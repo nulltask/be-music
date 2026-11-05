@@ -110,6 +110,15 @@ describe('resolveLR2ResultState ops', () => {
     expect(replay.has(LR2_OP.REPLAY_OFF)).toBe(false);
   });
 
+  it('keeps AUTOPLAY (op 33) on for the result of a full AUTO play, AUTOPLAY OFF (op 32) otherwise', () => {
+    const live = resultOps(makeResult({ cleared: true }), {});
+    expect(live.has(LR2_OP.AUTOPLAY_OFF)).toBe(true);
+    expect(live.has(LR2_OP.AUTOPLAY_ON)).toBe(false);
+    const auto = resultOps({ ...makeResult({ cleared: true }), autoPlay: true }, {});
+    expect(auto.has(LR2_OP.AUTOPLAY_ON)).toBe(true);
+    expect(auto.has(LR2_OP.AUTOPLAY_OFF)).toBe(false);
+  });
+
   // -- CUSTOMOPTION defaults --------------------------------------- LITONE4 (and many 1920×1080 LR2 themes) gates a
   // large fraction of its result chrome on `#IF,<customOptionDefault>` blocks. The runtime op set MUST include the
   // skin's CUSTOMOPTION default values or those elements get filtered out at render time. Mirrors how

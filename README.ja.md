@@ -70,8 +70,7 @@ Be-Music は、BMS・bmson 譜面を遊び、扱うためのオープンソー�
 - `@be-music/player-browser`: browser の PixiJS ランタイム。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作る。音声サービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持つ
 - `@be-music/app-play`: folder / ZIP drop、LR2 / beatoraja theme、Options ダイアログ、browser 再生を、1 つのシーンルーターの下のサービスとして接続する private Vite プレイヤー
 - `@be-music/app-leaderboard`: Cloudflare Workers で動く private な Leaderboard API。リプレイの投稿、再シミュレーションによる検証、ランキング
-- `@be-music/app-accounts`: ログイン、パスキー、連携プロバイダーを扱う非公開の Accounts サービスと OIDC プロバイダー
-- `@be-music/app-dashboard`: 非公開のサービスダッシュボードと共通アカウントの入口
+- `@be-music/app-dashboard`: 非公開のサービスダッシュボードと Accounts サービス（ログイン、パスキー、連携プロバイダーを扱う OIDC プロバイダー）
 - `@be-music/worker-play`: 静的アセット、OIDC セッション、設定、Leaderboard 転送、URL・メディアプロキシを扱うプレイヤー配信用 Worker
 - `@be-music/service-auth-client`: 共通の OIDC クライアント、サービスセッション、API トークン検証
 - `@be-music/service-web-theme`: クライアントとサーバーのエントリーを分けた、サービス共通のスタイルと Lit ビュー

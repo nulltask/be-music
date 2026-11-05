@@ -20,7 +20,7 @@ export interface Env {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   /**
-   * Where Better Auth lives (docs/services.md section 3): `https://accounts.be-music.app`. Unset (local runs, tests),
+   * The legacy in-Worker Better Auth origin, used only for localhost development and tests. Unset (local runs, tests),
    * each request's own origin is used, as before the services were split.
    */
   AUTH_ORIGIN?: string;

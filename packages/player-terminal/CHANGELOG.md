@@ -1,5 +1,11 @@
 # @be-music/player-terminal
 
+## 0.9.4
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/player-engine@0.15.1`, `@be-music/player-node-audio@0.2.5`
+
 ## 0.9.3
 
 ### Patch Changes

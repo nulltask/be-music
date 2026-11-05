@@ -367,6 +367,11 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.resolveResultLamp(BENCH_RESULT);
     },
   });
+  define('player-skin-sdk.resolveResultPlayTag', {
+    run: () => {
+      skinSdkAPI.resolveResultPlayTag({ ...BENCH_RESULT, autoPlay: true });
+    },
+  });
   define('player-skin-sdk.resolveResultVerdict', {
     run: () => {
       skinSdkAPI.resolveResultVerdict(BENCH_RESULT);

@@ -4,7 +4,7 @@ import {
   type ResolvedNote,
   type TimedSampleTrigger,
 } from '@be-music/chart-model';
-import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
+import { toTimedPlayableNote, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
 import { resolveModifierLanes } from './chart-modifier-timelines.ts';
 import { withChartOverrides } from './resolved-chart-overrides.ts';
 
@@ -96,7 +96,7 @@ export function addExtraNotes(
   }
   if (removed.size === 0) return { chart: source, changes: 0 };
   const added = [...effective.values()];
-  for (const { note } of added) notes.push({ ...note, judged: false });
+  for (const { note } of added) notes.push(toTimedPlayableNote(note));
   notes.sort((a, b) => a.seconds - b.seconds || a.channel.localeCompare(b.channel));
   const converted = new Map(
     added.map(({ trigger, note }) => [trigger, { ...trigger, event: note.event, channel: note.channel }]),

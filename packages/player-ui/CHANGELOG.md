@@ -1,5 +1,12 @@
 # @be-music/player-ui
 
+## 0.7.1
+
+### Patch Changes
+
+- 16eee5d: The result screen shows an AUTO PLAY or ASSIST tag under a player's verdict, so an AUTO or assisted play's result is no longer mistaken for a plain one.
+- Updated dependencies: `@be-music/player-skin-sdk@0.10.0`
+
 ## 0.7.0
 
 ### Minor Changes

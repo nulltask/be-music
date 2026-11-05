@@ -70,8 +70,7 @@ Be-Music is an open-source project for playing and working with BMS and bmson ch
 - `@be-music/player-browser`: Browser PixiJS runtime: every select, decide, play and result screen as a scene session drawn by a built-in, LR2 or beatoraja family view, behind one host API, plus the audio service, the chart collection, skin loading and gameplay recording
 - `@be-music/app-play`: Private Vite player that wires folder/ZIP drops, LR2/beatoraja themes, the Options dialog and browser playback together, as services behind one scene router
 - `@be-music/app-leaderboard`: Private Leaderboard API on Cloudflare Workers: replay submission, verification by re-simulation, and rankings
-- `@be-music/app-accounts`: Private Accounts service and OIDC provider for sign-in, passkeys, and linked providers
-- `@be-music/app-dashboard`: Private service dashboard and shared-account entry point
+- `@be-music/app-dashboard`: Private service dashboard and the Accounts service: the OIDC provider for sign-in, passkeys, and linked providers
 - `@be-music/worker-play`: Player delivery Worker for static assets, OIDC sessions, settings, Leaderboard forwarding, and URL/media proxies
 - `@be-music/service-auth-client`: Shared OIDC client, service sessions, and API token verification
 - `@be-music/service-web-theme`: Shared service styles and Lit views, with separate client and server entries

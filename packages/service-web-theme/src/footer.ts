@@ -84,7 +84,7 @@ export function serviceOrigins(hostname: string): Record<ServiceName, string> {
   const site = serviceSite(hostname);
   return {
     dashboard: `https://${site}/`,
-    accounts: `https://accounts.${site}/`,
+    accounts: `https://${site}/account`,
     play: `https://play.${site}/`,
     leaderboard: `https://leaderboard.${site}/`,
   };

@@ -17,6 +17,7 @@ import { readStoredReplayView } from '../replay-view-settings.ts';
 import { DEFAULT_REPLAY_AUTO_SAVE_RULES } from './replay-slots.ts';
 import { overlayOptionSettings, readStoredOptionSettings } from '../option-settings.ts';
 import { readPlayInSilentMode } from '../silent-mode-playback.ts';
+import { DEFAULT_LEADERBOARD_SUBMIT_RULE } from '../leaderboard-submit-rule.ts';
 import type { PlayerGUIState } from '../types.ts';
 import {
   readDeviceSignals,
@@ -239,6 +240,8 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     replayView: readStoredReplayView(storage),
     // Leaderboard submission is opt-in: a play is only sent once the player turns it on.
     submitToLeaderboard: false,
+    // Once on, a play is sent when it improves the player's EX-SCORE on the chart (its first play always).
+    leaderboardSubmitRule: DEFAULT_LEADERBOARD_SUBMIT_RULE,
     // Play options (playMode / chartOptions / assists / judge / gauge equivalents). Two-way synced with the LR2
     // select scene's PLAY OPTION panel where a counterpart exists; latched at song start and disabled during a
     // play. The judge ruleset has no in-skin counterpart — the Options dialog is its only surface.

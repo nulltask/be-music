@@ -54,4 +54,21 @@ describe('lane hold history', () => {
     recordLaneDown(history, ['a'], 20 + LANE_HOLD_HISTORY_MS);
     expect(history.spans).toHaveLength(1);
   });
+
+  test('pruning keeps the recent spans in order', () => {
+    const history = createLaneHoldHistory();
+    for (const downMs of [0, 100, 200, 300]) {
+      recordLaneDown(history, ['a'], downMs);
+      recordLaneUp(history, ['a'], downMs + 50);
+    }
+    // At 2_160 ms the horizon is 160 ms: the spans ending at 50 and 150 go, the ones ending at 250 and 350 stay.
+    recordLaneDown(history, ['a'], 2160);
+    expect(history.spans).toEqual([
+      { downMs: 200, upMs: 250 },
+      { downMs: 300, upMs: 350 },
+      { downMs: 2160, upMs: undefined },
+    ]);
+    expect(wasLaneDownAt(history, 225)).toBe(true);
+    expect(wasLaneDownAt(history, 275)).toBe(false);
+  });
 });

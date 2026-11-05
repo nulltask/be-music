@@ -59,7 +59,7 @@ const en: AboutContent = {
     { title: 'Every play a replay', text: 'download any replay and watch it judged again.', more: 'replays' },
     {
       title: 'No sign-up to start',
-      text: 'start as a guest, and create an account whenever you like.',
+      text: 'start as a guest, and keep your account whenever you like.',
       more: 'accounts',
     },
     {
@@ -108,13 +108,12 @@ const en: AboutContent = {
       id: 'accounts',
       title: 'Accounts',
       children: html`<p>
-          Submitting a play needs a sign-in. A <strong>guest</strong> needs no passkey: those plays stay${' '}<strong
-            >anonymous</strong
-          >
-          in that browser. Rankings show anonymous plays when you turn them on.
+          Submitting a play needs a sign-in. You can start as a <strong>guest</strong>, with no passkey, Google or
+          Discord: other devices cannot sign in to a guest account, and rankings show guest plays only when you turn
+          them on.
         </p>
         <p>
-          <strong>Create an account</strong> with a passkey (your device’s fingerprint, face or PIN), Google or Discord,
+          <strong>Keep your account</strong> with a passkey (your device’s fingerprint, face or PIN), Google or Discord,
           and your plays so far come with you and join the rankings. You can then sign in on another device.
         </p>`,
     })}${Section({
@@ -216,7 +215,7 @@ const ja: AboutContent = {
     },
     {
       title: '登録なしで始められる',
-      text: 'ゲストとして始められて、あとからアカウントを作れます。',
+      text: 'ゲストとして始められて、あとからアカウントを保存できます。',
       more: 'accounts',
     },
     {
@@ -262,11 +261,12 @@ const ja: AboutContent = {
       id: 'accounts',
       title: 'アカウント',
       children: html`<p>
-          プレイを送るにはログインが要ります。パスキーのない<strong>ゲスト</strong>として始めると、そのブラウザでは<strong>匿名</strong>のまま記録されます。ランキングは「匿名プレイヤー」をオンにしたときだけ、匿名のプレイを表示します。
+          プレイを送るにはログインが要ります。パスキー・Google・Discord
+          なしの<strong>ゲスト</strong>としても始められます。ゲストアカウントにはほかの端末からログインできず、ランキングは「ゲスト」をオンにしたときだけゲストのプレイを表示します。
         </p>
         <p>
           パスキー（端末の指紋認証、顔認証、PIN）、Google、Discord
-          で<strong>アカウントを作る</strong>と、それまでのプレイも引き継いでランキングに載り、ほかの端末からもログインできます。
+          で<strong>アカウントを保存</strong>すると、それまでのプレイも引き継いでランキングに載り、ほかの端末からもログインできます。
         </p>`,
     })}${Section({
       id: 'checks',

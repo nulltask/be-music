@@ -10,20 +10,24 @@ import { ACTION_LABELS_JA, actionKeyConfigLabel } from './action-labels.ts';
 export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   // Tabs
   Play: 'プレイ',
+  View: '表示',
   Keys: 'キー',
-  'Tempo & course': 'テンポとコース',
-  'Skin & display': 'スキンと表示',
+  Skin: 'スキン',
   Audio: 'サウンド',
   Library: 'ライブラリ',
   Leaderboard: 'Leaderboard',
-  Developer: '開発者',
+  Advanced: '詳細',
   'Judge & gauge': '判定とゲージ',
-  Lanes: 'レーン',
-  Notes: 'ノーツ',
-  'Hi-speed & view': 'ハイスピードと表示',
-  Practice: 'PRACTICE',
-  Select: '選曲',
+  Arrangement: '配置',
+  Modifiers: '譜面の変更',
+  Assist: 'アシスト',
+  Practice: '練習',
   'Replay / ghost': 'リプレイとゴースト',
+  'Cover & LIFT': 'カバーと LIFT',
+  Effects: '演出',
+  'Skin & display': 'スキンと表示',
+  Select: '選曲',
+  'Quick options': 'よく使うオプション',
   'Built-in': '内蔵',
   // Folder titles
   'Key config': 'キーコンフィグ',
@@ -221,9 +225,12 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   '📸 Screenshot': '📸 スクリーンショット',
   // Leaderboard
   'Submit to Leaderboard': 'Leaderboard に送信',
+  'Submit when': '送信する条件',
+  'EX-SCORE improves (first play always)': 'EX-SCORE 更新時 (初回は必ず)',
+  Always: '毎回',
   Account: 'アカウント',
-  'Create passkey (keep this account)': 'パスキーを作成 (このアカウントを残す)',
-  'Sign in with passkey': 'パスキーでログイン',
+  'Keep this account': 'このアカウントを保存',
+  'Sign in': 'ログイン',
   'Sign out': 'ログアウト',
   // Developer
   'CPU workers': 'CPU ワーカー数',
@@ -237,6 +244,24 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
 /** `label` as the dialog shows it in `lang`: the Japanese table's text in Japanese, else `label` itself. */
 export function optionLabel(label: string, lang: string): string {
   return lang === 'ja' ? (OPTION_LABELS_JA[label] ?? label) : label;
+}
+
+/** A label's text and the source it names in parentheses at its end, which the dialog shows as a badge. */
+export interface OptionLabelParts {
+  readonly text: string;
+  readonly source?: string;
+}
+
+const LABEL_SOURCE = /^(.*\S) \(((?:LR2|beatoraja|PC|AC)(?: [^();]*)?)\)$/u;
+
+/**
+ * Splits the source off the end of a label as the dialog shows it: `Scroll (beatoraja)` reads `Scroll` with a
+ * `beatoraja` badge, `Normal HI-SPEED (AC 32 measured)` `Normal HI-SPEED` with `AC 32 measured`. A note in parentheses
+ * that is not a source alone (`Fixed key 1P (LR2; 0=default)`, `Seed 1P (-1=random)`) stays in the text.
+ */
+export function splitOptionLabelSource(label: string): OptionLabelParts {
+  const match = LABEL_SOURCE.exec(label);
+  return match === null ? { text: label } : { text: match[1]!, source: match[2]! };
 }
 
 /** Ask the owner of the options tree to render its labels in the chosen language. */

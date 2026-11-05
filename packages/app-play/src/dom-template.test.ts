@@ -28,7 +28,7 @@ test('shows fixed build metadata in the page footer and the help overlay', async
   expect(footer).toContain('aria-current="page">Play</span>');
   expect(footer).not.toContain('>Play</a>');
   expect(footer).toContain('href="https://be-music.app/">Dashboard</a>');
-  expect(footer).toContain('href="https://accounts.be-music.app/">Accounts</a>');
+  expect(footer).toContain('href="https://be-music.app/account">Accounts</a>');
   expect(footer).toContain('href="https://leaderboard.be-music.app/">Leaderboard</a>');
   expect(footer).toContain('© 2026 nulltask · MIT License');
   // Build line on the left, service links in the centre, copyright on the right.

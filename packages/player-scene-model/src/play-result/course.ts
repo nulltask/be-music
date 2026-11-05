@@ -100,6 +100,8 @@ export function playResultFromCourseRun(
   return {
     ...(options.practice === true ? { practice: true } : {}),
     ...(options.fromReplay === true ? { fromReplay: true } : {}),
+    // A course runs every stage AUTO or none: the last stage played tells.
+    ...(lastStage?.played === true && lastStage.replay.play.mode === 'auto' ? { autoPlay: true } : {}),
     score: {
       total: result.noteCount,
       perfect: result.judge.pgreat,

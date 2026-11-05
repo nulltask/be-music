@@ -59,6 +59,8 @@ export interface BeatorajaResultFacts {
   readonly earlyLate?: BeatorajaEarlyLate;
   /** The course a stage or a course run belongs to. */
   readonly course?: CourseView;
+  /** The play was a full AUTO play. */
+  readonly autoPlay?: boolean;
 }
 
 /** What a result skin reads. */
@@ -214,8 +216,9 @@ export function resolveBeatorajaResultNumber(id: number, input: BeatorajaResultI
 /**
  * The ops a result skin lights for a run: the 1P and result rank ops (`RESULT_RANK_ZERO_1P` for an EX score of 0),
  * every generic rank op the EX score reaches ({@link beatorajaGenericRankOps}), `RESULT_CLEAR` or `RESULT_FAIL`, the
- * clear lamp's op (`beatorajaClearLampOp`; NO PLAY without a lamp), the judgment-exists ops and, for a course, its
- * stage ops ({@link resolveBeatorajaCourseStageOps}).
+ * clear lamp's op (`beatorajaClearLampOp`; NO PLAY without a lamp), the judgment-exists ops, `AUTOPLAY_ON` for a full
+ * AUTO play and `AUTOPLAY_OFF` otherwise (beatoraja's `OPTION_AUTOPLAYON` reads the play mode on every screen, the result
+ * too) and, for a course, its stage ops ({@link resolveBeatorajaCourseStageOps}).
  */
 export function resolveBeatorajaResultOps(input: BeatorajaResultInput): number[] {
   const { result } = input;
@@ -229,6 +232,7 @@ export function resolveBeatorajaResultOps(input: BeatorajaResultInput): number[]
     result.cleared ? BEATORAJA_OP.RESULT_CLEAR : BEATORAJA_OP.RESULT_FAIL,
     beatorajaClearLampOp(result.lamp ?? 'NO_PLAY'),
     ...computeJudgeExistOps(score),
+    result.autoPlay === true ? BEATORAJA_OP.AUTOPLAY_ON : BEATORAJA_OP.AUTOPLAY_OFF,
   ];
   if (result.course !== undefined) ops.push(...resolveBeatorajaCourseStageOps(result.course));
   return ops;

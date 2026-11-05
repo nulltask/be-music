@@ -22,13 +22,17 @@ describe('describeLeaderboardAccount', () => {
     expect(describeLeaderboardAccount(undefined)).toBe('Not signed in');
     expect(
       describeLeaderboardAccount({ handle: 'player-abc', displayName: 'Anonymous', anonymous: true, passkeys: 0 }),
-    ).toBe('player-abc (anonymous)');
+    ).toBe('player-abc (guest)');
     expect(
       describeLeaderboardAccount({ handle: 'player-abc', displayName: 'Player', anonymous: false, passkeys: 1 }),
     ).toBe('Player @player-abc · 1 passkey');
     expect(describeLeaderboardAccount({ handle: 'p', displayName: 'Q', anonymous: false, passkeys: 2 })).toBe(
       'Q @p · 2 passkeys',
     );
+  });
+
+  test('leaves out the passkey count of an account kept with Google or Discord alone', () => {
+    expect(describeLeaderboardAccount({ handle: 'p', displayName: 'Q', anonymous: false, passkeys: 0 })).toBe('Q @p');
   });
 });
 
@@ -69,7 +73,7 @@ describe('describeAccountChip', () => {
       describeAccountChip({ handle: 'player-abc', displayName: 'Anonymous', anonymous: true, passkeys: 0 }),
     ).toMatchObject({
       state: 'anonymous',
-      label: '@player-abc · anonymous',
+      label: '@player-abc · guest',
       href: '/players/player-abc',
     });
     expect(describeAccountChip({ handle: 'a b', displayName: 'Player', anonymous: false, passkeys: 1 })).toMatchObject({
@@ -91,15 +95,15 @@ describe('describeStartAccount', () => {
     });
   });
 
-  test('offers to keep an anonymous account, sign in to another or sign out', () => {
+  test('offers to keep a guest account, sign in to another or sign out', () => {
     expect(
       describeStartAccount({ handle: 'player-abc', displayName: 'Anonymous', anonymous: true, passkeys: 0 }),
     ).toEqual({
       state: 'anonymous',
-      label: '@player-abc · anonymous',
+      label: '@player-abc · guest',
       href: '/players/player-abc',
       actions: ['keep', 'sign-in', 'sign-out'],
-      hint: 'This account lives only in this browser, and rankings leave it out. Keep it with a passkey to join them.',
+      hint: 'Rankings leave guest accounts out, and other devices cannot sign in to one. Keep it with a passkey, Google or Discord to join them.',
     });
   });
 

@@ -122,6 +122,7 @@ describe('captureOptionSettings', () => {
       courseAutoAdvance: true,
       nonstopPlacement: 'lr2',
       submitToLeaderboard: true,
+      leaderboardSubmitRule: 'always',
       judgeRuleset: 'beatoraja',
       gauge: 'HARD',
       random1P: 'SCATTER',

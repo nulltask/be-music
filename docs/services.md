@@ -2,7 +2,7 @@
 
 # Services and environments
 
-> Status: Dashboard, Accounts, Player, Leaderboard and Donate have production and preview deployments. Accounts owns authentication and issues OIDC identities; app cookies are host-only. Registry and Editor remain planned.
+> Status: Dashboard, Accounts, Player, Leaderboard and Donate have production and preview deployments. Accounts runs in the Dashboard Worker on the Dashboard host, owns authentication and issues OIDC identities; app cookies are host-only. Registry and Editor remain planned.
 
 ## 1. Services
 
@@ -12,7 +12,7 @@ Be-Music account.
 | Service     | Production host            | What it does                                                                                               |
 | ----------- | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | Dashboard   | `be-music.app`             | The signed-in user's home, linking to every service                                                        |
-| Accounts    | `accounts.be-music.app`    | Sign-in, accounts, passkeys; the OIDC provider every other service uses                                    |
+| Accounts    | `be-music.app`             | Sign-in, accounts, passkeys; the OIDC provider every other service uses. Part of the Dashboard Worker      |
 | Player      | `play.be-music.app`        | The browser player                                                                                         |
 | Leaderboard | `leaderboard.be-music.app` | Rankings                                                                                                   |
 | Registry    | `registry.be-music.app`    | Users register charts, songs, courses and dan certifications, each public, private or unlisted (link only) |
@@ -22,14 +22,16 @@ Be-Music account.
 ```mermaid
 flowchart LR
   subgraph clients[OIDC clients]
-    H[Dashboard]
     P[Player]
     L[Leaderboard]
     R[Registry]
     E[Editor]
     D[Donate]
   end
-  A[Accounts]
+  subgraph worker[Dashboard Worker]
+    H[Dashboard]
+    A[Accounts]
+  end
   clients -->|sign in| A
   E -->|publish| R
   P -->|fetch charts| R
@@ -50,7 +52,7 @@ secrets and accounts.
 | Service     | Production                 | Preview                            | Worker (production / preview)         |
 | ----------- | -------------------------- | ---------------------------------- | ------------------------------------- |
 | Dashboard   | `be-music.app`             | `preview.be-music.app`             | `dashboard` / `dashboard-preview`     |
-| Accounts    | `accounts.be-music.app`    | `accounts.preview.be-music.app`    | `accounts` / `accounts-preview`       |
+| Accounts    | `be-music.app`             | `preview.be-music.app`             | `dashboard` / `dashboard-preview`     |
 | Player      | `play.be-music.app`        | `play.preview.be-music.app`        | `play` / `play-preview`               |
 | Leaderboard | `leaderboard.be-music.app` | `leaderboard.preview.be-music.app` | `leaderboard` / `leaderboard-preview` |
 | Registry    | `registry.be-music.app`    | `registry.preview.be-music.app`    | `registry` / `registry-preview`       |
@@ -71,10 +73,10 @@ flowchart LR
 - **Branch preview URLs** are not registered OIDC clients. Authentication is supported at the fixed production and preview origins; register another exact client/callback explicitly to add a deployment.
 - **Third-party services** have separate preview credentials: their own Discord and Google OAuth applications, and
   Stripe test-mode keys for `donate-preview`. Discord's redirect URI is
-  `https://accounts.be-music.app/api/auth/callback/discord` in production and
-  `https://accounts.preview.be-music.app/api/auth/callback/discord` in preview. Google's redirect URI is
-  `https://accounts.be-music.app/api/auth/callback/google` in production and
-  `https://accounts.preview.be-music.app/api/auth/callback/google` in preview.
+  `https://be-music.app/api/auth/callback/discord` in production and
+  `https://preview.be-music.app/api/auth/callback/discord` in preview. Google's redirect URI is
+  `https://be-music.app/api/auth/callback/google` in production and
+  `https://preview.be-music.app/api/auth/callback/google` in preview.
 - **Visibility**: preview hosts are kept out of search engines, and may be put behind Cloudflare Access.
 - **Certificates**: hosts two levels below `be-music.app` (`play.preview.be-music.app`) are not covered by the zone's
   universal certificate (`*.be-music.app`). Worker custom domains issue one certificate per hostname; check this on the
@@ -82,7 +84,7 @@ flowchart LR
 
 ## 3. Sign-in
 
-The Accounts service is an OpenID Connect provider (Better Auth). Every other service is a client of it, with a session
+The Accounts service is an OpenID Connect provider (Better Auth), with the issuer `https://be-music.app/api/auth`. It runs in the Dashboard Worker, and the Dashboard reads its session directly ([ADR 0039](./adr/0039-accounts-in-dashboard.md)). Every other service is a client of it, with a session
 cookie of its own on its own host. Services never share a cookie, so the same code works when a self-hosted instance
 puts its services on unrelated domains (section 5).
 
@@ -110,7 +112,7 @@ sequenceDiagram
   instance's accounts later.
 - **Sign-in methods** live in Accounts only: Discord, Google and passkeys, plus guest sessions. Device authorization for the terminal player remains planned. A signed-in account can later link a passkey, Discord, and Google from the account page. Linking keeps that account, including when the provider email differs.
 - **Passkeys** are bound to one relying party ID per environment: `be-music.app` in production and
-  `preview.be-music.app` in preview. Passkeys are only used on the Accounts host, so this works wherever the other
+  `preview.be-music.app` in preview. Passkeys are only used on the Dashboard host, where Accounts runs, so this works wherever the other
   services live.
 - **Calls between services** go through the server: the browser talks to its own service, which calls another
   service's API with the user's access token. The callee verifies the token against Accounts' JWKS, so services share
@@ -120,11 +122,11 @@ sequenceDiagram
 
 ### 3.1 Identity ownership and migration
 
-Accounts has its own D1 (`accounts` / `accounts-preview`) for users, provider links, passkeys, sessions, signing keys and OAuth client state. It never calls the Leaderboard during login.
+Accounts has its own D1 (`dashboard` / `dashboard-preview`) for users, provider links, passkeys, sessions, signing keys and OAuth client state. It never calls the Leaderboard during login.
 
 The Leaderboard owns public profiles and scores. `oidc_identity` maps `(issuer, subject)` to its local player ID. A verified token creates the local mirror/profile lazily; email is never a linking key. Existing mappings keep the original player IDs and score ownership. Signed guest-link claims let the Leaderboard transfer guest plays idempotently when an account is linked, without giving Accounts access to score tables.
 
-Apply the Accounts schema and Leaderboard migration `0013`, then run `packages/app-accounts/scripts/migrate-identities.ts` before switching authentication. It defaults to a dry run; `--preview --apply` copies preview users/provider links/passkeys and seeds their local mappings; omit `--preview` for production. It does not copy old sessions or challenges and never prints credentials. The source auth tables remain for rollback. Do not rerun the copy after new OIDC players have been provisioned. Users sign in again; migrated passkeys keep their existing RP IDs.
+When Accounts moved into the Dashboard Worker, its database was recreated empty and the one-time identity and profile migration scripts were removed ([ADR 0039](./adr/0039-accounts-in-dashboard.md)). Leaderboard mappings under the former issuer `https://accounts.be-music.app/api/auth` no longer match any account.
 
 `legacy-auth.ts` is confined to localhost tests/development. Public deployments fail closed without OIDC configuration and cannot accept the old shared session cookie.
 
@@ -145,21 +147,22 @@ configuration:
 | Setting               | Meaning                                                                |
 | --------------------- | ---------------------------------------------------------------------- |
 | `PUBLIC_ORIGIN`       | The service's own origin; callback URLs derive from it                 |
-| `AUTH_ISSUER`         | Exact issuer, e.g. `https://accounts.example/api/auth`                 |
+| `AUTH_ISSUER`         | Exact issuer, e.g. `https://example.com/api/auth`                      |
 | `OIDC_CLIENT_ID`      | Registered public PKCE client ID                                       |
 | `SESSION_SECRET`      | A separate random secret of at least 32 characters per app/environment |
 | `API_AUDIENCE`        | Exact protected API resource URI                                       |
 | `OIDC_CLIENTS`        | Accounts JSON map of client ID to exact app origin                     |
-| `PASSKEY_RP_ID`       | Accounts only; defaults to the Accounts host                           |
+| `PASSKEY_RP_ID`       | Accounts only; the relying party ID, e.g. the Dashboard host           |
 | `USER_CONTENT_ORIGIN` | Registry only; where uploaded files are served from                    |
 
 - Accounts reads its list of clients and redirect URIs from configuration.
-- Discord and Google are optional: an instance can start with passkeys and anonymous sessions only. Discord sign-in
-  reads `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` on the Accounts Worker. The official instance stores them in
+- Discord and Google are optional: an instance can start with passkeys and guest sessions only. Discord sign-in
+  reads `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` on the Dashboard Worker, which runs Accounts. The official instance stores them in
   the `be-music` vault (`discord` for production, `discord-preview` for preview). Google sign-in reads
   `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from the same vault (`google` for production, `google-preview` for
-  preview). `pnpm --filter @be-music/app-accounts run secrets:preview` and `secrets:production` install them without
-  printing the values.
+  preview). Better Auth's `BETTER_AUTH_SECRET` is in the same vault (`cloudflare-dashboard-better-auth` for production,
+  `cloudflare-dashboard-preview-better-auth` for preview). `pnpm --filter @be-music/app-dashboard run secrets:preview`
+  and `secrets:production` install them without printing the values.
 - D1 database IDs, Worker names and Service Binding targets come from deploy configuration, not from source.
 - Calls to outside services (such as BMS Search) can be turned off.
 - Donations, the donation site and the Be-Music name and logo belong to the official instance; links to them in the
@@ -170,7 +173,7 @@ configuration:
 | Service     | Today                                                                                  |
 | ----------- | -------------------------------------------------------------------------------------- |
 | Dashboard   | `dashboard` / `dashboard-preview`, a temporary page showing the session and links      |
-| Accounts    | `accounts` / `accounts-preview`, independent OIDC provider and auth D1                 |
+| Accounts    | Part of `dashboard` / `dashboard-preview`: the OIDC provider and its D1                |
 | Player      | `play` / `play-preview` (`packages/worker-play`, serving `@be-music/app-play`'s build) |
 | Leaderboard | `leaderboard` / `leaderboard-preview`, pages at the root of its host                   |
 | Donate      | `donate` / `donate-preview`, OIDC login and public financial data                      |
@@ -181,16 +184,17 @@ Its `workers.dev` subdomain is `be-music.workers.dev`.
 
 The Player is an installable web app with a service worker ([player-web.md](./player-web.md#installing-the-player)). The `play` Worker serves the service worker (`/sw.js`) with `Cache-Control: no-cache` and the web app manifest (`/manifest.webmanifest`) with `application/manifest+json`, whatever the Static Assets defaults are (`packages/worker-play/src/pwa-assets.ts`). The service worker never caches the Worker's own routes (`/api/*`, `/__url-load-proxy`), so sign-in, player settings and the Leaderboard API always reach the Worker; it keeps the ffmpeg core from R2 once a transcode has loaded it.
 
+Every response from the `play` Worker carries `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless` (`packages/worker-play/src/cross-origin-isolation.ts`; the dev server sends the same), so the player is cross-origin isolated. Isolation makes the browser coarsen `performance.now()` and input event timestamps less (Chromium: 5 µs instead of 100 µs), so key presses are judged and recorded in replays more finely, and gives the BGA transcode `SharedArrayBuffer`. `credentialless` rather than `require-corp` keeps cross-origin resources that send no `Cross-Origin-Resource-Policy` (Google Fonts, avatars on the providers' CDNs) loading, without cookies. Sign-in navigates the whole page, so `same-origin` opener isolation does not affect it. A browser without `credentialless` support (Safari) ignores the header and runs unisolated, as before.
+
 ## Storage ownership
 
 Accounts owns public profiles and avatars; all edits take place there. Leaderboard retains only its public ranking projection, player identity mappings and score data. See [ADR 0009](./adr/0009-accounts-profiles.md) for synchronization and the migration sequence.
 
 | Worker                                | D1             | R2                                                    |
 | ------------------------------------- | -------------- | ----------------------------------------------------- |
-| `accounts` / `accounts-preview`       | Same as Worker | Same as Worker: avatars                               |
 | `leaderboard` / `leaderboard-preview` | Same as Worker | Same as Worker: replays, chart documents, share cards |
 | `play` / `play-preview`               | None           | Same as Worker: FFmpeg core                           |
-| `dashboard` / `dashboard-preview`     | None           | None                                                  |
+| `dashboard` / `dashboard-preview`     | Same as Worker | `accounts` / `accounts-preview`: avatars              |
 | `donate` / `donate-preview`           | None           | None; financial data stays in its repository          |
 
 The static public asset bucket is `assets`, served at `assets.be-music.app`. The FFmpeg upload script defaults to `play`; `pnpm --filter @be-music/app-play run cf:r2:push:preview` updates `play-preview` separately.

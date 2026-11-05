@@ -16,7 +16,7 @@ import {
   type Locale,
 } from '@be-music/service-web-theme';
 
-/** The Accounts public profile combined with the local OIDC session's anonymous status. */
+/** The public profile combined with the Accounts session's guest status. */
 export interface DashboardAccount {
   handle: string;
   displayName: string;
@@ -42,7 +42,7 @@ const TEXT = {
     title: 'Be-Music Dashboard',
     signedIn: (name: string, handle: string) => `${name}（@${handle}）でログイン中です。`,
     anonymous: (handle: string) =>
-      `匿名アカウント @${handle} でログイン中です。パスキーを作ると、ほかの端末でも使えます。`,
+      `ゲストアカウント @${handle} でログイン中です。パスキー・Google・Discord で保存すると、ほかの端末でも使えます。`,
     signedOut: 'ログインしていません。',
     play: 'プレイする',
     leaderboard: 'ランキングを見る',
@@ -51,7 +51,8 @@ const TEXT = {
   en: {
     title: 'Be-Music Dashboard',
     signedIn: (name: string, handle: string) => `Signed in as ${name} (@${handle}).`,
-    anonymous: (handle: string) => `Signed in anonymously as @${handle}. Create a passkey to use it on other devices.`,
+    anonymous: (handle: string) =>
+      `Signed in as a guest, @${handle}. Keep the account with a passkey, Google or Discord to use it on other devices.`,
     signedOut: 'Not signed in.',
     play: 'Play',
     leaderboard: 'Leaderboard',
@@ -98,7 +99,7 @@ export function renderDashboard(input: {
       : input.account.anonymous
         ? t.anonymous(input.account.handle)
         : t.signedIn(input.account.displayName, input.account.handle);
-  const accountHref = input.account === undefined ? '/api/auth/sign-in' : '/api/auth/manage';
+  const accountHref = input.account === undefined ? '/login' : '/account';
   const accountLabel =
     input.account === undefined
       ? input.locale === 'ja'
@@ -158,7 +159,7 @@ export function renderDashboard(input: {
                 </p>
                 <div class="flex flex-wrap gap-2">
                   <a class="btn no-underline" data-size="sm" href=${accountHref}>${accountLabel}</a>
-                  ${input.account === undefined ? nothing : html`<form method="post" action="/api/auth/sign-out?returnTo=%2F"><button class="btn" data-size="sm" data-variant="outline" type="submit">${input.locale === 'ja' ? 'ログアウト' : 'Sign out'}</button></form>`}
+                  ${input.account === undefined ? nothing : html`<form method="post" action="/sign-out"><button class="btn" data-size="sm" data-variant="outline" type="submit">${input.locale === 'ja' ? 'ログアウト' : 'Sign out'}</button></form>`}
                 </div>
               </section>
             </section>

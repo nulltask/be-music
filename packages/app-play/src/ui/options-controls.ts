@@ -1,6 +1,6 @@
 import { CollapsiblePanelElement } from './collapsible-panel.ts';
 import { repeat } from 'lit/directives/repeat.js';
-import { optionLabel } from './options/labels.ts';
+import { optionLabel, splitOptionLabelSource } from './options/labels.ts';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -202,7 +202,8 @@ export class OptionBinding<T = unknown> extends OptionRow {
 
   private labelTemplate(): TemplateResult {
     return html`<span class="options-label-wrap"
-      ><label class="label options-label" id=${`${this.id}-label`} for=${this.id}>${this.label}</label
+      ><label class="label options-label" id=${`${this.id}-label`} for=${this.id}
+        >${optionLabelContent(this.label)}</label
       ><span data-option-help-host></span
     ></span>`;
   }
@@ -406,16 +407,16 @@ export class OptionButton extends OptionRow {
         : this.titleText;
     render(
       html`<button
-          class="btn options-button"
-          type="button"
-          data-variant="outline"
-          data-size="sm"
-          @click=${() => {
-            for (const handler of this.handlers) handler();
-          }}
-        >
-          ${title}</button
-        ><span data-option-help-host></span>`,
+        class="btn options-button"
+        type="button"
+        data-variant="outline"
+        data-size="sm"
+        @click=${() => {
+          for (const handler of this.handlers) handler();
+        }}
+      >
+        ${title}<span data-option-help-host></span>
+      </button>`,
       this.element,
     );
   }
@@ -646,6 +647,24 @@ export class OptionFolder extends OptionContainer {
   }
 }
 
+/** A label's text with the source at its end as a badge (`splitOptionLabelSource`). */
+export function optionLabelContent(label: string): TemplateResult {
+  const { text, source } = splitOptionLabelSource(label);
+  return source === undefined
+    ? html`${text}`
+    : html`${text}<span class="badge options-source" data-variant="outline">${source}</span>`;
+}
+
+/**
+ * How far to scroll a tab bar sideways to show a tab whose edges are `left`..`right` in a bar showing `viewLeft`..
+ * `viewRight`: negative to the left, `0` when it is already in view. A tab wider than the bar shows from its start.
+ */
+export function tabRevealScroll(left: number, right: number, viewLeft: number, viewRight: number): number {
+  if (left < viewLeft || right - left > viewRight - viewLeft) return left - viewLeft;
+  if (right > viewRight) return right - viewRight;
+  return 0;
+}
+
 /** Basecoat tabs: one page per title, the first selected. */
 export class OptionTabs extends OptionRow {
   public readonly pages: OptionPage[];
@@ -673,6 +692,18 @@ export class OptionTabs extends OptionRow {
       page.element.hidden = at !== index;
       page.element.setAttribute('aria-selected', String(at === index));
     });
+    // On a screen too narrow for the tab bar, it scrolls sideways: keep the selected tab in view. Only the bar
+    // scrolls, so selecting a nested tab never moves the panel around it.
+    const tab = this.element.querySelector<HTMLElement>(`#${this.tabIds[index]}`);
+    const bar = tab?.parentElement;
+    if (tab && bar) {
+      // Layout offsets, not client rects: the dialog's open animation scales it, and `scrollLeft` is unscaled. The
+      // bar's padding is kept in view around the tab.
+      const padding = Number.parseFloat(getComputedStyle(bar).paddingLeft) || 0;
+      const left = tab.offsetLeft - bar.offsetLeft - padding;
+      const right = left + tab.offsetWidth + 2 * padding;
+      bar.scrollLeft += tabRevealScroll(left, right, bar.scrollLeft, bar.scrollLeft + bar.clientWidth);
+    }
   }
 
   public override refresh(): void {

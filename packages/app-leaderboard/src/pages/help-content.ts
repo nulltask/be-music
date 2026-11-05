@@ -184,7 +184,7 @@ const en: HelpContent = {
             t.filters.assisted,
             'Plays with an assist (auto scratch, a widened judgment window), ranked apart from the rest.',
           ],
-          [t.filters.anonymous, 'Players who have not created an account yet, shown when turned on.'],
+          [t.filters.anonymous, 'Guest accounts not yet kept with a passkey, Google or Discord, shown when turned on.'],
           [t.filters.file, 'One chart can come in several files (re-saves, re-encodes); rank one file’s plays only.'],
         ],
       })}`,
@@ -212,11 +212,11 @@ const en: HelpContent = {
           rows: [
             [
               'Chart not listed yet',
-              'A new chart is listed once two players with an account have played it. Until then its plays reach the lists and rankings only for their own player, and search engines skip them.',
+              'A new chart is listed once two players who are not guests have played it. Until then its plays reach the lists and rankings only for their own player, and search engines skip them.',
             ],
             [
-              'Anonymous',
-              'Plays made before creating an account show in the rankings and Latest only with “Anonymous players” on. Create an account and they become public.',
+              'Guest',
+              'Plays by a guest account show in the rankings and Latest only with “Guests” on. Keep the account with a passkey, Google or Discord and they become public.',
             ],
             [
               'Hidden',
@@ -348,7 +348,7 @@ const ja: HelpContent = {
             t.filters.assisted,
             'アシスト（オートスクラッチ、判定幅の拡大）を使ったプレイ。ほかとは別にランキングします。',
           ],
-          [t.filters.anonymous, 'アカウントを作っていないプレイヤー。オンにすると表示します。'],
+          [t.filters.anonymous, 'パスキー・Google・Discord で保存していないゲストアカウント。オンにすると表示します。'],
           [
             t.filters.file,
             '1 つの譜面が複数のファイル（保存し直し、再エンコード）で配られることがあります。1 ファイルのプレイだけでランキングします。',
@@ -375,11 +375,11 @@ const ja: HelpContent = {
           rows: [
             [
               '譜面が公開前',
-              '新しい譜面は、アカウントを持つプレイヤー 2 人が遊ぶと公開されます。それまでは、そのプレイはリストとランキングで本人にだけ表示され、検索エンジンにも載りません。',
+              '新しい譜面は、ゲストでないプレイヤー 2 人が遊ぶと公開されます。それまでは、そのプレイはリストとランキングで本人にだけ表示され、検索エンジンにも載りません。',
             ],
             [
-              '匿名',
-              'アカウントを作る前のプレイは、「匿名プレイヤー」をオンにしたときだけランキングと最新のプレイに表示されます。アカウントを作ると、これまでのプレイも公開されます。',
+              'ゲスト',
+              'ゲストアカウントのプレイは、「ゲスト」をオンにしたときだけランキングと最新のプレイに表示されます。パスキー・Google・Discord でアカウントを保存すると、これまでのプレイも公開されます。',
             ],
             [
               '非表示',

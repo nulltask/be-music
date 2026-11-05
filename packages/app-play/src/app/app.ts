@@ -11,7 +11,7 @@ import {
   type PlayScene,
   type SelectScene,
 } from '@be-music/player-browser/host';
-import type { BrowseSnapshot, PlayOptions } from '@be-music/player-scene-model';
+import type { BrowseSnapshot, LibraryChart, PlayOptions } from '@be-music/player-scene-model';
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
 import { createAudioService, setMasterVolume, type AudioService } from '@be-music/player-browser/audio';
 import { downloadBlob } from '@be-music/player-browser/recording';
@@ -109,9 +109,11 @@ export class PlayerWebApp {
    */
   private readonly router = new SceneRouter<PlayerScene, PlayScene, SelectScene>({
     host: {
-      setScene: async (scene) => {
+      setScene: async (scene, role) => {
         await this.mountStage();
         await this.sceneHost.setScene(scene);
+        // The quick options belong to choosing a chart and playing it.
+        this.optionsDialog?.setQuickOptionsShown(role === 'select' || role === 'play');
         // The replay slots' card belongs to the screen that shows it: the select screen shows it again for its bar, the
         // result route for its run.
         this.replaySlotsPanel.hide();
@@ -221,6 +223,7 @@ export class PlayerWebApp {
     setStatus: (text) => this.status.set(text),
     warn: (message, error) => gamereplay.warn(message, error),
     recorder: REPLAY_RECORDER,
+    bestEXScore: (chartEntry) => this.records.peekChartBestRecord(chartEntry)?.exScore,
   });
   /**
    * The play options in force, the full set: fed by the select screen (`on.playOptions`) and the Options dialog
@@ -467,7 +470,7 @@ export class PlayerWebApp {
       setRecordingFilenameBase: (base) => this.recording.setFilenameBase(base),
       setStatus: (text) => this.status.set(text),
       setPlayStatus: (text) => this.status.setPlay(text),
-      lockReplayOptionsForPlay: (liveTempo) => this.lockReplayOptionsForPlay(liveTempo),
+      lockReplayOptionsForPlay: (liveTempo, chartEntry) => this.lockReplayOptionsForPlay(liveTempo, chartEntry),
       showSelect: () => this.showSelect(),
       playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       buildPlayScene: (chartEntry, kit, overrides) => this.playRoute.buildPlayScene(chartEntry, kit, overrides),
@@ -538,7 +541,7 @@ export class PlayerWebApp {
       recordingDeps: () => this.recording.deps(),
       setRecordingFilenameBase: (base) => this.recording.setFilenameBase(base),
       setPlayStatus: (text) => this.status.setPlay(text),
-      lockReplayOptionsForPlay: (liveTempo) => this.lockReplayOptionsForPlay(liveTempo),
+      lockReplayOptionsForPlay: (liveTempo, chartEntry) => this.lockReplayOptionsForPlay(liveTempo, chartEntry),
       unlockReplayOptions: () => this.unlockReplayOptions(),
       showSelect: () => this.showSelect(),
       showPlayOptionMismatch,
@@ -851,9 +854,9 @@ export class PlayerWebApp {
    * are rejected by keeping the controls disabled until {@link unlockReplayOptions} runs (result mounted or back
    * at select). The Options dialog disables its skin controls with them (`OptionsDialog.lockForPlay`).
    */
-  private lockReplayOptionsForPlay(liveTempo = false): void {
+  private lockReplayOptionsForPlay(liveTempo = false, chartEntry?: LibraryChart): void {
     this.replayAutoSave.latch(this.guiState.autoSaveReplay);
-    this.leaderboard.lockForPlay();
+    this.leaderboard.lockForPlay(chartEntry);
     this.optionsDialog.lockForPlay(liveTempo);
   }
 

@@ -1,6 +1,6 @@
 import type { Graphics } from 'pixi.js';
 import { describe, expect, it } from 'vite-plus/test';
-import { grainsFor, ShapeBatch, trailGrainsFor } from './draw.ts';
+import { drawReticle, grainsFor, ShapeBatch, trailGrainsFor } from './draw.ts';
 
 /** Records the geometry and paint calls a `Graphics` receives, in order. */
 function recorder(): { graphics: Graphics; calls: string[] } {
@@ -20,6 +20,10 @@ function recorder(): { graphics: Graphics; calls: string[] } {
     },
     fill(style: { color: number; alpha: number }) {
       calls.push(`fill ${style.color.toString(16)} ${style.alpha}`);
+      return graphics;
+    },
+    quadraticCurveTo(cpx: number, cpy: number, x: number, y: number) {
+      calls.push(`quad ${cpx},${cpy} ${x},${y}`);
       return graphics;
     },
     stroke(style: { color: number; width: number; alpha: number }) {
@@ -132,5 +136,43 @@ describe('trailGrainsFor', () => {
     expect(wide.lanes).toBe(3);
     expect(wide.lanes).toBeGreaterThan(thin.lanes);
     expect(wide.count * wide.lanes * wide.size ** 2 * wide.alpha).toBeCloseTo(0.8 * 10 * 4.5 * 0.2, 6);
+  });
+});
+
+describe('drawReticle cross', () => {
+  /** The cross's two arms as `[x1, y1, x2, y2]`, read from the last stroke's move/line pairs. */
+  function crossArms(crossAngle?: number): number[][] {
+    const { graphics, calls } = recorder();
+    drawReticle(graphics, 0, 0, 100, 100, 0xffffff, 1, { cross: true, crossAngle });
+    const cross = calls.slice(calls.lastIndexOf(calls.find((call) => call.startsWith('stroke'))!) + 1, -1);
+    const points = cross.map((call) => call.split(' ')[1]!.split(',').map(Number));
+    return [
+      [...points[0]!, ...points[1]!],
+      [...points[2]!, ...points[3]!],
+    ];
+  }
+
+  it('draws an upright + about the centre by default', () => {
+    expect(crossArms()).toEqual([
+      [40, 50, 60, 50],
+      [50, 40, 50, 60],
+    ]);
+  });
+
+  it('turns counter-clockwise on screen for a negative angle', () => {
+    const [horizontal] = crossArms(-Math.PI / 8);
+    // y points down: the arm's right end rises and its left end drops.
+    expect(horizontal![2]).toBeGreaterThan(50);
+    expect(horizontal![3]).toBeLessThan(50);
+    expect(horizontal![1]).toBeGreaterThan(50);
+  });
+
+  it('keeps both arms the same length and perpendicular at any angle', () => {
+    const [a, b] = crossArms(-0.7);
+    const va = [a![2]! - a![0]!, a![3]! - a![1]!];
+    const vb = [b![2]! - b![0]!, b![3]! - b![1]!];
+    expect(Math.hypot(va[0]!, va[1]!)).toBeCloseTo(20);
+    expect(Math.hypot(vb[0]!, vb[1]!)).toBeCloseTo(20);
+    expect(va[0]! * vb[0]! + va[1]! * vb[1]!).toBeCloseTo(0);
   });
 });
