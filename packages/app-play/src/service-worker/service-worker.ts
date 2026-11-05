@@ -18,6 +18,7 @@ import {
   SHELL_URL,
   extractFontFileURLs,
   ffmpegCoreCacheName,
+  fontFetchInit,
   isCacheableResponse,
   routeRequest,
   shellCacheName,
@@ -74,8 +75,8 @@ async function precacheFFmpegCore(): Promise<void> {
 async function precacheFonts(): Promise<void> {
   const cache = await caches.open(FONT_CACHE_NAME);
   for (const stylesheet of manifest.fontStylesheets) {
-    const response = await fetch(stylesheet, { mode: 'cors' });
-    if (!isCacheableResponse(response, 'font-stylesheet')) continue;
+    const response = await fetch(stylesheet, fontFetchInit);
+    if (!isCacheableResponse(response)) continue;
     const css = await response.clone().text();
     await cache.put(stylesheet, response);
     const files = extractFontFileURLs(css);
@@ -84,8 +85,8 @@ async function precacheFonts(): Promise<void> {
       while (next < files.length) {
         const url = files[next++]!;
         if ((await cache.match(url, { ignoreVary: true })) !== undefined) continue;
-        const file = await fetch(url, { mode: 'cors' }).catch(() => undefined);
-        if (file !== undefined && isCacheableResponse(file, 'font-file')) await cache.put(url, file);
+        const file = await fetch(url, fontFetchInit).catch(() => undefined);
+        if (file !== undefined && isCacheableResponse(file)) await cache.put(url, file);
       }
     };
     await Promise.all(Array.from({ length: 6 }, worker));
@@ -165,12 +166,33 @@ function matchOptions(route: RequestRoute): CacheQueryOptions | undefined {
   return route === 'font-stylesheet' || route === 'font-file' ? { ignoreVary: true } : undefined;
 }
 
+/**
+ * The request the worker sends for `request`: the fonts go with CORS ({@link fontFetchInit}), so the answer is one the
+ * cache can hand back to a cross-origin isolated page; everything else as the page asked.
+ */
+function networkRequest(request: Request, route: RequestRoute): Request {
+  return route === 'font-stylesheet' || route === 'font-file' ? new Request(request.url, fontFetchInit) : request;
+}
+
+/**
+ * The cached answer to `request`, or `undefined`. A match that throws (an opaque entry an older worker stored, which
+ * COEP forbids reading) counts as a miss, and the entry is dropped so the network answer replaces it.
+ */
+async function matchCached(cache: Cache, request: Request, route: RequestRoute): Promise<Response | undefined> {
+  try {
+    return await cache.match(request, matchOptions(route));
+  } catch {
+    await cache.delete(request, matchOptions(route)).catch(() => false);
+    return undefined;
+  }
+}
+
 async function cacheFirst(request: Request, cacheName: string, route: RequestRoute): Promise<Response> {
   const cache = await caches.open(cacheName);
-  const cached = await cache.match(request, matchOptions(route));
+  const cached = await matchCached(cache, request, route);
   if (cached !== undefined) return cached;
-  const response = await fetch(request);
-  if (isCacheableResponse(response, route)) await cache.put(request, response.clone());
+  const response = await fetch(networkRequest(request, route));
+  if (isCacheableResponse(response)) await cache.put(request, response.clone());
   return response;
 }
 
@@ -181,9 +203,9 @@ async function staleWhileRevalidate(
   event: ExtendableEventLike,
 ): Promise<Response> {
   const cache = await caches.open(cacheName);
-  const cached = await cache.match(request, matchOptions(route));
-  const refresh = fetch(request).then(async (response) => {
-    if (isCacheableResponse(response, route)) await cache.put(request, response.clone());
+  const cached = await matchCached(cache, request, route);
+  const refresh = fetch(networkRequest(request, route)).then(async (response) => {
+    if (isCacheableResponse(response)) await cache.put(request, response.clone());
     return response;
   });
   if (cached === undefined) return refresh;
