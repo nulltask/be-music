@@ -7,6 +7,11 @@ export function leaderboardLink(path: string, hostname: string): string {
   return `https://leaderboard.${leaderboardSite(hostname)}${path}`;
 }
 
+/** An avatar URL from the Leaderboard API, made absolute: a Leaderboard path resolves against {@link leaderboardLink}. */
+export function leaderboardAvatarURL(url: string, hostname: string): string {
+  return url.startsWith('/') ? leaderboardLink(url, hostname) : url;
+}
+
 /** `be-music.app` for `play.be-music.app`, `preview.be-music.app` for `play.preview.be-music.app`, else undefined. */
 export function siteOfPlayHost(hostname: string): string | undefined {
   const match = /^play\.(.+)$/.exec(hostname.toLowerCase());

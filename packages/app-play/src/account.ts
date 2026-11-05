@@ -6,6 +6,8 @@ export interface LeaderboardAccount {
   displayName: string;
   anonymous: boolean;
   passkeys: number;
+  /** The player's avatar: a Leaderboard path (`/players/<handle>/avatar?v=…`) or an absolute URL. */
+  avatarUrl?: string;
 }
 
 export type AccountActionResult = { ok: true } | { ok: false; error: string; code?: string };

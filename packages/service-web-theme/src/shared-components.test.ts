@@ -71,17 +71,19 @@ test('identity decisions agree for named, anonymous, and handle-less accounts', 
   });
 });
 
-test('avatars share lazy decorative defaults and allow an accessible rounded profile preview', () => {
+test('avatars are always round, cropped squares with lazy decorative defaults and an optional accessible name', () => {
   expect(compact(avatarTemplate({ size: 24 }))).toBe('');
   const decorative = compact(avatarTemplate({ src: '/avatar?a=1&b=2', size: 24 }));
   expect(decorative).toContain('src="/avatar?a=1&amp;b=2"');
   expect(decorative).toContain('width="24" height="24"');
   expect(decorative).toContain('alt="" loading="lazy" decoding="async"');
-  expect(decorative).toContain('rounded-full');
-  const preview = compact(avatarTemplate({ src: '/avatar', size: 96, shape: 'rounded', alt: '"Your avatar"' }));
+  expect(decorative).toContain(
+    'class="bg-muted ring-foreground/10 inline-block aspect-square shrink-0 rounded-full object-cover ring-1"',
+  );
+  const preview = compact(avatarTemplate({ src: '/avatar', size: 96, className: 'size-24', alt: '"Your avatar"' }));
   expect(preview).toContain('alt="&quot;Your avatar&quot;"');
-  expect(preview).toContain('rounded-lg');
-  expect(preview).not.toContain('rounded-full');
+  expect(preview).toContain('rounded-full object-cover ring-1 size-24"');
+  expect(preview).not.toContain('rounded-lg');
 });
 
 test('compact and detailed identities retain escaping and anonymous presentation', () => {
