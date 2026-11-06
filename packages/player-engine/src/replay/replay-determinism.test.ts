@@ -53,8 +53,8 @@ function buildInputs(replay: BeMusicReplay): ReplayInputEvent[] {
     }
     const downUs = note.timeUs + PRESS_OFFSETS_US[index % PRESS_OFFSETS_US.length]!;
     const upUs = note.type === 'long' && note.endTimeUs !== undefined ? note.endTimeUs : downUs + TAP_HOLD_US;
-    events.push({ timeUs: downUs, action: 'down', channels: [note.channel] });
-    events.push({ timeUs: upUs, action: 'up', channels: [note.channel] });
+    events.push({ timeUs: downUs, action: 'down', channels: [note.channel], source: 0 });
+    events.push({ timeUs: upUs, action: 'up', channels: [note.channel], source: 0 });
   });
   events.sort((left, right) => left.timeUs - right.timeUs);
   return events.map((event, seq) => ({ ...event, seq }));

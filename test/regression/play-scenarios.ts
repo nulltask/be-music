@@ -5,6 +5,7 @@ import type { PlayerGaugeSummary } from '@be-music/player-engine/signals';
 import type {
   BeMusicReplay,
   ReplayInputEvent,
+  ReplayInputSource,
   ReplayNote,
   RulesetId,
   ReplayRulesetResult,
@@ -35,16 +36,22 @@ const OFFSET_SCENARIO_SKIP_EVERY = 7;
 /** How long a tap is held, capped so it never runs into the lane's next press. */
 const TAP_HOLD_US = 40_000;
 
+/** One scenario's input stream and the input-source table its events name (`play.inputSources`). */
+export interface ScenarioInputs {
+  inputs: ReplayInputEvent[];
+  inputSources: ReplayInputSource[];
+}
+
 /**
  * The three input streams the corpus pins: no input, every note on time, and presses cycled across every window.
  * `chart` is the replay's chart: its notes, and its lane mode for the scratch lanes.
  */
 export function buildScenarios(
   chart: Pick<BeMusicReplay['chart'], 'notes' | 'laneMode'>,
-): Record<string, ReplayInputEvent[]> {
+): Record<string, ScenarioInputs> {
   const scratchChannels = resolveScenarioScratchChannels(chart.laneMode);
   return {
-    missed: [],
+    missed: { inputs: [], inputSources: [] },
     perfect: buildInputs(
       chart.notes,
       scratchChannels,
@@ -69,6 +76,8 @@ function resolveScenarioScratchChannels(laneMode: string): ReadonlySet<string> {
 export interface EngineReplayOptions {
   randomDraws: RandomDraws;
   inputs: readonly ReplayInputEvent[];
+  /** The input-source table `inputs` name. */
+  inputSources?: readonly ReplayInputSource[];
   judgeRuleset?: RulesetId;
   speed: number;
 }
@@ -94,6 +103,7 @@ export async function replayEngine(json: BeMusicJSON, options: EngineReplayOptio
     writeOutput: () => {},
     ...(options.judgeRuleset === undefined ? {} : { judgeRuleset: options.judgeRuleset }),
     replayInputs: options.inputs,
+    ...(options.inputSources !== undefined ? { replayInputSources: options.inputSources } : {}),
     recordReplay: {},
     onReplayRecorded: (recorded) => {
       replay = recorded;
@@ -181,16 +191,17 @@ function roundGauge(gauge: PlayerGaugeSummary): PlayerGaugeSummary {
  * the pressable notes so the stream is deterministic. Presses on one lane never overlap: a press waits for the
  * lane's previous release, and a tap is released before the lane's next press.
  *
- * A scratch press spins clockwise. A long note on a scratch lane ends the way a keyboard player ends a back-spin
- * scratch under the odd-even rule: the key is let go and the other scratch key goes down at the tail (a reverse spin,
- * which judges a back-spin scratch's tail), to be released a tap later.
+ * Each lane is played on a key of its own. A scratch press spins clockwise. A long note on a scratch lane ends the way
+ * a keyboard player ends a back-spin scratch: the key is let go and the lane's other key goes down at the tail (a press
+ * from another source, which judges a back-spin scratch's tail), to be released a tap later. Sources are numbered in
+ * the order they first appear, as the engine's recorder numbers them.
  */
 function buildInputs(
   notes: readonly ReplayNote[],
   scratchChannels: ReadonlySet<string>,
   offsetUs: (index: number) => number,
   skip: (index: number) => boolean,
-): ReplayInputEvent[] {
+): ScenarioInputs {
   const pressable = notes.filter((note) => note.type !== 'mine' && note.type !== 'invisible');
   const byChannel = new Map<string, Array<{ note: ReplayNote; index: number }>>();
   pressable.forEach((note, index) => {
@@ -202,7 +213,7 @@ function buildInputs(
     byChannel.set(note.channel, lane);
   });
 
-  const events: Array<Omit<ReplayInputEvent, 'seq'>> = [];
+  const events: Array<Omit<ReplayInputEvent, 'seq' | 'source'> & { key: string }> = [];
   for (const [channel, lane] of byChannel) {
     let lastUpUs = Number.NEGATIVE_INFINITY;
     lane.forEach(({ note, index }, position) => {
@@ -213,15 +224,23 @@ function buildInputs(
       const naturalUpUs = note.endTimeUs === undefined ? downUs + TAP_HOLD_US : note.endTimeUs + offset;
       const upUs = Math.max(downUs + 1, Math.min(naturalUpUs, nextDownUs - 1));
       const scratch = scratchChannels.has(channel);
-      events.push({ timeUs: downUs, action: 'down', channels: [channel], ...(scratch ? { spin: 'cw' as const } : {}) });
-      events.push({ timeUs: upUs, action: 'up', channels: [channel] });
+      const key = `lane-${channel}`;
+      events.push({
+        timeUs: downUs,
+        action: 'down',
+        channels: [channel],
+        key,
+        ...(scratch ? { spin: 'cw' as const } : {}),
+      });
+      events.push({ timeUs: upUs, action: 'up', channels: [channel], key });
       lastUpUs = upUs;
       if (scratch && note.endTimeUs !== undefined && upUs + 2 < nextDownUs - 1) {
         // The reverse spin, a microsecond after the release.
         const reverseDownUs = upUs + 1;
         const reverseUpUs = Math.max(reverseDownUs + 1, Math.min(reverseDownUs + TAP_HOLD_US, nextDownUs - 1));
-        events.push({ timeUs: reverseDownUs, action: 'down', channels: [channel], spin: 'ccw' });
-        events.push({ timeUs: reverseUpUs, action: 'up', channels: [channel] });
+        const reverseKey = `lane-${channel}-reverse`;
+        events.push({ timeUs: reverseDownUs, action: 'down', channels: [channel], key: reverseKey, spin: 'ccw' });
+        events.push({ timeUs: reverseUpUs, action: 'up', channels: [channel], key: reverseKey });
         lastUpUs = reverseUpUs;
       }
     });
@@ -234,5 +253,16 @@ function buildInputs(
       (left.action === right.action ? 0 : left.action === 'up' ? -1 : 1) ||
       left.channels[0]!.localeCompare(right.channels[0]!),
   );
-  return events.map((event, seq) => ({ seq, ...event }));
+  const inputSources: ReplayInputSource[] = [];
+  const ids = new Map<string, number>();
+  const inputs = events.map(({ key, ...event }, seq) => {
+    let source = ids.get(key);
+    if (source === undefined) {
+      source = inputSources.length;
+      ids.set(key, source);
+      inputSources.push({ id: source, kind: 'key', device: 'keyboard', label: key });
+    }
+    return { seq, ...event, source };
+  });
+  return { inputs, inputSources };
 }

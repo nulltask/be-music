@@ -97,8 +97,14 @@ async function setup(): Promise<unknown> {
   }));
   const inputs = notes
     .flatMap((note) => [
-      { seq: 0, timeUs: note.timeUs, action: 'down' as const, channels: [note.channel] },
-      { seq: 0, timeUs: note.endTimeUs ?? note.timeUs + 1000, action: 'up' as const, channels: [note.channel] },
+      { seq: 0, timeUs: note.timeUs, action: 'down' as const, channels: [note.channel], source: 0 },
+      {
+        seq: 0,
+        timeUs: note.endTimeUs ?? note.timeUs + 1000,
+        action: 'up' as const,
+        channels: [note.channel],
+        source: 0,
+      },
     ])
     .sort((a, b) => a.timeUs - b.timeUs);
   inputs.forEach((input, i) => (input.seq = i));
@@ -117,7 +123,14 @@ async function setup(): Promise<unknown> {
       playFingerprint: computePlayFingerprint(played, { chartPath }),
     },
     inputs,
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', judgeRuleset: 'lr2', randomDraws: draws },
+    play: {
+      inputSources: [{ id: 0, kind: 'key', device: 'keyboard', label: 'z' }],
+      mode: 'manual',
+      autoScratch: false,
+      gauge: 'GROOVE',
+      judgeRuleset: 'lr2',
+      randomDraws: draws,
+    },
   };
 
   return {

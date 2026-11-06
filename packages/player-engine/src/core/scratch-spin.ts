@@ -1,30 +1,18 @@
 /**
- * Which way a scratch press spins the turntable (#940). A back-spin scratch (BSS) is a charge long note on a scratch
- * lane: its head is hit with a spin one way and its tail is judged on a spin the other way (see
- * `isBackSpinScratch` in `ruleset/long-note.ts`). The spin is part of the press, so the judge core, the replay and the
- * replay simulator all read it from the input instead of guessing it from the keys.
+ * Which way a scratch press spins the turntable (#940), for display: the turntable's animation, live and in a replay.
+ * Judging does not read it: a back-spin scratch (`isBackSpinScratch` in `ruleset/long-note.ts`) ends on a press from
+ * another input source than the one that hit its head (`input-source.ts`, #605).
  *
  * - A controller that reports rotation (a turntable or an analog axis) sends the direction it actually turned.
  * - A keyboard uses odd-even: a scratch lane's keys alternate as the two directions, so its first key spins
  *   clockwise, its second counterclockwise, its third clockwise again, and so on ({@link createScratchSpinByToken}).
- * - Input with no direction (a touch lane) sends none: any fresh press then turns a BSS back
- *   ({@link isReverseScratchSpin}).
+ * - Input with no direction (a touch lane) sends none.
  */
 export type ScratchSpin = 'cw' | 'ccw';
 
 /** True for the two values a {@link ScratchSpin} takes (replay validation). */
 export function isScratchSpin(value: unknown): value is ScratchSpin {
   return value === 'cw' || value === 'ccw';
-}
-
-/**
- * True when a press spinning `press` reverses a back-spin scratch whose head was hit spinning `head`: every press
- * except one known to spin the same way as the head. Input that reports no spin (a touch lane, or an ANY KEY press from
- * a non-scratch key) has no other way to express the turn-back than a fresh press while the BSS is held, so a press
- * without a spin reverses it, and so does any press after a head hit without one.
- */
-export function isReverseScratchSpin(head: ScratchSpin | undefined, press: ScratchSpin | undefined): boolean {
-  return head === undefined || press === undefined || head !== press;
 }
 
 /** The part of a lane binding the odd-even rule reads (`LaneBinding` in `lane-layout.ts`). */

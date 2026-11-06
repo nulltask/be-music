@@ -58,8 +58,8 @@ function presses(chart: LibraryChart['chart']): ReplayInputEvent[] {
   const events: ReplayInputEvent[] = [];
   for (const note of resolveChart(chart).notes) {
     const timeUs = Math.round(note.seconds * 1_000_000);
-    events.push({ seq: 0, timeUs, action: 'down', channels: [note.channel] });
-    events.push({ seq: 0, timeUs: timeUs + 40_000, action: 'up', channels: [note.channel] });
+    events.push({ seq: 0, timeUs, action: 'down', channels: [note.channel], source: 0 });
+    events.push({ seq: 0, timeUs: timeUs + 40_000, action: 'up', channels: [note.channel], source: 0 });
   }
   return events.sort((left, right) => left.timeUs - right.timeUs).map((event, seq) => ({ ...event, seq }));
 }

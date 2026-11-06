@@ -48,12 +48,19 @@ function makeReplay(): BeMusicReplay {
       ],
     },
     inputs: [
-      { seq: 0, timeUs: 499_000, action: 'down', channels: ['11'], tokens: ['z'], code: 'KeyZ' },
-      { seq: 1, timeUs: 520_000, action: 'up', channels: ['11', '12'], code: 'touch' },
-      { seq: 3, timeUs: 600_000, action: 'down', channels: ['16'], tokens: ['ctrl-left'], spin: 'ccw' },
-      { seq: 2, timeUs: 640_000, action: 'up', channels: ['13'], tokens: ['x'], inferred: true },
+      { seq: 0, timeUs: 499_000, action: 'down', channels: ['11'], source: 0, code: 'KeyZ' },
+      { seq: 1, timeUs: 520_000, action: 'up', channels: ['11', '12'], source: 3, code: 'touch' },
+      { seq: 3, timeUs: 600_000, action: 'down', channels: ['16'], source: 1, spin: 'ccw' },
+      { seq: 2, timeUs: 640_000, action: 'up', channels: ['13'], source: 2, inferred: true },
     ],
     play: {
+      inputSources: [
+        { id: 0, kind: 'key', device: 'keyboard', label: 'z' },
+        { id: 1, kind: 'turntable', device: 'controller', label: 'tt', direction: 'down' },
+        { id: 2, kind: 'key', device: 'keyboard', label: 'x' },
+        { id: 3, kind: 'button', device: 'touch', label: 'z' },
+      ],
+      analogScratch: { algorithm: 'be-music/1', thresholdTicks: 2, stopMs: 100 },
       mode: 'manual',
       autoScratch: true,
       controlInputs: [
@@ -150,7 +157,7 @@ describe('replay format', () => {
         notes: [],
       },
       inputs: [],
-      play: { mode: 'auto', autoScratch: false, gauge: 'GROOVE' },
+      play: { inputSources: [], mode: 'auto', autoScratch: false, gauge: 'GROOVE' },
     };
     const parsed = parseReplay(serializeReplay(minimal));
     expect(parsed).toEqual(minimal);
@@ -211,15 +218,91 @@ describe('replay format', () => {
     }
   });
 
-  test('writes the unstable revision 0 and still reads logs stamped 1, as revision 0', () => {
+  test('writes the unstable revision 0 and rejects logs stamped 1', () => {
     expect(BE_MUSIC_REPLAY_VERSION).toBe(0);
-    const legacy = parseReplay(
+    expect(() =>
+      parseReplay(
+        corrupt((value) => {
+          value.version = 1;
+        }),
+      ),
+    ).toThrow(/^version:/);
+  });
+
+  test('round-trips the input-source table and the analog scratch algorithm', () => {
+    const parsed = parseReplay(serializeReplay(makeReplay()));
+    expect(parsed.play.inputSources).toEqual(makeReplay().play.inputSources);
+    expect(parsed.play.analogScratch).toEqual({ algorithm: 'be-music/1', thresholdTicks: 2, stopMs: 100 });
+    expect(parsed.inputs.map((input) => input.source)).toEqual([0, 3, 1, 2]);
+  });
+
+  // Replays recorded before input sources are rejected rather than guessed (#605): the format is still revision 0.
+  test('rejects a log without input sources, or whose inputs name no source', () => {
+    expect(() =>
+      parseReplay(
+        corrupt((value) => {
+          delete (value.play as Record<string, unknown>).inputSources;
+        }),
+      ),
+    ).toThrow(/^play\.inputSources: required/);
+    expect(() =>
+      parseReplay(
+        corrupt((value) => {
+          const input = (value.inputs as Array<Record<string, unknown>>)[0]!;
+          delete input.source;
+          input.tokens = ['z'];
+        }),
+      ),
+    ).toThrow(/^inputs\[0\]\.source: expected a non-negative integer/);
+    expect(() =>
+      parseReplay(
+        corrupt((value) => {
+          (value.inputs as Array<Record<string, unknown>>)[1]!.source = 9;
+        }),
+      ),
+    ).toThrow(/^inputs\[1\]\.source: no input source 9/);
+  });
+
+  test('validates the input-source table: unique ids, kinds, devices, labels and turntable directions', () => {
+    const withSources = (inputSources: unknown[]) =>
       corrupt((value) => {
-        value.version = 1;
-      }),
+        value.inputs = [];
+        (value.play as Record<string, unknown>).inputSources = inputSources;
+      });
+    const key = { id: 0, kind: 'key', device: 'keyboard', label: 'z' };
+    expect(parseReplay(withSources([key])).play.inputSources).toEqual([key]);
+    expect(() => parseReplay(withSources([key, { ...key, label: 'x' }]))).toThrow(/\[1\]\.id: duplicate id 0/);
+    expect(() => parseReplay(withSources([{ ...key, kind: 'pedal' }]))).toThrow(/\.kind:/);
+    expect(() => parseReplay(withSources([{ ...key, device: 'gamepad' }]))).toThrow(/\.device:/);
+    // Labels are normalised names, never device strings.
+    expect(() => parseReplay(withSources([{ ...key, label: 'Xbox 360 Controller (Vendor: 045e)' }]))).toThrow(
+      /\.label:/,
     );
-    expect(legacy.version).toBe(0);
-    expect(legacy).toEqual(parseReplay(serializeReplay(makeReplay())));
+    expect(() => parseReplay(withSources([{ ...key, label: '' }]))).toThrow(/\.label:/);
+    expect(() => parseReplay(withSources([{ ...key, id: -1 }]))).toThrow(/\.id:/);
+    const turntable = { id: 1, kind: 'turntable', device: 'controller', label: 'tt' };
+    expect(() => parseReplay(withSources([turntable]))).toThrow(/\.direction: expected 'up' \| 'down' on a turntable/);
+    expect(() => parseReplay(withSources([{ ...turntable, direction: 'left' }]))).toThrow(/\.direction:/);
+    expect(() => parseReplay(withSources([{ ...key, direction: 'up' }]))).toThrow(/only a turntable source/);
+    // Fields that are not part of a source are not kept.
+    expect(
+      parseReplay(withSources([{ ...turntable, direction: 'up', gamepadId: 'Vendor 045e' }])).play.inputSources,
+    ).toEqual([{ ...turntable, direction: 'up' }]);
+  });
+
+  test('validates play.analogScratch', () => {
+    const withAnalog = (analogScratch: unknown) =>
+      corrupt((value) => {
+        (value.play as Record<string, unknown>).analogScratch = analogScratch;
+      });
+    expect(parseReplay(withAnalog({ algorithm: 'be-music/1' })).play.analogScratch).toEqual({
+      algorithm: 'be-music/1',
+    });
+    expect(() => parseReplay(withAnalog({ algorithm: '' }))).toThrow(/analogScratch\.algorithm/);
+    expect(() => parseReplay(withAnalog({ algorithm: 'x', stopMs: -1 }))).toThrow(/analogScratch\.stopMs/);
+    expect(() => parseReplay(withAnalog({ algorithm: 'x', thresholdTicks: 1.5 }))).toThrow(
+      /analogScratch\.thresholdTicks/,
+    );
   });
 
   test('rejects invalid JSON and wrong format / version / clock markers', () => {

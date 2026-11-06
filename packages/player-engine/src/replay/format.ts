@@ -50,8 +50,16 @@ import {
   parseResults,
   ReplayParseError,
 } from './parse.ts';
+import {
+  parseReplayAnalogScratch,
+  parseReplayInputSources,
+  type ReplayAnalogScratch,
+  type ReplayInputSource,
+} from './input-sources.ts';
 
 export { ReplayParseError } from './parse.ts';
+export type { ReplayAnalogScratch, ReplayInputSource } from './input-sources.ts';
+export { parseReplayAnalogScratch, parseReplayInputSources } from './input-sources.ts';
 
 /**
  * Be-Music replay ("replay") format.
@@ -71,12 +79,6 @@ export const BE_MUSIC_REPLAY_FORMAT = 'be-music-replay';
  * number moving. The first stable revision will be `1`.
  */
 export const BE_MUSIC_REPLAY_VERSION = 0;
-
-/**
- * Revisions {@link parseReplay} still reads. Logs were stamped `1` before the format was marked unstable; their shape is
- * the same, so they parse as revision `0`.
- */
-const LEGACY_REPLAY_VERSIONS: ReadonlySet<unknown> = new Set([1]);
 
 /** Recommended file suffix for serialized replays (JSON payload). */
 export const REPLAY_FILE_SUFFIX = '.bmplay.json';
@@ -117,18 +119,21 @@ export interface ReplayInputEvent {
    * search all of them for a judgable note, mirroring the live engine.
    */
   channels: string[];
-  /** Raw input tokens (`'z'`, `'shift-left'`, ...) — diagnostic only; simulators use `channels`. */
-  tokens?: string[];
+  /**
+   * The physical input the event came from: an `id` in {@link ReplayPlay.inputSources}. Authoritative: the judge and
+   * the simulators key a scratch hold by it (beatoraja's back-spin scratch and scratch LN rules), and lane holds and
+   * ANY KEY routes by it.
+   */
+  source: number;
   /**
    * The physical input the player pressed or let go: a keyboard's `KeyboardEvent.code` (`'KeyZ'`, `'ShiftLeft'`), or
-   * `'touch'` for a touch lane. Diagnostic only, like `tokens`; absent when the host named none (a terminal, an
-   * inferred release).
+   * `'touch'` for a touch lane. Diagnostic only; absent when the host named none (a terminal, an inferred release).
    */
   code?: string;
   /**
    * The way a scratch press turned the turntable (`'cw'` / `'ccw'`): the direction a controller reported, or the
-   * keyboard's odd-even key. A back-spin scratch's tail is judged on a press spinning the other way from the press
-   * that hit its head, so simulators read it. Only on a `down`; absent when the press reported no spin.
+   * keyboard's odd-even key. Display only (the turntable's animation in a replay); judging reads {@link source}. Only
+   * on a `down`; absent when the press reported no spin.
    */
   spin?: ScratchSpin;
   /**
@@ -235,6 +240,13 @@ export interface ReplayChart {
 }
 
 export interface ReplayPlay {
+  /**
+   * The physical inputs the play used (#605), numbered by `id`; every input event names one (`ReplayInputEvent.source`).
+   * Coarse device classes and normalised labels only — never a device id, vendor or product id, or serial.
+   */
+  inputSources: ReplayInputSource[];
+  /** How the host turned an analog turntable axis into presses and releases, when one was played. */
+  analogScratch?: ReplayAnalogScratch;
   /** Absent retains beatoraja-compatible bmson zero-total recovery. */
   bmsonTotalMode?: import('../ruleset/bmson-total.ts').BmsonTotalMode;
   /** Selected source options at the start; typed effective play/chart fields remain authoritative for judging. */
@@ -495,7 +507,7 @@ export function parseReplay(source: unknown): BeMusicReplay {
   if (root.format !== BE_MUSIC_REPLAY_FORMAT) {
     throw new ReplayParseError(`format: expected '${BE_MUSIC_REPLAY_FORMAT}', got ${JSON.stringify(root.format)}`);
   }
-  if (root.version !== BE_MUSIC_REPLAY_VERSION && !LEGACY_REPLAY_VERSIONS.has(root.version)) {
+  if (root.version !== BE_MUSIC_REPLAY_VERSION) {
     throw new ReplayParseError(`version: unsupported version ${JSON.stringify(root.version)}`);
   }
   const clock = expectRecord(root.clock, 'clock');
@@ -506,6 +518,12 @@ export function parseReplay(source: unknown): BeMusicReplay {
   const chart = parseChart(expectRecord(root.chart, 'chart'));
   const inputs = parseInputs(root.inputs);
   const play = parsePlay(expectRecord(root.play, 'play'));
+  const sourceIds = new Set(play.inputSources.map((source) => source.id));
+  inputs.forEach((input, index) => {
+    if (!sourceIds.has(input.source)) {
+      throw new ReplayParseError(`inputs[${index}].source: no input source ${input.source} in play.inputSources`);
+    }
+  });
   if (
     play.bmsonTotalMode === 'spec' &&
     chart.total !== undefined &&
@@ -717,13 +735,8 @@ function parseInputs(value: unknown): ReplayInputEvent[] {
       timeUs: expectFiniteNumber(record.timeUs, `inputs[${index}].timeUs`),
       action,
       channels: channelsRaw as string[],
+      source: expectNonNegativeInteger(record.source, `inputs[${index}].source`),
     };
-    if (record.tokens !== undefined) {
-      if (!Array.isArray(record.tokens) || record.tokens.some((token) => typeof token !== 'string')) {
-        throw new ReplayParseError(`inputs[${index}].tokens: expected string[]`);
-      }
-      event.tokens = record.tokens as string[];
-    }
     if (record.code !== undefined) {
       if (typeof record.code !== 'string' || record.code.length === 0) {
         throw new ReplayParseError(`inputs[${index}].code: expected a non-empty string`);
@@ -781,11 +794,16 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   if (!isGaugeType(gauge)) {
     throw new ReplayParseError(`play.gauge: expected one of ${GAUGE_TYPES.join(' | ')}`);
   }
+  if (play.inputSources === undefined) {
+    throw new ReplayParseError('play.inputSources: required (replays recorded before input sources are not read)');
+  }
   const parsed: ReplayPlay = {
+    inputSources: parseReplayInputSources(play.inputSources),
     mode,
     autoScratch: play.autoScratch === true,
     gauge,
   };
+  if (play.analogScratch !== undefined) parsed.analogScratch = parseReplayAnalogScratch(play.analogScratch);
   if (play.randomLane !== undefined) {
     const randomLane = expectRecord(play.randomLane, 'play.randomLane');
     parsed.randomLane = {};

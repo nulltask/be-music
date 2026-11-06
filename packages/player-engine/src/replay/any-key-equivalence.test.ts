@@ -11,8 +11,18 @@ import type { RulesetId } from '../ruleset/index.ts';
  * must route it the same way from the same log, which keeps the keys' own lanes.
  */
 
-function key(seq: number, timeUs: number, action: 'down' | 'up', channel: string, token?: string): ReplayInputEvent {
-  return { seq, timeUs, action, channels: [channel], ...(token !== undefined ? { tokens: [token] } : {}) };
+/** The keys the inputs are played on: each its own input source, numbered by its place here. */
+const KEYS = ['z', 's', 'x'] as const;
+const INPUT_SOURCES = KEYS.map((label, id) => ({ id, kind: 'key' as const, device: 'keyboard' as const, label }));
+
+function key(
+  seq: number,
+  timeUs: number,
+  action: 'down' | 'up',
+  channel: string,
+  label: (typeof KEYS)[number] = 'z',
+): ReplayInputEvent {
+  return { seq, timeUs, action, channels: [channel], source: KEYS.indexOf(label) };
 }
 
 /** BPM 240 → one measure per second, so `measure` + `position` read directly as seconds. */
@@ -43,7 +53,10 @@ function simulatedJudgments(result: ReplayRulesetResult): Record<string, number>
 const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
 
 async function playAndSimulate(json: BeMusicJSON, inputs: readonly ReplayInputEvent[], ruleset: RulesetId) {
-  const { summary, replay } = await runRecordedPlay(json, inputs, ruleset, { anyKey: true });
+  const { summary, replay } = await runRecordedPlay(json, inputs, ruleset, {
+    anyKey: true,
+    replayInputSources: INPUT_SOURCES,
+  });
   const simulated = simulateReplay(replay, { ruleset });
   expect(judgments(summary)).toEqual(simulatedJudgments(simulated));
   expect(summary.exScore).toBe(simulated.exScore);
@@ -121,7 +134,7 @@ describe.concurrent('ANY KEY engine / simulator equivalence', () => {
     expect(summary.maxCombo).toBeGreaterThanOrEqual(3);
   });
 
-  test.each(RULESETS)('%s: a log without tokens routes by the keys’ own lanes', async (ruleset) => {
+  test.each(RULESETS)('%s: presses of one key route by the key’s own lane', async (ruleset) => {
     const json = chart([
       { measure: 1, channel: '14', position: [0, 1], value: '01' },
       { measure: 1, channel: '16', position: [1, 2], value: '01' },

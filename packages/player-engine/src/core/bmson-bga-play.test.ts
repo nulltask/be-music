@@ -83,10 +83,10 @@ test.each(['auto', 'replay'] as const)('%s seek rebuilds sequence history at the
       driver === 'replay'
         ? {
             replayInputs: [
-              { seq: 0, timeUs: 1000000, action: 'down', channels: ['11'] },
-              { seq: 1, timeUs: 1060000, action: 'up', channels: ['11'] },
-              { seq: 2, timeUs: 3000000, action: 'down', channels: ['11'] },
-              { seq: 3, timeUs: 3060000, action: 'up', channels: ['11'] },
+              { seq: 0, timeUs: 1000000, action: 'down', channels: ['11'], source: 0 },
+              { seq: 1, timeUs: 1060000, action: 'up', channels: ['11'], source: 0 },
+              { seq: 2, timeUs: 3000000, action: 'down', channels: ['11'], source: 0 },
+              { seq: 3, timeUs: 3060000, action: 'up', channels: ['11'], source: 0 },
             ],
           }
         : {},
@@ -152,12 +152,14 @@ test.each(['auto', 'replay'] as const)(
                   timeUs: Math.round(note.seconds * 1e6),
                   action: 'down' as const,
                   channels: [note.channel],
+                  source: 0,
                 },
                 {
                   seq: index * 2 + 1,
                   timeUs: Math.round((note.seconds + 0.06) * 1e6),
                   action: 'up' as const,
                   channels: [note.channel],
+                  source: 0,
                 },
               ]),
             }

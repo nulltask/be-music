@@ -161,9 +161,9 @@ async function buildResolvedExpected(
   const { replay } = await replayEngine(json, { randomDraws, inputs: [], speed: ENGINE_REPLAY_SPEED });
   const notes = replay.chart.notes;
   const play: Record<string, unknown> = {};
-  for (const [id, inputs] of Object.entries(buildScenarios(replay.chart))) {
-    const simulated = simulateReplayRulesets({ ...replay, inputs });
-    const replays = await replayEngineRulesets(json, { randomDraws, inputs, speed: ENGINE_REPLAY_SPEED });
+  for (const [id, { inputs, inputSources }] of Object.entries(buildScenarios(replay.chart))) {
+    const simulated = simulateReplayRulesets({ ...replay, inputs, play: { ...replay.play, inputSources } });
+    const replays = await replayEngineRulesets(json, { randomDraws, inputs, inputSources, speed: ENGINE_REPLAY_SPEED });
     for (const { ruleset, replay } of replays) {
       expect(findEngineSimulatorMismatches(replay, simulated[ruleset]!), `${path} ${id} ${ruleset}`).toEqual([]);
     }

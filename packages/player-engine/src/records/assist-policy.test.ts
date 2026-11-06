@@ -24,7 +24,7 @@ const note = (channel: string, extra: Partial<ReplayNote> = {}): ReplayNote => (
 function replay(play: Partial<BeMusicReplay['play']> = {}, chart: Partial<AssistReplay['chart']> = {}): AssistReplay {
   return {
     chart: { notes: [note('11'), note('16')], ...chart },
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', ...play },
+    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', ...play, inputSources: play.inputSources ?? [] },
   };
 }
 

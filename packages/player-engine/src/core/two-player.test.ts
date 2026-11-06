@@ -44,6 +44,7 @@ test.each(['lr2', 'beatoraja', '____'] as const)(
         gauge: 'HARD',
         gauge2P: 'EASY',
         replayInputs: replay.inputs,
+        replayInputSources: replay.play.inputSources,
       },
     });
     expect(replayed.summary?.perfect).toBe(1);

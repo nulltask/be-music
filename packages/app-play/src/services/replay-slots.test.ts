@@ -38,8 +38,14 @@ function replay(title = 'Fixture A', chartFingerprint = 'bmfp0:aaaa'): BeMusicRe
       noteCount: 0,
       notes: [],
     },
-    inputs: [{ seq: 0, timeUs: 1000, action: 'down', channels: ['11'] }],
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', judgeRuleset: 'lr2' },
+    inputs: [{ seq: 0, timeUs: 1000, action: 'down', channels: ['11'], source: 0 }],
+    play: {
+      inputSources: [{ id: 0, kind: 'key', device: 'keyboard', label: 'z' }],
+      mode: 'manual',
+      autoScratch: false,
+      gauge: 'GROOVE',
+      judgeRuleset: 'lr2',
+    },
   };
 }
 

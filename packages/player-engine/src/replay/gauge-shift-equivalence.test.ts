@@ -15,7 +15,7 @@ function chart(events: BeMusicJSON['events']): BeMusicJSON {
   return json;
 }
 function down(seq: number, timeUs: number, ...channels: string[]): ReplayInputEvent {
-  return { seq, timeUs, action: 'down', channels };
+  return { seq, timeUs, action: 'down', channels, source: 0 };
 }
 const NOTES = chart([
   { measure: 1, channel: '11', position: [0, 1], value: '01' },
