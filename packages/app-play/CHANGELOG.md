@@ -1,5 +1,28 @@
 # @be-music/app-play
 
+## 0.13.0
+
+### Minor Changes
+
+- c60eb63: Pick PRACTICE bars on the chart, set RANDOM MIX conditions, and show a camera in the BGA frame.
+  
+  - PRACTICE picks its range on the chart: with PRACTICE on, starting a chart opens its score, where a press on a bar plays that bar alone (another bar cuts it short), Shift or a drag picks a run of bars, and Start practice loops them (the whole chart with none picked). The dialog also sets GAUGE TYPE, GAUGE CATEGORY, GAUGE VALUE, JUDGERANK and TOTAL (saved with the settings, so it opens on the last values), and Play without practice plays the chart as a regular play this time, leaving PRACTICE on. Each chart's pick is kept for the page's life, so a retry loops the same bars. The START TIME / END TIME settings and the note-density range picker are removed from Options; settings saved with them still load.
+  - The PRACTICE bar picker starts its score at measure 1 when measure 0 is empty, and a run of bars picked (Shift, a drag) now sounds whole once it settles, cutting the audition playing, as a press on one bar does.
+  - The PRACTICE bar picker skips a measure 0 that only holds BGM, BGA or tempo setup. A PRACTICE play's MY BEST on the score graph now paces against the best record cut down to the bars looped (the best EX score times the share of the chart's notes in those bars) instead of the whole chart's best.
+  - Deciding a RANDOM MIX bar no longer freezes the page on a large library: it used to hash every chart file and resolve every chart's tempo map at once, and now reads a chart's BPMs only when a draw walks it and hashes only the charts drawn. A RANDOM MIX now opens a dialog first that sets the key modes, a level range or the difficulties, the number of stages and the number of loops (either count can be Infinity); OK starts the mix from the charts that fit, and the dialog opens on the conditions last confirmed. An endless mix draws each stage as the run reaches it. A draw of more than five stages, or an endless one, is played without being kept as a course.
+  - The dialog also sets the RANDOM MIX draw settings from Options → Course → My courses (favorite level, BPM range, max and min BPM) and, for a NONSTOP mix, the connection, and it remembers what was entered even when it is cancelled. My courses no longer lists the level limits and stage count, which the dialog now sets.
+  - With the new Estimate a missing #DIFFICULTY option (on by default), narrowing by difficulty also takes a chart that names no `#DIFFICULTY`, by the difficulty the library estimates for it from its names or note count, as the select screen lists it.
+  - A new Camera tab in Options shows a camera in the play's BGA frame instead of the chart's BGA, to film your hands on the keys or your face for a stream. Pick any camera (Allow camera access names them), mirror it, check it in a preview, and switch it during a play. The camera opens only during a play with the setting on, closes on every other screen, and the play falls back to the BGA when the camera is unplugged or its permission is taken back. The picture is not sent anywhere; a Capture recording includes it.
+  - Charts without `#DIFFICULTY` are shown, sorted and filtered under the difficulty their subtitle, title brackets or file name suggest, else their note count gives, marked on the built-in skins with `?` (`HYPER?`) or, from the note count, `??` (`HYPER??`); LR2 and beatoraja skins draw them under that difficulty.
+  - Help's Usage tab now explains the chart select search: plain text matches the title, subtitle, artist, genre or file name ignoring case, and text that starts with `?` is a chart filter (SQL `WHERE` clause with `ORDER BY` / `LIMIT`), with the columns it reads and examples that a test runs through the search. The old line said the search only covered the title, artist and genre.
+  - While Play reads the Leaderboard account, the header, the start card's Leaderboard row and the Options dialog's Account field show shimmering placeholders the size of what replaces them, instead of flashing "Sign in", "Checking account…" or "Not signed in" and then shifting the layout. The start card takes the shape it had on the last visit, and the replay slots card no longer calls a slot empty before the slots have been read.
+  - Options that the other options make meaningless stay in place, dimmed and disabled, instead of disappearing: the hi-speed modes' speeds, HS-FIX and Hi-speed while another mode is on, the CUSTOM JUDGE windows while it is off, EXTRA's minimum level, Scroll ADD's section lines and rate, and the long-note add rate. Turning one on no longer moves the rows under the pointer.
+  - Fix skins drawing with the browser's default fonts after the player became cross-origin isolated: the service worker had cached the Google Fonts stylesheet as an opaque answer, which a COEP page cannot read back, so the stylesheet failed to load. The worker now fetches the fonts with CORS, never stores an opaque answer, treats an unreadable cache entry as a miss, and drops the old fonts cache on activation.
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/skin-beatoraja@0.7.2`, `@be-music/skin-lr2@0.7.2`, `@be-music/service-web-theme@0.5.0`, `@be-music/player-browser@0.17.0`, `@be-music/player-engine@0.16.0`, `@be-music/player-scene-model@0.8.0`, `@be-music/player-skin-sdk@0.11.0`, `@be-music/player-ui@0.8.0`
+
 ## 0.12.0
 
 ### Minor Changes
