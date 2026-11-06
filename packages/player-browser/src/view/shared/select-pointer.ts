@@ -1,8 +1,8 @@
 /**
  * The select screen's pointer input. A click, or a touch that did not swipe, picks the bar under it (or goes to the
  * theme's hit test); a swipe drags the list and lets it glide on when let go; the wheel steps the list a notch at a time,
- * or by the distance a trackpad travels. A list pulled part of a row eases back to one once nothing moves it. While the
- * README overlay is open, the pointer scrolls or closes it instead.
+ * or by the distance a trackpad travels. A list pulled part of a row eases back to one once nothing moves it. The
+ * README dialog lies over the canvas while it is open, so the pointer reaches the list only while it is closed.
  *
  * The pointer reads the last frame and turns what the player does into intents through {@link SelectPointerContext}; the
  * family view passes it.
@@ -65,10 +65,6 @@ export interface SelectPointerContext {
   /** The pointer in design pixels, `-1` while it is off the canvas. */
   mouseX: number;
   mouseY: number;
-  /** Whether the README overlay is open; the pointer then scrolls or closes it. */
-  readonly readTextOpen: boolean;
-  scrollReadText(delta: number): void;
-  closeReadText(): void;
   resolveDesignSize(): SelectDesignSize;
   currentEntries(): readonly LibraryEntry[];
   /** Moves the cursor bar by bar (`SelectSession.moveCursorBy`). */
@@ -156,11 +152,6 @@ export class SelectPointer {
     gesture.lastY = event.offsetY;
     gesture.samples.push({ at: performance.now(), y: event.offsetY / viewport.scale });
     if (gesture.samples.length > TOUCH_SAMPLE_LIMIT) gesture.samples.shift();
-    // A swipe over the open README pans its body, as the wheel does.
-    if (this.ctx.readTextOpen) {
-      this.ctx.scrollReadText(-delta);
-      return;
-    }
     const step = stepTouchScroll(this.listPull, delta, this.resolveTouchScrollPitch());
     this.listPull = step.carry;
     this.lastPullInputAt = performance.now();
@@ -179,7 +170,6 @@ export class SelectPointer {
       this.handlePointerTap(gesture.startX, gesture.startY);
       return;
     }
-    if (this.ctx.readTextOpen) return;
     const now = performance.now();
     const velocity = releaseVelocity(gesture.samples, now);
     if (Math.abs(velocity) >= FLING_START_VELOCITY) {
@@ -266,12 +256,6 @@ export class SelectPointer {
     if (!this.ctx.visible) return;
     if (event.deltaY === 0) return;
     event.preventDefault();
-    // While the readtext modal is open, the wheel scrolls the README body instead of moving the bar cursor. Otherwise
-    // the user couldn't pan a long author note without first closing the overlay.
-    if (this.ctx.readTextOpen) {
-      this.ctx.scrollReadText(event.deltaY);
-      return;
-    }
     const entries = this.ctx.currentEntries();
     if (entries.length === 0) return;
     this.fling = undefined;
@@ -320,21 +304,12 @@ export class SelectPointer {
       };
       return;
     }
-    if (this.ctx.readTextOpen) event.preventDefault();
     this.handlePointerTap(event.offsetX, event.offsetY);
   };
 
   /** A click (or a touch that did not swipe) at canvas point (`offsetX`, `offsetY`), in CSS pixels. */
   private handlePointerTap(offsetX: number, offsetY: number): void {
     if (!this.ctx.visible || this.ctx.launchAt !== undefined) return;
-    // README modal owns the pointer while open. LR2 uses Enter (the decide key) for panel close, mirrored on the
-    // keyboard path; on the mouse side we accept any click anywhere as a dismiss to cover users who'd reach for "click
-    // outside the card" before reading the footer hint. The README content itself isn't interactive so consuming the
-    // click loses no affordance.
-    if (this.ctx.readTextOpen) {
-      this.ctx.closeReadText();
-      return;
-    }
     // No `canvas.focus()` — we listen for `keydown` on `window`, so capturing focus here would needlessly pull it away
     // from any form input the user might already be typing into.
     const themeSize = this.ctx.themeDesignSize;

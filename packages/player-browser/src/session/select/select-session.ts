@@ -2,7 +2,7 @@ import { firstReplaySlot, snapClassicHiSpeed, stepClassicHiSpeed, stepReplaySlot
 /**
  * The select screen's behaviour, whatever family draws it: where the player is in the library, as the browse model of
  * `@be-music/player-scene-model` keeps it (`BrowseState`, changed by `reduceBrowse`, its list derived by `browseEntries`), the
- * play options and the option panels, the search, the README overlay, starting a chart or a course, and the screen's
+ * play options and the option panels, the search, the README dialog, starting a chart or a course, and the screen's
  * sound. What the browse model leaves to the screen comes from the family's select policy (`select-policy.ts`).
  *
  * The sound goes through the audio service: the select BGM (ducked under the chart preview) and the preview of the
@@ -101,7 +101,7 @@ export interface SelectSessionEvents {
   /** The player asked to type a search: the host lays its text field over the skin's search box. */
   search?(): void;
   /**
-   * Shows a chart's text file in the host's own way. Without it, the screen draws its README overlay over the list.
+   * Shows a chart's text file in the host's own way. Without it, the view shows its README dialog over the screen.
    */
   readtext?(chart: LibraryChart): void;
   /** The course maker: name the course being made, or delete the player's own course under the cursor. */
@@ -1072,7 +1072,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   }
 
   // ---------------------------------------------------------------------------------------------------------------------
-  // The README overlay
+  // The README dialog
   // ---------------------------------------------------------------------------------------------------------------------
 
   /** Shows the text file of the chart under the cursor, or closes the one shown. */

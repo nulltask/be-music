@@ -467,7 +467,7 @@ describe('SelectSession panels', () => {
   });
 });
 
-describe('SelectSession README overlay', () => {
+describe('SelectSession README dialog', () => {
   it('shows the text file next to the chart, scrolls it on the keys and closes it on Enter', async () => {
     const library = makeLibrary({ 'pack/readme.txt': new TextEncoder().encode('notes') });
     const { intent, key, advance, cues } = createSession({

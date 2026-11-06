@@ -5,7 +5,7 @@
  * The player can give an operation keys of their own (`ControlActionOverrides`), which take the place of its defaults.
  *
  * A screen asks which of its operations a key event is (`matchControlActions`) instead of reading the key. The keys a
- * screen reads in its own way stay with it: the README overlay's scrolling, the PLAY OPTION panel's option keys (the
+ * screen reads in its own way stay with it: the README dialog's scrolling, the PLAY OPTION panel's option keys (the
  * 1P keys, by button) and the Escape that closes an open panel.
  */
 
