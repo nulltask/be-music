@@ -6,4 +6,4 @@ Deciding a RANDOM MIX bar no longer freezes the page on a large library: it used
 
 The dialog also sets the RANDOM MIX draw settings from Options → Course → My courses (favorite level, BPM range, max and min BPM) and, for a NONSTOP mix, the connection, and it remembers what was entered even when it is cancelled. My courses no longer lists the level limits and stage count, which the dialog now sets.
 
-With the new Estimate a missing #DIFFICULTY option (on by default), narrowing by difficulty also takes a chart that names no `#DIFFICULTY`, by the difficulty beatoraja estimates from its title, subtitle and note count.
+With the new Estimate a missing #DIFFICULTY option (on by default), narrowing by difficulty also takes a chart that names no `#DIFFICULTY`, by the difficulty the library estimates for it from its names or note count, as the select screen lists it.

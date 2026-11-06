@@ -39,8 +39,8 @@ export interface RandomMixConditions {
   /** The `#DIFFICULTY` values allowed ({@link RANDOM_MIX_DIFFICULTIES}). */
   difficulties: number[];
   /**
-   * Whether a chart that names no `#DIFFICULTY` is narrowed by the one estimated for it (as beatoraja estimates it,
-   * {@link RandomMixCandidate.estimatedDifficulty}); off, such a chart never fits a difficulty.
+   * Whether a chart that names no `#DIFFICULTY` is narrowed by the one estimated for it
+   * ({@link RandomMixCandidate.estimatedDifficulty}); off, such a chart never fits a difficulty.
    */
   estimateDifficulty: boolean;
   count: RandomMixCount;
@@ -136,7 +136,10 @@ export interface RandomMixCandidate {
   level: number;
   /** `#DIFFICULTY` (1-5), when the chart has one. */
   difficulty?: number;
-  /** The `#DIFFICULTY` estimated for a chart that names none (`estimateChartDifficulty`). */
+  /**
+   * The difficulty estimated for a chart that names none, from its names or note count (the library's
+   * `resolveLibraryChartDifficulty`).
+   */
   estimatedDifficulty?: number;
 }
 
