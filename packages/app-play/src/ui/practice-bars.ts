@@ -10,6 +10,7 @@ import {
   type PracticeGaugeCategory,
 } from '@be-music/player-scene-model';
 import {
+  chartScoreRangeTimes,
   defineBeMusicElements,
   layoutChartScore,
   type BeMusicUIEvent,
@@ -57,6 +58,9 @@ export interface PracticeBarsDialogDeps {
   readonly setPlayOptions: (changes: Partial<PlayOptions>) => void;
 }
 
+/** How long a run picked must stay as it is before it sounds, so a drag does not restart it at every bar. */
+const RANGE_PREVIEW_SETTLE_MS = 150;
+
 /** The score of each chart, laid out once; `null` for a chart that could not be. */
 const LAYOUTS = new WeakMap<LibraryChart, ChartScoreLayout | null>();
 
@@ -64,7 +68,7 @@ function layoutOf(chart: LibraryChart): ChartScoreLayout | undefined {
   let layout = LAYOUTS.get(chart);
   if (layout === undefined) {
     try {
-      const laidOut = layoutChartScore(resolveChart(chart.chart));
+      const laidOut = layoutChartScore(resolveChart(chart.chart), { omitEmptyFirstBar: true });
       layout = laidOut.bars.length > 0 ? laidOut : null;
     } catch {
       layout = null;
@@ -86,7 +90,9 @@ export class PracticeBarsDialog {
   private source: BrowserAssetSource | undefined;
   private layout: ChartScoreLayout | undefined;
   private selection: ChartScoreBarRange | undefined;
-  private previewing: number | undefined;
+  private previewing: ChartScoreBarRange | undefined;
+  /** A run picked by a drag sounds once the drag rests on it, not at every bar it passes. */
+  private rangePreviewTimer: ReturnType<typeof setTimeout> | undefined;
   private previewTimer: ReturnType<typeof setTimeout> | undefined;
   private settle: ((start: boolean) => void) | undefined;
 
@@ -252,34 +258,48 @@ export class PracticeBarsDialog {
   private stopPreview(): void {
     if (this.previewTimer !== undefined) clearTimeout(this.previewTimer);
     this.previewTimer = undefined;
+    if (this.rangePreviewTimer !== undefined) clearTimeout(this.rangePreviewTimer);
+    this.rangePreviewTimer = undefined;
     this.previewing = undefined;
     this.audio.stopOwned(this);
   }
 
-  /** Sounds bar `index` alone, cutting the bar sounding short. */
-  private preview(index: number): void {
-    const bar = this.layout?.bars[index];
-    if (bar === undefined || this.chart === undefined) return;
+  /** Sounds the bars `range` (one bar, or a run picked), cutting what is sounding short. */
+  private preview(range: ChartScoreBarRange): void {
+    const times = this.layout === undefined ? undefined : chartScoreRangeTimes(this.layout, range);
+    if (times === undefined || this.chart === undefined) return;
     if (this.previewTimer !== undefined) clearTimeout(this.previewTimer);
-    this.previewing = index;
+    this.previewing = range;
     if (this.source !== undefined)
-      this.audio.preview.playWindow({ chart: this.chart, source: this.source }, practiceBarWindow(bar), this);
-    // The outline goes once the bar has played through.
+      this.audio.preview.playWindow({ chart: this.chart, source: this.source }, practiceBarWindow(times), this);
+    // The outline goes once the bars have played through.
     this.previewTimer = setTimeout(
       () => {
         this.previewTimer = undefined;
-        if (this.previewing !== index) return;
+        if (this.previewing !== range) return;
         this.previewing = undefined;
         this.paint();
       },
-      Math.max(200, bar.endMs - bar.startMs),
+      Math.max(200, times.endMs - times.startMs),
     );
   }
 
   private onSelection(event: BeMusicUIEvent<'bar-selection-change'>): void {
     const { first, last, bar, extend } = event.detail;
     this.selection = { first, last };
-    if (!extend) this.preview(bar);
+    if (this.rangePreviewTimer !== undefined) clearTimeout(this.rangePreviewTimer);
+    this.rangePreviewTimer = undefined;
+    // A press sounds its bar at once; a run picked (Shift, a drag, Shift + arrows) sounds whole once it settles.
+    if (!extend) this.preview({ first: bar, last: bar });
+    else {
+      const range = { first, last };
+      this.rangePreviewTimer = setTimeout(() => {
+        this.rangePreviewTimer = undefined;
+        if (this.selection?.first !== range.first || this.selection.last !== range.last) return;
+        this.preview(range);
+        this.paint();
+      }, RANGE_PREVIEW_SETTLE_MS);
+    }
     this.paint();
   }
 

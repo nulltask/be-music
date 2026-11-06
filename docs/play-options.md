@@ -246,7 +246,7 @@ Sources: beatoraja 0.8.9 [`PlayerConfig`](https://github.com/exch-bms2/beatoraja
 
 Under every ruleset, turn on **PRACTICE** in the Options dialog, or press a beatoraja select skin's PRACTICE button (315); its PLAY button starts the regular mode. The settings follow beatoraja's `PracticeConfiguration`: **GAUGE TYPE**, **GAUGE CATEGORY**, **GAUGE VALUE** (1–120, default 20, clamped to the gauge's range), and **JUDGERANK (0 = chart)** and **TOTAL (0 = chart)**. It applies to a single chart, not to a course, NONSTOP or replay.
 
-The range is picked on the chart itself. With PRACTICE on, starting a chart opens its score before the decide screen: the chart's bars in columns, bottom to top, each with its measure number, its notes, long notes and mines on the play mode's lanes, and its tempo changes and stops beside it (`<be-music-chart-score>` from `@be-music/player-ui`). It shows SP and DP charts (5 / 7 / 10 / 14 KEY) and 9 KEY.
+The range is picked on the chart itself. With PRACTICE on, starting a chart opens its score before the decide screen: the chart's bars in columns, bottom to top, each with its measure number, its notes, long notes and mines on the play mode's lanes, and its tempo changes and stops beside it (`<be-music-chart-score>` from `@be-music/player-ui`). It shows SP and DP charts (5 / 7 / 10 / 14 KEY) and 9 KEY. When measure 0 holds nothing (no note, mine, sound, tempo change or stop), the score starts at measure 1.
 
 ```mermaid
 flowchart LR
@@ -260,7 +260,7 @@ flowchart LR
 ```
 
 - **Hear a bar.** A press on a bar sounds that bar alone, as AUTO PLAY would play it there: every sample that starts in the bar, and every sample started earlier that still sounds at its bar line (a long BGM, a long note's keysound) from where it is there, fading out just past the next bar line. Under BMS a slot's later sample cuts its earlier one, as in play. A press on another bar cuts the one sounding short and sounds the new one from its start. The bar sounding is outlined.
-- **Pick bars.** A press picks one bar; Shift-press or a drag runs the pick from the bar pressed first, so one bar or several bars in a row. The arrow keys move between bars, Shift extends, and Space presses. The line under the score shows the bars by measure number and their chart times (`m:ss.s`). **Whole chart** drops the pick.
+- **Pick bars.** A press picks one bar; Shift-press or a drag runs the pick from the bar pressed first, so one bar or several bars in a row. A run picked sounds whole once it rests for a moment, cutting what was sounding short, as a press does. The arrow keys move between bars, Shift extends, and Space presses. The line under the score shows the bars by measure number and their chart times (`m:ss.s`). **Whole chart** drops the pick.
 - **Settings.** Under the score are the PRACTICE settings of the Options dialog's Practice page: **GAUGE TYPE**, **GAUGE CATEGORY** (beatoraja rules), **GAUGE VALUE**, **JUDGERANK** and **TOTAL** (not under `????` rules). They are the same play options: a change in either place shows in the other and is saved with the settings, so the dialog opens on the values last set.
 - **Start practice** (or Enter) plays the bars picked in a loop, through the decide screen as any start does; with no bars picked the whole chart loops. **Play without practice** plays the chart as a regular play this time (a retry too), saving its result as usual, while PRACTICE stays on for the next start. **Cancel** or Esc goes back to the select screen.
 
