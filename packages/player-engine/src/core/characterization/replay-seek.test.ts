@@ -34,7 +34,11 @@ describe('a replay that seeks', () => {
                 ),
           ),
         });
-        const options: PlayerOptions = { judgeRuleset: ruleset, replayInputs: original.replay!.inputs };
+        const options: PlayerOptions = {
+          judgeRuleset: ruleset,
+          replayInputs: original.replay!.inputs,
+          replayInputSources: original.replay!.play.inputSources,
+        };
         const uninterrupted = await observePlay({
           driver: 'manual',
           chart: sample.chart(),
@@ -76,8 +80,8 @@ describe('a replay that seeks', () => {
   test('rebuilds held long notes and resumes their keysounds partway without replaying old effects', async () => {
     const options: PlayerOptions = {
       replayInputs: [
-        { timeUs: 500_000, seq: 0, action: 'down', channels: ['11'] },
-        { timeUs: 1_500_000, seq: 1, action: 'up', channels: ['11'] },
+        { timeUs: 500_000, seq: 0, action: 'down', channels: ['11'], source: 0 },
+        { timeUs: 1_500_000, seq: 1, action: 'up', channels: ['11'], source: 0 },
       ],
     };
     const held = await observePlay({
@@ -152,7 +156,11 @@ for (const judgeRuleset of ['lr2', 'beatoraja', '____'] as const) {
       options,
       script: resolveChart(chart).notes.flatMap((note) => tap(note.seconds * 1000 + 80, note.channel)),
     });
-    const playback = { ...options, replayInputs: original.replay!.inputs };
+    const playback = {
+      ...options,
+      replayInputs: original.replay!.inputs,
+      replayInputSources: original.replay!.play.inputSources,
+    };
     const baseline = await observePlay({
       driver: 'manual',
       chart: nonstopCourse().chart,

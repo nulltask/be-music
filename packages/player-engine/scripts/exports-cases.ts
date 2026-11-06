@@ -746,7 +746,7 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
         },
         play: { mode: 'manual', autoScratch: false },
       });
-      recorder.recordInput('down', 0.5, ['z'], ['11']);
+      recorder.recordInput('down', 0.5, { kind: 'key', device: 'keyboard', label: 'z' }, ['11']);
       recorder.discard();
     },
   });
@@ -1472,6 +1472,19 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       coalescer.observe({ ...benchView, hiSpeed: 2.5 }, 0);
     },
   });
+  define('player-engine.replay.parseReplayInputSources', {
+    run: () => {
+      replayAPI.parseReplayInputSources([
+        { id: 0, kind: 'key', device: 'keyboard', label: 'shift-left' },
+        { id: 1, kind: 'turntable', device: 'controller', label: 'tt', direction: 'up' },
+      ]);
+    },
+  });
+  define('player-engine.replay.parseReplayAnalogScratch', {
+    run: () => {
+      replayAPI.parseReplayAnalogScratch({ algorithm: 'be-music/1', thresholdTicks: 2, stopMs: 100 });
+    },
+  });
   define('player-engine.replay.parseReplayViewState', {
     run: () => {
       replayAPI.parseReplayViewState(benchView, 'worker-play.view');
@@ -1624,10 +1637,51 @@ function registerLanesCases(define: DefineBenchmarkCase): void {
       lanesAPI.resolveScratchSpin(['z'], benchScratchSpins);
     },
   });
-  define('player-engine.lanes.isReverseScratchSpin', {
+  const benchShiftSource = { kind: 'key', device: 'keyboard', label: 'shift-left' } as const;
+  const benchCtrlSource = { kind: 'key', device: 'keyboard', label: 'ctrl-left' } as const;
+  const benchTouchSource = { kind: 'button', device: 'touch', label: 'shift-left' } as const;
+  define('player-engine.lanes.createInputSourceTable', {
     run: () => {
-      lanesAPI.isReverseScratchSpin('cw', 'ccw');
-      lanesAPI.isReverseScratchSpin('cw', undefined);
+      const table = lanesAPI.createInputSourceTable();
+      table.idOf(benchShiftSource);
+      table.idOf(benchCtrlSource);
+      table.idOf(benchShiftSource);
+      table.list();
+    },
+  });
+  define('player-engine.lanes.endsBackSpinScratch', {
+    run: () => {
+      lanesAPI.endsBackSpinScratch(benchShiftSource, benchCtrlSource);
+      lanesAPI.endsBackSpinScratch(benchTouchSource, benchTouchSource);
+    },
+  });
+  define('player-engine.lanes.hasScratchCounterpart', {
+    run: () => {
+      lanesAPI.hasScratchCounterpart(benchShiftSource);
+      lanesAPI.hasScratchCounterpart(benchTouchSource);
+    },
+  });
+  define('player-engine.lanes.inputSourceKey', {
+    run: () => {
+      lanesAPI.inputSourceKey(benchShiftSource);
+    },
+  });
+  define('player-engine.lanes.isSameInputSource', {
+    run: () => {
+      lanesAPI.isSameInputSource(benchShiftSource, benchCtrlSource);
+      lanesAPI.isSameInputSource(undefined, benchShiftSource);
+    },
+  });
+  define('player-engine.lanes.keyboardInputSource', {
+    run: () => {
+      lanesAPI.keyboardInputSource(['shift-left', 'shift']);
+      lanesAPI.keyboardInputSource([]);
+    },
+  });
+  define('player-engine.lanes.releasesScratchHold', {
+    run: () => {
+      lanesAPI.releasesScratchHold(benchShiftSource, benchCtrlSource);
+      lanesAPI.releasesScratchHold(benchShiftSource, undefined);
     },
   });
   define('player-engine.lanes.isScratchSpin', {
@@ -2145,8 +2199,19 @@ const BENCH_REPLAY: BeMusicReplay = {
     timeUs: 125_000 * (index + 1) + (index % 2 === 0 ? 5_000 : 0),
     action: index % 2 === 0 ? ('down' as const) : ('up' as const),
     channels: [`1${((index >> 1) % 7) + 1}`],
+    source: (index >> 1) % 7,
   })),
-  play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
+  play: {
+    inputSources: ['z', 's', 'x', 'd', 'c', 'f', 'v'].map((label, id) => ({
+      id,
+      kind: 'key' as const,
+      device: 'keyboard' as const,
+      label,
+    })),
+    mode: 'manual',
+    autoScratch: false,
+    gauge: 'GROOVE',
+  },
 };
 const BENCH_COUPLE_REPLAY: BeMusicReplay = {
   ...BENCH_REPLAY,

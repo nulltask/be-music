@@ -11,6 +11,7 @@ export {
   type PlayerInputSignalBus,
 } from './core/input-signal-bus.ts';
 export type { ScratchSpin } from './core/scratch-spin.ts';
+export type { InputSource, InputSourceDevice, InputSourceKind, TurntableDirection } from './core/input-source.ts';
 export {
   createPlayerUISignalBus,
   type PlayerGaugeSummary,

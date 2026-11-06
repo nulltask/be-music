@@ -12,7 +12,7 @@ function chart(events: BeMusicJSON['events']): BeMusicJSON {
   return json;
 }
 function down(seq: number, timeUs: number, ...channels: string[]): ReplayInputEvent {
-  return { seq, timeUs, action: 'down', channels };
+  return { seq, timeUs, action: 'down', channels, source: 0 };
 }
 
 test('BEST CLEAR records the original choice and resolves the highest surviving gauge in live/replay', async () => {

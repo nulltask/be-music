@@ -149,8 +149,8 @@ function presses(hit: (index: number) => boolean): ReplayInputEvent[] {
   for (let index = 0; index < 8; index += 1) {
     if (!hit(index)) continue;
     const timeUs = 1_000_000 + index * 250_000;
-    events.push({ seq: events.length, timeUs, action: 'down', channels: ['11'] });
-    events.push({ seq: events.length, timeUs: timeUs + 40_000, action: 'up', channels: ['11'] });
+    events.push({ seq: events.length, timeUs, action: 'down', channels: ['11'], source: 0 });
+    events.push({ seq: events.length, timeUs: timeUs + 40_000, action: 'up', channels: ['11'], source: 0 });
   }
   return events;
 }

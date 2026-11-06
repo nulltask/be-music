@@ -136,6 +136,7 @@ async function playThreeWays(play: Omit<CharacterizationPlay, 'driver'>) {
     options: {
       ...play.options,
       replayInputs: log.inputs,
+      replayInputSources: log.play.inputSources,
       ...(log.play.tempo !== undefined ? { speed: log.play.tempo } : {}),
       ...(log.play.tempoChanges !== undefined ? { replayTempoChanges: log.play.tempoChanges } : {}),
     },
@@ -236,7 +237,11 @@ describe('engine characterization: play scenarios', () => {
     const replayOfTheAbortedLog = await observePlay({
       driver: 'manual',
       chart,
-      options: { replayInputs: manual.replay!.inputs, replayAbortedAtUs: manual.replay!.play.abortedAtUs },
+      options: {
+        replayInputs: manual.replay!.inputs,
+        replayInputSources: manual.replay!.play.inputSources,
+        replayAbortedAtUs: manual.replay!.play.abortedAtUs,
+      },
     });
     const auto = await observePlay({
       driver: 'auto',
@@ -465,7 +470,11 @@ describe('engine characterization: play scenarios', () => {
       { atMs: 3600, press: ['15'], pressedAtMs: 3480 },
     ];
     const manual = await observePlay({ driver: 'manual', chart, script });
-    const replay = await observePlay({ driver: 'manual', chart, options: { replayInputs: manual.replay!.inputs } });
+    const replay = await observePlay({
+      driver: 'manual',
+      chart,
+      options: { replayInputs: manual.replay!.inputs, replayInputSources: manual.replay!.play.inputSources },
+    });
     await expectSnapshot('scenarios/terminal-input', { manual, replay });
   });
 });

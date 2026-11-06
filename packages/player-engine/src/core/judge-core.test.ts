@@ -147,7 +147,7 @@ function replay(json: BeMusicJSON, inputs: ReplayInputEvent[], ticks: readonly n
 }
 
 function inputs(...events: Array<[timeUs: number, action: 'down' | 'up', channel: string]>): ReplayInputEvent[] {
-  return events.map(([timeUs, action, channel], seq) => ({ seq, timeUs, action, channels: [channel] }));
+  return events.map(([timeUs, action, channel], seq) => ({ seq, timeUs, action, channels: [channel], source: 0 }));
 }
 
 describe('judge core', () => {
@@ -418,6 +418,7 @@ describe('judge core', () => {
         timeUs: Math.round(ms * 1000),
         action,
         channels: ['12'],
+        source: 0,
         ...(token === undefined ? {} : { tokens: [token] }),
       }));
     }
@@ -450,7 +451,7 @@ describe('judge core', () => {
           notes,
         },
         inputs: toReplayInputs(events),
-        play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
+        play: { inputSources: [], mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
       });
       const withMine = simulateReplay(replay([tap, mine]), { ruleset });
       const without = simulateReplay(replay([tap]), { ruleset });

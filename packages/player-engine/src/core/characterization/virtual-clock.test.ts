@@ -102,7 +102,12 @@ describe('the virtual clock against real time', () => {
     const replay = {
       driver: 'manual' as const,
       chart,
-      options: { judgeRuleset: 'beatoraja' as const, speed: 8, replayInputs: recorded.replay!.inputs },
+      options: {
+        judgeRuleset: 'beatoraja' as const,
+        speed: 8,
+        replayInputs: recorded.replay!.inputs,
+        replayInputSources: recorded.replay!.play.inputSources,
+      },
     };
     const auto = { driver: 'auto' as const, chart: basicChart(), options: { speed: 8 } };
 

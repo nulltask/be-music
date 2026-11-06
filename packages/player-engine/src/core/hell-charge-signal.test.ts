@@ -52,9 +52,9 @@ describe('hell-charge UI commands', () => {
   test('a replay sends the same commands as the play it records', async () => {
     const live = await hellChargeCommands();
     const replayInputs = [
-      { timeUs: 500000, action: 'down' as const, channels: ['11'] },
-      { timeUs: 800000, action: 'up' as const, channels: ['11'] },
-      { timeUs: 1100000, action: 'down' as const, channels: ['11'] },
+      { timeUs: 500000, action: 'down' as const, channels: ['11'], source: 0 },
+      { timeUs: 800000, action: 'up' as const, channels: ['11'], source: 0 },
+      { timeUs: 1100000, action: 'down' as const, channels: ['11'], source: 0 },
     ].map((input, seq) => ({ ...input, seq }));
     const replay = await hellChargeCommands({
       script: [],
@@ -65,8 +65,8 @@ describe('hell-charge UI commands', () => {
 
   test('a replay seek into a draining HCN announces it again', async () => {
     const replayInputs = [
-      { timeUs: 500000, action: 'down' as const, channels: ['11'] },
-      { timeUs: 800000, action: 'up' as const, channels: ['11'] },
+      { timeUs: 500000, action: 'down' as const, channels: ['11'], source: 0 },
+      { timeUs: 800000, action: 'up' as const, channels: ['11'], source: 0 },
     ].map((input, seq) => ({ ...input, seq }));
     const commands = await hellChargeCommands({
       script: [command(200, { kind: 'seek', seconds: 1 })],

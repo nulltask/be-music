@@ -48,7 +48,13 @@ function replay(title = 'Fixture A'): BeMusicReplay {
       notes: [],
     },
     inputs: [],
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', judgeRuleset: 'lr2' },
+    play: {
+      inputSources: [{ id: 0, kind: 'key', device: 'keyboard', label: 'z' }],
+      mode: 'manual',
+      autoScratch: false,
+      gauge: 'GROOVE',
+      judgeRuleset: 'lr2',
+    },
   };
 }
 

@@ -16,12 +16,19 @@ test('LR2 EXTRA records its source parameters, effective notes and deterministic
   const options = { lr2ExtraMode: true, lr2ExtraLevel: 0 } as const;
   const preparedChart = preparePlaybackChart(resolveChart(chart), { ...options, speed: 16 });
   const input = preparedChart.notes.flatMap((note, index) => [
-    { seq: index * 2, timeUs: Math.round(note.seconds * 1e6), action: 'down' as const, channels: [note.channel] },
+    {
+      seq: index * 2,
+      timeUs: Math.round(note.seconds * 1e6),
+      action: 'down' as const,
+      channels: [note.channel],
+      source: 0,
+    },
     {
       seq: index * 2 + 1,
       timeUs: Math.round(note.seconds * 1e6) + 20000,
       action: 'up' as const,
       channels: [note.channel],
+      source: 0,
     },
   ]);
   const played = await runRecordedPlay(chart, input, 'lr2', { ...options, preparedChart });

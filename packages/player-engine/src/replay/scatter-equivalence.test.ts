@@ -21,10 +21,15 @@ test.each([false, true])(
     });
     preparedChart.notes[0]!.channel = channel!;
     const mode = correctedNineKey ? 'SCATTER-CORRECTED' : 'SCATTER';
-    const run = await runRecordedPlay(json, [{ seq: 0, action: 'down', timeUs: 1000000, channels: ['25'] }], 'lr2', {
-      preparedChart,
-      recordReplay: { randomLane: { p1: mode }, options: { random1P: mode } },
-    });
+    const run = await runRecordedPlay(
+      json,
+      [{ seq: 0, action: 'down', timeUs: 1000000, channels: ['25'], source: 0 }],
+      'lr2',
+      {
+        preparedChart,
+        recordReplay: { randomLane: { p1: mode }, options: { random1P: mode } },
+      },
+    );
     expect(run.summary.total).toBe(1);
     expect(run.summary.perfect).toBe(correctedNineKey ? 1 : 0);
     expect(run.summary.poor).toBe(correctedNineKey ? 0 : 1);

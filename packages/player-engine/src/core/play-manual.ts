@@ -16,6 +16,7 @@ import { resolveJudgeNowMsFromPressedAt } from './engine-clock.ts';
 import { formatJudgeWindowSet, printLaneMap, writeRuntimeEventLog } from './engine-trace.ts';
 import { createKeyStateInference } from './play-key-inference.ts';
 import { createScratchSpinByToken, resolvePressSpin } from './scratch-spin.ts';
+import { keyboardInputSource } from './input-source.ts';
 import type { PlaySession } from './play-session.ts';
 import type { JudgeStrategy, PlayJudge } from './play-strategy.ts';
 
@@ -226,18 +227,23 @@ function createManualJudge(session: PlaySession): PlayJudge {
           if (command.repeatTokens.length > 0) traceInput(commandSeconds(), 'repeat', command.repeatTokens);
           if (command.releaseTokens.length > 0) traceInput(commandSeconds(), 'release', command.releaseTokens);
         }
+        const heldTokens = [...command.pressTokens, ...command.repeatTokens];
+        const holdSource = command.source ?? keyboardInputSource(heldTokens);
         step({
           kind: 'hold',
           channels: mapInputChannels(command.pressTokens, command.repeatTokens),
-          tokens: [...command.pressTokens, ...command.repeatTokens],
+          tokens: heldTokens,
+          ...(holdSource !== undefined ? { source: holdSource } : {}),
         });
         const releasedChannels = mapInputChannels(command.releaseTokens);
         if (releasedChannels.size > 0) {
           const releaseNowMs = clock.nowMs();
+          const releaseSource = command.source ?? keyboardInputSource(command.releaseTokens);
           step({
             kind: 'release',
             channels: releasedChannels,
             tokens: command.releaseTokens,
+            ...(releaseSource !== undefined ? { source: releaseSource } : {}),
             nowSec: tempoClock.chartSecondsAt(releaseNowMs),
             nowMs: tempoClock.initialTempoMsAt(releaseNowMs),
             // The replay records the release at the key event's own instant, like a press.
@@ -267,8 +273,10 @@ function createManualJudge(session: PlaySession): PlayJudge {
       }
       const nowMs = tempoClock.initialTempoMsAt(pressedAtMs);
       const spin = resolvePressSpin(command.spin, command.tokens, scratchSpinByToken);
+      // Each physical key is its own source; a touch zone or a controller names its own.
+      const source = command.source ?? keyboardInputSource(command.tokens);
       if (!inputReportsReleases) {
-        keyState.press(candidateChannels, command.tokens, nowSec, nowMs, spin);
+        keyState.press(candidateChannels, command.tokens, nowSec, nowMs, source, spin);
         return;
       }
       step({
@@ -277,6 +285,7 @@ function createManualJudge(session: PlaySession): PlayJudge {
         tokens: command.tokens,
         nowSec,
         nowMs,
+        ...(source !== undefined ? { source } : {}),
         ...(spin !== undefined ? { spin } : {}),
         ...(command.code !== undefined ? { code: command.code } : {}),
       });

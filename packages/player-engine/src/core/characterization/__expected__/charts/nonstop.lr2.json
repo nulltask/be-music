@@ -53,18 +53,23 @@
         "title": "nonstop"
       },
       "inputs": [
-        {"seq":0,"timeUs":1030000,"action":"down","channels":["11"],"tokens":["z"]},
-        {"seq":1,"timeUs":1080000,"action":"up","channels":["11"],"tokens":["z"]},
-        {"seq":2,"timeUs":1470000,"action":"down","channels":["12"],"tokens":["s"]},
-        {"seq":3,"timeUs":1520000,"action":"up","channels":["12"],"tokens":["s"]},
-        {"seq":4,"timeUs":2000000,"action":"down","channels":["11"],"tokens":["z"]},
-        {"seq":5,"timeUs":2030000,"action":"down","channels":["14"],"tokens":["d"]},
-        {"seq":6,"timeUs":2050000,"action":"up","channels":["11"],"tokens":["z"]},
-        {"seq":7,"timeUs":2080000,"action":"up","channels":["14"],"tokens":["d"]},
-        {"seq":8,"timeUs":2770000,"action":"down","channels":["14"],"tokens":["d"]},
-        {"seq":9,"timeUs":2820000,"action":"up","channels":["14"],"tokens":["d"]}
+        {"seq":0,"timeUs":1030000,"action":"down","channels":["11"],"source":0},
+        {"seq":1,"timeUs":1080000,"action":"up","channels":["11"],"source":0},
+        {"seq":2,"timeUs":1470000,"action":"down","channels":["12"],"source":1},
+        {"seq":3,"timeUs":1520000,"action":"up","channels":["12"],"source":1},
+        {"seq":4,"timeUs":2000000,"action":"down","channels":["11"],"source":0},
+        {"seq":5,"timeUs":2030000,"action":"down","channels":["14"],"source":2},
+        {"seq":6,"timeUs":2050000,"action":"up","channels":["11"],"source":0},
+        {"seq":7,"timeUs":2080000,"action":"up","channels":["14"],"source":2},
+        {"seq":8,"timeUs":2770000,"action":"down","channels":["14"],"source":2},
+        {"seq":9,"timeUs":2820000,"action":"up","channels":["14"],"source":2}
       ],
       "play": {
+        "inputSources": [
+          {"id":0,"kind":"key","device":"keyboard","label":"z"},
+          {"id":1,"kind":"key","device":"keyboard","label":"s"},
+          {"id":2,"kind":"key","device":"keyboard","label":"d"}
+        ],
         "mode": "manual",
         "autoScratch": false,
         "gauge": "GROOVE",
@@ -256,6 +261,11 @@
       "chart": "(same as manual)",
       "inputs": "(same as manual)",
       "play": {
+        "inputSources": [
+          {"id":0,"kind":"key","device":"keyboard","label":"z"},
+          {"id":1,"kind":"key","device":"keyboard","label":"s"},
+          {"id":2,"kind":"key","device":"keyboard","label":"d"}
+        ],
         "mode": "manual",
         "autoScratch": false,
         "gauge": "GROOVE",
@@ -375,6 +385,7 @@
       "chart": "(same as manual)",
       "inputs": [],
       "play": {
+        "inputSources": [],
         "mode": "auto",
         "autoScratch": false,
         "gauge": "GROOVE",
