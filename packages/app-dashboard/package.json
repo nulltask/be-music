@@ -1,6 +1,6 @@
 {
   "name": "@be-music/app-dashboard",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Be-Music dashboard, account management and the OIDC identity provider for Be-Music services",
   "type": "module",

@@ -1,5 +1,11 @@
 # @be-music/player-node-audio
 
+## 0.2.6
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/player-engine@0.16.0`
+
 ## 0.2.5
 
 ### Patch Changes
