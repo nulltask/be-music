@@ -24,7 +24,7 @@ import { type PlayerInputSignalBus } from './input-signal-bus.ts';
 import type { GaugeType, GaugeAutoShift } from '../ruleset/gauge-type.ts';
 import { type LongNoteStyle, type RulesetId, type RulesetWindowTables } from '../ruleset/index.ts';
 import { type ReplayRecordingOptions } from '../replay/recorder.ts';
-import type { BeMusicReplay, ReplayCourseStage, ReplayInputEvent } from '../replay/format.ts';
+import type { BeMusicReplay, ReplayCourseStage, ReplayInputEvent, ReplayInputSource } from '../replay/format.ts';
 import type { ReplayTempoChange } from '../replay/view.ts';
 import { type PreparedPlaybackChartData } from './bootstrap.ts';
 
@@ -411,6 +411,11 @@ export interface PlayerPlayRecording {
    * its `speed` and tempo changes only set how fast it is re-driven and a re-recorded log carries neither.
    */
   replayInputs?: readonly ReplayInputEvent[];
+  /**
+   * The input-source table the {@link replayInputs} name (`play.inputSources` of their log). An input whose source it
+   * does not hold is judged as from an unknown source (the lenient single-source rule for a scratch hold).
+   */
+  replayInputSources?: readonly ReplayInputSource[];
   /**
    * The tempo changes a replay follows (`play.tempoChanges` of its log, in chart time), on top of `speed` as the tempo
    * at the start (`play.tempo`). Each takes effect once the replay's chart time reaches it, as a live `{ kind: 'tempo' }`

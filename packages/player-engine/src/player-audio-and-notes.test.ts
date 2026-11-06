@@ -206,7 +206,7 @@ describe('player', () => {
       leadInMs: 0,
       audio: false,
       tui: false,
-      replayInputs: [{ seq: 0, timeUs: 1_000_000, action: 'down', channels: ['11'] }],
+      replayInputs: [{ seq: 0, timeUs: 1_000_000, action: 'down', channels: ['11'], source: 0 }],
     });
 
     // The spanning hold neither POORs nor BADs, and the run completed (manualPlay resolved without interrupt).

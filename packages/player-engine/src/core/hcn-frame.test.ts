@@ -51,9 +51,9 @@ describe('HCN UI frame facts from the existing judge', () => {
   });
   test('a replay uses the same HCN display states as manual play', async () => {
     const replayInputs = [
-      { timeUs: 500000, action: 'down', channels: ['11'] },
-      { timeUs: 800000, action: 'up', channels: ['11'] },
-      { timeUs: 1100000, action: 'down', channels: ['11'] },
+      { timeUs: 500000, action: 'down', channels: ['11'], source: 0 },
+      { timeUs: 800000, action: 'up', channels: ['11'], source: 0 },
+      { timeUs: 1100000, action: 'down', channels: ['11'], source: 0 },
     ] as const;
     const replay = await states({
       script: [],

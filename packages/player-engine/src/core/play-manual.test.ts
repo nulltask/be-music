@@ -88,7 +88,7 @@ describe('manual play: a tap whose release is drained right after its press', ()
         driver: 'manual',
         chart: mineChart(),
         audio,
-        options: { judgeRuleset: ruleset, replayInputs: replay.inputs },
+        options: { judgeRuleset: ruleset, replayInputs: replay.inputs, replayInputSources: replay.play.inputSources },
       });
       expect(replayed.summary).toEqual(live.summary);
       expect(replayed.replay?.inputs).toEqual(replay.inputs);

@@ -1,6 +1,7 @@
 import { hasPressCandidate, type JudgeCoreEffect, type JudgeCoreInput, type JudgeCoreState } from './judge-core.ts';
 import { compareJudgeChannels } from './judge-core-score.ts';
-import { isReverseScratchSpin, type ScratchSpin } from './scratch-spin.ts';
+import type { ScratchSpin } from './scratch-spin.ts';
+import { endsBackSpinScratch, inputSourceKey, type InputSource } from './input-source.ts';
 
 /** How long the press that hits a long note's head keeps its lane down with no further key event (a repeat delay). */
 export const LONG_NOTE_INITIAL_HOLD_GRACE_MS = 380;
@@ -30,12 +31,16 @@ export const LONG_NOTE_REPEAT_HOLD_GRACE_MS = 120;
  * Every step goes to the judge core in chart order, so it judges exactly what the replay records.
  */
 export interface KeyStateInference {
-  /** A press from the input, at chart second `nowSec` and judge millisecond `nowMs`, spinning a scratch `spin`. */
+  /**
+   * A press from the input `source`, at chart second `nowSec` and judge millisecond `nowMs`, spinning a scratch `spin`
+   * (display only).
+   */
   press(
     channels: ReadonlySet<string>,
     tokens: readonly string[],
     nowSec: number,
     nowMs: number,
+    source?: InputSource,
     spin?: ScratchSpin,
   ): void;
   /** Releases the keys whose grace lapsed before chart second `nowSec`; the judge advances to `nowSec` next. */
@@ -50,6 +55,8 @@ interface InferredHold {
   untilSec: number;
   untilMs: number;
   readonly tokens: Set<string>;
+  /** The sources holding the lane, by key: each comes up with a release of its own. */
+  readonly sources: Map<string, InputSource>;
 }
 
 /**
@@ -71,7 +78,7 @@ export function createKeyStateInference(
   const extend = (hold: InferredHold | undefined, nowSec: number, nowMs: number, graceMs: number): InferredHold => {
     const untilSec = nowSec + graceMs / state.config.judgeMsPerChartSecond;
     const untilMs = nowMs + graceMs;
-    if (hold === undefined) return { untilSec, untilMs, tokens: new Set() };
+    if (hold === undefined) return { untilSec, untilMs, tokens: new Set(), sources: new Map() };
     hold.untilSec = untilSec;
     hold.untilMs = untilMs;
     return hold;
@@ -99,15 +106,20 @@ export function createKeyStateInference(
       step({ kind: 'advance', nowSec: hold.untilSec, nowMs: hold.untilMs });
     }
     const tokens = [...hold.tokens];
-    step({
-      kind: 'release',
-      channels: new Set([channel]),
-      tokens,
-      nowSec: hold.untilSec,
-      nowMs: hold.untilMs,
-      recordSec: hold.untilSec,
-      inferred: true,
-    });
+    // Each source holding the lane comes up, so the replay pairs every press with its release.
+    const sources = hold.sources.size === 0 ? [undefined] : [...hold.sources.values()];
+    for (const source of sources) {
+      step({
+        kind: 'release',
+        channels: new Set([channel]),
+        tokens,
+        nowSec: hold.untilSec,
+        nowMs: hold.untilMs,
+        recordSec: hold.untilSec,
+        inferred: true,
+        ...(source !== undefined ? { source } : {}),
+      });
+    }
     releasedThroughSec = Math.max(releasedThroughSec, hold.untilSec);
     releasedThroughMs = Math.max(releasedThroughMs, hold.untilMs);
     onRelease?.(hold.untilSec, tokens);
@@ -124,7 +136,7 @@ export function createKeyStateInference(
   const releaseLapsedBefore = (nowSec: number): void => releaseDue((hold) => hold.untilSec < nowSec);
 
   return {
-    press: (channels, tokens, pressSec, pressMs, spin) => {
+    press: (channels, tokens, pressSec, pressMs, source, spin) => {
       const nowSec = Math.max(pressSec, releasedThroughSec);
       const nowMs = Math.max(pressMs, releasedThroughMs);
       releaseLapsedBefore(nowSec);
@@ -133,14 +145,15 @@ export function createKeyStateInference(
         const hold = holds.get(channel);
         const keyRepeat = isLongNoteKeyRepeat(channel, nowSec);
         const activeLongNote = state.activeLongNotes.get(channel);
-        if (activeLongNote?.backSpinScratch === true && isReverseScratchSpin(activeLongNote.headSpin, spin)) {
-          // The other scratch key spins a back-spin scratch back: a press of its own, not the held key repeating.
+        if (activeLongNote?.backSpinScratch === true && endsBackSpinScratch(activeLongNote.headSource, source)) {
+          // Another scratch key ends a back-spin scratch: a press of its own, not the held key repeating.
           pressed.add(channel);
           continue;
         }
         if (hold !== undefined && (activeLongNote !== undefined || keyRepeat)) {
           // The held key repeating: the lane stays down and the press judges nothing.
           for (const token of tokens) hold.tokens.add(token);
+          if (source !== undefined) hold.sources.set(inputSourceKey(source), source);
           extend(hold, nowSec, nowMs, LONG_NOTE_REPEAT_HOLD_GRACE_MS);
           continue;
         }
@@ -152,8 +165,16 @@ export function createKeyStateInference(
       }
       if (pressed.size === 0) return;
       const heldBefore = new Set([...pressed].filter((channel) => state.activeLongNotes.has(channel)));
-      step({ kind: 'hold', channels: pressed, inferred: true });
-      step({ kind: 'press', channels: pressed, tokens, nowSec, nowMs, ...(spin !== undefined ? { spin } : {}) });
+      step({ kind: 'hold', channels: pressed, inferred: true, ...(source !== undefined ? { source } : {}) });
+      step({
+        kind: 'press',
+        channels: pressed,
+        tokens,
+        nowSec,
+        nowMs,
+        ...(source !== undefined ? { source } : {}),
+        ...(spin !== undefined ? { spin } : {}),
+      });
       for (const channel of pressed) {
         // A press that hits a long note's head holds it through the terminal's repeat delay.
         const graceMs =
@@ -162,6 +183,7 @@ export function createKeyStateInference(
             : LONG_NOTE_REPEAT_HOLD_GRACE_MS;
         const hold = extend(holds.get(channel), nowSec, nowMs, graceMs);
         for (const token of tokens) hold.tokens.add(token);
+        if (source !== undefined) hold.sources.set(inputSourceKey(source), source);
         holds.set(channel, hold);
       }
     },

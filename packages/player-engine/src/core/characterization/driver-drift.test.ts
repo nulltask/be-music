@@ -180,7 +180,7 @@ describe('driver drift', () => {
     const replay = await observePlay({
       driver: 'manual',
       chart: basicChart(),
-      options: { ...options, replayInputs: live.replay!.inputs },
+      options: { ...options, replayInputs: live.replay!.inputs, replayInputSources: live.replay!.play.inputSources },
     });
     // A replay of an auto-played log: its inputs are empty.
     const auto = await observePlay({ driver: 'auto', chart: basicChart(), options: { ...options, replayInputs: [] } });
@@ -215,7 +215,11 @@ describe('driver drift', () => {
     const replay = await observePlay({
       driver: 'manual',
       chart: basicChart(),
-      options: { replayInputs: live.replay!.inputs, replayAbortedAtUs: live.replay!.play.abortedAtUs },
+      options: {
+        replayInputs: live.replay!.inputs,
+        replayInputSources: live.replay!.play.inputSources,
+        replayAbortedAtUs: live.replay!.play.abortedAtUs,
+      },
     });
     expect(live.simulated?.lr2.judge.poor).toBe(0);
     expect(live.summary?.poor).toBe(0);
@@ -295,7 +299,11 @@ describe('driver drift', () => {
         const replay = await observePlay({
           driver: 'manual',
           chart,
-          options: { judgeRuleset, replayInputs: live.replay!.inputs },
+          options: {
+            judgeRuleset,
+            replayInputs: live.replay!.inputs,
+            replayInputSources: live.replay!.play.inputSources,
+          },
         });
         expect(replay.summary, play).toEqual(live.summary);
         expect(replay.replay?.inputs, play).toEqual(live.replay?.inputs);

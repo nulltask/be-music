@@ -37,7 +37,7 @@ function makeReplay(
       notes: NOTES,
     },
     inputs: inputs.map((input, seq) => ({ ...input, seq })),
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', ...play },
+    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', ...play, inputSources: play.inputSources ?? [] },
   };
 }
 
@@ -46,7 +46,7 @@ function makeReplay(
  * 0.89 s, so nothing after it was recorded. The same press is a GOOD under beatoraja, whose HAZARD survives it.
  */
 const FAILED_EARLY = makeReplay({ gauge: 'DEATH', judgeRuleset: 'lr2', endOnFailure: true }, [
-  { timeUs: 890_000, action: 'down', channels: ['11'] },
+  { timeUs: 890_000, action: 'down', channels: ['11'], source: 0 },
 ]);
 
 describe('findReplayNotSimulatedReason', () => {
@@ -115,7 +115,7 @@ describe('rejudgeReplay', () => {
   test('a ruleset whose gauge fails by the same point is simulated in full', () => {
     // 120 ms early is a BAD under both, which empties both DEATH and HAZARD at once.
     const replay = makeReplay({ gauge: 'DEATH', judgeRuleset: 'lr2', endOnFailure: true }, [
-      { timeUs: 880_000, action: 'down', channels: ['11'] },
+      { timeUs: 880_000, action: 'down', channels: ['11'], source: 0 },
     ]);
     const outcome = rejudgeReplay(replay, { ruleset: 'beatoraja' });
     expect(outcome.status).toBe('simulated');

@@ -54,18 +54,30 @@
         "artist": "Be-Music Dev Team"
       },
       "inputs": [
-        {"seq":0,"timeUs":500000,"action":"down","channels":["11"],"tokens":["z"]},
-        {"seq":1,"timeUs":1010000,"action":"down","channels":["12"],"tokens":["s"]},
-        {"seq":2,"timeUs":1250000,"action":"down","channels":["13"],"tokens":["x"]},
-        {"seq":3,"timeUs":1310000,"action":"up","channels":["13"],"tokens":["x"]},
-        {"seq":4,"timeUs":1500000,"action":"up","channels":["11"],"tokens":["z"]},
-        {"seq":5,"timeUs":1600000,"action":"up","channels":["12"],"tokens":["s"]},
-        {"seq":6,"timeUs":2000000,"action":"down","channels":["16"],"tokens":["shift-left"],"spin":"cw"},
-        {"seq":7,"timeUs":2540000,"action":"up","channels":["16"],"tokens":["shift-left"]},
-        {"seq":8,"timeUs":3480000,"action":"down","channels":["15"],"tokens":["c"]},
-        {"seq":9,"timeUs":3540000,"action":"up","channels":["15"],"tokens":["c"]}
+        {"seq":0,"timeUs":500000,"action":"down","channels":["11"],"source":0},
+        {"seq":1,"timeUs":1010000,"action":"down","channels":["12"],"source":1},
+        {"seq":2,"timeUs":1250000,"action":"down","channels":["13"],"source":2},
+        {"seq":3,"timeUs":1310000,"action":"up","channels":["13"],"source":2},
+        {"seq":4,"timeUs":1500000,"action":"up","channels":["11"],"source":0},
+        {"seq":5,"timeUs":1600000,"action":"up","channels":["12"],"source":1},
+        {"seq":6,"timeUs":2000000,"action":"down","channels":["16"],"source":3,"spin":"cw"},
+        {"seq":7,"timeUs":2540000,"action":"up","channels":["16"],"source":3},
+        {"seq":8,"timeUs":3480000,"action":"down","channels":["15"],"source":4},
+        {"seq":9,"timeUs":3540000,"action":"up","channels":["15"],"source":4}
       ],
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","endOnFailure":true},
+      "play": {
+        "inputSources": [
+          {"id":0,"kind":"key","device":"keyboard","label":"z"},
+          {"id":1,"kind":"key","device":"keyboard","label":"s"},
+          {"id":2,"kind":"key","device":"keyboard","label":"x"},
+          {"id":3,"kind":"key","device":"keyboard","label":"shift-left"},
+          {"id":4,"kind":"key","device":"keyboard","label":"c"}
+        ],
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "endOnFailure": true
+      },
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -264,7 +276,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","endOnFailure":true},
+      "play": {"inputSources":[],"mode":"auto","autoScratch":false,"gauge":"GROOVE","endOnFailure":true},
       "results": {
         "native": {
           "ruleset": "be-music/native",

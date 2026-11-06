@@ -43,7 +43,15 @@ function recordedReplay(play: Partial<BeMusicReplay['play']> = {}): BeMusicRepla
       playFingerprint: computePlayFingerprint(played, { chartPath: CHART_PATH }),
     },
     inputs: [],
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', judgeRuleset: 'beatoraja', randomDraws, ...play },
+    play: {
+      mode: 'manual',
+      autoScratch: false,
+      gauge: 'GROOVE',
+      judgeRuleset: 'beatoraja',
+      randomDraws,
+      ...play,
+      inputSources: play?.inputSources ?? [{ id: 0, kind: 'key', device: 'keyboard', label: 'z' }],
+    },
   };
 }
 

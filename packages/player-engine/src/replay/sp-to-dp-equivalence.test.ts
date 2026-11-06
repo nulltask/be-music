@@ -16,12 +16,19 @@ for (const playVariant of ['5', '7'] as const) {
       speed: 16,
     });
     const inputs = preparedChart.notes.flatMap((note, index) => [
-      { seq: index * 2, timeUs: Math.round(note.seconds * 1e6), action: 'down' as const, channels: [note.channel] },
+      {
+        seq: index * 2,
+        timeUs: Math.round(note.seconds * 1e6),
+        action: 'down' as const,
+        channels: [note.channel],
+        source: 0,
+      },
       {
         seq: index * 2 + 1,
         timeUs: Math.round(note.seconds * 1e6) + 10000,
         action: 'up' as const,
         channels: [note.channel],
+        source: 0,
       },
     ]);
     const played = await runRecordedPlay(json, inputs, 'lr2', { preparedChart, battleMode: 'SP-TO-DP' });

@@ -21,11 +21,11 @@ import type { RulesetId } from '../ruleset/index.ts';
  */
 
 function down(seq: number, timeUs: number, ...channels: string[]): ReplayInputEvent {
-  return { seq, timeUs, action: 'down', channels };
+  return { seq, timeUs, action: 'down', channels, source: 0 };
 }
 
 function up(seq: number, timeUs: number, ...channels: string[]): ReplayInputEvent {
-  return { seq, timeUs, action: 'up', channels };
+  return { seq, timeUs, action: 'up', channels, source: 0 };
 }
 
 /** BPM 240, a long note on `11` from 1.0 s to 2.0 s via `#LNOBJ`, plus a plain note that is never pressed. */
@@ -577,7 +577,7 @@ describe.concurrent('engine / simulator equivalence', () => {
       timeUs,
       action,
       channels: ['11'],
-      tokens: [token],
+      source: token === 'a' ? 0 : 1,
     });
     const inputs = [
       key(0, 500_000, 'down', 'a'),

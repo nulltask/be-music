@@ -1,12 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { createLaneBindings } from './lane-layout.ts';
-import {
-  createScratchSpinByToken,
-  isReverseScratchSpin,
-  isScratchSpin,
-  resolvePressSpin,
-  resolveScratchSpin,
-} from './scratch-spin.ts';
+import { createScratchSpinByToken, isScratchSpin, resolvePressSpin, resolveScratchSpin } from './scratch-spin.ts';
 
 describe('scratch spin', () => {
   test('isScratchSpin accepts the two directions only', () => {
@@ -14,17 +8,6 @@ describe('scratch spin', () => {
     expect(isScratchSpin('ccw')).toBe(true);
     expect(isScratchSpin('up')).toBe(false);
     expect(isScratchSpin(undefined)).toBe(false);
-  });
-
-  test('every press reverses but one known to spin the same way as the head', () => {
-    expect(isReverseScratchSpin('cw', 'ccw')).toBe(true);
-    expect(isReverseScratchSpin('ccw', 'cw')).toBe(true);
-    expect(isReverseScratchSpin('cw', 'cw')).toBe(false);
-    expect(isReverseScratchSpin('ccw', 'ccw')).toBe(false);
-    // Input without a spin (a touch lane) turns it back with any fresh press.
-    expect(isReverseScratchSpin('cw', undefined)).toBe(true);
-    expect(isReverseScratchSpin(undefined, 'cw')).toBe(true);
-    expect(isReverseScratchSpin(undefined, undefined)).toBe(true);
   });
 
   test('odd-even: a scratch lane’s keys alternate, and key aliases share their key’s spin', () => {

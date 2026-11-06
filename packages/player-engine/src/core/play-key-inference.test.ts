@@ -201,17 +201,32 @@ describe('createKeyStateInference: back-spin scratch', () => {
       runJudgeCoreStep(state, input, (effect) => inference.observe(effect)),
     );
     const scratch = new Set(['16']);
-    inference.press(scratch, ['shift-left'], 1.0, 1000, 'cw');
-    expect(state.activeLongNotes.get('16')?.headSpin).toBe('cw');
-    // Shift repeating keeps the lane down and judges nothing.
+    const shift = { kind: 'key', device: 'keyboard', label: 'shift-left' } as const;
+    inference.press(scratch, ['shift-left'], 1.0, 1000, shift, 'cw');
+    expect(state.activeLongNotes.get('16')?.headSource).toEqual(shift);
+    // Shift repeating (inside its grace) keeps the lane down and judges nothing.
     for (let index = 0; index < 12; index += 1) {
-      const seconds = 1.4 + index * 0.05;
-      inference.press(scratch, ['shift-left'], seconds, seconds * 1000, 'cw');
+      const seconds = 1.3 + index * 0.05;
+      inference.press(scratch, ['shift-left'], seconds, seconds * 1000, shift, 'cw');
     }
     expect(state.activeLongNotes.has('16')).toBe(true);
-    // Ctrl spins it back: the tail is judged.
-    inference.press(scratch, ['ctrl-left'], 2.0, 2000, 'ccw');
+    // Ctrl is another source: it ends the back-spin scratch, and the tail is judged.
+    inference.press(scratch, ['ctrl-left'], 2.0, 2000, { kind: 'key', device: 'keyboard', label: 'ctrl-left' }, 'ccw');
     expect(state.activeLongNotes.has('16')).toBe(false);
     expect(state.summary.perfect).toBe(2);
+  });
+
+  // beatoraja's early POOR release: a key whose repeats stop long before the tail came up then, ending the BSS.
+  test('the head key coming up far before the tail ends the back-spin scratch as a POOR', () => {
+    const state = createScratchCore();
+    const inference = createKeyStateInference(state, (input) =>
+      runJudgeCoreStep(state, input, (effect) => inference.observe(effect)),
+    );
+    const scratch = new Set(['16']);
+    const shift = { kind: 'key', device: 'keyboard', label: 'shift-left' } as const;
+    inference.press(scratch, ['shift-left'], 1.0, 1000, shift);
+    inference.releaseBefore(1.5);
+    expect(state.activeLongNotes.has('16')).toBe(false);
+    expect([state.summary.perfect, state.summary.poor]).toEqual([1, 1]);
   });
 });
