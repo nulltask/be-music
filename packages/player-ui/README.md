@@ -24,7 +24,8 @@ React and Vue are peer dependencies of their respective wrappers. The skin SDK h
 | `be-music-timing-graph`      | `data: BeMusicTimingData`                                                                        |
 | `be-music-play-settings`     | `data: BeMusicSettingsData`                                                                      |
 | `be-music-chart-list`        | `entries`, `selectedIndex`, `disabled`                                                           |
-| `be-music-chart-details`     | `entry`, `launching`, `readText`                                                                 |
+| `be-music-chart-details`     | `entry`, `launching`, `readmeAvailable`                                                          |
+| `be-music-readme-dialog`     | `text` (open while set), `heading`, `subheading`, `hint`                                         |
 | `be-music-play-options`      | `options`, `choices`, `disabled`                                                                 |
 | `be-music-select-screen`     | `frame: BeMusicDOMSelectFrame`                                                                   |
 | `be-music-gameplay-hud`      | `frame: BeMusicDOMGameplayFrame`                                                                 |
@@ -45,6 +46,10 @@ React and Vue are peer dependencies of their respective wrappers. The skin SDK h
 | `be-music-chart-score`       | `layout: ChartScoreLayout`, `selection`, `previewing`, `column-beats`, `beat-height`, `disabled` |
 
 Each class is exported as `BeMusic…Element`. Wrappers export the same names without `Element`, for example `BeMusicGameplayHUD` and `BeMusicJudgmentTable`. Leaf components take only their own presentation data and can be arranged independently. Screen components compose those leaves and accept the existing DOM skin frames.
+
+## README dialog
+
+`be-music-readme-dialog` is a modal Basecoat dialog that shows a plain text file, such as the README shipped beside a chart, in a fixed-width face (`--be-music-readme-font` sets another). It is open while `text` is set. `splitLinkedText(text)` splits the text into runs of plain text and links (`https://`, `http://`, the BBS-era `ttp://`, a bare `www.` and mail addresses), and the element builds text nodes and anchors from the runs, so the text is never read as HTML; a link opens in a new tab with `rel="noopener noreferrer"`. The dialog does not close itself: its close button, Escape and a click on the backdrop send `readme-close`, and its owner clears `text`. `scrollTextBy(delta)` scrolls the text for a host that takes the keys itself. `be-music-chart-details` sends `readme-request` from its Readme button, disabled when `readmeAvailable` is `false`.
 
 ## Playfield
 
