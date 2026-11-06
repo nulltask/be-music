@@ -206,6 +206,12 @@ export interface PlayEngineContext
 }
 
 /**
+ * How long a PRACTICE play fades in as it starts, and how long each loop back to its start crossfades: the end of the
+ * round fades out under the start of the next (#949).
+ */
+const PRACTICE_LOOP_CROSSFADE_SECONDS = 0.5;
+
+/**
  * "Fully on" hold time before {@link flashKeyBeam} hands the lane laser to the release-fade path.
  * Without this hold the sprite would only stay at peak alpha for the first frame (≈16 ms at 60 fps) before the fade
  * tween kicked in, which made auto-judged short-note flashes look like a single-frame blink. ~60 ms is enough to
@@ -627,6 +633,10 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       playbackRate: samplePlaybackRate(ctx),
       playbackRateFollowsTempo: supportsLiveTempoChange(ctx.options.tempoPitchMode ?? 'pitch'),
       tempo: ctx.tempo,
+      // A looping PRACTICE play fades in and crossfades back to its start each time round (#949).
+      ...(!ctx.options.replay && ctx.options.practiceRange !== undefined
+        ? { seekCrossfadeSeconds: PRACTICE_LOOP_CROSSFADE_SECONDS }
+        : {}),
     },
     mode: ctx.options.autoPlay ? 'auto' : 'manual',
     ui: callbacks,
