@@ -803,6 +803,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             // judge ruleset, the debug judge-window override, the end-on-failure flag and the course stage are
             // restored from the log so the judging setup matches the recording.
             replayInputs: ctx.options.replay.inputs,
+            replayInputSources: ctx.options.replay.play.inputSources,
             // The tempo changes of the play, followed as the replay reaches them (`resolveReplayTempo`).
             ...(ctx.replayTempo !== undefined && ctx.replayTempo.changes.length > 0
               ? { replayTempoChanges: ctx.replayTempo.changes }

@@ -34,7 +34,7 @@ function stageLog(chartFingerprint: string | undefined): BeMusicReplay {
       ...(chartFingerprint !== undefined ? { chartFingerprint, playFingerprint: chartFingerprint } : {}),
     },
     inputs: [],
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', course: { kind: 'grade' } },
+    play: { inputSources: [], mode: 'manual', autoScratch: false, gauge: 'GROOVE', course: { kind: 'grade' } },
   };
 }
 

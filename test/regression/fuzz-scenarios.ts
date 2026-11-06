@@ -128,9 +128,10 @@ export function buildFuzzInputs(notes: readonly ReplayNote[], random: () => numb
     return Math.round((random() - 0.5) * 1_200_000);
   };
   const events: Array<Omit<ReplayInputEvent, 'seq'>> = [];
+  // One unnamed source for every key: the fuzz cases press one key per lane, and no scratch hold needs two.
   const press = (channel: string, down: number, up: number): void => {
-    events.push({ timeUs: down, action: 'down', channels: [channel] });
-    events.push({ timeUs: up, action: 'up', channels: [channel] });
+    events.push({ timeUs: down, action: 'down', channels: [channel], source: 0 });
+    events.push({ timeUs: up, action: 'up', channels: [channel], source: 0 });
   };
   for (const [channel, laneNotes] of byLane) {
     laneNotes.sort((left, right) => left.timeUs - right.timeUs);

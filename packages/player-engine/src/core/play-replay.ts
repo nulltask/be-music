@@ -18,7 +18,7 @@ import { resolveRulesetLongNoteMode, toUILongNoteMode } from './judge-rules.ts';
 function createReplayJudge(session: PlaySession): PlayJudge {
   const { applyJudgeEffect } = session;
   let judgeCore = createPlayJudgeCore(session, 1000);
-  let replay = createJudgeCoreReplay(session.options.replayInputs ?? []);
+  let replay = createJudgeCoreReplay(session.options.replayInputs ?? [], session.options.replayInputSources);
   let coreJudge = judgeCoreJudge(session, judgeCore);
   return {
     isSettled: () => coreJudge.isSettled(),
@@ -27,7 +27,7 @@ function createReplayJudge(session: PlaySession): PlayJudge {
     seek: (seconds) => {
       judgeCore = createPlayJudgeCore(session, 1000);
       coreJudge = judgeCoreJudge(session, judgeCore);
-      replay = createJudgeCoreReplay(session.options.replayInputs ?? []);
+      replay = createJudgeCoreReplay(session.options.replayInputs ?? [], session.options.replayInputSources);
       const rebuilt = createSeekRebuildSink(session.summary);
       // Rebuild silently, retaining keysounds not cut by a later stop on their lane.
       const sounds = new Map<string, Array<Extract<JudgeCoreEffect, { kind: 'sound' }>>>();

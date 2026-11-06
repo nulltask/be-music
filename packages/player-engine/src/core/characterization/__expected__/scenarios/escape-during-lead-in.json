@@ -60,7 +60,15 @@
         "total": 160
       },
       "inputs": [],
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","aborted":true,"abortedAtUs":0,"endOnFailure":true},
+      "play": {
+        "inputSources": [],
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "aborted": true,
+        "abortedAtUs": 0,
+        "endOnFailure": true
+      },
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -183,7 +191,15 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as manual)",
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","aborted":true,"abortedAtUs":0,"endOnFailure":true},
+      "play": {
+        "inputSources": [],
+        "mode": "auto",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "aborted": true,
+        "abortedAtUs": 0,
+        "endOnFailure": true
+      },
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",

@@ -29,8 +29,13 @@ function replay(channel = '11'): BeMusicReplay {
       noteCount: 1,
       notes: [note],
     },
-    inputs: [{ seq: 0, timeUs: 1_000_000, action: 'down', channels: [channel] }],
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
+    inputs: [{ seq: 0, timeUs: 1_000_000, action: 'down', channels: [channel], source: 0 }],
+    play: {
+      inputSources: [{ id: 0, kind: 'key', device: 'keyboard', label: 'z' }],
+      mode: 'manual',
+      autoScratch: false,
+      gauge: 'GROOVE',
+    },
   };
 }
 

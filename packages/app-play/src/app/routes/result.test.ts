@@ -89,7 +89,9 @@ function resultOf(chart: LibraryChart, cleared = true): PlayResult {
     playSeconds: 30,
     gaugeHistory: [],
     scoreHistory: [],
-    replay: { play: { mode: 'manual' } } as unknown as BeMusicReplay,
+    replay: {
+      play: { inputSources: [{ id: 0, kind: 'key', device: 'keyboard', label: 'z' }], mode: 'manual' },
+    } as unknown as BeMusicReplay,
   } as unknown as PlayResult;
 }
 
@@ -485,7 +487,13 @@ for (const family of ['none', 'lr2', 'beatoraja'] as const) {
         noteCount: 0,
         notes: [],
       },
-      play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', bmsonTotalMode: 'spec' },
+      play: {
+        inputSources: [{ id: 0, kind: 'key', device: 'keyboard', label: 'z' }],
+        mode: 'manual',
+        autoScratch: false,
+        gauge: 'GROOVE',
+        bmsonTotalMode: 'spec',
+      },
       inputs: [],
     };
     if (family === 'beatoraja') await h.route.showBeatorajaPlayResult(data, false);
