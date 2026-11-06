@@ -80,6 +80,12 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.libraryRootFolders(BENCH_LIBRARY);
     },
   });
+  define('player-scene-model.estimateChartDifficulty', {
+    run: () => {
+      sceneModelAPI.estimateChartDifficulty({ title: 'Song', subtitle: '[ANOTHER]', notes: 1200 });
+      sceneModelAPI.estimateChartDifficulty({ title: 'Song', notes: 1200 });
+    },
+  });
   define('player-scene-model.resolveLibraryChartPlayVariant', {
     run: () => {
       sceneModelAPI.resolveLibraryChartPlayVariant(BENCH_CHARTS[0]!);

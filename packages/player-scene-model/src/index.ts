@@ -16,6 +16,7 @@
  * - System sounds: a theme's cues and jingles by slot (`SystemSoundSet`), from an LR2 or a beatoraja theme.
  * - Replay slots: the four replays a chart or a course keeps, the one the select screen picks and their result states.
  */
+export * from './library/difficulty.ts';
 export * from './library/entries.ts';
 export * from './library/folders.ts';
 export * from './library/key-mode.ts';
