@@ -252,7 +252,9 @@ describe('RANDOM MIX', () => {
       level: 12,
       difficulty: 4,
     });
-    expect(createRandomMixCandidate(DOUBLE)).toMatchObject({ keyMode: 10, level: 0 });
+    // A chart naming no difficulty carries the one beatoraja estimates: by its subtitle here, else by its notes.
+    expect(createRandomMixCandidate({ ...DOUBLE, subtitle: '[ANOTHER]' })).toMatchObject({ estimatedDifficulty: 4 });
+    expect(createRandomMixCandidate(DOUBLE)).toMatchObject({ keyMode: 10, level: 0, estimatedDifficulty: 1 });
     expect(createRandomMixCandidate(DOUBLE).difficulty).toBeUndefined();
   });
 

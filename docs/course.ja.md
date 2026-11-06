@@ -275,7 +275,7 @@ LR2 の動作で分からないところと、Be-Music の読み方：
 LR2 は `config.course` の値だけで RANDOM MIX を抽選します。Be-Music は先に尋ねます。RANDOM MIX バーを決定するとダイアログ（`promptRandomMixConditions`、app-play の `ui/random-mix-dialog.ts`）が開き、OK を押すと条件に合う譜面から抽選を始めます。条件は `RandomMixConditions`（`@be-music/player-engine/course`）です。
 
 - **キー：** ライブラリにあるキーモードから、いくつでも選べます。LR2 の 2 つ目のクエリが同じ `mode` を読むのと同じく、抽選は 1 曲目のキーモードを保つので、1 回の抽選は 1 つのキーモードになります。
-- **絞り込み：** プレイレベルの範囲（最小が最大より大きければ入れ替えます。空欄は制限なし）か、`#DIFFICULTY`（BEGINNER、NORMAL、HYPER、ANOTHER、INSANE。持たない譜面は合いません）。
+- **絞り込み：** プレイレベルの範囲（最小が最大より大きければ入れ替えます。空欄は制限なし）か、`#DIFFICULTY`（BEGINNER、NORMAL、HYPER、ANOTHER、INSANE）。**#DIFFICULTY がない譜面は推定する**（既定で ON）では、`#DIFFICULTY` を持たない譜面を、beatoraja が推定する難易度で絞り込みます（`@be-music/player-scene-model` の `estimateChartDifficulty`。LR2 は推定しません）。サブタイトルの難易度名、なければタイトルとサブタイトルの難易度名（LEGGENDARIA は INSANE）、それもなければノーツ数（250 未満は BEGINNER、600 未満は NORMAL、1000 未満は HYPER、2000 未満は ANOTHER、それ以上は INSANE）で決めます（beatoraja `SQLiteSongDatabaseAccessor.assignDifficulty`、[L962-L983](https://github.com/exch-bms2/beatoraja/blob/69954f83efc97f64bd6f1a9c5ecdf4c11eb09aa7/src/bms/player/beatoraja/song/SQLiteSongDatabaseAccessor.java#L962-L983)）。OFF では、そうした譜面は合いません。
 - **曲数：** 1-99、または無限。NONSTOP は 1 本につないだ譜面なので、5 曲までで、無限は選べません。
 - **ループ回数：** 何回続けて遊ぶか。1-99、または無限。毎回、同じ条件で新しく抽選します。
 - **抽選の設定：** LR2 の好みのレベル、BPM の範囲、最大 / 最小 BPM（ボタン 260、263-265）。Options → Course → **My courses…** でも設定できます。NONSTOP では、各ステージの後のつなぎ方（ボタン 268）も設定できます。

@@ -111,6 +111,7 @@ describe('made courses storage', () => {
       minLevel: 3,
       maxLevel: 12,
       difficulties: [4, 5],
+      estimateDifficulty: false,
       count: 'infinity' as const,
       loops: 'infinity' as const,
     };
