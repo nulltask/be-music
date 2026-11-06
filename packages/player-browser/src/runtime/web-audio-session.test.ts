@@ -375,6 +375,46 @@ describe('createWebAudioSession', () => {
     expect(kept.trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(0, 2);
   });
 
+  test('with crossfades on, fades in as it starts and crossfades a seek instead of stopping at once', () => {
+    vi.useFakeTimers();
+    const { audioContext, audioBus, trackedBufferSources, createdGains, keyMixer, bgmMixer } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([
+        ['kick.wav', makeMockAudioBuffer()],
+        ['bgm.wav', makeMockAudioBuffer()],
+      ]),
+      wavCmdVolumeMultipliers: new Map(),
+      seekCrossfadeSeconds: 0.5,
+    });
+    session.start();
+    // The start opens a key and a BGM gain on their mixers, fading in from silence.
+    const [firstKey, firstBGM] = createdGains;
+    expect(vi.mocked(firstKey!.connect)).toHaveBeenCalledWith(keyMixer);
+    expect(vi.mocked(firstBGM!.connect)).toHaveBeenCalledWith(bgmMixer);
+    expect(firstBGM!.gain.value).toBe(0);
+    expect(vi.mocked(firstBGM!.gain.linearRampToValueAtTime)).toHaveBeenCalledWith(1, 0.5);
+    session.triggerEvent?.(mkEvent('11', '01'));
+    session.triggerEvent?.(mkEvent('01', '03'));
+    expect(trackedBufferSources.map((source) => source.connectedTo)).toEqual([firstKey, firstBGM]);
+
+    session.seek?.(12);
+    // The old position fades out and its voices stop once it is silent; the new one fades in on gains of its own.
+    expect(vi.mocked(firstBGM!.gain.linearRampToValueAtTime)).toHaveBeenLastCalledWith(0, 0.5);
+    for (const source of trackedBufferSources) expect(vi.mocked(source.node.stop)).toHaveBeenCalledWith(0.5);
+    const [nextKey, nextBGM] = createdGains.slice(2);
+    expect(vi.mocked(nextBGM!.gain.linearRampToValueAtTime)).toHaveBeenCalledWith(1, 0.5);
+    session.triggerEvent?.(mkEvent('01', '03'));
+    expect(trackedBufferSources[2]!.connectedTo).toBe(nextBGM);
+    expect(nextKey).toBeDefined();
+    // The old gains go once the fade is over.
+    vi.advanceTimersByTime(600);
+    expect(vi.mocked(firstBGM!.disconnect)).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   test('a seek stops what plays and puts the dynamic volumes back to the chart start', () => {
     const { audioContext, audioBus, trackedBufferSources } = createMocks();
     const session = createWebAudioSession({
