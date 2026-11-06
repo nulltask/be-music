@@ -38,6 +38,11 @@ export interface RandomMixConditions {
   maxLevel: number;
   /** The `#DIFFICULTY` values allowed ({@link RANDOM_MIX_DIFFICULTIES}). */
   difficulties: number[];
+  /**
+   * Whether a chart that names no `#DIFFICULTY` is narrowed by the one estimated for it (as beatoraja estimates it,
+   * {@link RandomMixCandidate.estimatedDifficulty}); off, such a chart never fits a difficulty.
+   */
+  estimateDifficulty: boolean;
   count: RandomMixCount;
   /** How many draws are played in a row, each a fresh draw by these conditions, or `infinity` until the player stops. */
   loops: RandomMixCount;
@@ -50,6 +55,7 @@ export const DEFAULT_RANDOM_MIX_CONDITIONS: Readonly<RandomMixConditions> = {
   minLevel: 0,
   maxLevel: 0,
   difficulties: [...RANDOM_MIX_DIFFICULTIES],
+  estimateDifficulty: true,
   count: LR2_COURSE_MAKER_MAX_STAGES,
   loops: 1,
 };
@@ -90,6 +96,8 @@ export function normalizeRandomMixConditions(
     minLevel: clampInteger(stored.minLevel, 0, 99, fallback.minLevel),
     maxLevel: clampInteger(stored.maxLevel, 0, 99, fallback.maxLevel),
     difficulties: difficulties ?? [...fallback.difficulties],
+    estimateDifficulty:
+      typeof stored.estimateDifficulty === 'boolean' ? stored.estimateDifficulty : fallback.estimateDifficulty,
     count:
       stored.count === 'infinity'
         ? 'infinity'
@@ -128,13 +136,20 @@ export interface RandomMixCandidate {
   level: number;
   /** `#DIFFICULTY` (1-5), when the chart has one. */
   difficulty?: number;
+  /** The `#DIFFICULTY` estimated for a chart that names none (`estimateChartDifficulty`). */
+  estimatedDifficulty?: number;
 }
 
-/** Whether a chart fits the conditions (its key mode, then its level range or difficulty). */
+/**
+ * Whether a chart fits the conditions (its key mode, then its level range or difficulty, a chart naming none read by its
+ * estimated difficulty when `estimateDifficulty` is on).
+ */
 export function matchesRandomMixConditions(chart: RandomMixCandidate, conditions: RandomMixConditions): boolean {
   if (!conditions.keyModes.includes(chart.keyMode)) return false;
-  if (conditions.by === 'difficulty')
-    return chart.difficulty !== undefined && conditions.difficulties.includes(chart.difficulty);
+  if (conditions.by === 'difficulty') {
+    const difficulty = chart.difficulty ?? (conditions.estimateDifficulty ? chart.estimatedDifficulty : undefined);
+    return difficulty !== undefined && conditions.difficulties.includes(difficulty);
+  }
   const [low, high] = resolveLevelRange(conditions);
   return low <= chart.level && chart.level <= high;
 }
