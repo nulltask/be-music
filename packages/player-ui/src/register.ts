@@ -5,6 +5,7 @@ import { BeMusicTimingGraphElement } from './components/timing-graph.ts';
 import { BeMusicPlaySettingsElement } from './components/play-settings.ts';
 import { BeMusicChartListElement } from './components/chart-list.ts';
 import { BeMusicChartDetailsElement } from './components/chart-details.ts';
+import { BeMusicReadmeDialogElement } from './components/readme-dialog.ts';
 import { BeMusicPlayOptionsElement } from './components/play-options.ts';
 import { BeMusicSelectScreenElement } from './components/select-screen.ts';
 import { BeMusicResultScreenElement } from './components/result-screen.ts';
@@ -50,6 +51,7 @@ export function defineBeMusicElements(
     ['be-music-play-settings', BeMusicPlaySettingsElement],
     ['be-music-chart-list', BeMusicChartListElement],
     ['be-music-chart-details', BeMusicChartDetailsElement],
+    ['be-music-readme-dialog', BeMusicReadmeDialogElement],
     ['be-music-play-options', BeMusicPlayOptionsElement],
     ['be-music-select-screen', BeMusicSelectScreenElement],
     ['be-music-result-screen', BeMusicResultScreenElement],
@@ -85,6 +87,7 @@ declare global {
     'be-music-play-settings': BeMusicPlaySettingsElement;
     'be-music-chart-list': BeMusicChartListElement;
     'be-music-chart-details': BeMusicChartDetailsElement;
+    'be-music-readme-dialog': BeMusicReadmeDialogElement;
     'be-music-play-options': BeMusicPlayOptionsElement;
     'be-music-select-screen': BeMusicSelectScreenElement;
     'be-music-result-screen': BeMusicResultScreenElement;

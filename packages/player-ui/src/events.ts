@@ -13,6 +13,8 @@ export interface BeMusicUIEventMap {
   'cancel-request': undefined;
   'back-request': undefined;
   'readme-request': undefined;
+  /** `<be-music-readme-dialog>`: the player asked to close it (its close button, Escape or the backdrop). */
+  'readme-close': undefined;
   'gesture-request': undefined;
   'play-request': { autoPlay: boolean };
   'auto-play-change': { autoPlay: boolean };

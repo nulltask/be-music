@@ -48,7 +48,8 @@ export interface BeMusicDOMSelectFrame extends BeMusicDOMPresentation {
   readonly searchError?: string;
   readonly playOptions: Readonly<PlayOptions>;
   readonly playOptionChoices: BeMusicPlayOptionChoices;
-  readonly readText: string | undefined;
+  /** Whether the chart under the cursor has a README (a `.txt` file beside it); the host shows it in its own dialog. */
+  readonly hasReadme: boolean;
   readonly launching: boolean;
 }
 
@@ -59,6 +60,7 @@ export interface BeMusicDOMSelectActions {
   search(query: string): void;
   play(autoPlay?: boolean): void;
   setPlayOption<K extends keyof PlayOptions>(key: K, value: PlayOptions[K]): void;
+  /** Opens the README of the chart under the cursor, or closes the one shown. */
   readText(): void;
   gesture(): void;
 }

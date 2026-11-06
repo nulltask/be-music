@@ -76,15 +76,15 @@ export const BeMusicChartList: DefineComponent<BeMusicChartListProps, BeMusicVue
 export type BeMusicChartDetailsProps = {
   entry?: LibraryEntry;
   launching?: boolean;
-  readText?: string;
+  readmeAvailable?: boolean;
 } & BeMusicVueEventHandlers<'play-request' | 'readme-request'>;
 export const BeMusicChartDetails: DefineComponent<BeMusicChartDetailsProps, BeMusicVueElementRef> = wrap<
-  { entry?: LibraryEntry; launching?: boolean; readText?: string },
+  { entry?: LibraryEntry; launching?: boolean; readmeAvailable?: boolean },
   'play-request' | 'readme-request'
 >(
   'BeMusicChartDetails',
   'be-music-chart-details',
-  ['entry', 'launching', 'readText'],
+  ['entry', 'launching', 'readmeAvailable'],
   ['play-request', 'readme-request'],
 );
 

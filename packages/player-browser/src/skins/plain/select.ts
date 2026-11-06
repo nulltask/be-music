@@ -13,7 +13,7 @@ import {
   type BeMusicSurface,
   selectListRows,
 } from '@be-music/player-skin-sdk';
-import { PORTRAIT_SELECT_LAYOUT, resolvePortraitSelectCard } from './layout.ts';
+import { PORTRAIT_SELECT_LAYOUT, README_CHIP, resolvePortraitSelectCard } from './layout.ts';
 import { ACCENT, INK, LINE, MUTED, PANEL, TEXT, stat, text } from './theme.ts';
 
 /** Where the song list sits; the player uses the same numbers to tell which row was clicked. */
@@ -86,7 +86,7 @@ export function drawSelect(surface: BeMusicSurface<'2d'>, frame: BeMusicSelectFr
   }
 }
 
-/** The left card: title, artist, the chart's key facts, and the PLAY / AUTO buttons. */
+/** The left card: title, artist, the chart's key facts, the PLAY / AUTO buttons, and README at its top right. */
 function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFrame): void {
   const chartEntry = frame.focusedChart;
   const x = MARGIN;
@@ -96,8 +96,7 @@ function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFram
   if (!chartEntry) {
     if (frame.focusedCourse !== undefined) {
       drawCourse(ctx, frame, frame.focusedCourse, x + 16, y, PANEL_W - 32);
-      button(ctx, frame, 'PLAY', x + 16, y + 236, 160, frame.actions.play, true);
-      button(ctx, frame, 'AUTO', x + 186, y + 236, 88, frame.actions.autoPlay, false);
+      drawCardButtons(ctx, frame, x, y);
       return;
     }
     text(ctx, 'Pick a folder', x + 16, y + 28, { size: 14, color: MUTED });
@@ -107,8 +106,13 @@ function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFram
   const { nowMs } = frame;
   const lift = chartEntry.genre ? 12 : 0;
   const textW = PANEL_W - 32;
-  if (chartEntry.genre) text(ctx, chartEntry.genre, x + 16, y + 22, { size: 10, color: MUTED, maxWidth: textW, nowMs });
-  text(ctx, chartEntry.title, x + 16, y + 28 + lift, { size: 18, weight: 800, maxWidth: textW, nowMs });
+  // README at the top right, on the genre line: the first line keeps clear of it.
+  const chipW = README_CHIP.w + 8;
+  readmeChip(ctx, frame, { x: x + PANEL_W - 16 - README_CHIP.w, y: y + 13, ...README_CHIP });
+  if (chartEntry.genre)
+    text(ctx, chartEntry.genre, x + 16, y + 22, { size: 10, color: MUTED, maxWidth: textW - chipW, nowMs });
+  const titleW = chartEntry.genre ? textW : textW - chipW;
+  text(ctx, chartEntry.title, x + 16, y + 28 + lift, { size: 18, weight: 800, maxWidth: titleW, nowMs });
   text(ctx, chartEntry.artist ?? '', x + 16, y + 52 + lift, { size: 11, color: MUTED, maxWidth: textW, nowMs });
 
   // Three columns of facts; each value keeps to its column (a wide BPM range or gimmick list scrolls).
@@ -124,8 +128,33 @@ function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFram
   // The judge rank (#RANK / #DEFEXRANK) on a third row.
   stat(ctx, 'JUDGE', resolveChartStats(chartEntry).judgeRank, x + 16, y + 188, narrow);
 
+  drawCardButtons(ctx, frame, x, y);
+}
+
+/** PLAY and AUTO along the foot of the landscape card at (`x`, `y`). */
+function drawCardButtons(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFrame, x: number, y: number): void {
   button(ctx, frame, 'PLAY', x + 16, y + 236, 160, frame.actions.play, true);
   button(ctx, frame, 'AUTO', x + 186, y + 236, 88, frame.actions.autoPlay, false);
+}
+
+/** README: a small button that opens the chart's README, muted and without a hit area on a chart that has none. */
+function readmeChip(
+  ctx: CanvasRenderingContext2D,
+  frame: BeMusicSelectFrame,
+  rect: { x: number; y: number; w: number; h: number },
+): void {
+  const enabled = frame.hasReadme === true;
+  ctx.fillStyle = INK;
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.strokeStyle = LINE;
+  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
+  text(ctx, 'README', rect.x + rect.w / 2, rect.y + rect.h / 2, {
+    size: 10,
+    weight: 800,
+    align: 'center',
+    ...(enabled ? {} : { color: MUTED }),
+  });
+  if (enabled) frame.hit(rect.x, rect.y - 4, rect.w, rect.h + 8, frame.actions.toggleReadme);
 }
 
 /**
@@ -140,6 +169,7 @@ function drawPortraitCard(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFra
     factRows: [r0, r1],
     play,
     auto,
+    readme,
   } = resolvePortraitSelectCard(width);
   ctx.fillStyle = PANEL;
   ctx.fillRect(card.x, card.y, card.w, card.h);
@@ -158,9 +188,13 @@ function drawPortraitCard(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFra
   const { nowMs } = frame;
   const textW = card.w - 32;
   const lift = chartEntry.genre ? 12 : 0;
+  // README at the top right, on the genre line: the first line keeps clear of it.
+  const chipW = readme.w + 8;
+  readmeChip(ctx, frame, readme);
   if (chartEntry.genre)
-    text(ctx, chartEntry.genre, left, card.y + 20, { size: 10, color: MUTED, maxWidth: textW, nowMs });
-  text(ctx, chartEntry.title, left, card.y + 30 + lift, { size: 20, weight: 800, maxWidth: textW, nowMs });
+    text(ctx, chartEntry.genre, left, card.y + 20, { size: 10, color: MUTED, maxWidth: textW - chipW, nowMs });
+  const titleW = chartEntry.genre ? textW : textW - chipW;
+  text(ctx, chartEntry.title, left, card.y + 30 + lift, { size: 20, weight: 800, maxWidth: titleW, nowMs });
   // The judge rank (#RANK / #DEFEXRANK) at the end of the artist line: the card has no room for a third row of facts.
   const right = card.x + card.w - 16;
   const artistY = card.y + 56 + lift;

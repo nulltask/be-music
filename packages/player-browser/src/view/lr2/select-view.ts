@@ -77,7 +77,7 @@ import {
   resolveSolidSpecialGraphicTexture,
 } from '../../skin/lr2/scene-textures.ts';
 import { renderEmptyStateHint } from '../built-in/select-empty-hint.ts';
-import { SelectReadTextOverlay } from '../built-in/select-readtext.ts';
+import { SelectReadmeDialog } from '../shared/readme-dialog.ts';
 import { SelectPointer, type SelectDesignSize, type SelectPointerContext } from '../shared/select-pointer.ts';
 import type { IntentSink, SelectFrame, SelectIntent, SelectView } from '../types.ts';
 import { clampSlot, renderLR2SelectBars, wrapIndex, type LR2SelectBarsContext } from './select-bars.ts';
@@ -126,7 +126,7 @@ export class LR2SelectView implements SelectView {
   private readonly listLayer: Container = new Container();
   /** The skin's chrome declared after the bar list (e.g. the list's scroll slider), on top of it. */
   private readonly skinForegroundLayer: Container = new Container();
-  private readonly readText: SelectReadTextOverlay = new SelectReadTextOverlay();
+  private readonly readme: SelectReadmeDialog = new SelectReadmeDialog();
   private readonly pointer: SelectPointer;
   /** What the bar list reads and draws into ({@link renderLR2SelectBars}). */
   private readonly bars: LR2SelectBarsContext;
@@ -214,6 +214,10 @@ export class LR2SelectView implements SelectView {
     this.listScrollOffset = 0;
     this.lastScrollUpdate = 0;
     this.pointer.lastWheelMoveAt = Number.NEGATIVE_INFINITY;
+    this.readme.attach(
+      () => host.domRoot,
+      () => this.emit?.({ type: 'readtext' }),
+    );
     this.attached = true;
   }
 
@@ -230,6 +234,7 @@ export class LR2SelectView implements SelectView {
       canvas.removeEventListener('pointercancel', this.pointer.handlePointerCancel);
       canvas.removeEventListener('wheel', this.pointer.handleWheel);
     }
+    this.readme.detach();
     this.emit = undefined;
   }
 
@@ -275,10 +280,10 @@ export class LR2SelectView implements SelectView {
           resolveLR2SelectTimers({ kind: 'panel', panel: event.panel, open: event.open, at: event.atMs }),
         );
       } else {
-        this.readText.scrollBy(event.delta);
+        this.readme.scrollBy(event.delta);
       }
     }
-    this.readText.show(frame.readText);
+    this.readme.show(frame.readText);
     this.perf.beginTick();
     this.pointer.advanceFling(this.nowMs);
     this.pointer.settleListPull(this.nowMs);
@@ -353,13 +358,12 @@ export class LR2SelectView implements SelectView {
     this.designClipMask.label = 'select/design-clip';
     this.root.addChild(this.viewportBackground, this.designRoot);
     // Back to front: the background, the chrome declared before the bars, the bars, the chrome declared after them,
-    // the README overlay. An LR2 option panel is chrome gated by its `panel` field, not a layer of its own.
+    // the clip. An LR2 option panel is chrome gated by its `panel` field, not a layer of its own.
     this.designRoot.addChild(
       this.background,
       this.skinLayer,
       this.listLayer,
       this.skinForegroundLayer,
-      this.readText.layer,
       this.designClipMask,
     );
     this.designRoot.mask = this.designClipMask;
@@ -422,7 +426,6 @@ export class LR2SelectView implements SelectView {
     if (frame.library.charts.length === 0) {
       renderEmptyStateHint({ skinLayer: this.skinLayer, collection: frame.library }, skin.width, skin.height);
     }
-    this.readText.render(skin.width, skin.height);
   }
 
   /**
@@ -821,11 +824,6 @@ export class LR2SelectView implements SelectView {
       set mouseY(value: number) {
         view.mouseY = value;
       },
-      get readTextOpen(): boolean {
-        return view.readText.open;
-      },
-      scrollReadText: (delta) => view.readText.scrollBy(delta),
-      closeReadText: () => emit({ type: 'readtext' }),
       resolveDesignSize: size,
       currentEntries: () => view.entries,
       moveCursorBy: (steps) => {
