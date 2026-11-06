@@ -16,6 +16,7 @@ function bar(index: number, measure: number, startMs: number, endMs: number): Ch
     tempos: [],
     stops: [],
     noteCount: 0,
+    soundCount: 0,
   };
 }
 

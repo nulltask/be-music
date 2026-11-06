@@ -29,6 +29,7 @@ export { BeMusicPreviewStartElement } from './components/preview-start.ts';
 export { BeMusicChartScoreElement } from './components/chart-score.ts';
 export {
   chartScoreRangeTimes,
+  isChartScoreBarEmpty,
   layoutChartScore,
   packChartScoreColumns,
   selectChartScoreBars,
@@ -36,6 +37,7 @@ export {
   type ChartScoreBarRange,
   type ChartScoreLane,
   type ChartScoreLayout,
+  type ChartScoreLayoutOptions,
   type ChartScoreLongNote,
   type ChartScoreNote,
   type ChartScoreStop,
