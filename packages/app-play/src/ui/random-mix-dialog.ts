@@ -278,28 +278,39 @@ function template(
               ${levelInput('random-mix-max-level', t.maxLevel, 'maxLevel')}
             </div>`
           : html`<div class="random-mix-choices" aria-label=${t.difficulty}>
-              ${RANDOM_MIX_DIFFICULTIES.map(
-                (difficulty) =>
-                  html`<label class="random-mix-check">
-                    <input
-                      class="input"
-                      type="checkbox"
-                      name="difficulty"
-                      value=${difficulty}
-                      .checked=${conditions.difficulties.includes(difficulty)}
-                      @change=${(event: Event) =>
-                        update({
-                          difficulties: toggleRandomMixValue(
-                            conditions.difficulties,
-                            difficulty,
-                            (event.currentTarget as HTMLInputElement).checked,
-                          ),
-                        })}
-                    />
-                    <span>${DIFFICULTY_NAMES[difficulty]}</span>
-                  </label>`,
-              )}
-            </div>`
+                ${RANDOM_MIX_DIFFICULTIES.map(
+                  (difficulty) =>
+                    html`<label class="random-mix-check">
+                      <input
+                        class="input"
+                        type="checkbox"
+                        name="difficulty"
+                        value=${difficulty}
+                        .checked=${conditions.difficulties.includes(difficulty)}
+                        @change=${(event: Event) =>
+                          update({
+                            difficulties: toggleRandomMixValue(
+                              conditions.difficulties,
+                              difficulty,
+                              (event.currentTarget as HTMLInputElement).checked,
+                            ),
+                          })}
+                      />
+                      <span>${DIFFICULTY_NAMES[difficulty]}</span>
+                    </label>`,
+                )}
+              </div>
+              <label class="random-mix-check">
+                <input
+                  class="input"
+                  type="checkbox"
+                  name="estimate-difficulty"
+                  .checked=${conditions.estimateDifficulty}
+                  @change=${(event: Event) =>
+                    update({ estimateDifficulty: (event.currentTarget as HTMLInputElement).checked })}
+                />
+                <span>${t.estimateDifficulty}</span>
+              </label>`
       }
     </fieldset>
     <div class="random-mix-group">
