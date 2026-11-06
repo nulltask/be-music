@@ -31,6 +31,7 @@ import {
   type RandomMixConditions,
 } from '@be-music/player-engine/course';
 import {
+  resolveLibraryChartDifficulty,
   resolveLibraryChartPlayVariant,
   type LibraryChart,
   type LibraryCourse,
@@ -488,8 +489,9 @@ export function createRandomMixChart(
 /**
  * A library chart as the RANDOM MIX dialog and draw read it, from what the library already knows: its folder (the chart's
  * directory within its source, LR2's `folder` column), key mode, play level (truncated, 0 when it is not a number) and
- * `#DIFFICULTY`. Its BPMs and file hash are left for the charts a draw walks, so building every chart's candidate stays
- * cheap however large the library.
+ * difficulty as the library lists it (`resolveLibraryChartDifficulty`): its own `#DIFFICULTY` as `difficulty`, or an
+ * estimate from its names or note count as `estimatedDifficulty`. Its BPMs and file hash are left for the charts a draw
+ * walks, so building every chart's candidate stays cheap however large the library.
  */
 export function createRandomMixCandidate(
   chartEntry: LibraryChart,
@@ -499,13 +501,17 @@ export function createRandomMixCandidate(
       ? chartEntry.playLevel
       : Number.parseInt(String(chartEntry.playLevel ?? ''), 10);
   const slash = chartEntry.chartPath.lastIndexOf('/');
-  const difficulty = chartEntry.chart.metadata.difficulty;
+  const difficulty = resolveLibraryChartDifficulty(chartEntry);
   return {
     chart: chartEntry,
     folder: `${chartEntry.sourceId}/${slash < 0 ? '' : chartEntry.chartPath.slice(0, slash)}`,
     keyMode: Number(resolveLibraryChartPlayVariant(chartEntry)),
     level: Number.isFinite(level) ? Math.trunc(level) : 0,
-    ...(difficulty !== undefined && Number.isInteger(difficulty) && difficulty > 0 ? { difficulty } : {}),
+    ...(difficulty === undefined
+      ? {}
+      : difficulty.basis === 'chart'
+        ? { difficulty: difficulty.value }
+        : { estimatedDifficulty: difficulty.value }),
   };
 }
 
