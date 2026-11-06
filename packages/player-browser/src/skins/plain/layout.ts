@@ -13,6 +13,8 @@ export const PORTRAIT_MIN_TEXT = 14;
 
 /** Page margin of the portrait select and result screens. */
 const MARGIN = 16;
+/** The README chip's size: a small button on the focused-song card's genre line. */
+export const README_CHIP = { w: 56, h: 18 } as const;
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Select
@@ -38,12 +40,13 @@ export interface PortraitSelectCard {
   factRows: readonly [number, number];
   play: BeMusicRect;
   auto: BeMusicRect;
+  readme: BeMusicRect;
 }
 
 /**
  * The focused-song card for a portrait select screen `width` wide: across the top, from under the header down to the
  * list ({@link PORTRAIT_SELECT_LAYOUT}`.listTop`). Genre, title and artist on top, then two rows of three facts, then
- * PLAY and AUTO side by side along its foot.
+ * PLAY and AUTO side by side along its foot, and a small README at its top right, on the genre line.
  */
 export function resolvePortraitSelectCard(width: number): PortraitSelectCard {
   const top = 44;
@@ -62,6 +65,7 @@ export function resolvePortraitSelectCard(width: number): PortraitSelectCard {
     factRows: [card.y + 96, card.y + 140],
     play: { x: left, y: buttonY, w: playW, h: buttonH },
     auto: { x: left + playW + gap, y: buttonY, w: inner - playW - gap, h: buttonH },
+    readme: { x: left + inner - README_CHIP.w, y: card.y + 11, ...README_CHIP },
   };
 }
 
