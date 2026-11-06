@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test';
 import type { ChartScoreBar } from '@be-music/player-ui';
-import { describePracticeBars, PracticeBarsMemory, practiceBarWindow } from './practice-bars-model.ts';
+import {
+  describePracticeBars,
+  PracticeBarsMemory,
+  practiceBarWindow,
+  practiceBestEXScore,
+  practiceNoteShare,
+} from './practice-bars-model.ts';
 import { playerText, setPlayerLang } from '../player-copy.ts';
 
 function bar(index: number, measure: number, startMs: number, endMs: number): ChartScoreBar {
@@ -51,6 +57,7 @@ describe('PracticeBarsMemory', () => {
     expect(memory.remember('a', LAYOUT, { first: 1, last: 2 })).toEqual({
       bars: { first: 1, last: 2 },
       range: { startMs: 2000, endMs: 7500 },
+      noteShare: 1,
     });
     expect(memory.rangeFor('a')).toEqual({ startMs: 2000, endMs: 7500 });
     expect(memory.pickFor('b')).toBeUndefined();
@@ -78,5 +85,39 @@ describe('PracticeBarsMemory without practice', () => {
     expect(memory.pickFor('a')?.bars).toEqual({ first: 1, last: 1 });
     memory.remember('a', LAYOUT, { first: 2, last: 2 });
     expect(memory.skipsPractice('a')).toBe(false);
+  });
+});
+
+describe('practiceNoteShare', () => {
+  const counted = { bars: [10, 30, 0, 60].map((noteCount, index) => ({ ...bar(index, index, 0, 0), noteCount })) };
+
+  it('is the share of the chart’s judged notes the bars picked hold', () => {
+    expect(practiceNoteShare(counted, { first: 1, last: 1 })).toBe(0.3);
+    expect(practiceNoteShare(counted, { first: 3, last: 1 })).toBe(0.9);
+  });
+
+  it('is 1 for a chart with no notes', () => {
+    expect(practiceNoteShare(LAYOUT, { first: 0, last: 1 })).toBe(1);
+  });
+
+  it('is kept with the pick for the play to read, 1 for a chart started with no bars', () => {
+    const memory = new PracticeBarsMemory();
+    memory.remember('a', counted, { first: 0, last: 1 });
+    expect(memory.noteShareFor('a')).toBe(0.4);
+    memory.remember('a', counted, undefined);
+    expect(memory.noteShareFor('a')).toBe(1);
+  });
+});
+
+describe('practiceBestEXScore', () => {
+  it('cuts the best EX score down to the share of the notes looped, rounding', () => {
+    expect(practiceBestEXScore(1234, 0.25)).toBe(309);
+    expect(practiceBestEXScore(1234, 1)).toBe(1234);
+  });
+
+  it('keeps the share within 0..1 and the score at 0 or more', () => {
+    expect(practiceBestEXScore(100, 2)).toBe(100);
+    expect(practiceBestEXScore(100, Number.NaN)).toBe(100);
+    expect(practiceBestEXScore(-5, 0.5)).toBe(0);
   });
 });

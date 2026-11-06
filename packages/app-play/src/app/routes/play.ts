@@ -70,6 +70,7 @@ import type { CourseRoute } from './course.ts';
 import { playingFamily } from './decide.ts';
 import type { NonstopPlay, NonstopRoute } from './nonstop.ts';
 import { disposeKeepingAudioTail, type ResultRoute } from './result.ts';
+import { practiceBestEXScore } from '../../ui/practice-bars-model.ts';
 import type { SelectRoute } from './select.ts';
 
 /** The chart and play mode of a play start: what R on its result plays again. */
@@ -166,6 +167,8 @@ export interface PlayRouteDeps {
   readonly practiceRange?: (chartEntry: LibraryChart) => PracticeRange | undefined;
   /** Whether the chart was last started without practice on the PRACTICE bar picker, so it plays as a regular play. */
   readonly practiceSkipped?: (chartEntry: LibraryChart) => boolean;
+  /** The share of the chart's notes a PRACTICE play loops (`PracticeBarsMemory.noteShareFor`), 1 for the whole chart. */
+  readonly practiceNoteShare?: (chartEntry: LibraryChart) => number;
   /** Names the selected options a chart cannot be played with; `onClose` runs once the player dismisses it. */
   readonly showPlayOptionMismatch: (options: readonly string[], onClose: () => void) => void;
   /** Keeps a play option for every screen and play, and pushes it to the select screen. */
@@ -228,6 +231,7 @@ export class PlayRoute {
   private readonly showSelect: PlayRouteDeps['showSelect'];
   private readonly practiceRange: PlayRouteDeps['practiceRange'];
   private readonly practiceSkipped: PlayRouteDeps['practiceSkipped'];
+  private readonly practiceNoteShare: PlayRouteDeps['practiceNoteShare'];
   private readonly showPlayOptionMismatch: PlayRouteDeps['showPlayOptionMismatch'];
   private readonly setPlayOptions: PlayRouteDeps['setPlayOptions'];
 
@@ -262,6 +266,7 @@ export class PlayRoute {
     this.showSelect = deps.showSelect;
     this.practiceRange = deps.practiceRange;
     this.practiceSkipped = deps.practiceSkipped;
+    this.practiceNoteShare = deps.practiceNoteShare;
     this.showPlayOptionMismatch = deps.showPlayOptionMismatch;
     this.setPlayOptions = deps.setPlayOptions;
   }
@@ -570,7 +575,15 @@ export class PlayRoute {
       sounds: this.familyKits.selectSoundSet(kit.family),
       host: this.sceneHost,
       playOptions,
-      scoreTargets: { bestEXScore: this.records.lookupChartBestRecord(chartEntry)?.exScore ?? 0 },
+      // A PRACTICE play paces against the best record cut down to the bars it loops.
+      scoreTargets: {
+        bestEXScore: practicing
+          ? practiceBestEXScore(
+              this.records.lookupChartBestRecord(chartEntry)?.exScore ?? 0,
+              this.practiceNoteShare?.(chartEntry) ?? 1,
+            )
+          : (this.records.lookupChartBestRecord(chartEntry)?.exScore ?? 0),
+      },
       ...(this.leaderboard.playerName !== undefined ? { playerName: this.leaderboard.playerName } : {}),
       on: {
         exit: onExit,
