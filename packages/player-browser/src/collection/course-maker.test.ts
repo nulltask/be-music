@@ -252,7 +252,11 @@ describe('RANDOM MIX', () => {
       level: 12,
       difficulty: 4,
     });
-    expect(createRandomMixCandidate(DOUBLE)).toMatchObject({ keyMode: 10, level: 0 });
+    // A chart naming no difficulty carries the one the library estimates: by its subtitle here, else by its notes.
+    const named = createRandomMixCandidate(chartEntry('n', '#SUBTITLE [ANOTHER]\n#00111:01'));
+    expect(named).toMatchObject({ estimatedDifficulty: 4 });
+    expect(named.difficulty).toBeUndefined();
+    expect(createRandomMixCandidate(DOUBLE)).toMatchObject({ keyMode: 10, level: 0, estimatedDifficulty: 1 });
     expect(createRandomMixCandidate(DOUBLE).difficulty).toBeUndefined();
   });
 
