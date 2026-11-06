@@ -1,3 +1,4 @@
+import type { TimedSampleTrigger } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import { createEmptyJSON } from '@be-music/chart-source';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
@@ -5,6 +6,7 @@ import { MIXER_HEADROOM_GAIN_LINEAR } from '../runtime/audio-bus.ts';
 import {
   CHART_PREVIEW_FALLBACK_FADE_OUT_SECONDS,
   CHART_PREVIEW_STOP_FADE_OUT_SECONDS,
+  CHART_PREVIEW_WINDOW_FADE_OUT_SECONDS,
   ChartPreviewEngine,
   type ChartPreviewTarget,
   collectChartPreviewTriggers,
@@ -13,7 +15,10 @@ import {
   LR2_PREVIEW_FOCUS_DELAY_MS,
   resolveChartPreviewLevel,
   resolveChartPreviewPath,
+  resolveChartWindowCarryOver,
   resolvePreviewFallbackFade,
+  selectChartWindowCarryOvers,
+  selectChartWindowTriggers,
 } from './preview.ts';
 
 const collectionMocks = vi.hoisted(() => ({
@@ -342,6 +347,152 @@ describe('ChartPreviewEngine', () => {
       );
       expect(gains[index]!.linearRampToValueAtTime).toHaveBeenCalledWith(0, 10);
     }
+  });
+});
+
+describe('ChartPreviewEngine.playWindow', () => {
+  function barChart(): BeMusicJSON {
+    // 120 BPM: a bar is 2 s. A BGM hit on every bar line and a keysound halfway through bar 1.
+    const chart = createEmptyJSON('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = Array.from({ length: 4 }, (_, index) => ({ index, length: 1 }));
+    chart.events = [
+      ...[0, 1, 2, 3].map((measure) => ({ measure, channel: '01', position: [0, 1] as [number, number], value: 'AA' })),
+      { measure: 1, channel: '11', position: [1, 2], value: 'BB' },
+    ];
+    chart.resources.wav = { AA: 'bgm.wav', BB: 'key.wav' };
+    return chart;
+  }
+
+  test('sounds only what starts in the window, from its start, and fades out just past its end', async () => {
+    const chart = barChart();
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0 });
+
+    engine.playWindow(makePreviewTarget(chart), { startSeconds: 2, endSeconds: 4 });
+
+    await vi.waitFor(() => expect(sources).toHaveLength(2));
+    // The bar's line at once (after the scheduling margin), the keysound a second in.
+    expect(sources.map((source) => source.start.mock.calls[0]?.[0])).toEqual([0.02, 1.02]);
+    for (const source of sources)
+      expect(source.stop).toHaveBeenCalledWith(2.02 + CHART_PREVIEW_WINDOW_FADE_OUT_SECONDS);
+  });
+
+  test('fades the previous window out when another starts, and decodes a sample once per chart', async () => {
+    const chart = barChart();
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0 });
+    const target = makePreviewTarget(chart);
+
+    engine.playWindow(target, { startSeconds: 2, endSeconds: 4 });
+    await vi.waitFor(() => expect(sources).toHaveLength(2));
+    engine.playWindow(target, { startSeconds: 4, endSeconds: 6 });
+    await vi.waitFor(() => expect(sources).toHaveLength(3));
+
+    const firstGain = vi.mocked(audioContext.createGain).mock.results[0]!.value as GainNode;
+    expect(firstGain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, CHART_PREVIEW_STOP_FADE_OUT_SECONDS);
+    expect(vi.mocked(audioContext.decodeAudioData)).toHaveBeenCalledTimes(2);
+  });
+
+  test('starts a sample from before the window that still sounds at its start partway, as a seek there does', async () => {
+    // 120 BPM: a 4 s BGM sample from the chart's start still sounds 2 s in, at bar 1's line.
+    const chart = createEmptyJSON('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = Array.from({ length: 3 }, (_, index) => ({ index, length: 1 }));
+    chart.events = [
+      { measure: 0, channel: '01', position: [0, 1], value: 'LL' },
+      { measure: 1, channel: '11', position: [1, 2], value: 'BB' },
+    ];
+    chart.resources.wav = { LL: 'long.wav', BB: 'key.wav' };
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    vi.mocked(audioContext.decodeAudioData).mockImplementation(async (bytes: ArrayBuffer) =>
+      makeMockAudioBuffer(new Uint8Array(bytes)[0] === 9 ? 4 : 1),
+    );
+    collectionMocks.loadAssetBytes.mockImplementation(
+      async (entry: { path: string }) => new Uint8Array([entry.path === 'long.wav' ? 9 : 1]),
+    );
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0 });
+
+    engine.playWindow(makePreviewTarget(chart), { startSeconds: 2, endSeconds: 4 });
+
+    await vi.waitFor(() => expect(sources).toHaveLength(2));
+    // The long sample 2 s in at once, then the keysound a second later.
+    expect(sources[0]!.start).toHaveBeenCalledWith(0.02, 2);
+    expect(sources[1]!.start).toHaveBeenCalledWith(1.02, 0);
+  });
+
+  test('stops with a focus on nothing, even though no chart was focused', async () => {
+    const chart = barChart();
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0 });
+
+    engine.playWindow(makePreviewTarget(chart), { startSeconds: 2, endSeconds: 4 });
+    await vi.waitFor(() => expect(sources).toHaveLength(2));
+    engine.focus(undefined);
+
+    const gain = vi.mocked(audioContext.createGain).mock.results[0]!.value as GainNode;
+    expect(gain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0, CHART_PREVIEW_STOP_FADE_OUT_SECONDS);
+  });
+});
+
+describe('selectChartWindowTriggers', () => {
+  const triggers = [0, 1.9999999, 2, 3.5, 4].map((seconds) => ({ seconds }) as TimedSampleTrigger);
+
+  test('keeps the triggers starting in [start, end)', () => {
+    expect(selectChartWindowTriggers(triggers, { startSeconds: 2, endSeconds: 4 }).map((t) => t.seconds)).toEqual([
+      1.9999999, 2, 3.5,
+    ]);
+  });
+
+  test('keeps nothing for an empty window', () => {
+    expect(selectChartWindowTriggers(triggers, { startSeconds: 2, endSeconds: 2 })).toEqual([]);
+  });
+});
+
+describe('selectChartWindowCarryOvers', () => {
+  const trigger = (seconds: number, sampleKey: string, continued = false) =>
+    ({ seconds, sampleKey, event: continued ? { bmson: { c: true } } : {} }) as unknown as TimedSampleTrigger;
+  const triggers = [
+    trigger(0, 'AA'),
+    trigger(1, 'BB'),
+    trigger(1.5, 'AA'),
+    trigger(2, 'CC'),
+    trigger(1.8, 'DD', true),
+  ].sort((left, right) => left.seconds - right.seconds);
+
+  test('keeps each slot’s last trigger before the window when a retrigger cuts the slot', () => {
+    expect(
+      selectChartWindowCarryOvers(triggers, { startSeconds: 2 }, true).map((t) => [t.seconds, t.sampleKey]),
+    ).toEqual([
+      [1, 'BB'],
+      [1.5, 'AA'],
+    ]);
+  });
+
+  test('keeps every trigger before the window when samples overlap, but no bmson continuation', () => {
+    expect(selectChartWindowCarryOvers(triggers, { startSeconds: 2 }, false).map((t) => t.seconds)).toEqual([
+      0, 1, 1.5,
+    ]);
+  });
+});
+
+describe('resolveChartWindowCarryOver', () => {
+  test('starts a whole sample as far in as the window is past its trigger', () => {
+    expect(resolveChartWindowCarryOver({ seconds: 1, sampleOffsetSeconds: 0 }, 4, 2.5)).toEqual({ offsetSeconds: 1.5 });
+  });
+
+  test('starts a bmson slice partway with what is left of it', () => {
+    expect(
+      resolveChartWindowCarryOver({ seconds: 1, sampleOffsetSeconds: 10, sampleDurationSeconds: 3 }, 60, 2),
+    ).toEqual({ offsetSeconds: 11, durationSeconds: 2 });
+  });
+
+  test('drops a sample that has finished, or one that does not start before the window', () => {
+    expect(resolveChartWindowCarryOver({ seconds: 1, sampleOffsetSeconds: 0 }, 1, 2)).toBeUndefined();
+    expect(
+      resolveChartWindowCarryOver({ seconds: 1, sampleOffsetSeconds: 0, sampleDurationSeconds: 0.5 }, 9, 2),
+    ).toBeUndefined();
+    expect(resolveChartWindowCarryOver({ seconds: 2, sampleOffsetSeconds: 0 }, 4, 2)).toBeUndefined();
   });
 });
 

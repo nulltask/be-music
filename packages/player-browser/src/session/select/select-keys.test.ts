@@ -91,7 +91,7 @@ describe('resolveSelectKeyAction', () => {
     expect(resolveSelectKeyAction(down('KeyV', 'v'), { panel: 2, readTextOpen: false })).toEqual({ type: 'activate' });
   });
 
-  it('gives the README overlay the keyboard while it is open', () => {
+  it('gives the README dialog the keyboard while it is open', () => {
     const open: SelectKeyState = { panel: undefined, readTextOpen: true };
     expect(resolveSelectKeyAction(down('Enter'), open)).toEqual({ type: 'readtext-close' });
     expect(resolveSelectKeyAction(down('Backspace'), open)).toEqual({ type: 'readtext-close' });
@@ -107,7 +107,8 @@ describe('resolveSelectKeyAction', () => {
       type: 'readtext-scroll',
       delta: Number.MAX_SAFE_INTEGER,
     });
-    expect(resolveSelectKeyAction(down('Escape'), open)).toEqual({ type: 'swallow' });
+    expect(resolveSelectKeyAction(down('Escape'), open)).toEqual({ type: 'readtext-close' });
+    expect(resolveSelectKeyAction(down('KeyA', 'a'), open)).toEqual({ type: 'swallow' });
     // Space still toggles the play-options panel, as it always did.
     expect(resolveSelectKeyAction(down('Space', ' '), open)).toEqual({ type: 'panel', panel: 1 });
   });
@@ -189,7 +190,7 @@ describe('resolveSelectKeyAction on the beatoraja key map', () => {
     expect(resolve(down('F9'))).toEqual({ type: 'favorite', list: 'charts' });
   });
 
-  it('steps its option panels on the 1P keys, and gives the README overlay the keyboard while it is open', () => {
+  it('steps its option panels on the 1P keys, and gives the README dialog the keyboard while it is open', () => {
     // Space is the 1P turntable's second key, which scrolls up here.
     expect(resolve(down('Space', ' '))).toEqual({ type: 'step', direction: -1 });
     // START, SELECT and 5 open beatoraja's panels 1 to 3, whose 1P keys step their options.

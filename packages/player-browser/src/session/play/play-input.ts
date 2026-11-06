@@ -8,7 +8,7 @@
  * The functions read and write the scene's state through {@link PlayInputContext}; the play session passes itself.
  */
 
-import type { PlayerInputSignalBus } from '@be-music/player-engine/signals';
+import type { InputSource, PlayerInputSignalBus } from '@be-music/player-engine/signals';
 import { HISPEED_STEP } from '@be-music/player-scene-model';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { QuitHoldController } from './quit-hold.ts';
@@ -434,32 +434,38 @@ function pushTouchLaneChange(
   const signals = ctx.sharedEngineInputSignals;
   if (!signals || (change.pressed.length === 0 && change.released.length === 0)) return;
   const pressedAt = performance.timeOrigin + timeStamp;
-  const releaseTokens = resolveTouchTokens(ctx, change.released);
-  if (releaseTokens.length > 0) {
+  // Each lane's touch zone is its own input source (`ReplayInputEvent.source`), so every lane gets its own commands.
+  for (const token of resolveTouchTokens(ctx, change.released)) {
     signals.pushCommand({
       kind: 'kitty-state',
       pressTokens: [],
       repeatTokens: [],
-      releaseTokens,
+      releaseTokens: [token],
       code: TOUCH_INPUT_CODE,
+      source: touchInputSource(token),
       pressedAt,
     });
   }
-  const pressTokens = resolveTouchTokens(ctx, change.pressed);
-  if (pressTokens.length === 0) return;
-  // A finger has no turning direction: `spin: null` keeps the engine from reading one off the lane's key token, so a
-  // fresh tap on a held back-spin scratch turns it back.
-  for (const token of pressTokens) {
-    signals.pushCommand({ kind: 'lane-input', tokens: [token], code: TOUCH_INPUT_CODE, pressedAt, spin: null });
+  // A finger has no turning direction: `spin: null` keeps the engine from reading one off the lane's key token. A touch
+  // zone is the only touch source of its lane, so a fresh tap on a held back-spin scratch ends it.
+  for (const token of resolveTouchTokens(ctx, change.pressed)) {
+    const source = touchInputSource(token);
+    signals.pushCommand({ kind: 'lane-input', tokens: [token], code: TOUCH_INPUT_CODE, source, pressedAt, spin: null });
+    signals.pushCommand({
+      kind: 'kitty-state',
+      pressTokens: [token],
+      repeatTokens: [],
+      releaseTokens: [],
+      code: TOUCH_INPUT_CODE,
+      source,
+      pressedAt,
+    });
   }
-  signals.pushCommand({
-    kind: 'kitty-state',
-    pressTokens,
-    repeatTokens: [],
-    releaseTokens: [],
-    code: TOUCH_INPUT_CODE,
-    pressedAt,
-  });
+}
+
+/** The input source of a lane's touch zone, named by the lane's key token. */
+function touchInputSource(token: string): InputSource {
+  return { kind: 'button', device: 'touch', label: token };
 }
 
 /** The input tokens pressing `channels`: each lane binding's first token, the one its key on the keyboard sends. */

@@ -50,6 +50,18 @@ export const CHART_PREVIEW_STOP_FADE_OUT_SECONDS: number = 0.25;
  */
 export const CHART_PREVIEW_FALLBACK_FADE_OUT_SECONDS: number = 3;
 
+/**
+ * How long a window preview ({@link ChartPreviewEngine.playWindow}) rings on past its end while it fades out, so a bar
+ * closes without a click but the next bar's first hit stays out.
+ */
+export const CHART_PREVIEW_WINDOW_FADE_OUT_SECONDS: number = 0.12;
+
+/** A stretch of a chart to sound, in chart seconds: `[startSeconds, endSeconds)`. */
+export interface ChartPreviewWindow {
+  readonly startSeconds: number;
+  readonly endSeconds: number;
+}
+
 export interface ChartPreviewTarget {
   chart: LibraryChart;
   source: BrowserAssetSource;
@@ -166,6 +178,16 @@ export class ChartPreviewEngine {
    */
   private playbackActive = false;
   private disposed = false;
+  /** A window preview ({@link playWindow}) was started since the last focus, so even no focus has something to stop. */
+  private windowStarted = false;
+  /** The chart a window preview last sounded, with its triggers and decodes, kept for the next window of it. */
+  private windowCache:
+    | {
+        readonly target: ChartPreviewTarget;
+        readonly triggers: readonly TimedSampleTrigger[];
+        readonly buffers: Map<string, Promise<AudioBuffer | undefined>>;
+      }
+    | undefined;
 
   public constructor(audioContext: AudioContext, output: AudioNode, options: ChartPreviewEngineOptions = {}) {
     this.audioContext = audioContext;
@@ -188,9 +210,10 @@ export class ChartPreviewEngine {
    */
   public focus(target: ChartPreviewTarget | undefined): void {
     if (this.disposed) return;
-    if (sameTarget(this.currentTarget, target)) {
+    if (sameTarget(this.currentTarget, target) && !this.windowStarted) {
       return;
     }
+    this.windowStarted = false;
     const sequence = ++this.activeSequence;
     this.cancelPending();
     this.stopAllSources({ fade: true });
@@ -207,6 +230,24 @@ export class ChartPreviewEngine {
       this.pendingFocusTimer = undefined;
       void this.startPreview(target, sequence);
     }, this.focusDelayMs);
+  }
+
+  /**
+   * Sounds `window` of `target`'s chart at once, as AUTO PLAY would play it there (a PRACTICE bar's audition): every
+   * sample that starts inside the window, and every sample started before it that still sounds at its start (a long
+   * BGM, a long note's keysound) from where it is there, fading out just past the window's end. Whatever was playing
+   * (the focus preview, or the previous window) fades out first, and the focus is forgotten, so focusing the chart
+   * again re-arms its preview. The chart's triggers and decoded samples are kept for the next window of the same chart.
+   */
+  public playWindow(target: ChartPreviewTarget, window: ChartPreviewWindow): void {
+    if (this.disposed) return;
+    const sequence = ++this.activeSequence;
+    this.cancelPending();
+    this.stopAllSources({ fade: true });
+    this.emitPlaybackStop();
+    this.currentTarget = undefined;
+    this.windowStarted = true;
+    void this.playWindowNow(target, window, sequence);
   }
 
   /**
@@ -443,6 +484,134 @@ export class ChartPreviewEngine {
     this.emitPlaybackStart(target);
   }
 
+  private windowCacheFor(target: ChartPreviewTarget): NonNullable<ChartPreviewEngine['windowCache']> {
+    const cached = this.windowCache;
+    if (cached !== undefined && sameTarget(cached.target, target) && cached.target.chart.chart === target.chart.chart)
+      return cached;
+    const fresh = {
+      target,
+      triggers: collectChartPreviewTriggers(target.chart.chart, Number.MAX_VALUE),
+      buffers: new Map<string, Promise<AudioBuffer | undefined>>(),
+    };
+    this.windowCache = fresh;
+    return fresh;
+  }
+
+  /** Decodes a sample once per chart for the window previews; a failed decode is kept as `undefined`. */
+  private decodeWindowSample(
+    cache: NonNullable<ChartPreviewEngine['windowCache']>,
+    path: string,
+  ): Promise<AudioBuffer | undefined> {
+    let decoded = cache.buffers.get(path);
+    if (decoded === undefined) {
+      // The decode outlives the window that asked for it: the next window of the chart reuses it.
+      decoded = this.decodeChartAudioUnsequenced(cache.target, path);
+      cache.buffers.set(path, decoded);
+    }
+    return decoded;
+  }
+
+  private async decodeChartAudioUnsequenced(
+    target: ChartPreviewTarget,
+    path: string,
+  ): Promise<AudioBuffer | undefined> {
+    if (this.disposed) return undefined;
+    const attempted = new Set<BrowserAssetEntry>();
+    for (;;) {
+      const entry = resolveChartAudioAsset(target.source, target.chart.chartPath, path, {
+        pathPrefix: target.chart.chart.bms.pathWAV,
+        ...(attempted.size ? { excludedEntries: attempted } : {}),
+      });
+      if (entry === undefined || attempted.has(entry)) return undefined;
+      attempted.add(entry);
+      try {
+        const bytes = await loadAssetBytes(entry);
+        if (!bytes) continue;
+        return await this.audioContext.decodeAudioData(bytes.slice().buffer);
+      } catch {
+        // A missing or unsupported candidate may still have a playable alternate codec.
+      }
+    }
+  }
+
+  private async playWindowNow(target: ChartPreviewTarget, window: ChartPreviewWindow, sequence: number): Promise<void> {
+    const chart = target.chart.chart;
+    const cache = this.windowCacheFor(target);
+    const triggers = selectChartWindowTriggers(cache.triggers, window);
+    const monophonic = usesMonophonicWAVPlayback(chart);
+    // What started before the window and may still sound at its start, as a play that seeks there starts it partway.
+    const carried = selectChartWindowCarryOvers(cache.triggers, window, monophonic);
+    if (triggers.length === 0 && carried.length === 0) return;
+    const wavResources = resolveBmsWAVResources(chart);
+    const buffers = new Map<string, AudioBuffer>();
+    await Promise.all(
+      [...new Set([...carried, ...triggers].map((trigger) => trigger.sampleKey))].map(async (key) => {
+        const path = wavResources[key];
+        if (typeof path !== 'string') return;
+        const buffer = await this.decodeWindowSample(cache, path);
+        if (buffer) buffers.set(key, buffer);
+      }),
+    );
+    if (this.isStale(sequence)) return;
+    const startAt = this.audioContext.currentTime + 0.02;
+    const span = Math.max(0, window.endSeconds - window.startSeconds);
+    const { fadeStartAt, endAt } = resolvePreviewFallbackFade(
+      startAt,
+      span + CHART_PREVIEW_WINDOW_FADE_OUT_SECONDS,
+      CHART_PREVIEW_WINDOW_FADE_OUT_SECONDS,
+    );
+    const level = resolveChartPreviewLevel(chart);
+    let scheduledCount = 0;
+    const activeBySlot = new Map<string, PreviewSourceHandle>();
+    const schedule = (
+      trigger: TimedSampleTrigger,
+      buffer: AudioBuffer,
+      when: number,
+      offsetSeconds: number,
+      durationSeconds: number | undefined,
+    ): void => {
+      let source: AudioBufferSourceNode;
+      try {
+        source = this.audioContext.createBufferSource();
+        source.buffer = buffer;
+      } catch {
+        return;
+      }
+      const handle = this.attachSource(source, level);
+      if (!handle) return;
+      source.onended = (): void => {
+        if (activeBySlot.get(trigger.sampleKey) === handle) activeBySlot.delete(trigger.sampleKey);
+        this.finishSource(handle);
+      };
+      try {
+        const activeSameSlot = activeBySlot.get(trigger.sampleKey);
+        if (monophonic && activeSameSlot) this.stopSourceAt(activeSameSlot, when);
+        if (durationSeconds !== undefined) source.start(when, offsetSeconds, durationSeconds);
+        else source.start(when, offsetSeconds);
+        this.fadeOutAtWindowEnd(handle, fadeStartAt, endAt);
+        scheduledCount += 1;
+        activeBySlot.set(trigger.sampleKey, handle);
+      } catch {
+        this.finishSource(handle);
+      }
+    };
+    for (const trigger of carried) {
+      const buffer = buffers.get(trigger.sampleKey);
+      if (!buffer) continue;
+      const part = resolveChartWindowCarryOver(trigger, buffer.duration, window.startSeconds);
+      if (part !== undefined) schedule(trigger, buffer, startAt, part.offsetSeconds, part.durationSeconds);
+    }
+    for (const trigger of triggers) {
+      const activeSameSlot = activeBySlot.get(trigger.sampleKey);
+      if (chart.sourceFormat === 'bmson' && trigger.event.bmson?.c === true && activeSameSlot) continue;
+      const buffer = buffers.get(trigger.sampleKey);
+      if (!buffer) continue;
+      const when = startAt + Math.max(0, trigger.seconds - window.startSeconds);
+      schedule(trigger, buffer, when, trigger.sampleOffsetSeconds ?? 0, trigger.sampleDurationSeconds);
+    }
+    if (scheduledCount > 0) this.emitPlaybackStart(target);
+  }
+
   private async playInPlace(target: ChartPreviewTarget, sequence: number): Promise<void> {
     const chart = target.chart.chart;
     const triggers = collectChartPreviewTriggers(chart, this.fallbackDurationSeconds);
@@ -563,6 +732,60 @@ export function collectChartPreviewTriggers(chart: BeMusicJSON, cutoffSeconds: n
         firesBeforeTempoReversal(reversal, trigger.seconds, trigger.channel),
     )
     .sort((left, right) => left.seconds - right.seconds);
+}
+
+/**
+ * Pure helper: the triggers of `triggers` (sorted by time, as {@link collectChartPreviewTriggers} returns them) that start
+ * inside `window`, `[startSeconds, endSeconds)`. What started before the window is {@link selectChartWindowCarryOvers}'.
+ */
+export function selectChartWindowTriggers(
+  triggers: readonly TimedSampleTrigger[],
+  window: ChartPreviewWindow,
+): TimedSampleTrigger[] {
+  if (!(window.endSeconds > window.startSeconds)) return [];
+  const startSeconds = window.startSeconds - 1e-6;
+  const endSeconds = window.endSeconds - 1e-6;
+  return triggers.filter((trigger) => trigger.seconds >= startSeconds && trigger.seconds < endSeconds);
+}
+
+/**
+ * Pure helper: the triggers of `triggers` (sorted by time) that start before `window` and may still sound at its start,
+ * to be started partway ({@link resolveChartWindowCarryOver}) as a play that seeks there does. Under monophonic WAV
+ * playback (BMS) a slot's later trigger cuts its earlier ones, so only each slot's last trigger before the window counts.
+ * A bmson continuation (`c`) is left out: it sounds through the instance it continues.
+ */
+export function selectChartWindowCarryOvers(
+  triggers: readonly TimedSampleTrigger[],
+  window: Pick<ChartPreviewWindow, 'startSeconds'>,
+  monophonic: boolean,
+): TimedSampleTrigger[] {
+  const startSeconds = window.startSeconds - 1e-6;
+  const before = triggers.filter((trigger) => trigger.seconds < startSeconds && trigger.event.bmson?.c !== true);
+  if (!monophonic) return before;
+  const lastBySlot = new Map<string, TimedSampleTrigger>();
+  for (const trigger of before) lastBySlot.set(trigger.sampleKey, trigger);
+  return [...lastBySlot.values()].sort((left, right) => left.seconds - right.seconds);
+}
+
+/**
+ * Pure helper: how to start `trigger`'s sample partway at `windowStartSeconds`, given the decoded sample's length: the
+ * offset into the buffer and, for a bmson slice, how much of the slice is left. `undefined` once it has finished.
+ */
+export function resolveChartWindowCarryOver(
+  trigger: Pick<TimedSampleTrigger, 'seconds' | 'sampleOffsetSeconds' | 'sampleDurationSeconds'>,
+  bufferDurationSeconds: number,
+  windowStartSeconds: number,
+): { offsetSeconds: number; durationSeconds?: number } | undefined {
+  const elapsed = windowStartSeconds - trigger.seconds;
+  if (!(elapsed > 0)) return undefined;
+  const sampleOffset = trigger.sampleOffsetSeconds ?? 0;
+  const length = trigger.sampleDurationSeconds ?? bufferDurationSeconds - sampleOffset;
+  // Less than a millisecond left is nothing to hear.
+  if (!(length - elapsed > 0.001)) return undefined;
+  const offsetSeconds = sampleOffset + elapsed;
+  return trigger.sampleDurationSeconds !== undefined
+    ? { offsetSeconds, durationSeconds: trigger.sampleDurationSeconds - elapsed }
+    : { offsetSeconds };
 }
 
 /**

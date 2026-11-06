@@ -81,16 +81,22 @@
         "total": 100
       },
       "inputs": [
-        {"seq":0,"timeUs":500000,"action":"down","channels":["11"],"tokens":["z"]},
-        {"seq":1,"timeUs":550000,"action":"up","channels":["11"],"tokens":["z"]},
-        {"seq":2,"timeUs":625000,"action":"down","channels":["12"],"tokens":["s"]},
-        {"seq":3,"timeUs":675000,"action":"up","channels":["12"],"tokens":["s"]},
-        {"seq":4,"timeUs":750000,"action":"down","channels":["13"],"tokens":["x"]},
-        {"seq":5,"timeUs":800000,"action":"up","channels":["13"],"tokens":["x"]},
-        {"seq":6,"timeUs":875000,"action":"down","channels":["14"],"tokens":["d"]},
-        {"seq":7,"timeUs":925000,"action":"up","channels":["14"],"tokens":["d"]}
+        {"seq":0,"timeUs":500000,"action":"down","channels":["11"],"source":0},
+        {"seq":1,"timeUs":550000,"action":"up","channels":["11"],"source":0},
+        {"seq":2,"timeUs":625000,"action":"down","channels":["12"],"source":1},
+        {"seq":3,"timeUs":675000,"action":"up","channels":["12"],"source":1},
+        {"seq":4,"timeUs":750000,"action":"down","channels":["13"],"source":2},
+        {"seq":5,"timeUs":800000,"action":"up","channels":["13"],"source":2},
+        {"seq":6,"timeUs":875000,"action":"down","channels":["14"],"source":3},
+        {"seq":7,"timeUs":925000,"action":"up","channels":["14"],"source":3}
       ],
       "play": {
+        "inputSources": [
+          {"id":0,"kind":"key","device":"keyboard","label":"z"},
+          {"id":1,"kind":"key","device":"keyboard","label":"s"},
+          {"id":2,"kind":"key","device":"keyboard","label":"x"},
+          {"id":3,"kind":"key","device":"keyboard","label":"d"}
+        ],
         "mode": "manual",
         "autoScratch": false,
         "gauge": "HARD",
@@ -294,6 +300,12 @@
       "chart": "(same as manual)",
       "inputs": "(same as manual)",
       "play": {
+        "inputSources": [
+          {"id":0,"kind":"key","device":"keyboard","label":"z"},
+          {"id":1,"kind":"key","device":"keyboard","label":"s"},
+          {"id":2,"kind":"key","device":"keyboard","label":"x"},
+          {"id":3,"kind":"key","device":"keyboard","label":"d"}
+        ],
         "mode": "manual",
         "autoScratch": false,
         "gauge": "HARD",
@@ -431,6 +443,7 @@
       "chart": "(same as manual)",
       "inputs": [],
       "play": {
+        "inputSources": [],
         "mode": "auto",
         "autoScratch": false,
         "gauge": "HARD",

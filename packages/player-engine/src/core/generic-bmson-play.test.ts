@@ -72,7 +72,10 @@ test.each([6, 8, 36, 70])(
     const replay = await observePlay({
       driver: 'manual',
       chart,
-      options: { replayInputs: parseReplay(JSON.stringify(manual.replay)).inputs },
+      options: (() => {
+        const parsed = parseReplay(JSON.stringify(manual.replay));
+        return { replayInputs: parsed.inputs, replayInputSources: parsed.play.inputSources };
+      })(),
     });
     expect(replay.summary).toEqual(manual.summary);
   },

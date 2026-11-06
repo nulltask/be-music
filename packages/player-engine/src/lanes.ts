@@ -30,8 +30,23 @@ export {
 } from './core/lane-layout.ts';
 
 export {
+  createInputSourceTable,
+  endsBackSpinScratch,
+  hasScratchCounterpart,
+  inputSourceKey,
+  isSameInputSource,
+  keyboardInputSource,
+  releasesScratchHold,
+  type IdentifiedInputSource,
+  type InputSource,
+  type InputSourceDevice,
+  type InputSourceKind,
+  type InputSourceTable,
+  type TurntableDirection,
+} from './core/input-source.ts';
+
+export {
   createScratchSpinByToken,
-  isReverseScratchSpin,
   isScratchSpin,
   resolveScratchSpin,
   type ScratchSpin,

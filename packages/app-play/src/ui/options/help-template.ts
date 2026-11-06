@@ -106,7 +106,8 @@ export const OPTIONS_HELP_TEMPLATE = html`
         <p class="help-menu-note">
           Locked during a play unless noted. Options that only change the chart or the view (marked LR2, beatoraja or
           AC) work under every ruleset and run their source's algorithm; the judge rules come from Play options →
-          Judgment windows. Items marked “Shown with …” say when they appear.
+          Judgment windows. Items marked “Shown with …” say when they appear, and “Used with …” when they can be set;
+          until then they stay in place, disabled.
         </p>
         <dl class="help-menu-items">
           <dt>Judgment windows</dt>
@@ -177,12 +178,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>Scroll section lines</dt>
           <dd>
-            <em class="help-menu-when">Shown with Scroll set to ADD.</em> How many bar lines each scroll change lasts.
+            <em class="help-menu-when">Used with Scroll set to ADD.</em> How many bar lines each scroll change lasts.
           </dd>
           <dt>Scroll rate</dt>
           <dd>
-            <em class="help-menu-when">Shown with Scroll set to ADD.</em> How strong each scroll change is, from 0
-            (none) to 1.
+            <em class="help-menu-when">Used with Scroll set to ADD.</em> How strong each scroll change is, from 0 (none)
+            to 1.
           </dd>
           <dt>Mines (beatoraja)</dt>
           <dd>REMOVE takes the mines out; ADD RANDOM, ADD NEAR and ADD ALL add mines.</dd>
@@ -240,7 +241,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Turns background keysounds into extra notes, as LR2's EXTRA MODE does.</dd>
           <dt>EXTRA minimum level (LR2)</dt>
           <dd>
-            <em class="help-menu-when">Shown with EXTRA MODE (LR2) on.</em> How dense EXTRA MODE may get at least: LEVEL
+            <em class="help-menu-when">Used with EXTRA MODE (LR2) on.</em> How dense EXTRA MODE may get at least: LEVEL
             1 to 3.
           </dd>
           <dt>LN MODE (beatoraja)</dt>
@@ -255,52 +256,46 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>Key PGREAT %</dt>
           <dd>
-            <em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of the PGREAT window for key notes, as
+            <em class="help-menu-when">Used with CUSTOM JUDGE on.</em> The width of the PGREAT window for key notes, as
             a percentage of the rules' own.
           </dd>
           <dt>Key GREAT %</dt>
           <dd>
-            <em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of the GREAT window for key notes, as
-            a percentage of the rules' own.
+            <em class="help-menu-when">Used with CUSTOM JUDGE on.</em> The width of the GREAT window for key notes, as a
+            percentage of the rules' own.
           </dd>
           <dt>Key GOOD %</dt>
           <dd>
-            <em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of the GOOD window for key notes, as a
+            <em class="help-menu-when">Used with CUSTOM JUDGE on.</em> The width of the GOOD window for key notes, as a
             percentage of the rules' own.
           </dd>
           <dt>Scratch PGREAT %</dt>
           <dd>
-            <em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of the PGREAT window for scratch
-            notes, as a percentage of the rules' own.
+            <em class="help-menu-when">Used with CUSTOM JUDGE on.</em> The width of the PGREAT window for scratch notes,
+            as a percentage of the rules' own.
           </dd>
           <dt>Scratch GREAT %</dt>
           <dd>
-            <em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of the GREAT window for scratch notes,
+            <em class="help-menu-when">Used with CUSTOM JUDGE on.</em> The width of the GREAT window for scratch notes,
             as a percentage of the rules' own.
           </dd>
           <dt>Scratch GOOD %</dt>
           <dd>
-            <em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> The width of the GOOD window for scratch notes,
+            <em class="help-menu-when">Used with CUSTOM JUDGE on.</em> The width of the GOOD window for scratch notes,
             as a percentage of the rules' own.
           </dd>
           <dt>LN margin %</dt>
           <dd>
-            <em class="help-menu-when">Shown with CUSTOM JUDGE on.</em> How early a long note may be let go before its
+            <em class="help-menu-when">Used with CUSTOM JUDGE on.</em> How early a long note may be let go before its
             end and still count, as a percentage of the rules' own margin.
           </dd>
           <dt>PRACTICE</dt>
           <dd>
-            beatoraja's PRACTICE, under every ruleset: plays a range of the chart again and again until Esc. A practice
-            play saves no replay and no record, and is never sent to the Leaderboard.
-          </dd>
-          <dt>START TIME ms</dt>
-          <dd>
-            <em class="help-menu-when">Shown with PRACTICE on.</em> Where the practice starts, in chart milliseconds.
-          </dd>
-          <dt>END TIME ms (0 = end)</dt>
-          <dd>
-            <em class="help-menu-when">Shown with PRACTICE on.</em> Where the practice ends, in chart milliseconds; 0
-            plays to the chart's end.
+            beatoraja's PRACTICE, under every ruleset: a chart started with it on opens its score first. Press a bar to
+            hear it, Shift-press or drag to pick a run of bars, then Start practice: the bars play again and again until
+            Esc (no bars picked plays the whole chart). The dialog also sets the settings below, and Play without
+            practice plays the chart as a regular play this time. A practice play saves no replay and no record, and is
+            never sent to the Leaderboard.
           </dd>
           <dt>GAUGE TYPE</dt>
           <dd>
@@ -333,7 +328,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>beatoraja EXTRA: whether the scratch lanes get added notes too.</dd>
           <dt>Long-note add rate (beatoraja)</dt>
           <dd>
-            <em class="help-menu-when">Shown with an ADD choice in Long notes.</em> How many of the notes become long
+            <em class="help-menu-when">Used with an ADD choice in Long notes.</em> How many of the notes become long
             notes, 0 to 1.
           </dd>
           <dt>Auto judge timing</dt>
@@ -381,7 +376,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
         <dl class="help-menu-items">
           <dt>HS-FIX</dt>
           <dd>
-            <em class="help-menu-when">Hidden while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> Keeps the scroll
+            <em class="help-menu-when">Disabled while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> Keeps the scroll
             speed steady against a BPM: MAXBPM, MINBPM, AVERAGE, STARTBPM, or CONSTANT (LR2, offered under every
             ruleset).
           </dd>
@@ -389,7 +384,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Picks the speed from twenty levels measured on AC, instead of the Hi-speed slider.</dd>
           <dt>Normal HS level</dt>
           <dd>
-            <em class="help-menu-when">Shown with Normal HI-SPEED on.</em> The level, 1 to 20; each scrolls at the green
+            <em class="help-menu-when">Used with Normal HI-SPEED on.</em> The level, 1 to 20; each scrolls at the green
             number AC measured for it.
           </dd>
           <dt>Fixed display area (AC 34)</dt>
@@ -401,16 +396,16 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>Floating speed</dt>
           <dd>
-            <em class="help-menu-when">Shown with FLOATING HI-SPEED on.</em> The hi-speed FLOATING starts from, in steps
+            <em class="help-menu-when">Used with FLOATING HI-SPEED on.</em> The hi-speed FLOATING starts from, in steps
             of 0.01.
           </dd>
           <dt>CLASSIC HI-SPEED</dt>
           <dd>Picks the speed from AC's eleven CLASSIC steps instead of the Hi-speed slider.</dd>
           <dt>Classic speed</dt>
-          <dd><em class="help-menu-when">Shown with CLASSIC HI-SPEED on.</em> The step, 1.0 to 4.0.</dd>
+          <dd><em class="help-menu-when">Used with CLASSIC HI-SPEED on.</em> The step, 1.0 to 4.0.</dd>
           <dt>Hi-speed</dt>
           <dd>
-            <em class="help-menu-when">Hidden while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> The scroll speed.
+            <em class="help-menu-when">Disabled while CLASSIC, Normal or FLOATING HI-SPEED is on.</em> The scroll speed.
             Changes live, like ↑ / ↓ during play.
           </dd>
           <dt>Display area info</dt>
@@ -597,6 +592,32 @@ export const OPTIONS_HELP_TEMPLATE = html`
         </dl>
       </section>
       <section class="help-menu-folder">
+        <h4 class="help-menu-folder-title">BGA camera</h4>
+        <dl class="help-menu-items">
+          <dt>Show camera in BGA</dt>
+          <dd>
+            Shows a camera in the play's BGA frame instead of the chart's BGA, with any skin: to show your hands on the
+            keys, or your face when you stream. The camera opens only during a play with this on, and closes on every
+            other screen. You can turn it on or off during a play. The picture is not sent anywhere, but a video
+            recorded with Capture includes it, since it records the BGA frame.
+          </dd>
+          <dt>Camera</dt>
+          <dd>
+            Which camera to show; the default is the browser's default camera. The pick is remembered on this device. If
+            the camera is unplugged or its permission is taken back, the play shows the BGA again.
+          </dd>
+          <dt>Allow camera access</dt>
+          <dd>Asks the browser for the camera once, so the list shows the cameras by name. The camera closes again.</dd>
+          <dt>Mirror camera</dt>
+          <dd>Flips the picture left to right, as a mirror shows it; a camera filming your hands may need it.</dd>
+          <dt>Preview camera</dt>
+          <dd>
+            Shows the picked camera here, as the BGA frame would show it, so you can frame it before a play. The camera
+            opens only for the preview, and stops when you press Stop preview, leave this tab or close Options.
+          </dd>
+        </dl>
+      </section>
+      <section class="help-menu-folder">
         <h4 class="help-menu-folder-title">Library &amp; records</h4>
         <dl class="help-menu-items">
           <dt>Music ZIP URL</dt>
@@ -655,7 +676,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
         <h4 class="help-menu-folder-title">Capture</h4>
         <dl class="help-menu-items">
           <dt>● Record gameplay video</dt>
-          <dd>Records the next play as a video to download.</dd>
+          <dd>Records the next play as a video to download. A camera shown in the BGA frame is recorded too.</dd>
           <dt>Video format</dt>
           <dd>The video's container and codec: MP4 · H.264 by default, or MP4 / WebM with H.265, AV1, VP9 or VP8.</dd>
           <dt>📸 Screenshot</dt>
@@ -767,7 +788,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
         <p class="help-menu-note">
           特に書かない限りプレイ中は変えられません。譜面や表示を変えるだけのオプション (LR2・beatoraja・AC と付いたもの)
           はどのルールでも使え、その出典のアルゴリズムで動きます。判定のルールは Play options → Judgment windows
-          で決まります。「…のときに表示」とある項目は、その条件で表示されます。
+          で決まります。「…のときに表示」とある項目は、その条件で表示されます。「…のときに使います」とある項目は、その条件で設定できるようになり、それまでは同じ場所に無効のまま表示されます。
         </p>
         <dl class="help-menu-items">
           <dt>Judgment windows</dt>
@@ -834,9 +855,13 @@ export const OPTIONS_HELP_TEMPLATE = html`
             はランダムなスクロールの変化を加えます。判定は変わりません。
           </dd>
           <dt>Scroll section lines</dt>
-          <dd><em class="help-menu-when">Scroll が ADD のときに表示。</em> スクロールの変化 1 回が続く小節線の数。</dd>
+          <dd>
+            <em class="help-menu-when">Scroll が ADD のときに使います。</em> スクロールの変化 1 回が続く小節線の数。
+          </dd>
           <dt>Scroll rate</dt>
-          <dd><em class="help-menu-when">Scroll が ADD のときに表示。</em> スクロールの変化の強さ。0 (なし) 〜 1。</dd>
+          <dd>
+            <em class="help-menu-when">Scroll が ADD のときに使います。</em> スクロールの変化の強さ。0 (なし) 〜 1。
+          </dd>
           <dt>Mines (beatoraja)</dt>
           <dd>REMOVE は地雷を取り除き、ADD RANDOM、ADD NEAR、ADD ALL は地雷を加えます。</dd>
           <dt>ANY KEY (PC)</dt>
@@ -887,7 +912,8 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>LR2 の EXTRA MODE のように、BGM のキー音をノーツに変えて増やします。</dd>
           <dt>EXTRA minimum level (LR2)</dt>
           <dd>
-            <em class="help-menu-when">EXTRA MODE (LR2) がオンのときに表示。</em> EXTRA MODE の最低の密度。LEVEL 1〜3。
+            <em class="help-menu-when">EXTRA MODE (LR2) がオンのときに使います。</em> EXTRA MODE の最低の密度。LEVEL
+            1〜3。
           </dd>
           <dt>LN MODE (beatoraja)</dt>
           <dd>
@@ -898,50 +924,47 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> 下の倍率で判定の幅を変えます。</dd>
           <dt>Key PGREAT %</dt>
           <dd>
-            <em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em> 鍵盤の PGREAT の判定幅
+            <em class="help-menu-when">CUSTOM JUDGE がオンのときに使います。</em> 鍵盤の PGREAT の判定幅
             (ルール本来の幅に対する割合)。
           </dd>
           <dt>Key GREAT %</dt>
           <dd>
-            <em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em> 鍵盤の GREAT の判定幅
+            <em class="help-menu-when">CUSTOM JUDGE がオンのときに使います。</em> 鍵盤の GREAT の判定幅
             (ルール本来の幅に対する割合)。
           </dd>
           <dt>Key GOOD %</dt>
           <dd>
-            <em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em> 鍵盤の GOOD の判定幅
+            <em class="help-menu-when">CUSTOM JUDGE がオンのときに使います。</em> 鍵盤の GOOD の判定幅
             (ルール本来の幅に対する割合)。
           </dd>
           <dt>Scratch PGREAT %</dt>
           <dd>
-            <em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em> スクラッチの PGREAT の判定幅
+            <em class="help-menu-when">CUSTOM JUDGE がオンのときに使います。</em> スクラッチの PGREAT の判定幅
             (ルール本来の幅に対する割合)。
           </dd>
           <dt>Scratch GREAT %</dt>
           <dd>
-            <em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em> スクラッチの GREAT の判定幅
+            <em class="help-menu-when">CUSTOM JUDGE がオンのときに使います。</em> スクラッチの GREAT の判定幅
             (ルール本来の幅に対する割合)。
           </dd>
           <dt>Scratch GOOD %</dt>
           <dd>
-            <em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em> スクラッチの GOOD の判定幅
+            <em class="help-menu-when">CUSTOM JUDGE がオンのときに使います。</em> スクラッチの GOOD の判定幅
             (ルール本来の幅に対する割合)。
           </dd>
           <dt>LN margin %</dt>
           <dd>
-            <em class="help-menu-when">CUSTOM JUDGE がオンのときに表示。</em>
+            <em class="help-menu-when">CUSTOM JUDGE がオンのときに使います。</em>
             ロングノートを終わりより早く離しても成功とする余裕 (ルール本来の余裕に対する割合)。
           </dd>
           <dt>PRACTICE</dt>
           <dd>
-            beatoraja の PRACTICE を、どのルールでも使えます。譜面の一部の範囲を Esc
-            を押すまで繰り返します。練習のプレイはリプレイも記録も残さず、Leaderboard にも送りません。
-          </dd>
-          <dt>START TIME ms</dt>
-          <dd><em class="help-menu-when">PRACTICE がオンのときに表示。</em> 練習を始める位置 (譜面のミリ秒)。</dd>
-          <dt>END TIME ms (0 = end)</dt>
-          <dd>
-            <em class="help-menu-when">PRACTICE がオンのときに表示。</em> 練習を終える位置 (譜面のミリ秒)。0
-            なら譜面の最後まで。
+            beatoraja の PRACTICE を、どのルールでも使えます。オンにして選曲すると、まず譜面を表示します。小節を押すと
+            その小節を試聴し、Shift
+            を押しながら押すかドラッグすると連続した小節を選べます。「練習を始める」を押すと、選んだ小節を Esc
+            を押すまで繰り返します
+            (小節を選ばなければ譜面全体)。下の設定もダイアログで変えられ、「練習せずに遊ぶ」では今回は通常のプレイになります。練習のプレイはリプレイも記録も残さず、Leaderboard
+            にも送りません。
           </dd>
           <dt>GAUGE TYPE</dt>
           <dd><em class="help-menu-when">PRACTICE がオンのときに表示。</em> 練習で使うゲージ (そのルールのゲージ)。</dd>
@@ -969,7 +992,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>beatoraja の EXTRA。スクラッチのレーンにもノーツを足すか。</dd>
           <dt>Long-note add rate (beatoraja)</dt>
           <dd>
-            <em class="help-menu-when">Long notes が ADD のどれかのときに表示。</em> ロングノートにする割合 (0〜1)。
+            <em class="help-menu-when">Long notes が ADD のどれかのときに使います。</em> ロングノートにする割合 (0〜1)。
           </dd>
           <dt>Auto judge timing</dt>
           <dd>
@@ -1014,7 +1037,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
         <dl class="help-menu-items">
           <dt>HS-FIX</dt>
           <dd>
-            <em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は非表示。</em> BPM
+            <em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は無効。</em> BPM
             に合わせてスクロール速度を一定に保ちます。MAXBPM、MINBPM、AVERAGE、STARTBPM、CONSTANT
             (LR2。どのルールでも選べます)。
           </dd>
@@ -1022,7 +1045,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Hi-speed のスライダーの代わりに、AC で実測した 20 段階から速度を選びます。</dd>
           <dt>Normal HS level</dt>
           <dd>
-            <em class="help-menu-when">Normal HI-SPEED がオンのときに表示。</em> レベル (1〜20)。それぞれ AC
+            <em class="help-menu-when">Normal HI-SPEED がオンのときに使います。</em> レベル (1〜20)。それぞれ AC
             で実測した緑数字で流れます。
           </dd>
           <dt>Fixed display area (AC 34)</dt>
@@ -1033,16 +1056,16 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>Floating speed</dt>
           <dd>
-            <em class="help-menu-when">FLOATING HI-SPEED がオンのときに表示。</em> FLOATING の起点のハイスピード (0.01
-            刻み)。
+            <em class="help-menu-when">FLOATING HI-SPEED がオンのときに使います。</em> FLOATING の起点のハイスピード
+            (0.01 刻み)。
           </dd>
           <dt>CLASSIC HI-SPEED</dt>
           <dd>Hi-speed のスライダーの代わりに、AC の CLASSIC の 11 段階から速度を選びます。</dd>
           <dt>Classic speed</dt>
-          <dd><em class="help-menu-when">CLASSIC HI-SPEED がオンのときに表示。</em> 段階 (1.0〜4.0)。</dd>
+          <dd><em class="help-menu-when">CLASSIC HI-SPEED がオンのときに使います。</em> 段階 (1.0〜4.0)。</dd>
           <dt>Hi-speed</dt>
           <dd>
-            <em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は非表示。</em>
+            <em class="help-menu-when">CLASSIC / Normal / FLOATING HI-SPEED がオンの間は無効。</em>
             スクロールの速さ。プレイ中の ↑ / ↓ と同じく、すぐ反映されます。
           </dd>
           <dt>Display area info</dt>
@@ -1223,6 +1246,32 @@ export const OPTIONS_HELP_TEMPLATE = html`
         </dl>
       </section>
       <section class="help-menu-folder">
+        <h4 class="help-menu-folder-title">BGA camera</h4>
+        <dl class="help-menu-items">
+          <dt>Show camera in BGA</dt>
+          <dd>
+            プレイ画面の BGA の枠に、譜面の BGA
+            の代わりにカメラの映像を映します。どのスキンでも使えます。手元を写して打鍵の様子を見せたり、配信で顔を出したりするときに使います。オンのときだけプレイ中にカメラを起動し、ほかの画面では止めます。プレイ中にも切り替えられます。映像はどこにも送りませんが、Capture
+            で録画すると BGA の枠ごと映像も記録されます。
+          </dd>
+          <dt>Camera</dt>
+          <dd>
+            映すカメラ。既定はブラウザの既定のカメラです。選んだカメラはこの端末に記憶します。カメラが抜かれたり、許可が取り消されたりすると、BGA
+            に戻ります。
+          </dd>
+          <dt>Allow camera access</dt>
+          <dd>一度だけブラウザにカメラの許可を求め、一覧にカメラの名前が出るようにします。カメラはすぐ止めます。</dd>
+          <dt>Mirror camera</dt>
+          <dd>映像を左右反転します。手元を写すときに必要になることがあります。</dd>
+          <dt>Preview camera</dt>
+          <dd>
+            選んだカメラを、BGA
+            の枠と同じ向きでここに映します。プレイの前に画角を合わせるのに使います。カメラはプレビューの間だけ動き、Stop
+            preview を押す、このタブを離れる、Options を閉じる、のいずれかで止まります。
+          </dd>
+        </dl>
+      </section>
+      <section class="help-menu-folder">
         <h4 class="help-menu-folder-title">Library &amp; records</h4>
         <dl class="help-menu-items">
           <dt>Music ZIP URL</dt>
@@ -1282,7 +1331,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
         <h4 class="help-menu-folder-title">Capture</h4>
         <dl class="help-menu-items">
           <dt>● Record gameplay video</dt>
-          <dd>次のプレイを動画として録画してダウンロードします。</dd>
+          <dd>次のプレイを動画として録画してダウンロードします。BGA の枠に映したカメラの映像も記録されます。</dd>
           <dt>Video format</dt>
           <dd>動画のコンテナとコーデック。既定は MP4 · H.264 で、MP4 / WebM と H.265・AV1・VP9・VP8 から選べます。</dd>
           <dt>📸 Screenshot</dt>

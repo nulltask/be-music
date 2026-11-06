@@ -1,4 +1,6 @@
+import { promptRandomMixConditions } from '../ui/random-mix-dialog.ts';
 import { playerText } from '../player-copy.ts';
+import { BGACameraService } from '../services/bga-camera.ts';
 import { requestPlayerWindowClose } from '../ui/close-window.ts';
 import { DialogPauseController } from '../ui/dialog-pause.ts';
 // Imports are split across `@be-music/player-browser`'s entries (`./host`, `./skin`, `./collection`, `./audio`,
@@ -15,6 +17,7 @@ import type { BrowseSnapshot, LibraryChart, PlayOptions } from '@be-music/player
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
 import { createAudioService, setMasterVolume, type AudioService } from '@be-music/player-browser/audio';
 import { downloadBlob } from '@be-music/player-browser/recording';
+import { resolveChartSource } from '@be-music/player-browser/collection';
 import { logger } from '@be-music/player-browser';
 import { BeatorajaSkinOptionsPanel, type BeatorajaSkinOptionsPanelDeps } from '../ui/beatoraja-skin-options.ts';
 import { LeaderboardPanel } from '../leaderboard-ui.ts';
@@ -43,7 +46,7 @@ import type { PlayerGUIState, PlayerScene, PlayerWebElements, SkinFamilyOverride
 import { createPlayerGUIState, readCompressorRequest, storeBuiltInSkinId } from '../services/settings.ts';
 import { BE_MUSIC_SKINS } from '../services/built-in-skins.ts';
 import { SilentModeSetting } from '../services/silent-mode.ts';
-import { playOptionsFromGUI, PlayOptionsService } from '../services/play-options.ts';
+import { copyPlayOptionsToGUI, playOptionsFromGUI, PlayOptionsService } from '../services/play-options.ts';
 import { REPLAY_RECORDER, ReplayAutoSave } from '../services/replays.ts';
 import { ReplaySlotStore } from '../services/replay-slots.ts';
 import { createIndexedDBReplaySlotBackend } from '../services/replay-slot-database.ts';
@@ -61,6 +64,8 @@ import { LR2ThemeService } from '../services/themes/lr2.ts';
 import { FamilyKits } from './family-kits.ts';
 import { controlSettingsOf } from '../control-keys.ts';
 import { showExitMenu } from '../ui/exit-menu.ts';
+import { PracticeBarsDialog } from '../ui/practice-bars.ts';
+import { PracticeBarsMemory } from '../ui/practice-bars-model.ts';
 import { createFpsOverlay } from '../ui/fps-overlay.ts';
 import { openHelpModal, setHelpKeyboardSource, watchHelpExpanded } from '../help-modal.ts';
 import type { TestHookRecorder } from '../test-hook.ts';
@@ -114,6 +119,8 @@ export class PlayerWebApp {
         await this.sceneHost.setScene(scene);
         // The quick options belong to choosing a chart and playing it.
         this.optionsDialog?.setQuickOptionsShown(role === 'select' || role === 'play');
+        // The BGA camera opens for a play on the stage and closes on every other screen.
+        this.bgaCamera.follow(role === 'play' ? (scene as PlayScene | undefined) : undefined);
         // The replay slots' card belongs to the screen that shows it: the select screen shows it again for its bar, the
         // result route for its run.
         this.replaySlotsPanel.hide();
@@ -182,6 +189,10 @@ export class PlayerWebApp {
    * built-in decide and result screens so far. The other screens still play on contexts of their own.
    */
   private readonly audio: AudioService = createAudioService();
+  /** The bars each chart was last practised on (PRACTICE), which its plays loop. */
+  private readonly practiceBars = new PracticeBarsMemory();
+  /** The PRACTICE bar picker, made on its first use. */
+  private practiceBarsDialog: PracticeBarsDialog | undefined;
   /** The select screen, from its first showing to every return, and the starts made on it (`app/routes/select.ts`). */
   private readonly selectRoute: SelectRoute;
   /** A start's decide screen, and the play it hands the stage to (`app/routes/decide.ts`). */
@@ -259,6 +270,15 @@ export class PlayerWebApp {
   private readonly replaySlotsPanel = new ReplaySlotsPanel({
     service: this.replaySlots,
     replay: (slot) => this.selectView?.replay(slot),
+    setStatus: (text) => this.status.set(text),
+  });
+  /**
+   * The camera a play can show in its BGA frame (Options → Camera). It opens only while a play is on the
+   * stage with the setting on.
+   */
+  private readonly bgaCamera = new BGACameraService({
+    mediaDevices: navigator.mediaDevices,
+    permissions: navigator.permissions,
     setStatus: (text) => this.status.set(text),
   });
   /** The Capture folder's video recording and screenshots: the record armed, the next file name, the format. */
@@ -404,7 +424,7 @@ export class PlayerWebApp {
       library: this.library,
       records: this.records,
       courseMaker: this.courseMaker,
-      keysFilter: () => this.guiState.keysFilter,
+      promptRandomMix: (request) => promptRandomMixConditions(request),
       replayAutoSave: this.replayAutoSave,
       leaderboard: this.leaderboard,
       familyKits: this.familyKits,
@@ -448,6 +468,24 @@ export class PlayerWebApp {
       unlockReplayOptions: () => this.unlockReplayOptions(),
       rememberHiSpeed: (value, source) => this.playRoute.rememberHiSpeed(value, source),
       showDecide: (chartEntry, overrides) => this.decideRoute.showDecide(chartEntry, overrides),
+      pickPracticeBars: (chartEntry) => {
+        this.practiceBarsDialog ??= new PracticeBarsDialog({
+          audio: this.audio,
+          memory: this.practiceBars,
+          playOptions: () => this.playOptions.current,
+          ruleset: () => this.guiState.judgeRuleset,
+          // As a select screen's edit: kept, mirrored into the Options dialog and saved.
+          setPlayOptions: (changes) => {
+            this.setPlayOptions(changes);
+            copyPlayOptionsToGUI(this.playOptions.current, this.guiState);
+            this.optionsDialog.refreshRulesetChoices();
+            this.optionsDialog.refreshPlayOptionControllers();
+          },
+        });
+        // The select screen's preview of the chart gives way to the bars' auditions.
+        this.audio.preview.stop();
+        return this.practiceBarsDialog.open(chartEntry, resolveChartSource(this.library.collection, chartEntry));
+      },
       replaySlots: this.replaySlots,
       replaySlotsPanel: this.replaySlotsPanel,
       startReplayFromSlot: (entry, slot) => this.replayRoute.startReplayFromSlot(entry, slot),
@@ -544,6 +582,9 @@ export class PlayerWebApp {
       lockReplayOptionsForPlay: (liveTempo, chartEntry) => this.lockReplayOptionsForPlay(liveTempo, chartEntry),
       unlockReplayOptions: () => this.unlockReplayOptions(),
       showSelect: () => this.showSelect(),
+      practiceRange: (chartEntry) => this.practiceBars.rangeFor(chartEntry.id),
+      practiceSkipped: (chartEntry) => this.practiceBars.skipsPractice(chartEntry.id),
+      practiceNoteShare: (chartEntry) => this.practiceBars.noteShareFor(chartEntry.id),
       showPlayOptionMismatch,
       setPlayOptions: (changes) => this.setPlayOptions(changes),
     });
@@ -576,6 +617,7 @@ export class PlayerWebApp {
       ghostReplayFile: this.ghostReplayFile,
       sceneHost: this.sceneHost,
       silentMode: this.silentMode,
+      bgaCamera: this.bgaCamera,
       leaderboard: this.leaderboard,
       library: this.library,
       records: this.records,

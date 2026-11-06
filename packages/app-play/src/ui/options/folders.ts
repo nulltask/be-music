@@ -17,6 +17,7 @@ export const OPTION_FOLDERS = {
   tempo: { title: 'Tempo' },
   course: { title: 'Course' },
   skin: { title: 'Skin & display' },
+  bgaCamera: { title: 'BGA camera' },
   beatorajaSkins: { title: 'Beatoraja skins' },
   skinSettings: { title: 'Skin settings' },
   addSkin: { title: 'Add skin' },
@@ -34,11 +35,21 @@ export const OPTION_FOLDERS = {
 
 /**
  * The Options dialog's tabs, left to right: Play (Play options, with Tempo on its Practice page), View (the hi-speed,
- * the covers and LIFT, and the effects), Keys, Skin (Skin & display), Audio, Library (the status, opening files,
+ * the covers and LIFT, and the effects), Keys, Skin (Skin & display), Audio, Camera (the BGA camera), Library (the status, opening files,
  * Library & records, Select, Course and Capture), Leaderboard, and Advanced (diagnostics, the BGA transcode and the
  * reset).
  */
-export const OPTIONS_TABS = ['Play', 'View', 'Keys', 'Skin', 'Audio', 'Library', 'Leaderboard', 'Advanced'] as const;
+export const OPTIONS_TABS = [
+  'Play',
+  'View',
+  'Keys',
+  'Skin',
+  'Audio',
+  'Camera',
+  'Library',
+  'Leaderboard',
+  'Advanced',
+] as const;
 
 /**
  * The pages the Play options folder splits its many options into: how a play is judged and its gauge, how the lanes

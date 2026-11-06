@@ -73,12 +73,27 @@ export class CourseRun<
   S extends CourseRunStage = CourseRunStage,
   H extends CourseRunStageExtras = CourseRunStageExtras,
 > {
-  readonly definition: CourseDefinition;
+  /** The course: an endless run's grows by a stage at each {@link appendStage}. */
+  get definition(): CourseDefinition {
+    return this.course;
+  }
+
   /**
    * Every stage as the course plays it, in order: its chart with the course's long-note constraint applied. A played
    * stage's fingerprints describe this chart.
    */
-  readonly stages: readonly S[];
+  get stages(): readonly S[] {
+    return this.stageList;
+  }
+
+  /**
+   * An endless run (a RANDOM MIX drawn one stage at a time) has no last stage: it goes on after every stage that did not
+   * fail, and the host {@link appendStage appends} the next stage before it asks for it.
+   */
+  readonly endless: boolean;
+
+  private course: CourseDefinition;
+  private readonly stageList: S[];
   private readonly played: PlayedStage<H>[] = [];
   private ended = false;
   private practiceMode = false;
@@ -88,16 +103,30 @@ export class CourseRun<
   }
 
   /** Throws when a stage has no chart: a course with a missing stage cannot be started. */
-  constructor(definition: CourseDefinition, stages: ReadonlyArray<S | undefined>) {
+  constructor(definition: CourseDefinition, stages: ReadonlyArray<S | undefined>, options: { endless?: boolean } = {}) {
     const missing = stages.findIndex((stage) => stage === undefined);
     if (missing >= 0) {
       throw new Error(`course "${definition.name}" has no chart for stage ${missing + 1}`);
     }
-    this.definition = definition;
-    this.stages = (stages as readonly S[]).map((stage) => {
-      const chart = applyCourseLongNoteConstraint(stage.chart, definition.constraints);
-      return chart === stage.chart ? stage : { ...stage, chart };
-    });
+    this.course = definition;
+    this.endless = options.endless === true;
+    this.stageList = (stages as readonly S[]).map((stage) => this.constrain(stage));
+  }
+
+  /**
+   * Adds the next stage of an endless run: `definition` is the course with that stage added (its stage refs one longer),
+   * and `stage` its chart. Throws on a run that is not endless or has ended.
+   */
+  appendStage(definition: CourseDefinition, stage: S): void {
+    if (!this.endless) throw new Error('only an endless course run takes more stages');
+    if (this.ended) throw new Error('the course run is over');
+    this.course = definition;
+    this.stageList.push(this.constrain(stage));
+  }
+
+  private constrain(stage: S): S {
+    const chart = applyCourseLongNoteConstraint(stage.chart, this.course.constraints);
+    return chart === stage.chart ? stage : { ...stage, chart };
   }
 
   get stageCount(): number {
@@ -176,7 +205,7 @@ export class CourseRun<
       replay === undefined ? native.ruleset : (replay.play?.judgeRuleset ?? 'lr2'),
       native.gauge,
     );
-    return !failed && this.played.length + 1 < this.stages.length;
+    return !failed && (this.endless || this.played.length + 1 < this.stages.length);
   }
 
   /**

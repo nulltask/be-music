@@ -489,7 +489,7 @@ The rank display resolved from the current chart is displayed on the song select
 BMS with `#DEFEXRANK` will display that number, and normal `#RANK 0-4` will display the corresponding label.
 Similarly, `PLAYLEVEL` uses the display value resolved from the chart, and if `#PLAYLEVEL` is omitted in BMS, it will give a BM98-compatible default value of `3`.
 When `PLAYLEVEL` is `0`, player uses `?` for display. The string `PLAYLEVEL` is displayed as is, and decimal values ​​​​are also displayed without rounding.
-`DIFFICULTY` only displays integers between `1-5`. In the song selection list, arrange them in the order of `PLAYER -> DIFFICULTY -> PLAYLEVEL -> filename`, use the keys `1-5` to switch the `DIFFICULTY` filter, and press `0` to cancel it. `DIFFICULTY` Unspecified values ​​​​or values ​​​​outside the range are not filtered and will be displayed as `-`.
+`DIFFICULTY` only displays integers between `1-5`. In the song selection list, arrange them in the order of `PLAYER -> DIFFICULTY -> PLAYLEVEL -> filename`, use the keys `1-5` to switch the `DIFFICULTY` filter, and press `0` to cancel it. A chart whose `DIFFICULTY` is unspecified or out of range gets one estimated from its names instead (a difficulty word in the subtitle or a bracketed part of the title, such as `[SP ANOTHER]`, else a word or an abbreviation in the file name, such as `_hyper` or `7a`), as beatoraja fills one in for its song database. When the names suggest none, the note count gives one by beatoraja's bounds (under 250 notes BEGINNER, 600 NORMAL, 1000 HYPER, 2000 ANOTHER, else INSANE). An estimated value is sorted and filtered like a declared one and shown with a mark: `?` from the names (`3?`, `HYPER?`), `??` from the note count (`3??`, `HYPER??`), which is right far less often (about 60% against charts that name their difficulty, against 97% for the names). A chart with neither, or without notes, is not filtered and is displayed as `-`. Replays, scores and written charts keep only the chart's own `#DIFFICULTY`.
 
 A BMS that has dynamic changes using `#EXRANKxx` will have a displayed rank of `RANDOM`.
 This is because the judgment range changes midway through the score, and it cannot be expressed with a single fixed label.
@@ -749,12 +749,18 @@ The modes below are the EFFECTIVE modes the ruleset resolved to, not the chart's
   crossing the judge line ticks (`JudgeManager` L235-L242): one judged early waits until the one ahead of it on the
   lane has passed, and a head missed only after its end point passed has no ticks. AUTO SCRATCH lanes have none.
 - Back-spin scratch (BSS): a mode `2` / `3` long note on a scratch lane (`isBackSpinScratch`) has its tail judged on a
-  reverse spin instead of the release, as beatoraja does ("BSS終端処理"). The press that hits the head records its
-  scratch spin (`'cw'` / `'ccw'`); a later press on the lane spinning the other way judges the tail at once, its timing
-  against the long-scratch-end windows (`POOR` outside them, no release margin), and plays the tail's keysound. Letting
-  go settles nothing — the gauge ticks of a hell-charge BSS still follow whether the lane is down — and a press spinning
-  the same way is a re-press. A tail never spun back is a missed `POOR` once its late window closes, held or not. LR2
-  plays every long note as an LN, so it has no BSS. Where the spin comes from is in [Scratch spin](#scratch-spin).
+  press from another input source instead of the release, as beatoraja does ("BSS終端処理", `JudgeManager` L351-L370).
+  The press that hits the head records its [input source](#input-sources) (beatoraja's `sckey`); a later press on the
+  lane from a different source — the turntable's other direction, the scratch's other key — judges the tail at once,
+  its timing against the long-scratch-end windows (`POOR` outside them, no release margin), and plays the tail's
+  keysound. A press from the head's own source is a re-press. A release settles nothing, with one exception under
+  beatoraja (`scratchHoldsBySource`, `JudgeManager` L494-L511): a release of the head's source that would judge `POOR`
+  against the long-scratch-end windows (too early for any of them) ends the note there as a `POOR`. That-Which-Must-Not-Be-Named ignores
+  every release. The gauge ticks of a hell-charge BSS still follow whether the lane is down. A tail never ended this way
+  is a missed `POOR` once its late window closes, held or not. LR2 plays every long note as an LN, so it has no BSS.
+- Scratch LN under beatoraja: an LN (mode `1`) on a scratch lane remembers its head's source too, and only that source's
+  release lets it go; a release from another source is ignored and the lane stays held (`JudgeManager` L522-L531).
+  LR2 releases a scratch LN on any of the lane's keys, as before.
 
 A release is settled at its own instant. The one exception is the ruleset's long-note release margin
 (`longNoteReleaseMarginUs`, beatoraja's `longnoteMargin` / `longscratchMargin`): under beatoraja's PMS rule a release
@@ -765,27 +771,43 @@ keyboard protocol) the engine infers the release: 120 ms after the key's last re
 hit the long note's head when no repeat followed.
 
 A press on a lane whose long note is held (a second key bound to the lane, such as the turntable's other direction)
-never judges another note on that lane: the lane's current note is the long note. A reverse spin on a back-spin scratch
-judges its tail (above). What any other press does is the ruleset's (`pressDuringLongNote`): `lr2` judges the LN's head
+never judges another note on that lane: the lane's current note is the long note. A press from another source on a
+back-spin scratch judges its tail (above). What any other press does is the ruleset's (`pressDuringLongNote`): `lr2` judges the LN's head
 again when the press falls within its `BAD` window and charges an empty `POOR` otherwise (OpenLR2 `ProcLongnote`);
 `beatoraja` ignores it as a re-press (`JudgeManager` L355-377), and `____` does the same.
 
+#### Input sources
+
+Every lane press and release comes from an input source (`InputSource`, `core/input-source.ts`): one key of a
+keyboard, one button of a controller, a touch zone, or one rotation direction of a turntable. The replay records it as
+the input's `source`, an id into its `play.inputSources` table (see [`replay.md`](./replay.md#input-sources)), so the
+judge core, a replay and the replay simulator all key a scratch hold by the same source:
+
+- A keyboard key is its own source, named by its first token (`keyboardInputSource`): a scratch lane's Shift, Ctrl
+  (Option / Alt in a macOS terminal) and Space are three sources. A host passes no source for a key; the engine takes
+  it from the tokens.
+- A touch zone is one source per lane (`kind: 'button'`, `device: 'touch'`, named by the lane's key token); the web
+  player sends it on the touch lane's `lane-input` and `kitty-state` commands.
+- A controller passes its source on the `lane-input` and `kitty-state` commands: a turntable is two sources, `up` and
+  `down`, whether the device reports an axis or two buttons, and a host that turns an axis into presses names the
+  algorithm in `recordReplay.analogScratch`. No host has a controller input path yet (no Gamepad API input); that is
+  the boundary a controller plugs into. A source never carries device-identifying data.
+
+**Single-source fallback.** With only one source on a scratch lane, beatoraja's strict rules would leave every BSS
+unclearable: only another source ends one. A hold started by a source that has no counterpart on its lane therefore
+plays a lenient rule: any fresh press on the lane ends the BSS, its own source's included, and a release settles
+nothing (`hasScratchCounterpart`, `endsBackSpinScratch`). Which sources have a counterpart is a property of the source,
+so a live play and its re-simulation always agree: a turntable direction always has the other direction, and every
+keyboard scratch lane has at least two keys (`createLaneBindings` adds Ctrl or Option / Alt, and Space on 1P), so both
+play strict; a touch zone, a controller button and an unknown source play lenient. A touch player clears a BSS by
+tapping the scratch again at its tail. See [ADR 0040](./adr/0040-replay-input-sources.md) for the trade-off.
+
 #### Scratch spin
 
-Each scratch press carries the way it turned the turntable, `'cw'` or `'ccw'` (`ScratchSpin`, recorded as the replay
-input's `spin`), so the judge core, a replay and the replay simulator all read a reverse spin from the input:
-
-- A controller that reports rotation (a turntable or an analog axis) sends the direction it actually turned, as the
-  `spin` of its `lane-input` command.
-- A keyboard uses odd-even: a scratch lane's keys alternate as the two directions (`LaneBinding.inputKeys`,
-  `createScratchSpinByToken`). Each scratch has two keys by default — Shift (`'cw'`) and Ctrl, or Option / Alt in a
-  macOS terminal (`'ccw'`) — so pressing the scratch key other than the one that hit a BSS head spins it back.
-- Input with no direction reports no spin: a touch lane (its `lane-input` carries `spin: null`) and an ANY KEY press
-  from a non-scratch key. Every press counts as the reverse spin except one known to spin the same way as the head, so
-  a fresh press without a spin while a BSS is held turns it back, and after a head hit without a spin any later press
-  does (`isReverseScratchSpin`).
-
-See [ADR 0037](./adr/0037-scratch-spin-input.md) for the trade-off.
+A scratch press may also carry the way it turned the turntable, `'cw'` or `'ccw'` (`ScratchSpin`, recorded as the replay
+input's `spin`), for display only: the turntable's animation, live and in a replay. A controller that reports rotation
+sends the direction it turned; a keyboard uses odd-even, its scratch lane's keys alternating as the two directions
+(`LaneBinding.inputKeys`, `createScratchSpinByToken`); a touch lane sends `spin: null`. Judging does not read it.
 
 A long note the player never touched owes one `POOR` for the head, plus a second for the tail under charge modes —
 except under That-Which-Must-Not-Be-Named, where the cancelled tail owes nothing.

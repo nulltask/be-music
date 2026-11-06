@@ -201,7 +201,7 @@ describe('ruleset chart-facts adapters agree', () => {
         ],
       },
       inputs: [],
-      play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
+      play: { inputSources: [], mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
     };
     const fromReplay = rulesetChartFactsFromReplay(replay);
 
@@ -232,7 +232,7 @@ describe('ruleset chart-facts adapters agree', () => {
         notes: [{ id: 0, channel: '11', type: 'normal', timeUs: 1_000_000 }],
       },
       inputs: [],
-      play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
+      play: { inputSources: [], mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
     };
     const fromReplay = rulesetChartFactsFromReplay(replay);
     expect(fromChart).toEqual(fromReplay);

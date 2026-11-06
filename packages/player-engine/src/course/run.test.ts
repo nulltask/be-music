@@ -72,6 +72,23 @@ describe('CourseRun', () => {
     expect(constrained.every((entry) => entry.chart.sourceFormat === 'bms' && entry.chart.bms.lnMode === 3)).toBe(true);
   });
 
+  test('an endless run goes on after every stage that did not fail, as the host appends stages', () => {
+    const one = parseBeatorajaCourseData({ name: 'Mix', hash: [{ md5: MD5[0]! }], constraint: [] })!;
+    const course = new CourseRun<Stage>(one, [stage('a')], { endless: true });
+    expect(course.endless).toBe(true);
+    expect(course.recordStage(stageLog({}))).toBe('next');
+    // Nothing appended yet: no next stage to plan.
+    expect(course.nextStage()).toBeUndefined();
+    const two = { ...one, stages: [...one.stages, { md5: MD5[1]! }] };
+    course.appendStage(two, stage('b'));
+    expect(course.definition).toBe(two);
+    expect(course.nextStage()).toMatchObject({ index: 1, stageCount: 2 });
+    expect(course.recordStage(stageLog({ gauge: { type: 'GRADE', final: 0, cleared: false } }))).toBe('finished');
+    expect(() => course.appendStage(two, stage('c'))).toThrow();
+    expect(() => run().appendStage(two, stage('c'))).toThrow();
+    expect(course.stages.map((entry) => entry.id)).toEqual(['a', 'b']);
+  });
+
   test('carries the stage max combo when a stage has no course combo', () => {
     const course = run([]);
     course.recordStage(stageLog({ maxCombo: 7, course: undefined }));

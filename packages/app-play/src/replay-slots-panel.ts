@@ -6,7 +6,8 @@ import { repeat } from 'lit/directives/repeat.js';
 // and on the select screen it replays, downloads or deletes the replays of the chart or course under the cursor.
 
 import { downloadBlob } from '@be-music/player-browser/recording';
-import { playerText } from './player-copy.ts';
+import { playerLang, playerText } from './player-copy.ts';
+import { skeletonGroupTemplate, skeletonTemplate } from '@be-music/service-web-theme/client';
 import { REPLAY_SLOT_COUNT, type LibraryEntry } from '@be-music/player-scene-model';
 import type { ReplaySlotRecord, ReplaySlotTarget } from './services/replay-slots.ts';
 import type { ReplaySlotService, ResultReplaySlots } from './services/replay-slot-service.ts';
@@ -132,7 +133,18 @@ export class ReplaySlotsPanel {
                       return html`<li class="replay-slots-row">
                         <span class="replay-slots-name">${copy.slot(slot + 1)}</span>
                         <span class="replay-slots-detail"
-                          >${state === 'saved' ? copy.savedNow : record !== undefined ? describeReplaySlotRecord(record) : copy.empty}</span
+                          >${
+                            state === 'saved'
+                              ? copy.savedNow
+                              : record !== undefined
+                                ? describeReplaySlotRecord(record)
+                                : slots.loaded
+                                  ? copy.empty
+                                  : skeletonGroupTemplate({
+                                      locale: playerLang(),
+                                      content: skeletonTemplate({ shape: 'line', width: '24ch' }),
+                                    })
+                          }</span
                         >
                         <button
                           class="btn"

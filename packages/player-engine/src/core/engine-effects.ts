@@ -98,7 +98,7 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeEffectHand
         replayRecorder?.recordInput(
           effect.action,
           effect.seconds,
-          effect.tokens,
+          effect.source,
           effect.channels,
           effect.inferred,
           effect.spin,

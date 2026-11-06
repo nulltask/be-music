@@ -1,5 +1,9 @@
-import type { CourseView } from '@be-music/player-scene-model';
-import type { LibraryChart } from './chart.ts';
+import type { DifficultyBasis } from '@be-music/player-engine/display';
+import {
+  resolveLibraryChartDifficulty,
+  type CourseView,
+  type LibraryChartDifficultySource,
+} from '@be-music/player-scene-model';
 import { PLAYFIELD } from './playfield.ts';
 import { STAGE_HEIGHT, STAGE_MARGIN, STAGE_WIDTH } from './stage.ts';
 import type { BeMusicGameplayLayout, BeMusicGameplayRuntime, BeMusicRect, BeMusicStage } from './types.ts';
@@ -431,12 +435,36 @@ export function resolveStageLabel(
 
 const DIFFICULTY_NAMES = ['BEGINNER', 'NORMAL', 'HYPER', 'ANOTHER', 'INSANE'] as const;
 
-/** The chart's `#DIFFICULTY` (1–5) by name (`BEGINNER` … `INSANE`); `UNSPECIFIED` when missing, or `undefined` without a chart. */
-export function resolveDifficultyName(chart: Pick<LibraryChart, 'chart'> | undefined): string | undefined {
-  const value = chart?.chart.metadata.difficulty;
-  return chart === undefined
-    ? undefined
-    : ((typeof value === 'number' ? DIFFICULTY_NAMES[Math.trunc(value) - 1] : undefined) ?? 'UNSPECIFIED');
+/**
+ * The mark a chart screen writes after an estimated difficulty's name, by its basis: `?` for one read from the chart's
+ * names (`HYPER?`), `??` for one beatoraja would give by the note count (`HYPER??`), which is right far less often.
+ */
+export const DIFFICULTY_BASIS_MARKS: Readonly<Record<DifficultyBasis, string>> = { chart: '', names: '?', notes: '??' };
+
+/**
+ * The chart's difficulty by name (`BEGINNER` … `INSANE`) and where it comes from (`resolveLibraryChartDifficulty`):
+ * the chart's own `#DIFFICULTY`, its names or its note count. `UNSPECIFIED` with no basis when none gives one, or
+ * `undefined` without a chart.
+ */
+export function resolveDifficulty(
+  chart: LibraryChartDifficultySource | undefined,
+): { name: string; basis?: DifficultyBasis } | undefined {
+  if (chart === undefined) return undefined;
+  const difficulty = resolveLibraryChartDifficulty(chart);
+  const name = difficulty !== undefined ? DIFFICULTY_NAMES[difficulty.value - 1] : undefined;
+  return name !== undefined ? { name, basis: difficulty!.basis } : { name: 'UNSPECIFIED' };
+}
+
+/**
+ * The chart's difficulty by name (`BEGINNER` … `INSANE`), followed by its basis mark when it was estimated
+ * ({@link DIFFICULTY_BASIS_MARKS}: `HYPER?` from the names, `HYPER??` from the note count); `UNSPECIFIED` when it has
+ * none, or `undefined` without a chart.
+ */
+export function resolveDifficultyName(chart: LibraryChartDifficultySource | undefined): string | undefined {
+  const difficulty = resolveDifficulty(chart);
+  return (
+    difficulty && `${difficulty.name}${difficulty.basis !== undefined ? DIFFICULTY_BASIS_MARKS[difficulty.basis] : ''}`
+  );
 }
 
 /** Turntable angle in radians: one clockwise revolution per four chart beats. */

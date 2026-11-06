@@ -592,6 +592,16 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreAPI.createRandomMixChart(BENCH_SONG, BENCH_SONG_MD5);
     },
   });
+  define('player-browser.createRandomMixCandidate', {
+    run: () => {
+      playerWebCoreAPI.createRandomMixCandidate(BENCH_SONG);
+    },
+  });
+  define('player-browser.resolveRandomMixBPM', {
+    run: () => {
+      playerWebCoreAPI.resolveRandomMixBPM(BENCH_SONG);
+    },
+  });
   define('player-browser.createDrawnRandomMixEntry', {
     run: () => {
       playerWebCoreAPI.createDrawnRandomMixEntry(BENCH_COURSE_DEFINITION, BENCH_HASHED_SONGS);

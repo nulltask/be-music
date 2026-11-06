@@ -1140,6 +1140,7 @@ describe('player', () => {
       audio: false,
       tui: false,
       replayInputs: recorded!.inputs,
+      replayInputSources: recorded!.play.inputSources,
       onReplayRecorded: (replay) => {
         replayed = replay;
       },
@@ -1197,6 +1198,7 @@ describe('player', () => {
         audio: false,
         tui: false,
         replayInputs: recorded!.inputs,
+        replayInputSources: recorded!.play.inputSources,
         randomDraws,
         onReplayRecorded: (log) => {
           replay = log;
@@ -1230,7 +1232,7 @@ describe('player', () => {
     json.metadata.bpm = 240;
     json.metadata.rank = 2;
     json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
-    const replayInputs = [{ seq: 0, timeUs: 1_035_000, action: 'down' as const, channels: ['11'] }];
+    const replayInputs = [{ seq: 0, timeUs: 1_035_000, action: 'down' as const, channels: ['11'], source: 0 }];
     const base = { speed: 8, leadInMs: 0, audio: false, tui: false, replayInputs } as const;
 
     const lr2 = await manualPlay(json, { ...base });
@@ -1261,11 +1263,11 @@ describe('player', () => {
 
     const late = await manualPlay(json, {
       ...base,
-      replayInputs: [{ seq: 0, timeUs: 1_250_000, action: 'down' as const, channels: ['11'] }],
+      replayInputs: [{ seq: 0, timeUs: 1_250_000, action: 'down' as const, channels: ['11'], source: 0 }],
     });
     const early = await manualPlay(json, {
       ...base,
-      replayInputs: [{ seq: 0, timeUs: 750_000, action: 'down' as const, channels: ['11'] }],
+      replayInputs: [{ seq: 0, timeUs: 750_000, action: 'down' as const, channels: ['11'], source: 0 }],
     });
 
     expect(late.bad).toBe(1);
@@ -1289,7 +1291,9 @@ describe('player', () => {
       return json;
     };
     const base = { speed: 8, leadInMs: 0, audio: false, tui: false, judgeRuleset: 'beatoraja' } as const;
-    const pressAt = (channel: string) => [{ seq: 0, timeUs: 1_065_000, action: 'down' as const, channels: [channel] }];
+    const pressAt = (channel: string) => [
+      { seq: 0, timeUs: 1_065_000, action: 'down' as const, channels: [channel], source: 0 },
+    ];
 
     const key = await manualPlay(chart(), { ...base, replayInputs: pressAt('11') });
     const scratch = await manualPlay(chart(), { ...base, replayInputs: pressAt('16') });
@@ -1319,7 +1323,7 @@ describe('player', () => {
       leadInMs: 0,
       audio: false,
       tui: false,
-      replayInputs: [{ seq: 0, timeUs: 1_130_000, action: 'down' as const, channels: ['11'] }],
+      replayInputs: [{ seq: 0, timeUs: 1_130_000, action: 'down' as const, channels: ['11'], source: 0 }],
     };
 
     const lr2 = await manualPlay(json, { ...base });

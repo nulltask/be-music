@@ -111,6 +111,28 @@ export interface WebAudioSessionContext {
    * it follows the tempo, else 1.
    */
   tempo?: number;
+  /**
+   * Fades the play in over this many seconds as it starts, and crossfades each seek over as long: the sounds of the old
+   * position fade out while the ones of the new fade in, instead of the old ones stopping at once. A PRACTICE play's
+   * loop (#949) goes back to its start with a seek, so its range comes round again smoothly. Absent or 0: no fades.
+   */
+  seekCrossfadeSeconds?: number;
+}
+
+/** A crossfade's gains: one before each bus mixer, so one position's voices fade together. */
+interface CrossfadeGeneration {
+  readonly key: GainNode;
+  readonly bgm: GainNode;
+}
+
+/**
+ * Moves `param` from where it is now to `target` over `seconds` from `now` in a straight line, cancelling what was
+ * scheduled after now so a fade that starts mid-fade does not jump.
+ */
+export function rampGainTo(param: AudioParam, target: number, now: number, seconds: number): void {
+  param.cancelScheduledValues?.(now);
+  param.setValueAtTime(param.value, now);
+  param.linearRampToValueAtTime(target, now + Math.max(0, seconds));
 }
 
 /**
@@ -219,6 +241,49 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
   // per-voice at build time instead of being written onto the shared bus mixers.
   let currentBGMDynamicGain = 1;
   let currentKeyDynamicGain = 1;
+  const crossfadeSeconds =
+    context.seekCrossfadeSeconds !== undefined && Number.isFinite(context.seekCrossfadeSeconds)
+      ? Math.max(0, context.seekCrossfadeSeconds)
+      : 0;
+  /** The gains the voices of the position now playing go through, while crossfades are on. */
+  let generation: CrossfadeGeneration | undefined;
+  /** Opens the gains for a new position, fading in from silence over the crossfade. */
+  const openGeneration = (): void => {
+    const now = audioContext.currentTime;
+    const open = (mixer: GainNode): GainNode => {
+      const gain = audioContext.createGain();
+      gain.gain.value = 0;
+      gain.connect(mixer);
+      rampGainTo(gain.gain, 1, now, crossfadeSeconds);
+      return gain;
+    };
+    generation = { key: open(audioBus.keyMixer), bgm: open(audioBus.bgmMixer) };
+  };
+  /** Fades the position playing out over the crossfade, stopping its voices and dropping its gains at the end. */
+  const closeGeneration = (voices: readonly WebAudioSourceHandle[]): void => {
+    const closing = generation;
+    generation = undefined;
+    const now = audioContext.currentTime;
+    const endAt = now + crossfadeSeconds;
+    if (closing !== undefined) {
+      rampGainTo(closing.key.gain, 0, now, crossfadeSeconds);
+      rampGainTo(closing.bgm.gain, 0, now, crossfadeSeconds);
+    }
+    for (const handle of voices) stopSource(handle, endAt);
+    if (closing === undefined) return;
+    setTimeout(
+      () => {
+        for (const gain of [closing.key, closing.bgm]) {
+          try {
+            gain.disconnect();
+          } catch {
+            // Already disconnected, or the context closed first.
+          }
+        }
+      },
+      crossfadeSeconds * 1000 + 50,
+    );
+  };
 
   /**
    * How far into its sample a sound that started `elapsedSeconds` of chart time ago is: the time it has played, at the
@@ -268,6 +333,11 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     if (stage !== undefined) {
       // A stage's background voices go through its fade; the player's keysounds stay on the key bus.
       if (bus === audioBus.bgmMixer) bus = stageMixer!.bgmInput(stage) ?? bus;
+    }
+    // While crossfades are on, a voice goes through its position's gains.
+    if (generation !== undefined) {
+      if (bus === audioBus.keyMixer) bus = generation.key;
+      else if (bus === audioBus.bgmMixer) bus = generation.bgm;
     }
     const rate = basePlaybackRate * stageRate;
     if (rate !== 1) node.playbackRate.value = rate;
@@ -454,6 +524,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       // Chart second 0 is now (after the backend's own start delay): a NONSTOP chart's fades fall from here.
       const delaySeconds = (context.chartStartDelayMs ?? 0) / 1000;
       anchorChartAt(delaySeconds > 0 ? -delaySeconds * tempo : 0);
+      if (crossfadeSeconds > 0) openGeneration();
     },
     pause: (): void => {
       if (paused) return;
@@ -503,6 +574,14 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       activeByChannel.clear();
       activeSources.clear();
       preparedBuffers.clear();
+      for (const gain of generation === undefined ? [] : [generation.key, generation.bgm]) {
+        try {
+          gain.disconnect();
+        } catch {
+          // Already disconnected, or the context closed first.
+        }
+      }
+      generation = undefined;
     },
     triggerEvent: (event: BeMusicEvent): void => {
       // Dynamic volume changes (`#xxx97` / `#xxx98`) reach the session through the same `triggerEvent` channel as
@@ -545,8 +624,12 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     },
     seek: (seconds: number): void => {
       if (disposed) return;
-      // What plays belongs to the old position; the engine starts what still rings at `seconds` partway.
-      for (const handle of Array.from(activeSources)) stopSource(handle);
+      // What plays belongs to the old position; the engine starts what still rings at `seconds` partway. With
+      // crossfades on, the old position fades out under the new one instead of stopping at once.
+      if (crossfadeSeconds > 0 && started) {
+        closeGeneration(Array.from(activeSources));
+        openGeneration();
+      } else for (const handle of Array.from(activeSources)) stopSource(handle);
       activeBySlot.clear();
       activeBySlice.clear();
       activeByChannel.clear();

@@ -1,5 +1,10 @@
 import { resolveChart, type ResolvedChart } from '@be-music/chart-model';
 import type { BeMusicJSON, BeMusicPlayLevel } from '@be-music/chart-source';
+import {
+  estimateDifficultyFromNames,
+  estimateDifficultyFromNoteCount,
+  type DifficultyBasis,
+} from './difficulty-estimate.ts';
 
 const BMS_DEFAULT_DISPLAY_RANK = 2;
 const BMS_DEFAULT_DISPLAY_PLAY_LEVEL = 3;
@@ -56,6 +61,7 @@ export function resolveDisplayedPlayLevelValue(chart: BeMusicJSON): BeMusicPlayL
   return undefined;
 }
 
+/** The chart's own `#DIFFICULTY` when it is 1–5 (truncated), else `undefined`. */
 export function resolveDisplayedDifficultyValue(chart: BeMusicJSON): number | undefined {
   const difficulty = chart.metadata.difficulty;
   const normalized =
@@ -64,6 +70,35 @@ export function resolveDisplayedDifficultyValue(chart: BeMusicJSON): number | un
     return normalized;
   }
   return undefined;
+}
+
+/** A difficulty a chart screen shows, and where it comes from. */
+export interface DisplayedDifficulty {
+  /** 1 BEGINNER … 5 INSANE. */
+  readonly value: number;
+  readonly basis: DifficultyBasis;
+}
+
+/**
+ * The difficulty a chart screen shows: the chart's own `#DIFFICULTY` (1–5); else the one its title, subtitle, bmson
+ * chart name and file name suggest (`estimateDifficultyFromNames`); else, given the chart's `noteCount`, the one
+ * beatoraja gives by it (`estimateDifficultyFromNoteCount`). `undefined` when none gives one.
+ */
+export function resolveDisplayedDifficulty(
+  chart: BeMusicJSON,
+  options: { readonly fileName?: string; readonly noteCount?: number } = {},
+): DisplayedDifficulty | undefined {
+  const declared = resolveDisplayedDifficultyValue(chart);
+  if (declared !== undefined) return { value: declared, basis: 'chart' };
+  const named = estimateDifficultyFromNames({
+    title: chart.metadata.title,
+    subtitle: chart.metadata.subtitle,
+    chartName: chart.bmson.info.chartName,
+    fileName: options.fileName,
+  });
+  if (named !== undefined) return { value: named, basis: 'names' };
+  const counted = options.noteCount !== undefined ? estimateDifficultyFromNoteCount(options.noteCount) : undefined;
+  return counted !== undefined ? { value: counted, basis: 'notes' } : undefined;
 }
 
 function formatDisplayedJudgeRankValue(value: number): string {

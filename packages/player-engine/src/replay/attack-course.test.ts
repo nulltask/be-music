@@ -11,6 +11,7 @@ const inputs = (gauge: string) =>
     seq: index,
     action: 'down' as const,
     channels: [channel],
+    source: 0,
     timeUs: (index + 1) * 1000000 + (gauge === 'GROOVE' ? 0 : index === 0 ? 30000 : gauge === 'G-ATTACK' ? 80000 : 0),
   }));
 
@@ -24,8 +25,8 @@ for (const dropped of [false, true]) {
     const played = await runRecordedPlay(
       chart,
       [
-        { seq: 0, action: 'down', channels: ['11'], timeUs: 1080000 },
-        { seq: 1, action: 'up', channels: ['11'], timeUs: dropped ? 1400000 : 2020000 },
+        { seq: 0, action: 'down', channels: ['11'], source: 0, timeUs: 1080000 },
+        { seq: 1, action: 'up', channels: ['11'], source: 0, timeUs: dropped ? 1400000 : 2020000 },
       ],
       'lr2',
       { gauge: 'G-ATTACK', course: course.nextStage()!.course },
@@ -107,8 +108,8 @@ test('G.ATTACK NONSTOP records and re-simulates one continuous gauge across both
   const input = resolveChart(prepared.course.chart).notes.flatMap((note, index) => {
     const timeUs = Math.round(note.seconds * 1000000) + (index % 3 === 0 ? 30000 : 80000);
     return [
-      { seq: index * 2, action: 'down' as const, channels: [note.channel], timeUs },
-      { seq: index * 2 + 1, action: 'up' as const, channels: [note.channel], timeUs: timeUs + 20000 },
+      { seq: index * 2, action: 'down' as const, channels: [note.channel], source: 0, timeUs },
+      { seq: index * 2 + 1, action: 'up' as const, channels: [note.channel], source: 0, timeUs: timeUs + 20000 },
     ];
   });
   const run = await runRecordedPlay(prepared.course.chart, input, 'lr2', {

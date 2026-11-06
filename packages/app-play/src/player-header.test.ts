@@ -93,6 +93,21 @@ test('renders the shared header with Settings where Play would be', () => {
     account: { handle: 'alice', displayName: 'Alice', anonymous: false },
   });
   expect(noAvatar).not.toContain('/avatar');
+  const loading = playerServiceHeaderHTML({
+    locale: 'en',
+    hostname: 'localhost',
+    requestURL: '/',
+    accountLoading: true,
+  });
+  expect(loading).toContain('data-service-header="account-loading"');
+  expect(loading).not.toContain('data-service-header="account"');
+  expect(loading).not.toContain('Sign in');
+  expect(
+    classifyPlayerHeaderClick(
+      { closest: (query) => (query === '[data-service-header="account-loading"]' ? {} : null) },
+      true,
+    ),
+  ).toBeUndefined();
 });
 
 test('Settings toggles the Options dialog and a signed-out account opens sign-in', () => {

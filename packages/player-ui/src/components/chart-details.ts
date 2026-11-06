@@ -7,7 +7,7 @@ export class BeMusicChartDetailsElement extends BeMusicElement {
   static override properties: PropertyDeclarations = {
     entry: { attribute: false },
     launching: { type: Boolean },
-    readText: { attribute: false },
+    readmeAvailable: { attribute: false },
   };
   static override styles: CSSResultGroup = [
     structureStyles,
@@ -46,17 +46,15 @@ export class BeMusicChartDetailsElement extends BeMusicElement {
           min-height: 40px;
         }
       }
-      pre {
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-        max-height: 30vh;
-        overflow: auto;
-      }
     `,
   ];
   declare entry: LibraryEntry | undefined;
   declare launching: boolean;
-  declare readText: string | undefined;
+  /**
+   * Whether the chart has a README to show (`<be-music-readme-dialog>` shows it); `undefined` leaves the Readme button
+   * enabled on every chart.
+   */
+  declare readmeAvailable: boolean | undefined;
   protected override render(): TemplateResult {
     const entry = this.entry;
     const playable = !!entry && entry.kind !== 'folder';
@@ -86,13 +84,12 @@ export class BeMusicChartDetailsElement extends BeMusicElement {
         ><button
           class="btn"
           data-variant="outline"
-          ?disabled=${this.launching || entry?.kind !== 'chart'}
+          ?disabled=${this.launching || entry?.kind !== 'chart' || this.readmeAvailable === false}
           @click=${() => this.emit('readme-request', undefined)}
         >
           Readme</button
         ><slot name="actions"></slot>
       </div>
-      <pre ?hidden=${this.readText === undefined}>${this.readText ?? ''}</pre>
       <p class="muted">Arrow keys to browse · Enter to open · Escape to go back.</p>
       <slot></slot>
     </aside>`;

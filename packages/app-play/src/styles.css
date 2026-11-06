@@ -88,7 +88,7 @@ textarea {
   .player-service-header header nav {
     gap: 2px;
   }
-  .player-service-header [data-service-header='account'] {
+  .player-service-header :is([data-service-header='account'], [data-service-header='account-loading']) {
     padding-inline: 0.5rem;
   }
 }
@@ -250,6 +250,50 @@ textarea {
 .options-row {
   gap: 12px;
 }
+/* The Camera tab's preview (ui/options/bga-camera.ts): the camera as the BGA frame shows it, mirrored or not. */
+.options-camera-preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 420px;
+  margin-inline: auto;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  background: #000;
+}
+.options-camera-preview-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.options-camera-preview-video[data-mirror] {
+  transform: scaleX(-1);
+}
+.options-camera-preview-message {
+  margin: 0;
+  padding: 0 16px;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--muted-foreground);
+}
+/* The BGA camera folder's state and privacy note (ui/options/bga-camera.ts). */
+.options-camera-note {
+  display: grid;
+  gap: 4px;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+.options-camera-note > p {
+  margin: 0;
+}
+.options-camera-note > .options-camera-status {
+  color: var(--foreground);
+}
 .options-row[data-orientation='horizontal'] > :is(.options-label, .options-label-wrap),
 .options-slider-head > .options-label-wrap {
   min-width: 0;
@@ -405,6 +449,29 @@ textarea {
   resize: none;
   font-size: 0.8125rem;
   color: var(--muted-foreground);
+}
+/* A multiline monitor and, while its value is read, a shimmering line over it in the same cell, where its first line
+   of text will be. */
+.options-monitor-box {
+  display: grid;
+}
+.options-monitor-box > * {
+  grid-area: 1 / 1;
+}
+.options-monitor-skeleton {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  pointer-events: none;
+  /* The text area's own border, padding and line box (Basecoat's `textarea`: px-2.5 py-2, text-sm leading), so each
+     line sits where its text will. */
+  border: 1px solid transparent;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.8125rem;
+  line-height: calc(1.25 / 0.875);
+}
+.options-monitor-skeleton > .be-music-skeleton {
+  margin-block: calc((1lh - 1em) / 2);
 }
 .options-monitor-value {
   font-size: 0.8125rem;
@@ -2389,6 +2456,79 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   flex-wrap: wrap;
 }
 
+/* The RANDOM MIX dialog: the conditions a mix is drawn by. */
+.random-mix-form {
+  display: grid;
+  gap: 1rem;
+}
+.random-mix-group {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.random-mix-group > legend {
+  margin-block-end: 0.5rem;
+}
+.random-mix-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+.random-mix-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.random-mix-levels {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+.random-mix-level {
+  display: grid;
+  gap: 0.375rem;
+}
+.random-mix-dash {
+  line-height: 2.25rem;
+}
+.random-mix-row {
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  align-items: center;
+  gap: 0.75rem;
+}
+.random-mix-count {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.random-mix-number {
+  width: 6rem;
+}
+.random-mix-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.random-mix-setting {
+  display: grid;
+  gap: 0.375rem;
+  min-width: 0;
+}
+.random-mix-setting .select {
+  width: 100%;
+}
+.random-mix-note,
+.random-mix-matches {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+.random-mix-matches[data-empty='true'] {
+  color: var(--destructive);
+}
+
 /* The charts a dropped replay or course replay needs that are not loaded. */
 .replay-missing-list {
   list-style: disc;
@@ -2532,10 +2672,14 @@ html.touch-first .search-input.search-inline:focus {
 }
 
 /* Replay slots (replay-slots-panel.ts): a result's slots to save into, and the select bar's replays. */
-.start-account-actions .btn {
+.start-account-actions .btn:not(.be-music-skeleton-fill) {
   background: transparent;
   color: var(--muted-foreground);
   border: 1px solid var(--border);
+}
+/* A placeholder button takes the real one's border box. */
+.start-account-actions .btn.be-music-skeleton-fill {
+  border: 1px solid transparent;
 }
 .start-load-actions {
   display: flex;
@@ -2756,32 +2900,54 @@ html.touch-first .search-input.search-inline:focus {
   padding-top: 8px;
 }
 
-/* The PRACTICE range picker (#948): a density graph with two handles, in a row of its own in the Options dialog. */
-.practice-range {
-  --practice-range-accent: var(--primary);
-  --practice-range-muted: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
-  --practice-range-tick: color-mix(in oklch, var(--foreground) 10%, transparent);
-  --practice-range-selection: color-mix(in oklch, var(--primary) 18%, transparent);
+/* The PRACTICE bar picker (`ui/practice-bars.ts`): the chart's score, opened as a chart starts with PRACTICE on. */
+.practice-bars-dialog > * {
+  width: min(1100px, calc(100% - 2rem));
+  max-width: none;
+  max-height: min(92vh, 900px);
+}
+.practice-bars-chart {
+  font-weight: 600;
+}
+.practice-bars-chart > span {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+.practice-bars-score {
+  --be-music-chart-score-accent: var(--primary);
+  min-height: 120px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #050608;
+}
+.practice-bars-note {
+  padding: 12px;
+  color: var(--muted-foreground);
+}
+.practice-bars-caption {
+  min-height: 1.4em;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.practice-bars-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.practice-bars-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px 12px;
+}
+.practice-bars-field {
   display: grid;
   gap: 4px;
-}
-.practice-range-graph {
-  display: block;
-  width: 100%;
-  border-radius: 4px;
-  background: var(--input);
-  cursor: ew-resize;
-  touch-action: none;
-}
-.practice-range-caption {
+  font-size: 12px;
   color: var(--muted-foreground);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
 }
-.practice-range.disabled {
-  opacity: 0.5;
-}
-.practice-range.disabled .practice-range-graph {
-  cursor: default;
+.practice-bars-field > .input,
+.practice-bars-field > .select {
+  width: 100%;
 }

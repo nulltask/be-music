@@ -99,3 +99,17 @@ for (const [name, run] of [
   for (let index = 0; index < 10000; index++) run();
   console.log(JSON.stringify({ name, iterations: 10000, durationMs: performance.now() - started }));
 }
+
+const { resolveSkeleton, skeletonLabel, skeletonLength } = await import('../src/skeleton-model.ts');
+const { skeletonGroupTemplate, skeletonTemplate } = await import('../src/skeleton-template.ts');
+for (const [name, run] of [
+  ['skeletonLength', () => skeletonLength('12ch', '1em')],
+  ['resolveSkeleton', () => resolveSkeleton({ shape: 'circle', width: 24 })],
+  ['skeletonLabel', () => skeletonLabel('ja')],
+  ['skeletonTemplate', () => skeletonTemplate({ shape: 'line', width: '12ch' })],
+  ['skeletonGroupTemplate', () => skeletonGroupTemplate({ locale: 'en', content: skeletonTemplate() })],
+] as const) {
+  const started = performance.now();
+  for (let index = 0; index < 10000; index++) run();
+  console.log(JSON.stringify({ name, iterations: 10000, durationMs: performance.now() - started }));
+}

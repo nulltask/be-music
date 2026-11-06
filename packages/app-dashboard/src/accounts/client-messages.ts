@@ -7,6 +7,16 @@ const en = {
   profileFailed: 'Profile update failed',
   cannotPrepare: 'Cannot prepare image',
   cannotEncode: 'Cannot encode image',
+  welcome: {
+    handleHint: '3 to 15 letters, digits or _. Your player page lives at /players/your-handle.',
+    handleChecking: 'Checking…',
+    handleFree: 'That handle is free.',
+    handle: {
+      format: 'Use 3 to 15 letters, digits or _.',
+      reserved: 'That handle is reserved.',
+      taken: 'That handle is taken.',
+    },
+  },
   errors: {
     'invalid-handle': 'Handles are 3 to 15 letters, digits or _.',
     'invalid-display-name': 'That display name cannot be used.',
@@ -32,6 +42,16 @@ const ja: ClientMessages = {
   profileFailed: 'プロフィールを更新できませんでした',
   cannotPrepare: '画像を準備できません',
   cannotEncode: '画像を書き出せません',
+  welcome: {
+    handleHint: '英数字と _ で 3〜15 文字。プレイヤーページは /players/ユーザー名 になります。',
+    handleChecking: '確認しています…',
+    handleFree: 'このユーザー名は使えます。',
+    handle: {
+      format: '英数字と _ で 3〜15 文字にしてください。',
+      reserved: 'このユーザー名は予約されています。',
+      taken: 'このユーザー名はすでに使われています。',
+    },
+  },
   errors: {
     'invalid-handle': 'ユーザー名は英数字と _ で 3〜15 文字です。',
     'invalid-display-name': 'その表示名は使えません。',

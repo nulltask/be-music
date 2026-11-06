@@ -31,7 +31,14 @@ function stage(fingerprint: string, play: Partial<BeMusicReplay['play']> = {}): 
         playFingerprint: `${fingerprint}-play`,
       },
       inputs: [],
-      play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', course: { kind: 'grade' }, ...play },
+      play: {
+        mode: 'manual',
+        autoScratch: false,
+        gauge: 'GROOVE',
+        course: { kind: 'grade' },
+        ...play,
+        inputSources: play.inputSources ?? [],
+      },
     },
   };
 }

@@ -11,6 +11,11 @@ import {
   saveProfile,
   shouldTurnOnSubmitting,
   loadLeaderboardAccount,
+  readLeaderboardAccount,
+  readStartAccountState,
+  rememberStartAccountState,
+  START_ACCOUNT_STATE_KEY,
+  startAccountPlaceholder,
 } from './account.ts';
 import { render } from '@lit-labs/ssr';
 import { PLAYER_APP_TEMPLATE } from './dom-template.ts';
@@ -190,5 +195,73 @@ describe('shouldTurnOnSubmitting', () => {
     expect(shouldTurnOnSubmitting('signed-in', 'signed-in')).toBe(false);
     expect(shouldTurnOnSubmitting(undefined, 'anonymous')).toBe(false);
     expect(shouldTurnOnSubmitting(undefined, 'signed-out')).toBe(false);
+  });
+});
+
+describe('readLeaderboardAccount', () => {
+  test('tells a signed-out answer from a Leaderboard that did not answer', async () => {
+    const account = { handle: 'h', displayName: 'D', anonymous: true, passkeys: 0 };
+    const respond = (session: Response, me?: Response) =>
+      (async (input: RequestInfo | URL) =>
+        String(input).endsWith('/get-session') ? session : (me ?? new Response('null'))) as typeof fetch;
+    expect(await readLeaderboardAccount(respond(new Response('{}'), new Response(JSON.stringify(account))))).toEqual({
+      account,
+      reached: true,
+    });
+    expect(await readLeaderboardAccount(respond(new Response('null')))).toEqual({ account: undefined, reached: true });
+    expect(await readLeaderboardAccount(respond(new Response('{}'), new Response('', { status: 401 })))).toEqual({
+      account: undefined,
+      reached: true,
+    });
+    expect(await readLeaderboardAccount(respond(new Response('{}'), new Response('', { status: 502 })))).toEqual({
+      account: undefined,
+      reached: false,
+    });
+    expect(await readLeaderboardAccount(respond(new Response('', { status: 503 })))).toEqual({
+      account: undefined,
+      reached: false,
+    });
+    const aborted = (async () => {
+      throw new DOMException('aborted', 'AbortError');
+    }) as typeof fetch;
+    expect(await readLeaderboardAccount(aborted)).toEqual({ account: undefined, reached: false });
+  });
+});
+
+describe('start account placeholder', () => {
+  test('remembers the state the card showed, and reads a first visit or blocked storage as signed out', () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => void values.set(key, value),
+    };
+    expect(readStartAccountState(storage)).toBe('signed-out');
+    rememberStartAccountState('anonymous', storage);
+    expect(values.get(START_ACCOUNT_STATE_KEY)).toBe('anonymous');
+    expect(readStartAccountState(storage)).toBe('anonymous');
+    values.set(START_ACCOUNT_STATE_KEY, 'bogus');
+    expect(readStartAccountState(storage)).toBe('signed-out');
+    const blocked = {
+      getItem: () => {
+        throw new DOMException('blocked', 'SecurityError');
+      },
+      setItem: () => {
+        throw new DOMException('blocked', 'SecurityError');
+      },
+    };
+    expect(readStartAccountState(blocked)).toBe('signed-out');
+    expect(() => rememberStartAccountState('signed-in', blocked)).not.toThrow();
+    expect(readStartAccountState(undefined)).toBe('signed-out');
+  });
+
+  test('stands in for the actions and hint of the state it was', () => {
+    expect(startAccountPlaceholder('signed-out')).toEqual({
+      actions: ['sign-in', 'sign-up'],
+      hint: describeStartAccount(undefined).hint,
+    });
+    const guest = startAccountPlaceholder('anonymous');
+    expect(guest.actions).toEqual(['keep', 'sign-in', 'sign-out']);
+    expect(guest.hint).toBe(describeStartAccount({ handle: 'g', displayName: 'G', anonymous: true, passkeys: 0 }).hint);
+    expect(startAccountPlaceholder('signed-in')).toEqual({ actions: ['sign-out'], hint: undefined });
   });
 });

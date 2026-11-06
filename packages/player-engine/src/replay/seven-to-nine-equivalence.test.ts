@@ -15,12 +15,19 @@ test('7-to-9 records effective nine-key input, source parameters and holds and r
   applySevenToNine(preparedChart, { sevenToNinePattern: 6, sevenToNineType: 2, hRandomThresholdBPM: 180 });
   const inputs = preparedChart.notes
     .flatMap((note, index) => [
-      { seq: index * 2, timeUs: Math.round(note.seconds * 1e6), action: 'down' as const, channels: [note.channel] },
+      {
+        seq: index * 2,
+        timeUs: Math.round(note.seconds * 1e6),
+        action: 'down' as const,
+        channels: [note.channel],
+        source: 0,
+      },
       {
         seq: index * 2 + 1,
         timeUs: Math.round((note.endSeconds ?? note.seconds + 0.01) * 1e6),
         action: 'up' as const,
         channels: [note.channel],
+        source: 0,
       },
     ])
     .sort((a, b) => a.timeUs - b.timeUs)

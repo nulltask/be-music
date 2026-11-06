@@ -3,7 +3,15 @@ import { resolveAutoScratchSides } from '../core/auto-scratch.ts';
 import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart-model';
 import { resolve____RankLabel } from '../ruleset/score.ts';
 import type { BeMusicReplay, ReplayInputEvent, ReplayRulesetResult } from './format.ts';
-import { isReverseScratchSpin, type ScratchSpin } from '../core/scratch-spin.ts';
+import {
+  createInputSourceLookup,
+  endsBackSpinScratch,
+  hasScratchCounterpart,
+  inputSourceKey,
+  isSameInputSource,
+  releasesScratchHold,
+  type InputSource,
+} from '../core/input-source.ts';
 import {
   classifyRulesetJudge,
   ignoresLateLongNoteHeadBad,
@@ -219,9 +227,10 @@ interface ActiveHold {
    * pressed again first, which resumes the hold.
    */
   pendingRelease?: { atUs: number; judge: GaugeJudgeIndex; dmUs: number };
-  /** A back-spin scratch: its tail is judged on a press spinning the other way from {@link headSpin}, not on a release. */
+  /** A back-spin scratch: its tail is judged on a press from another source than {@link headSource} (`endsBackSpinScratch`). */
   backSpinScratch?: true;
-  headSpin?: ScratchSpin;
+  /** The source that hit the head of a scratch long note (beatoraja's `sckey`), as the engine's judge core keeps it. */
+  headSource?: InputSource;
 }
 
 interface SimLane {
@@ -233,8 +242,8 @@ interface SimLane {
   mineCursor: number;
   held: boolean;
   /**
-   * The keys holding the lane down now (`''` for an input recorded without tokens). Mines ask whether ANY key on the
-   * lane is down, so a second key keeps the lane down while the first is released, as the engine's lane history does.
+   * The input sources holding the lane down now, by key (`inputKey`). Mines ask whether ANY key on the lane is down, so
+   * a second key keeps the lane down while the first is released, as the engine's lane history does.
    */
   downTokens: Set<string>;
   /** The Hell Charge notes passing the lane, in tail order, while their gauge ticks run (see `HCNTickCounter`). */
@@ -284,6 +293,8 @@ class ReplaySimulation {
   private judgeNote: SimNote | undefined;
   /** ANY KEY (`play.anyKey`): the lanes each pressed key was routed to; absent when the play did not use it. */
   private readonly anyKeyRoutes: AnyKeyRoutes | undefined;
+  /** The source each input names (`play.inputSources`). */
+  private readonly sourceOf: (id: number | undefined) => InputSource | undefined;
 
   constructor(
     replay: BeMusicReplay,
@@ -301,6 +312,7 @@ class ReplaySimulation {
     this.scratchChannels = resolveScratchChannels(replay.chart.laneMode);
     this.gauge = new RulesetGauge(config.gauge, config.gaugeFallback, config.gaugeBank);
     this.anyKeyRoutes = replay.play.anyKey === true && replay.play.mode !== 'auto' ? new AnyKeyRoutes() : undefined;
+    this.sourceOf = createInputSourceLookup(replay.play.inputSources);
     this.buildLanes();
   }
 
@@ -735,14 +747,11 @@ class ReplaySimulation {
     const timeUs = input.timeUs;
     this.judgeAtUs = timeUs;
     const windows = this.config.windowsAt(timeUs);
+    const source = this.sourceOf(input.source);
     const pressed = this.anyKeyRoutes ? this.routeAnyKeyPress(input, windows) : this.resolveInputLanes(input);
     for (const lane of pressed) {
       lane.held = true;
-      if (input.tokens === undefined || input.tokens.length === 0) {
-        lane.downTokens.add('');
-      } else {
-        for (const token of input.tokens) lane.downTokens.add(token);
-      }
+      lane.downTokens.add(this.inputKey(input));
       this.setHCNGaining(lane, timeUs);
     }
     // Pressing a lane whose release is waiting out the margin resumes its hold: that press judges nothing else. A lane
@@ -752,7 +761,7 @@ class ReplaySimulation {
       if (lane.hold === undefined) return true;
       if (lane.hold.pendingRelease !== undefined) {
         lane.hold.pendingRelease = undefined;
-      } else if (lane.hold.backSpinScratch === true && isReverseScratchSpin(lane.hold.headSpin, input.spin)) {
+      } else if (lane.hold.backSpinScratch === true && endsBackSpinScratch(lane.hold.headSource, source)) {
         this.judgeBackSpinScratchTail(lane, lane.hold, timeUs);
       } else {
         this.applyPressDuringLongNote(lane, lane.hold, timeUs);
@@ -781,7 +790,7 @@ class ReplaySimulation {
     const { note, lane, dmUs } = selected;
     this.judgingAt(timeUs, lane, note);
     if (note.isLong) {
-      this.startLongNote(lane, note, selected.judge, dmUs, input.spin);
+      this.startLongNote(lane, note, selected.judge, dmUs, source);
       this.startHCNPassing(lane, note, timeUs);
     } else {
       note.judged = true;
@@ -842,18 +851,23 @@ class ReplaySimulation {
   private handleUp(input: ReplayInputEvent): void {
     const timeUs = input.timeUs;
     this.judgeAtUs = timeUs;
+    const source = this.sourceOf(input.source);
     for (const lane of this.anyKeyRoutes ? this.releaseAnyKey(input) : this.resolveInputLanes(input)) {
-      lane.held = false;
-      if (input.tokens === undefined || input.tokens.length === 0) {
-        lane.downTokens.clear();
-      } else {
-        for (const token of input.tokens) lane.downTokens.delete(token);
-        // An unnamed press is released by any release of the lane.
-        lane.downTokens.delete('');
-      }
+      lane.downTokens.delete(this.inputKey(input));
       const hold = lane.hold;
-      if (!hold || hold.backSpinScratch === true) {
-        // A back-spin scratch is not settled by a release: its tail waits for the reverse spin.
+      if (
+        hold !== undefined &&
+        hold.note.longStyle === 1 &&
+        hold.headSource !== undefined &&
+        !releasesScratchHold(hold.headSource, source)
+      ) {
+        // beatoraja: a scratch LN is let go only by the key that hit its head; another key's release is ignored.
+        this.setHCNGaining(lane, timeUs);
+        continue;
+      }
+      lane.held = false;
+      if (!hold || (hold.backSpinScratch === true && !this.endsBackSpinScratchOnRelease(hold, source, timeUs))) {
+        // A back-spin scratch is not settled by a release (but for beatoraja's early POOR release of its head's source).
         this.setHCNGaining(lane, timeUs);
         continue;
       }
@@ -892,6 +906,29 @@ class ReplaySimulation {
       }
       this.settleChargeTail(lane, note, timeUs, released.judge, released.dmUs);
     }
+  }
+
+  /**
+   * The key an input holds a lane by: its source's key, as the engine's judge core keys lane holds and ANY KEY routes,
+   * or its id when the table does not hold it.
+   */
+  private inputKey(input: ReplayInputEvent): string {
+    const source = this.sourceOf(input.source);
+    return source === undefined ? `#${input.source}` : inputSourceKey(source);
+  }
+
+  /**
+   * beatoraja's "BSS途中離し": releasing the source that hit a back-spin scratch's head ends it when the release would
+   * judge POOR against the long-scratch-end windows. As the engine's judge core (`endsBackSpinScratchOnRelease`).
+   */
+  private endsBackSpinScratchOnRelease(hold: ActiveHold, source: InputSource | undefined, timeUs: number): boolean {
+    if (!this.config.scratchHoldsBySource || !hasScratchCounterpart(hold.headSource)) return false;
+    if (!isSameInputSource(hold.headSource, source)) return false;
+    const endWindows = selectJudgeWindowSet(this.config.windowsAt(timeUs), {
+      scratch: hold.note.scratch,
+      longNoteEnd: true,
+    });
+    return classifyJudge(hold.note.endTimeUs! - timeUs, endWindows) === JUDGE_NONE;
   }
 
   private resolveInputLanes(input: ReplayInputEvent): SimLane[] {
@@ -935,7 +972,7 @@ class ReplaySimulation {
     const routed = selectAnyKeyLane(candidates);
     const lanes = routed === undefined ? own : [this.lanes.get(routed)!];
     this.anyKeyRoutes!.route(
-      anyKeyRouteKeys(input.tokens ?? [], this.ownChannels(input)),
+      anyKeyRouteKeys([this.inputKey(input)], this.ownChannels(input)),
       lanes.map((lane) => lane.channel),
     );
     return lanes;
@@ -945,7 +982,7 @@ class ReplaySimulation {
   private releaseAnyKey(input: ReplayInputEvent): SimLane[] {
     const own = this.ownChannels(input);
     const lanes: SimLane[] = [];
-    for (const channel of this.anyKeyRoutes!.release(anyKeyRouteKeys(input.tokens ?? [], own), own)) {
+    for (const channel of this.anyKeyRoutes!.release(anyKeyRouteKeys([this.inputKey(input)], own), own)) {
       const lane = this.lanes.get(channel);
       if (lane && !lane.auto) lanes.push(lane);
     }
@@ -962,7 +999,7 @@ class ReplaySimulation {
     note: SimNote,
     judge: GaugeJudgeIndex,
     dmUs: number,
-    spin: ScratchSpin | undefined,
+    source: InputSource | undefined,
   ): void {
     const style = note.longStyle ?? 1;
     if (style === 1) {
@@ -972,6 +1009,8 @@ class ReplaySimulation {
         headJudge: judge,
         headDmUs: dmUs,
         tailMissDeadlineUs: Number.POSITIVE_INFINITY,
+        // beatoraja: a scratch LN remembers the key that hit its head (the engine's `headSource`).
+        ...(this.config.scratchHoldsBySource && source !== undefined && lane.scratch ? { headSource: source } : {}),
       };
       return;
     }
@@ -991,7 +1030,7 @@ class ReplaySimulation {
       note,
       tailMissDeadlineUs: note.endTimeUs! + judgeWindowLateReachUs(endWindows),
       ...(isBackSpinScratch(style, lane.scratch)
-        ? { backSpinScratch: true as const, ...(spin !== undefined ? { headSpin: spin } : {}) }
+        ? { backSpinScratch: true as const, ...(source !== undefined ? { headSource: source } : {}) }
         : {}),
     };
   }

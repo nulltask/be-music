@@ -1,7 +1,7 @@
 /**
  * The beatoraja family's select view: a beatoraja select skin (`header.type` 5, `select.json` / `selectmain.lua`) drawn
  * by `BeatorajaPlaySkinView`, its canvas fitted into the window, with the bar list (`select/rows.ts`) drawn into the
- * skin at its `songlist` anchor and the README overlay on top. It draws the select session's frames: what the skin reads
+ * skin at its `songlist` anchor and the README dialog over it. It draws the select session's frames: what the skin reads
  * of the screen comes from the scene mapping of `@be-music/skin-beatoraja/scene` (`select/skin-state.ts`: the bar ops,
  * numbers, texts and image-set values over the focused bar, the list options and the records), the focused chart's
  * images and graphs from `select/chart-images.ts`, the search prompt from `select/search.ts`, and beatoraja's scene
@@ -50,7 +50,7 @@ import { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import { loadBeatorajaChartImages, type BeatorajaChartImages } from '../../skin/beatoraja/chart-images.ts';
-import { SelectReadTextOverlay } from '../built-in/select-readtext.ts';
+import { SelectReadmeDialog } from '../shared/readme-dialog.ts';
 import type { IntentSink, SelectFrame, SelectIntent, SelectView } from '../types.ts';
 import { beatorajaSceneNowMs, BeatorajaSkinStage } from './scene-frame.ts';
 import { BeatorajaSelectChartImages, type BeatorajaSelectChartImagesContext } from './select/chart-images.ts';
@@ -113,7 +113,7 @@ export class BeatorajaSelectView implements SelectView {
   private readonly options: BeatorajaSelectViewOptions;
   /** The bar list, inside the skin's container at its `songlist` anchor. */
   private readonly listLayer: Container = new Container();
-  private readonly readText: SelectReadTextOverlay = new SelectReadTextOverlay();
+  private readonly readme: SelectReadmeDialog = new SelectReadmeDialog();
   /** This view as its parts read and drive it (see {@link createContext}). */
   private readonly context: BeatorajaSelectViewContext = BeatorajaSelectView.createContext(this);
   private readonly rows: BeatorajaSelectRows = new BeatorajaSelectRows(this.context);
@@ -155,9 +155,6 @@ export class BeatorajaSelectView implements SelectView {
     // label above a row's hit sprite would take a click on the title text and hand it to this (listener-less) layer.
     // Passive leaves each child to its own mode: only the row hit sprites are hit.
     this.listLayer.eventMode = 'passive';
-    // A click anywhere on the README overlay closes it, as its footer says.
-    this.readText.layer.eventMode = 'static';
-    this.readText.layer.on('pointertap', () => this.emit?.({ type: 'readtext' }));
     this.stage = this.buildStage();
     this.root.addChild(this.stage.root);
   }
@@ -173,8 +170,7 @@ export class BeatorajaSelectView implements SelectView {
     this.search.destroySearchPrompt();
     this.skinState.cachedBaseOps = undefined;
     this.rows.forgetSkin();
-    // The old skin view's container lets go of its children as it is destroyed: the list layer and the overlay move
-    // into the new one.
+    // The old skin view's container lets go of its children as it is destroyed: the list layer moves into the new one.
     this.stage.dispose();
     this.stage = this.buildStage();
     this.root.addChild(this.stage.root);
@@ -185,9 +181,14 @@ export class BeatorajaSelectView implements SelectView {
     if (this.disposed) return;
     this.host = host;
     this.emit = emit;
+    this.readme.attach(
+      () => host.domRoot,
+      () => this.emit?.({ type: 'readtext' }),
+    );
   }
 
   public detach(): void {
+    this.readme.detach();
     this.host = undefined;
     this.emit = undefined;
   }
@@ -200,8 +201,6 @@ export class BeatorajaSelectView implements SelectView {
     this.rows.destroyRowVisuals();
     this.listLayer.parent?.removeChild(this.listLayer);
     if (!this.listLayer.destroyed) this.listLayer.destroy({ children: true });
-    this.readText.layer.parent?.removeChild(this.readText.layer);
-    if (!this.readText.layer.destroyed) this.readText.layer.destroy({ children: true });
     this.stage.dispose();
     this.chartImages.dispose();
     this.root.parent?.removeChild(this.root);
@@ -227,9 +226,9 @@ export class BeatorajaSelectView implements SelectView {
     this.frame = frame;
     this.listAsked = undefined;
     for (const event of frame.events) {
-      if (event.kind === 'readtext-scroll') this.readText.scrollBy(event.delta);
+      if (event.kind === 'readtext-scroll') this.readme.scrollBy(event.delta);
     }
-    this.readText.show(frame.readText);
+    this.readme.show(frame.readText);
     const view = this.stage.view;
     this.skinState.frameInput = undefined;
     this.skinState.frameInput = this.skinState.selectInput();
@@ -237,11 +236,6 @@ export class BeatorajaSelectView implements SelectView {
     this.chartImages.refreshChartImagesForFocus(focused?.kind === 'chart' ? focused.chart : undefined);
     this.rows.refreshRowVisuals();
     this.search.refreshSearchPrompt();
-    if (this.readText.open && view.container.children.at(-1) !== this.readText.layer) {
-      // On top of the skin and the search prompt.
-      view.container.addChild(this.readText.layer);
-    }
-    this.readText.render(view.width, view.height);
     const skinSounds = this.options.skinSounds;
     view.update({
       activeOps: this.withPanelOps(this.skinState.computeActiveOps()),
@@ -259,7 +253,7 @@ export class BeatorajaSelectView implements SelectView {
   // The skin
   // ---------------------------------------------------------------------------------------------------------------------
 
-  /** The skin view of the kit on its stage, with the bar list built for its `songlist` and the overlay on top. */
+  /** The skin view of the kit on its stage, with the bar list built for its `songlist`. */
   private buildStage(): BeatorajaSkinStage {
     const { skin, textures, fonts } = this.kit.kit;
     const view = new BeatorajaPlaySkinView({
@@ -287,7 +281,6 @@ export class BeatorajaSelectView implements SelectView {
     // At the skin's `songlist` anchor in its destinations: what the skin declares before it draws behind the bars,
     // what it declares after on top.
     view.container.addChildAt(this.listLayer, view.songListLayerInsertIndex);
-    view.container.addChild(this.readText.layer);
     // Another skin can lay the bars out otherwise (another `liston[]` length): the rows are built again for it.
     this.rows.songList = parseBeatorajaSongList(skin);
     this.rows.applySongListGeometry();

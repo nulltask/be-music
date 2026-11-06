@@ -26,6 +26,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Cover & LIFT': 'カバーと LIFT',
   Effects: '演出',
   'Skin & display': 'スキンと表示',
+  'BGA camera': 'BGA カメラ',
   Select: '選曲',
   'Quick options': 'よく使うオプション',
   'Built-in': '内蔵',
@@ -123,8 +124,6 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Hi-speed': 'ハイスピード',
   // Practice
   PRACTICE: 'PRACTICE',
-  'START TIME ms': 'START TIME ms',
-  'END TIME ms (0 = end)': 'END TIME ms (0 = 最後まで)',
   'GAUGE VALUE': 'GAUGE VALUE',
   'JUDGERANK (0 = chart)': 'JUDGERANK (0 = 譜面の値)',
   'TOTAL (0 = chart)': 'TOTAL (0 = 譜面の値)',
@@ -187,6 +186,13 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Play layout': 'プレイ画面のレイアウト',
   'Judged notes': '判定後のノーツ',
   'Toggle fullscreen': '全画面の切り替え',
+  // BGA camera
+  'Show camera in BGA': 'BGA の枠にカメラを映す',
+  Camera: 'カメラ',
+  'Allow camera access': 'カメラへのアクセスを許可',
+  'Mirror camera': 'カメラを左右反転',
+  'Preview camera': 'カメラをプレビュー',
+  'Stop preview': 'プレビューを止める',
   'Reset to defaults': '既定に戻す',
   // Audio
   Mute: 'ミュート',

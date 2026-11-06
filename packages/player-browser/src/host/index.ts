@@ -29,6 +29,7 @@ export { createResultScene, type ResultScene, type ResultSceneKit, type ResultSc
 export type { ResultSessionEvents } from '../session/result/result-session.ts';
 export {
   createPlayScene,
+  type BGACamera,
   type PlayScene,
   type PlaySceneCourse,
   type PlaySceneEvents,

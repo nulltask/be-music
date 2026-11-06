@@ -36,6 +36,8 @@ export interface EngineDriverAudioContext {
   playbackRateFollowsTempo?: boolean;
   /** The play tempo the chart starts at (`WebAudioSessionContext.tempo`). */
   tempo?: number;
+  /** Fades the play in and crossfades its seeks (a PRACTICE play's loop), as `WebAudioSessionContext` takes it. */
+  seekCrossfadeSeconds?: number;
 }
 
 /**
@@ -129,6 +131,7 @@ export async function runEngineDriver(options: EngineDriverOptions): Promise<Eng
       ...(audio.playbackRate !== undefined ? { playbackRate: audio.playbackRate } : {}),
       ...(audio.playbackRateFollowsTempo === true ? { playbackRateFollowsTempo: true } : {}),
       ...(audio.tempo !== undefined ? { tempo: audio.tempo } : {}),
+      ...(audio.seekCrossfadeSeconds !== undefined ? { seekCrossfadeSeconds: audio.seekCrossfadeSeconds } : {}),
     });
   };
   const createInputRuntime = createWebInputRuntimeFactory({

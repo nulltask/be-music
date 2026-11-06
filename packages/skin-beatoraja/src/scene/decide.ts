@@ -1,5 +1,5 @@
 import { clamp } from '@be-music/shared-utils/core';
-import type { LibraryChart } from '@be-music/player-scene-model';
+import { resolveLibraryChartDifficultyValue, type LibraryChart } from '@be-music/player-scene-model';
 import { BEATORAJA_NUM, BEATORAJA_OP } from '../runtime-ids.ts';
 import { beatorajaDifficultyOps } from './select.ts';
 
@@ -26,7 +26,7 @@ function clampUnit(value: number): number {
  */
 export function resolveBeatorajaDecideOps(input: BeatorajaDecideInput): number[] {
   return [
-    ...beatorajaDifficultyOps(input.chart.chart.metadata.difficulty),
+    ...beatorajaDifficultyOps(resolveLibraryChartDifficultyValue(input.chart)),
     clampUnit(input.progress) < 1 ? BEATORAJA_OP.NOW_LOADING : BEATORAJA_OP.LOADED,
   ];
 }

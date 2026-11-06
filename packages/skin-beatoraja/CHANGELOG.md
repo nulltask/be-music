@@ -1,5 +1,12 @@
 # @be-music/skin-beatoraja
 
+## 0.7.2
+
+### Patch Changes
+
+- 7154192: The decide screen lights the difficulty ops of the difficulty a chart's names, else its note count, suggest when it has no `#DIFFICULTY`.
+- Updated dependencies: `@be-music/skin-lr2@0.7.2`, `@be-music/player-engine@0.16.0`, `@be-music/player-scene-model@0.8.0`
+
 ## 0.7.1
 
 ### Patch Changes

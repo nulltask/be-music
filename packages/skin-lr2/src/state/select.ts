@@ -2,6 +2,7 @@ import type { CourseDraft, LR2RandomMixSettings, NonstopConnection } from '@be-m
 import type { ClearLamp } from '@be-music/player-engine/ruleset';
 import {
   resolveCourseView,
+  resolveLibraryChartDifficultyValue,
   type CourseView,
   type DifficultyFilter,
   type LibraryChart,
@@ -134,7 +135,7 @@ function chartOps(chart: LibraryChart, readme: boolean, lamp: ClearLamp | undefi
     features.bpmChange ? LR2_OP.HAS_BPM_CHANGE : LR2_OP.NO_BPM_CHANGE,
     features.random ? LR2_OP.HAS_RANDOM : LR2_OP.NO_RANDOM,
     resolveLR2JudgeRankOp(metadata.rank),
-    resolveLR2DifficultyOp(metadata.difficulty),
+    resolveLR2DifficultyOp(resolveLibraryChartDifficultyValue(chart)),
     metadata.stageFile ? LR2_OP.HAS_STAGEFILE : LR2_OP.NO_STAGEFILE,
     metadata.banner ? LR2_OP.HAS_BANNER : LR2_OP.NO_BANNER,
     metadata.backBMP ? LR2_OP.HAS_BACKBMP : LR2_OP.NO_BACKBMP,
@@ -281,7 +282,7 @@ function chartNumber(num: number, chart: LibraryChart, input: LR2SelectInput): n
     case LR2_NUM.FOLDER_LEVEL_ANOTHER:
     case LR2_NUM.FOLDER_LEVEL_INSANE:
       // No folder of a chart's difficulties yet: the chart's own level under its difficulty's number.
-      return chart.chart.metadata.difficulty === num - LR2_NUM.FOLDER_LEVEL_BEGINNER + 1
+      return resolveLibraryChartDifficultyValue(chart) === num - LR2_NUM.FOLDER_LEVEL_BEGINNER + 1
         ? lr2PlayLevel(chart)
         : undefined;
     case LR2_NUM.BPM:
@@ -454,7 +455,7 @@ const BAR_LEVEL_KINDS: readonly LR2BarLevelKind[] = ['undefined', 'beginner', 'n
 export function resolveLR2BarLevel(chart: LibraryChart): { kind: LR2BarLevelKind; level: number } | undefined {
   const level = lr2PlayLevel(chart);
   if (level === undefined) return undefined;
-  const difficulty = chart.chart.metadata.difficulty;
+  const difficulty = resolveLibraryChartDifficultyValue(chart);
   const kind = difficulty !== undefined ? (BAR_LEVEL_KINDS[difficulty] ?? 'undefined') : 'undefined';
   return { kind, level };
 }

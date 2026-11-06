@@ -1,13 +1,24 @@
 import type { BeMusicJSON } from '@be-music/chart-source';
 import { manualPlay } from '../index.ts';
 import type { PlayerOptions, PlayerSummary } from '../core/engine.ts';
-import type { BeMusicReplay, ReplayInputEvent } from '../replay/format.ts';
+import type { BeMusicReplay, ReplayInputEvent, ReplayInputSource } from '../replay/format.ts';
 import type { RulesetId } from '../ruleset/index.ts';
 
 /** Drive the engine from exact recorded input timestamps and capture its newly written replay. */
 interface ReplayRun {
   summary: PlayerSummary;
   replay: BeMusicReplay;
+}
+
+/**
+ * A table naming every source id `inputs` use, for inputs written without one: each id a controller button of its own,
+ * so a scratch hold it starts plays the lenient single-source rule, and the replay recorded from it names the same
+ * sources.
+ */
+export function defaultInputSources(inputs: readonly ReplayInputEvent[]): ReplayInputSource[] {
+  return [...new Set(inputs.map((input) => input.source))]
+    .sort((left, right) => left - right)
+    .map((id) => ({ id, kind: 'button', device: 'controller', label: `test-${id}` }));
 }
 
 export async function runRecordedPlay(
@@ -25,6 +36,7 @@ export async function runRecordedPlay(
     tui: false,
     judgeRuleset: ruleset,
     replayInputs: inputs,
+    replayInputSources: extra.replayInputSources ?? defaultInputSources(inputs),
     recordReplay: extra.recordReplay ?? {},
     onReplayRecorded: (recorded) => {
       replay = recorded;

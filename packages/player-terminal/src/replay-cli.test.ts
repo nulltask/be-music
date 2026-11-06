@@ -20,7 +20,12 @@ function makeReplay(): BeMusicReplay {
       notes: [],
     },
     inputs: [],
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
+    play: {
+      inputSources: [{ id: 0, kind: 'key', device: 'keyboard', label: 'z' }],
+      mode: 'manual',
+      autoScratch: false,
+      gauge: 'GROOVE',
+    },
   };
 }
 

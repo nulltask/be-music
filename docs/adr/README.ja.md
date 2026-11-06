@@ -67,3 +67,5 @@
 - [0038: 各画面は操作ボタンを、スキン系統のキー操作で読む](./0038-control-buttons-follow-skin-family.ja.md)
 
 - [0039: Accounts を Dashboard の Worker で Dashboard のホストに置く](./0039-accounts-in-dashboard.ja.md)
+
+- [0040: スクラッチのホールドを記録した入力ソースで識別する](./0040-replay-input-sources.ja.md)

@@ -3,6 +3,7 @@
  * among the chart's files and decoding it. BMS authors traditionally ship notes and changelogs this way.
  */
 
+import { decodeBMSText } from '@be-music/chart-parser';
 import { dirname } from '@be-music/shared-utils/core';
 import { loadAssetBytes, resolveChartSource } from './collection.ts';
 import type { LibraryChart } from '@be-music/player-scene-model';
@@ -48,19 +49,10 @@ export async function findReadtextForChart(
 }
 
 /**
- * Decodes raw `.txt` bytes to a string. BMS author notes are historically Shift-JIS (the LR2 era's default codepage on
- * Japanese Windows installs), but modern releases sometimes ship as UTF-8 with or without a BOM. UTF-8 first when a BOM
- * is present (unambiguous), then Shift-JIS, and finally lossy UTF-8, so there is always *some* string.
+ * Decodes raw `.txt` bytes to a string, detecting the encoding as a chart's own text is (`decodeBMSText` of
+ * `@be-music/chart-parser`): a BOM first (UTF-8, UTF-16), then strict UTF-8, Korean EUC-KR, and otherwise the
+ * likeliest of Shift_JIS (the LR2 era's notes), EUC-JP and Latin-1. There is always some string.
  */
 export function decodeReadtextBytes(bytes: Uint8Array): string {
-  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
-    return new TextDecoder('utf-8', { fatal: false }).decode(bytes.subarray(3));
-  }
-  try {
-    const sjis = new TextDecoder('shift-jis', { fatal: false }).decode(bytes);
-    if (sjis.length > 0 && !sjis.includes('�')) return sjis;
-  } catch {
-    // `shift-jis` not available in this runtime — fall through.
-  }
-  return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  return decodeBMSText(bytes).text;
 }

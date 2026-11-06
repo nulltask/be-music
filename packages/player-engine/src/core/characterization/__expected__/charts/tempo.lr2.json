@@ -57,26 +57,37 @@
         "artist": "Be-Music Dev Team"
       },
       "inputs": [
-        {"seq":0,"timeUs":500000,"action":"down","channels":["11"],"tokens":["z"]},
-        {"seq":1,"timeUs":550000,"action":"up","channels":["11"],"tokens":["z"]},
-        {"seq":2,"timeUs":1012000,"action":"down","channels":["11"],"tokens":["z"]},
-        {"seq":3,"timeUs":1062000,"action":"up","channels":["11"],"tokens":["z"]},
-        {"seq":4,"timeUs":1308000,"action":"down","channels":["11"],"tokens":["z"]},
-        {"seq":5,"timeUs":1358000,"action":"up","channels":["11"],"tokens":["z"]},
-        {"seq":6,"timeUs":1712000,"action":"down","channels":["12"],"tokens":["s"]},
-        {"seq":7,"timeUs":1762000,"action":"up","channels":["12"],"tokens":["s"]},
-        {"seq":8,"timeUs":1847000,"action":"down","channels":["12"],"tokens":["s"]},
-        {"seq":9,"timeUs":1897000,"action":"up","channels":["12"],"tokens":["s"]},
-        {"seq":10,"timeUs":2297000,"action":"down","channels":["12"],"tokens":["s"]},
-        {"seq":11,"timeUs":2347000,"action":"up","channels":["12"],"tokens":["s"]},
-        {"seq":12,"timeUs":2917000,"action":"down","channels":["12"],"tokens":["s"]},
-        {"seq":13,"timeUs":2967000,"action":"up","channels":["12"],"tokens":["s"]},
-        {"seq":14,"timeUs":3179000,"action":"down","channels":["13"],"tokens":["x"]},
-        {"seq":15,"timeUs":3229000,"action":"up","channels":["13"],"tokens":["x"]},
-        {"seq":16,"timeUs":3642000,"action":"down","channels":["13"],"tokens":["x"]},
-        {"seq":17,"timeUs":3692000,"action":"up","channels":["13"],"tokens":["x"]}
+        {"seq":0,"timeUs":500000,"action":"down","channels":["11"],"source":0},
+        {"seq":1,"timeUs":550000,"action":"up","channels":["11"],"source":0},
+        {"seq":2,"timeUs":1012000,"action":"down","channels":["11"],"source":0},
+        {"seq":3,"timeUs":1062000,"action":"up","channels":["11"],"source":0},
+        {"seq":4,"timeUs":1308000,"action":"down","channels":["11"],"source":0},
+        {"seq":5,"timeUs":1358000,"action":"up","channels":["11"],"source":0},
+        {"seq":6,"timeUs":1712000,"action":"down","channels":["12"],"source":1},
+        {"seq":7,"timeUs":1762000,"action":"up","channels":["12"],"source":1},
+        {"seq":8,"timeUs":1847000,"action":"down","channels":["12"],"source":1},
+        {"seq":9,"timeUs":1897000,"action":"up","channels":["12"],"source":1},
+        {"seq":10,"timeUs":2297000,"action":"down","channels":["12"],"source":1},
+        {"seq":11,"timeUs":2347000,"action":"up","channels":["12"],"source":1},
+        {"seq":12,"timeUs":2917000,"action":"down","channels":["12"],"source":1},
+        {"seq":13,"timeUs":2967000,"action":"up","channels":["12"],"source":1},
+        {"seq":14,"timeUs":3179000,"action":"down","channels":["13"],"source":2},
+        {"seq":15,"timeUs":3229000,"action":"up","channels":["13"],"source":2},
+        {"seq":16,"timeUs":3642000,"action":"down","channels":["13"],"source":2},
+        {"seq":17,"timeUs":3692000,"action":"up","channels":["13"],"source":2}
       ],
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"lr2","endOnFailure":true},
+      "play": {
+        "inputSources": [
+          {"id":0,"kind":"key","device":"keyboard","label":"z"},
+          {"id":1,"kind":"key","device":"keyboard","label":"s"},
+          {"id":2,"kind":"key","device":"keyboard","label":"x"}
+        ],
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "lr2",
+        "endOnFailure": true
+      },
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -285,7 +296,18 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as manual)",
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"lr2","endOnFailure":true},
+      "play": {
+        "inputSources": [
+          {"id":0,"kind":"key","device":"keyboard","label":"z"},
+          {"id":1,"kind":"key","device":"keyboard","label":"s"},
+          {"id":2,"kind":"key","device":"keyboard","label":"x"}
+        ],
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "lr2",
+        "endOnFailure": true
+      },
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",
@@ -425,7 +447,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"lr2","endOnFailure":true},
+      "play": {"inputSources":[],"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"lr2","endOnFailure":true},
       "results": {
         "native": {
           "ruleset": "be-music/native",

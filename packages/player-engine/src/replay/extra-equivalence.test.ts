@@ -13,11 +13,18 @@ for (const extraNoteScratch of [false, true]) {
     const preparedChart = preparePlaybackChart(resolveChart(json), options);
     const inputs = preparedChart.notes
       .flatMap((note, index) => [
-        { seq: index * 2, action: 'down' as const, channels: [note.channel], timeUs: Math.round(note.seconds * 1e6) },
+        {
+          seq: index * 2,
+          action: 'down' as const,
+          channels: [note.channel],
+          source: 0,
+          timeUs: Math.round(note.seconds * 1e6),
+        },
         {
           seq: index * 2 + 1,
           action: 'up' as const,
           channels: [note.channel],
+          source: 0,
           timeUs: Math.round(note.seconds * 1e6) + 20000,
         },
       ])

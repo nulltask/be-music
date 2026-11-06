@@ -9,6 +9,8 @@ export { BeMusicTimingGraphElement } from './components/timing-graph.ts';
 export { BeMusicPlaySettingsElement } from './components/play-settings.ts';
 export { BeMusicChartListElement } from './components/chart-list.ts';
 export { BeMusicChartDetailsElement } from './components/chart-details.ts';
+export { BeMusicReadmeDialogElement } from './components/readme-dialog.ts';
+export { splitLinkedText, type BeMusicTextRun } from './linkify.ts';
 export { BeMusicPlayOptionsElement } from './components/play-options.ts';
 export { BeMusicSelectScreenElement } from './components/select-screen.ts';
 export { BeMusicResultScreenElement } from './components/result-screen.ts';
@@ -26,6 +28,33 @@ export { BeMusicPlaybackControlsElement } from './components/playback-controls.t
 export { BeMusicPreviewHUDElement } from './components/preview-hud.ts';
 export { BeMusicPreviewSelectElement } from './components/preview-select.ts';
 export { BeMusicPreviewStartElement } from './components/preview-start.ts';
+export { BeMusicChartScoreElement } from './components/chart-score.ts';
+export {
+  chartScoreRangeTimes,
+  isChartScoreBarEmpty,
+  layoutChartScore,
+  packChartScoreColumns,
+  selectChartScoreBars,
+  type ChartScoreBar,
+  type ChartScoreBarRange,
+  type ChartScoreLane,
+  type ChartScoreLayout,
+  type ChartScoreLayoutOptions,
+  type ChartScoreLongNote,
+  type ChartScoreNote,
+  type ChartScoreStop,
+  type ChartScoreTempo,
+} from './chart-score/layout.ts';
+export {
+  chartScoreRowAt,
+  DEFAULT_CHART_SCORE_METRICS,
+  resolveChartScoreColumn,
+  resolveChartScoreLanes,
+  type ChartScoreBarBox,
+  type ChartScoreLaneBox,
+  type ChartScoreLaneGeometry,
+  type ChartScoreMetrics,
+} from './chart-score/geometry.ts';
 export { formatPlaybackTime, resolveSeekTarget } from './playback.ts';
 export {
   PREVIEW_CONTROLS_CSS_HEIGHT,

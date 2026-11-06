@@ -1,5 +1,15 @@
 # @be-music/player-ui-react
 
+## 0.3.0
+
+### Minor Changes
+
+- a8f6fed: Add the `BeMusicChartScore` wrapper for `<be-music-chart-score>`, with `onBarSelectionChange`.
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/player-ui@0.8.0`
+
 ## 0.2.7
 
 ### Patch Changes

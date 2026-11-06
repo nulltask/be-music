@@ -158,15 +158,14 @@ export interface PlayOptions {
   longNoteMode: 'LN' | 'CN' | 'HCN';
   customJudge: boolean;
   /**
-   * PRACTICE (beatoraja's `PracticeProperty`, under every judge ruleset): play only `practiceStartMs`..`practiceEndMs`
-   * (0 = the chart's end) and play the range again when it ends. `practiceGauge` is one of the judge ruleset's own
+   * PRACTICE (beatoraja's `PracticeProperty`, under every judge ruleset): play only the bars picked on the chart's score
+   * when the chart is started (`resolvePracticeSelection`'s range) and play them again when they end. The range belongs
+   * to that start, not to the options. `practiceGauge` is one of the judge ruleset's own
    * gauges (`resolvePracticeGaugeTypes`). A 0 judgerank or TOTAL keeps the chart's; both are read on the judge ruleset's
    * own tables and do nothing under That-Which-Must-Not-Be-Named. `MODE` keeps the play mode's gauge category, which
    * only beatoraja has.
    */
   practice: boolean;
-  practiceStartMs: number;
-  practiceEndMs: number;
   practiceGauge: PracticeGaugeType;
   practiceGaugeCategory: PracticeGaugeCategory;
   practiceStartGauge: number;

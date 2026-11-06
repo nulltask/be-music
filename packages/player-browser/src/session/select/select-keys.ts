@@ -12,7 +12,7 @@
  *
  * The keys and START are the player's (`SessionKeyEvent.buttons`).
  *
- * While the README overlay is open, the keys scroll or close it, on either map.
+ * While the README dialog is open, the keys scroll or close it, on either map.
  */
 
 import type { BrowseCommand, PlayOptions } from '@be-music/player-scene-model';
@@ -25,9 +25,9 @@ import {
   type ControlScheme,
 } from '../controls/control-buttons.ts';
 
-/** Pixel scroll of the README overlay per arrow key: about two lines of its 14 px / 18 px text. */
+/** CSS pixels the README dialog scrolls per arrow key: about two lines of its text. */
 export const READTEXT_LINE_SCROLL = 36;
-/** Pixel scroll per PageUp / PageDown: most of the overlay, leaving a couple of lines to find one's place by. */
+/** CSS pixels per PageUp / PageDown: most of the dialog's text, leaving a couple of lines to find one's place by. */
 export const READTEXT_PAGE_SCROLL = 360;
 
 /** How many bars Page Up / Page Down move the cursor on the beatoraja map. */
@@ -59,9 +59,9 @@ export type SelectKeyAction =
   | { readonly type: 'panel'; readonly panel: number }
   /** Step a play option of the play-options panel (the hi-speed by its step). */
   | { readonly type: 'play-option'; readonly key: keyof PlayOptions; readonly step: 1 | -1 }
-  /** Scroll the README overlay by `delta` pixels. */
+  /** Scroll the README dialog by `delta` pixels. */
   | { readonly type: 'readtext-scroll'; readonly delta: number }
-  /** Close the README overlay. */
+  /** Close the README dialog. */
   | { readonly type: 'readtext-close' }
   /** Open the folder under the cursor, and do nothing on a chart (LR2's →). */
   | { readonly type: 'open-folder' }
@@ -91,10 +91,10 @@ export type SelectKeyAction =
   | { readonly type: 'reload' }
   /** Mark or unmark the focused chart as a favourite (beatoraja's F8 / F9). */
   | { readonly type: 'favorite'; readonly list: 'music' | 'charts' }
-  /** The key does nothing here, but no other handler may take it (the README overlay owns the keyboard). */
+  /** The key does nothing here, but no other handler may take it (the README dialog owns the keyboard). */
   | { readonly type: 'swallow' };
 
-/** What the keys depend on: the panel open and whether the README overlay is. */
+/** What the keys depend on: the panel open and whether the README dialog is. */
 export interface SelectKeyState {
   readonly panel: number | undefined;
   readonly readTextOpen: boolean;
@@ -161,7 +161,7 @@ function buttonsOf(event: SessionKeyEvent): readonly ControlButton[] {
   return event.buttons ?? controlButtonsOfKey(event, DEFAULT_CONTROL_BUTTONS);
 }
 
-/** The README overlay's scroll keys and how far each one goes. */
+/** The README dialog's scroll keys and how far each one goes. */
 const READTEXT_SCROLL_KEYS: Readonly<Record<string, number>> = {
   ArrowDown: READTEXT_LINE_SCROLL,
   ArrowUp: -READTEXT_LINE_SCROLL,
@@ -243,11 +243,11 @@ export function resolveSelectKeyAction(
 }
 
 /**
- * The README overlay's keys while it is open: Enter (LR2's decide key) or Backspace close it, the arrows and the page
- * keys scroll it, and nothing else reaches the list behind it.
+ * The README dialog's keys while it is open: Enter (LR2's decide key), Backspace or Escape close it, the arrows and the
+ * page keys scroll it, and nothing else reaches the list behind it.
  */
 function resolveReadTextKey(event: SessionKeyEvent): SelectKeyAction {
-  if (event.key === 'Backspace' || event.key === 'Enter') return { type: 'readtext-close' };
+  if (event.key === 'Backspace' || event.key === 'Enter' || event.key === 'Escape') return { type: 'readtext-close' };
   const delta = READTEXT_SCROLL_KEYS[event.key];
   return delta === undefined ? { type: 'swallow' } : { type: 'readtext-scroll', delta };
 }

@@ -27,7 +27,7 @@ function inside(rect: BeMusicRect, width: number, height: number): boolean {
 
 describe('resolvePortraitSelectCard', () => {
   it('fills the width above the song list, its buttons inside it', () => {
-    const { card, play, auto } = resolvePortraitSelectCard(W);
+    const { card, play, auto, readme } = resolvePortraitSelectCard(W);
     expect(card.x).toBe(16);
     expect(card.x + card.w).toBe(W - 16);
     expect(card.y + card.h + 44).toBeLessThanOrEqual(PORTRAIT_SELECT_LAYOUT.listTop);
@@ -37,6 +37,10 @@ describe('resolvePortraitSelectCard', () => {
     }
     expect(overlaps(play, auto)).toBe(false);
     expect(auto.x + auto.w).toBe(card.x + card.w - 16);
+    // README sits small at the card's top right, above the facts.
+    expect(readme.x + readme.w).toBe(card.x + card.w - 16);
+    expect(readme.y).toBeGreaterThan(card.y);
+    expect(readme.y + readme.h).toBeLessThan(card.y + 96);
   });
 
   it('puts the three fact columns side by side above the buttons', () => {

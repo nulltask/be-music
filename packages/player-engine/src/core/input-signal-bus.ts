@@ -3,6 +3,7 @@ import { signal } from 'alien-signals';
 import type { ReplayViewState } from '../replay/view.ts';
 import type { HighSpeedControlAction } from './high-speed-control.ts';
 import type { ScratchSpin } from './scratch-spin.ts';
+import type { InputSource } from './input-source.ts';
 
 type WritableSignal<T> = {
   (): T;
@@ -40,11 +41,17 @@ export type PlayerInputCommand =
       kind: 'lane-input';
       tokens: string[];
       /**
+       * The physical input behind the press (`input-source.ts`): a touch zone, a controller button, or one direction of
+       * a turntable. Omitted for keys: the engine takes a keyboard source from the first token (each physical key is
+       * its own source). The replay records it and beatoraja's scratch rules key a scratch hold by it. Never put
+       * device-identifying data (a `Gamepad.id`, vendor or product ids) in it.
+       */
+      source?: InputSource;
+      /**
        * The way a scratch press turned the turntable, from a controller that reports rotation (a turntable or an analog
        * axis). Omitted for keys: the engine takes a key's spin from the odd-even rule over the scratch lane's keys
-       * (`createScratchSpinByToken`). `null` for input with no direction at all (a touch lane): the press has no spin,
-       * so a fresh press while a back-spin scratch is held turns it back (`isReverseScratchSpin`). A back-spin
-       * scratch's tail is judged on a press spinning the other way.
+       * (`createScratchSpinByToken`). `null` for input with no direction at all (a touch lane). Display only (the
+       * turntable's animation): a back-spin scratch is judged on `source`.
        */
       spin?: ScratchSpin | null;
       /**
@@ -83,6 +90,8 @@ export type PlayerInputCommand =
       releaseTokens: string[];
       /** The physical input behind the event (`lane-input.code`); the replay records it on the release. */
       code?: string;
+      /** The input source of the event (`lane-input.source`); omitted for keys, as there. */
+      source?: InputSource;
       /** Wall-clock-ms snapshot of the underlying physical event. Same domain as `lane-input.pressedAt`. */
       pressedAt?: number;
     };

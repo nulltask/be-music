@@ -3,9 +3,10 @@ import { createEmptyJSON } from '@be-music/chart-source';
 import { drawBrowserRandomCourse, type BrowserChartCollection } from '@be-music/player-browser/collection';
 import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
 import {
+  DEFAULT_LR2_RANDOM_MIX_SETTINGS,
+  DEFAULT_RANDOM_MIX_CONDITIONS,
   parseBeatorajaCourseData,
-  type LR2RandomMixChart,
-  type LR2RandomMixDrawResult,
+  type RandomMixConditions,
 } from '@be-music/player-engine/course';
 import type { BeMusicCourseReplay, BeMusicReplay, ReplayCourseResult } from '@be-music/player-engine/replay';
 import type { PlayResult } from '@be-music/player-scene-model';
@@ -54,6 +55,39 @@ function grade(ids: string[] = ['a', 'b'], overrides: Partial<LibraryCourse> = {
   };
 }
 
+/** What the dialog confirms: `conditions` with LR2's settings (no BPM range) and FADE. */
+function choice(conditions: RandomMixConditions, confirmed = true) {
+  return {
+    choice: {
+      conditions,
+      settings: { ...DEFAULT_LR2_RANDOM_MIX_SETTINGS, bpmRange: 0 },
+      defaultConnection: 'fade' as const,
+    },
+    confirmed,
+  };
+}
+
+/** RANDOM MIX conditions for the fixture songs, which read as 5 keys (they have no notes). */
+const MIX5: RandomMixConditions = { ...DEFAULT_RANDOM_MIX_CONDITIONS, keyModes: [5] };
+
+/** The RANDOM MIX bar of a course folder. */
+function randomMixBar(kind: 'expert' | 'nonstop'): LibraryCourse {
+  const bar = grade([], { id: `maker:${kind}#random-mix`, randomMix: true });
+  return { ...bar, definition: { ...bar.definition, kind } };
+}
+
+/** Every song hashes, each to its own MD5, and sits in its own folder. */
+function hashAll(h: ReturnType<typeof harness>): void {
+  h.deps.library.collection = {
+    ...h.deps.library.collection,
+    charts: ['a', 'b'].map((id) => ({ ...chartEntry(id), chartPath: `${id}/${id}.bms` })),
+  };
+  h.deps.records.resolveChartHashes.mockImplementation(async (chart) => ({
+    md5: (chart.id === 'a' ? 'a' : 'b').repeat(32),
+    sha256: 'c'.repeat(64),
+  }));
+}
+
 /** A stage's replay: played by hand, its gauge left at `final` (0 fails the run). */
 function stageLog(final = 80, play: Partial<BeMusicReplay['play']> = {}): BeMusicReplay {
   return {
@@ -93,14 +127,23 @@ function familyState(family: 'built-in' | 'beatoraja'): FamilyDispatchState {
 /** The course route on fake screens and services, recording what it shows. */
 function harness(options: { family?: 'built-in' | 'beatoraja'; beatorajaMounts?: boolean } = {}) {
   const courses = new CourseRunService();
-  const drawRandomMix = vi.fn<
-    (
-      kind: 'expert' | 'nonstop',
-      keyMode: number,
-      charts: readonly LR2RandomMixChart[],
-      random: () => number,
-    ) => LR2RandomMixDrawResult<LR2RandomMixChart>
-  >(() => ({ ok: false, reason: 'no-candidates' }));
+  const mix = {
+    conditions: { ...DEFAULT_RANDOM_MIX_CONDITIONS } as RandomMixConditions,
+  };
+  const maker = {
+    start: vi.fn<CourseRouteDeps['courseMaker']['maker']['start']>(),
+    keepRandomMix: vi.fn<CourseRouteDeps['courseMaker']['maker']['keepRandomMix']>(),
+    get randomMixConditions() {
+      return mix.conditions;
+    },
+    setRandomMixConditions: vi.fn((conditions: RandomMixConditions) => {
+      mix.conditions = conditions;
+    }),
+    randomMixSettings: { ...DEFAULT_LR2_RANDOM_MIX_SETTINGS, bpmRange: 0 },
+    setRandomMixSettings: vi.fn<CourseRouteDeps['courseMaker']['maker']['setRandomMixSettings']>(),
+    defaultConnection: 'fade' as const,
+    setDefaultConnection: vi.fn<CourseRouteDeps['courseMaker']['maker']['setDefaultConnection']>(),
+  };
   const deps = {
     courses,
     library: {
@@ -116,13 +159,9 @@ function harness(options: { family?: 'built-in' | 'beatoraja'; beatorajaMounts?:
       recordCourseResult: vi.fn<CourseRouteDeps['records']['recordCourseResult']>(),
       recordDanRank: vi.fn<CourseRouteDeps['records']['recordDanRank']>(),
     },
-    courseMaker: {
-      maker: {
-        start: vi.fn<CourseRouteDeps['courseMaker']['maker']['start']>(),
-        drawRandomMix: drawRandomMix as unknown as CourseRouteDeps['courseMaker']['maker']['drawRandomMix'],
-      },
-    },
-    keysFilter: vi.fn<CourseRouteDeps['keysFilter']>(() => 'ALL'),
+    courseMaker: { maker },
+    promptRandomMix: vi.fn<CourseRouteDeps['promptRandomMix']>(async () => undefined),
+    random: () => 0.5,
     replayAutoSave: { saveCourse: vi.fn<CourseRouteDeps['replayAutoSave']['saveCourse']>() },
     leaderboard: { maybeSubmitCourse: vi.fn<CourseRouteDeps['leaderboard']['maybeSubmitCourse']>() },
     familyKits: { familyDispatchState: () => familyState(options.family ?? 'built-in') },
@@ -141,7 +180,7 @@ function harness(options: { family?: 'built-in' | 'beatoraja'; beatorajaMounts?:
   const route = new CourseRoute(deps);
   /** What the decide screen shown for the course leads to. */
   const decided = (): Parameters<CourseRouteDeps['showDecide']>[2] => deps.showDecide.mock.calls.at(-1)![2];
-  return { courses, deps, route, decided, drawRandomMix };
+  return { courses, deps, route, decided, maker };
 }
 
 /** Starts `course` and plays its first stage from its decide screen. */
@@ -201,35 +240,122 @@ describe('CourseRoute: starting a course', () => {
     expect(h.deps.showDecide).not.toHaveBeenCalled();
   });
 
-  test('a RANDOM MIX bar draws a course of hashed songs in the key filter mode, then plays it', async () => {
+  test('a RANDOM MIX bar asks for its conditions first; cancelling starts nothing but keeps the edits', async () => {
     const h = harness();
-    const bar = grade([], { randomMix: true });
-    const mix = { ...bar, definition: { ...bar.definition, kind: 'expert' as const } };
-    await h.route.startCourse(mix);
-    expect(h.deps.setStatus).toHaveBeenLastCalledWith('RANDOM MIX: no chart matches the RANDOM MIX settings');
-    expect(h.drawRandomMix).toHaveBeenLastCalledWith('expert', 7, [], Math.random);
+    await h.route.startCourse(randomMixBar('expert'));
+    const [request] = h.deps.promptRandomMix.mock.calls[0]!;
+    expect(request).toMatchObject({
+      kind: 'expert',
+      keyModes: [5],
+      initial: DEFAULT_RANDOM_MIX_CONDITIONS,
+      settings: h.maker.randomMixSettings,
+      defaultConnection: 'fade',
+    });
+    expect(request.countMatches(MIX5)).toBe(2);
+    expect(request.countMatches({ ...MIX5, keyModes: [14] })).toBe(0);
     expect(h.deps.showDecide).not.toHaveBeenCalled();
+    expect(h.maker.setRandomMixConditions).not.toHaveBeenCalled();
+    // Nothing was hashed to open the dialog.
+    expect(h.deps.records.resolveChartHashes).not.toHaveBeenCalled();
+    // A dialog cancelled after edits keeps them for the next one, and starts nothing.
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 7, loops: 'infinity' }, false));
+    await h.route.startCourse(randomMixBar('expert'));
+    expect(h.maker.randomMixConditions).toMatchObject({ count: 7, loops: 'infinity' });
+    expect(h.maker.setRandomMixSettings).toHaveBeenCalled();
+    expect(h.deps.showDecide).not.toHaveBeenCalled();
+    expect(h.courses.randomMixLoop).toBeUndefined();
+  });
 
-    h.deps.records.resolveChartHashes.mockImplementation(async (chart) =>
-      chart.id === 'a' ? { md5: 'A'.repeat(32), sha256: 'b'.repeat(64) } : undefined,
-    );
-    h.deps.keysFilter.mockReturnValue('KEYS_14');
-    const drawn = grade(['a']).definition;
-    h.drawRandomMix.mockImplementation((_kind, _keyMode, charts) => ({
-      ok: true,
-      course: { ...drawn, kind: 'expert' },
-      charts: [...charts],
-      settings: {} as never,
-    }));
-    await h.route.startCourse(mix, { autoPlay: true });
-    const [, keyMode, charts] = h.drawRandomMix.mock.calls.at(-1)!;
-    expect(keyMode).toBe(14);
-    expect(charts).toMatchObject([{ md5: 'a'.repeat(32), chart: { id: 'a' } }]);
-    expect(h.courses.active?.course).toMatchObject({ id: 'maker:expert#0', stages: [{ chart: { id: 'a' } }] });
+  test('confirmed conditions draw a kept course, hashing only the songs drawn, then play it', async () => {
+    const h = harness();
+    hashAll(h);
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 1 }));
+    await h.route.startCourse(randomMixBar('expert'), { autoPlay: true });
+    expect(h.maker.setRandomMixConditions).toHaveBeenCalledWith(expect.objectContaining({ count: 1 }));
+    expect(h.maker.setRandomMixSettings).toHaveBeenCalledWith(expect.objectContaining({ bpmRange: 0 }));
+    // Only a NONSTOP mix sets the connection.
+    expect(h.maker.setDefaultConnection).not.toHaveBeenCalled();
+    expect(h.deps.records.resolveChartHashes).toHaveBeenCalledTimes(1);
+    const kept = h.maker.keepRandomMix.mock.calls[0]![0];
+    expect(kept).toMatchObject({ name: 'RANDOM MIX', kind: 'expert', release: false });
+    expect(kept.stages).toHaveLength(1);
+    expect(h.courses.active?.course).toMatchObject({ id: 'maker:expert#0', definition: kept });
+    expect(h.courses.active?.unkept).toBeUndefined();
     expect(h.courses.autoPlay).toBe(true);
-    // Back on the select screen, the cursor is on the drawn course, the newest of its folder.
+    // Back on the select screen, the cursor is on the drawn course, the newest of its folder; the loop is over.
     h.decided().cancel!();
     expect(h.courses.takeReturnNavigation()).toEqual({ ...AT_COURSE_BAR, focusKey: 'course:maker:expert#0' });
+    expect(h.courses.randomMixLoop).toBeUndefined();
+  });
+
+  test('says so when no song can be drawn', async () => {
+    const h = harness();
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 3 }));
+    await h.route.startCourse(randomMixBar('expert'));
+    expect(h.deps.setStatus).toHaveBeenLastCalledWith('RANDOM MIX: no chart matches the conditions');
+    expect(h.deps.showSelect).toHaveBeenCalled();
+    expect(h.maker.keepRandomMix).not.toHaveBeenCalled();
+  });
+
+  test('an endless mix draws each stage as the run reaches it and keeps no course or record', async () => {
+    const h = harness();
+    hashAll(h);
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 'infinity' }));
+    await h.route.startCourse(randomMixBar('expert'));
+    const active = h.courses.active!;
+    expect(active.unkept).toBe(true);
+    expect(active.run.endless).toBe(true);
+    expect(active.run.stageCount).toBe(1);
+    // The bar lists the stage drawn ahead, so stage 1 is not the final one.
+    expect(active.course.stages).toHaveLength(2);
+    expect(h.maker.keepRandomMix).not.toHaveBeenCalled();
+    await h.decided().start();
+    expect(h.deps.setStatus).toHaveBeenLastCalledWith('RANDOM MIX: stage 1 / ∞');
+    active.run.recordStage(stageLog(70, { course: { kind: 'expert' } }));
+    expect(h.route.continueCourse()).toBe(true);
+    await vi.waitFor(() => expect(h.deps.playChart).toHaveBeenCalledTimes(2));
+    expect(active.run.stageCount).toBe(2);
+    expect(h.deps.setStatus).toHaveBeenLastCalledWith('RANDOM MIX: stage 2 / ∞');
+    // The run ends when a stage fails: its course result keeps no record.
+    active.run.recordStage(stageLog(0, { course: { kind: 'expert' } }));
+    expect(h.route.continueCourse()).toBe(true);
+    await vi.waitFor(() => expect(h.deps.showResult).toHaveBeenCalled());
+    expect(h.deps.records.recordCourseResult).not.toHaveBeenCalled();
+    expect(h.deps.replayAutoSave.saveCourse).toHaveBeenCalled();
+    expect(h.deps.showResult.mock.calls[0]![1].course.stages).toHaveLength(2);
+  });
+
+  test('a loop draws its next run as the select screen would come back, and ends after its last', async () => {
+    const h = harness();
+    hashAll(h);
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 1, loops: 2 }));
+    await h.route.startCourse(randomMixBar('expert'));
+    expect(h.courses.randomMixLoop).toEqual({ kind: 'expert', loop: 1, loops: 2 });
+    await h.decided().start();
+    h.courses.active!.run.recordStage(stageLog(70, { course: { kind: 'expert' } }));
+    await h.route.showCourseResult();
+    expect(h.route.continueRandomMixLoop()).toBe(true);
+    await vi.waitFor(() => expect(h.deps.showDecide).toHaveBeenCalledTimes(2));
+    expect(h.deps.setStatus).toHaveBeenCalledWith('RANDOM MIX: loop 2 / 2');
+    await h.decided().start();
+    h.courses.active!.run.recordStage(stageLog(70, { course: { kind: 'expert' } }));
+    await h.route.showCourseResult();
+    expect(h.route.continueRandomMixLoop()).toBe(false);
+    expect(h.courses.randomMixLoop).toBeUndefined();
+  });
+
+  test('a NONSTOP mix goes to the NONSTOP route, at most five songs, and backing out ends its loop', async () => {
+    const h = harness();
+    hashAll(h);
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 'infinity', loops: 'infinity' }));
+    await h.route.startCourse(randomMixBar('nonstop'));
+    const [course, options] = h.deps.startNonstopCourse.mock.calls[0]!;
+    expect(course.definition.kind).toBe('nonstop');
+    expect(course.stages).toHaveLength(2);
+    expect(h.maker.keepRandomMix).toHaveBeenCalled();
+    expect(h.maker.setDefaultConnection).toHaveBeenCalledWith('fade');
+    options.cancel!();
+    expect(h.courses.randomMixLoop).toBeUndefined();
   });
 
   test('a NONSTOP course goes to the NONSTOP route with its decide screen, and keeps no run', async () => {

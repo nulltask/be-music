@@ -15,6 +15,34 @@ defineServiceUI();
 const status = document.querySelector<BeMusicStatusElement>('#status')!;
 const messages = clientMessages(document.documentElement.lang);
 
+const welcome = document.querySelector<HTMLElement>('[data-welcome]');
+/** The app's sign-in request the welcome returns to (`oauth_query`), kept from the sign-in page through the welcome. */
+const welcomeQuery = welcome === null ? '' : (new URLSearchParams(location.search).get('oauth_query') ?? '');
+
+/** Goes back to the app that asked for the sign-in (`oauthQuery`), or to `fallback` on this host. */
+async function continueSignIn(oauthQuery: string, fallback: string): Promise<void> {
+  if (!oauthQuery) {
+    location.assign(fallback);
+    return;
+  }
+  const continued = await auth.$fetch<{ url?: string }>('/oauth2/continue', {
+    method: 'POST',
+    body: { selected: true, oauth_query: oauthQuery },
+  });
+  if (continued.data?.url) {
+    location.assign(continued.data.url);
+    return;
+  }
+  status.message = continued.error?.message ?? messages.continueFailed;
+}
+
+/** Whether the signed-in account has yet to see the welcome after signing up. */
+async function needsWelcome(): Promise<boolean> {
+  const response = await fetch('/api/profile');
+  if (!response.ok) return false;
+  return ((await response.json()) as { onboarded?: boolean }).onboarded === false;
+}
+
 async function done(result: unknown): Promise<void> {
   const value = result as { error?: { message?: string }; data?: { url?: string; redirect?: boolean } } | undefined;
   if (value?.error) {
@@ -22,20 +50,36 @@ async function done(result: unknown): Promise<void> {
     return;
   }
   if (value?.data?.url) {
+    // Signing in for an app answers with the app's return URL at once. A new account is welcomed first; the welcome
+    // asks for a fresh return URL when it is done, and the one here goes unused.
+    if (query && (await needsWelcome())) {
+      location.assign(`/welcome?${new URLSearchParams({ oauth_query: query })}`);
+      return;
+    }
     location.assign(value.data.url);
     return;
   }
-  if (query) {
-    const continued = await auth.$fetch<{ url?: string }>('/oauth2/continue', {
-      method: 'POST',
-      body: { selected: true, oauth_query: query },
-    });
-    if (continued.data?.url) {
-      location.assign(continued.data.url);
-      return;
-    }
-    status.message = continued.error?.message ?? messages.continueFailed;
-  } else location.assign('/account');
+  // On the welcome, keeping the account goes on to its last step.
+  if (welcome !== null) {
+    showWelcomeStep('finish');
+    return;
+  }
+  // A new account is welcomed first, before going back to the app (docs/services.md, "Welcome after sign-up").
+  if (await needsWelcome()) {
+    const params = new URLSearchParams(query ? { oauth_query: query } : { next: '/account' });
+    location.assign(`/welcome?${params}`);
+    return;
+  }
+  await continueSignIn(query, '/account');
+}
+
+/** Shows one step of the welcome; the last one records the welcome as done. */
+function showWelcomeStep(step: string): void {
+  for (const section of document.querySelectorAll<HTMLElement>('[data-welcome-step]')) {
+    section.hidden = section.dataset.welcomeStep !== step;
+  }
+  document.querySelector<HTMLElement>(`[data-welcome-step="${step}"] h2`)?.focus();
+  if (step === 'finish') void fetch('/api/profile/onboarded', { method: 'POST' });
 }
 document.addEventListener('click', (event) => {
   const button = (event.target as Element).closest<HTMLButtonElement>('button[data-action], button[data-auth-action]');
@@ -51,18 +95,32 @@ document.addEventListener('click', (event) => {
         return done(await auth.signIn.anonymous());
       case 'passkey':
         return done(await auth.signIn.passkey());
+      case 'passkey-start': {
+        // A new account with a passkey: a guest account, kept at once by the passkey made for it.
+        const started = (await auth.signIn.anonymous()) as { error?: { message?: string } } | undefined;
+        if (started?.error) return done(started);
+        await auth.passkey.addPasskey({ name: 'Be-Music' });
+        return done(undefined);
+      }
+      case 'welcome-finish': {
+        await fetch('/api/profile/onboarded', { method: 'POST' });
+        return continueSignIn(welcomeQuery, welcome?.dataset.welcomeNext ?? '/account');
+      }
       case 'discord':
       case 'google':
         return done(await auth.signIn.social({ provider: action, callbackURL: '/account' }));
       case 'link-discord':
-      case 'link-google':
+      case 'link-google': {
+        // From the welcome, linking comes back to its last step, keeping where the welcome goes next.
+        const back = welcome === null ? '/account' : welcomeReturnURL('finish');
         return done(
           await auth.linkSocial({
             provider: action === 'link-discord' ? 'discord' : 'google',
-            callbackURL: '/account',
-            errorCallbackURL: '/account',
+            callbackURL: back,
+            errorCallbackURL: welcome === null ? '/account' : welcomeReturnURL('keep'),
           }),
         );
+      }
       case 'continue':
         return done(
           await auth.$fetch('/oauth2/continue', { method: 'POST', body: { selected: true, oauth_query: query } }),
@@ -162,3 +220,75 @@ document.querySelector<HTMLInputElement>('#avatar-input')?.addEventListener('cha
       input.disabled = false;
     });
 });
+
+/** This welcome's URL at `step`, keeping where it goes next and the app's sign-in request. */
+function welcomeReturnURL(step: 'keep' | 'finish'): string {
+  const params = new URLSearchParams(location.search);
+  params.set('step', step);
+  return `/welcome?${params}`;
+}
+
+// The welcome: the steps move forward without reloading, and its handle is checked as it is typed.
+if (welcome !== null) {
+  const initial = new URLSearchParams(location.search).get('step');
+  if (initial === 'finish' || initial === 'keep') showWelcomeStep(initial);
+  document.addEventListener('click', (event) => {
+    const target = (event.target as Element).closest<HTMLButtonElement>('button[data-welcome-go]');
+    if (target) showWelcomeStep(target.dataset.welcomeGo ?? 'finish');
+  });
+  const form = document.querySelector<HTMLFormElement>('#welcome-profile-form');
+  const handle = form?.querySelector<HTMLInputElement>('input[name="handle"]');
+  const handleStatus = document.querySelector<HTMLElement>('#welcome-handle-status');
+  const original = handle?.value ?? '';
+  let checking: ReturnType<typeof setTimeout> | undefined;
+  handle?.addEventListener('input', () => {
+    clearTimeout(checking);
+    if (!handleStatus) return;
+    const value = handle.value;
+    if (value === original) {
+      handleStatus.textContent = messages.welcome.handleHint;
+      return;
+    }
+    handleStatus.textContent = messages.welcome.handleChecking;
+    checking = setTimeout(() => {
+      void fetch(`/api/profile/handle?${new URLSearchParams({ value })}`)
+        .then((response) => response.json() as Promise<{ ok: boolean; reason?: 'format' | 'reserved' | 'taken' }>)
+        .then((result) => {
+          if (handle.value !== value) return;
+          handleStatus.textContent = result.ok
+            ? messages.welcome.handleFree
+            : messages.welcome.handle[result.reason ?? 'format'];
+        })
+        .catch(() => {
+          handleStatus.textContent = messages.welcome.handleHint;
+        });
+    }, 300);
+  });
+  form?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    button.disabled = true;
+    const entered = data.get('displayName');
+    const displayName = typeof entered === 'string' ? entered.trim() : '';
+    void fetch('/api/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ handle: data.get('handle'), ...(displayName ? { displayName } : {}) }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const body = (await response.json()) as { error?: string };
+          throw new Error(describeClientError(body.error, messages.profileFailed, messages));
+        }
+        status.message = '';
+        showWelcomeStep(form.dataset.next ?? 'finish');
+      })
+      .catch((error: Error) => {
+        status.message = error.message;
+      })
+      .finally(() => {
+        button.disabled = false;
+      });
+  });
+}

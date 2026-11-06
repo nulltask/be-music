@@ -4,6 +4,7 @@ import { optionLabel, splitOptionLabelSource } from './options/labels.ts';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
+import { skeletonTemplate } from '@be-music/service-web-theme/client';
 // The controls of the player's Options dialog and the beatoraja Skin Config panel, drawn with Basecoat: a switch for a
 // boolean, a select for a choice list, a slider with a number field for a number with a range, a text field, read-only
 // monitors (text, a text area, an FPS graph), buttons, collapsible folders and tabs. A control binds `object[key]`: an
@@ -40,6 +41,11 @@ export interface OptionBindingParams<T> {
   /** A monitor of `rows` lines. */
   readonly multiline?: boolean;
   readonly rows?: number;
+  /**
+   * A multiline monitor whose value is still being read: while this returns true the text area holds one blank line,
+   * the height a one-line value takes (it sizes to its content), and is `aria-busy`, with a shimmering line over it.
+   */
+  readonly busy?: () => boolean;
   /** A number monitor drawn as a graph of its last `bufferSize` samples, from `min` to `max`. */
   readonly view?: 'graph';
   readonly interval?: number;
@@ -78,6 +84,7 @@ export class OptionRow {
   protected language = 'en';
   private readonly localize: ((language: string) => void) | undefined;
   private disabledState = false;
+  private unavailableState = false;
 
   public constructor(element: HTMLElement, parent: OptionContainer | undefined, localize?: (language: string) => void) {
     this.element = element;
@@ -92,12 +99,30 @@ export class OptionRow {
     this.element.hidden = value;
   }
 
-  /** Disables every input, select and button in it; a disabled row is dimmed. */
+  /** Disables every input, select and button in it; a disabled row is dimmed. A play's lock sets it. */
   public get disabled(): boolean {
     return this.disabledState;
   }
   public set disabled(value: boolean) {
     this.disabledState = value;
+    this.applyDisabled();
+  }
+
+  /**
+   * Whether the other options make it meaningless (a hi-speed mode's own speed while another mode is on): it stays in
+   * place, dimmed and disabled like a {@link disabled} row, so the options never move under the player. Apart from
+   * {@link disabled}, so a play's lock and this never undo each other.
+   */
+  public get unavailable(): boolean {
+    return this.unavailableState;
+  }
+  public set unavailable(value: boolean) {
+    this.unavailableState = value;
+    this.applyDisabled();
+  }
+
+  private applyDisabled(): void {
+    const value = this.disabledState || this.unavailableState;
     this.element.toggleAttribute('data-disabled', value);
     for (const control of this.element.querySelectorAll<
       HTMLInputElement | HTMLSelectElement | HTMLButtonElement | HTMLTextAreaElement
@@ -349,16 +374,29 @@ export class OptionBinding<T = unknown> extends OptionRow {
           ></polyline>
         </svg>`;
     }
-    if (this.params.multiline === true)
+    if (this.params.multiline === true) {
+      const busy = this.params.busy?.() === true;
+      const rows = this.params.rows ?? 3;
       return html`${this.labelTemplate()}
-        <textarea
-          class="textarea options-monitor"
-          id=${this.id}
-          readonly
-          data-readonly
-          rows=${this.params.rows ?? 3}
-          .value=${live(displayText(value))}
-        ></textarea>`;
+        <div class="options-monitor-box">
+          <textarea
+            class="textarea options-monitor"
+            id=${this.id}
+            readonly
+            data-readonly
+            rows=${rows}
+            aria-busy=${ifDefined(busy ? 'true' : undefined)}
+            .value=${live(busy ? '\u00a0' : displayText(value))}
+          ></textarea>
+          ${
+            busy
+              ? html`<span class="options-monitor-skeleton" aria-hidden="true"
+                  >${skeletonTemplate({ shape: 'line', width: '60%' })}</span
+                >`
+              : nothing
+          }
+        </div>`;
+    }
     return html`${this.labelTemplate()}<output class="options-monitor-value" id=${this.id}
         >${displayText(value)}</output
       >`;

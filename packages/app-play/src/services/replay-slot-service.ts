@@ -83,6 +83,11 @@ export class ResultReplaySlots {
     );
   }
 
+  /** Whether the slots have been read, so the card can tell an empty slot from one not read yet. */
+  public get loaded(): boolean {
+    return this.store.loaded;
+  }
+
   /** The slots' records, for a card that names what each one holds. */
   public slots(): ReplaySlotList {
     return this.store.slots(this.target);

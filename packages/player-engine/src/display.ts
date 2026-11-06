@@ -31,11 +31,19 @@ export { DEFAULT_POOR_BGA_DISPLAY_SECONDS, pickActiveBGACue, pickActiveBGAKey } 
 export {
   formatSeconds,
   resolveAltModifierLabel,
+  resolveDisplayedDifficulty,
   resolveDisplayedDifficultyValue,
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
+  type DisplayedDifficulty,
 } from './utils.ts';
+export {
+  estimateDifficultyFromNames,
+  estimateDifficultyFromNoteCount,
+  type DifficultyBasis,
+  type DifficultyNames,
+} from './difficulty-estimate.ts';
 export {
   DEFAULT_TUI_NOTE_HEIGHT,
   MAX_TUI_NOTE_HEIGHT,
