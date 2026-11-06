@@ -77,6 +77,17 @@ export interface ChartScoreBar {
   readonly stops: readonly ChartScoreStop[];
   /** The judged notes that start in this bar (taps and long-note heads). */
   readonly noteCount: number;
+  /** The sounds that start in this bar: BGM, keysounds and invisible objects (`ResolvedChart.sampleTriggers`). */
+  readonly soundCount: number;
+}
+
+/** How {@link layoutChartScore} lays a chart out. */
+export interface ChartScoreLayoutOptions {
+  /**
+   * Leaves measure 0 out when it holds nothing ({@link isChartScoreBarEmpty}), so the score starts at measure 1, as
+   * many BMS charts begin with an empty lead-in measure. A measure 0 with anything in it stays.
+   */
+  readonly omitEmptyFirstBar?: boolean;
 }
 
 /** A chart laid out bar by bar ({@link layoutChartScore}). */
@@ -153,6 +164,7 @@ interface MutableBar {
   tempos: ChartScoreTempo[];
   stops: ChartScoreStop[];
   noteCount: number;
+  soundCount: number;
 }
 
 /**
@@ -164,6 +176,7 @@ interface MutableBar {
  */
 export function layoutChartScore(
   chart: Pick<ResolvedChart, 'layouts' | 'notes' | 'mines' | 'sampleTriggers' | 'beatResolver' | 'timing' | 'lnMode'>,
+  options: ChartScoreLayoutOptions = {},
 ): ChartScoreLayout {
   const layout = pickLayout(chart);
   const lanes: ChartScoreLane[] = (layout?.lanes ?? []).map((lane) => ({
@@ -199,6 +212,7 @@ export function layoutChartScore(
     tempos: [],
     stops: [],
     noteCount: 0,
+    soundCount: 0,
   }));
   const positionIn = (index: number, beat: number): number => {
     const head = heads[index]!;
@@ -246,6 +260,10 @@ export function layoutChartScore(
     bars[index]!.mines.push({ lane, position: positionIn(index, mine.beat) });
   }
 
+  for (const trigger of chart.sampleTriggers) {
+    if (Number.isFinite(trigger.beat)) bars[barIndexOf(heads, trigger.beat)]!.soundCount += 1;
+  }
+
   // Tempo changes after the start; the BPM the chart starts at is the layout's.
   const initialBPM = chart.timing.displayBPMAtBeat(heads[0]!);
   let currentBPM = initialBPM;
@@ -269,6 +287,7 @@ export function layoutChartScore(
     const beats = heads[measure + 1]! - heads[measure]!;
     if (!(beats > EPSILON)) continue;
     const bar = bars[measure]!;
+    if (measure === 0 && options.omitEmptyFirstBar === true && barCount > 1 && isChartScoreBarEmpty(bar)) continue;
     const sortByPosition = <T extends { position: number; lane?: number }>(items: T[]): T[] =>
       items.sort((left, right) => left.position - right.position || (left.lane ?? 0) - (right.lane ?? 0));
     laidOut.push({
@@ -283,6 +302,7 @@ export function layoutChartScore(
       tempos: sortByPosition(bar.tempos),
       stops: sortByPosition(bar.stops),
       noteCount: bar.noteCount,
+      soundCount: bar.soundCount,
     });
   }
   return {
@@ -292,6 +312,23 @@ export function layoutChartScore(
     initialBPM,
     noteCount,
   };
+}
+
+/**
+ * Whether a bar holds nothing: no note, long note or mine, no sound starting in it (BGM included), and no tempo change
+ * or stop. A long note running on into the bar counts as something in it.
+ */
+export function isChartScoreBarEmpty(
+  bar: Pick<ChartScoreBar, 'notes' | 'longNotes' | 'mines' | 'tempos' | 'stops' | 'soundCount'>,
+): boolean {
+  return (
+    bar.notes.length === 0 &&
+    bar.longNotes.length === 0 &&
+    bar.mines.length === 0 &&
+    bar.tempos.length === 0 &&
+    bar.stops.length === 0 &&
+    bar.soundCount === 0
+  );
 }
 
 /**

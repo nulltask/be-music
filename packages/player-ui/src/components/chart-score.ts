@@ -42,7 +42,7 @@ function formatMeasure(measure: number): string {
  * stops beside it. Lay a resolved chart out with `layoutChartScore` and hand it over as `layout`.
  *
  * The bars are a selection: a press picks a bar, Shift (or a drag) runs the selection from the bar pressed first, and
- * the arrow keys move between bars (Shift extends) and Space presses. Each pick fires `bar-selection-change`; `previewing` marks the bar
+ * the arrow keys move between bars (Shift extends) and Space presses. Each pick fires `bar-selection-change`; `previewing` marks the bar (or run)
  * the host is sounding.
  */
 export class BeMusicChartScoreElement extends BeMusicElement {
@@ -156,9 +156,7 @@ export class BeMusicChartScoreElement extends BeMusicElement {
         pointer-events: none;
       }
       .previewing {
-        fill: none;
-        stroke: var(--chart-score-preview);
-        stroke-width: 2;
+        fill: var(--chart-score-preview);
         pointer-events: none;
       }
       .hit:focus-visible {
@@ -175,8 +173,8 @@ export class BeMusicChartScoreElement extends BeMusicElement {
   declare layout: ChartScoreLayout | undefined;
   /** The bars selected, as `bar-selection-change` last reported them (or as the host sets them). */
   declare selection: ChartScoreBarRange | undefined;
-  /** The bar the host is sounding, outlined. */
-  declare previewing: number | undefined;
+  /** The bar (or the run of bars) the host is sounding, outlined. */
+  declare previewing: number | ChartScoreBarRange | undefined;
   /** How many beats a column holds (default 16: four 4/4 bars). */
   declare columnBeats: number;
   /** How tall a beat is, in CSS pixels (default 16). */
@@ -284,6 +282,33 @@ export class BeMusicChartScoreElement extends BeMusicElement {
     });
   };
 
+  /**
+   * The bar's part of the outline around the bars sounding: one frame around the whole run, its sides on every bar and
+   * its top and bottom only where the run (or its column) ends, 2 px inside the lanes.
+   */
+  private renderPreviewOutline(
+    index: number,
+    box: ChartScoreBarBox,
+    lanes: ChartScoreLaneGeometry,
+    laneWidth: number,
+    edges: { readonly columnBottom: boolean; readonly columnTop: boolean },
+  ): TemplateResult {
+    const height = box.bottom - box.top;
+    const bottom = edges.columnBottom || !this.isPreviewing(index - 1);
+    const top = edges.columnTop || !this.isPreviewing(index + 1);
+    return svg`<rect class="previewing" x=${lanes.left} y=${box.top} width="2" height=${height}></rect>
+      <rect class="previewing" x=${lanes.right - 2} y=${box.top} width="2" height=${height}></rect>
+      ${top ? svg`<rect class="previewing" x=${lanes.left} y=${box.top} width=${laneWidth} height="2"></rect>` : nothing}
+      ${bottom ? svg`<rect class="previewing" x=${lanes.left} y=${box.bottom - 2} width=${laneWidth} height="2"></rect>` : nothing}`;
+  }
+
+  private isPreviewing(index: number): boolean {
+    const previewing = this.previewing;
+    if (previewing === undefined) return false;
+    if (typeof previewing === 'number') return previewing === index;
+    return index >= Math.min(previewing.first, previewing.last) && index <= Math.max(previewing.first, previewing.last);
+  }
+
   protected override render(): TemplateResult {
     const layout = this.layout;
     if (layout === undefined || layout.bars.length === 0)
@@ -336,7 +361,12 @@ export class BeMusicChartScoreElement extends BeMusicElement {
         (box) => svg`<rect class="lane" x=${box.x} y="0" width=${box.width} height=${column.height + 1}></rect>
           <rect class="lane-edge" x=${box.x + box.width - 1} y="0" width="1" height=${column.height + 1}></rect>`,
       )}
-      ${bars.map((bar, slot) => this.renderBar(bar, column.bars[slot]!, layout, lanes, laneWidth))}
+      ${bars.map((bar, slot) =>
+        this.renderBar(bar, column.bars[slot]!, layout, lanes, laneWidth, {
+          columnBottom: slot === 0,
+          columnTop: slot === bars.length - 1,
+        }),
+      )}
     </svg>`;
   }
 
@@ -346,6 +376,7 @@ export class BeMusicChartScoreElement extends BeMusicElement {
     layout: ChartScoreLayout,
     lanes: ChartScoreLaneGeometry,
     laneWidth: number,
+    edges: { readonly columnBottom: boolean; readonly columnTop: boolean },
   ): TemplateResult {
     const height = box.bottom - box.top;
     const selected =
@@ -399,11 +430,7 @@ export class BeMusicChartScoreElement extends BeMusicElement {
         return svg`<rect class="mine" x=${lane.x + 2} y=${y - 2} width=${lane.width - 5} height="2"></rect>`;
       })}
       ${labels}
-      ${
-        this.previewing === bar.index
-          ? svg`<rect class="previewing" x=${lanes.left} y=${box.top + 1} width=${laneWidth - 1} height=${height - 2}></rect>`
-          : nothing
-      }
+      ${this.isPreviewing(bar.index) ? this.renderPreviewOutline(bar.index, box, lanes, laneWidth, edges) : nothing}
       <rect
         class="hit"
         data-bar=${bar.index}

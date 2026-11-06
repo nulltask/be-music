@@ -3,14 +3,18 @@ import { parseChart } from '@be-music/chart-parser';
 import { describe, expect, it } from 'vite-plus/test';
 import {
   chartScoreRangeTimes,
+  isChartScoreBarEmpty,
   layoutChartScore,
   packChartScoreColumns,
   selectChartScoreBars,
   type ChartScoreLayout,
 } from './layout.ts';
 
-function layout(lines: readonly string[]): ChartScoreLayout {
-  return layoutChartScore(resolveChart(parseChart(['#WAV01 a.wav', '#WAV02 b.wav', ...lines].join('\n'), 'bms')));
+function layout(lines: readonly string[], options?: Parameters<typeof layoutChartScore>[1]): ChartScoreLayout {
+  return layoutChartScore(
+    resolveChart(parseChart(['#WAV01 a.wav', '#WAV02 b.wav', ...lines].join('\n'), 'bms')),
+    options,
+  );
 }
 
 describe('layoutChartScore', () => {
@@ -178,5 +182,54 @@ describe('chartScoreRangeTimes', () => {
 
   it('reads nothing outside the score', () => {
     expect(chartScoreRangeTimes(score, { first: 2, last: 9 })).toBeUndefined();
+  });
+});
+
+describe('omitEmptyFirstBar', () => {
+  const omit = { omitEmptyFirstBar: true };
+
+  it('starts the score at measure 1 when measure 0 holds nothing, numbering the bars from there', () => {
+    const score = layout(['#BPM 120', '#00111:01', '#00211:01'], omit);
+    expect(score.bars.map((bar) => [bar.index, bar.measure, bar.startMs])).toEqual([
+      [0, 1, 2000],
+      [1, 2, 4000],
+    ]);
+    expect(chartScoreRangeTimes(score, { first: 0, last: 0 })).toEqual({ startMs: 2000, endMs: 4000 });
+  });
+
+  it('keeps measure 0 with a note, a BGM sound, a tempo change or a stop in it', () => {
+    for (const line of ['#00011:01', '#00001:02', '#00008:0001', '#00009:01']) {
+      const score = layout(['#BPM 120', '#BPM01 150', '#STOP01 48', line, '#00111:01'], omit);
+      expect(score.bars[0]!.measure, line).toBe(0);
+    }
+  });
+
+  it('keeps measure 0 by default', () => {
+    expect(layout(['#BPM 120', '#00111:01']).bars[0]!.measure).toBe(0);
+  });
+});
+
+describe('isChartScoreBarEmpty', () => {
+  const empty = { notes: [], longNotes: [], mines: [], tempos: [], stops: [], soundCount: 0 };
+
+  it('is empty with nothing in the bar', () => {
+    expect(isChartScoreBarEmpty(empty)).toBe(true);
+  });
+
+  it('is not empty with any note, long note, mine, tempo change, stop or sound', () => {
+    for (const bar of [
+      { ...empty, notes: [{ lane: 0, position: 0 }] },
+      { ...empty, longNotes: [{ lane: 0, from: 0, to: 1, head: false, tail: false, mode: 1 as const }] },
+      { ...empty, mines: [{ lane: 0, position: 0.5 }] },
+      { ...empty, tempos: [{ position: 0.5, bpm: 180 }] },
+      { ...empty, stops: [{ position: 0, durationMs: 500 }] },
+      { ...empty, soundCount: 1 },
+    ])
+      expect(isChartScoreBarEmpty(bar)).toBe(false);
+  });
+
+  it('counts the sounds starting in each bar', () => {
+    const score = layout(['#BPM 120', '#00001:0202', '#00111:01']);
+    expect(score.bars.map((bar) => bar.soundCount)).toEqual([2, 1]);
   });
 });
