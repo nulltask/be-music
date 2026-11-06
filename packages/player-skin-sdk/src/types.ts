@@ -749,7 +749,7 @@ export interface BeMusicSelectActions {
   /** Moves one play option to its next (`step` 1, the default) or previous (`-1`) choice, wrapping around. */
   cyclePlayOption(key: keyof BeMusicPlayOptions, step?: 1 | -1): void;
   /** Opens or closes the focused song's readme (the `.txt` beside the chart), when it has one. */
-  toggleReadme(): void;
+  toggleReadme: () => void;
 }
 
 /**
@@ -802,6 +802,11 @@ export interface BeMusicSelectFrame {
    */
   searchEditing?: boolean;
   totalCharts: number;
+  /**
+   * Whether the chart under the cursor has a README (a `.txt` file beside it) for {@link BeMusicSelectActions.toggleReadme}
+   * to show: draw a README button enabled only then. Absent from hosts that predate it.
+   */
+  hasReadme?: boolean;
   actions: BeMusicSelectActions;
   effects: BeMusicEffectLevel;
   /** `performance.now()` when a chart was launched and the skin's outro is playing, otherwise `undefined`. */

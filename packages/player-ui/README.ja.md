@@ -24,7 +24,8 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 | `be-music-timing-graph`      | `data: BeMusicTimingData`                                                                        |
 | `be-music-play-settings`     | `data: BeMusicSettingsData`                                                                      |
 | `be-music-chart-list`        | `entries`・`selectedIndex`・`disabled`                                                           |
-| `be-music-chart-details`     | `entry`・`launching`・`readText`                                                                 |
+| `be-music-chart-details`     | `entry`・`launching`・`readmeAvailable`                                                          |
+| `be-music-readme-dialog`     | `text`（設定している間は開く）・`heading`・`subheading`・`hint`                                  |
 | `be-music-play-options`      | `options`・`choices`・`disabled`                                                                 |
 | `be-music-select-screen`     | `frame: BeMusicDOMSelectFrame`                                                                   |
 | `be-music-gameplay-hud`      | `frame: BeMusicDOMGameplayFrame`                                                                 |
@@ -45,6 +46,10 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 | `be-music-chart-score`       | `layout: ChartScoreLayout`・`selection`・`previewing`・`column-beats`・`beat-height`・`disabled` |
 
 各クラスを `BeMusic…Element` として export します。ラッパーは `BeMusicGameplayHUD`・`BeMusicJudgmentTable` のように `Element` を除いた名前です。個々の部品は自身に必要な表示データだけを受け取り、独立して配置できます。画面コンポーネントはそれらを組み合わせ、既存の DOM スキンフレームを受け取ります。
+
+## README ダイアログ
+
+`be-music-readme-dialog` は、譜面に同梱された README などのテキストファイルを等幅フォントで表示する、Basecoat のモーダルダイアログです（`--be-music-readme-font` でフォントを変えられます）。`text` を設定している間は開きます。`splitLinkedText(text)` はテキストを、ただの文字列とリンク（`https://`・`http://`・掲示板時代の `ttp://`・`www.` で始まるアドレス・メールアドレス）に分けます。要素はそこからテキストノードとアンカーを組み立てるので、テキストを HTML として解釈することはありません。リンクは `rel="noopener noreferrer"` 付きで新しいタブで開きます。ダイアログは自分では閉じません。閉じるボタン・Escape・背景のクリックで `readme-close` を送り、持ち主が `text` を消します。キーを自分で受け取るホストは `scrollTextBy(delta)` でスクロールします。`be-music-chart-details` は Readme ボタンで `readme-request` を送ります。`readmeAvailable` が `false` のときボタンは無効です。
 
 ## プレイフィールド
 
