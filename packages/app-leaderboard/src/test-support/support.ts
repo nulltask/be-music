@@ -101,8 +101,8 @@ export function makeReplay(
     const timeUs = 1_000_000 + index * 500_000;
     notes.push({ id: index, channel: '11', type: 'normal', timeUs });
     if (index >= skip && index < skip + options.hits) {
-      inputs.push({ seq: inputs.length, timeUs, action: 'down', channels: ['11'] });
-      inputs.push({ seq: inputs.length, timeUs: timeUs + 50_000, action: 'up', channels: ['11'] });
+      inputs.push({ seq: inputs.length, timeUs, action: 'down', channels: ['11'], source: 0 });
+      inputs.push({ seq: inputs.length, timeUs: timeUs + 50_000, action: 'up', channels: ['11'], source: 0 });
     }
   }
   return {
@@ -123,7 +123,14 @@ export function makeReplay(
       ...options.chart,
     },
     inputs,
-    play: { mode: 'manual', autoScratch: false, gauge: 'EASY', judgeRuleset: 'lr2', ...options.play },
+    play: {
+      mode: 'manual',
+      autoScratch: false,
+      gauge: 'EASY',
+      judgeRuleset: 'lr2',
+      ...options.play,
+      inputSources: options.play?.inputSources ?? [{ id: 0, kind: 'key', device: 'keyboard', label: 'z' }],
+    },
   };
 }
 
