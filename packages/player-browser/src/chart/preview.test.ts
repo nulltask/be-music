@@ -15,7 +15,9 @@ import {
   LR2_PREVIEW_FOCUS_DELAY_MS,
   resolveChartPreviewLevel,
   resolveChartPreviewPath,
+  resolveChartWindowCarryOver,
   resolvePreviewFallbackFade,
+  selectChartWindowCarryOvers,
   selectChartWindowTriggers,
 } from './preview.ts';
 
@@ -392,6 +394,33 @@ describe('ChartPreviewEngine.playWindow', () => {
     expect(vi.mocked(audioContext.decodeAudioData)).toHaveBeenCalledTimes(2);
   });
 
+  test('starts a sample from before the window that still sounds at its start partway, as a seek there does', async () => {
+    // 120 BPM: a 4 s BGM sample from the chart's start still sounds 2 s in, at bar 1's line.
+    const chart = createEmptyJSON('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = Array.from({ length: 3 }, (_, index) => ({ index, length: 1 }));
+    chart.events = [
+      { measure: 0, channel: '01', position: [0, 1], value: 'LL' },
+      { measure: 1, channel: '11', position: [1, 2], value: 'BB' },
+    ];
+    chart.resources.wav = { LL: 'long.wav', BB: 'key.wav' };
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    vi.mocked(audioContext.decodeAudioData).mockImplementation(async (bytes: ArrayBuffer) =>
+      makeMockAudioBuffer(new Uint8Array(bytes)[0] === 9 ? 4 : 1),
+    );
+    collectionMocks.loadAssetBytes.mockImplementation(
+      async (entry: { path: string }) => new Uint8Array([entry.path === 'long.wav' ? 9 : 1]),
+    );
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0 });
+
+    engine.playWindow(makePreviewTarget(chart), { startSeconds: 2, endSeconds: 4 });
+
+    await vi.waitFor(() => expect(sources).toHaveLength(2));
+    // The long sample 2 s in at once, then the keysound a second later.
+    expect(sources[0]!.start).toHaveBeenCalledWith(0.02, 2);
+    expect(sources[1]!.start).toHaveBeenCalledWith(1.02, 0);
+  });
+
   test('stops with a focus on nothing, even though no chart was focused', async () => {
     const chart = barChart();
     const { audioContext, output, sources } = makePreviewAudioMocks();
@@ -417,6 +446,53 @@ describe('selectChartWindowTriggers', () => {
 
   test('keeps nothing for an empty window', () => {
     expect(selectChartWindowTriggers(triggers, { startSeconds: 2, endSeconds: 2 })).toEqual([]);
+  });
+});
+
+describe('selectChartWindowCarryOvers', () => {
+  const trigger = (seconds: number, sampleKey: string, continued = false) =>
+    ({ seconds, sampleKey, event: continued ? { bmson: { c: true } } : {} }) as unknown as TimedSampleTrigger;
+  const triggers = [
+    trigger(0, 'AA'),
+    trigger(1, 'BB'),
+    trigger(1.5, 'AA'),
+    trigger(2, 'CC'),
+    trigger(1.8, 'DD', true),
+  ].sort((left, right) => left.seconds - right.seconds);
+
+  test('keeps each slot’s last trigger before the window when a retrigger cuts the slot', () => {
+    expect(
+      selectChartWindowCarryOvers(triggers, { startSeconds: 2 }, true).map((t) => [t.seconds, t.sampleKey]),
+    ).toEqual([
+      [1, 'BB'],
+      [1.5, 'AA'],
+    ]);
+  });
+
+  test('keeps every trigger before the window when samples overlap, but no bmson continuation', () => {
+    expect(selectChartWindowCarryOvers(triggers, { startSeconds: 2 }, false).map((t) => t.seconds)).toEqual([
+      0, 1, 1.5,
+    ]);
+  });
+});
+
+describe('resolveChartWindowCarryOver', () => {
+  test('starts a whole sample as far in as the window is past its trigger', () => {
+    expect(resolveChartWindowCarryOver({ seconds: 1, sampleOffsetSeconds: 0 }, 4, 2.5)).toEqual({ offsetSeconds: 1.5 });
+  });
+
+  test('starts a bmson slice partway with what is left of it', () => {
+    expect(
+      resolveChartWindowCarryOver({ seconds: 1, sampleOffsetSeconds: 10, sampleDurationSeconds: 3 }, 60, 2),
+    ).toEqual({ offsetSeconds: 11, durationSeconds: 2 });
+  });
+
+  test('drops a sample that has finished, or one that does not start before the window', () => {
+    expect(resolveChartWindowCarryOver({ seconds: 1, sampleOffsetSeconds: 0 }, 1, 2)).toBeUndefined();
+    expect(
+      resolveChartWindowCarryOver({ seconds: 1, sampleOffsetSeconds: 0, sampleDurationSeconds: 0.5 }, 9, 2),
+    ).toBeUndefined();
+    expect(resolveChartWindowCarryOver({ seconds: 2, sampleOffsetSeconds: 0 }, 4, 2)).toBeUndefined();
   });
 });
 
