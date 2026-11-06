@@ -265,6 +265,66 @@ describe('POST /api/v0/scores', () => {
     expect(malformed.status).toBe(422);
     expect(((await malformed.json()) as { error: string }).error).toBe('invalid-replay');
   });
+
+  // #605: every input names a source in `play.inputSources`. Replays recorded before input sources are refused rather
+  // than guessed, and a source carries a coarse device class and a normalised label only.
+  test('rejects replays without a valid input-source table', async () => {
+    const cookie = await signInAnonymously(fetchApp);
+    const replay = makeReplay(chart, { noteCount: 10, hits: 10 });
+    const refusals = [
+      // A log recorded before input sources: no table, and inputs that still carry tokens.
+      {
+        ...replay,
+        play: { ...replay.play, inputSources: undefined },
+        inputs: replay.inputs.map(({ source: _source, ...input }) => ({ ...input, tokens: ['z'] })),
+      },
+      // An input naming a source the table does not hold.
+      { ...replay, inputs: replay.inputs.map((input) => ({ ...input, source: 7 })) },
+      // A device string in a label.
+      {
+        ...replay,
+        play: {
+          ...replay.play,
+          inputSources: [{ id: 0, kind: 'key', device: 'keyboard', label: 'USB Keyboard (Vendor: 04d9)' }],
+        },
+      },
+      // A turntable source without its direction.
+      {
+        ...replay,
+        play: { ...replay.play, inputSources: [{ id: 0, kind: 'turntable', device: 'controller', label: 'tt' }] },
+      },
+    ];
+    for (const refused of refusals) {
+      const response = await submit(cookie, submissionBody(refused, chart.playDocument, chart.chartDocument));
+      expect(response.status).toBe(422);
+      expect(((await response.json()) as { error: string }).error).toBe('invalid-replay');
+    }
+  });
+
+  test('accepts a play on a turntable controller, and stores its input sources as submitted', async () => {
+    const cookie = await signInAnonymously(fetchApp);
+    const inputSources = [
+      { id: 0, kind: 'turntable', device: 'controller', label: 'tt', direction: 'up' },
+      { id: 1, kind: 'button', device: 'controller', label: 'b1' },
+    ] as const;
+    const replay = makeReplay(chart, {
+      noteCount: 10,
+      hits: 10,
+      play: {
+        inputSources: [...inputSources],
+        analogScratch: { algorithm: 'be-music/1', thresholdTicks: 2, stopMs: 100 },
+      },
+    });
+    const played = { ...replay, inputs: replay.inputs.map((input) => ({ ...input, source: 1 })) };
+    const response = await submit(cookie, submissionBody(played, chart.playDocument, chart.chartDocument));
+    expect(response.status).toBe(201);
+    const { scoreId } = (await response.json()) as { scoreId: string };
+    const object = await env.BLOBS.get(`replays/${scoreId}.bmplay.json.gz`);
+    const kept = JSON.parse(gunzipSync(Buffer.from(await object!.arrayBuffer())).toString('utf8')) as typeof played;
+    expect(kept.play.inputSources).toEqual(inputSources);
+    expect(kept.play.analogScratch).toEqual({ algorithm: 'be-music/1', thresholdTicks: 2, stopMs: 100 });
+    expect(new Set(kept.inputs.map((input) => input.source))).toEqual(new Set([1]));
+  });
 });
 
 describe('rankings', () => {
