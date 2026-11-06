@@ -122,6 +122,7 @@ const NON_ELEMENT_EXPORTS = new Set([
   'paintPlayfieldParts',
   'formatPlaybackTime',
   'resolveSeekTarget',
+  'splitLinkedText',
   'resolveGameplayPanels',
   'previewContentBottom',
   'previewJudgementInset',
@@ -177,6 +178,12 @@ export const playerUIBenchmarkPackage: BenchmarkPackageDefinition = {
     define('player-ui.resolveSeekTarget', {
       run: () => {
         ui.resolveSeekTarget(118, 5, 120);
+      },
+    });
+    const readme = `${'BGA: someone / Objects: someone else\n'.repeat(40)}Site: https://example.com/bms/ mail: author@example.jp\n`;
+    define('player-ui.splitLinkedText', {
+      run: () => {
+        ui.splitLinkedText(readme);
       },
     });
     define('player-ui.resolveGameplayPanels', {
