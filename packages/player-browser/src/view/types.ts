@@ -135,7 +135,7 @@ export type SelectViewEvent =
   | { readonly kind: 'browse'; readonly event: BrowseEvent; readonly atMs: number }
   /** An option panel opened or closed (LR2's timers 21-29 and 31-39 start then). */
   | { readonly kind: 'panel'; readonly panel: number; readonly open: boolean; readonly atMs: number }
-  /** The README overlay scrolls by `delta` pixels (a key); the view clamps it to the text. */
+  /** The README dialog scrolls by `delta` pixels (a key); the view clamps it to the text. */
   | { readonly kind: 'readtext-scroll'; readonly delta: number };
 
 /** The course maker as a select skin shows it: the course being made and a new NONSTOP course's connection. */
@@ -189,7 +189,7 @@ export interface SelectFrame {
   readonly searchError?: string;
   /** When the player started the bar under the cursor: a skin's launch outro counts from it, and input waits. */
   readonly startedAtMs?: number;
-  /** The README overlay: the text file shown for a chart. */
+  /** The README dialog: the text file shown for a chart. */
   readonly readText?: { readonly chart: LibraryChart; readonly text: string };
   /** The course maker, when the player makes courses (LR2's course-maker ops, texts and buttons). */
   readonly courseMaker?: SelectCourseMakerState;

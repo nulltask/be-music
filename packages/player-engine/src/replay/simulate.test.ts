@@ -24,11 +24,11 @@ function note(timeUs: number, overrides: Partial<ReplayNote> = {}): ReplayNote {
 }
 
 function down(timeUs: number, channels: string[] = ['11']): Omit<ReplayInputEvent, 'seq'> {
-  return { timeUs, action: 'down', channels };
+  return { timeUs, action: 'down', channels, source: 0 };
 }
 
 function up(timeUs: number, channels: string[] = ['11']): Omit<ReplayInputEvent, 'seq'> {
-  return { timeUs, action: 'up', channels };
+  return { timeUs, action: 'up', channels, source: 0 };
 }
 
 interface MakeReplayOverrides {
@@ -55,7 +55,13 @@ function makeReplay(overrides: MakeReplayOverrides = {}): BeMusicReplay {
       ...overrides.chart,
     },
     inputs: (overrides.inputs ?? []).map((input, seq) => ({ ...input, seq })),
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', ...overrides.play },
+    play: {
+      mode: 'manual',
+      autoScratch: false,
+      gauge: 'GROOVE',
+      ...overrides.play,
+      inputSources: overrides.play?.inputSources ?? [{ id: 0, kind: 'key', device: 'keyboard', label: 'z' }],
+    },
   };
 }
 

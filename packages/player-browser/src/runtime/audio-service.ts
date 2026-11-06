@@ -35,7 +35,12 @@ import {
 } from '@be-music/skin-beatoraja';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import type { SystemSound, SystemSoundSet, SystemSoundSlot } from '@be-music/player-scene-model';
-import { ChartPreviewEngine, type ChartPreviewEngineOptions, type ChartPreviewTarget } from '../chart/preview.ts';
+import {
+  ChartPreviewEngine,
+  type ChartPreviewEngineOptions,
+  type ChartPreviewTarget,
+  type ChartPreviewWindow,
+} from '../chart/preview.ts';
 import { logger } from '../logger.ts';
 import type { BeatorajaSkinAudio } from '../skin/beatoraja/audio.ts';
 import { AudioAnalyzer, SILENT_AUDIO, type AudioFeatures } from './audio-analysis.ts';
@@ -87,6 +92,11 @@ export interface AudioServicePreview {
    * so focusing the same chart again re-arms it. The preview belongs to `owner` until the next focus.
    */
   focus(target: ChartPreviewTarget | undefined, owner?: AudioOwner): void;
+  /**
+   * Sounds `window` of the chart at once (a PRACTICE bar's audition, `ChartPreviewEngine.playWindow`), cutting the
+   * previous window or the focus preview short. The preview belongs to `owner` until the next focus or window.
+   */
+  playWindow(target: ChartPreviewTarget, window: ChartPreviewWindow, owner?: AudioOwner): void;
   /** Stops the preview and forgets the focus. */
   stop(): void;
   /** Whether a preview is audible now. */
@@ -114,6 +124,8 @@ export interface PlayAudioHandle extends PlayAudioGraph {
 /** The part of {@link ChartPreviewEngine} the service drives. */
 export interface ChartPreviewPlayer {
   focus(target: ChartPreviewTarget | undefined): void;
+  /** Sounds a window of a chart at once; an engine without it sounds nothing. */
+  playWindow?(target: ChartPreviewTarget, window: ChartPreviewWindow): void;
   stop(): void;
   dispose(): void;
 }
@@ -550,6 +562,14 @@ export function createAudioService(options: AudioServiceOptions = {}): AudioServ
       previewOwner = owner;
       if (system !== undefined) resumeContext(system.context);
       engine.focus(target);
+    },
+    playWindow(target, window, owner) {
+      if (disposed) return;
+      const engine = ensurePreview();
+      if (engine === undefined) return;
+      previewOwner = owner;
+      if (system !== undefined) resumeContext(system.context);
+      engine.playWindow?.(target, window);
     },
     stop() {
       previewEngine?.focus(undefined);

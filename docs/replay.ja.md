@@ -33,14 +33,15 @@ LR2 / beatoraja / 名前を言ってはいけないあのゲームのリザル�
    スコア対象ノートを未判定のまま残したプレイはゲージ 0 で終えます（[`bms-spec.ja.md`](./bms-spec.ja.md)「負の BPM」
    を参照）。
 2. **`inputs`** — プレイアブルレーンに届いた全ての生のキー押下・解放
-   （`{ seq, timeUs, action: 'down' | 'up', channels }`。ホストがキーを名付けたときは `tokens`、物理的な入力が
-   分かるときは `code`（キーボードの `KeyboardEvent.code`。`'KeyZ'` や `'ShiftLeft'` など。タッチレーンは `'touch'` で、
-   その `tokens` はレーンのキーボードのキーです。`tokens` と同じく診断用）、入力が解放を
-   伝えないため（kitty キーボードプロトコルのない端末）エンジンが推定した `up` には `inferred: true` が付きます。
-   これはエンジンがキーを離したとみなした瞬間です。`inferred` は診断用で、リプレイとシミュレータは他の `up` と
-   同じに読みます）。スクラッチの押下には、ターンテーブルを回した向き `spin: 'cw' | 'ccw'`（コントローラーが報告した
-   向き、またはキーボードの odd-even のキー）が付きます。バックスピンスクラッチの終点は始点を叩いた押下と逆向きの押下で
-   判定するため（`spin` のない押下、たとえばタッチのタップも逆向きとみなします）、シミュレータもこれを読みます（[`player-spec.ja.md`](./player-spec.ja.md#スクラッチの回転方向) を参照）。
+   （`{ seq, timeUs, action: 'down' | 'up', channels, source }`）。`source` は必須で、プレイの
+   [入力ソースの表](#入力ソース)（`play.inputSources`）にある物理的な入力の `id` です。`source` が正本です。判定と
+   シミュレータはスクラッチのホールドをこれで識別し（beatoraja のバックスピンスクラッチとスクラッチ LN の規則）、レーンの
+   ホールドと ANY KEY の割り当てもこれで行います。物理的な入力が分かるときは `code`（キーボードの `KeyboardEvent.code`。
+   `'KeyZ'` や `'ShiftLeft'` など。タッチレーンは `'touch'`。診断用）を持ち、入力が解放を伝えないため（kitty キーボード
+   プロトコルのない端末）エンジンが推定した `up` には `inferred: true` が付きます。これはエンジンがキーを離したとみなした
+   瞬間です。`inferred` は診断用で、リプレイとシミュレータは他の `up` と同じに読みます。スクラッチの押下には、表示用に
+   ターンテーブルを回した向き `spin: 'cw' | 'ccw'` が付くことがあります（リプレイのターンテーブルのアニメーション）。判定は
+   `source` を読みます（[`player-spec.ja.md`](./player-spec.ja.md#入力ソース) を参照）。
    入力は判定へ変換せず、ノート ID への割り当ても
    行わず、空 POOR の原因になる「ノートに対応しない入力」もすべて残します。ソートキーは常に
    `(timeUs, seq)` で、`seq` が同時刻イベントの順序を確定します。
@@ -80,6 +81,43 @@ LR2 / beatoraja / 名前を言ってはいけないあのゲームのリザル�
 `results.*.minePoor` は `judge.poor` に含まれる LR2 の地雷被弾数です。判定ノートを消費せず、コンボも切りません。コース BP では判定済みノート数から地雷を除き、POOR として各被弾を1回数えます。エンジンのサマリーと結果スコアも同じ任意フィールドを持ちます。修正後の beta3 地雷規則を適用するには、旧キャッシュを再シミュレーションし、保存済みの派生記録を再集計します。
 
 `results.*.fullCombo` は、beatoraja FIVEKEYS/PMS の空 POOR 後の終了時のフルコンボ可否を必要な場合に記録します。全ノート GOOD 以上も引き続き必要です。エンジンとシミュレータが現在のコンボから確定するため、最初のノートより前の空 POOR は、その後のフルコンボを妨げません。このフィールドのない旧キャッシュは判定数による互換動作を保つので、修正後のモード規則を適用するには再シミュレーションします。コース結果も可否を保持し、コース全体のコンボ条件と合わせて判定します。
+
+### 入力ソース
+
+`play.inputSources`（必須）は、プレイが使った物理的な入力を、最初に現れた順に `id` で番号付けして並べます。どの入力
+イベントも `source` でそのひとつを指します。キーボードのキー、コントローラーのボタン、タッチの領域、ターンテーブルの
+2 つの回転方向は、ひとつのモデルを共有します（#605、[ADR 0040](./adr/0040-replay-input-sources.ja.md)）。
+
+```jsonc
+"play": {
+  "inputSources": [
+    { "id": 0, "kind": "key", "device": "keyboard", "label": "shift-left" },
+    { "id": 1, "kind": "key", "device": "keyboard", "label": "ctrl-left" },
+    { "id": 2, "kind": "turntable", "device": "controller", "label": "tt", "direction": "up" },
+    { "id": 3, "kind": "turntable", "device": "controller", "label": "tt", "direction": "down" },
+    { "id": 4, "kind": "button", "device": "touch", "label": "z" }
+  ],
+  "analogScratch": { "algorithm": "be-music/1", "thresholdTicks": 2, "stopMs": 100 }
+}
+```
+
+- `kind`: `key` と `button` はデジタル入力、`turntable` はターンテーブルのひとつの回転方向で、`direction`（`up` か
+  `down`）が必須です。デバイスが軸を報告しても 2 つのボタンを報告しても、ターンテーブルは常に 2 つのソースです。
+- `device` は大まかな種別だけです。`keyboard`、`controller`、`touch` のいずれかです。`label` は正規化した名前（空白を
+  含まない小文字の印字可能 ASCII、32 文字以内）です。キーボードのキーの最初のトークン（`'shift-left'`、`'z'`）、タッチ
+  領域のレーンのキー、コントローラーの `b1` / `tt` などです。リプレイはデバイスを識別するデータを記録しません。
+  `Gamepad.id`、ベンダー ID やプロダクト ID、シリアルは記録しません。
+- レーンに割り当てた物理キーはそれぞれ独立したソースです。スクラッチレーンの Shift、Ctrl、Space は 3 つです。各レーンの
+  タッチ領域はひとつです。
+- `play.analogScratch`（省略可）は、ホストがアナログのターンテーブル軸を押下と解放に変えたときの、バージョン付きの
+  アルゴリズム名とそのパラメータを、監査と表示のために記録します。ログには変換後のイベントを記録し、軸の生のサンプルは
+  記録しません。シミュレータがアルゴリズムを実行し直すことはありません。
+
+`parseReplay` は、id の重複、未知の `kind` や `device`、正規化した名前でないラベル、`direction` のないターンテーブルの
+ソース（またはそれ以外のソースの `direction`）、表にない `source` を指す入力を拒否します。`play.inputSources` のない
+ログや、入力が `source` を持たないログ（入力ソース以前に記録したログの `tokens`）は、推測せずに拒否します。形式はまだ
+リビジョン 0 で、古いログを読める必要はありません。ソースをチャンネルに変えるのは引き続きホストの役目で、レーンの選択は
+引き続き `channels` が正本です。
 
 **実際に効いたプレイオプション。** 選択時のスナップショット（`play.options`、[プレイヤーが見ていたもの](#プレイヤーが見ていたもの) を参照）とは別に、`play` は判定と譜面を決める型付きフィールドを持ち、オプションが OFF の間はそれぞれ省略されます。`judgeAlgorithm` と `customJudge`（beatoraja の判定アルゴリズムと CUSTOM JUDGE の倍率）、`gaugeAutoShift` と `bottomShiftableGauge`、`autoScratch1P` / `autoScratch2P`、`anyKey`（ANY KEY。`inputs` は各キー自身のレーンを残し、リプレイで割り当て直します）、変更内容を伴う譜面変更オプション — `longNoteModifier`・`longNoteRate`・`longNoteModifierChangeCount`、`mineModifier`・`mineModifierChangeCount`、`scrollModifier`・`scrollSection`・`scrollRate`・`scrollModifierTimeline`・`scrollModifierChanged`、`extraNoteDepth`・`extraNoteScratch`・`extraNoteChangeCount`、LR2 EXTRA MODE の `lr2ExtraMode`・`lr2ExtraLevel`・`lr2ExtraEffectiveLevel`・`lr2ExtraConvertedObjectCount`・`lr2ExtraTempo`、7 TO 9 の `sevenToNinePattern`・`sevenToNineType`・`sevenToNineThresholdBPM`・`sevenToNineApplied` — そしてバトル・変換モードの `battleMode`、元譜面の `battleSourceVariant`、`battleTempo`、`battleAssist1P` / `battleAssist2P`、`battleChangedObjectCount`、`battleDroppedObjectCount`、LR2 D-BATTLE の `dBattleScratch` です。`chart.notes` はこれらすべてを適用した後の譜面なので、リプレイやシミュレーションが再抽選することはありません。生成された LN の始点は `generatedLongNote: true`、生成された地雷は `silent: true` と解決済みの `damage`、移動したノートは `sourceChannel` を持ちます。`chart.headerBPM` と `chart.bpmRange` は、テンポで譜面を分類するオプションが読むヘッダ BPM と BPM の最小・最大を保持します。
 
@@ -219,6 +257,8 @@ ESC で中断したログのリプレイは、再シミュレーションと同�
 ブラウザーのリプレイは `PlayScene.seek(seconds)` または ← / →（5 秒）でシークできます。同じエンジンが記録された入力を先頭から再適用し、判定・ゲージ・コンボ・保持中のロングノート・記録されたテンポ・表示設定を目標位置に復元します。一時停止中は停止したままで、中断したリプレイでは記録された終了位置より先へ進めません。記録されたテンポと表示設定を優先するかは引き続き Replay / ghost オプションで決まります。シークしても新しいリプレイは記録しません。コースのステージや NONSTOP でシークすると、[ADR 0016](./adr/0016-seek-play-loop-command.ja.md) に従いコース全体を練習扱いにします。後続ステージもリプレイを記録せず、コースのリプレイは出力できません。
 
 手動シークは `PlaySceneOptions.allowSeek: 'practice'` で有効にします。最初のシークでリプレイの記録を破棄します。目標より前に始まるノートはロングノートの終端も含めて得点なしで消化済みにし、スコア・コンボ・ゲージをプレイ開始時の値に戻します。一時停止中は停止したままです。結果には `practice: true` が付き、ベスト記録・Leaderboard 送信・リプレイ自動保存の対象外になります。プレイヤーでは単曲とコースのステージで手動シークを有効にします。コース進行はリプレイ記録とは独立したステージ結果から引き継ぎます。
+
+[PRACTICE](./play-options.ja.md#practice) のプレイもリプレイを記録しません。`PlayerOptions.practice` があるあいだエンジンはログを作らないので、保存も自動保存も送信もしません。範囲はエンジンに譜面の時刻（ミリ秒の `practice.startMs` と `practice.endMs`）として渡します。譜面の表示で選んだ小節の、最初の小節の小節線から最後の小節を閉じる小節線までです（`@be-music/player-ui` の `chartScoreRangeTimes`）。小節を選んでいなければ譜面全体です。これまでに記録したリプレイは変わりません。どれも PRACTICE の範囲を持っていません。
 
 ## リプレイスロット
 
@@ -496,8 +536,9 @@ beatoraja/0    1174   82.68%   AA   ...
 ## バージョニング
 
 `format: "be-music-replay"`、`version: 0`。リビジョン `0` は開発中のリビジョンです。形式はまだ定義中のため、
-`version` を変えずに互換性のない変更が入ることがあります。最初の安定リビジョンは `1` になります。形式を不安定と
-位置づける前に `version: 1` で書かれたログは同じ形なので、リビジョン `0` として引き続き読み込めます。未知の追加
+`version` を変えずに互換性のない変更が入ることがあります。最初の安定リビジョンは `1` になります。古いログは
+読み込みません。形式を不安定と位置づける前に `version: 1` で書かれたログと、入力ソース以前に記録したログ
+（`play.inputSources` がなく、入力が `source` ではなく `tokens` を持つ）は、推測せずに拒否します。未知の追加
 フィールドはパース時に無視されるため、後方互換の追加は version を変えずに行えます。ルールセット結果 ID は独自の
 リビジョン（`lr2/0` など）を持ちます。
 

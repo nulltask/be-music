@@ -57,8 +57,6 @@ export type GUIPlayOptions = Pick<
   | 'longNoteMode'
   | 'customJudge'
   | 'practice'
-  | 'practiceStartMs'
-  | 'practiceEndMs'
   | 'practiceGauge'
   | 'practiceGaugeCategory'
   | 'practiceStartGauge'
@@ -131,8 +129,6 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     longNoteMode: state.longNoteMode,
     customJudge: state.customJudge,
     practice: state.practice,
-    practiceStartMs: state.practiceStartMs,
-    practiceEndMs: state.practiceEndMs,
     practiceGauge: state.practiceGauge,
     practiceGaugeCategory: state.practiceGaugeCategory,
     practiceStartGauge: state.practiceStartGauge,
@@ -221,8 +217,6 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.longNoteMode = options.longNoteMode;
   state.customJudge = options.customJudge;
   state.practice = options.practice;
-  state.practiceStartMs = options.practiceStartMs;
-  state.practiceEndMs = options.practiceEndMs;
   state.practiceGauge = options.practiceGauge;
   state.practiceGaugeCategory = options.practiceGaugeCategory;
   state.practiceStartGauge = options.practiceStartGauge;

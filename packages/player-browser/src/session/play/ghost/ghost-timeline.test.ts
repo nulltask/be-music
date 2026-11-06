@@ -26,14 +26,20 @@ function makeGhostReplay(
       notes: notes.map((note, id) => ({ ...note, id })),
     },
     inputs: inputs.map((input, seq) => ({ ...input, seq })),
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', ...play },
+    play: {
+      mode: 'manual',
+      autoScratch: false,
+      gauge: 'GROOVE',
+      ...play,
+      inputSources: play?.inputSources ?? [{ id: 0, kind: 'key', device: 'keyboard', label: 'z' }],
+    },
   };
 }
 
 const tap = (timeUs: number, channel = '11'): ReplayNote => ({ id: 0, channel, type: 'normal', timeUs });
 const press = (timeUs: number, channel = '11'): Array<Omit<ReplayInputEvent, 'seq'>> => [
-  { timeUs, action: 'down', channels: [channel] },
-  { timeUs: timeUs + 50_000, action: 'up', channels: [channel] },
+  { timeUs, action: 'down', channels: [channel], source: 0 },
+  { timeUs: timeUs + 50_000, action: 'up', channels: [channel], source: 0 },
 ];
 
 describe('buildGhostTimeline', () => {
@@ -82,8 +88,8 @@ describe('buildGhostTimeline', () => {
       makeGhostReplay(
         [{ id: 0, channel: '11', type: 'long', timeUs: 1_000_000, endTimeUs: 2_000_000, lnMode: 1 }],
         [
-          { timeUs: 1_000_000, action: 'down', channels: ['11'] },
-          { timeUs: 2_000_000, action: 'up', channels: ['11'] },
+          { timeUs: 1_000_000, action: 'down', channels: ['11'], source: 0 },
+          { timeUs: 2_000_000, action: 'up', channels: ['11'], source: 0 },
         ],
       ),
     );

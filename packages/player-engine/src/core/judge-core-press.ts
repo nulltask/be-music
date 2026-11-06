@@ -25,7 +25,14 @@ import {
   startHCNPassing,
 } from './judge-core-advance.ts';
 import { recordLaneDown, recordLaneUp } from './lane-hold.ts';
-import { isReverseScratchSpin, type ScratchSpin } from './scratch-spin.ts';
+import type { ScratchSpin } from './scratch-spin.ts';
+import {
+  endsBackSpinScratch,
+  hasScratchCounterpart,
+  isSameInputSource,
+  releasesScratchHold,
+  type InputSource,
+} from './input-source.ts';
 import {
   applyGaugeJudge,
   applyResolvedManualJudge,
@@ -38,7 +45,12 @@ import {
   toJudgeUs,
   isJudgingClosed,
 } from './judge-core-score.ts';
-import { type JudgeCoreEffectSink, type JudgeCoreInput, type JudgeCoreState } from './judge-core-types.ts';
+import {
+  type ActiveLongNoteState,
+  type JudgeCoreEffectSink,
+  type JudgeCoreInput,
+  type JudgeCoreState,
+} from './judge-core-types.ts';
 
 /**
  * Judgment-core input handling: which note a press resolves against, multi-BAD, empty POOR and
@@ -246,8 +258,10 @@ const NO_CHANNELS: readonly string[] = [];
 
 /**
  * A press on `candidateChannels`. `recordedChannels` are the lanes the replay records for it: the keys' own lanes, which
- * differ from the lanes judged only when ANY KEY routed the press. `spin` is the way a scratch press turned the
- * turntable (`scratch-spin.ts`), and `code` the physical input the replay records.
+ * differ from the lanes judged only when ANY KEY routed the press. `tokens` are the keys the lanes are held by (the
+ * source's key, when there is one). `source` is the physical input the press came from (`input-source.ts`): a scratch
+ * long note remembers the source that hit its head. `spin` is the way a scratch press turned the turntable, for
+ * display, and `code` the physical input the replay records.
  */
 export function handleLanePress(
   state: JudgeCoreState,
@@ -257,6 +271,7 @@ export function handleLanePress(
   nowSec: number,
   emit: JudgeCoreEffectSink,
   recordedChannels: ReadonlySet<string> = candidateChannels,
+  source?: InputSource,
   spin?: ScratchSpin,
   code?: string,
 ): void {
@@ -267,7 +282,7 @@ export function handleLanePress(
     kind: 'record-input',
     action: 'down',
     seconds: nowSec,
-    tokens,
+    source,
     channels: recordedChannels,
     ...(spin !== undefined ? { spin } : {}),
     ...(code !== undefined ? { code } : {}),
@@ -321,7 +336,7 @@ export function handleLanePress(
     : NO_CHANNELS;
   for (const channel of heldLongNoteChannels) {
     const hold = state.activeLongNotes.get(channel)!;
-    if (hold.backSpinScratch === true && isReverseScratchSpin(hold.headSpin, spin)) {
+    if (hold.backSpinScratch === true && endsBackSpinScratch(hold.headSource, source)) {
       judgeBackSpinScratchTail(state, channel, judgeSec, nowSec, emit);
     } else {
       applyPressDuringLongNote(state, channel, judgeSec, nowSec, emit);
@@ -418,7 +433,7 @@ export function handleLanePress(
         headScored: true,
         audioStopped: false,
         ...(isBackSpinScratch(longNoteMode, config.scratchChannels.has(channel))
-          ? { backSpinScratch: true as const, ...(spin !== undefined ? { headSpin: spin } : {}) }
+          ? { backSpinScratch: true as const, ...(source !== undefined ? { headSource: source } : {}) }
           : {}),
       });
       state.longNoteSettleMs.delete(channel);
@@ -434,6 +449,10 @@ export function handleLanePress(
         headJudge,
         headScored: false,
         audioStopped: false,
+        // beatoraja: a scratch LN remembers the key that hit its head, and only that key's release lets it go.
+        ...(ruleset.scratchHoldsBySource && source !== undefined && config.scratchChannels.has(channel)
+          ? { headSource: source }
+          : {}),
       });
       state.longNoteSettleMs.delete(channel);
       state.longHoldReleaseSeconds.delete(channel);
@@ -562,7 +581,7 @@ export function handleLaneRelease(
       kind: 'record-input',
       action: 'up',
       seconds: input.recordSec,
-      tokens: input.tokens,
+      source: input.source,
       channels: recordedChannels,
       ...(input.inferred === true ? { inferred: true } : {}),
       ...(input.code !== undefined ? { code: input.code } : {}),
@@ -574,15 +593,32 @@ export function handleLaneRelease(
   for (const channel of input.channels) {
     recordLaneUp(laneHoldHistory(state, channel), input.tokens, releaseMs);
     setHCNGaining(state, channel, toJudgeUs(input.nowSec), emit);
+    const hold = state.activeLongNotes.get(channel);
+    if (
+      hold !== undefined &&
+      hold.mode === 1 &&
+      hold.headSource !== undefined &&
+      !releasesScratchHold(hold.headSource, input.source)
+    ) {
+      // beatoraja: a scratch LN is let go only by the key that hit its head; another key's release is ignored, and the
+      // lane stays held.
+      continue;
+    }
     state.heldChannels.delete(channel);
     if (input.inferred !== true) {
       emit({ kind: 'ui', command: { kind: 'release-lane', channel } });
     }
-    if (state.activeLongNotes.get(channel)?.backSpinScratch === true) {
-      // A back-spin scratch is not settled by a release: its tail waits for the reverse spin.
+    if (hold?.backSpinScratch === true) {
+      // A back-spin scratch is not settled by a release, except, under beatoraja, a release of the head's own source
+      // that would judge POOR ("BSS途中離し"): its tail is then judged at once.
+      if (endsBackSpinScratchOnRelease(state, channel, hold, input)) {
+        state.longHoldReleaseSeconds.set(channel, input.nowSec);
+        state.longNoteSettleMs.set(channel, Number.NEGATIVE_INFINITY);
+        settleNow = true;
+      }
       continue;
     }
-    if (state.activeLongNotes.has(channel)) {
+    if (hold !== undefined) {
       state.longHoldReleaseSeconds.set(channel, input.nowSec);
       const marginMs = resolveLongNoteReleaseMarginMs(state, channel, input.nowSec);
       // A release settles its long note at once, unless the ruleset lets a BAD-or-worse early release wait out a
@@ -594,6 +630,29 @@ export function handleLaneRelease(
   if (settleNow) {
     advanceJudgeState(state, input.nowSec, input.nowMs, emit);
   }
+}
+
+/**
+ * beatoraja's "BSS途中離し" (`JudgeManager` L494-L511): under a ruleset that keys scratch holds by source, releasing the
+ * source that hit a back-spin scratch's head ends it when the release would judge POOR against the long-scratch-end
+ * windows (too early for any of them). Any other release, and every release of a hold that plays the lenient
+ * single-source rule (`hasScratchCounterpart`), is ignored.
+ */
+function endsBackSpinScratchOnRelease(
+  state: JudgeCoreState,
+  channel: string,
+  hold: ActiveLongNoteState,
+  input: Extract<JudgeCoreInput, { kind: 'release' }>,
+): boolean {
+  const { config } = state;
+  if (!config.ruleset.scratchHoldsBySource || !hasScratchCounterpart(hold.headSource)) return false;
+  if (!isSameInputSource(hold.headSource, input.source)) return false;
+  const judgeSec = toJudgeClock(config, input.nowSec);
+  const tail = resolveManualTimedJudge(
+    (judgeSec - hold.endSeconds) * 1000,
+    judgeWindowsFor(config, channel, judgeSec, true),
+  );
+  return tail.kind === 'POOR';
 }
 
 /**

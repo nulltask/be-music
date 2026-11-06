@@ -3,6 +3,7 @@
  * family and returns the scene to load with `prepare`, show with `PixiSceneHost.setScene` and begin with `start`.
  */
 
+import { BGACameraFeed } from '../media/bga-camera.ts';
 import type { ResolvedPlayChart } from '@be-music/player-engine';
 import type { BeMusicReplay, ReplayCourseStage } from '@be-music/player-engine/replay';
 import type { RulesetId } from '@be-music/player-engine/ruleset';
@@ -14,6 +15,7 @@ import {
   type LibraryChart,
   type PlayOptions,
   type PlayResult,
+  type PracticeRange,
   type SystemSoundSet,
 } from '@be-music/player-scene-model';
 import type { Texture } from 'pixi.js';
@@ -104,6 +106,11 @@ export interface PlaySceneOptions extends SessionSceneOptions {
   readonly settings: PlaySceneSettings;
   /** Allow manual seeking; the first seek makes the play practice and disables saved results. */
   readonly allowSeek?: 'practice';
+  /**
+   * The bars a PRACTICE play loops, as chart milliseconds (`chartScoreRangeTimes` of the bars picked on the chart's
+   * score). Read only when the play options turn PRACTICE on for a single fresh play; without it the whole chart loops.
+   */
+  readonly practiceRange?: PracticeRange;
   /** The course stage this play is, if any. */
   readonly course?: PlaySceneCourse;
   /** A replay to play back instead of the player's input: its recorded setup, arrangement, tempo and view. */
@@ -200,8 +207,20 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   setAutoPauseOnBlur(enabled: boolean): void;
   setJudgedNoteDisplay(mode: 'KEEP_SCROLLING' | 'HIDE'): void;
   setShowInvisibleNotes(enabled: boolean): void;
+  /**
+   * Shows `camera.stream` in the BGA frame in place of the chart's BGA, flipped left to right when `camera.mirror` is
+   * set, or the chart's BGA again with `undefined`. Takes effect from the next frame, during a play too. The scene only
+   * shows the stream: the caller opens it and stops its tracks.
+   */
+  setBGACamera(camera: BGACamera | undefined): void;
   /** Ends the scene; `preserveAudioTail` lets a play that ended ring out before its audio closes. */
   dispose(options?: PlayDisposeOptions): void;
+}
+
+/** A camera for the BGA frame ({@link PlayScene.setBGACamera}). */
+export interface BGACamera {
+  readonly stream: MediaStream;
+  readonly mirror: boolean;
 }
 
 /** A family's play view, and what the scene and the play session ask of it. */
@@ -515,8 +534,20 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
     this.familySlot.current.setShowInvisibleNotes(enabled);
   }
 
+  public setBGACamera(camera: BGACamera | undefined): void {
+    const current = this.play.bgaCamera;
+    if (camera !== undefined && current?.stream === camera.stream) {
+      current.mirror = camera.mirror;
+      return;
+    }
+    current?.dispose();
+    this.play.bgaCamera = camera !== undefined && !this.disposed ? new BGACameraFeed(camera.stream, camera) : undefined;
+  }
+
   public override dispose(options: PlayDisposeOptions = {}): void {
     this.playSession.disposeOptions = options;
+    this.play.bgaCamera?.dispose();
+    this.play.bgaCamera = undefined;
     super.dispose();
     this.textures.destroyAll(this.prepareHost ?? this.play.host);
   }
@@ -698,6 +729,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
         playOptions,
         settings.judgeRuleset,
         course === undefined && options.replay === undefined,
+        options.practiceRange,
       ),
       audio: options.audio,
       onExit: () => on.exit(),
@@ -760,7 +792,7 @@ const BEATORAJA_PLAY_SETTINGS: Pick<PlaySessionOptions, 'coverKeys'> = {
 };
 
 /**
- * PRACTICE for a single fresh play, under every judge ruleset (#933): the range and the rules read under the ruleset
+ * PRACTICE for a single fresh play, under every judge ruleset (#933): the bars picked and the rules read under the ruleset
  * (`resolvePracticeSelection`), a practice play saving nothing, and no chart modifier, as beatoraja applies them only in
  * PLAY / AUTOPLAY.
  */
@@ -768,11 +800,12 @@ function resolvePracticeSessionOptions(
   playOptions: Readonly<PlayOptions>,
   ruleset: RulesetId | undefined,
   single: boolean,
+  range: PracticeRange | undefined,
 ): Partial<PlaySessionOptions> {
   if (!playOptions.practice || !single) return {};
   return {
     practice: true,
-    practiceRange: resolvePracticeSelection(playOptions, ruleset ?? 'lr2'),
+    practiceRange: resolvePracticeSelection(playOptions, ruleset ?? 'lr2', range),
     battleMode: 'OFF',
     longNoteModifier: 'OFF',
     mineModifier: 'OFF',

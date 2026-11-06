@@ -17,13 +17,25 @@ export type AccountActionResult = { ok: true } | { ok: false; error: string; cod
  * checked first (`null` when signed out), so a signed-out player never triggers a 401 the browser would log.
  */
 export async function loadLeaderboardAccount(doFetch: typeof fetch = fetch): Promise<LeaderboardAccount | undefined> {
+  return (await readLeaderboardAccount(doFetch)).account;
+}
+
+/**
+ * {@link loadLeaderboardAccount}, saying whether the Leaderboard answered: `reached` is false when a request failed (no
+ * network, the page unloading), so the account is unknown rather than signed out.
+ */
+export async function readLeaderboardAccount(
+  doFetch: typeof fetch = fetch,
+): Promise<{ account: LeaderboardAccount | undefined; reached: boolean }> {
   try {
     const session = await doFetch('/api/auth/get-session', { credentials: 'same-origin' });
-    if (!session.ok || (await session.json()) === null) return undefined;
+    if (!session.ok || (await session.json()) === null) return { account: undefined, reached: session.ok };
     const response = await doFetch('/api/v0/me', { credentials: 'same-origin' });
-    return response.ok ? ((await response.json()) as LeaderboardAccount) : undefined;
+    return response.ok
+      ? { account: (await response.json()) as LeaderboardAccount, reached: true }
+      : { account: undefined, reached: response.status === 401 };
   } catch {
-    return undefined;
+    return { account: undefined, reached: false };
   }
 }
 
@@ -245,4 +257,42 @@ export function shouldTurnOnSubmitting(
   next: AccountChip['state'],
 ): boolean {
   return next === 'signed-in' && previous !== 'signed-in';
+}
+
+/** Where the start card remembers the account state it last showed, to shape its placeholder on the next visit. */
+export const START_ACCOUNT_STATE_KEY = 'be-music.start-account-state';
+
+/** The account state the start card last showed in this browser; signed out on a first visit or blocked storage. */
+export function readStartAccountState(storage: Pick<Storage, 'getItem'> | undefined): AccountChip['state'] {
+  let value: string | null = null;
+  try {
+    value = storage?.getItem(START_ACCOUNT_STATE_KEY) ?? null;
+  } catch {
+    // Blocked storage: a first visit.
+  }
+  return value === 'signed-in' || value === 'anonymous' ? value : 'signed-out';
+}
+
+/** Remembers the account state the start card shows (see {@link readStartAccountState}). */
+export function rememberStartAccountState(
+  state: AccountChip['state'],
+  storage: Pick<Storage, 'setItem'> | undefined,
+): void {
+  try {
+    storage?.setItem(START_ACCOUNT_STATE_KEY, state);
+  } catch {
+    // Blocked storage: the next visit shapes the placeholder as a first one.
+  }
+}
+
+/**
+ * What the start card's placeholder stands in for while the account is read: the actions and the hint the card showed
+ * last time ({@link describeStartAccount} for that state), so a returning player's card keeps its size when the
+ * account arrives.
+ */
+export function startAccountPlaceholder(state: AccountChip['state']): Pick<StartAccountView, 'actions' | 'hint'> {
+  const view = describeStartAccount(
+    state === 'signed-out' ? undefined : { handle: '', displayName: '', anonymous: state === 'anonymous', passkeys: 0 },
+  );
+  return { actions: view.actions, hint: view.hint };
 }

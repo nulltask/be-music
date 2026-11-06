@@ -9,6 +9,8 @@ import type { LongNoteModifier } from '../core/long-note-modifier.ts';
 import { resolveReplaySourceChannel } from './source-channel.ts';
 import type { MineModifier } from '../core/mine-modifier.ts';
 import type { ScratchSpin } from '../core/scratch-spin.ts';
+import { createInputSourceTable, type InputSource } from '../core/input-source.ts';
+import type { ReplayAnalogScratch } from './input-sources.ts';
 import {
   diffReplayOptions,
   parseReplayOptionState,
@@ -127,6 +129,8 @@ export interface ReplayRecorderPlaySettings {
   tempo?: number;
   /** What the player sees at the start (`PlayerOptions.recordReplay.view`): hi-speed, covers and lift. */
   view?: ReplayViewState;
+  /** How the host turned an analog turntable axis into presses and releases (`ReplayPlay.analogScratch`). */
+  analogScratch?: ReplayAnalogScratch;
   native?: Record<string, string | number | boolean | null>;
 }
 
@@ -142,7 +146,7 @@ export interface ReplayRecorderPlaySettings {
  */
 export type ReplayRecordingOptions = Pick<
   ReplayRecorderPlaySettings,
-  'gauge' | 'randomLane' | 'dpFlip' | 'view' | 'native' | 'options'
+  'gauge' | 'randomLane' | 'dpFlip' | 'view' | 'native' | 'options' | 'analogScratch'
 > & {
   chartSHA256?: string;
   chartMD5?: string;
@@ -204,13 +208,14 @@ export interface ReplayRecorder {
   /** Discards recorded data and ignores later input after a practice seek. Finalization is no longer allowed. */
   discard(): void;
   /**
-   * Records a press or release; `inferred` marks a release the engine inferred from input without releases, `spin` the
-   * way a scratch press turned the turntable, `code` the physical input (`ReplayInputEvent.code`).
+   * Records a press or release from `source` (numbered into `play.inputSources`); `inferred` marks a release the engine
+   * inferred from input without releases, `spin` the way a scratch press turned the turntable, `code` the physical
+   * input (`ReplayInputEvent.code`). An input without a source is recorded under {@link UNKNOWN_INPUT_SOURCE}.
    */
   recordInput(
     action: ReplayInputAction,
     timeSeconds: number,
-    tokens: readonly string[],
+    source: InputSource | undefined,
     channels: Iterable<string>,
     inferred?: boolean,
     spin?: ScratchSpin,
@@ -229,9 +234,16 @@ export interface ReplayRecorder {
   finalize(input: ReplayRecorderFinalizeInput): BeMusicReplay;
 }
 
+/**
+ * The source an input that named none is recorded under (a host or a test that drives the engine without sources). A
+ * controller button, so a scratch hold it starts plays the lenient single-source rule, as an unknown source does.
+ */
+export const UNKNOWN_INPUT_SOURCE: InputSource = { kind: 'button', device: 'controller', label: 'unknown' };
+
 export function createReplayRecorder(options: ReplayRecorderOptions): ReplayRecorder {
   const chart = buildReplayChart(options);
   const inputs: ReplayInputEvent[] = [];
+  const inputSources = createInputSourceTable();
   let discarded = false;
   let seq = 0;
   let emptyPoorCount = 0;
@@ -247,13 +259,14 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
     discard: () => {
       discarded = true;
       inputs.length = 0;
+      inputSources.clear();
       viewChanges.length = 0;
       controlInputs.length = 0;
       optionChanges.length = 0;
       tempoChanges.length = 0;
       emptyPoorCount = 0;
     },
-    recordInput: (action, timeSeconds, tokens, channels, inferred, spin, code): void => {
+    recordInput: (action, timeSeconds, source, channels, inferred, spin, code): void => {
       if (discarded) return;
       const channelList = [...channels];
       if (channelList.length === 0) {
@@ -264,10 +277,8 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
         timeUs: secondsToMicroseconds(timeSeconds),
         action,
         channels: channelList,
+        source: inputSources.idOf(source ?? UNKNOWN_INPUT_SOURCE),
       };
-      if (tokens.length > 0) {
-        event.tokens = [...tokens];
-      }
       if (code !== undefined && code.length > 0) {
         event.code = code;
       }
@@ -321,6 +332,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
     finalize: ({ summary, maxCombo, aborted, abortedAtSeconds, secondPlayer }): BeMusicReplay => {
       if (discarded) throw new Error('Cannot finalize a discarded practice replay');
       const play: ReplayPlay = {
+        inputSources: inputSources.list(),
         mode: options.play.mode,
         autoScratch: options.play.autoScratch,
         gauge: options.play.gauge ?? 'GROOVE',
@@ -398,6 +410,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (optionChanges.length > 0) play.optionChanges = structuredClone(optionChanges);
       if (viewChanges.length > 0) play.viewChanges = structuredClone(viewChanges);
       if (controlInputs.length > 0) play.controlInputs = controlInputs.map((input) => ({ ...input }));
+      if (options.play.analogScratch !== undefined) play.analogScratch = { ...options.play.analogScratch };
       if (options.play.native !== undefined) play.native = options.play.native;
 
       const createdAt = (options.now?.() ?? new Date()).toISOString();

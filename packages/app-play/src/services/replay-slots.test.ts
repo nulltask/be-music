@@ -38,8 +38,14 @@ function replay(title = 'Fixture A', chartFingerprint = 'bmfp0:aaaa'): BeMusicRe
       noteCount: 0,
       notes: [],
     },
-    inputs: [{ seq: 0, timeUs: 1000, action: 'down', channels: ['11'] }],
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', judgeRuleset: 'lr2' },
+    inputs: [{ seq: 0, timeUs: 1000, action: 'down', channels: ['11'], source: 0 }],
+    play: {
+      inputSources: [{ id: 0, kind: 'key', device: 'keyboard', label: 'z' }],
+      mode: 'manual',
+      autoScratch: false,
+      gauge: 'GROOVE',
+      judgeRuleset: 'lr2',
+    },
   };
 }
 
@@ -240,6 +246,23 @@ describe('ReplaySlotStore', () => {
     const outcome = await refused.save(CHART, 0, { kind: 'chart', replay: replay('New') }, score(90), 'New');
     expect(outcome).toEqual({ saved: false, reason: 'storage', error: quota });
     expect(refused.slots(CHART)[0]?.title).toBe('Old');
+  });
+
+  test('says when the slots have been read, even when the backend fails', async () => {
+    const store = new ReplaySlotStore({ backend: createMemoryReplaySlotBackend() });
+    expect(store.loaded).toBe(false);
+    await store.load();
+    expect(store.loaded).toBe(true);
+    const failing: ReplaySlotBackend = {
+      ...createMemoryReplaySlotBackend(),
+      listRecords: () => Promise.reject(new Error('blocked')),
+    };
+    const refused = new ReplaySlotStore({ backend: failing });
+    const changes: boolean[] = [];
+    refused.subscribe(() => changes.push(refused.loaded));
+    await refused.load();
+    expect(changes).toEqual([true]);
+    expect(refused.exists(CHART)).toEqual([false, false, false, false]);
   });
 
   test('empties a slot', async () => {

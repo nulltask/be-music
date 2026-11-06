@@ -2,7 +2,9 @@ import {
   appendCourseDraftStage,
   createCourseDraft,
   DEFAULT_LR2_RANDOM_MIX_SETTINGS,
+  DEFAULT_RANDOM_MIX_CONDITIONS,
   defaultCourseMakerConstraints,
+  normalizeRandomMixConditions,
   drawLR2RandomMix,
   LR2_RANDOM_MIX_NAME,
   normalizeLR2RandomMixSettings,
@@ -25,8 +27,11 @@ import {
   type LR2RandomMixSetting,
   type LR2RandomMixSettings,
   type NonstopConnection,
+  type RandomMixCandidate,
+  type RandomMixConditions,
 } from '@be-music/player-engine/course';
 import {
+  resolveLibraryChartDifficulty,
   resolveLibraryChartPlayVariant,
   type LibraryChart,
   type LibraryCourse,
@@ -80,6 +85,8 @@ export interface CourseMakerOptions {
   defaultConnection?: NonstopConnection;
   /** The RANDOM MIX settings (LR2's buttons 260-266). Default LR2's. */
   randomMixSettings?: LR2RandomMixSettings;
+  /** The conditions the RANDOM MIX dialog last confirmed. Default `DEFAULT_RANDOM_MIX_CONDITIONS`. */
+  randomMixConditions?: RandomMixConditions;
   /** A song's chart MD5, which a course keys its stages by; `undefined` when it cannot be hashed. */
   md5Of: (chartEntry: LibraryChart) => Promise<string | undefined>;
   /** Called after every change, so a host can save the courses and redraw. */
@@ -101,6 +108,7 @@ export class CourseMaker {
   private current: CourseDraft | undefined;
   private connection: NonstopConnection;
   private mixSettings: LR2RandomMixSettings;
+  private mixConditions: RandomMixConditions;
   /** The last RANDOM MIX drawn in each folder, among {@link savedCourses}: the next draw there replaces it. */
   private lastRandomMixes = new Set<CourseDefinition>();
 
@@ -111,6 +119,7 @@ export class CourseMaker {
     this.savedCourses = [...(options.courses ?? [])];
     this.connection = options.defaultConnection ?? 'fade';
     this.mixSettings = { ...(options.randomMixSettings ?? DEFAULT_LR2_RANDOM_MIX_SETTINGS) };
+    this.mixConditions = normalizeRandomMixConditions(options.randomMixConditions ?? DEFAULT_RANDOM_MIX_CONDITIONS);
   }
 
   /** The saved courses, newest first. */
@@ -131,6 +140,17 @@ export class CourseMaker {
     return this.mixSettings;
   }
 
+  /** The conditions the RANDOM MIX dialog last confirmed: the dialog opens on them. */
+  get randomMixConditions(): RandomMixConditions {
+    return this.mixConditions;
+  }
+
+  /** Keeps the conditions the RANDOM MIX dialog was confirmed with. */
+  setRandomMixConditions(conditions: RandomMixConditions): void {
+    this.mixConditions = normalizeRandomMixConditions(conditions);
+    this.emit('settings');
+  }
+
   /** The saved courses that are the last RANDOM MIX drawn in their folder (the next draw there replaces them). */
   get randomMixes(): readonly CourseDefinition[] {
     return this.savedCourses.filter((course) => this.lastRandomMixes.has(course));
@@ -144,12 +164,15 @@ export class CourseMaker {
     courses: readonly CourseDefinition[];
     defaultConnection?: NonstopConnection;
     randomMixSettings?: LR2RandomMixSettings;
+    randomMixConditions?: RandomMixConditions;
     randomMixes?: readonly CourseDefinition[];
   }): void {
     this.savedCourses = [...saved.courses];
     if (saved.defaultConnection !== undefined) this.connection = saved.defaultConnection;
     if (saved.randomMixSettings !== undefined)
       this.mixSettings = normalizeLR2RandomMixSettings(saved.randomMixSettings);
+    if (saved.randomMixConditions !== undefined)
+      this.mixConditions = normalizeRandomMixConditions(saved.randomMixConditions);
     this.lastRandomMixes = new Set((saved.randomMixes ?? []).filter((course) => this.savedCourses.includes(course)));
   }
 
@@ -234,6 +257,18 @@ export class CourseMaker {
     this.emit('settings');
   }
 
+  /** Replaces the RANDOM MIX settings (each value snapped and clamped to its button's range). */
+  setRandomMixSettings(settings: LR2RandomMixSettings): void {
+    this.mixSettings = normalizeLR2RandomMixSettings(settings);
+    this.emit('settings');
+  }
+
+  /** Sets the connection a new NONSTOP course gets after each stage (LR2's button 268). */
+  setDefaultConnection(connection: NonstopConnection): void {
+    this.connection = connection;
+    this.emit('settings');
+  }
+
   /** Steps one RANDOM MIX setting (LR2's buttons 260-266), wrapping around at both ends. */
   stepRandomMixSetting(key: LR2RandomMixSetting, delta: number): void {
     this.mixSettings = stepLR2RandomMixSetting(this.mixSettings, key, delta);
@@ -261,12 +296,21 @@ export class CourseMaker {
     }
     const drawn = drawLR2RandomMix({ kind, keyMode, settings, defaultConnection: this.connection }, charts, random);
     if (!drawn.ok) return drawn;
-    const previous = this.savedCourses.filter((course) => course.kind === kind && this.lastRandomMixes.has(course));
-    for (const course of previous) this.lastRandomMixes.delete(course);
-    this.savedCourses = [drawn.course, ...this.savedCourses.filter((course) => !previous.includes(course))];
-    this.lastRandomMixes.add(drawn.course);
-    this.emit('courses');
+    this.keepRandomMix(drawn.course);
     return drawn;
+  }
+
+  /**
+   * Keeps a drawn RANDOM MIX as the newest course of its kind, deleting the last RANDOM MIX drawn in that folder, as
+   * LR2's `WriteRandomCourse` deletes and re-inserts its `RANDOM MIX` row. The previous draw is matched as this maker's
+   * own draw rather than by its title, so a course the player named "RANDOM MIX" stays.
+   */
+  keepRandomMix(course: CourseDefinition): void {
+    const previous = this.savedCourses.filter((saved) => saved.kind === course.kind && this.lastRandomMixes.has(saved));
+    for (const saved of previous) this.lastRandomMixes.delete(saved);
+    this.savedCourses = [course, ...this.savedCourses.filter((saved) => !previous.includes(saved))];
+    this.lastRandomMixes.add(course);
+    this.emit('courses');
   }
 
   /** Whether `course` is one of the saved courses (and so can be edited). */
@@ -440,6 +484,40 @@ export function createRandomMixChart(
     ...(chartEntry.subtitle !== undefined ? { subtitle: chartEntry.subtitle } : {}),
     ...(chartEntry.artist !== undefined ? { artist: chartEntry.artist } : {}),
   };
+}
+
+/**
+ * A library chart as the RANDOM MIX dialog and draw read it, from what the library already knows: its folder (the chart's
+ * directory within its source, LR2's `folder` column), key mode, play level (truncated, 0 when it is not a number) and
+ * difficulty as the library lists it (`resolveLibraryChartDifficulty`): its own `#DIFFICULTY` as `difficulty`, or an
+ * estimate from its names or note count as `estimatedDifficulty`. Its BPMs and file hash are left for the charts a draw
+ * walks, so building every chart's candidate stays cheap however large the library.
+ */
+export function createRandomMixCandidate(
+  chartEntry: LibraryChart,
+): RandomMixCandidate & { readonly chart: LibraryChart } {
+  const level =
+    typeof chartEntry.playLevel === 'number'
+      ? chartEntry.playLevel
+      : Number.parseInt(String(chartEntry.playLevel ?? ''), 10);
+  const slash = chartEntry.chartPath.lastIndexOf('/');
+  const difficulty = resolveLibraryChartDifficulty(chartEntry);
+  return {
+    chart: chartEntry,
+    folder: `${chartEntry.sourceId}/${slash < 0 ? '' : chartEntry.chartPath.slice(0, slash)}`,
+    keyMode: Number(resolveLibraryChartPlayVariant(chartEntry)),
+    level: Number.isFinite(level) ? Math.trunc(level) : 0,
+    ...(difficulty === undefined
+      ? {}
+      : difficulty.basis === 'chart'
+        ? { difficulty: difficulty.value }
+        : { estimatedDifficulty: difficulty.value }),
+  };
+}
+
+/** A chart's BPMs as a RANDOM MIX reads them (`resolveChartBPMRange`, cached per chart). */
+export function resolveRandomMixBPM(chartEntry: LibraryChart): { min: number; max: number } {
+  return resolveChartBPMRange(chartEntry.chart);
 }
 
 /**

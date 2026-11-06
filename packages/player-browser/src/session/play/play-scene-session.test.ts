@@ -217,14 +217,17 @@ describe("the view's touch lanes, as lane intents", () => {
   test('a press goes to the engine as the lane key does: one lane input, then the key held', () => {
     const { play, session, commands } = createTouchPlay();
     session.dispatch({ type: 'lane', channel: '11', pressed: true, atMs: 120 });
+    // A lane's touch zone is an input source of its own, named by the lane's key token.
+    const source = { kind: 'button', device: 'touch', label: 'z' };
     expect(commands).toEqual([
-      { kind: 'lane-input', tokens: ['z'], code: 'touch', pressedAt: at(120), spin: null },
+      { kind: 'lane-input', tokens: ['z'], code: 'touch', source, pressedAt: at(120), spin: null },
       {
         kind: 'kitty-state',
         pressTokens: ['z'],
         repeatTokens: [],
         releaseTokens: [],
         code: 'touch',
+        source,
         pressedAt: at(120),
       },
     ]);
@@ -238,6 +241,7 @@ describe("the view's touch lanes, as lane intents", () => {
       kind: 'lane-input',
       tokens: ['shift-left'],
       code: 'touch',
+      source: { kind: 'button', device: 'touch', label: 'shift-left' },
       pressedAt: at(10),
       spin: null,
     });
@@ -255,6 +259,7 @@ describe("the view's touch lanes, as lane intents", () => {
         repeatTokens: [],
         releaseTokens: ['shift-left'],
         code: 'touch',
+        source: { kind: 'button', device: 'touch', label: 'shift-left' },
         pressedAt: at(30),
       },
     ]);
@@ -278,8 +283,10 @@ describe("the view's touch lanes, as lane intents", () => {
     commands.length = 0;
     const before = play.touchLiftCount;
     session.dispatch({ type: 'pause' });
-    expect(commands.map((command) => command.kind)).toEqual(['kitty-state', 'toggle-pause']);
-    expect(commands[0]).toMatchObject({ pressTokens: [], releaseTokens: ['s', 'z'] });
+    // One release per lane: each touch zone is its own source.
+    expect(commands.map((command) => command.kind)).toEqual(['kitty-state', 'kitty-state', 'toggle-pause']);
+    expect(commands[0]).toMatchObject({ pressTokens: [], releaseTokens: ['s'], source: { label: 's' } });
+    expect(commands[1]).toMatchObject({ pressTokens: [], releaseTokens: ['z'], source: { label: 'z' } });
     expect(play.touchLanesHeld.size).toBe(0);
     expect(play.touchLiftCount).toBe(before + 1);
     // Resuming lifts nothing more.

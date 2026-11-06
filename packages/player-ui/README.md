@@ -16,34 +16,40 @@ React and Vue are peer dependencies of their respective wrappers. The skin SDK h
 
 ## Components
 
-| Element                      | Properties                                                        |
-| ---------------------------- | ----------------------------------------------------------------- |
-| `be-music-score-summary`     | `data: BeMusicScoreData`, optional `compact`                      |
-| `be-music-judgment-table`    | `data: BeMusicJudgmentData`                                       |
-| `be-music-gauge-panel`       | `data: BeMusicGaugeData`, optional `compact`                      |
-| `be-music-timing-graph`      | `data: BeMusicTimingData`                                         |
-| `be-music-play-settings`     | `data: BeMusicSettingsData`                                       |
-| `be-music-chart-list`        | `entries`, `selectedIndex`, `disabled`                            |
-| `be-music-chart-details`     | `entry`, `launching`, `readText`                                  |
-| `be-music-play-options`      | `options`, `choices`, `disabled`                                  |
-| `be-music-select-screen`     | `frame: BeMusicDOMSelectFrame`                                    |
-| `be-music-gameplay-hud`      | `frame: BeMusicDOMGameplayFrame`                                  |
-| `be-music-result-screen`     | `frame: BeMusicDOMResultFrame`                                    |
-| `be-music-decide-screen`     | `frame: BeMusicDOMDecideFrame`                                    |
-| `be-music-bga`               | `data: BeMusicBGAData`, `rect: BeMusicRect`                       |
-| `be-music-lanes`             | `data: BeMusicLanesData`, `rect: BeMusicRect`                     |
-| `be-music-notes`             | `data: BeMusicNotesData`, `rect: BeMusicRect`                     |
-| `be-music-lane-covers`       | `data: BeMusicLaneCoversData`, `rect: BeMusicRect`                |
-| `be-music-judge-line`        | `data: BeMusicJudgeLineData`, `rect: BeMusicRect`                 |
-| `be-music-bombs`             | `data: BeMusicBombsData`, `rect: BeMusicRect`                     |
-| `be-music-judgment-display`  | `data: BeMusicJudgmentDisplayData`, `rect: BeMusicRect`           |
-| `be-music-playfield`         | `frame: BeMusicGameplayFrame`                                     |
-| `be-music-playback-controls` | `data: BeMusicPlaybackData`                                       |
-| `be-music-preview-hud`       | `frame: BeMusicDOMGameplayFrame`, `volume`, `muted`, `fullscreen` |
-| `be-music-preview-select`    | `charts: readonly LibraryChart[]`, `heading`, optional `images`   |
-| `be-music-preview-start`     | `mode: 'play' \| 'replay'`, `disabled`                            |
+| Element                      | Properties                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------ |
+| `be-music-score-summary`     | `data: BeMusicScoreData`, optional `compact`                                                     |
+| `be-music-judgment-table`    | `data: BeMusicJudgmentData`                                                                      |
+| `be-music-gauge-panel`       | `data: BeMusicGaugeData`, optional `compact`                                                     |
+| `be-music-timing-graph`      | `data: BeMusicTimingData`                                                                        |
+| `be-music-play-settings`     | `data: BeMusicSettingsData`                                                                      |
+| `be-music-chart-list`        | `entries`, `selectedIndex`, `disabled`                                                           |
+| `be-music-chart-details`     | `entry`, `launching`, `readmeAvailable`                                                          |
+| `be-music-readme-dialog`     | `text` (open while set), `heading`, `subheading`, `hint`                                         |
+| `be-music-play-options`      | `options`, `choices`, `disabled`                                                                 |
+| `be-music-select-screen`     | `frame: BeMusicDOMSelectFrame`                                                                   |
+| `be-music-gameplay-hud`      | `frame: BeMusicDOMGameplayFrame`                                                                 |
+| `be-music-result-screen`     | `frame: BeMusicDOMResultFrame`                                                                   |
+| `be-music-decide-screen`     | `frame: BeMusicDOMDecideFrame`                                                                   |
+| `be-music-bga`               | `data: BeMusicBGAData`, `rect: BeMusicRect`                                                      |
+| `be-music-lanes`             | `data: BeMusicLanesData`, `rect: BeMusicRect`                                                    |
+| `be-music-notes`             | `data: BeMusicNotesData`, `rect: BeMusicRect`                                                    |
+| `be-music-lane-covers`       | `data: BeMusicLaneCoversData`, `rect: BeMusicRect`                                               |
+| `be-music-judge-line`        | `data: BeMusicJudgeLineData`, `rect: BeMusicRect`                                                |
+| `be-music-bombs`             | `data: BeMusicBombsData`, `rect: BeMusicRect`                                                    |
+| `be-music-judgment-display`  | `data: BeMusicJudgmentDisplayData`, `rect: BeMusicRect`                                          |
+| `be-music-playfield`         | `frame: BeMusicGameplayFrame`                                                                    |
+| `be-music-playback-controls` | `data: BeMusicPlaybackData`                                                                      |
+| `be-music-preview-hud`       | `frame: BeMusicDOMGameplayFrame`, `volume`, `muted`, `fullscreen`                                |
+| `be-music-preview-select`    | `charts: readonly LibraryChart[]`, `heading`, optional `images`                                  |
+| `be-music-preview-start`     | `mode: 'play' \| 'replay'`, `disabled`                                                           |
+| `be-music-chart-score`       | `layout: ChartScoreLayout`, `selection`, `previewing`, `column-beats`, `beat-height`, `disabled` |
 
 Each class is exported as `BeMusic…Element`. Wrappers export the same names without `Element`, for example `BeMusicGameplayHUD` and `BeMusicJudgmentTable`. Leaf components take only their own presentation data and can be arranged independently. Screen components compose those leaves and accept the existing DOM skin frames.
+
+## README dialog
+
+`be-music-readme-dialog` is a modal Basecoat dialog that shows a plain text file, such as the README shipped beside a chart, in a fixed-width face (`--be-music-readme-font` sets another). It is open while `text` is set. `splitLinkedText(text)` splits the text into runs of plain text and links (`https://`, `http://`, the BBS-era `ttp://`, a bare `www.` and mail addresses), and the element builds text nodes and anchors from the runs, so the text is never read as HTML; a link opens in a new tab with `rel="noopener noreferrer"`. The dialog does not close itself: its close button, Escape and a click on the backdrop send `readme-close`, and its owner clears `text`. `scrollTextBy(delta)` scrolls the text for a host that takes the keys itself. `be-music-chart-details` sends `readme-request` from its Readme button, disabled when `readmeAvailable` is `false`.
 
 ## Playfield
 
@@ -56,6 +62,12 @@ Notes, long-note caps, and mines use `resolveNoteHeight` from `@be-music/player-
 ## Preview
 
 `be-music-playback-controls` is a video player's control bar: play / pause (`pause-request`), a seek bar that requests `seek-request` with `{ seconds }` while it is dragged and again when let go, the time, mute and volume (`volume-change` with `{ volume, muted }`) and full screen (`fullscreen-request`). `be-music-preview-hud` lays the chart's facts, score, combo, gauge and judgments under the BGA rect and the controls along the bottom of the stage, and forwards their requests. `be-music-preview-select` lists a track's charts, showing each chart's picture from `images` (a `#STAGEFILE`, or a `#BANNER` when the host supplies one), and requests one with `activate-request`; `be-music-preview-start` is the large play or replay button (`play-request`). `formatPlaybackTime`, `resolveSeekTarget` and `resolveGameplayPanels` are the pure helpers behind them. The embed page composes them ([browser player](../../docs/player-web.md#embedded-preview)).
+
+## Chart score
+
+`be-music-chart-score` draws a chart as a printed score does: its bars in columns, bottom to top and left to right, each with its measure number (`012`), its bar and beat lines, its notes, long notes and mines on the play mode's lanes (the scratch on its side's outer edge, a FREE ZONE note on the scratch), and its tempo changes and stops beside it. It takes SP and DP charts (5 / 7 / 10 / 14 KEY) and 9 KEY (PMS-STD or the BME-type layout, whichever the notes are on). Lay a resolved chart (`resolveChart` from `@be-music/chart-model`) out with `layoutChartScore(chart)` and set it as `layout`; `{ omitEmptyFirstBar: true }` leaves measure 0 out when it holds nothing to play (`isChartScoreBarEmpty`: no note, long note or mine; BGM, BGA, tempo changes and stops do not count), so the score starts at measure 1. Each bar is as long as its measure in beats (`#xxx02`, bmson lines) and carries its `startMs` / `endMs` in whole chart milliseconds through the chart's BPM changes and stops; a long note crossing bar lines has a segment in each bar. `column-beats` (default 16) sets how many beats a column holds and `beat-height` (default 16) how many pixels a beat is.
+
+The bars are a selection. A press picks a bar; Shift-press or a drag runs the selection from the bar pressed first; the arrow keys move between bars, Shift extends, and Space presses. Each pick fires `bar-selection-change` with `{ first, last, bar, extend }`. `chartScoreRangeTimes(layout, range)` turns a selection into chart milliseconds, and `previewing` outlines the bar (or the run of bars) the host is sounding. The colours are the `--be-music-chart-score-*` custom properties (`background`, `lane`, `bar-line`, `beat-line`, `white`, `black`, `scratch`, `mine`, `tempo`, `stop`, `text`, `accent`, `preview`). `packChartScoreColumns`, `selectChartScoreBars`, `resolveChartScoreLanes`, `resolveChartScoreColumn` and `chartScoreRowAt` are the pure helpers behind it.
 
 ## HTML and TypeScript
 

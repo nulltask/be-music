@@ -89,6 +89,7 @@ describe.concurrent('play tempo', () => {
       tui: false,
       writeOutput: () => undefined,
       replayInputs: live.replay.inputs,
+      replayInputSources: live.replay.play.inputSources,
       recordReplay: {},
       onReplayRecorded: (recorded) => {
         replayed = recorded;
@@ -164,6 +165,7 @@ describe.concurrent('play tempo', () => {
       writeOutput: () => undefined,
       createAudioSession: async () => audioSession,
       replayInputs: live.replay.inputs,
+      replayInputSources: live.replay.play.inputSources,
       replayTempoChanges: [{ timeUs: 300_000, tempo: 2 }],
       onTempoChange: (change) => changes.push(change),
       recordReplay: {},

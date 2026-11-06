@@ -12,9 +12,12 @@ import { withChartOverrides } from './resolved-chart-overrides.ts';
  * play's tempo and its lane options are the play's own.
  */
 export interface PlayPractice {
-  /** `START TIME` in chart milliseconds. */
+  /** Where the range starts (beatoraja's `START TIME`), in chart milliseconds: the Be-Music player's first bar picked. */
   startMs: number;
-  /** `END TIME` in chart milliseconds; absent is the source default, the chart's last timeline + 1000. */
+  /**
+   * Where the range ends (beatoraja's `END TIME`), in chart milliseconds: the line closing the last bar picked; absent
+   * is the source default, the chart's last timeline + 1000.
+   */
   endMs?: number;
   /** `GAUGE TYPE`: one of the judge ruleset's `resolvePracticeGaugeTypes`. */
   gauge: PracticeGaugeType;
@@ -46,7 +49,7 @@ export function resolvePracticeRange(practice: PlayPractice, chartEndMs: number)
 const MAX_PRACTICE_BARS = 100_000;
 
 /**
- * The chart millisecond bar `measure` starts at, whole as PRACTICE's times are (the range picker snaps to it): the
+ * The chart millisecond bar `measure` starts at, whole as PRACTICE's times are (the bars picked start there): the
  * resolved chart's bar line there (its `#xxx02` measure lengths or bmson lines), timed through its BPM changes and the
  * stops before it. A bar past the chart's last measure is a 4/4 bar.
  */

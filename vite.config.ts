@@ -45,6 +45,7 @@ const runtimeNeutralSources = [
   'packages/player-engine/src/core/**/*.ts',
   'packages/player-engine/src/audio-clock.ts',
   'packages/player-engine/src/course/**/*.ts',
+  'packages/player-engine/src/difficulty-estimate.ts',
   'packages/player-engine/src/display.ts',
   'packages/player-engine/src/image-resize-algorithm.ts',
   'packages/player-engine/src/judging.ts',

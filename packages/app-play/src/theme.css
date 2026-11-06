@@ -10,6 +10,7 @@
 @source '../../service-web-theme/src/popover-template.ts';
 @source '../../service-web-theme/src/account-identity-template.ts';
 @import 'basecoat-css';
+@import '../../service-web-theme/src/skeleton.css';
 
 /* The system faces: Basecoat names Geist, which the player does not load. */
 @theme {

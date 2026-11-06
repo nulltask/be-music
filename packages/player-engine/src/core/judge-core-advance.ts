@@ -838,8 +838,13 @@ export function advanceJudgeState(
       continue;
     }
 
-    // A back-spin scratch's tail waits for the reverse spin (`judgeBackSpinScratchTail`): letting go settles nothing.
-    if (isChargeLongNoteMode(hold.mode) && !isHolding && hold.backSpinScratch !== true) {
+    // A back-spin scratch's tail waits for the reverse spin (`judgeBackSpinScratchTail`): letting go settles nothing,
+    // unless the release ended it (beatoraja's early POOR release, which records the release instant).
+    if (
+      isChargeLongNoteMode(hold.mode) &&
+      !isHolding &&
+      (hold.backSpinScratch !== true || releaseSeconds !== undefined)
+    ) {
       if (!hold.audioStopped) {
         stopLongNoteSound(hold, channel, nowSec, 'release', emit);
       }

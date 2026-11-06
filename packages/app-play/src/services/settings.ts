@@ -283,8 +283,6 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     longNoteMode: 'LN',
     customJudge: false,
     practice: false,
-    practiceStartMs: 0,
-    practiceEndMs: 0,
     practiceGauge: 'NORMAL',
     practiceGaugeCategory: 'MODE',
     practiceStartGauge: 20,

@@ -33,16 +33,16 @@ A replay is deliberately **not** a list of judgments. Its canonical payload is:
    sweeps misses past R, and ends a run that leaves scorable notes unjudged with the gauge at 0, exactly as the
    engine did (see [`bms-spec.md`](./bms-spec.md) "Negative BPM").
 2. **`inputs`** — every raw key press / release that reached a playable lane, as
-   `{ seq, timeUs, action: 'down' | 'up', channels }`, with the key `tokens` when the host named them, the physical
-   input in `code` when the host had one (a keyboard's `KeyboardEvent.code` such as `'KeyZ'` or `'ShiftLeft'`, or
-   `'touch'` for a touch lane, whose `tokens` are its lane's keyboard key; diagnostic only, like `tokens`), and
-   `inferred: true` on an `up` the engine inferred because the input reported no releases (a terminal without the
+   `{ seq, timeUs, action: 'down' | 'up', channels, source }`. `source` is required: it is the `id` of the physical
+   input in the play's [input-source table](#input-sources) (`play.inputSources`), and it is authoritative — the judge
+   and the simulators key a scratch hold by it (beatoraja's back-spin scratch and scratch LN rules), and hold lanes and
+   route ANY KEY presses by it. An event may also carry the physical input in `code` when the host had one (a
+   keyboard's `KeyboardEvent.code` such as `'KeyZ'` or `'ShiftLeft'`, or `'touch'` for a touch lane; diagnostic only),
+   and `inferred: true` on an `up` the engine inferred because the input reported no releases (a terminal without the
    kitty keyboard protocol): the instant it took the key as let go. `inferred` is diagnostic only; replays and
-   simulators read such an `up` like any other. A scratch press carries `spin: 'cw' | 'ccw'`, the way it turned the
-   turntable (a controller's reported direction, or the keyboard's odd-even key): a back-spin scratch's tail is judged
-   on a press spinning the other way from the one that hit its head (a press without `spin`, such as a touch tap,
-   counts as one), so simulators read it (see
-   [`player-spec.md`](./player-spec.md#scratch-spin)). Inputs are never converted into judgments, never assigned
+   simulators read such an `up` like any other. A scratch press may carry `spin: 'cw' | 'ccw'`, the way it turned the
+   turntable, for display (a replay's turntable animation); judging reads `source` (see
+   [`player-spec.md`](./player-spec.md#input-sources)). Inputs are never converted into judgments, never assigned
    to a note id, and phantom presses (the ones that fire LR2 empty POORs) are kept. The sort key is always
    `(timeUs, seq)` — `seq` disambiguates same-microsecond events.
 3. **`play`** — the settings that affect scoring: mode (manual / auto), auto scratch, the selected gauge, the
@@ -80,6 +80,43 @@ later fix to any ruleset re-scores every previously recorded play without re-rec
 `results.*.minePoor` counts LR2 mine hits already included in `judge.poor`. They never consume judgment notes or break combo. Course BP subtracts them from the judged-note count, then includes each hit once as POOR. The live summary and result score carry the same optional field. Re-simulate older caches and rebuild historical derived records to apply the corrected beta3 mine rules.
 
 `results.*.fullCombo` optionally records final combo eligibility after an empty POOR in beatoraja FIVEKEYS/PMS. Every note must still be GOOD or better. The engine and simulator derive this from the running combo, so an empty POOR before the first note permits a later full combo. Legacy caches without the field use judgment counts; re-simulate them to apply the corrected mode rule. Course results preserve the eligibility and still require the course combo to cover every note.
+
+### Input sources
+
+`play.inputSources` (required) lists the physical inputs the play used, numbered by `id` in the order they first
+appeared; every input event names one by its `source`. Keyboard keys, controller buttons, touch zones and the two
+directions of a turntable share one model (#605, [ADR 0040](./adr/0040-replay-input-sources.md)):
+
+```jsonc
+"play": {
+  "inputSources": [
+    { "id": 0, "kind": "key", "device": "keyboard", "label": "shift-left" },
+    { "id": 1, "kind": "key", "device": "keyboard", "label": "ctrl-left" },
+    { "id": 2, "kind": "turntable", "device": "controller", "label": "tt", "direction": "up" },
+    { "id": 3, "kind": "turntable", "device": "controller", "label": "tt", "direction": "down" },
+    { "id": 4, "kind": "button", "device": "touch", "label": "z" }
+  ],
+  "analogScratch": { "algorithm": "be-music/1", "thresholdTicks": 2, "stopMs": 100 }
+}
+```
+
+- `kind`: `key` and `button` are digital inputs; `turntable` is one rotation direction of a turntable, and requires a
+  `direction` (`up` or `down`). A turntable is always two sources, whether the device reports an axis or two buttons.
+- `device` is a coarse class only: `keyboard`, `controller` or `touch`. `label` is a normalised name (lowercase
+  printable ASCII without whitespace, at most 32 characters): a keyboard key's first token (`'shift-left'`, `'z'`), a
+  touch zone's lane key, or a controller's `b1` / `tt`. A replay never records device-identifying data: no
+  `Gamepad.id`, vendor or product id, or serial.
+- Each physical key bound to a lane is its own source: a scratch lane's Shift, Ctrl and Space are three. Each lane's
+  touch zone is one.
+- `play.analogScratch` (optional) names the versioned algorithm, and its parameters, by which the host turned an analog
+  turntable axis into presses and releases, for audit and display. The log records the resulting events, never raw
+  axis samples, and the simulators never re-run the algorithm.
+
+`parseReplay` rejects a table with duplicate ids, an unknown `kind` or `device`, a label that is not a normalised name,
+a turntable source without a `direction` (or another source with one), and any input whose `source` the table does not
+hold. A log without `play.inputSources`, or whose inputs carry no `source` (the `tokens` of logs recorded before input
+sources), is rejected rather than guessed: the format is still at revision 0 and older logs need not be read. Turning
+a source into channels stays the host's job, and `channels` stays authoritative for lane selection.
 
 **Effective play options.** Besides the selected snapshot (`play.options`, see [What the player saw](#what-the-player-saw)), `play` carries the typed fields that decide judging and the chart, each omitted while its option is off: `judgeAlgorithm` and `customJudge` (beatoraja's judgment algorithm and CUSTOM JUDGE rates); `gaugeAutoShift` and `bottomShiftableGauge`; `autoScratch1P` / `autoScratch2P`; `anyKey` (ANY KEY, whose `inputs` keep each key's own lane and are routed again on replay); the chart modifiers with what they changed — `longNoteModifier`, `longNoteRate` and `longNoteModifierChangeCount`, `mineModifier` and `mineModifierChangeCount`, `scrollModifier`, `scrollSection`, `scrollRate`, `scrollModifierTimeline` and `scrollModifierChanged`, `extraNoteDepth`, `extraNoteScratch` and `extraNoteChangeCount`, LR2 EXTRA MODE's `lr2ExtraMode`, `lr2ExtraLevel`, `lr2ExtraEffectiveLevel`, `lr2ExtraConvertedObjectCount` and `lr2ExtraTempo`, and 7 TO 9's `sevenToNinePattern`, `sevenToNineType`, `sevenToNineThresholdBPM` and `sevenToNineApplied`; and the battle and conversion modes — `battleMode`, the chart's own `battleSourceVariant`, `battleTempo`, `battleAssist1P` / `battleAssist2P`, `battleChangedObjectCount`, `battleDroppedObjectCount` and LR2 D-BATTLE's `dBattleScratch`. `chart.notes` is the chart after every one of them, so a replay or a simulation never rolls them again: a generated long-note head carries `generatedLongNote: true`, a generated mine `silent: true` with its resolved `damage`, and a moved note its `sourceChannel`. `chart.headerBPM` and `chart.bpmRange` keep the header BPM and the BPM extrema the options that classify a chart by its tempo read.
 
@@ -222,6 +259,8 @@ tempo it is re-driven at.
 Browser replays can seek through `PlayScene.seek(seconds)` or ← / → (five seconds). The same engine re-drives recorded inputs from the start, restoring judgments, gauge, combo, held long notes, the recorded tempo and the view at the target. A paused replay stays paused, and a replay aborted early cannot seek past its recorded end. Replay / ghost options still decide whether recorded tempo and view settings override the viewer's. Seeking produces no new replay. A course-stage or NONSTOP seek makes the entire course practice under [ADR 0016](./adr/0016-seek-play-loop-command.md); later stages do not record replays, and the course cannot export a replay.
 
 Manual seeking requires `PlaySceneOptions.allowSeek: 'practice'`. The first seek discards the replay recorder. Notes with heads before the target, including their long-note tails, are consumed without scoring; score, combo and gauge reset to their play-start values. A paused play stays paused. The result carries `practice: true` and cannot be saved as a best record, submitted to the Leaderboard or auto-saved as a replay. The player enables manual seeking for single charts and course stages. Course progression uses live stage outcomes independently of replay recording.
+
+A [PRACTICE](./play-options.md#practice) play records no replay either: the engine builds no log while `PlayerOptions.practice` is set, so it is never saved, auto-saved or sent. Its range still reaches the engine as chart times, `practice.startMs` and `practice.endMs` in milliseconds: the bars picked on the chart's score, from the first bar's line to the line closing the last (`chartScoreRangeTimes` in `@be-music/player-ui`), or the whole chart with no bars picked. Replays recorded before are unchanged: none of them holds a PRACTICE range.
 
 ## Replay slots
 
@@ -556,9 +595,10 @@ Options: `--ruleset=lr2,beatoraja,____|all`, `--gauge=<id>` (ruleset-scoped gaug
 ## Versioning
 
 `format: "be-music-replay"`, `version: 0`. Revision `0` is the development revision: the format is still being
-defined and may change incompatibly without `version` moving. The first stable revision will be `1`. Logs stamped
-`version: 1` before the format was marked unstable have the same shape and still parse, as revision `0`. Unknown extra
-fields are ignored on parse so minor additions stay readable. Ruleset result ids carry their own revision (`lr2/0`
+defined and may change incompatibly without `version` moving. The first stable revision will be `1`. Older logs are
+not read: those stamped `version: 1` before the format was marked unstable, and those recorded before input sources
+(no `play.inputSources`, inputs with `tokens` but no `source`), are rejected rather than guessed. Unknown extra fields
+are ignored on parse so minor additions stay readable. Ruleset result ids carry their own revision (`lr2/0`
 etc.).
 
 Revision `0` is the development revision: the rulesets are still being aligned with their sources, so their rules

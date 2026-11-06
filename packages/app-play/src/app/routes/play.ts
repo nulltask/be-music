@@ -23,7 +23,13 @@ import {
 } from '@be-music/player-browser/host';
 import type { BeMusicReplay, ReplayRecorderInfo } from '@be-music/player-engine/replay';
 import { abortedRecordPlayFromResult, courseStageRecordPlayFromResult } from '@be-music/player-engine/records';
-import { snapHiSpeed, type LibraryChart, type PlayOptions, type PlayResult } from '@be-music/player-scene-model';
+import {
+  snapHiSpeed,
+  type LibraryChart,
+  type PlayOptions,
+  type PlayResult,
+  type PracticeRange,
+} from '@be-music/player-scene-model';
 import {
   courseGoesOnAfter,
   courseReplayStageGivenUp,
@@ -64,6 +70,7 @@ import type { CourseRoute } from './course.ts';
 import { playingFamily } from './decide.ts';
 import type { NonstopPlay, NonstopRoute } from './nonstop.ts';
 import { disposeKeepingAudioTail, type ResultRoute } from './result.ts';
+import { practiceBestEXScore } from '../../ui/practice-bars-model.ts';
 import type { SelectRoute } from './select.ts';
 
 /** The chart and play mode of a play start: what R on its result plays again. */
@@ -156,6 +163,12 @@ export interface PlayRouteDeps {
   /** Re-enables the options a play latched. */
   readonly unlockReplayOptions: () => void;
   readonly showSelect: () => Promise<void>;
+  /** The bars a PRACTICE play of the chart loops, as picked on its score (`PracticeBarsMemory`); none loops it whole. */
+  readonly practiceRange?: (chartEntry: LibraryChart) => PracticeRange | undefined;
+  /** Whether the chart was last started without practice on the PRACTICE bar picker, so it plays as a regular play. */
+  readonly practiceSkipped?: (chartEntry: LibraryChart) => boolean;
+  /** The share of the chart's notes a PRACTICE play loops (`PracticeBarsMemory.noteShareFor`), 1 for the whole chart. */
+  readonly practiceNoteShare?: (chartEntry: LibraryChart) => number;
   /** Names the selected options a chart cannot be played with; `onClose` runs once the player dismisses it. */
   readonly showPlayOptionMismatch: (options: readonly string[], onClose: () => void) => void;
   /** Keeps a play option for every screen and play, and pushes it to the select screen. */
@@ -216,6 +229,9 @@ export class PlayRoute {
   private readonly lockReplayOptionsForPlay: PlayRouteDeps['lockReplayOptionsForPlay'];
   private readonly unlockReplayOptions: PlayRouteDeps['unlockReplayOptions'];
   private readonly showSelect: PlayRouteDeps['showSelect'];
+  private readonly practiceRange: PlayRouteDeps['practiceRange'];
+  private readonly practiceSkipped: PlayRouteDeps['practiceSkipped'];
+  private readonly practiceNoteShare: PlayRouteDeps['practiceNoteShare'];
   private readonly showPlayOptionMismatch: PlayRouteDeps['showPlayOptionMismatch'];
   private readonly setPlayOptions: PlayRouteDeps['setPlayOptions'];
 
@@ -248,6 +264,9 @@ export class PlayRoute {
     this.lockReplayOptionsForPlay = deps.lockReplayOptionsForPlay;
     this.unlockReplayOptions = deps.unlockReplayOptions;
     this.showSelect = deps.showSelect;
+    this.practiceRange = deps.practiceRange;
+    this.practiceSkipped = deps.practiceSkipped;
+    this.practiceNoteShare = deps.practiceNoteShare;
     this.showPlayOptionMismatch = deps.showPlayOptionMismatch;
     this.setPlayOptions = deps.setPlayOptions;
   }
@@ -312,7 +331,10 @@ export class PlayRoute {
       ...(overrides.courseStage !== undefined ? { courseStage: overrides.courseStage } : {}),
       ...(overrides.nonstop !== undefined ? { nonstop: overrides.nonstop } : {}),
     };
-    const playOptions = this.playOptions.current;
+    // "Play without practice" on the PRACTICE bar picker plays the chart as a regular play, leaving PRACTICE on.
+    const playOptions = this.practiceSkipped?.(chartEntry)
+      ? { ...this.playOptions.current, practice: false }
+      : this.playOptions.current;
     const replay = overrides.replay;
     const courseStage = overrides.courseStage;
     const nonstop = overrides.nonstop;
@@ -369,7 +391,7 @@ export class PlayRoute {
     // PRACTICE (beatoraja's, under every ruleset since #933) plays a single chart's range over and over, saving nothing
     // (the host's `practiceRange`).
     const practicing =
-      this.playOptions.current.practice && replay === undefined && courseStage === undefined && nonstop === undefined;
+      playOptions.practice && replay === undefined && courseStage === undefined && nonstop === undefined;
     const callbacks = {
       // In-play hi-speed changes come back to be remembered for the next play.
       onHiSpeedChange: (hiSpeed: number, normalLevel?: number, floating?: boolean) => {
@@ -525,9 +547,11 @@ export class PlayRoute {
     };
     const { onExit, onChartFinished, onRestart, onHiSpeedChange, onTempoChange } = callbacks;
     const source = resolveChartSource(this.library.collection, chartEntry);
+    const practiceRange = practicing ? this.practiceRange?.(chartEntry) : undefined;
     const view = createPlayScene(kit, {
       chart: chartEntry,
       allowSeek: 'practice',
+      ...(practiceRange !== undefined ? { practiceRange } : {}),
       ...(source !== undefined ? { source } : {}),
       settings:
         kit.family === 'built-in'
@@ -551,7 +575,15 @@ export class PlayRoute {
       sounds: this.familyKits.selectSoundSet(kit.family),
       host: this.sceneHost,
       playOptions,
-      scoreTargets: { bestEXScore: this.records.lookupChartBestRecord(chartEntry)?.exScore ?? 0 },
+      // A PRACTICE play paces against the best record cut down to the bars it loops.
+      scoreTargets: {
+        bestEXScore: practicing
+          ? practiceBestEXScore(
+              this.records.lookupChartBestRecord(chartEntry)?.exScore ?? 0,
+              this.practiceNoteShare?.(chartEntry) ?? 1,
+            )
+          : (this.records.lookupChartBestRecord(chartEntry)?.exScore ?? 0),
+      },
       ...(this.leaderboard.playerName !== undefined ? { playerName: this.leaderboard.playerName } : {}),
       on: {
         exit: onExit,

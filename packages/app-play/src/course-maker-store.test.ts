@@ -104,6 +104,34 @@ describe('made courses storage', () => {
     expect(parseMadeCourses(older)).toMatchObject({ randomMixSettings: MIX, randomMixes: [] });
   });
 
+  test('keeps the RANDOM MIX dialog conditions, endless counts included', () => {
+    const conditions = {
+      keyModes: [7, 14],
+      by: 'difficulty' as const,
+      minLevel: 3,
+      maxLevel: 12,
+      difficulties: [4, 5],
+      estimateDifficulty: false,
+      count: 'infinity' as const,
+      loops: 'infinity' as const,
+    };
+    const stored = JSON.parse(
+      JSON.stringify(
+        serializeMadeCourses({
+          courses: [],
+          defaultConnection: 'fade',
+          randomMixSettings: MIX,
+          randomMixConditions: conditions,
+          randomMixes: [],
+        }),
+      ),
+    );
+    expect(parseMadeCourses(stored).randomMixConditions).toEqual(conditions);
+    // A record saved before the dialog has none: the dialog opens on its defaults.
+    const { randomMixConditions: _conditions, ...older } = stored;
+    expect(parseMadeCourses(older).randomMixConditions).toBeUndefined();
+  });
+
   test('reads nothing from a missing, foreign or older record', () => {
     const empty = { courses: [], defaultConnection: 'fade', randomMixSettings: MIX, randomMixes: [] };
     expect(parseMadeCourses(undefined)).toEqual(empty);

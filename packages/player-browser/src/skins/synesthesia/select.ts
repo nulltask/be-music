@@ -194,6 +194,55 @@ function drawDifficulty(
   });
 }
 
+/**
+ * A secondary button (AUTO, README): an outline with corner reticles and its label centred in the display face. A
+ * disabled one (a chart with no README) is drawn faint.
+ */
+function drawSecondaryButton(
+  chrome: Graphics,
+  addText: (text: string, x: number, y: number, options?: SkinTextOptions) => Container,
+  label: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  size: number,
+  enabled: boolean,
+  letterSpacing = 3,
+): void {
+  chrome.rect(x, y, w, h).stroke({ color: SYN_MIST, width: 1, alpha: enabled ? 0.45 : 0.15 });
+  drawReticle(chrome, x, y, w, h, SYN_MIST, enabled ? 0.8 : 0.25, { arm: 5, width: 1 });
+  addText(label, x + w / 2, y + h / 2, {
+    size,
+    fill: SYN_MIST,
+    fontFamily: SYN_DISPLAY_FONT,
+    letterSpacing,
+    anchorX: 0.5,
+    anchorY: 0.5,
+    alpha: enabled ? 1 : 0.3,
+  });
+}
+
+/** The README chip's size: a small outline on the info card's genre line. */
+const README_CHIP_W = 56;
+const README_CHIP_H = 18;
+
+/**
+ * README at (`x`, `y`): a small outlined chip that opens the chart's README, drawn faint and without a hit area on a
+ * chart that has none.
+ */
+function drawReadmeChip(
+  chrome: Graphics,
+  addText: (text: string, x: number, y: number, options?: SkinTextOptions) => Container,
+  frame: PixiSelectFrame,
+  x: number,
+  y: number,
+): void {
+  const enabled = frame.hasReadme === true;
+  drawSecondaryButton(chrome, addText, 'README', x, y, README_CHIP_W, README_CHIP_H, 8, enabled, 2);
+  if (enabled) addHitArea(x - 2, y - 4, README_CHIP_W + 4, README_CHIP_H + 8, 'pointer', frame.actions.toggleReadme);
+}
+
 function framePanel(graphics: Graphics, x: number, y: number, w: number, h: number, rim: number): void {
   drawGlassSurface(graphics, x, y, w, h, 0.94);
   graphics.rect(x, y, w, h).stroke({ color: rim, width: 1, alpha: 0.28 });
@@ -723,10 +772,13 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         fill: accent,
         fontFamily: SYN_TEXT_FONT,
         letterSpacing: 2,
-        maxWidth: 258,
+        // Clear of the README chip at the row's end.
+        maxWidth: chartEntry ? 258 - README_CHIP_W - 8 : 258,
         alpha: 1 - slide,
       });
     }
+    // README at the card's top right, on the genre line; the title starts under it.
+    if (chartEntry) drawReadmeChip(chrome, addText, frame, 288 - README_CHIP_W, 66);
     if (chartArtist) {
       addText(chartArtist, 30 + slide * 40, 114, {
         size: 10,
@@ -789,16 +841,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorY: 0.5,
     });
     // AUTO's right edge sits on the content column's (288), like the LEVEL chip above it.
-    chrome.rect(202, 307, 86, 26).stroke({ color: SYN_MIST, width: 1, alpha: 0.45 });
-    drawReticle(chrome, 202, 307, 86, 26, SYN_MIST, 0.8, { arm: 5, width: 1 });
-    addText('AUTO', 245, 320, {
-      size: 9,
-      fill: SYN_MIST,
-      fontFamily: SYN_DISPLAY_FONT,
-      letterSpacing: 3,
-      anchorX: 0.5,
-      anchorY: 0.5,
-    });
+    drawSecondaryButton(chrome, addText, 'AUTO', 202, 307, 86, 26, 9, true);
     addHitArea(26, 300, 172, 40, 'pointer', frame.actions.play);
     addHitArea(200, 304, 90, 32, 'pointer', frame.actions.autoPlay);
     this.drawBanner(frame, 30, 354, 258, 72);
@@ -907,10 +950,13 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         fill: accent,
         fontFamily: SYN_TEXT_FONT,
         letterSpacing: 2,
-        maxWidth: innerW,
+        // Clear of the README chip at the row's end.
+        maxWidth: chartEntry ? innerW - README_CHIP_W - 8 : innerW,
         alpha: 1 - slide,
       });
     }
+    // README at the card's top right, on the genre line; the title starts under it.
+    if (chartEntry) drawReadmeChip(chrome, addText, frame, left + innerW - README_CHIP_W, card.y + 10);
     addText(chartEntry?.title ?? course?.title ?? 'No chart selected', left + slide * 24, card.y + 30, {
       size: 18,
       weight: '500',
@@ -990,16 +1036,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     });
     const autoX = left + playW + 16;
     const autoW = left + innerW - autoX;
-    chrome.rect(autoX, buttonY + 2, autoW, 32).stroke({ color: SYN_MIST, width: 1, alpha: 0.45 });
-    drawReticle(chrome, autoX, buttonY + 2, autoW, 32, SYN_MIST, 0.8, { arm: 5, width: 1 });
-    addText('AUTO', autoX + autoW / 2, buttonY + 18, {
-      size: 10,
-      fill: SYN_MIST,
-      fontFamily: SYN_DISPLAY_FONT,
-      letterSpacing: 3,
-      anchorX: 0.5,
-      anchorY: 0.5,
-    });
+    drawSecondaryButton(chrome, addText, 'AUTO', autoX, buttonY + 2, autoW, 32, 10, true);
     addHitArea(left - 4, buttonY - 4, playW + 8, 44, 'pointer', frame.actions.play);
     addHitArea(autoX - 2, buttonY - 2, autoW + 4, 40, 'pointer', frame.actions.autoPlay);
 

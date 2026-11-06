@@ -404,7 +404,8 @@ export const en = {
     upload: 'Upload an avatar',
     useGenerated: 'Use the generated avatar',
     passkeys: 'Passkeys',
-    passkeysAnonymous: 'You are playing as a guest. Keep this account with a passkey to sign in on other devices.',
+    passkeysAnonymous:
+      'You are playing as a guest. Keep this account with a passkey, Google or Discord to sign in on other devices.',
     passkeysCount: (count: number) => `${plural(count, 'passkey', 'passkeys')}. A passkey signs you in on any device.`,
     keepAccount: 'Keep this account with a passkey',
     addPasskey: 'Add a passkey',

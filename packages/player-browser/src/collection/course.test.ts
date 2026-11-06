@@ -169,11 +169,12 @@ describe('random courses', () => {
       },
     });
     expect(record.chart).toBe(entry);
-    // A chart with no lanes in use reads as 5 KEYS, as the play-variant rule gives it.
+    // A chart with no lanes in use reads as 5 KEYS, as the play-variant rule gives it. Without #DIFFICULTY or a hint
+    // in its names, its 100 notes read as BEGINNER, as beatoraja's song database fills it in.
     const bare = createCourseChartRecord(chartEntry('d', 'Empty'));
     expect([bare.level, bare.difficulty, bare.mode, bare.length, bare.feature, bare.md5]).toEqual([
       0,
-      0,
+      1,
       5,
       0,
       0,

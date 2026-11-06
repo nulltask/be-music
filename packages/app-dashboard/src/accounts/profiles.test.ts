@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { DISPLAY_NAME_MAX, generateHandle, normalizeDisplayName, normalizeHandle } from './profiles.ts';
+import {
+  DISPLAY_NAME_MAX,
+  generateHandle,
+  normalizeDisplayName,
+  normalizeHandle,
+  keptDisplayName,
+  welcomeNextPath,
+} from './profiles.ts';
 
 describe('normalizeHandle', () => {
   test('accepts letters, digits and _, 3 to 15 characters, and stores them in lower case', () => {
@@ -42,5 +49,26 @@ describe('normalizeDisplayName', () => {
     for (const input of ['a\nb', 'a\u0007b', 'abc‮def', 'a b', 'a⁦b']) {
       expect(normalizeDisplayName(input)).toEqual({ ok: false, reason: 'characters' });
     }
+  });
+});
+
+describe('welcomeNextPath', () => {
+  test('keeps a path on this host', () => {
+    expect(welcomeNextPath('/account')).toBe('/account');
+    expect(welcomeNextPath('/')).toBe('/');
+  });
+
+  test('sends anything else to the account page', () => {
+    for (const next of [null, undefined, '', 'account', '//evil.example', '/\\evil.example', 'https://evil.example/']) {
+      expect(welcomeNextPath(next)).toBe('/account');
+    }
+  });
+});
+
+describe('keptDisplayName', () => {
+  test("renames a guest's placeholder and keeps a chosen name", () => {
+    expect(keptDisplayName('Anonymous')).toBe('Player');
+    expect(keptDisplayName('Taro')).toBe('Taro');
+    expect(keptDisplayName('Player')).toBe('Player');
   });
 });

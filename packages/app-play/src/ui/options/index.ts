@@ -12,7 +12,6 @@ import {
   formatGaugeLabel,
   isDuplicatedBattleChoice,
   keepPracticeGauge,
-  type LibraryChart,
   type PlayOptions,
 } from '@be-music/player-scene-model';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
@@ -46,12 +45,14 @@ import {
 } from '../../services/ghost.ts';
 import type { LibraryService } from '../../services/library.ts';
 import type { RecordsService } from '../../services/records.ts';
+import type { BGACameraService } from '../../services/bga-camera.ts';
 import type { SilentModeSetting } from '../../services/silent-mode.ts';
 import type { StoredSkinSettings } from '../../skin-settings.ts';
 import type { PlayerGUIState, SkinFamilyOverride } from '../../types.ts';
 import type { ActiveBeatorajaPlay } from '../beatoraja-skin-options.ts';
 import type { SkinDropFamily } from '../skin-drop-prompt.ts';
 import { buildAudioFolder } from './audio.ts';
+import { buildBGACameraFolder } from './bga-camera.ts';
 import { buildCaptureFolder } from './capture.ts';
 import {
   buildCompressorTuningGUI,
@@ -72,7 +73,6 @@ import {
 } from './play-option-items.ts';
 import { buildPlayOptionsFolder, buildReplayViewFolder } from './play-options.ts';
 import { buildQuickOptionsPanel, QUICK_OPTIONS_ENABLED } from './quick-options.ts';
-import type { PracticeRangePicker } from './practice-range.ts';
 import { detectRenderResolution, scheduleFirstRunResolutionDetect } from './render-resolution.ts';
 import { applyBeatorajaSkinSwitchIfActive, rebuildBeatorajaSkinPickers } from './skin-pickers.ts';
 import { buildSkinFolder, rebuildLR2ThemePicker, rebuildSkinFamilyPicker, rebuildSkinSettingsFolder } from './skin.ts';
@@ -114,6 +114,8 @@ export interface OptionsDialogDeps {
    * the site header and the site footer stay outside fullscreen.
    */
   readonly shell: HTMLElement;
+  /** The camera the play can show in its BGA frame, which the Camera tab sets up. */
+  readonly bgaCamera: BGACameraService;
   /** The play: loading behind a decide screen, or on the stage. */
   gameplayView(): PlayScene | undefined;
   /** The select screen, on the stage or kept off it. */
@@ -268,10 +270,6 @@ export class OptionsDialog {
   public customJudgeController: PaneBinding | undefined;
   /** PRACTICE toggle first, then its settings. */
   public practiceControllers: PaneBinding[] = [];
-  /** The row carrying the PRACTICE range picker, shown while PRACTICE is on. */
-  public practiceRangeBlade: OptionRow | undefined;
-  /** The PRACTICE range picker (#948), which follows the chart under the select screen's cursor. */
-  public practiceRangePicker: PracticeRangePicker | undefined;
   /** PRACTICE's GAUGE TYPE: the judge ruleset's own gauges. */
   public practiceGaugeController: OptionBinding<PlayOptions['practiceGauge']> | undefined;
   /** PRACTICE's GAUGE CATEGORY, which only beatoraja has. */
@@ -327,6 +325,7 @@ export class OptionsDialog {
   public statusController: PaneBinding | undefined;
   // The folders and the controls that follow what is loaded, each built in its own module with the dialog as `this`.
   private readonly buildCaptureFolder = buildCaptureFolder;
+  private readonly buildBGACameraFolder = buildBGACameraFolder;
   private readonly buildPlayOptionsFolder = buildPlayOptionsFolder;
   private readonly buildReplayViewFolder = buildReplayViewFolder;
   private readonly buildKeyConfigFolder = buildKeyConfigFolder;
@@ -447,10 +446,10 @@ export class OptionsDialog {
     const addFolder = (parent: Pick<OptionContainer, 'addFolder'>, folder: OptionFolderSpec): OptionFolder =>
       parent.addFolder({ title: folder.title });
     const tabs = gui.addTab({ pages: OPTIONS_TABS.map((title) => ({ title })) });
-    const [play, view, keys, skin, audio, library, leaderboard, advanced] = tabs.pages;
-    if (!play || !view || !keys || !skin || !audio || !library || !leaderboard || !advanced) return;
+    const [play, view, keys, skin, audio, cameraTab, library, leaderboard, advanced] = tabs.pages;
+    if (!play || !view || !keys || !skin || !audio || !cameraTab || !library || !leaderboard || !advanced) return;
     // Tabs in the order a session uses them: how to play and what the lanes show, the keys, how it looks and sounds,
-    // the library (loading, records, the select screen's list, courses and capturing a play), the Leaderboard, then
+    // the camera in the BGA frame, the library (loading, records, the select screen's list, courses and capturing a play), the Leaderboard, then
     // the advanced settings. The sections are made first, top to bottom, since the Play options fill the View and
     // Select folders on other tabs.
     const playOptions = addSection(play, OPTION_FOLDERS.playOptions);
@@ -475,6 +474,7 @@ export class OptionsDialog {
     this.buildKeyConfigFolder(addSection(keys, OPTION_FOLDERS.keys));
     this.buildSkinFolder(addSection(skin, OPTION_FOLDERS.skin), addFolder);
     this.buildAudioFolder(addSection(audio, OPTION_FOLDERS.audio), addFolder);
+    this.buildBGACameraFolder(addSection(cameraTab, OPTION_FOLDERS.bgaCamera), this.deps.bgaCamera);
     this.deps.leaderboard.buildFolder(addSection(leaderboard, OPTION_FOLDERS.leaderboard));
     this.buildDeveloperFolder(addSection(advanced, OPTION_FOLDERS.advanced));
     this.refreshCompressorStageVisibility();
@@ -520,10 +520,6 @@ export class OptionsDialog {
   public setGhostAvailability(facts: GhostBarFacts | undefined): void {
     this.ghostBar = facts;
     this.refreshGhostAvailability();
-  }
-  /** Tells the PRACTICE range picker the chart under the cursor: `undefined` on a folder, a course or no bar. */
-  public setPracticeChart(chart: LibraryChart | undefined): void {
-    this.practiceRangePicker?.setChart(chart);
   }
   /** Repaints "Ghost", "Ghost mode" and "Ghost status": disabled during a play and on a course bar. */
   public refreshGhostAvailability(): void {
@@ -609,17 +605,19 @@ export class OptionsDialog {
         'STARTBPM',
       ] as const);
     const floating = this.guiState.floatingHiSpeed;
-    if (this.floatingSpeedController) this.floatingSpeedController.hidden = !floating;
+    // A hi-speed mode's own controls stay in place while another mode is on, disabled rather than hidden.
+    if (this.floatingSpeedController) this.floatingSpeedController.unavailable = !floating;
     const normal = this.guiState.normalHiSpeedLevel > 0;
-    if (this.normalHiSpeedLevelController) this.normalHiSpeedLevelController.hidden = !normal || floating;
-    if (this.hiSpeedController) this.hiSpeedController.hidden = this.guiState.classicHiSpeed || normal || floating;
-    if (this.hsFixController) this.hsFixController.hidden = this.guiState.classicHiSpeed || normal || floating;
+    if (this.normalHiSpeedLevelController) this.normalHiSpeedLevelController.unavailable = !normal || floating;
+    if (this.hiSpeedController) this.hiSpeedController.unavailable = this.guiState.classicHiSpeed || normal || floating;
+    if (this.hsFixController) this.hsFixController.unavailable = this.guiState.classicHiSpeed || normal || floating;
     // The quick panel offers only the regular hi-speed and HS-FIX; a measured or classic mode is set in the dialog.
     if (this.quickHiSpeedController)
-      this.quickHiSpeedController.hidden = this.guiState.classicHiSpeed || normal || floating;
+      this.quickHiSpeedController.unavailable = this.guiState.classicHiSpeed || normal || floating;
     if (this.quickHsFixController)
-      this.quickHsFixController.hidden = this.guiState.classicHiSpeed || normal || floating;
-    if (this.classicSpeedController) this.classicSpeedController.hidden = !this.guiState.classicHiSpeed || floating;
+      this.quickHsFixController.unavailable = this.guiState.classicHiSpeed || normal || floating;
+    if (this.classicSpeedController)
+      this.classicSpeedController.unavailable = !this.guiState.classicHiSpeed || floating;
     if (this.anyKeyController) this.anyKeyController.hidden = this.guiState.judgeRuleset !== '____';
     const ruleset = this.guiState.judgeRuleset;
     const beatoraja = ruleset === 'beatoraja';
@@ -644,7 +642,7 @@ export class OptionsDialog {
     const twoPlayer = ['TWO-PLAYER', 'COUPLE', 'AUTO'].includes(this.guiState.battleMode);
     if (this.gauge2PController) this.gauge2PController.hidden = !twoPlayer;
     for (const controller of this.mRanControllers) controller.hidden = !twoPlayer;
-    if (this.lr2ExtraLevelController) this.lr2ExtraLevelController.hidden = !this.guiState.lr2ExtraMode;
+    if (this.lr2ExtraLevelController) this.lr2ExtraLevelController.unavailable = !this.guiState.lr2ExtraMode;
     if (!beatoraja && this.guiState.longNoteMode !== 'LN') {
       this.guiState.longNoteMode = 'LN';
       this.setPlayOptions({ longNoteMode: 'LN' });
@@ -656,8 +654,6 @@ export class OptionsDialog {
     this.practiceControllers.forEach((controller, index) => {
       controller.hidden = index > 0 && !practice;
     });
-    if (this.practiceRangeBlade) this.practiceRangeBlade.hidden = !practice;
-    this.practiceRangePicker?.setShown(practice);
     const practiceGauge = keepPracticeGauge(this.guiState.practiceGauge, ruleset);
     if (practiceGauge !== this.guiState.practiceGauge) {
       this.guiState.practiceGauge = practiceGauge;
@@ -675,10 +671,13 @@ export class OptionsDialog {
       this.setPlayOptions({ customJudge: false });
     }
     if (this.customJudgeController) this.customJudgeController.hidden = !beatoraja;
-    for (const controller of this.customJudgeRateControllers)
-      controller.hidden = !beatoraja || !this.guiState.customJudge;
+    // The rates belong to beatoraja's rules; under them they stay in place, disabled while CUSTOM JUDGE is off.
+    for (const controller of this.customJudgeRateControllers) {
+      controller.hidden = !beatoraja;
+      controller.unavailable = !this.guiState.customJudge;
+    }
     if (this.longNoteRateController)
-      this.longNoteRateController.hidden = !this.guiState.longNoteModifier.startsWith('ADD_');
+      this.longNoteRateController.unavailable = !this.guiState.longNoteModifier.startsWith('ADD_');
     // Every ruleset seeds its lane randoms (#933); only the PMS playable randomizer ignores its seed, as in the source.
     for (const side of ['1P', '2P'] as const) {
       const controller = side === '1P' ? this.randomSeed1PController : this.randomSeed2PController;
@@ -695,8 +694,8 @@ export class OptionsDialog {
       this.bottomShiftableGaugeController.options = bottomChoices;
       this.bottomShiftableGaugeController.refresh();
     }
-    if (this.scrollSectionController) this.scrollSectionController.hidden = this.guiState.scrollModifier !== 'ADD';
-    if (this.scrollRateController) this.scrollRateController.hidden = this.guiState.scrollModifier !== 'ADD';
+    if (this.scrollSectionController) this.scrollSectionController.unavailable = this.guiState.scrollModifier !== 'ADD';
+    if (this.scrollRateController) this.scrollRateController.unavailable = this.guiState.scrollModifier !== 'ADD';
     if (!beatoraja && this.guiState.judgeAlgorithm !== 'combo') {
       this.guiState.judgeAlgorithm = 'combo';
       this.setPlayOptions({ judgeAlgorithm: 'combo' });

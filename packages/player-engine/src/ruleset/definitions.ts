@@ -176,6 +176,13 @@ export interface RulesetConfig {
   longNoteReleaseMarginUs: { note: number; scratch: number };
   /** That-Which-Must-Not-Be-Named: a BAD / POOR on a charge-note head skips the tail judgment entirely. */
   headBadSkipsTail: boolean;
+  /**
+   * beatoraja's `sckey` (#605): a scratch long note remembers the input source that hit its head. An LN on a scratch
+   * lane is let go only by that source's release; a back-spin scratch ends on that source's release when the release
+   * would judge POOR (otherwise it is ignored). A press from another source ends a back-spin scratch under every
+   * ruleset that plays one. LR2 and That-Which-Must-Not-Be-Named release scratch holds on any key.
+   */
+  scratchHoldsBySource: boolean;
   comboBreaksOnEmptyPoor: boolean;
   /** When a mine detonates (see {@link MineTrigger}). */
   mineTrigger: MineTrigger;
@@ -1064,6 +1071,7 @@ function resolveRulesetTables(
       pressDuringLongNote: 'rejudge-head-or-empty-poor',
       longNoteReleaseMarginUs: { note: 0, scratch: 0 },
       headBadSkipsTail: false,
+      scratchHoldsBySource: false,
       comboBreaksOnEmptyPoor: false,
       mineTrigger: 'press-ahead-or-hold',
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
@@ -1139,6 +1147,7 @@ function resolveRulesetTables(
         scratch: 0,
       },
       headBadSkipsTail: false,
+      scratchHoldsBySource: true,
       comboBreaksOnEmptyPoor,
       mineTrigger: 'hold',
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
@@ -1174,6 +1183,7 @@ function resolveRulesetTables(
     pressDuringLongNote: 'ignore',
     longNoteReleaseMarginUs: { note: 0, scratch: 0 },
     headBadSkipsTail: true,
+    scratchHoldsBySource: false,
     comboBreaksOnEmptyPoor: false,
     // That-Which-Must-Not-Be-Named has no mines; LR2's model stands in until there is evidence otherwise.
     mineTrigger: 'press-or-hold',

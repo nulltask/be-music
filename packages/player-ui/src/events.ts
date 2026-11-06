@@ -13,6 +13,8 @@ export interface BeMusicUIEventMap {
   'cancel-request': undefined;
   'back-request': undefined;
   'readme-request': undefined;
+  /** `<be-music-readme-dialog>`: the player asked to close it (its close button, Escape or the backdrop). */
+  'readme-close': undefined;
   'gesture-request': undefined;
   'play-request': { autoPlay: boolean };
   'auto-play-change': { autoPlay: boolean };
@@ -23,5 +25,7 @@ export interface BeMusicUIEventMap {
   'seek-request': { seconds: number };
   'volume-change': { volume: number; muted: boolean };
   'fullscreen-request': undefined;
+  /** `<be-music-chart-score>`: the bars selected (`first`..`last`), the bar pressed, and whether it extended the run. */
+  'bar-selection-change': { first: number; last: number; bar: number; extend: boolean };
 }
 export type BeMusicUIEvent<K extends keyof BeMusicUIEventMap> = CustomEvent<BeMusicUIEventMap[K]>;

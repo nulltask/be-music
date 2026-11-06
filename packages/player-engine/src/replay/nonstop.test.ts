@@ -37,8 +37,14 @@ function presses(chart: ReturnType<typeof stitch>['chart'], miss: (index: number
     .sort((left, right) => left.timeUs - right.timeUs)
     .forEach((note, index) => {
       if (miss(index)) return;
-      events.push({ seq: events.length, timeUs: note.timeUs, action: 'down', channels: [note.channel] });
-      events.push({ seq: events.length, timeUs: note.timeUs + 40_000, action: 'up', channels: [note.channel] });
+      events.push({ seq: events.length, timeUs: note.timeUs, action: 'down', channels: [note.channel], source: 0 });
+      events.push({
+        seq: events.length,
+        timeUs: note.timeUs + 40_000,
+        action: 'up',
+        channels: [note.channel],
+        source: 0,
+      });
     });
   return events.sort((left, right) => left.timeUs - right.timeUs || left.seq - right.seq);
 }

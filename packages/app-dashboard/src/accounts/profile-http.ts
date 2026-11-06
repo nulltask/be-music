@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { createAuth, type Env } from './auth.ts';
 import { openDatabase } from './db/client.ts';
 import { profile, user } from './schema.ts';
-import { createProfile, updateProfile } from './profiles.ts';
+import { checkHandleAvailability, createProfile, markOnboarded, needsOnboarding, updateProfile } from './profiles.ts';
 import { AVATAR_MAX_BYTES, avatarURL, generatedAvatarSVG, putAvatar, removeAvatar } from './avatars.ts';
 
 /** The public projection of a profile. Authentication details never leave Accounts. */
@@ -44,13 +44,23 @@ export async function profileHTTP(request: Request, env: Env): Promise<Response 
       },
     });
   }
-  if (!['/api/profile', '/api/profile/avatar'].includes(url.pathname)) return null;
+  if (!['/api/profile', '/api/profile/avatar', '/api/profile/handle', '/api/profile/onboarded'].includes(url.pathname))
+    return null;
   if (request.method !== 'GET' && request.headers.get('origin') !== env.AUTH_ORIGIN)
     return reply({ error: 'invalid-origin' }, 403);
   const session = await createAuth(env).api.getSession({ headers: request.headers });
   if (!session) return reply({ error: 'sign-in-required' }, 401);
   const userId = session.user.id;
   await createProfile(db, userId, session.user.isAnonymous === true);
+  // The welcome checks a handle as the player types it, and records when it is done or skipped.
+  if (url.pathname === '/api/profile/handle' && request.method === 'GET')
+    return reply(await checkHandleAvailability(db, userId, url.searchParams.get('value') ?? ''));
+  if (url.pathname === '/api/profile/onboarded' && request.method === 'POST') {
+    await markOnboarded(db, userId);
+    return reply({ onboarded: true });
+  }
+  if (url.pathname === '/api/profile' && request.method === 'GET')
+    return reply({ ...(await publicProfile(env, userId)), onboarded: !(await needsOnboarding(db, userId)) });
   if (url.pathname === '/api/profile' && request.method === 'PATCH') {
     let body: unknown;
     try {

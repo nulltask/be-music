@@ -5,6 +5,7 @@ import {
   currentCacheNames,
   extractFontFileURLs,
   ffmpegCoreCacheName,
+  fontFetchInit,
   isCacheableResponse,
   routeRequest,
   shellCacheName,
@@ -128,19 +129,22 @@ describe('routeRequest', () => {
 
 describe('isCacheableResponse', () => {
   test('stores complete successful answers', () => {
-    expect(isCacheableResponse({ status: 200, type: 'basic' }, 'hashed-asset')).toBe(true);
-    expect(isCacheableResponse({ status: 200, type: 'cors' }, 'font-file')).toBe(true);
+    expect(isCacheableResponse({ status: 200, type: 'basic' })).toBe(true);
+    expect(isCacheableResponse({ status: 200, type: 'cors' })).toBe(true);
   });
 
   test('never stores errors, partial content or redirects', () => {
-    expect(isCacheableResponse({ status: 404, type: 'basic' }, 'hashed-asset')).toBe(false);
-    expect(isCacheableResponse({ status: 206, type: 'basic' }, 'ffmpeg-core')).toBe(false);
-    expect(isCacheableResponse({ status: 0, type: 'opaqueredirect' }, 'shell-navigation')).toBe(false);
+    expect(isCacheableResponse({ status: 404, type: 'basic' })).toBe(false);
+    expect(isCacheableResponse({ status: 206, type: 'basic' })).toBe(false);
+    expect(isCacheableResponse({ status: 0, type: 'opaqueredirect' })).toBe(false);
   });
 
-  test('stores an opaque answer only for the fonts', () => {
-    expect(isCacheableResponse({ status: 0, type: 'opaque' }, 'font-stylesheet')).toBe(true);
-    expect(isCacheableResponse({ status: 0, type: 'opaque' }, 'hashed-asset')).toBe(false);
+  test('never stores an opaque answer, which a cross-origin isolated page cannot read back', () => {
+    expect(isCacheableResponse({ status: 0, type: 'opaque' })).toBe(false);
+  });
+
+  test('fetches the fonts with CORS and no credentials, whatever mode the page asked in', () => {
+    expect(fontFetchInit).toEqual({ mode: 'cors', credentials: 'omit' });
   });
 });
 
@@ -166,6 +170,11 @@ describe('cache names', () => {
       'some-other-cache',
     ];
     expect(staleCacheNames(existing, manifest)).toEqual([shellCacheName('v1'), ffmpegCoreCacheName('0.12.9')]);
+  });
+
+  test('drop the first font cache, which could hold opaque answers', () => {
+    expect(FONT_CACHE_NAME).not.toBe('be-music-play-fonts');
+    expect(staleCacheNames(['be-music-play-fonts', FONT_CACHE_NAME], manifest)).toEqual(['be-music-play-fonts']);
   });
 });
 

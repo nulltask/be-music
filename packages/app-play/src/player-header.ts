@@ -45,6 +45,8 @@ const actions: {
 };
 
 let account: PlayerHeaderAccount | undefined;
+/** The account has not been read yet, so the header shows a placeholder rather than "Sign in". */
+let accountLoading = true;
 let host: HTMLElement | undefined;
 /** An odd number of Settings clicks arrived before the menu existed, so the first bind should open it. */
 let pendingMenu = false;
@@ -96,6 +98,8 @@ export function playerServiceHeaderTemplate(input: {
   hostname: string;
   requestURL: string;
   account?: PlayerHeaderAccount;
+  /** The account is still being read: a placeholder stands where it will show. */
+  accountLoading?: boolean;
   /** The page is fullscreen, so the button offers to leave. */
   fullscreenActive?: boolean;
   /** The Options dialog is open, so the gear is expanded. */
@@ -132,6 +136,7 @@ export function playerServiceHeaderTemplate(input: {
     spanViewport: true,
     accountHref,
     account: signedIn,
+    accountLoading: input.accountLoading === true,
     accountNewTab: true,
     requestURL: input.requestURL,
   })}`;
@@ -152,9 +157,10 @@ export function classifyPlayerHeaderClick(
   return undefined;
 }
 
-/** Remembers who is signed in and repaints the header. */
+/** Remembers who is signed in (`undefined`: signed out), ends the loading placeholder and repaints the header. */
 export function setPlayerHeaderAccount(next: PlayerHeaderAccount | undefined): void {
   account = next;
+  accountLoading = false;
   paint();
 }
 
@@ -240,6 +246,7 @@ function paint(): void {
       hostname,
       requestURL,
       account,
+      accountLoading,
       fullscreenActive: getFullscreenElement(document) !== null,
       settingsOpen,
       installable,

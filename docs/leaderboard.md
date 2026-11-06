@@ -82,6 +82,7 @@ Resubmitting the same play from its owner returns the stored result; submission 
 
 ### 5.3 Verification layers
 
+- L0 parses the replay (`parseReplay`), refusing a malformed one with `invalid-replay`. Every input must name a source in the replay's input-source table (`play.inputSources`, [`replay.md`](./replay.md#input-sources)), whose entries hold a coarse device class and a normalised label only; a replay recorded before input sources is refused rather than guessed. The table and the sources are part of the play's identity (`identifyPlay`), so they are stored as submitted. Rankings do not split by device class yet.
 - L1 re-simulates inputs instead of trusting the replay’s result cache.
 - L2 rejects AUTO and classifies assists. Tempo changes and standalone course stages are stored as unranked; ESC aborts are ranked as failed plays.
 - L3 checks that the play document and, on registration, chart document hash to the claimed fingerprints. The play document then also checks the replay's chart gameplay program: `chart.chartPlayOptions` must be the document's `playOptions` narrowed to the play (a course stage leaves out NOTES COPY; a NONSTOP run applies none), or the play is rejected with `chart-play-options-mismatch` ([ADR 0035](./adr/0035-chart-authored-notes-options.md), `src/scores/chart-play-options.ts`).

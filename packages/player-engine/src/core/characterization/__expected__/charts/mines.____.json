@@ -54,16 +54,27 @@
         "artist": "Be-Music Dev Team"
       },
       "inputs": [
-        {"seq":0,"timeUs":490000,"action":"down","channels":["11"],"tokens":["z"]},
-        {"seq":1,"timeUs":1100000,"action":"up","channels":["11"],"tokens":["z"]},
-        {"seq":2,"timeUs":1500000,"action":"down","channels":["11"],"tokens":["z"]},
-        {"seq":3,"timeUs":1560000,"action":"up","channels":["11"],"tokens":["z"]},
-        {"seq":4,"timeUs":2000000,"action":"down","channels":["12"],"tokens":["s"]},
-        {"seq":5,"timeUs":2060000,"action":"up","channels":["12"],"tokens":["s"]},
-        {"seq":6,"timeUs":2400000,"action":"down","channels":["16"],"tokens":["shift-left"],"spin":"cw"},
-        {"seq":7,"timeUs":2600000,"action":"up","channels":["16"],"tokens":["shift-left"]}
+        {"seq":0,"timeUs":490000,"action":"down","channels":["11"],"source":0},
+        {"seq":1,"timeUs":1100000,"action":"up","channels":["11"],"source":0},
+        {"seq":2,"timeUs":1500000,"action":"down","channels":["11"],"source":0},
+        {"seq":3,"timeUs":1560000,"action":"up","channels":["11"],"source":0},
+        {"seq":4,"timeUs":2000000,"action":"down","channels":["12"],"source":1},
+        {"seq":5,"timeUs":2060000,"action":"up","channels":["12"],"source":1},
+        {"seq":6,"timeUs":2400000,"action":"down","channels":["16"],"source":2,"spin":"cw"},
+        {"seq":7,"timeUs":2600000,"action":"up","channels":["16"],"source":2}
       ],
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"____","endOnFailure":true},
+      "play": {
+        "inputSources": [
+          {"id":0,"kind":"key","device":"keyboard","label":"z"},
+          {"id":1,"kind":"key","device":"keyboard","label":"s"},
+          {"id":2,"kind":"key","device":"keyboard","label":"shift-left"}
+        ],
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "____",
+        "endOnFailure": true
+      },
       "results": {
         "native": {
           "ruleset": "be-music/native",
@@ -230,7 +241,18 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": "(same as manual)",
-      "play": {"mode":"manual","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"____","endOnFailure":true},
+      "play": {
+        "inputSources": [
+          {"id":0,"kind":"key","device":"keyboard","label":"z"},
+          {"id":1,"kind":"key","device":"keyboard","label":"s"},
+          {"id":2,"kind":"key","device":"keyboard","label":"shift-left"}
+        ],
+        "mode": "manual",
+        "autoScratch": false,
+        "gauge": "GROOVE",
+        "judgeRuleset": "____",
+        "endOnFailure": true
+      },
       "results": "(same as manual)"
     },
     "simulated": "(same as manual)",
@@ -330,7 +352,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"____","endOnFailure":true},
+      "play": {"inputSources":[],"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"____","endOnFailure":true},
       "results": {
         "native": {
           "ruleset": "be-music/native",

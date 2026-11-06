@@ -4,6 +4,12 @@ import { markScorableJudged, markLandmineJudged, markInvisibleJudged } from './j
 import { handleLanePress, handleLaneRelease, resolveAnyKeyPressChannels } from './judge-core-press.ts';
 import { AnyKeyRoutes, anyKeyRouteKeys } from './any-key.ts';
 import {
+  createInputSourceLookup,
+  inputSourceKey,
+  type IdentifiedInputSource,
+  type InputSource,
+} from './input-source.ts';
+import {
   type JudgeCoreConfig,
   type JudgeCoreEffect,
   type JudgeCoreEffectSink,
@@ -101,6 +107,14 @@ export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreSc
   return state;
 }
 
+/**
+ * The keys an input is held and routed by: its source's key when it named one, else its tokens. A live play and a
+ * replay of it name the same sources, so their lane holds and ANY KEY routes agree.
+ */
+function inputKeys(tokens: readonly string[] | undefined, source: InputSource | undefined): readonly string[] {
+  return source === undefined ? (tokens ?? []) : [inputSourceKey(source)];
+}
+
 /** Applies one input to the state, delivering the effects to `emit` in the order they happen. */
 export function runJudgeCoreStep(state: JudgeCoreState, input: JudgeCoreInput, emit: JudgeCoreEffectSink): void {
   switch (input.kind) {
@@ -117,11 +131,12 @@ export function runJudgeCoreStep(state: JudgeCoreState, input: JudgeCoreInput, e
       handleLanePress(
         state,
         input.channels,
-        input.tokens,
+        inputKeys(input.tokens, input.source),
         input.nowMs,
         input.nowSec,
         emit,
         input.channels,
+        input.source,
         input.spin,
         input.code,
       );
@@ -130,25 +145,27 @@ export function runJudgeCoreStep(state: JudgeCoreState, input: JudgeCoreInput, e
       holdLanes(
         state,
         state.config.anyKey === true
-          ? state.anyKeyRoutes.routedLanes(anyKeyRouteKeys(input.tokens ?? [], input.channels))
+          ? state.anyKeyRoutes.routedLanes(anyKeyRouteKeys(inputKeys(input.tokens, input.source), input.channels))
           : input.channels,
         input.inferred === true,
         emit,
       );
       return;
-    case 'release':
+    case 'release': {
+      const keyed = { ...input, tokens: inputKeys(input.tokens, input.source) };
       if (state.config.anyKey === true) {
-        const keys = anyKeyRouteKeys(input.tokens, input.channels);
+        const keys = anyKeyRouteKeys(keyed.tokens, input.channels);
         handleLaneRelease(
           state,
-          { ...input, channels: state.anyKeyRoutes.release(keys, input.channels) },
+          { ...keyed, channels: state.anyKeyRoutes.release(keys, input.channels) },
           emit,
           input.channels,
         );
         return;
       }
-      handleLaneRelease(state, input, emit);
+      handleLaneRelease(state, keyed, emit);
       return;
+    }
     case 'finish':
       finishJudgeState(state, input.totalSeconds, emit);
       return;
@@ -182,9 +199,21 @@ function pressAnyKey(
   emit: JudgeCoreEffectSink,
 ): void {
   const lanes = resolveAnyKeyPressChannels(state, input.channels, input.nowSec);
-  state.anyKeyRoutes.route(anyKeyRouteKeys(input.tokens, input.channels), lanes);
+  const keys = inputKeys(input.tokens, input.source);
+  state.anyKeyRoutes.route(anyKeyRouteKeys(keys, input.channels), lanes);
   holdLanes(state, lanes, false, emit);
-  handleLanePress(state, lanes, input.tokens, input.nowMs, input.nowSec, emit, input.channels, input.spin, input.code);
+  handleLanePress(
+    state,
+    lanes,
+    keys,
+    input.nowMs,
+    input.nowSec,
+    emit,
+    input.channels,
+    input.source,
+    input.spin,
+    input.code,
+  );
 }
 
 /** {@link runJudgeCoreStep} collecting the effects into an array — `step(state, input) → effects`. */
@@ -247,6 +276,8 @@ export function resolveJudgeInputChannels(
 /** A recorded input stream being re-driven through the core. */
 export interface JudgeCoreReplay {
   readonly events: readonly ReplayInputEvent[];
+  /** The source each event's id names (`play.inputSources`); `undefined` for an id the table does not hold. */
+  readonly sourceOf: (id: number | undefined) => InputSource | undefined;
   cursor: number;
   /** The chart second the judge state has been advanced to. */
   judgedThroughSeconds: number;
@@ -254,10 +285,14 @@ export interface JudgeCoreReplay {
   judgedThroughUs: number;
 }
 
-/** Sorts a replay's inputs into replay order. */
-export function createJudgeCoreReplay(inputs: readonly ReplayInputEvent[]): JudgeCoreReplay {
+/** Sorts a replay's inputs into replay order; `sources` is its `play.inputSources` table. */
+export function createJudgeCoreReplay(
+  inputs: readonly ReplayInputEvent[],
+  sources?: readonly IdentifiedInputSource[],
+): JudgeCoreReplay {
   return {
     events: [...inputs].sort((left, right) => left.timeUs - right.timeUs || left.seq - right.seq),
+    sourceOf: createInputSourceLookup(sources),
     cursor: 0,
     judgedThroughSeconds: Number.NEGATIVE_INFINITY,
     judgedThroughUs: Number.NEGATIVE_INFINITY,
@@ -286,17 +321,21 @@ function processReplayEventsUntil(
     }
     if (channels.size === 0) continue;
     const eventMs = eventSec * config.judgeMsPerChartSecond;
+    const source = replay.sourceOf(event.source);
+    // An event whose source the table does not hold is keyed by its id, so its press and release still pair up.
+    const tokens = source === undefined ? [`#${event.source}`] : [];
     if (event.action === 'down') {
-      runJudgeCoreStep(state, { kind: 'hold', channels, tokens: event.tokens ?? [] }, emit);
+      runJudgeCoreStep(state, { kind: 'hold', channels, tokens, ...(source !== undefined ? { source } : {}) }, emit);
       emit({ kind: 'input-time', seconds: eventSec });
       runJudgeCoreStep(
         state,
         {
           kind: 'press',
           channels,
-          tokens: event.tokens ?? [],
+          tokens,
           nowSec: eventSec,
           nowMs: eventMs,
+          ...(source !== undefined ? { source } : {}),
           ...(event.spin !== undefined ? { spin: event.spin } : {}),
           ...(event.code !== undefined ? { code: event.code } : {}),
         },
@@ -308,10 +347,11 @@ function processReplayEventsUntil(
         {
           kind: 'release',
           channels,
-          tokens: event.tokens ?? [],
+          tokens,
           nowSec: eventSec,
           nowMs: eventMs,
           recordSec: eventSec,
+          ...(source !== undefined ? { source } : {}),
           ...(event.inferred === true ? { inferred: true } : {}),
           ...(event.code !== undefined ? { code: event.code } : {}),
         },

@@ -11,8 +11,8 @@ const variable = '#BPM 240\n#BPM01 480\n#STOP01 192\n#00111:01\n#00108:01\n#0020
 test('scroll REMOVE preserves live judgment times, records actual effect and reproduces judgments and gauge', async () => {
   const json = parseChart(variable, 'bms');
   const inputs = [
-    { seq: 0, timeUs: 1000000, action: 'down' as const, channels: ['11'] },
-    { seq: 1, timeUs: 2500000, action: 'down' as const, channels: ['12'] },
+    { seq: 0, timeUs: 1000000, action: 'down' as const, channels: ['11'], source: 0 },
+    { seq: 1, timeUs: 2500000, action: 'down' as const, channels: ['12'], source: 0 },
   ];
   const run = await runRecordedPlay(json, inputs, 'beatoraja', { scrollModifier: 'REMOVE' });
   const replay = parseReplay(serializeReplay(run.replay));
@@ -56,8 +56,8 @@ test('a shared scroll ADD chart records the effective curve and preserves live/r
   const run = await runRecordedPlay(
     json,
     [
-      { seq: 0, timeUs: 1000000, action: 'down', channels: ['11'] },
-      { seq: 1, timeUs: 2500000, action: 'down', channels: ['12'] },
+      { seq: 0, timeUs: 1000000, action: 'down', channels: ['11'], source: 0 },
+      { seq: 1, timeUs: 2500000, action: 'down', channels: ['12'], source: 0 },
     ],
     'beatoraja',
     { preparedChart },

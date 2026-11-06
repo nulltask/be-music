@@ -10,6 +10,7 @@ import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts'
 import { parseReplay, BE_MUSIC_REPLAY_FORMAT, BE_MUSIC_REPLAY_VERSION } from './format.ts';
 import {
   createReplayRecorder,
+  UNKNOWN_INPUT_SOURCE,
   REPLAY_NATIVE_RULESET_ID,
   type ReplayRecorderChartData,
   type ReplayRecorderOptions,
@@ -186,40 +187,58 @@ describe('replay recorder', () => {
     });
   });
 
-  test('records inputs with microsecond timestamps, sequential seq, and copied channels', () => {
+  test('records inputs with microsecond timestamps, sequential seq, copied channels and an input-source table', () => {
     const recorder = createReplayRecorder(makeRecorderOptions());
+    const key = (label: string) => ({ kind: 'key', device: 'keyboard', label }) as const;
 
-    // Inputs that resolve to no playable channel are not recorded (and consume no seq).
-    recorder.recordInput('down', 0.5, ['q'], new Set());
+    // Inputs that resolve to no playable channel are not recorded (and consume no seq, nor a source id).
+    recorder.recordInput('down', 0.5, key('q'), new Set());
 
     const sourceChannels = ['11'];
-    recorder.recordInput('down', 1.234567, ['z'], sourceChannels);
+    recorder.recordInput('down', 1.234567, key('z'), sourceChannels);
     sourceChannels.push('19'); // later mutation must not leak into the recorded event
-    recorder.recordInput('up', 1.3, [], new Set(['11', '12']));
+    // An input that named no source is recorded under the unknown source.
+    recorder.recordInput('up', 1.3, undefined, new Set(['11', '12']));
     // A release the engine inferred is marked; the mark means nothing on a press.
-    recorder.recordInput('down', 1.4, ['x'], ['13'], true);
-    recorder.recordInput('up', 1.52, ['x'], ['13'], true);
+    recorder.recordInput('down', 1.4, key('x'), ['13'], true);
+    recorder.recordInput('up', 1.52, key('x'), ['13'], true);
     // The physical input is kept as given; an empty one is dropped.
-    recorder.recordInput('down', 1.6, ['shift-left', 'shift'], ['16'], undefined, 'cw', 'ShiftLeft');
-    recorder.recordInput('up', 1.7, ['shift-left', 'shift'], ['16'], undefined, undefined, '');
+    recorder.recordInput('down', 1.6, key('shift-left'), ['16'], undefined, 'cw', 'ShiftLeft');
+    recorder.recordInput('up', 1.7, key('shift-left'), ['16'], undefined, undefined, '');
+    recorder.recordInput('down', 1.8, { kind: 'turntable', device: 'controller', label: 'tt', direction: 'down' }, [
+      '16',
+    ]);
 
     const replay = recorder.finalize({ summary: makeSummary() });
     expect(replay.inputs).toEqual([
-      { seq: 0, timeUs: 1_234_567, action: 'down', channels: ['11'], tokens: ['z'] },
-      { seq: 1, timeUs: 1_300_000, action: 'up', channels: ['11', '12'] },
-      { seq: 2, timeUs: 1_400_000, action: 'down', channels: ['13'], tokens: ['x'] },
-      { seq: 3, timeUs: 1_520_000, action: 'up', channels: ['13'], tokens: ['x'], inferred: true },
-      {
-        seq: 4,
-        timeUs: 1_600_000,
-        action: 'down',
-        channels: ['16'],
-        tokens: ['shift-left', 'shift'],
-        code: 'ShiftLeft',
-        spin: 'cw',
-      },
-      { seq: 5, timeUs: 1_700_000, action: 'up', channels: ['16'], tokens: ['shift-left', 'shift'] },
+      { seq: 0, timeUs: 1_234_567, action: 'down', channels: ['11'], source: 0 },
+      { seq: 1, timeUs: 1_300_000, action: 'up', channels: ['11', '12'], source: 1 },
+      { seq: 2, timeUs: 1_400_000, action: 'down', channels: ['13'], source: 2 },
+      { seq: 3, timeUs: 1_520_000, action: 'up', channels: ['13'], source: 2, inferred: true },
+      { seq: 4, timeUs: 1_600_000, action: 'down', channels: ['16'], source: 3, code: 'ShiftLeft', spin: 'cw' },
+      { seq: 5, timeUs: 1_700_000, action: 'up', channels: ['16'], source: 3 },
+      { seq: 6, timeUs: 1_800_000, action: 'down', channels: ['16'], source: 4 },
     ]);
+    expect(replay.play.inputSources).toEqual([
+      { id: 0, kind: 'key', device: 'keyboard', label: 'z' },
+      { id: 1, ...UNKNOWN_INPUT_SOURCE },
+      { id: 2, kind: 'key', device: 'keyboard', label: 'x' },
+      { id: 3, kind: 'key', device: 'keyboard', label: 'shift-left' },
+      { id: 4, kind: 'turntable', device: 'controller', label: 'tt', direction: 'down' },
+    ]);
+    // The recorded log parses back as it is.
+    expect(parseReplay(JSON.stringify(replay)).play.inputSources).toEqual(replay.play.inputSources);
+  });
+
+  test('records the host-declared analog scratch algorithm', () => {
+    const recorder = createReplayRecorder(
+      makeRecorderOptions({
+        play: { mode: 'manual', autoScratch: false, analogScratch: { algorithm: 'be-music/1', thresholdTicks: 2 } },
+      }),
+    );
+    const replay = recorder.finalize({ summary: makeSummary() });
+    expect(replay.play.analogScratch).toEqual({ algorithm: 'be-music/1', thresholdTicks: 2 });
+    expect(replay.play.inputSources).toEqual([]);
   });
 
   test('records the control buttons pressed during the play, with their physical keys', () => {
@@ -268,6 +287,7 @@ describe('replay recorder', () => {
     const replay = recorder.finalize({ summary, maxCombo: 5, aborted: true, abortedAtSeconds: 1.2345674 });
 
     expect(replay.play).toEqual({
+      inputSources: [],
       mode: 'manual',
       autoScratch: true,
       gauge: 'HARD',
@@ -314,7 +334,7 @@ describe('replay recorder', () => {
     const recorder = createReplayRecorder(makeRecorderOptions());
     const replay = recorder.finalize({ summary: makeSummary() });
 
-    expect(replay.play).toEqual({ mode: 'manual', autoScratch: false, gauge: 'GROOVE' });
+    expect(replay.play).toEqual({ inputSources: [], mode: 'manual', autoScratch: false, gauge: 'GROOVE' });
     expect(replay.play.aborted).toBeUndefined();
     expect(replay.results?.native).toMatchObject({
       maxCombo: 0,
@@ -529,10 +549,10 @@ test('records a non-100 gauge maximum as a percentage in native results', () => 
 
 test('discard stops all recording and rejects finalization', () => {
   const recorder = createReplayRecorder(makeRecorderOptions());
-  recorder.recordInput('down', 1, [], ['11']);
+  recorder.recordInput('down', 1, undefined, ['11']);
   recorder.discard();
   recorder.discard();
-  recorder.recordInput('down', 2, [], ['12']);
+  recorder.recordInput('down', 2, undefined, ['12']);
   recorder.recordEmptyPoor();
   recorder.recordViewChange(2, { hiSpeed: 2 });
   recorder.recordTempoChange(2, 2);
@@ -579,9 +599,9 @@ test('round-trips automatic calibration separately from input timestamps and sim
   const options = makeRecorderOptions();
   options.play.options = { judgeTimingAutoAdjust: true, judgeTimingMs: 500 };
   const recorder = createReplayRecorder(options);
-  recorder.recordInput('down', 1.15, ['z'], ['11']);
+  recorder.recordInput('down', 1.15, { kind: 'key', device: 'keyboard', label: 'z' }, ['11']);
   recorder.recordOptionChange(1.15, { judgeTimingMs: 505 });
-  recorder.recordInput('up', 1.16, ['z'], ['11']);
+  recorder.recordInput('up', 1.16, { kind: 'key', device: 'keyboard', label: 'z' }, ['11']);
   recorder.recordOptionChange(2, { judgeTimingMs: 503 });
   const replay = parseReplay(JSON.parse(JSON.stringify(recorder.finalize({ summary: makeSummary() }))));
   expect(replay.play.options).toEqual({ judgeTimingAutoAdjust: true, judgeTimingMs: 500 });

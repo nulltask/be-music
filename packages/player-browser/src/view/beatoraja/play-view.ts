@@ -1,4 +1,5 @@
 import { ChartTextOverlay } from '../shared/chart-text.ts';
+import type { BGACameraFeed } from '../../media/bga-camera.ts';
 import type { BGAOpacityTimelines } from '@be-music/chart-model';
 import { collectBPMGuideEvents } from '../../chart/bpm-guide.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
@@ -143,6 +144,8 @@ export interface BeatorajaPlayRuntime {
       }
     | undefined;
   readonly chartPlayVariant: ChartPlayVariant;
+  /** The camera the BGA frame shows in place of the chart's BGA (`PlayScene.setBGACamera`). */
+  readonly bgaCamera?: BGACameraFeed | undefined;
   /** The play's Visual CONSTANT switch and the course's NO_SPEED lock, which decide whether `#SPEED` scrolls. */
   readonly options?: { readonly visualConstant?: boolean; readonly hiSpeedLocked?: boolean };
   readonly notes: readonly PlayerUIFrameNote[];
@@ -541,6 +544,7 @@ export class BeatorajaPlayView implements PlayView {
       paused,
       started: !play.isIntroPlaying(),
       showInvisibleNotes: this.showInvisibleNotes,
+      ...(play.bgaCamera !== undefined ? { camera: play.bgaCamera } : {}),
       bpmGuide: frame.playOptions.bpmGuide,
       judgeTimingMs: frame.playOptions.judgeTimingMs,
       constant: resolveConstantVisibility({

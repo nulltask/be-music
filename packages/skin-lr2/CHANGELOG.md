@@ -1,5 +1,12 @@
 # @be-music/skin-lr2
 
+## 0.7.2
+
+### Patch Changes
+
+- 7154192: A chart without `#DIFFICULTY` lights the difficulty ops, bar level kind, difficulty text and folder level numbers of the difficulty its names, else its note count, suggest instead of the undefined ones.
+- Updated dependencies: `@be-music/player-engine@0.16.0`, `@be-music/player-scene-model@0.8.0`
+
 ## 0.7.1
 
 ### Patch Changes

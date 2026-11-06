@@ -259,7 +259,7 @@ flowchart TD
 
 - **The draw.** A min level above the max level, or a min BPM above the max BPM, is swapped first when both are set, and kept swapped (`resolveLR2RandomMixSettings`), as LR2 writes the swap back. Stage 1 is a chart of the key mode within the level limits whose min and max BPM lie within the BPM limits; with a BPM range set it must also keep one BPM. Stages 2+ come from one random order of the charts within the level limits and the window of the range around stage 1's max BPM (intersected with the BPM limits). A chart from a song folder an earlier stage came from is skipped, so the course can come out shorter than asked. With a favorite level, each drawn chart is replaced by the chart of its folder and key mode within the level limits nearest that level; its BPMs are not checked again. No chart for stage 1 draws nothing.
 - **The course.** The draw is a course the player made, named `RANDOM MIX`, in stage 1's key mode, unranked (`release: false`, LR2's `ir = 0`). A NONSTOP draw gets the default connection (button 268) after every stage. `CourseMaker.drawRandomMix` keeps it as the newest course of its folder in place of the folder's previous draw, as LR2 deletes and re-inserts its `RANDOM MIX` row, so it has its own record and replays until the next draw. LR2 finds the previous draw by its title, so it also deletes a course the player named "RANDOM MIX"; Be-Music remembers which course is its draw instead, and a draw the player renames becomes their own course, which the next draw keeps.
-- **Key mode.** The draw takes the select key filter's key mode (`resolveLR2RandomMixKeyMode`): 7 under ALL, as LR2's `CreateRandomCourse` does.
+- **Key mode.** `drawLR2RandomMix` takes the select key filter's key mode (`resolveLR2RandomMixKeyMode`): 7 under ALL, as LR2's `CreateRandomCourse` does. The player's RANDOM MIX bar takes the key modes from [its dialog](#the-random-mix-dialog) instead.
 
 What LR2 leaves unknown, and how Be-Music reads it:
 
@@ -269,6 +269,35 @@ What LR2 leaves unknown, and how Be-Music reads it:
 - LR2 passes `defaultgauge` (text 199) to its course writer, which does not write it anywhere; Be-Music has no default gauge for a draw.
 - LR2 puts the first four characters of the player's password MD5 into the course hash; a browser has no password, so they stay `0`, as for any course made here.
 - LR2 starts the play straight away; Be-Music shows a course's decide screen first, as it does for every course, and says so in the status line when no chart can be stage 1 (LR2 does nothing).
+
+### The RANDOM MIX dialog
+
+LR2 draws its RANDOM MIX by the `config.course` values alone. Be-Music asks first: deciding a RANDOM MIX bar opens a dialog (`promptRandomMixConditions`, app-play `ui/random-mix-dialog.ts`), and OK starts the mix from the charts that fit. The conditions are `RandomMixConditions` (`@be-music/player-engine/course`):
+
+- **Keys:** the key modes the library has, any number of them. A draw keeps stage 1's key mode, as LR2's second query reads the same `mode`, so each run is in one key mode.
+- **Narrow by:** a play level range (a min above the max is swapped; an empty end is no limit), or `#DIFFICULTY` (BEGINNER, NORMAL, HYPER, ANOTHER, INSANE). With **Estimate a missing #DIFFICULTY** (on by default), a chart that names none is narrowed by the difficulty the library estimates for it, as the select screen lists it (`resolveLibraryChartDifficulty`, `@be-music/player-scene-model`): from its names, else from its note count as beatoraja does (see the [BMS spec](./bms-spec.md)). Off, such a chart never fits.
+- **Stages:** 1-99, or Infinity. A NONSTOP mix, one stitched chart, has at most five stages and no Infinity.
+- **Loops:** how many runs in a row, 1-99, or Infinity. Each run is a fresh draw by the same conditions.
+- **Draw settings:** LR2's favorite level, BPM range and max / min BPM (buttons 260, 263-265), which Options → Course → **My courses…** sets too, and for a NONSTOP mix the connection after every stage (button 268).
+
+The dialog opens on what it held when it last closed, OK or not (kept with the courses in IndexedDB, `normalizeRandomMixConditions`), offers only key modes the library has, says how many charts fit, and keeps OK off while none does. LR2's level limits and stage count (buttons 261, 262, 266) are the dialog's now: an LR2 skin still steps and shows them, but the draw does not read them, and My courses no longer lists them.
+
+```mermaid
+flowchart TD
+    bar[RANDOM MIX bar] --> dialog[Dialog]
+    dialog -->|Cancel| select[Select screen]
+    dialog -->|OK| pool[Charts that fit]
+    pool --> run[Draw and play one run]
+    run --> result[Course result]
+    result -->|loops left| run
+    result -->|last loop| select
+    run -->|decide screen backed out| select
+```
+
+- **The draw** (`drawRandomMixStage`) picks one stage at a time: it walks the charts that fit in a random order and takes the first that passes LR2's rules above (BPM limits, one BPM for stage 1 under a BPM range, the BPM window around stage 1 for the rest, no chart folder twice), then applies the favorite level. Each pick is uniform among the charts that pass, as LR2's one random order is; `random` is the only source of chance, so a draw is reproducible. A chart's BPMs are read only when the walk reaches it and its file hashed (a stage is keyed by MD5) only once it is drawn, so starting a mix costs the same however large the library is. Before this, deciding the bar hashed every chart file of the library and resolved every chart's tempo map at once, which froze the page on a large library.
+- **Infinity:** an endless run (`CourseRun` with `endless`) has no last stage. The host draws each stage as the run reaches it (`appendStage`) and one stage ahead, which the skins list as the next one, so no stage reads as FINAL STAGE. The run ends when a stage fails or is given up. Once every chart folder of the pool has been drawn, the folders are free again (all but the last one).
+- **Kept or not:** a run of five stages or fewer is kept as its folder's newest course, as before (see the bullets above). A longer or endless run is not: the player's courses are kept as `.lr2crs`, which holds the five stages LR2 plays. Such a run keeps no course record and saves into no replay slot, since no bar lists it; its course replay is still auto-saved and it is submitted to the Leaderboard like any run, unranked (`release: false`). Its course replay holds the stages it played, so it replays and re-simulates as a fixed course.
+- **Loops:** the next run starts when the select screen would come back after a run's result. Backing out of a run's decide screen ends the loop, as does any navigation that ends a course run.
 
 ## Playing a course stage
 

@@ -25,7 +25,13 @@ describe('replay-arrangement', () => {
         notes: [replayNote({ channel: '15', timeUs: 1_000_000, endTimeUs: 2_000_000, type: 'long', lnMode: 1 })],
       },
       inputs: [],
-      play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE', randomLane: { p1: 'SCATTER' } },
+      play: {
+        inputSources: [{ id: 0, kind: 'key', device: 'keyboard', label: 'z' }],
+        mode: 'manual',
+        autoScratch: false,
+        gauge: 'GROOVE',
+        randomLane: { p1: 'SCATTER' },
+      },
     };
     const parsed = parseReplay(serializeReplay(replay));
     const target = {

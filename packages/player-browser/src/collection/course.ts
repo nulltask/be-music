@@ -20,6 +20,7 @@ import type { BestRecord } from '@be-music/player-engine/records';
 import { resolveBeatorajaDefaultTotal } from '@be-music/player-engine/replay';
 import { isScratchLaneForVariant } from '@be-music/player-skin-sdk';
 import {
+  resolveLibraryChartDifficultyValue,
   resolveLibraryChartPlayVariant,
   type LibraryChart,
   type LibraryCourse,
@@ -199,7 +200,8 @@ export function createCourseChartRecord(
     title: chartEntry.title,
     path: chartEntry.chartPath,
     level: Number.isFinite(level) ? Math.trunc(level) : 0,
-    difficulty: Math.trunc(chart.metadata.difficulty ?? 0) || 0,
+    // The chart's own `#DIFFICULTY`, else the one estimated from its names, as beatoraja's song database fills it.
+    difficulty: resolveLibraryChartDifficultyValue(chartEntry) ?? 0,
     notes: chartEntry.totalNotes,
     judge: Math.trunc(chart.metadata.rank ?? 0) || 0,
     ...(hashes.md5 !== undefined ? { md5: hashes.md5.toLowerCase() } : {}),

@@ -16,6 +16,8 @@ import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { SkinDOMMount } from '../../skin/be-music/dom-mount.ts';
 import { ChartImageCache } from '../../skin/be-music/chart-images.ts';
 import type { BrowserAssetSource } from '../../collection/types.ts';
+import { hasReadtextForChart } from '../../collection/readtext.ts';
+import { SelectReadmeDialog } from '../shared/readme-dialog.ts';
 import type {
   FamilyView,
   IntentSink,
@@ -107,6 +109,7 @@ export class DOMSelectView
   }
   private revision = -1;
   private launching = false;
+  private readonly readme = new SelectReadmeDialog();
 
   public constructor(kit: BuiltInKit) {
     // Event handlers resolve emit at invocation time, after attach; the skin never receives a session object.
@@ -132,6 +135,15 @@ export class DOMSelectView
   public override attach(host: PixiSceneHost, emit: IntentSink<SelectIntent>): void {
     this.revision = -1;
     super.attach(host, emit);
+    this.readme.attach(
+      () => host.domRoot,
+      () => this.emit({ type: 'readtext' }),
+    );
+  }
+
+  public override detach(): void {
+    this.readme.detach();
+    super.detach();
   }
 
   public override updateKit(kit: BuiltInKit): void {
@@ -145,10 +157,13 @@ export class DOMSelectView
 
   public draw(frame: SelectFrame): void {
     this.syncOrientation();
+    for (const event of frame.events) if (event.kind === 'readtext-scroll') this.readme.scrollBy(event.delta);
+    this.readme.show(frame.readText);
     const launching = frame.startedAtMs !== undefined;
     if (frame.revision === this.revision && this.launching === launching) return;
     this.revision = frame.revision;
     this.launching = launching;
+    const focused = frame.entries[frame.cursor];
     this.mount.update({
       ...this.presentation,
       revision: frame.revision,
@@ -159,7 +174,7 @@ export class DOMSelectView
       ...(frame.searchError !== undefined ? { searchError: frame.searchError } : {}),
       playOptions: frame.playOptions,
       playOptionChoices: PLAY_OPTION_CHOICES,
-      readText: frame.readText?.text,
+      hasReadme: focused?.kind === 'chart' && hasReadtextForChart(frame.library, focused.chart),
       launching,
     });
   }

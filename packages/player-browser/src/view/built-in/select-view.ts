@@ -1,6 +1,6 @@
 /**
  * The built-in family's select view: a Be-Music Skin's `select` screen (`BeMusicSelectBinding`), letterboxed into the
- * window, with the README overlay on top. It draws the select session's frames and turns the player's pointer input
+ * window, with the README dialog over it. It draws the select session's frames and turns the player's pointer input
  * (a tap or a click on a bar, a swipe and its glide, the wheel, the skin's PLAY / AUTO / search / play option / readme
  * hit areas) into intents.
  */
@@ -13,6 +13,7 @@ import {
 } from '@be-music/player-skin-sdk';
 import { Color, Container, Graphics } from 'pixi.js';
 import { resolveChartSource } from '../../collection/collection.ts';
+import { hasReadtextForChart } from '../../collection/readtext.ts';
 import type { BuiltInKit } from '../../host/family-kit.ts';
 import {
   designRectToCanvas,
@@ -24,6 +25,7 @@ import {
 } from '../../stage/viewport.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import { PerfTracker } from '../shared/perf.ts';
+import { SelectReadmeDialog } from '../shared/readme-dialog.ts';
 import { SelectPointer, type SelectDesignSize, type SelectPointerContext } from '../shared/select-pointer.ts';
 import { BeMusicSelectBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
@@ -31,7 +33,6 @@ import { ChartImageCache } from '../../skin/be-music/chart-images.ts';
 import type { BeMusicSelectActions } from '../../skin/be-music/types.ts';
 import { logger } from '../../logger.ts';
 import type { IntentSink, SelectFrame, SelectIntent, SelectView } from '../types.ts';
-import { SelectReadTextOverlay } from './select-readtext.ts';
 
 const log = logger('select');
 
@@ -50,7 +51,7 @@ export class BuiltInSelectView implements SelectView {
   /** Where the Be-Music Skin's back and front layers mount; the skin owns what is inside. */
   private readonly beMusicBackHolder: Container = new Container();
   private readonly beMusicFrontHolder: Container = new Container();
-  private readonly readText: SelectReadTextOverlay = new SelectReadTextOverlay();
+  private readonly readme: SelectReadmeDialog = new SelectReadmeDialog();
   private readonly pointer: SelectPointer;
   /** Per-frame timing, logged every second with `?perf` or `globalThis.__BE_MUSIC_PERF__ = true`. */
   private readonly perf: PerfTracker = new PerfTracker('select');
@@ -112,6 +113,10 @@ export class BuiltInSelectView implements SelectView {
     canvas.addEventListener('wheel', this.pointer.handleWheel, { passive: false });
     // A wheel throttle left over from before the screen last left would eat the first notch.
     this.pointer.lastWheelMoveAt = Number.NEGATIVE_INFINITY;
+    this.readme.attach(
+      () => host.domRoot,
+      () => this.emit?.({ type: 'readtext' }),
+    );
     this.builtRevision = -1;
     this.attached = true;
   }
@@ -129,6 +134,7 @@ export class BuiltInSelectView implements SelectView {
       canvas.removeEventListener('pointercancel', this.pointer.handlePointerCancel);
       canvas.removeEventListener('wheel', this.pointer.handleWheel);
     }
+    this.readme.detach();
     this.emit = undefined;
   }
 
@@ -157,10 +163,10 @@ export class BuiltInSelectView implements SelectView {
       if (event.kind === 'browse' && event.event.kind !== 'list-changed' && event.event.kind !== 'favorite') {
         this.cursorChangedAt = event.atMs;
       } else if (event.kind === 'readtext-scroll') {
-        this.readText.scrollBy(event.delta);
+        this.readme.scrollBy(event.delta);
       }
     }
-    this.readText.show(frame.readText);
+    this.readme.show(frame.readText);
     this.perf.beginTick();
     this.pointer.advanceFling(now);
     this.pointer.settleListPull(now);
@@ -174,10 +180,6 @@ export class BuiltInSelectView implements SelectView {
       screen.height !== this.cachedScreenHeight
     ) {
       this.perf.time('render', () => this.buildFrame(frame));
-    }
-    if (this.readText.open) {
-      const { width, height } = this.beMusicDesignSize;
-      this.readText.render(width, height);
     }
     const renderer = this.renderer;
     if (renderer !== undefined) {
@@ -223,13 +225,7 @@ export class BuiltInSelectView implements SelectView {
     this.beMusicBackHolder.label = 'select/be-music-back';
     this.beMusicFrontHolder.label = 'select/be-music-front';
     this.root.addChild(this.viewportBackground, this.designRoot);
-    this.designRoot.addChild(
-      this.background,
-      this.beMusicBackHolder,
-      this.beMusicFrontHolder,
-      this.readText.layer,
-      this.designClipMask,
-    );
+    this.designRoot.addChild(this.background, this.beMusicBackHolder, this.beMusicFrontHolder, this.designClipMask);
     this.designRoot.mask = this.designClipMask;
   }
 
@@ -280,6 +276,7 @@ export class BuiltInSelectView implements SelectView {
       searchQuery: normalizeSearchQuery(frame.browse.searchText),
       searchEditing: frame.searchEditing,
       totalCharts: frame.library.charts.length,
+      hasReadme: focused?.kind === 'chart' && hasReadtextForChart(frame.library, focused.chart),
       actions: this.actions,
       effects: this.kit.effects ?? 'full',
       launchAt: frame.startedAtMs,
@@ -388,11 +385,6 @@ export class BuiltInSelectView implements SelectView {
       set mouseY(value: number) {
         view.mouseY = value;
       },
-      get readTextOpen(): boolean {
-        return view.readText.open;
-      },
-      scrollReadText: (delta) => view.readText.scrollBy(delta),
-      closeReadText: () => emit({ type: 'readtext' }),
       resolveDesignSize: () => view.beMusicDesignSize,
       currentEntries: () => view.frame?.entries ?? [],
       moveCursorBy: (steps) => {

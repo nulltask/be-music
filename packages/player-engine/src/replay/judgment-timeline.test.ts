@@ -27,7 +27,7 @@ function makeReplay(
       notes: notes.map((note, id) => ({ ...note, id })),
     },
     inputs: inputs.map((input, seq) => ({ ...input, seq })),
-    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
+    play: { inputSources: [], mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
   };
 }
 
@@ -36,11 +36,13 @@ const down = (timeUs: number, channel = '11'): Omit<ReplayInputEvent, 'seq'> => 
   timeUs,
   action: 'down',
   channels: [channel],
+  source: 0,
 });
 const up = (timeUs: number, channel = '11'): Omit<ReplayInputEvent, 'seq'> => ({
   timeUs,
   action: 'up',
   channels: [channel],
+  source: 0,
 });
 
 describe('resolveReplayJudgmentTimeline', () => {

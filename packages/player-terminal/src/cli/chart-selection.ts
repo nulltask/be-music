@@ -8,10 +8,14 @@ import { type BeMusicJSON, type BeMusicPlayLevel } from '@be-music/chart-source'
 import { decodeBMSText, parseChart, resolveBMSControlFlow } from '@be-music/chart-parser';
 import { resolveChart, type ResolvedChart } from '@be-music/chart-model';
 import {
+  estimateDifficultyFromNames,
+  estimateDifficultyFromNoteCount,
   resolveDisplayedDifficultyValue,
   resolveDisplayedJudgeRankLabel,
   resolveDisplayedJudgeRankValue,
   resolveDisplayedPlayLevelValue,
+  type DifficultyBasis,
+  type DisplayedDifficulty,
 } from '@be-music/player-engine/display';
 import { resolvePreviewContinueKeyFromChart } from './chart-preview.ts';
 
@@ -88,6 +92,8 @@ export type ChartSelectionEntry =
       totalNotes?: number;
       player?: number;
       difficulty?: number;
+      /** Where an estimated `difficulty` comes from (`resolveChartSummaryDifficulty`); absent for the chart's own. */
+      difficultyBasis?: Exclude<DifficultyBasis, 'chart'>;
       rank?: number;
       rankLabel?: string;
       playLevel?: BeMusicPlayLevel;
@@ -344,12 +350,13 @@ function buildChartSelectionEntriesFromSummaries(summariesInput: readonly ChartS
     if (!charts || charts.length === 0) {
       continue;
     }
+    const difficulties = new Map(charts.map((chart) => [chart, resolveChartSummaryDifficulty(chart)]));
     const sortedCharts = [...charts].sort((left, right) => {
       const playerDiff = compareOptionalNumber(left.player, right.player);
       if (playerDiff !== 0) {
         return playerDiff;
       }
-      const difficultyDiff = compareOptionalNumber(left.difficulty, right.difficulty);
+      const difficultyDiff = compareOptionalNumber(difficulties.get(left)?.value, difficulties.get(right)?.value);
       if (difficultyDiff !== 0) {
         return difficultyDiff;
       }
@@ -370,6 +377,7 @@ function buildChartSelectionEntriesFromSummaries(summariesInput: readonly ChartS
     });
 
     for (const chart of sortedCharts) {
+      const difficulty = difficulties.get(chart);
       entries.push({
         kind: 'chart',
         filePath: chart.filePath,
@@ -384,7 +392,8 @@ function buildChartSelectionEntriesFromSummaries(summariesInput: readonly ChartS
         previewContinueKey: chart.previewContinueKey,
         totalNotes: chart.totalNotes,
         player: chart.player,
-        difficulty: chart.difficulty,
+        difficulty: difficulty?.value,
+        ...(difficulty !== undefined && difficulty.basis !== 'chart' ? { difficultyBasis: difficulty.basis } : {}),
         rank: chart.rank,
         rankLabel: chart.rankLabel,
         playLevel: chart.playLevel,
@@ -540,6 +549,34 @@ function decodeUTF8Buffer(buffer: Buffer): string {
     text = text.slice(1);
   }
   return text;
+}
+
+/**
+ * The difficulty a chart is listed, sorted and filtered under: its `#DIFFICULTY`; else the one its title, subtitle and
+ * file name suggest (`estimateDifficultyFromNames`); else the one its note count gives (`estimateDifficultyFromNoteCount`).
+ * The estimate is worked out here rather than kept in the persisted summary, so a cached summary picks up changes to
+ * the estimate's rules.
+ */
+export function resolveChartSummaryDifficulty(chart: {
+  difficulty?: number;
+  title?: string;
+  subtitle?: string;
+  fileLabel: string;
+  totalNotes?: number;
+}): DisplayedDifficulty | undefined {
+  if (chart.difficulty !== undefined) {
+    return { value: chart.difficulty, basis: 'chart' };
+  }
+  const named = estimateDifficultyFromNames({
+    title: chart.title,
+    subtitle: chart.subtitle,
+    fileName: chart.fileLabel,
+  });
+  if (named !== undefined) {
+    return { value: named, basis: 'names' };
+  }
+  const counted = chart.totalNotes !== undefined ? estimateDifficultyFromNoteCount(chart.totalNotes) : undefined;
+  return counted !== undefined ? { value: counted, basis: 'notes' } : undefined;
 }
 
 function buildChartSelectionContentHash(sourceBuffer: Buffer): string {

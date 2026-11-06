@@ -58,8 +58,8 @@ test.each([10, 60])(
       options: {
         uiFPS,
         replayInputs: [
-          { seq: 0, timeUs: 1000000, action: 'down', channels: ['11'] },
-          { seq: 1, timeUs: 1350000, action: 'up', channels: ['11'] },
+          { seq: 0, timeUs: 1000000, action: 'down', channels: ['11'], source: 0 },
+          { seq: 1, timeUs: 1350000, action: 'up', channels: ['11'], source: 0 },
         ],
       },
       onFrame: capture(frames),
@@ -115,8 +115,8 @@ test('replay seek reconstructs held animation state at the target and lets its r
     chart: chart(0),
     options: {
       replayInputs: [
-        { seq: 0, timeUs: 1000000, action: 'down', channels: ['11'] },
-        { seq: 1, timeUs: 1600000, action: 'up', channels: ['11'] },
+        { seq: 0, timeUs: 1000000, action: 'down', channels: ['11'], source: 0 },
+        { seq: 1, timeUs: 1600000, action: 'up', channels: ['11'], source: 0 },
       ],
     },
     script: [{ atMs: 1400, command: { kind: 'seek', seconds: 1.2 } }],
@@ -140,9 +140,9 @@ test('plays host-remapped NONSTOP selections, expires stage state and rebuilds i
     options: {
       keyBoundBGACues: result.map.keyBoundBGA,
       replayInputs: [
-        { seq: 0, timeUs: 1000000, action: 'down', channels: ['11'] },
-        { seq: 1, timeUs: Math.round((boundary + 0.1) * 1e6), action: 'up', channels: ['11'] },
-        { seq: 2, timeUs: Math.round((boundary + 0.2) * 1e6), action: 'down', channels: ['11'] },
+        { seq: 0, timeUs: 1000000, action: 'down', channels: ['11'], source: 0 },
+        { seq: 1, timeUs: Math.round((boundary + 0.1) * 1e6), action: 'up', channels: ['11'], source: 0 },
+        { seq: 2, timeUs: Math.round((boundary + 0.2) * 1e6), action: 'down', channels: ['11'], source: 0 },
       ],
     },
     onFrame: capture(frames),

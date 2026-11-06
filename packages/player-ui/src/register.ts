@@ -5,6 +5,7 @@ import { BeMusicTimingGraphElement } from './components/timing-graph.ts';
 import { BeMusicPlaySettingsElement } from './components/play-settings.ts';
 import { BeMusicChartListElement } from './components/chart-list.ts';
 import { BeMusicChartDetailsElement } from './components/chart-details.ts';
+import { BeMusicReadmeDialogElement } from './components/readme-dialog.ts';
 import { BeMusicPlayOptionsElement } from './components/play-options.ts';
 import { BeMusicSelectScreenElement } from './components/select-screen.ts';
 import { BeMusicResultScreenElement } from './components/result-screen.ts';
@@ -15,6 +16,7 @@ import { BeMusicPlaybackControlsElement } from './components/playback-controls.t
 import { BeMusicPreviewHUDElement } from './components/preview-hud.ts';
 import { BeMusicPreviewSelectElement } from './components/preview-select.ts';
 import { BeMusicPreviewStartElement } from './components/preview-start.ts';
+import { BeMusicChartScoreElement } from './components/chart-score.ts';
 import { BeMusicLanesElement } from './components/lanes.ts';
 import { BeMusicNotesElement } from './components/notes.ts';
 import { BeMusicLaneCoversElement } from './components/lane-covers.ts';
@@ -49,6 +51,7 @@ export function defineBeMusicElements(
     ['be-music-play-settings', BeMusicPlaySettingsElement],
     ['be-music-chart-list', BeMusicChartListElement],
     ['be-music-chart-details', BeMusicChartDetailsElement],
+    ['be-music-readme-dialog', BeMusicReadmeDialogElement],
     ['be-music-play-options', BeMusicPlayOptionsElement],
     ['be-music-select-screen', BeMusicSelectScreenElement],
     ['be-music-result-screen', BeMusicResultScreenElement],
@@ -66,6 +69,7 @@ export function defineBeMusicElements(
     ['be-music-preview-hud', BeMusicPreviewHUDElement],
     ['be-music-preview-select', BeMusicPreviewSelectElement],
     ['be-music-preview-start', BeMusicPreviewStartElement],
+    ['be-music-chart-score', BeMusicChartScoreElement],
   ] as const) {
     const existing = registry.get(tag);
     if (existing && existing !== constructor)
@@ -83,6 +87,7 @@ declare global {
     'be-music-play-settings': BeMusicPlaySettingsElement;
     'be-music-chart-list': BeMusicChartListElement;
     'be-music-chart-details': BeMusicChartDetailsElement;
+    'be-music-readme-dialog': BeMusicReadmeDialogElement;
     'be-music-play-options': BeMusicPlayOptionsElement;
     'be-music-select-screen': BeMusicSelectScreenElement;
     'be-music-result-screen': BeMusicResultScreenElement;
@@ -100,5 +105,6 @@ declare global {
     'be-music-preview-hud': BeMusicPreviewHUDElement;
     'be-music-preview-select': BeMusicPreviewSelectElement;
     'be-music-preview-start': BeMusicPreviewStartElement;
+    'be-music-chart-score': BeMusicChartScoreElement;
   }
 }

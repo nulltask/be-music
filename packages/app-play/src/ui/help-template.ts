@@ -3,6 +3,7 @@ import { localized } from './localized.ts';
 import { html } from 'lit';
 import { PUBLIC_BETA_DELETION, PUBLIC_BETA_LABEL } from '@be-music/service-web-theme';
 import { PLAYER_BUILD_INFO } from './shell-build-info.ts';
+import { HELP_SEARCH_EXAMPLES } from './help-search-examples.ts';
 
 export const PLAYER_HELP_TEMPLATE = html`
   <dialog
@@ -184,8 +185,40 @@ export const PLAYER_HELP_TEMPLATE = html`
                 <kbd>R</kbd>
                 (a random chart).
               </li>
-              <li><kbd>/</kbd> focuses the search input. Filter by title, artist, or genre.</li>
+              <li><kbd>/</kbd> or <kbd>0</kbd> focuses the search input (see Searching charts below).</li>
               <li><kbd>Esc</kbd> clears the search filter.</li>
+            </ul>
+
+            <h3 class="help-section-title">Searching charts</h3>
+            <ul class="help-list">
+              <li>
+                Plain text lists the charts whose title, subtitle, artist, genre or file name contains it, ignoring
+                upper and lower case. The whole text is one phrase: spaces, quotes and words such as <code>OR</code> are
+                matched as typed, and full-width / half-width letters and hiragana / katakana are told apart. At the top
+                level every chart is searched; inside a folder, only its charts. The MODE and difficulty filters still
+                apply.
+              </li>
+              <li>
+                Text that starts with <code>?</code> is a chart filter, written like an SQL <code>WHERE</code> clause
+                (beatoraja's random-course filters): <code>=</code> <code>!=</code> <code>&lt;</code>
+                <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code>, <code>BETWEEN … AND …</code>,
+                <code>IN (…)</code>, <code>LIKE</code> (<code>%</code> any text, <code>_</code> one character, case
+                ignored for A–Z), <code>IS NULL</code>, <code>AND</code> <code>OR</code> <code>NOT</code> and
+                parentheses, then an optional <code>ORDER BY … DESC</code> and <code>LIMIT n</code> (which replace the
+                sort). Put text in single quotes; <code>=</code> on text is exact and case-sensitive. Keywords may be
+                lower case. A filter that does not parse shows why under the search box and filters nothing.
+              </li>
+              <li>
+                Columns: <code>title</code> <code>subtitle</code> <code>artist</code> <code>subartist</code>
+                <code>genre</code> <code>path</code>, <code>level</code>, <code>difficulty</code> (1 BEGINNER … 5
+                INSANE), <code>song.mode</code> (keys: 5, 7, 9, 10, 14; 25 for 24 keys), <code>song.notes</code>,
+                <code>minbpm</code> / <code>maxbpm</code>, <code>length</code> (ms), <code>judge</code> (#RANK); your
+                best record <code>score.clear</code> (1 FAILED, 3 ASSIST EASY, 4 EASY, 5 NORMAL, 6 HARD, 7 EX HARD, 8
+                FULL COMBO; NULL when never played), <code>score.exscore</code>, <code>score.minbp</code>,
+                <code>playcount</code>; and <code>information.total</code>, <code>density</code>, <code>mainbpm</code>.
+                Write <code>song.mode</code> and <code>song.notes</code> in full. MD5 / SHA-256 cannot be searched.
+              </li>
+              ${HELP_SEARCH_EXAMPLES.map((example) => html`<li><code>${example.query}</code> — ${example.en}</li>`)}
             </ul>
 
             <h3 class="help-section-title">Gameplay (default keys)</h3>
@@ -369,8 +402,40 @@ export const PLAYER_HELP_TEMPLATE = html`
                 スキンでは <kbd>PageUp</kbd> / <kbd>PageDown</kbd>、<kbd>Home</kbd> / <kbd>End</kbd>、<kbd>R</kbd>
                 (ランダムに譜面を選ぶ) も使えます。
               </li>
-              <li><kbd>/</kbd> で検索入力にフォーカス。タイトル / アーティスト / ジャンルで絞り込めます。</li>
+              <li><kbd>/</kbd> か <kbd>0</kbd> で検索入力にフォーカス (書き方は下の「譜面の検索」)。</li>
               <li><kbd>Esc</kbd> で検索条件をクリア。</li>
+            </ul>
+
+            <h3 class="help-section-title">譜面の検索</h3>
+            <ul class="help-list">
+              <li>
+                ふつうの文字列は、タイトル・サブタイトル・アーティスト・ジャンル・ファイル名にそれを含む譜面を並べます。
+                大文字と小文字は区別しません。全体で 1 つの語句として扱うので、空白・引用符・<code>OR</code>
+                などの語も打ったとおりに探し、全角と半角、ひらがなとカタカナは別の文字として扱います。最上位ではすべての譜面を、フォルダの中ではその譜面だけを探します。MODE
+                と難易度の絞り込みは検索中も効きます。
+              </li>
+              <li>
+                <code>?</code> で始めると譜面フィルターになり、SQL の <code>WHERE</code> 句 (beatoraja
+                のランダムコースのフィルター) の形で書きます。<code>=</code> <code>!=</code> <code>&lt;</code>
+                <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code>、<code>BETWEEN … AND …</code>、
+                <code>IN (…)</code>、<code>LIKE</code> (<code>%</code> は任意の文字列、<code>_</code> は 1 文字。A〜Z
+                の大文字と小文字は区別しません)、<code>IS NULL</code>、<code>AND</code> <code>OR</code>
+                <code>NOT</code> と括弧、続けて <code>ORDER BY … DESC</code> と <code>LIMIT n</code> を書けます
+                (ソートの代わりになります)。文字列は単一引用符で囲みます。文字列の <code>=</code>
+                は完全一致で、大文字と小文字を区別します。キーワードは小文字でもかまいません。解析できない式は、検索欄の下に理由を出し、何も絞り込みません。
+              </li>
+              <li>
+                列: <code>title</code> <code>subtitle</code> <code>artist</code> <code>subartist</code>
+                <code>genre</code> <code>path</code>、<code>level</code>、<code>difficulty</code> (1 BEGINNER 〜 5
+                INSANE)、<code>song.mode</code> (鍵盤数: 5・7・9・10・14、24 鍵は 25)、<code>song.notes</code>、
+                <code>minbpm</code> / <code>maxbpm</code>、<code>length</code> (ミリ秒)、<code>judge</code>
+                (#RANK)。自己ベストの <code>score.clear</code> (1 FAILED、3 ASSIST EASY、4 EASY、5 NORMAL、6 HARD、7 EX
+                HARD、8 FULL COMBO。未プレイは
+                NULL)、<code>score.exscore</code>、<code>score.minbp</code>、<code>playcount</code>。
+                <code>information.total</code>・<code>density</code>・<code>mainbpm</code>。<code>song.mode</code> と
+                <code>song.notes</code> は省略せずに書きます。MD5 / SHA-256 では検索できません。
+              </li>
+              ${HELP_SEARCH_EXAMPLES.map((example) => html`<li><code>${example.query}</code> — ${example.ja}</li>`)}
             </ul>
 
             <h3 class="help-section-title">ゲームプレイ (デフォルトキー)</h3>

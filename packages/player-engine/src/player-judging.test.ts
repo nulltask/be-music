@@ -37,7 +37,7 @@ describe('player', () => {
       leadInMs: 0,
       audio: false,
       tui: false,
-      replayInputs: [{ seq: 0, timeUs: 1_150_000, action: 'down' as const, channels: ['11', '12'] }],
+      replayInputs: [{ seq: 0, timeUs: 1_150_000, action: 'down' as const, channels: ['11', '12'], source: 0 }],
     };
 
     const lr2 = await manualPlay(json, { ...base });
