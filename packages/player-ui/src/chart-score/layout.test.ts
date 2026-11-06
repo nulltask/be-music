@@ -197,9 +197,16 @@ describe('omitEmptyFirstBar', () => {
     expect(chartScoreRangeTimes(score, { first: 0, last: 0 })).toEqual({ startMs: 2000, endMs: 4000 });
   });
 
-  it('keeps measure 0 with a note, a BGM sound, a tempo change or a stop in it', () => {
-    for (const line of ['#00011:01', '#00001:02', '#00008:0001', '#00009:01']) {
-      const score = layout(['#BPM 120', '#BPM01 150', '#STOP01 48', line, '#00111:01'], omit);
+  it('leaves out a measure 0 holding only BGM, BGA, a tempo change or a stop', () => {
+    for (const line of ['#00001:02', '#00004:01', '#00008:0001', '#00009:01']) {
+      const score = layout(['#BPM 120', '#BPM01 150', '#STOP01 48', '#BMP01 a.bmp', line, '#00111:01'], omit);
+      expect(score.bars[0]!.measure, line).toBe(1);
+    }
+  });
+
+  it('keeps measure 0 with a note, a long note or a mine on a lane', () => {
+    for (const line of ['#00011:01', '#00051:0101', '#000D1:01']) {
+      const score = layout(['#BPM 120', '#LNTYPE 1', line, '#00111:01'], omit);
       expect(score.bars[0]!.measure, line).toBe(0);
     }
   });
@@ -212,18 +219,22 @@ describe('omitEmptyFirstBar', () => {
 describe('isChartScoreBarEmpty', () => {
   const empty = { notes: [], longNotes: [], mines: [], tempos: [], stops: [], soundCount: 0 };
 
-  it('is empty with nothing in the bar', () => {
+  it('is empty with nothing to play, whatever sounds or sets the chart up there', () => {
     expect(isChartScoreBarEmpty(empty)).toBe(true);
+    const setupOnly = {
+      ...empty,
+      tempos: [{ position: 0.5, bpm: 180 }],
+      stops: [{ position: 0, durationMs: 500 }],
+      soundCount: 3,
+    };
+    expect(isChartScoreBarEmpty(setupOnly)).toBe(true);
   });
 
-  it('is not empty with any note, long note, mine, tempo change, stop or sound', () => {
+  it('is not empty with a note, a long note or a mine', () => {
     for (const bar of [
       { ...empty, notes: [{ lane: 0, position: 0 }] },
       { ...empty, longNotes: [{ lane: 0, from: 0, to: 1, head: false, tail: false, mode: 1 as const }] },
       { ...empty, mines: [{ lane: 0, position: 0.5 }] },
-      { ...empty, tempos: [{ position: 0.5, bpm: 180 }] },
-      { ...empty, stops: [{ position: 0, durationMs: 500 }] },
-      { ...empty, soundCount: 1 },
     ])
       expect(isChartScoreBarEmpty(bar)).toBe(false);
   });

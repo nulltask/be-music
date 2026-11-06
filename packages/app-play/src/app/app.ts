@@ -584,6 +584,7 @@ export class PlayerWebApp {
       showSelect: () => this.showSelect(),
       practiceRange: (chartEntry) => this.practiceBars.rangeFor(chartEntry.id),
       practiceSkipped: (chartEntry) => this.practiceBars.skipsPractice(chartEntry.id),
+      practiceNoteShare: (chartEntry) => this.practiceBars.noteShareFor(chartEntry.id),
       showPlayOptionMismatch,
       setPlayOptions: (changes) => this.setPlayOptions(changes),
     });
