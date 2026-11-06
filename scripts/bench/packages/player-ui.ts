@@ -136,6 +136,7 @@ const NON_ELEMENT_EXPORTS = new Set([
   'resolveChartScoreLanes',
   'resolveChartScoreColumn',
   'chartScoreRowAt',
+  'isChartScoreBarEmpty',
 ]);
 // A 7 KEY chart of 64 bars with a note on every eighth, a long note across each bar line and a tempo change every bar.
 const scoreChart = resolveChart(
@@ -239,6 +240,11 @@ export const playerUIBenchmarkPackage: BenchmarkPackageDefinition = {
     define('player-ui.resolveChartScoreColumn', {
       run: () => {
         ui.resolveChartScoreColumn(scoreLayout.bars.slice(0, 4), 16);
+      },
+    });
+    define('player-ui.isChartScoreBarEmpty', {
+      run: () => {
+        ui.isChartScoreBarEmpty(scoreLayout.bars[0]!);
       },
     });
     define('player-ui.chartScoreRowAt', {

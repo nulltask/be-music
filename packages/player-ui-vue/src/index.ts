@@ -267,7 +267,7 @@ export const BeMusicPreviewStart: DefineComponent<BeMusicPreviewStartProps, BeMu
 export type BeMusicChartScoreProps = {
   layout?: ChartScoreLayout;
   selection?: ChartScoreBarRange;
-  previewing?: number;
+  previewing?: number | ChartScoreBarRange;
   columnBeats?: number;
   beatHeight?: number;
   disabled?: boolean;
@@ -276,7 +276,7 @@ export const BeMusicChartScore: DefineComponent<BeMusicChartScoreProps, BeMusicV
   {
     layout?: ChartScoreLayout;
     selection?: ChartScoreBarRange;
-    previewing?: number;
+    previewing?: number | ChartScoreBarRange;
     columnBeats?: number;
     beatHeight?: number;
     disabled?: boolean;
