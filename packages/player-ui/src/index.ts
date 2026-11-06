@@ -9,6 +9,8 @@ export { BeMusicTimingGraphElement } from './components/timing-graph.ts';
 export { BeMusicPlaySettingsElement } from './components/play-settings.ts';
 export { BeMusicChartListElement } from './components/chart-list.ts';
 export { BeMusicChartDetailsElement } from './components/chart-details.ts';
+export { BeMusicReadmeDialogElement } from './components/readme-dialog.ts';
+export { splitLinkedText, type BeMusicTextRun } from './linkify.ts';
 export { BeMusicPlayOptionsElement } from './components/play-options.ts';
 export { BeMusicSelectScreenElement } from './components/select-screen.ts';
 export { BeMusicResultScreenElement } from './components/result-screen.ts';

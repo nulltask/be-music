@@ -116,7 +116,7 @@ export class BeMusicSelectScreenElement extends FrameElement<BeMusicDOMSelectFra
           exportparts="panel:details-panel,title:chart-title"
           .entry=${f.entries[f.selectedIndex]}
           .launching=${f.launching}
-          .readText=${f.readText}
+          .readmeAvailable=${f.hasReadme}
         ></be-music-chart-details>
       </div>
       <slot></slot>
