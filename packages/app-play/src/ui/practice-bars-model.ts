@@ -42,6 +42,33 @@ export function describePracticeBars(
 export interface PracticeBarsPick {
   readonly bars: ChartScoreBarRange;
   readonly range: PracticeRange;
+  /** The share of the chart's judged notes the bars hold ({@link practiceNoteShare}). */
+  readonly noteShare: number;
+}
+
+/**
+ * The share of the chart's judged notes (taps and long-note heads) that start in `bars`: what a best score is cut down
+ * to for a PRACTICE play of them, as a pacemaker reads the share of notes judged. 1 for a chart with no notes.
+ */
+export function practiceNoteShare(layout: Pick<ChartScoreLayout, 'bars'>, bars: ChartScoreBarRange): number {
+  let total = 0;
+  let picked = 0;
+  const first = Math.min(bars.first, bars.last);
+  const last = Math.max(bars.first, bars.last);
+  for (const bar of layout.bars) {
+    total += bar.noteCount;
+    if (bar.index >= first && bar.index <= last) picked += bar.noteCount;
+  }
+  return total > 0 ? picked / total : 1;
+}
+
+/**
+ * The best EX score a PRACTICE play paces against: the best record's cut down to the share of the notes the play
+ * loops (all of them when the whole chart loops), rounded as an EX score is.
+ */
+export function practiceBestEXScore(bestEXScore: number, noteShare: number): number {
+  const share = Number.isFinite(noteShare) ? Math.min(1, Math.max(0, noteShare)) : 1;
+  return Math.round(Math.max(0, bestEXScore) * share);
 }
 
 /**
@@ -76,7 +103,7 @@ export class PracticeBarsMemory {
       this.picks.delete(chartId);
       return undefined;
     }
-    const pick = { bars, range };
+    const pick = { bars, range, noteShare: practiceNoteShare(layout!, bars) };
     this.picks.set(chartId, pick);
     return pick;
   }
@@ -84,6 +111,11 @@ export class PracticeBarsMemory {
   /** The chart's last pick, if any. */
   public pickFor(chartId: string): PracticeBarsPick | undefined {
     return this.picks.get(chartId);
+  }
+
+  /** The share of the chart's notes a PRACTICE play of it loops: its last pick's, or 1 for the whole chart. */
+  public noteShareFor(chartId: string): number {
+    return this.picks.get(chartId)?.noteShare ?? 1;
   }
 
   /** The PRACTICE range a play of the chart loops: its last pick, or `undefined` for the whole chart. */
