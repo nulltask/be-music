@@ -84,8 +84,9 @@ export interface ChartScoreBar {
 /** How {@link layoutChartScore} lays a chart out. */
 export interface ChartScoreLayoutOptions {
   /**
-   * Leaves measure 0 out when it holds nothing ({@link isChartScoreBarEmpty}), so the score starts at measure 1, as
-   * many BMS charts begin with an empty lead-in measure. A measure 0 with anything in it stays.
+   * Leaves measure 0 out when it holds nothing to play ({@link isChartScoreBarEmpty}), so the score starts at measure
+   * 1, as many BMS charts begin with a lead-in measure holding only BGM, BGA or tempo setup. A measure 0 with a note
+   * on a lane stays.
    */
   readonly omitEmptyFirstBar?: boolean;
 }
@@ -315,20 +316,12 @@ export function layoutChartScore(
 }
 
 /**
- * Whether a bar holds nothing: no note, long note or mine, no sound starting in it (BGM included), and no tempo change
- * or stop. A long note running on into the bar counts as something in it.
+ * Whether a bar holds nothing to play: no note, long note or mine on a lane. What only sounds or sets the chart up
+ * (BGM, keysounds of invisible objects, tempo changes, stops, BGA) does not count. A long note running on into the bar
+ * counts as something in it.
  */
-export function isChartScoreBarEmpty(
-  bar: Pick<ChartScoreBar, 'notes' | 'longNotes' | 'mines' | 'tempos' | 'stops' | 'soundCount'>,
-): boolean {
-  return (
-    bar.notes.length === 0 &&
-    bar.longNotes.length === 0 &&
-    bar.mines.length === 0 &&
-    bar.tempos.length === 0 &&
-    bar.stops.length === 0 &&
-    bar.soundCount === 0
-  );
+export function isChartScoreBarEmpty(bar: Pick<ChartScoreBar, 'notes' | 'longNotes' | 'mines'>): boolean {
+  return bar.notes.length === 0 && bar.longNotes.length === 0 && bar.mines.length === 0;
 }
 
 /**
