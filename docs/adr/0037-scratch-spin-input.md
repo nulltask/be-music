@@ -2,6 +2,8 @@
 
 # 0037: Judge a back-spin scratch's tail on a recorded scratch spin
 
+Status: superseded in part by [ADR 0040](./0040-replay-input-sources.md): a back-spin scratch is now judged on a recorded input source, and the spin is kept for display only.
+
 ## Context
 
 A back-spin scratch (BSS) is a charge note (CN / HCN) on a scratch lane. On a turntable it is spun one way at the head and the other way at the tail. beatoraja models the turntable as two keys per scratch lane and judges the tail when the key other than the one that hit the head goes down ("BSS終端処理" in `JudgeManager`); a release of the scratch is ignored unless it falls in the tail's POOR range. Be-Music judged a BSS like any charge note, on the release, and the second scratch key (Ctrl, or Option / Alt in a macOS terminal) was only an alias of the lane (issue #940).
