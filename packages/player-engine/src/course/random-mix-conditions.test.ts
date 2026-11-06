@@ -55,6 +55,7 @@ describe('RANDOM MIX conditions', () => {
         minLevel: 120,
         maxLevel: -4,
         difficulties: [5, 9, 2],
+        estimateDifficulty: false,
         count: 'infinity',
         loops: 500,
       }),
@@ -64,6 +65,7 @@ describe('RANDOM MIX conditions', () => {
       minLevel: 99,
       maxLevel: 0,
       difficulties: [2, 5],
+      estimateDifficulty: false,
       count: 'infinity',
       loops: 99,
     });
@@ -83,7 +85,13 @@ describe('RANDOM MIX conditions', () => {
     const byDifficulty = conditions({ by: 'difficulty', difficulties: [4, 5], minLevel: 99 });
     expect(matchesRandomMixConditions(chart(1, { difficulty: 4 }), byDifficulty)).toBe(true);
     expect(matchesRandomMixConditions(chart(1, { difficulty: 2 }), byDifficulty)).toBe(false);
+    // A chart naming no difficulty fits by its estimated one, unless estimating is off.
     expect(matchesRandomMixConditions(chart(1), byDifficulty)).toBe(false);
+    expect(matchesRandomMixConditions(chart(1, { estimatedDifficulty: 5 }), byDifficulty)).toBe(true);
+    expect(matchesRandomMixConditions(chart(1, { difficulty: 2, estimatedDifficulty: 5 }), byDifficulty)).toBe(false);
+    expect(
+      matchesRandomMixConditions(chart(1, { estimatedDifficulty: 5 }), { ...byDifficulty, estimateDifficulty: false }),
+    ).toBe(false);
   });
 
   test('filter keeps library order and lists the key modes', () => {
