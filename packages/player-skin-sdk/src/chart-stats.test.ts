@@ -16,6 +16,15 @@ function chartEntry(source: string) {
 const PLAIN = ['#BPM 120', '#WAV01 a.wav', '#00111:01010101', '#00211:01000000'].join('\n');
 
 describe('resolveChartStats', () => {
+  it('does not take FREE ZONE notes for long notes', () => {
+    // BM98-era charts put FREE ZONE on channel 17: a fixed one-beat tail, judged by nobody.
+    const stats = resolveChartStats(
+      chartEntry(['#PLAYER 1', '#BPM 120', '#WAV01 a.wav', '#00111:01010101', '#00217:01010101'].join('\n')),
+    );
+    expect(stats.longNotes).toBe(0);
+    expect(resolveChartTags(stats)).not.toContain('LN');
+  });
+
   it('measures a steady chart up to its last note', () => {
     const stats = resolveChartStats(chartEntry(PLAIN));
     // Two 4/4 measures at 120 BPM: the last note sits on measure 2's downbeat, 4 seconds in.
