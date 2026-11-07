@@ -92,6 +92,12 @@ export interface SelectSessionEvents {
    */
   start(entry: SelectStartEntry, options: { readonly autoPlay: boolean; readonly replaySlot?: number }): boolean | void;
   /**
+   * A chart was picked and the skin's launch outro begins; `start` follows once it has played. The host can start
+   * loading what comes next (the play) from here instead of waiting out the outro. Not called for a start without an
+   * outro, which goes to `start` at once.
+   */
+  launch?(entry: SelectStartEntry, options: { readonly autoPlay: boolean; readonly replaySlot?: number }): void;
+  /**
    * The bar under the cursor changed, or the screen came on the stage (`undefined` on an empty list): the host's own
    * surfaces for it (the replay slots' card) follow it. Reported from the frame.
    */
@@ -792,6 +798,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     }
     this.launch = { atMs, entry, autoPlay, ...(replaySlot !== undefined ? { replaySlot } : {}) };
     this.changed();
+    this.options.on.launch?.(entry, { autoPlay, ...(replaySlot !== undefined ? { replaySlot } : {}) });
   }
 
   /** Hands a launch whose outro has played on to the host. */

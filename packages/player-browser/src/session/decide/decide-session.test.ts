@@ -1,5 +1,6 @@
 import { createEmptyJSON } from '@be-music/chart-source';
 import { parseChart } from '@be-music/chart-parser';
+import { resolvePlayChart } from '@be-music/player-engine';
 import { DEFAULT_PLAY_OPTIONS, type LibraryChart, type SystemSoundSet } from '@be-music/player-scene-model';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { SceneViewTiming } from '../../view/types.ts';
@@ -260,6 +261,25 @@ describe('DecideSession', () => {
     const frame = session.frame(0);
     expect(frame.course).toBe(course);
     expect(frame.playOptions).toBe(playOptions);
+  });
+
+  it('shows the draws the host made before the screen, drawing none of its own', () => {
+    const chart = parseChart(['#RANDOM 2', '#IF 2', '#00112:01', '#ENDIF', '#ENDRANDOM'].join('\n'), 'bms');
+    const resolved = resolvePlayChart(chart, { random: () => 0.9 });
+    const random = vi.fn(() => 0);
+    const session = new DecideSession({
+      chart: { ...CHART, chart },
+      sounds: {},
+      audio: createAudio(),
+      timing: { inputDelayMs: 0, fadeOutMs: 0 },
+      random,
+      resolved,
+      on: { continue: () => undefined, cancel: () => undefined },
+    });
+    expect(session.resolved).toBe(resolved);
+    session.enter(0);
+    expect(session.frame(0).playChart).toBe(resolved.chart);
+    expect(random).not.toHaveBeenCalled();
   });
 
   it("draws the chart's #RANDOM branches once, for the screen and the play alike", () => {

@@ -468,6 +468,7 @@ export class PlayerWebApp {
       unlockReplayOptions: () => this.unlockReplayOptions(),
       rememberHiSpeed: (value, source) => this.playRoute.rememberHiSpeed(value, source),
       showDecide: (chartEntry, overrides) => this.decideRoute.showDecide(chartEntry, overrides),
+      preloadOnLaunch: (chartEntry, overrides) => this.decideRoute.preloadOnLaunch(chartEntry, overrides),
       pickPracticeBars: (chartEntry) => {
         this.practiceBarsDialog ??= new PracticeBarsDialog({
           audio: this.audio,

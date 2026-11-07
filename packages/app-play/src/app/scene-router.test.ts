@@ -437,6 +437,21 @@ describe('SceneRouter.leave', () => {
     await router.leave();
     expect(log).toEqual(['finalize', 'setScene:none', 'exit:decide', 'dispose:decide', 'dispose:play']);
   });
+
+  test('keeps a play loading since the launch for the decide screen of its navigation', async () => {
+    const { router, log, scene, play } = setup();
+    const select = scene('select');
+    await router.show(select, { role: 'select' });
+    const token = router.begin();
+    const gameplay = play('play');
+    await router.prepare(gameplay, { token });
+    log.length = 0;
+    await expect(router.leave({ token, keepHeldPlay: true })).resolves.toBe(true);
+    expect(log).toEqual(['finalize', 'setScene:none', 'exit:select']);
+    expect(router.play).toBe(gameplay);
+    await router.show(scene('decide'), { role: 'decide', token });
+    expect(router.play).toBe(gameplay);
+  });
 });
 
 describe('SceneRouter.dropSelect', () => {
