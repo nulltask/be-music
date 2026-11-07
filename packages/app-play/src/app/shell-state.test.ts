@@ -52,6 +52,27 @@ describe('resolveShellState', () => {
     });
   });
 
+  test('a chart picked on the select screen makes way for the play from its launch outro on', () => {
+    expect(resolveShellState({ ...onSelect, launching: true })).toMatchObject({
+      inGameplay: true,
+      touchPlay: false,
+      paused: false,
+      // The search field goes with the panels.
+      offSelect: true,
+    });
+    expect(resolveShellState({ ...onSelect, showing: 'result', launching: true })).toMatchObject({ inGameplay: false });
+  });
+
+  test('between scenes the shell keeps whether it made way for a play', () => {
+    expect(resolveShellState({ ...onSelect, showing: undefined, wasInGameplay: true })).toMatchObject({
+      inGameplay: true,
+    });
+    expect(resolveShellState({ ...onSelect, showing: undefined, wasInGameplay: false })).toMatchObject({
+      inGameplay: false,
+    });
+    expect(resolveShellState({ ...onSelect, wasInGameplay: true })).toMatchObject({ inGameplay: false });
+  });
+
   test('a play prepared behind the decide screen counts as gameplay already', () => {
     expect(resolveShellState({ ...onSelect, showing: 'decide', playFamily: 'lr2' })).toMatchObject({
       inGameplay: true,

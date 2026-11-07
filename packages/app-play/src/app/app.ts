@@ -607,6 +607,7 @@ export class PlayerWebApp {
       deviceProfile,
       gameplayView: () => this.gameplayView,
       showing: () => this.router.current?.identity.kind,
+      launching: () => this.selectView?.launching() === true,
     });
   }
 
