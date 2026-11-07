@@ -488,3 +488,62 @@ describe('DecideRoute continuation visibility', () => {
     expect(shown).not.toHaveBeenCalled();
   });
 });
+
+describe('DecideRoute: loading the play from the moment the chart is picked', () => {
+  test('the play loads during the select screen’s launch outro, and the decide screen takes it over', async () => {
+    const h = await harness();
+    h.route.preloadOnLaunch(chartEntry('a'), { autoPlay: true });
+    await vi.waitFor(() => expect(h.plays).toHaveLength(1));
+    const play = h.plays[0]!;
+    await vi.waitFor(() => expect(play.prepare).toHaveBeenCalledOnce());
+    // The select screen is still up, playing its outro, while the play loads off stage.
+    expect(h.router.current).toBe(h.select);
+    expect(h.router.play).toBe(play);
+    const drawn = vi.mocked(h.deps.buildPlayScene).mock.calls[0]![2].preResolved!;
+
+    await h.route.showDecide(chartEntry('a'), { autoPlay: true });
+    const decide = h.decides[0]!;
+    // The screen shows the branches the load was made with, and no second play is made.
+    expect(decide.options.resolved).toBe(drawn);
+    expect(h.plays).toHaveLength(1);
+    expect(h.router.current).toBe(decide);
+    // One navigation for the launch, the screen and the play.
+    expect(h.onInterrupt).toHaveBeenCalledOnce();
+
+    play.load.resolve();
+    decide.options.on.continue();
+    await vi.waitFor(() => expect(play.start).toHaveBeenCalledOnce());
+    expect(h.router.current).toBe(play);
+    expect(h.deps.playChart).not.toHaveBeenCalled();
+  });
+
+  test('a decide screen for another chart, or without the launch’s AUTO, loads its own play', async () => {
+    const h = await harness();
+    h.route.preloadOnLaunch(chartEntry('a'));
+    await vi.waitFor(() => expect(h.plays).toHaveLength(1));
+    const launched = h.plays[0]!;
+
+    await h.route.showDecide(chartEntry('b'));
+    await vi.waitFor(() => expect(h.plays).toHaveLength(2));
+    expect(h.decides[0]!.options.resolved).toBeUndefined();
+    // The launch's play goes; the screen's own loads.
+    await vi.waitFor(() => expect(launched.dispose).toHaveBeenCalled());
+    expect(h.plays[1]!.dispose).not.toHaveBeenCalled();
+  });
+
+  test('a chart with no decide screen loads nothing ahead: its play is made as it starts', async () => {
+    const h = await harness({ decideFamily: null });
+    h.route.preloadOnLaunch(chartEntry('a'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(h.deps.buildPlayScene).not.toHaveBeenCalled();
+    expect(h.onInterrupt).not.toHaveBeenCalled();
+  });
+
+  test('a decide screen reached another way after a launch (a course’s) does not take the launch’s play', async () => {
+    const h = await harness();
+    h.route.preloadOnLaunch(chartEntry('a'));
+    await vi.waitFor(() => expect(h.plays).toHaveLength(1));
+    await h.route.showDecide(chartEntry('a'), {}, { start: async () => {} });
+    expect(h.decides[0]!.options.resolved).toBeUndefined();
+  });
+});

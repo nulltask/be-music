@@ -349,6 +349,33 @@ describe('SelectSession starting', () => {
     expect(atRoot.started).toEqual([]);
   });
 
+  it('tells the host a chart was picked as its launch outro begins, before handing it on', () => {
+    const launched: { entry: string; autoPlay: boolean }[] = [];
+    const { key, advance, started } = createSession({
+      browse: { folderPath: ['pack'], cursors: [1, 0] },
+      launchOutroMs: () => 500,
+      on: {
+        launch: (entry, { autoPlay }) => {
+          launched.push({ entry: entry.kind === 'chart' ? entry.chart.title : entry.course.definition.name, autoPlay });
+        },
+      },
+    });
+    key('Enter');
+    expect(launched).toEqual([{ entry: 'a', autoPlay: false }]);
+    expect(started).toEqual([]);
+    advance(500);
+    expect(started).toEqual([{ entry: 'a', autoPlay: false }]);
+    expect(launched).toHaveLength(1);
+  });
+
+  it('hands a chart on at once without a launch outro, telling no launch', () => {
+    const launch = vi.fn();
+    const { key, started } = createSession({ browse: { folderPath: ['pack'], cursors: [1, 0] }, on: { launch } });
+    key('Enter');
+    expect(started).toEqual([{ entry: 'a', autoPlay: false }]);
+    expect(launch).not.toHaveBeenCalled();
+  });
+
   it('waits for the skin’s launch outro before handing a chart on, ignoring input meanwhile', () => {
     const { session, key, advance, started } = createSession({
       browse: { folderPath: ['pack'], cursors: [1, 0] },

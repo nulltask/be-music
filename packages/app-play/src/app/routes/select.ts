@@ -103,6 +103,11 @@ export interface SelectRouteDeps {
   /** Shows the decide screen for a chart started on the screen (`DecideRoute`). */
   readonly showDecide: (chartEntry: LibraryChart, overrides: { autoPlay?: boolean }) => Promise<void>;
   /**
+   * Starts loading the play of a chart picked on the screen as it is picked, through the skin's launch outro
+   * (`DecideRoute.preloadOnLaunch`); `showDecide` follows once the outro has played.
+   */
+  readonly preloadOnLaunch?: (chartEntry: LibraryChart, overrides: { autoPlay?: boolean }) => void;
+  /**
    * With PRACTICE on, opens the chart's score to pick the bars to loop (`PracticeBarsDialog`); resolves whether the
    * player started (`true`) or backed out.
    */
@@ -152,6 +157,7 @@ export class SelectRoute {
   private readonly unlockReplayOptions: SelectRouteDeps['unlockReplayOptions'];
   private readonly rememberHiSpeed: SelectRouteDeps['rememberHiSpeed'];
   private readonly showDecide: SelectRouteDeps['showDecide'];
+  private readonly preloadOnLaunch: SelectRouteDeps['preloadOnLaunch'];
   private readonly pickPracticeBars: SelectRouteDeps['pickPracticeBars'];
   private readonly replaySlots: SelectRouteDeps['replaySlots'];
   private readonly replaySlotsPanel: SelectRouteDeps['replaySlotsPanel'];
@@ -186,6 +192,7 @@ export class SelectRoute {
     this.unlockReplayOptions = deps.unlockReplayOptions;
     this.rememberHiSpeed = deps.rememberHiSpeed;
     this.showDecide = deps.showDecide;
+    this.preloadOnLaunch = deps.preloadOnLaunch;
     this.pickPracticeBars = deps.pickPracticeBars;
   }
 
@@ -282,6 +289,14 @@ export class SelectRoute {
           replaySlot !== undefined
             ? this.startReplayFromSlot(entry, replaySlot)
             : this.startFromSelect(entry, autoPlay),
+        // A chart that will go to its decide screen starts loading its play as it is picked, not after the outro.
+        launch: (entry, { autoPlay, replaySlot }) => {
+          if (replaySlot !== undefined || entry.kind !== 'chart') return;
+          // A chart added to a course being made, or one whose practice bars are picked first, plays nothing yet.
+          if (this.courseMaker.maker.draft !== undefined) return;
+          if (this.playOptions.current.practice && this.pickPracticeBars !== undefined) return;
+          this.preloadOnLaunch?.(entry.chart, autoPlay ? { autoPlay: true } : {});
+        },
         // The card lists the bar's replays where the skin has no replay-slot UI (a beatoraja skin draws its own).
         focus: (entry) => {
           if (kit.family !== 'beatoraja') this.replaySlotsPanel.showSelect(entry);
