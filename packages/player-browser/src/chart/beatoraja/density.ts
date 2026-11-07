@@ -86,6 +86,8 @@ export function computeBeatorajaChartDensityValues(chart: BeMusicJSON | Resolved
   const objects: CountedObject[] = [];
   let totalNotes = 0;
   for (const note of resolved.notes) {
+    // beatoraja drops FREE ZONE (`17` / `27`), so its notes are in no density.
+    if (note.freeZone === true) continue;
     const ms = toTimelineMs(note.seconds);
     if (note.kind === 'ln' && note.endSeconds !== undefined) {
       const endMs = toTimelineMs(note.endSeconds);

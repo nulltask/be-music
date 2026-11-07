@@ -1,4 +1,4 @@
-import { resolveChart } from '@be-music/chart-model';
+import { isHeldLongNote, resolveChart } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import {
   createCourseChartScore,
@@ -254,6 +254,8 @@ function songInformation(chartEntry: LibraryChart, resolved: ResolvedChart): Cou
   let s = 0;
   let ls = 0;
   for (const note of resolved.notes) {
+    // beatoraja drops FREE ZONE (`17` / `27`): judged by nobody, it is no note at all.
+    if (note.freeZone === true) continue;
     const scratch = isScratchLaneForVariant(note.channel, variant);
     if (note.kind === 'ln') {
       const count = (note.lnMode ?? resolved.lnMode) === 1 ? 1 : 2;
@@ -288,7 +290,7 @@ function songInformation(chartEntry: LibraryChart, resolved: ResolvedChart): Cou
 /** beatoraja's `SongData.FEATURE_*` bits that the resolved chart shows. */
 function songFeatureBits(chart: BeMusicJSON, resolved: ResolvedChart): number {
   let feature = 0;
-  if (resolved.notes.some((note) => note.kind === 'ln')) {
+  if (resolved.notes.some(isHeldLongNote)) {
     const named = chart.sourceFormat === 'bms' ? chart.bms.lnMode : chart.bmson.info.lnType || undefined;
     feature |= named === 2 ? 16 : named === 3 ? 32 : named === 1 ? 8 : 1;
   }
