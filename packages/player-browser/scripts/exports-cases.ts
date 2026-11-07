@@ -356,7 +356,9 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.createDecideScene', {
     run: async () => {
       const kits: playerWebCoreAPI.DecideSceneKit[] = [
-        { family: 'built-in', skin: playerWebCoreAPI.synesthesiaSkin },
+        // A Be-Music Skin without a decide screen: entering one that draws (Synesthesia's) makes Pixi text, which needs
+        // a document the Node benchmark has not got.
+        { family: 'built-in', skin: playerWebCoreAPI.plainSkin },
         { family: 'lr2', skin: BENCH_LR2_DECIDE_SKIN },
         {
           family: 'beatoraja',

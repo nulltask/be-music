@@ -402,6 +402,7 @@ A skin may add a decide screen, shown between picking a chart and the play. Host
 
 - **`decide.durationMs`:** how long the screen shows (default 2000). The player can skip ahead with Enter, Space, or a click, or go back to select with Escape.
 - **`decide.draw(surface, frame)`** receives a `BeMusicDecideFrame`: `song`, `playOptions`, `elapsedMs` since the screen mounted, `nowMs`, `effects`, `audio`, `settings`, and `chartImage`. The Be-Music player currently passes `audio` as `undefined` on this screen.
+- **Carrying the select outro on:** the decide screen comes right after the select screen's launch outro, on the same stage, so a skin can continue the outro's motion instead of starting over. Synesthesia's select outro plays the first 210 ms of its launch warp and its decide screen poses the rest from the time since the launch, with the star field's travel handed over from the select screen. With `effects` at `'reduced'` it keeps the fades and drops the moves; at `'off'` it shows the settled screen.
 
 ## Judgement timing
 
@@ -615,7 +616,7 @@ A face without Japanese (such as Orbitron) is followed in its stack by one that 
   - `subscribe(listener)` reports additions so a picker can refresh.
   - Skins that fail validation, for example because of an unsupported `apiVersion`, are left out instead of breaking the host.
 
-- **Built-in skins:** `BUILT_IN_BE_MUSIC_SKINS` contains Synesthesia (the default), Plain, and Native.
+- **Built-in skins:** `BUILT_IN_BE_MUSIC_SKINS` contains Synesthesia (the default), Plain, and Native. Synesthesia and Native have a decide screen; Plain goes straight to the play.
 - **Player:** the player's Options dialog can add a skin from a module URL (_Skin & display_ → _Add skin_ → _Skin module URL_). A skin runs with the page's full access, so the player asks for confirmation first. Only load skins you trust. The player currently hides _Add skin_ while `ADD_SKIN_ENABLED` is off (`services/built-in-skins.ts`).
 
 ## Versioning
