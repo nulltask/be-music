@@ -43,6 +43,11 @@ export interface RandomMixConditions {
    * ({@link RandomMixCandidate.estimatedDifficulty}); off, such a chart never fits a difficulty.
    */
   estimateDifficulty: boolean;
+  /**
+   * Whether a chart whose BPM changes can be drawn: stage 1 then need not keep one BPM, and the BPM limits and the BPM
+   * range read a chart's max BPM only. Off, LR2's rules apply ({@link drawRandomMixStage}).
+   */
+  allowBPMChanges: boolean;
   count: RandomMixCount;
 }
 
@@ -54,6 +59,7 @@ export const DEFAULT_RANDOM_MIX_CONDITIONS: Readonly<RandomMixConditions> = {
   maxLevel: 0,
   difficulties: [...RANDOM_MIX_DIFFICULTIES],
   estimateDifficulty: true,
+  allowBPMChanges: true,
   count: LR2_COURSE_MAKER_MAX_STAGES,
 };
 
@@ -92,6 +98,7 @@ export function normalizeRandomMixConditions(
     difficulties: difficulties ?? [...fallback.difficulties],
     estimateDifficulty:
       typeof stored.estimateDifficulty === 'boolean' ? stored.estimateDifficulty : fallback.estimateDifficulty,
+    allowBPMChanges: typeof stored.allowBPMChanges === 'boolean' ? stored.allowBPMChanges : fallback.allowBPMChanges,
     count:
       stored.count === 'infinity'
         ? 'infinity'
@@ -175,6 +182,11 @@ export interface RandomMixBPMRange {
 
 /** What one stage of a draw is drawn against. */
 export interface RandomMixStageOptions<T extends RandomMixCandidate> {
+  /**
+   * Draw a chart whose BPM changes too ({@link RandomMixConditions.allowBPMChanges}): stage 1 need not keep one BPM, and
+   * the BPM limits and range read the chart's max BPM. Default `false`, LR2's rules.
+   */
+  allowBPMChanges?: boolean;
   /** LR2's RANDOM MIX settings: the BPM limits, the BPM range and the favorite level apply (the levels do not). */
   settings: LR2RandomMixSettings;
   /** A chart's BPMs, asked only of the charts the draw walks (and only when a BPM setting needs them). */
@@ -223,6 +235,32 @@ export function drawRandomMixStage<T extends RandomMixCandidate>(
   random: () => number,
 ): T | undefined {
   const settings = resolveLR2RandomMixSettings(options.settings);
+  const fits = createStageFilter(settings, options);
+  for (const index of randomOrder(pool.length, random)) {
+    const chart = pool[index]!;
+    if (fits(chart)) return preferLevel(pool, chart, settings.preferredLevel, options.excluded);
+  }
+  return undefined;
+}
+
+/**
+ * Whether any chart of `pool` can be stage 1 of a draw ({@link drawRandomMixStage} without `first`): with a BPM range
+ * set, stage 1 must keep one BPM, and the BPM limits apply, so charts that fit the conditions may still give no draw.
+ * It walks `pool` in order and stops at the first chart that can, reading BPMs only as far as it walks.
+ */
+export function hasRandomMixFirstStage<T extends RandomMixCandidate>(
+  pool: readonly T[],
+  options: Pick<RandomMixStageOptions<T>, 'settings' | 'bpmOf' | 'allowBPMChanges'>,
+): boolean {
+  const fits = createStageFilter(resolveLR2RandomMixSettings(options.settings), options);
+  return pool.some(fits);
+}
+
+/** Whether a chart can be the next stage of a draw: the rules {@link drawRandomMixStage} lists, before `preferLevel`. */
+function createStageFilter<T extends RandomMixCandidate>(
+  settings: LR2RandomMixSettings,
+  options: Omit<RandomMixStageOptions<T>, 'settings'>,
+): (chart: T) => boolean {
   const { first, usedFolders, excluded } = options;
   const minBPM = settings.minBPM > 0 ? settings.minBPM : -Infinity;
   const maxBPM = settings.maxBPM > 0 ? settings.maxBPM : Infinity;
@@ -233,22 +271,21 @@ export function drawRandomMixStage<T extends RandomMixCandidate>(
     low = Math.max(minBPM, firstMax - settings.bpmRange);
     high = Math.min(maxBPM, firstMax + settings.bpmRange);
   }
-  const checksBPM = low > -Infinity || high < Infinity || (first === undefined && settings.bpmRange > 0);
-  const fits = (chart: T): boolean => {
+  const checksBPM =
+    low > -Infinity ||
+    high < Infinity ||
+    (first === undefined && settings.bpmRange > 0 && options.allowBPMChanges !== true);
+  return (chart) => {
     if (first !== undefined && chart.keyMode !== first.keyMode) return false;
     if (usedFolders?.has(chart.folder) === true || excluded?.has(chart) === true) return false;
     if (!checksBPM) return true;
     const bpm = options.bpmOf(chart);
-    const min = Math.trunc(bpm.min);
     const max = Math.trunc(bpm.max);
+    // A chart whose BPM changes is placed by its max BPM, as LR2 centres the BPM range on stage 1's max BPM.
+    const min = options.allowBPMChanges === true ? max : Math.trunc(bpm.min);
     if (min < low || max > high) return false;
     return first !== undefined || settings.bpmRange <= 0 || min === max;
   };
-  for (const index of randomOrder(pool.length, random)) {
-    const chart = pool[index]!;
-    if (fits(chart)) return preferLevel(pool, chart, settings.preferredLevel, excluded);
-  }
-  return undefined;
 }
 
 /** `GetRandomSongHash`: the chart of `chart`'s folder and key mode in `pool` nearest `level` (0 keeps `chart`). */

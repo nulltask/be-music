@@ -112,6 +112,7 @@ describe('made courses storage', () => {
       maxLevel: 12,
       difficulties: [4, 5],
       estimateDifficulty: false,
+      allowBPMChanges: false,
       count: 'infinity' as const,
     };
     const stored = JSON.parse(

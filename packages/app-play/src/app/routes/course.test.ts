@@ -253,6 +253,13 @@ describe('CourseRoute: starting a course', () => {
     });
     expect(request.countMatches(MIX5)).toBe(2);
     expect(request.countMatches({ ...MIX5, keyModes: [14] })).toBe(0);
+    // Charts can fit the conditions yet give no stage 1 under the draw settings (the BPM limits here), which OK checks.
+    const settings = { ...DEFAULT_LR2_RANDOM_MIX_SETTINGS, bpmRange: 0 };
+    expect(request.canStart({ conditions: MIX5, settings, defaultConnection: 'fade' })).toBe(true);
+    expect(request.countMatches(MIX5)).toBeGreaterThan(0);
+    expect(
+      request.canStart({ conditions: MIX5, settings: { ...settings, maxBPM: 10 }, defaultConnection: 'fade' }),
+    ).toBe(false);
     expect(h.deps.showDecide).not.toHaveBeenCalled();
     expect(h.maker.setRandomMixConditions).not.toHaveBeenCalled();
     // Nothing was hashed to open the dialog.

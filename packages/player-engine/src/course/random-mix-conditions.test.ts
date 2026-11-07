@@ -5,6 +5,7 @@ import {
   createRandomMixCourse,
   drawRandomMixStage,
   filterRandomMixCandidates,
+  hasRandomMixFirstStage,
   isRandomMixKept,
   listRandomMixKeyModes,
   matchesRandomMixConditions,
@@ -67,6 +68,7 @@ describe('RANDOM MIX conditions', () => {
       maxLevel: 0,
       difficulties: [2, 5],
       estimateDifficulty: false,
+      allowBPMChanges: true,
       count: 'infinity',
     });
     expect(normalizeRandomMixConditions({ count: 0, loops: 'infinity', by: 'other' })).toEqual({
@@ -191,5 +193,56 @@ describe('createRandomMixCourse', () => {
     expect(course).toMatchObject({ name: 'RANDOM MIX', kind: 'expert', keyMode: 7, release: false });
     expect(course.stages.map((stage) => stage.md5)).toEqual(['a'.repeat(32), 'b'.repeat(32)]);
     expect(createRandomMixCourse('expert', [])).toBeUndefined();
+  });
+});
+
+describe('hasRandomMixFirstStage', () => {
+  test('is false when every chart that fits changes BPM under a BPM range, and true without the range', () => {
+    // The charts the dialog counts (say every ANOTHER) all change BPM: none can be stage 1 under a BPM range.
+    const pool = [chart(1, { bpm: [150, 200] }), chart(2, { bpm: [120, 180] })];
+    expect(hasRandomMixFirstStage(pool, { settings: settings({ bpmRange: 10 }), bpmOf })).toBe(false);
+    expect(drawRandomMixStage(pool, { settings: settings({ bpmRange: 10 }), bpmOf }, seeded(1))).toBeUndefined();
+    expect(hasRandomMixFirstStage(pool, { settings: settings(), bpmOf })).toBe(true);
+    expect(hasRandomMixFirstStage([...pool, chart(3)], { settings: settings({ bpmRange: 10 }), bpmOf })).toBe(true);
+  });
+
+  test('applies the BPM limits, and stops at the first chart that can be stage 1', () => {
+    const pool = Array.from({ length: 100 }, (_, n) => chart(n, { bpm: [150, 150] }));
+    expect(hasRandomMixFirstStage(pool, { settings: settings({ maxBPM: 140 }), bpmOf })).toBe(false);
+    let asked = 0;
+    expect(
+      hasRandomMixFirstStage(pool, { settings: settings({ bpmRange: 10 }), bpmOf: (c) => (asked++, bpmOf(c)) }),
+    ).toBe(true);
+    expect(asked).toBe(1);
+    expect(hasRandomMixFirstStage([], { settings: settings(), bpmOf })).toBe(false);
+  });
+});
+
+describe('allowBPMChanges', () => {
+  test('lets a chart whose BPM changes be stage 1, placed by its max BPM', () => {
+    const pool = [chart(1, { bpm: [150, 200] }), chart(2, { bpm: [120, 180] })];
+    const ranged = settings({ bpmRange: 10 });
+    expect(hasRandomMixFirstStage(pool, { settings: ranged, bpmOf, allowBPMChanges: true })).toBe(true);
+    expect(drawRandomMixStage(pool, { settings: ranged, bpmOf, allowBPMChanges: true }, seeded(1))).toBeDefined();
+    // Later stages lie within the range around stage 1's max BPM, by their own max BPM.
+    const first = pool[0]!;
+    const later = [chart(3, { bpm: [100, 205] }), chart(4, { bpm: [100, 230] })];
+    for (let seed = 0; seed < 10; seed += 1)
+      expect(
+        drawRandomMixStage(later, { settings: ranged, bpmOf, first, allowBPMChanges: true }, seeded(seed))?.n,
+      ).toBe(3);
+    // The BPM limits read the max BPM too.
+    expect(hasRandomMixFirstStage(pool, { settings: settings({ maxBPM: 190 }), bpmOf, allowBPMChanges: true })).toBe(
+      true,
+    );
+    expect(hasRandomMixFirstStage(pool, { settings: settings({ maxBPM: 170 }), bpmOf, allowBPMChanges: true })).toBe(
+      false,
+    );
+  });
+
+  test('is on by default and kept across storage', () => {
+    expect(DEFAULT_RANDOM_MIX_CONDITIONS.allowBPMChanges).toBe(true);
+    expect(normalizeRandomMixConditions({ allowBPMChanges: false }).allowBPMChanges).toBe(false);
+    expect(normalizeRandomMixConditions({}).allowBPMChanges).toBe(true);
   });
 });

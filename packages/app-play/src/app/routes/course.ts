@@ -15,6 +15,7 @@ import {
 import {
   createRandomMixCourse,
   filterRandomMixCandidates,
+  hasRandomMixFirstStage,
   isRandomMixKept,
   listRandomMixKeyModes,
   resolveRandomMixCount,
@@ -286,6 +287,12 @@ export class CourseRoute {
       settings: maker.randomMixSettings,
       defaultConnection: maker.defaultConnection,
       countMatches: (asked) => filterRandomMixCandidates(pool, asked).length,
+      canStart: (asked) =>
+        hasRandomMixFirstStage(filterRandomMixCandidates(pool, asked.conditions), {
+          settings: asked.settings,
+          bpmOf: (candidate) => resolveRandomMixBPM(candidate.chart),
+          allowBPMChanges: asked.conditions.allowBPMChanges,
+        }),
     });
     if (closed === undefined) return;
     // What the dialog held is kept for the next one, confirmed or not.
@@ -314,6 +321,7 @@ export class CourseRoute {
       bpmOf: resolveRandomMixBPM,
       md5Of: async (chartEntry) => (await this.records.resolveChartHashes(chartEntry))?.md5,
       random: this.random,
+      allowBPMChanges: conditions.allowBPMChanges,
       endless,
     });
     const stages = await draw.take(endless ? 1 : count);
