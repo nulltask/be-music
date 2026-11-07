@@ -1,5 +1,18 @@
 # @be-music/player-engine
 
+## 0.17.0
+
+### Minor Changes
+
+- 80d471d: Make a RANDOM MIX one draw, and leave FREE ZONE out of the NONSTOP long-note check.
+  
+  - Remove `loops` from `RandomMixConditions` and the `RANDOM_MIX_MAX_LOOPS` export: a RANDOM MIX is one draw. `normalizeRandomMixConditions` drops a stored `loops`.
+  - A NONSTOP stitch no longer switches to per-note bmson long-note types because of a stage's FREE ZONE notes, which are not long notes.
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.10.0`, `@be-music/chart-parser@0.7.1`
+
 ## 0.16.0
 
 ### Minor Changes

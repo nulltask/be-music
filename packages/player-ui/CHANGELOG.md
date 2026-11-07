@@ -1,5 +1,11 @@
 # @be-music/player-ui
 
+## 0.8.1
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.10.0`, `@be-music/player-skin-sdk@0.11.1`
+
 ## 0.8.0
 
 ### Minor Changes
