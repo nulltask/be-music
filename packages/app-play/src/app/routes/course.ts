@@ -22,7 +22,6 @@ import {
 } from '@be-music/player-engine/course';
 import { RandomMixDraw, type RandomMixPoolChart } from '../../random-mix-draw.ts';
 import type { RandomMixDialogRequest, RandomMixDialogResult } from '../../ui/random-mix-dialog.ts';
-import type { RandomMixLoop } from '../../services/courses.ts';
 import { playerText } from '../../player-copy.ts';
 import type {
   BeMusicCourseReplay,
@@ -113,10 +112,7 @@ export interface CourseRouteDeps {
   readonly selectNavigation: () => BrowseSnapshot | undefined;
   readonly setStatus: (text: string) => void;
   /** Starts a NONSTOP course (`NonstopRoute`), with its decide screen when the course bar starts it. */
-  readonly startNonstopCourse: (
-    course: LibraryCourse,
-    options: { decide?: boolean; cancel?: () => void },
-  ) => Promise<void>;
+  readonly startNonstopCourse: (course: LibraryCourse, options: { decide?: boolean }) => Promise<void>;
   readonly showSelect: () => Promise<void>;
   /** Shows the decide screen for `song`, which leads to `then.start` instead of playing `song`. */
   readonly showDecide: (
@@ -275,8 +271,8 @@ export class CourseRoute {
   }
 
   /**
-   * A RANDOM MIX bar: the RANDOM MIX dialog asks which charts to draw from, how many stages and how many runs in a row,
-   * then the first run is drawn and played. What the dialog held is kept for the next one, OK or not. Only the library's facts at hand are read to list the charts that fit; a
+   * A RANDOM MIX bar: the RANDOM MIX dialog asks which charts to draw from and how many stages, then one run is drawn
+   * and played. Its result leads back to the select screen, as any course's does; deciding the bar again draws afresh. What the dialog held is kept for the next one, OK or not. Only the library's facts at hand are read to list the charts that fit; a
    * chart's BPMs are read once a draw walks it and its chart file hashed once it is drawn, so starting a mix costs the
    * same however large the library is.
    */
@@ -299,20 +295,8 @@ export class CourseRoute {
     maker.setRandomMixSettings(choice.settings);
     if (kind === 'nonstop') maker.setDefaultConnection(choice.defaultConnection);
     if (!closed.confirmed) return;
-    this.courses.setRandomMixLoop({ kind, loop: 1, loops: conditions.loops });
     this.courses.leaveSelect(this.selectNavigation());
-    await this.playRandomMix({ kind, loop: 1, loops: conditions.loops }, pool);
-  }
-
-  /**
-   * The RANDOM MIX loop's next run, when one is due as the select screen would come back: drawn by the conditions last
-   * confirmed. Returns whether a run started (the select screen then stays away).
-   */
-  public continueRandomMixLoop(): boolean {
-    const loop = this.courses.takeNextRandomMixLoop();
-    if (loop === undefined) return false;
-    void this.playRandomMix(loop, this.library.collection.charts.map(createRandomMixCandidate));
-    return true;
+    await this.playRandomMix(kind, pool);
   }
 
   /**
@@ -320,10 +304,9 @@ export class CourseRoute {
    * folder's newest course, as LR2 keeps its draw; a longer or endless one is played without being kept. An endless
    * run draws each stage as it reaches it.
    */
-  private async playRandomMix(loop: RandomMixLoop, pool: readonly RandomMixPoolChart[]): Promise<void> {
+  private async playRandomMix(kind: 'expert' | 'nonstop', pool: readonly RandomMixPoolChart[]): Promise<void> {
     const maker = this.courseMaker.maker;
     const conditions = maker.randomMixConditions;
-    const { kind } = loop;
     const count = resolveRandomMixCount(kind, conditions.count);
     const endless = count === 'infinity';
     const draw = new RandomMixDraw(filterRandomMixCandidates(pool, conditions), {
@@ -340,12 +323,10 @@ export class CourseRoute {
       { defaultConnection: maker.defaultConnection },
     );
     if (course === undefined) {
-      this.courses.setRandomMixLoop(undefined);
       this.setStatus(playerText().course.randomMixNoMatch);
       await this.showSelect();
       return;
     }
-    if (loop.loops !== 1) this.setStatus(playerText().course.randomMixLoop(loop.loop, loop.loops));
     const kept = isRandomMixKept(count);
     if (kept) maker.keepRandomMix(course);
     // A kept draw is its folder's newest course, where the cursor comes back; otherwise the RANDOM MIX bar.
@@ -353,11 +334,7 @@ export class CourseRoute {
     const navigation = this.courses.takeReturnNavigation() ?? this.selectNavigation();
     this.courses.leaveSelect(navigation !== undefined ? { ...navigation, focusKey: `course:${barId}` } : undefined);
     if (kind === 'nonstop') {
-      await this.startNonstopCourse(createDrawnRandomMixEntry(course, stages), {
-        decide: true,
-        // Backing out of a run's decide screen ends the loop.
-        cancel: () => this.courses.setRandomMixLoop(undefined),
-      });
+      await this.startNonstopCourse(createDrawnRandomMixEntry(course, stages), { decide: true });
       return;
     }
     const endlessMix: EndlessRandomMix | undefined = endless
@@ -377,11 +354,7 @@ export class CourseRoute {
       {},
       {
         start: () => this.playNextCourseStage(),
-        // Backing out of a run's decide screen ends the loop too.
-        cancel: () => {
-          this.courses.cancelRun(active);
-          this.courses.setRandomMixLoop(undefined);
-        },
+        cancel: () => this.courses.cancelRun(active),
       },
     );
   }

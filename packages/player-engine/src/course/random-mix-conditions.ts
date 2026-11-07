@@ -44,8 +44,6 @@ export interface RandomMixConditions {
    */
   estimateDifficulty: boolean;
   count: RandomMixCount;
-  /** How many draws are played in a row, each a fresh draw by these conditions, or `infinity` until the player stops. */
-  loops: RandomMixCount;
 }
 
 /** The conditions before the dialog was ever confirmed: 7 keys, any level, five stages (LR2's defaults). */
@@ -57,11 +55,7 @@ export const DEFAULT_RANDOM_MIX_CONDITIONS: Readonly<RandomMixConditions> = {
   difficulties: [...RANDOM_MIX_DIFFICULTIES],
   estimateDifficulty: true,
   count: LR2_COURSE_MAKER_MAX_STAGES,
-  loops: 1,
 };
-
-/** The most draws a counted RANDOM MIX loop plays in a row. */
-export const RANDOM_MIX_MAX_LOOPS = 99;
 
 /** An integer in `[min, max]`, or `fallback` for a value that is not a finite number. */
 function clampInteger(value: unknown, min: number, max: number, fallback: number): number {
@@ -79,8 +73,8 @@ function integerSet(value: unknown): number[] | undefined {
 
 /**
  * Conditions read back from storage (or `fallback` for each value that is missing or malformed): levels clamped to
- * 0-99, difficulties kept to {@link RANDOM_MIX_DIFFICULTIES}, a count clamped to 1-{@link RANDOM_MIX_MAX_COUNT} and loops
- * to 1-{@link RANDOM_MIX_MAX_LOOPS}.
+ * 0-99, difficulties kept to {@link RANDOM_MIX_DIFFICULTIES} and a count clamped to 1-{@link RANDOM_MIX_MAX_COUNT}. The
+ * `loops` an earlier version kept is dropped: each RANDOM MIX is one draw.
  */
 export function normalizeRandomMixConditions(
   value: unknown,
@@ -102,10 +96,6 @@ export function normalizeRandomMixConditions(
       stored.count === 'infinity'
         ? 'infinity'
         : clampInteger(stored.count, 1, RANDOM_MIX_MAX_COUNT, fallback.count === 'infinity' ? 1 : fallback.count),
-    loops:
-      stored.loops === 'infinity'
-        ? 'infinity'
-        : clampInteger(stored.loops, 1, RANDOM_MIX_MAX_LOOPS, fallback.loops === 'infinity' ? 1 : fallback.loops),
   };
 }
 
