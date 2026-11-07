@@ -57,6 +57,7 @@ describe('RANDOM MIX conditions', () => {
         difficulties: [5, 9, 2],
         estimateDifficulty: false,
         count: 'infinity',
+        // An earlier version kept how many runs to play in a row; it is dropped.
         loops: 500,
       }),
     ).toEqual({
@@ -67,12 +68,10 @@ describe('RANDOM MIX conditions', () => {
       difficulties: [2, 5],
       estimateDifficulty: false,
       count: 'infinity',
-      loops: 99,
     });
-    expect(normalizeRandomMixConditions({ count: 0, loops: 'infinity', by: 'other' })).toMatchObject({
+    expect(normalizeRandomMixConditions({ count: 0, loops: 'infinity', by: 'other' })).toEqual({
+      ...DEFAULT_RANDOM_MIX_CONDITIONS,
       count: 1,
-      loops: 'infinity',
-      by: 'level',
     });
   });
 

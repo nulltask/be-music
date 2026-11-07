@@ -9,17 +9,6 @@ import type { BrowseSnapshot, LibraryCourse, PlayResult } from '@be-music/player
 import { startCourseRun, type ActiveCourse, type EndlessRandomMix } from '../course-flow.ts';
 
 /**
- * A RANDOM MIX played in a loop: each run a fresh draw by the same conditions, until `loops` runs have been played (or,
- * `infinity`, until the player backs out of a run's decide screen).
- */
-export interface RandomMixLoop {
-  kind: 'expert' | 'nonstop';
-  /** The run being played, from 1. */
-  loop: number;
-  loops: number | 'infinity';
-}
-
-/**
  * The course run in progress, from the course bar started to its course result, or until a navigation the scenes did
  * not ask for ends it ({@link endRun}). A NONSTOP course is one play and keeps no run here, only its AUTO and where the
  * select screen was.
@@ -34,8 +23,6 @@ export class CourseRunService {
    * keeps this to put the cursor back on the course bar once it is over.
    */
   private courseReturnNavigation: BrowseSnapshot | undefined;
-  /** The RANDOM MIX loop in progress, whose next run starts once the select screen would come back. */
-  private mixLoop: RandomMixLoop | undefined;
 
   /** The EXPERT / GRADE course being played, between its stages. */
   public get active(): ActiveCourse | undefined {
@@ -109,7 +96,6 @@ export class CourseRunService {
    */
   public endRun(): BrowseSnapshot | undefined {
     this.activeCourse = undefined;
-    this.mixLoop = undefined;
     this.courseAutoPlay = undefined;
     const navigation = this.courseReturnNavigation;
     this.courseReturnNavigation = undefined;
@@ -125,30 +111,5 @@ export class CourseRunService {
     const navigation = this.courseReturnNavigation;
     this.courseReturnNavigation = undefined;
     return navigation;
-  }
-
-  /** The RANDOM MIX loop in progress, if any. */
-  public get randomMixLoop(): RandomMixLoop | undefined {
-    return this.mixLoop;
-  }
-
-  /** A RANDOM MIX loop starts (or `undefined`: none, the loop ended). */
-  public setRandomMixLoop(loop: RandomMixLoop | undefined): void {
-    this.mixLoop = loop;
-  }
-
-  /**
-   * The RANDOM MIX loop's next run, taken once the select screen would come back from a run: the loop with its count
-   * moved on, or `undefined` (the loop then ends) after its last run or outside a loop.
-   */
-  public takeNextRandomMixLoop(): RandomMixLoop | undefined {
-    const loop = this.mixLoop;
-    if (loop === undefined || this.activeCourse !== undefined) return undefined;
-    if (loop.loops !== 'infinity' && loop.loop >= loop.loops) {
-      this.mixLoop = undefined;
-      return undefined;
-    }
-    this.mixLoop = { ...loop, loop: loop.loop + 1 };
-    return this.mixLoop;
   }
 }

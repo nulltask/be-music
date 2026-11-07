@@ -628,7 +628,6 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
         keyModes: [14, 7, 'x'],
         by: 'difficulty',
         count: 'infinity',
-        loops: 500,
       });
     },
   });
