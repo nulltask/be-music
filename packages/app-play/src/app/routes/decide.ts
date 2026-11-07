@@ -14,7 +14,7 @@ import {
   type PlayScene,
   type SelectScene,
 } from '@be-music/player-browser/host';
-import type { BeMusicReplay } from '@be-music/player-engine/replay';
+import { resolvePlayChart, type BeMusicReplay } from '@be-music/player-engine/replay';
 import { systemSoundSetFromBeatoraja, type LibraryChart } from '@be-music/player-scene-model';
 import { sanitizeFilenameStem } from '../../player-utils.ts';
 import { pickActiveFamilyForScene } from '../../family-dispatch.ts';
@@ -37,6 +37,18 @@ const gamereplay = logger('gameplay');
 interface DecidePlayOverrides {
   readonly autoPlay?: boolean;
   readonly preResolved: ResolvedPlayChart;
+}
+
+/**
+ * A play started loading as its chart was picked on the select screen, while the screen's launch outro plays
+ * (`preloadOnLaunch`): the decide screen that follows takes its navigation, its draws and the play over.
+ */
+interface LaunchPreload {
+  readonly chartEntry: LibraryChart;
+  readonly autoPlay: boolean | undefined;
+  readonly token: SceneRouteToken;
+  readonly resolved: ResolvedPlayChart;
+  readonly preload: DecidePreload<PlayScene, DecidePlayOverrides>;
 }
 
 /** What a decide screen leads to instead of playing its song: a course's first stage, and what backing out undoes. */
@@ -130,6 +142,10 @@ export class DecideRoute {
   private readonly playChart: DecideRouteDeps['playChart'];
   private readonly buildPlayScene: DecideRouteDeps['buildPlayScene'];
   private readonly latchPlay: DecideRouteDeps['latchPlay'];
+  /** The play loading since its chart was picked, for the decide screen about to show it. */
+  private launchPreload: LaunchPreload | undefined;
+  /** Bumped on each launch, so a launch's preload that is still deciding whether to start knows it is not the latest. */
+  private launchGeneration = 0;
 
   public constructor(deps: DecideRouteDeps) {
     this.router = deps.router;
@@ -162,6 +178,49 @@ export class DecideRoute {
   }
 
   /**
+   * Starts loading the play of a chart picked on the select screen as the pick is made, so the load runs through the
+   * select screen's launch outro as well as the decide screen. Only when a decide screen will follow that is known at
+   * once (the Be-Music Skin's or an LR2 theme's; a beatoraja theme's decide entry loads first): `showDecide` takes the
+   * navigation, the chart's draws and the play over. A start that goes elsewhere (no decide screen, or another chart)
+   * begins its own navigation, and the play loaded here is disposed as stale.
+   */
+  public preloadOnLaunch(chartEntry: LibraryChart, overrides: { autoPlay?: boolean } = {}): void {
+    const generation = ++this.launchGeneration;
+    this.launchPreload = undefined;
+    const decideFamily = pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'decide', chartEntry);
+    if (decideFamily === 'beatoraja') return;
+    void (async () => {
+      const kit = await this.familyKits.decideKitFor(
+        decideFamily,
+        chartEntry,
+        this.familyKits.playsOnBeatoraja(chartEntry),
+      );
+      if (kit === undefined || generation !== this.launchGeneration) return;
+      const token = this.router.begin();
+      // The decide screen shows the branches drawn here, and the play plays them.
+      const resolved = resolvePlayChart(chartEntry.chart);
+      const options: DecidePlayOverrides = { ...overrides, preResolved: resolved };
+      const play = this.preloadGameplay(chartEntry, options, token);
+      // A load nobody takes over fails quietly: the decide screen that takes it reports its failure.
+      play.catch(() => undefined);
+      this.launchPreload = { chartEntry, autoPlay: overrides.autoPlay, token, resolved, preload: { options, play } };
+    })();
+  }
+
+  /** The launch preload for this start of `chartEntry`, if it is still the newest navigation; it is taken once. */
+  private takeLaunchPreload(
+    chartEntry: LibraryChart,
+    overrides: { autoPlay?: boolean },
+    then: DecideContinuation | undefined,
+  ): LaunchPreload | undefined {
+    const launch = this.launchPreload;
+    this.launchPreload = undefined;
+    if (launch === undefined || then !== undefined) return undefined;
+    if (launch.chartEntry.id !== chartEntry.id || launch.autoPlay !== overrides.autoPlay) return undefined;
+    return this.router.isCurrent(launch.token) ? launch : undefined;
+  }
+
+  /**
    * Mounts the decide-screen splash and routes the user into gameplay when it dismisses (auto-advance OR Enter / Space
    * / Escape input). Without a decide skin, falls straight through to `playChart` so themes that don't ship a Decide
    * directory still play the chart immediately. Every family's splash is `createDecideScene`'s: on the beatoraja family
@@ -184,6 +243,7 @@ export class DecideRoute {
     const decideFamily = pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'decide', chartEntry);
     const playsOnBeatoraja = this.familyKits.playsOnBeatoraja(chartEntry);
     const kit = await this.familyKits.decideKitFor(decideFamily, chartEntry, playsOnBeatoraja);
+    const launch = this.takeLaunchPreload(chartEntry, overrides, then);
     if (kit === undefined) {
       // No decide splash: a Be-Music Skin without one, an LR2-only setup that didn't ship a decide skin, or a beatoraja
       // theme without a decide skin (or one that failed to load). The select screen's decide jingle still plays.
@@ -193,10 +253,11 @@ export class DecideRoute {
     }
     // One navigation from here into the play: the play loading behind the splash, the splash and the play share it. A
     // course's splash (`then`) carries its run on; a chart's starts a run of its own.
-    const token = this.router.begin({ continuesRun: then !== undefined });
+    const token = launch?.token ?? this.router.begin({ continuesRun: then !== undefined });
     this.selectRoute.lastSelectNavigation = this.selectView?.snapshot();
     // The select screen goes off the stage (kept), and any decide splash or play left over goes.
-    if (!(await this.router.leave({ token }))) return;
+    // A play loading since the launch stays for the screen to show.
+    if (!(await this.router.leave({ token, ...(launch !== undefined ? { keepHeldPlay: true } : {}) }))) return;
     // Build the gameplay view eagerly and kick off its heavy load (chart parse, audio decode, BGA preload) IN PARALLEL
     // with the Decide animation, off stage (`prepare` attaches nothing until the play is shown). The Decide splash
     // typically runs ~3 s; chart asset decoding is mostly done by the time the splash auto-advances, so the hand-off to
@@ -240,8 +301,11 @@ export class DecideRoute {
       sounds: kit.family === 'beatoraja' ? systemSoundSetFromBeatoraja({ bgm: this.beatoraja.beatorajaThemeBGM }) : {},
       audio: this.audio,
       on: { continue: callbacks.onContinue, cancel: callbacks.onCancel },
+      ...(launch !== undefined ? { resolved: launch.resolved } : {}),
     });
-    if (then === undefined) {
+    if (launch !== undefined) {
+      preload = launch.preload;
+    } else if (then === undefined) {
       const options = { ...overrides, preResolved: decide.resolved };
       preload = { options, play: this.preloadGameplay(chartEntry, options, token) };
     }

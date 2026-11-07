@@ -1,5 +1,11 @@
 # @be-music/app-leaderboard
 
+## 0.5.5
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.10.0`, `@be-music/player-engine@0.17.0`
+
 ## 0.5.4
 
 ### Patch Changes

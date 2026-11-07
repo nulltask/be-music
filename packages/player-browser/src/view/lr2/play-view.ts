@@ -1,3 +1,4 @@
+import { isFreeZoneChannel } from '@be-music/chart-model';
 import { ChartTextOverlay } from '../shared/chart-text.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
@@ -450,7 +451,10 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
         ...(play.battleSourceVariant !== undefined ? { battleSourceVariant: play.battleSourceVariant } : {}),
       },
       features: {
-        longNote: play.notes.some((note) => note.endBeat !== undefined),
+        // A FREE ZONE note's fixed tail is not a long note.
+        longNote: play.notes.some(
+          (note) => note.endBeat !== undefined && !isFreeZoneChannel(note.channel, play.chartPlayVariant),
+        ),
         bpmChange: (play.timingResolver?.tempoPoints.length ?? 0) > 1,
         bga: play.hasBGA,
       },

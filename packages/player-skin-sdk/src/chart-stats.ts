@@ -1,5 +1,5 @@
 import type { BeMusicJSON } from '@be-music/chart-source';
-import { resolveChart, resolveChartPlayVariant } from '@be-music/chart-model';
+import { isHeldLongNote, resolveChart, resolveChartPlayVariant } from '@be-music/chart-model';
 import type { LibraryChart } from './chart.ts';
 
 /**
@@ -47,7 +47,8 @@ function computeChartStats(chart: BeMusicJSON, fallbackBPM: number | undefined):
     const resolved = resolveChart(chart, { inferBmsLNTypeWhenMissing: true });
     for (const note of resolved.notes) {
       lengthSeconds = Math.max(lengthSeconds, note.endSeconds ?? note.seconds);
-      if (note.endBeat !== undefined) longNotes += 1;
+      // A FREE ZONE note's fixed tail is not a long note.
+      if (isHeldLongNote(note)) longNotes += 1;
     }
     mines = resolved.mines.length;
     const timing = resolved.timing;

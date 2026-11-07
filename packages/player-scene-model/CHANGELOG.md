@@ -1,5 +1,11 @@
 # @be-music/player-scene-model
 
+## 0.8.1
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.10.0`, `@be-music/player-engine@0.17.0`
+
 ## 0.8.0
 
 ### Minor Changes

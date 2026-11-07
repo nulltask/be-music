@@ -258,12 +258,11 @@ describe('CourseRoute: starting a course', () => {
     // Nothing was hashed to open the dialog.
     expect(h.deps.records.resolveChartHashes).not.toHaveBeenCalled();
     // A dialog cancelled after edits keeps them for the next one, and starts nothing.
-    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 7, loops: 'infinity' }, false));
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 7 }, false));
     await h.route.startCourse(randomMixBar('expert'));
-    expect(h.maker.randomMixConditions).toMatchObject({ count: 7, loops: 'infinity' });
+    expect(h.maker.randomMixConditions).toMatchObject({ count: 7 });
     expect(h.maker.setRandomMixSettings).toHaveBeenCalled();
     expect(h.deps.showDecide).not.toHaveBeenCalled();
-    expect(h.courses.randomMixLoop).toBeUndefined();
   });
 
   test('confirmed conditions draw a kept course, hashing only the songs drawn, then play it', async () => {
@@ -282,10 +281,9 @@ describe('CourseRoute: starting a course', () => {
     expect(h.courses.active?.course).toMatchObject({ id: 'maker:expert#0', definition: kept });
     expect(h.courses.active?.unkept).toBeUndefined();
     expect(h.courses.autoPlay).toBe(true);
-    // Back on the select screen, the cursor is on the drawn course, the newest of its folder; the loop is over.
+    // Back on the select screen, the cursor is on the drawn course, the newest of its folder.
     h.decided().cancel!();
     expect(h.courses.takeReturnNavigation()).toEqual({ ...AT_COURSE_BAR, focusKey: 'course:maker:expert#0' });
-    expect(h.courses.randomMixLoop).toBeUndefined();
   });
 
   test('says so when no song can be drawn', async () => {
@@ -325,37 +323,35 @@ describe('CourseRoute: starting a course', () => {
     expect(h.deps.showResult.mock.calls[0]![1].course.stages).toHaveLength(2);
   });
 
-  test('a loop draws its next run as the select screen would come back, and ends after its last', async () => {
+  test('a RANDOM MIX is one draw: its course result leads back to the select screen, drawing no other run', async () => {
     const h = harness();
     hashAll(h);
-    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 1, loops: 2 }));
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 1 }));
     await h.route.startCourse(randomMixBar('expert'));
-    expect(h.courses.randomMixLoop).toEqual({ kind: 'expert', loop: 1, loops: 2 });
     await h.decided().start();
     h.courses.active!.run.recordStage(stageLog(70, { course: { kind: 'expert' } }));
-    await h.route.showCourseResult();
-    expect(h.route.continueRandomMixLoop()).toBe(true);
-    await vi.waitFor(() => expect(h.deps.showDecide).toHaveBeenCalledTimes(2));
-    expect(h.deps.setStatus).toHaveBeenCalledWith('RANDOM MIX: loop 2 / 2');
-    await h.decided().start();
-    h.courses.active!.run.recordStage(stageLog(70, { course: { kind: 'expert' } }));
-    await h.route.showCourseResult();
-    expect(h.route.continueRandomMixLoop()).toBe(false);
-    expect(h.courses.randomMixLoop).toBeUndefined();
+    expect(h.route.continueCourse()).toBe(true);
+    await vi.waitFor(() => expect(h.deps.showResult).toHaveBeenCalledTimes(1));
+    // Dismissing the course result goes on to nothing: the run is over, and the select screen comes back.
+    expect(h.courses.active).toBeUndefined();
+    expect(h.route.continueCourse()).toBe(false);
+    expect(h.courses.takeReturnNavigation()).toEqual({ ...AT_COURSE_BAR, focusKey: 'course:maker:expert#0' });
+    expect(h.deps.promptRandomMix).toHaveBeenCalledTimes(1);
+    expect(h.deps.showDecide).toHaveBeenCalledTimes(1);
   });
 
-  test('a NONSTOP mix goes to the NONSTOP route, at most five songs, and backing out ends its loop', async () => {
+  test('a NONSTOP mix goes to the NONSTOP route with its decide screen, at most five songs', async () => {
     const h = harness();
     hashAll(h);
-    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 'infinity', loops: 'infinity' }));
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 'infinity' }));
     await h.route.startCourse(randomMixBar('nonstop'));
     const [course, options] = h.deps.startNonstopCourse.mock.calls[0]!;
     expect(course.definition.kind).toBe('nonstop');
     expect(course.stages).toHaveLength(2);
+    expect(options).toEqual({ decide: true });
     expect(h.maker.keepRandomMix).toHaveBeenCalled();
     expect(h.maker.setDefaultConnection).toHaveBeenCalledWith('fade');
-    options.cancel!();
-    expect(h.courses.randomMixLoop).toBeUndefined();
+    expect(h.courses.takeReturnNavigation()).toEqual({ ...AT_COURSE_BAR, focusKey: 'course:maker:nonstop#0' });
   });
 
   test('a NONSTOP course goes to the NONSTOP route with its decide screen, and keeps no run', async () => {

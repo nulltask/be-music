@@ -1,5 +1,11 @@
 # @be-music/player-terminal
 
+## 0.9.6
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.10.0`, `@be-music/player-engine@0.17.0`, `@be-music/chart-audio-renderer@0.5.2`, `@be-music/chart-parser@0.7.1`, `@be-music/player-node-audio@0.2.7`
+
 ## 0.9.5
 
 ### Patch Changes

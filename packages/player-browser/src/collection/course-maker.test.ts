@@ -269,8 +269,8 @@ describe('RANDOM MIX', () => {
     courses.keepRandomMix(replacement);
     expect(courses.courses).toEqual([replacement]);
     expect(courses.randomMixes).toEqual([replacement]);
-    courses.setRandomMixConditions({ ...courses.randomMixConditions, keyModes: [14, 7], count: 'infinity', loops: 3 });
-    expect(courses.randomMixConditions).toMatchObject({ keyModes: [7, 14], count: 'infinity', loops: 3 });
+    courses.setRandomMixConditions({ ...courses.randomMixConditions, keyModes: [14, 7], count: 'infinity' });
+    expect(courses.randomMixConditions).toMatchObject({ keyModes: [7, 14], count: 'infinity' });
     expect(changes.at(-1)).toBe('settings');
     courses.setRandomMixSettings({ ...courses.randomMixSettings, maxBPM: 1234, bpmRange: 20 });
     expect(courses.randomMixSettings).toMatchObject({ maxBPM: 990, bpmRange: 20 });

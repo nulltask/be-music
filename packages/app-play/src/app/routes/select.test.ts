@@ -160,7 +160,6 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     courses,
     courseRoute: {
       startCourse: vi.fn<SelectRouteDeps['courseRoute']['startCourse']>(async () => {}),
-      continueRandomMixLoop: vi.fn<SelectRouteDeps['courseRoute']['continueRandomMixLoop']>(() => false),
     },
     courseMaker: {
       maker: {} as SelectRouteDeps['courseMaker']['maker'],

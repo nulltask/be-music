@@ -1,5 +1,11 @@
 # @be-music/chart-parser
 
+## 0.7.1
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.10.0`
+
 ## 0.7.0
 
 ### Minor Changes

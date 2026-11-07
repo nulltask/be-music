@@ -71,6 +71,11 @@ export interface SelectScene extends SessionScene<SelectFrame, SelectIntent> {
   snapshot(): BrowseSnapshot;
   /** The bar under the cursor, or `undefined` when the list is empty. */
   focused(): LibraryEntry | undefined;
+  /**
+   * Whether a chart was picked and the skin's launch outro is playing, before the screen hands the chart on: the host can
+   * make way for the screens that follow (the decide screen and the play) from here.
+   */
+  launching(): boolean;
   /** The play options in force. */
   getPlayOptions(): PlayOptions;
   /** Takes play options from the host; the screen does not report them back through `on.playOptions`. */
@@ -179,6 +184,10 @@ class FamilySelectScene extends SessionScene<SelectFrame, SelectIntent> implemen
 
   public focused(): LibraryEntry | undefined {
     return this.selectSession.focused();
+  }
+
+  public launching(): boolean {
+    return this.selectSession.launching();
   }
 
   public getPlayOptions(): PlayOptions {
