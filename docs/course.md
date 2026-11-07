@@ -279,7 +279,7 @@ LR2 draws its RANDOM MIX by the `config.course` values alone. Be-Music asks firs
 - **Stages:** 1-99, or Infinity. A NONSTOP mix, one stitched chart, has at most five stages and no Infinity.
 - **Draw settings:** LR2's favorite level, BPM range and max / min BPM (buttons 260, 263-265), which Options → Course → **My courses…** sets too, and for a NONSTOP mix the connection after every stage (button 268).
 
-The dialog opens on what it held when it last closed, OK or not (kept with the courses in IndexedDB, `normalizeRandomMixConditions`), offers only key modes the library has, says how many charts fit, and keeps OK off while none does. LR2's level limits and stage count (buttons 261, 262, 266) are the dialog's now: an LR2 skin still steps and shows them, but the draw does not read them, and My courses no longer lists them.
+The dialog opens on what it held when it last closed, OK or not (kept with the courses in IndexedDB, `normalizeRandomMixConditions`), offers only key modes the library has, says how many charts fit, and keeps OK off while none does. The count does not read BPMs, which would mean resolving every chart: on OK, the dialog checks that a chart that fits can be stage 1 under the draw settings (`hasRandomMixFirstStage`: with a BPM range, stage 1 must keep one BPM, and the BPM limits apply), and when none can, it stays open and says so. Without that check a draw narrowed to charts that all change BPM (often the case for ANOTHER or INSANE) would start nothing. LR2's level limits and stage count (buttons 261, 262, 266) are the dialog's now: an LR2 skin still steps and shows them, but the draw does not read them, and My courses no longer lists them.
 
 ```mermaid
 flowchart TD

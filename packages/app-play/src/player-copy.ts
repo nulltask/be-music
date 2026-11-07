@@ -300,6 +300,8 @@ const en = {
       nonstopLimit: (max: number) => `A NONSTOP mix has up to ${max} stages.`,
       matches: (count: number) => (count === 1 ? '1 chart matches.' : `${count} charts match.`),
       noMatch: 'No chart matches these conditions.',
+      noFirstStage: (count: number) =>
+        `${count === 1 ? '1 chart matches' : `${count} charts match`}, but none can be stage 1 under the draw settings: with a BPM range, stage 1 must keep one BPM, and the BPM limits apply. Set the BPM range to NO LIMIT or widen the BPM limits.`,
       cancel: 'Cancel',
       ok: 'OK',
     },
@@ -643,6 +645,8 @@ const ja: typeof en = {
       nonstopLimit: (max) => `NONSTOP は ${max} ステージまでです。`,
       matches: (count) => `${count} 譜面が条件に合います。`,
       noMatch: '条件に合う譜面がありません。',
+      noFirstStage: (count) =>
+        `${count} 譜面が条件に合いますが、抽選の設定では 1 曲目にできる譜面がありません。BPM の範囲を設定していると 1 曲目は BPM が変わらない譜面に限られ、最大 / 最小 BPM も効きます。BPM の範囲を NO LIMIT にするか、BPM の制限を広げてください。`,
       cancel: 'キャンセル',
       ok: 'OK',
     },
