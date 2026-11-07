@@ -67,8 +67,8 @@ export interface SelectRouteDeps {
   >;
   /** The course run: where the cursor goes back to once a course is over. */
   readonly courses: Pick<CourseRunService, 'takeReturnNavigation'>;
-  /** Starts a course bar's run, and the next run of a RANDOM MIX loop. */
-  readonly courseRoute: Pick<CourseRoute, 'startCourse' | 'continueRandomMixLoop'>;
+  /** Starts a course bar's run. */
+  readonly courseRoute: Pick<CourseRoute, 'startCourse'>;
   /** The course being made, which a chart started on the screen joins, and its card. */
   readonly courseMaker: Pick<CourseMakerService, 'maker' | 'panel' | 'addChartToCourseBeingMade'>;
   /** The family that draws the screen, and its sounds. */
@@ -213,8 +213,6 @@ export class SelectRoute {
       void this.showDecide(next, { autoPlay: true });
       return;
     }
-    // A RANDOM MIX loop draws its next run instead of coming back to the select screen.
-    if (this.courseRoute.continueRandomMixLoop()) return;
     // Back from a play or a result: the status line describes the library again instead of the play just left.
     if (this.playStatusShown()) this.setStatus(describeChartCollection(this.library.collection));
     // Back from a course: the cursor returns to the course bar it was started from.

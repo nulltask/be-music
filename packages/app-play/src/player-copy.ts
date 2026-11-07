@@ -294,7 +294,6 @@ const en = {
       difficulty: 'Difficulty',
       estimateDifficulty: 'Estimate a missing #DIFFICULTY',
       count: 'Stages',
-      loops: 'Loops',
       settings: 'Draw settings',
       defaultConnection: 'Connection',
       infinity: 'Infinity',
@@ -305,8 +304,6 @@ const en = {
       ok: 'OK',
     },
     randomMixNoMatch: 'RANDOM MIX: no chart matches the conditions',
-    randomMixLoop: (loop: number, loops: number | 'infinity') =>
-      `RANDOM MIX: loop ${loop}${loops === 'infinity' ? '' : ` / ${loops}`}`,
   },
   practice: {
     title: 'PRACTICE',
@@ -640,7 +637,6 @@ const ja: typeof en = {
       difficulty: '難易度',
       estimateDifficulty: '#DIFFICULTY がない譜面は推定する',
       count: '曲数',
-      loops: 'ループ回数',
       settings: '抽選の設定',
       defaultConnection: 'つなぎ方',
       infinity: '無限',
@@ -651,7 +647,6 @@ const ja: typeof en = {
       ok: 'OK',
     },
     randomMixNoMatch: 'RANDOM MIX: 条件に合う譜面がありません',
-    randomMixLoop: (loop, loops) => `RANDOM MIX: ループ ${loop}${loops === 'infinity' ? '' : ` / ${loops}`}`,
   },
   practice: {
     title: 'PRACTICE',
