@@ -39,6 +39,11 @@ export interface RandomMixDialogRequest {
   defaultConnection: NonstopConnection;
   /** How many charts fit `conditions`. */
   countMatches: (conditions: RandomMixConditions) => number;
+  /**
+   * Whether a chart that fits can be stage 1 under the draw settings (`hasRandomMixFirstStage`): a BPM range lets only
+   * a chart that keeps one BPM be stage 1, and the BPM limits apply, which the count does not read. Asked on OK only.
+   */
+  canStart: (choice: RandomMixDialogChoice) => boolean;
 }
 
 /** What OK confirms: the conditions, LR2's RANDOM MIX settings and the NONSTOP connection. */
@@ -96,12 +101,19 @@ export function promptRandomMixConditions(request: RandomMixDialogRequest): Prom
     settings: { ...request.settings },
     defaultConnection: request.defaultConnection,
   };
+  // Set when OK found no chart that can be stage 1; any change clears it.
+  let blocked = false;
   const update = (next: Partial<RandomMixDialogChoice>): void => {
     choice = { ...choice, ...next };
+    blocked = false;
+    draw();
+  };
+  const block = (): void => {
+    blocked = true;
     draw();
   };
   const draw = (): void => {
-    render(template(request, choice, update), dialog);
+    render(template(request, choice, update, { blocked, block }), dialog);
   };
   draw();
   dialog.returnValue = '';
@@ -111,7 +123,9 @@ export function promptRandomMixConditions(request: RandomMixDialogRequest): Prom
     dialog.addEventListener(
       'close',
       () => {
-        resolve({ choice, confirmed: dialog.returnValue === 'ok' && request.countMatches(choice.conditions) > 0 });
+        const confirmed =
+          dialog.returnValue === 'ok' && request.countMatches(choice.conditions) > 0 && request.canStart(choice);
+        resolve({ choice, confirmed });
       },
       { once: true },
     );
@@ -177,6 +191,7 @@ function template(
   request: RandomMixDialogRequest,
   choice: RandomMixDialogChoice,
   set: (next: Partial<RandomMixDialogChoice>) => void,
+  start: { blocked: boolean; block: () => void },
 ): TemplateResult {
   const { conditions, settings } = choice;
   const update = (next: Partial<RandomMixConditions>): void => set({ conditions: { ...conditions, ...next } });
@@ -219,6 +234,12 @@ function template(
       const form = event.currentTarget as HTMLFormElement;
       const ok = form.querySelector<HTMLButtonElement>('button[value="ok"]');
       if (ok !== null && !ok.disabled) form.requestSubmit(ok);
+    }}
+    @submit=${(event: SubmitEvent) => {
+      // OK keeps the dialog open, and says why, when no chart that fits can be stage 1 under the draw settings.
+      if ((event.submitter as HTMLButtonElement | null)?.value !== 'ok' || request.canStart(choice)) return;
+      event.preventDefault();
+      start.block();
     }}
   >
     <header>
@@ -336,9 +357,19 @@ function template(
             : nothing
         }
       </div>
+      <label class="random-mix-check">
+        <input
+          class="input"
+          type="checkbox"
+          name="allow-bpm-changes"
+          .checked=${conditions.allowBPMChanges}
+          @change=${(event: Event) => update({ allowBPMChanges: (event.currentTarget as HTMLInputElement).checked })}
+        />
+        <span>${t.allowBPMChanges}</span>
+      </label>
     </fieldset>
-    <p class="random-mix-matches" role="status" aria-live="polite" data-empty=${matches === 0}>
-      ${matches > 0 ? t.matches(matches) : t.noMatch}
+    <p class="random-mix-matches" role="status" aria-live="polite" data-empty=${matches === 0 || start.blocked}>
+      ${matches === 0 ? t.noMatch : start.blocked ? t.noFirstStage(matches) : t.matches(matches)}
     </p>
     <footer>
       <button type="submit" value="" class="btn" data-variant="outline">${t.cancel}</button>
