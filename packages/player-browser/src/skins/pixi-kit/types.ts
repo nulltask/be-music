@@ -2,6 +2,7 @@ import type { Container, Graphics } from 'pixi.js';
 import type {
   BeMusicAudioFrame,
   BeMusicBomb,
+  BeMusicDecideFrame,
   BeMusicEffectLevel,
   BeMusicGameplayLayout,
   BeMusicGameplayRuntime,
@@ -24,11 +25,13 @@ import type { ChildPool } from './pools.ts';
  */
 export interface PixiSkinDefinition extends Omit<
   BeMusicSkin,
-  'context' | 'contextAttributes' | 'setup' | 'teardown' | 'gameplay' | 'select' | 'result'
+  'context' | 'contextAttributes' | 'setup' | 'teardown' | 'gameplay' | 'select' | 'result' | 'decide'
 > {
   readonly gameplay: PixiGameplaySkin;
   readonly select: PixiSelectSkin;
   readonly result: PixiResultSkin;
+  /** The decide screen between select and play; without one the player goes straight to the play. */
+  readonly decide?: PixiDecideSkin;
 }
 
 /** What {@link PixiGameplaySkin.renderChrome} receives: its layers and pools, the runtime values, and the layout. */
@@ -175,4 +178,20 @@ export interface PixiResultFrame extends BeMusicResultFrame {
 
 export interface PixiResultSkin {
   render(frame: PixiResultFrame): void;
+}
+
+export interface PixiDecideFrame extends BeMusicDecideFrame {
+  /** Rebuilt every frame. */
+  layer: Container;
+  /**
+   * Persistent layer behind {@link layer}, kept across frames for what needn't be rebuilt (a ground, a particle field
+   * updated in place). Its children are destroyed with the screen.
+   */
+  backdrop: Container;
+}
+
+export interface PixiDecideSkin {
+  /** How long (ms) the screen shows before the play starts (`BeMusicDecideSkin.durationMs`). */
+  readonly durationMs?: number;
+  render(frame: PixiDecideFrame): void;
 }

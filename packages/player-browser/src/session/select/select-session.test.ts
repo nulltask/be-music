@@ -350,19 +350,22 @@ describe('SelectSession starting', () => {
   });
 
   it('waits for the skin’s launch outro before handing a chart on, ignoring input meanwhile', () => {
-    const { key, advance, started } = createSession({
+    const { session, key, advance, started } = createSession({
       browse: { folderPath: ['pack'], cursors: [1, 0] },
       launchOutroMs: () => 500,
     });
     advance(100);
+    expect(session.launching()).toBe(false);
     key('Enter');
     expect(advance(10).startedAtMs).toBe(100);
+    expect(session.launching()).toBe(true);
     expect(key('ArrowDown')).toBe(false);
     advance(480);
     expect(started).toEqual([]);
     const frame = advance(20);
     expect(started).toEqual([{ entry: 'a', autoPlay: false }]);
     expect(frame.startedAtMs).toBeUndefined();
+    expect(session.launching()).toBe(false);
   });
 });
 

@@ -4,6 +4,7 @@ import { PIXI_HOST_RENDER, pixiHostTarget } from './host-render.ts';
 import {
   defineBeMusicSkin,
   findWhiteLaneWidth,
+  type BeMusicDecideFrame,
   type BeMusicGameplayFrame,
   type BeMusicResultFrame,
   type BeMusicSelectFrame,
@@ -14,7 +15,7 @@ import { drawCautionMine } from './mine.ts';
 import { ChildPool, LaggedDisposer } from './pools.ts';
 import { setTextResolution } from './resolution.ts';
 import { collectHitAreas, type PixiHitArea } from './skin-text.ts';
-import type { PixiSelectFrame, PixiSelectRenderer, PixiSkinDefinition } from './types.ts';
+import type { PixiDecideSkin, PixiSelectFrame, PixiSelectRenderer, PixiSkinDefinition } from './types.ts';
 
 /** LR2's opacity for a dropped long note (`0x80` of `0xff`). */
 const DROPPED_LONG_NOTE_ALPHA = 0x80 / 0xff;
@@ -26,7 +27,7 @@ const DROPPED_LONG_NOTE_ALPHA = 0x80 / 0xff;
  * on the surface's WebGL 2 context and the frame is rendered into the canvas.
  */
 export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'webgl2'> {
-  const { gameplay, select, result: _result, ...meta } = definition;
+  const { gameplay, select, result: _result, decide, ...meta } = definition;
   const surfaces = new WeakMap<HTMLCanvasElement, PixiSurface>();
   const surfaceFor = (surface: BeMusicSurface<'webgl2'>): PixiSurface | undefined => surfaces.get(surface.canvas);
 
@@ -105,6 +106,21 @@ export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'web
         target.render(surface, () => screen.build(frame));
       },
     },
+    ...(decide !== undefined
+      ? {
+          decide: {
+            durationMs: decide.durationMs,
+            draw(surface: BeMusicSurface<'webgl2'>, frame: BeMusicDecideFrame) {
+              const target = surfaceFor(surface);
+              if (!target) return;
+              target.screen ??= new DecideScreen(decide);
+              if (!(target.screen instanceof DecideScreen)) return;
+              const screen = target.screen;
+              target.render(surface, () => screen.build(frame));
+            },
+          },
+        }
+      : {}),
   });
   Object.defineProperty(skin, PIXI_HOST_RENDER, { value: true });
   return skin;
@@ -115,7 +131,7 @@ export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'web
  * player's renderer, drawing into the player's texture.
  */
 class PixiSurface {
-  screen: GameplayScreen | SelectScreen | ResultScreen | undefined;
+  screen: GameplayScreen | SelectScreen | ResultScreen | DecideScreen | undefined;
   private readonly renderer: Renderer;
   private readonly target: Texture | undefined;
 
@@ -349,6 +365,31 @@ class ResultScreen {
   build(frame: BeMusicResultFrame): Container {
     this.disposer.cycle(this.layer);
     this.definition.result.render({ ...frame, layer: this.layer, backdrop: this.backdrop });
+    return this.root;
+  }
+
+  destroy(): void {
+    this.disposer.flush();
+    this.root.destroy({ children: true });
+  }
+}
+
+/** Decide: like the result, one layer rebuilt every frame over a persistent backdrop. */
+class DecideScreen {
+  private readonly skin: PixiDecideSkin;
+  private readonly root = new Container();
+  private readonly backdrop = new Container();
+  private readonly layer = new Container();
+  private readonly disposer = new LaggedDisposer();
+
+  constructor(skin: PixiDecideSkin) {
+    this.skin = skin;
+    this.root.addChild(this.backdrop, this.layer);
+  }
+
+  build(frame: BeMusicDecideFrame): Container {
+    this.disposer.cycle(this.layer);
+    this.skin.render({ ...frame, layer: this.layer, backdrop: this.backdrop });
     return this.root;
   }
 

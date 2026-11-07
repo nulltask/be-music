@@ -294,6 +294,11 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     return focusedEntry(this.browseLibrary, this.browse);
   }
 
+  /** Whether a chart was picked and the skin's launch outro is playing: the screen is about to hand it on. */
+  public launching(): boolean {
+    return this.launch !== undefined;
+  }
+
   /** The play options in force. */
   public getPlayOptions(): PlayOptions {
     return { ...this.playOptions };
