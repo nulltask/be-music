@@ -67,8 +67,8 @@ export interface SelectRouteDeps {
   >;
   /** The course run: where the cursor goes back to once a course is over. */
   readonly courses: Pick<CourseRunService, 'takeReturnNavigation'>;
-  /** Starts a course bar's run, and the next run of a RANDOM MIX loop. */
-  readonly courseRoute: Pick<CourseRoute, 'startCourse' | 'continueRandomMixLoop'>;
+  /** Starts a course bar's run. */
+  readonly courseRoute: Pick<CourseRoute, 'startCourse'>;
   /** The course being made, which a chart started on the screen joins, and its card. */
   readonly courseMaker: Pick<CourseMakerService, 'maker' | 'panel' | 'addChartToCourseBeingMade'>;
   /** The family that draws the screen, and its sounds. */
@@ -102,6 +102,11 @@ export interface SelectRouteDeps {
   readonly rememberHiSpeed: (value: number, source: 'select') => void;
   /** Shows the decide screen for a chart started on the screen (`DecideRoute`). */
   readonly showDecide: (chartEntry: LibraryChart, overrides: { autoPlay?: boolean }) => Promise<void>;
+  /**
+   * Starts loading the play of a chart picked on the screen as it is picked, through the skin's launch outro
+   * (`DecideRoute.preloadOnLaunch`); `showDecide` follows once the outro has played.
+   */
+  readonly preloadOnLaunch?: (chartEntry: LibraryChart, overrides: { autoPlay?: boolean }) => void;
   /**
    * With PRACTICE on, opens the chart's score to pick the bars to loop (`PracticeBarsDialog`); resolves whether the
    * player started (`true`) or backed out.
@@ -152,6 +157,7 @@ export class SelectRoute {
   private readonly unlockReplayOptions: SelectRouteDeps['unlockReplayOptions'];
   private readonly rememberHiSpeed: SelectRouteDeps['rememberHiSpeed'];
   private readonly showDecide: SelectRouteDeps['showDecide'];
+  private readonly preloadOnLaunch: SelectRouteDeps['preloadOnLaunch'];
   private readonly pickPracticeBars: SelectRouteDeps['pickPracticeBars'];
   private readonly replaySlots: SelectRouteDeps['replaySlots'];
   private readonly replaySlotsPanel: SelectRouteDeps['replaySlotsPanel'];
@@ -186,6 +192,7 @@ export class SelectRoute {
     this.unlockReplayOptions = deps.unlockReplayOptions;
     this.rememberHiSpeed = deps.rememberHiSpeed;
     this.showDecide = deps.showDecide;
+    this.preloadOnLaunch = deps.preloadOnLaunch;
     this.pickPracticeBars = deps.pickPracticeBars;
   }
 
@@ -206,8 +213,6 @@ export class SelectRoute {
       void this.showDecide(next, { autoPlay: true });
       return;
     }
-    // A RANDOM MIX loop draws its next run instead of coming back to the select screen.
-    if (this.courseRoute.continueRandomMixLoop()) return;
     // Back from a play or a result: the status line describes the library again instead of the play just left.
     if (this.playStatusShown()) this.setStatus(describeChartCollection(this.library.collection));
     // Back from a course: the cursor returns to the course bar it was started from.
@@ -282,6 +287,14 @@ export class SelectRoute {
           replaySlot !== undefined
             ? this.startReplayFromSlot(entry, replaySlot)
             : this.startFromSelect(entry, autoPlay),
+        // A chart that will go to its decide screen starts loading its play as it is picked, not after the outro.
+        launch: (entry, { autoPlay, replaySlot }) => {
+          if (replaySlot !== undefined || entry.kind !== 'chart') return;
+          // A chart added to a course being made, or one whose practice bars are picked first, plays nothing yet.
+          if (this.courseMaker.maker.draft !== undefined) return;
+          if (this.playOptions.current.practice && this.pickPracticeBars !== undefined) return;
+          this.preloadOnLaunch?.(entry.chart, autoPlay ? { autoPlay: true } : {});
+        },
         // The card lists the bar's replays where the skin has no replay-slot UI (a beatoraja skin draws its own).
         focus: (entry) => {
           if (kit.family !== 'beatoraja') this.replaySlotsPanel.showSelect(entry);

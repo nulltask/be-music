@@ -113,7 +113,6 @@ describe('made courses storage', () => {
       difficulties: [4, 5],
       estimateDifficulty: false,
       count: 'infinity' as const,
-      loops: 'infinity' as const,
     };
     const stored = JSON.parse(
       JSON.stringify(

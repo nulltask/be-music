@@ -291,7 +291,7 @@ export const PLAYER_APP_TEMPLATE = html`
       </dialog>
       <!--
       The RANDOM MIX dialog: deciding a RANDOM MIX bar asks which charts to draw
-      from and how many songs and loops before the mix starts. Lit renders into
+      from and how many songs before the mix starts. Lit renders into
       the empty dialog (\`promptRandomMixConditions\`, ui/random-mix-dialog.ts).
     -->
       <dialog

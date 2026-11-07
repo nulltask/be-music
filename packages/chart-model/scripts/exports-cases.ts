@@ -775,4 +775,14 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.isInvisibleNoteChannel('3A');
     },
   });
+  define('chart-model.isFreeZoneChannel', {
+    run: () => {
+      chartAPI.isFreeZoneChannel('17', '7');
+    },
+  });
+  define('chart-model.isHeldLongNote', {
+    run: () => {
+      chartAPI.isHeldLongNote({ kind: 'ln', endBeat: 4, freeZone: true });
+    },
+  });
 }

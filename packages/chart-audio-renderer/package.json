@@ -1,6 +1,6 @@
 {
   "name": "@be-music/chart-audio-renderer",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Offline audio rendering of BMS, bmson, and Be-Music JSON charts to WAV or AIFF",
   "license": "MIT",
   "bin": {

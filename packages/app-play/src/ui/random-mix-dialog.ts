@@ -2,7 +2,6 @@ import { html, nothing, render, type TemplateResult } from 'lit';
 import {
   RANDOM_MIX_DIFFICULTIES,
   RANDOM_MIX_MAX_COUNT,
-  RANDOM_MIX_MAX_LOOPS,
   RANDOM_MIX_NONSTOP_MAX_COUNT,
   resolveRandomMixCount,
   type LR2RandomMixSettings,
@@ -14,9 +13,9 @@ import { connectionSelect, RANDOM_MIX_FIELDS, randomMixSelect } from '../course-
 import { playerText } from '../player-copy.ts';
 
 // The RANDOM MIX dialog: deciding a RANDOM MIX bar asks which charts to draw from (key modes, a level range or the
-// difficulties), how many stages (or endless) and how many draws in a row (or endless), with the draw settings the Options
-// dialog's My courses also sets (LR2's favorite level, BPM range and BPM limits, and a NONSTOP mix's connection), then
-// OK starts the mix. It opens on what was last confirmed, and says how many charts match; OK is off while none does.
+// difficulties) and how many stages (or endless), with the draw settings the Options dialog's My courses also sets
+// (LR2's favorite level, BPM range and BPM limits, and a NONSTOP mix's connection), then OK starts the mix. It opens on
+// what was last confirmed, and says how many charts match; OK is off while none does.
 
 const DIFFICULTY_NAMES: Readonly<Record<number, string>> = {
   1: 'BEGINNER',
@@ -316,9 +315,6 @@ function template(
     <div class="random-mix-group">
       ${countField('random-mix-count', t.count, conditions.count, countMax, !nonstop, (count) => update({ count }))}
       ${nonstop ? html`<p class="random-mix-note">${t.nonstopLimit(RANDOM_MIX_NONSTOP_MAX_COUNT)}</p>` : nothing}
-      ${countField('random-mix-loops', t.loops, conditions.loops, RANDOM_MIX_MAX_LOOPS, true, (loops) =>
-        update({ loops }),
-      )}
     </div>
     <fieldset class="random-mix-group">
       <legend class="label">${t.settings}</legend>

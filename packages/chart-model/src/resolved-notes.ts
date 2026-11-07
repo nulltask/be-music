@@ -244,6 +244,22 @@ export function variantUsesFreeZone(variant: ChartPlayVariant): boolean {
 }
 
 /**
+ * Whether `channel` is a FREE ZONE column under `variant` (`17` / `27`, see {@link variantUsesFreeZone}): its notes have
+ * a fixed one-beat tail but are judged by nobody, so they are not long notes.
+ */
+export function isFreeZoneChannel(channel: string, variant: ChartPlayVariant): boolean {
+  return (channel === '17' || channel === '27') && variantUsesFreeZone(variant);
+}
+
+/**
+ * Whether a resolved note is a long note a player holds: an `ln` note with a tail, not a FREE ZONE note, whose fixed
+ * tail only marks the zone. What a chart lists as its long notes (the LN tag, the LN feature) counts these.
+ */
+export function isHeldLongNote(note: Pick<ResolvedNote, 'kind' | 'endBeat' | 'freeZone'>): boolean {
+  return note.kind === 'ln' && note.endBeat !== undefined && note.freeZone !== true;
+}
+
+/**
  * Whether `channel` places an invisible object (`3x` / `4x`) on a lane: one that sets the lane's keysound in manual
  * play but is neither judged nor sounded by auto play.
  */

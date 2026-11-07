@@ -1,5 +1,11 @@
 # @be-music/player-ui-vue
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/player-ui@0.8.1`
+
 ## 0.3.0
 
 ### Minor Changes

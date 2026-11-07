@@ -1,3 +1,4 @@
+import { synesthesiaDecideSkin } from './decide.ts';
 import { renderSynesthesiaChrome } from './gameplay-chrome.ts';
 import {
   SYNESTHESIA_BOMB_DURATION_MS,
@@ -40,5 +41,6 @@ export const synesthesiaSkin: BeMusicSkin = definePixiSkin({
     bombDurationMs: SYNESTHESIA_BOMB_DURATION_MS,
   },
   select: synesthesiaSelectSkin,
+  decide: synesthesiaDecideSkin,
   result: synesthesiaResultSkin,
 });

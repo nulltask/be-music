@@ -1,5 +1,12 @@
 # @be-music/player-skin-sdk
 
+## 0.11.1
+
+### Patch Changes
+
+- c5e848d: A chart whose only tails are FREE ZONE notes (channel `17` / `27`, as in BM98-era charts) no longer counts long notes in `resolveChartStats`, so the built-in skins stop tagging it `LN`.
+- Updated dependencies: `@be-music/chart-model@0.10.0`, `@be-music/player-engine@0.17.0`, `@be-music/player-scene-model@0.8.1`
+
 ## 0.11.0
 
 ### Minor Changes
