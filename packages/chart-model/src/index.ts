@@ -97,7 +97,13 @@ export {
   type ResolvedVolumeChange,
 } from './resolved-chart.ts';
 
-export { isInvisibleNoteChannel, type ResolvedNote, type ResolvedNoteKind } from './resolved-notes.ts';
+export {
+  isFreeZoneChannel,
+  isHeldLongNote,
+  isInvisibleNoteChannel,
+  type ResolvedNote,
+  type ResolvedNoteKind,
+} from './resolved-notes.ts';
 
 export {
   canonicalizeFingerprintDocument,
