@@ -11,6 +11,10 @@ export interface ShellStateInput {
   readonly paused: boolean;
   /** The kind of scene on stage, `undefined` between scenes. */
   readonly showing: SceneKind | undefined;
+  /** Whether the select screen is playing its launch outro: a chart was picked and is about to be handed on. */
+  readonly launching?: boolean;
+  /** The last resolved {@link ShellState.inGameplay}: kept between scenes, so the stage doesn't shrink for a frame. */
+  readonly wasInGameplay?: boolean;
   /** Whether the skin draws on a portrait stage. */
   readonly portraitStage: boolean;
   /** Whether the select skin has its own search box. */
@@ -19,7 +23,11 @@ export interface ShellStateInput {
 
 /** The shell's classes and the page's viewport, as {@link resolveShellState} decides them. */
 export interface ShellState {
-  /** A play screen is up (or being prepared behind a decide screen): the select-screen overlays step aside. */
+  /**
+   * A play screen is up (or being prepared behind a decide screen), or the select screen's launch outro leads to one:
+   * the site header and the select-screen overlays step aside. From the launch on, so the stage takes its play size
+   * as the chart is picked instead of in the middle of the outro running into the decide screen.
+   */
   readonly inGameplay: boolean;
   /** The play takes touch input and has the touch pause / quit controls (the built-in and LR2 play views). */
   readonly touchPlay: boolean;
@@ -32,12 +40,16 @@ export interface ShellState {
 }
 
 export function resolveShellState(input: ShellStateInput): ShellState {
-  const inGameplay = input.playFamily !== undefined;
+  const playing = input.playFamily !== undefined;
+  const inGameplay =
+    playing ||
+    (input.showing === 'select' && input.launching === true) ||
+    (input.showing === undefined && input.wasInGameplay === true);
   return {
     inGameplay,
     // A beatoraja skin draws its own lanes and takes no touch.
-    touchPlay: inGameplay && input.playFamily !== 'beatoraja',
-    paused: inGameplay && input.paused,
+    touchPlay: playing && input.playFamily !== 'beatoraja',
+    paused: playing && input.paused,
     portraitStage: input.portraitStage,
     searchInSkin: !inGameplay && input.skinHasBox,
     offSelect: inGameplay || input.showing !== 'select',

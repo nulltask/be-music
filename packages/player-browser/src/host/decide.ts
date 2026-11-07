@@ -49,6 +49,12 @@ export interface DecideSceneOptions extends SessionSceneOptions {
   readonly progress?: () => number | undefined;
   /** The random source the chart's `#RANDOM` / `#SWITCH` branches are drawn with. Defaults to `Math.random`. */
   readonly random?: () => number;
+  /**
+   * The chart with its `#RANDOM` / `#SWITCH` branches drawn already (`resolvePlayChart`), when the host drew them before
+   * making the screen, so it could start loading the play as the chart was picked. The screen shows these draws, and
+   * `resolved` is this chart.
+   */
+  readonly resolved?: ResolvedPlayChart;
   /** Where the screen leads: the play (`continue`) or back to select (`cancel`); each fires once per entry. */
   readonly on: DecideSessionEvents;
 }
@@ -158,6 +164,7 @@ export function createDecideScene(kit: DecideSceneKit, options: DecideSceneOptio
     timing: decideTimingOf(kit),
     ...(options.progress !== undefined ? { progress: options.progress } : {}),
     ...(options.random !== undefined ? { random: options.random } : {}),
+    ...(options.resolved !== undefined ? { resolved: options.resolved } : {}),
     on: options.on,
   });
   return new FamilyDecideScene(session, createDecideView(kit, session, options), {

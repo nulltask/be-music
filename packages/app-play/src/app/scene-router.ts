@@ -81,6 +81,11 @@ export interface SceneLeaveOptions<P> extends SceneNavigationOptions {
   readonly playDispose?: PlayDispose<P>;
   /** The navigation the leave belongs to; without one it begins a navigation of its own. */
   readonly token?: SceneRouteToken;
+  /**
+   * Keeps the play loading off stage, for a decide screen of the same navigation that shows next: its load began as the
+   * chart was picked, before the select screen left.
+   */
+  readonly keepHeldPlay?: boolean;
 }
 
 export interface ScenePrepareOptions {
@@ -216,7 +221,7 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene, S
   /**
    * Takes the scene showing off the stage, after the transitions already in line, and leaves the stage empty (files
    * loading, a play being built): the recording in progress is finalized, a kept scene stays for later and any other
-   * is disposed, and so is a play loading off stage. Resolves `false` when a newer navigation has begun by its turn
+   * is disposed, and so is a play loading off stage (unless `options.keepHeldPlay`). Resolves `false` when a newer navigation has begun by its turn
    * (it begins one itself without `options.token`, interrupting the run unless `options.continuesRun`).
    */
   public leave(options: SceneLeaveOptions<P> = {}): Promise<boolean> {
@@ -231,7 +236,7 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene, S
         this.currentScene = undefined;
         if (!this.kept.has(previous)) this.release(previous, options.playDispose);
       }
-      this.dropHeldPlay();
+      if (options.keepHeldPlay !== true) this.dropHeldPlay();
       return true;
     });
   }

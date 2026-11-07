@@ -19,7 +19,6 @@ import {
   REST_CAMERA,
   roamingCamera,
   scratchProjected,
-  starfieldInto,
   viewPoint,
   wanderPoint,
   type RiverOptions,
@@ -34,13 +33,9 @@ import {
 
 import {
   SYN_AMBER,
-  SYN_CYAN,
-  SYN_DEEP,
   SYN_DIM,
   SYN_DISPLAY_FONT,
-  SYN_EMBER,
   SYN_FLARE,
-  SYN_MAGENTA,
   SYN_MIST,
   SYN_TEXT_FONT,
   SYN_VOID,
@@ -77,6 +72,22 @@ import {
   fadeChildrenFrom,
 } from '../pixi-kit/index.ts';
 import { addSynesthesiaText } from './figures.ts';
+import {
+  recordLaunchHandoff,
+  resolveDecideLayout,
+  resolveLaunchWarp,
+  resolveWarpStarSpeed,
+  SELECT_LAUNCH_OUTRO_MS,
+} from './launch-warp.ts';
+import {
+  createWarpStarScratch,
+  drawLaunchTitle,
+  paintSpace,
+  poseWarpStar,
+  resolveStarTrail,
+  STAR_COUNT,
+  WARP_STAR_COUNT,
+} from './warp-field.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 92, listBottomInset: 28, rowHeight: 28 };
 /**
@@ -96,17 +107,7 @@ const ROW_NOTES_W = 84;
  */
 const ROW_COUNT_MAX_W = 150;
 const SLIDE_MS = 320;
-const OUTRO_MS = 700;
 const INTRO_STAGGER_MS = 45;
-/** Stars drifting past while browsing, and the denser field the launch warp dashes through. */
-const STAR_COUNT = 320;
-/** The star field's volume: particles stream from `far` to `near` along z. */
-const STARFIELD = { spread: 560, near: 10, far: 1000, speed: 1 } as const;
-/** How much faster the field streams at the peak of the launch warp, and how long a trail each particle draws. */
-const WARP_SPEEDUP = 7;
-const STAR_TRAIL_SECONDS = 0.07;
-const STAR_TRAIL_MAX = 220;
-const WARP_STAR_COUNT = 900;
 const RIVER_PARTICLES = 340;
 /** How far the select camera roams around the pyramid field. */
 const CAMERA_RANGE = { x: 240, y: 110, yaw: 0.38, pitch: 0.16 } as const;
@@ -143,7 +144,7 @@ const WORLD_ORBIT = 900;
 const PYRAMIDS = [pointCloudPyramid(12, 900), pointCloudPyramid(4, 560), pointCloudPyramid(9, 520)];
 
 export const synesthesiaSelectSkin: PixiSelectSkin = {
-  outroMs: OUTRO_MS,
+  outroMs: SELECT_LAUNCH_OUTRO_MS,
   searchTextSize: 10,
   portraitSearchTextSize: 11,
   layout: LAYOUT,
@@ -284,6 +285,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   private readonly scratchPoint = { x: 0, y: 0, z: 0 };
   private readonly scratchHead = scratchProjected();
   private readonly scratchTail = scratchProjected();
+  private readonly starScratch = createWarpStarScratch();
   private readonly riverOptions: RiverOptions = { length: 1800, speed: 120, amplitude: 36, width: 20, seed: 2 };
   /** Each star's trail during the launch warp, drawn behind the stars. */
   private readonly trails = new Graphics();
@@ -348,62 +350,21 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   }
 
   /**
-   * Launch outro — the warp: the panels and list fade away while the camera dashes straight through the particle field
-   * in black space (in `tick`), and the chosen title condenses at the centre out of wide-tracked light with its artist
-   * under it, a lock-on reticle snapping shut around it. Then the screen falls to black for the count-in.
+   * Launch outro — the start of the warp: the panels and list fade away while the camera settles onto a straight dash
+   * through the particle field (in `tick`), and the chosen title starts to condense at the centre out of wide-tracked
+   * light, a lock-on reticle closing around it. The decide screen carries the warp on from here (see launch-warp.ts).
    */
   private renderOutro(frame: PixiSelectFrame): void {
-    const t = Math.min(1, (frame.nowMs - (frame.launchAt ?? frame.nowMs)) / OUTRO_MS);
+    const pose = resolveLaunchWarp(frame.nowMs - (frame.launchAt ?? frame.nowMs), frame.effects);
     const { designWidth, designHeight, layer } = frame;
-    const chartEntry = frame.focusedChart;
-    const cx = designWidth / 2;
-    const cy = designHeight / 2;
-    const dark = Math.max(0, (t - 0.72) / 0.28);
     // Fade the list and panels out of the way, leaving black space and the particles rushing past.
-    const away = 1 - easeOutCubic(Math.min(1, t / 0.25));
+    const away = pose.away;
     for (const child of layer.children) {
       child.alpha *= away;
       if (child.label === 'synesthesia-select/header') child.y -= 38 * (1 - away);
       if (child.label === 'synesthesia-select/footer') child.y += 32 * (1 - away);
     }
-    const form = easeOutCubic(Math.min(1, t / 0.4));
-    const alpha = Math.min(1, t * 4) * (1 - dark);
-    const title = addSynesthesiaText(layer, chartEntry?.title ?? '', cx, cy - 6, {
-      size: 26,
-      weight: '500',
-      fill: SYN_WHITE,
-      fontFamily: SYN_TEXT_FONT,
-      letterSpacing: 2 + 14 * (1 - form),
-      anchorX: 0.5,
-      anchorY: 0.5,
-      maxWidth: designWidth - 120,
-      alpha,
-      dropShadow: { color: SYN_EMBER, distance: 0, blur: 16, alpha: 1 },
-    });
-    if (chartEntry?.artist) {
-      addSynesthesiaText(layer, chartEntry.artist, cx, cy + 24, {
-        size: 11,
-        fill: SYN_MIST,
-        fontFamily: SYN_TEXT_FONT,
-        letterSpacing: 2,
-        anchorX: 0.5,
-        anchorY: 0.5,
-        maxWidth: designWidth - 160,
-        alpha: alpha * Math.min(1, Math.max(0, (t - 0.15) / 0.2)),
-      });
-    }
-    // Lock-on: brackets close from wide to tight around the title.
-    const lock = easeOutCubic(Math.min(1, t / 0.35));
-    const boxW = Math.min(designWidth - 80, title.width + 48) + 160 * (1 - lock);
-    const boxH = 64 + 60 * (1 - lock);
-    const reticle = new Graphics();
-    reticle.label = 'synesthesia-select/outro-lock';
-    drawReticle(reticle, cx - boxW / 2, cy - boxH / 2 + 4, boxW, boxH, SYN_WHITE, 0.85 * alpha, {
-      arm: 12,
-      width: 1.5,
-    });
-    if (dark > 0) reticle.rect(0, 0, designWidth, designHeight).fill({ color: SYN_VOID, alpha: dark });
-    layer.addChild(reticle);
+    drawLaunchTitle(layer, frame.focusedChart, resolveDecideLayout(designWidth, designHeight), designWidth, pose, 1);
   }
 
   public tick(
@@ -422,7 +383,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     this.lastTickMs = nowMs;
     // Kicks puff up the fish.
     this.kick = stepKick(this.kick, drive.bands, drive.onset, dt);
-    const warp = launchAt !== undefined ? Math.min(1, (nowMs - launchAt) / OUTRO_MS) : 0;
+    const launch = launchAt !== undefined ? resolveLaunchWarp(nowMs - launchAt, this.effects) : undefined;
+    const warp = launch?.warp ?? 0;
     const bpm = focusedChart?.bpm;
     const beatsPerSecond = (bpm !== undefined && Number.isFinite(bpm) && bpm > 0 ? Math.min(bpm, 300) : 120) / 60;
     const beatPhase = (seconds * beatsPerSecond) % 1;
@@ -433,7 +395,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     // Camera: the backdrop roams between random shots (flying, sometimes hard-cutting) with a handheld drift.
     // Reduced effects halve the moves; off keeps it at rest.
     // On launch the camera settles and flies dead straight, so the warp reads as a dash through the particles.
-    const settle = easeOutCubic(Math.min(1, warp / 0.3));
+    const settle = launch?.settle ?? 0;
     const camera = mixCamera(
       REST_CAMERA,
       roamingCamera(seconds, 13, CAMERA_RANGE, CAMERA_CYCLE_S),
@@ -444,9 +406,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     // speed the eye can follow, with each particle trailing its own path so the dash reads as forward motion.
     const cx = this.designWidth * (0.58 - 0.08 * settle);
     const cy = this.designHeight * (0.44 + 0.06 * settle);
-    const speed = (80 + beatsPerSecond * 55) * (1 + WARP_SPEEDUP * warp * warp) * (1 + 1.2 * drive.level);
-    // World units each particle's trail reaches back along its path: about the last few frames of travel.
-    const trail = warp > 0 ? Math.min(STAR_TRAIL_MAX, speed * STAR_TRAIL_SECONDS) * settle : 0;
+    const speed = resolveWarpStarSpeed(bpm, warp, this.effects, drive.level);
+    const trail = resolveStarTrail(speed, warp, settle);
     const trails = this.trails;
     trails.clear();
     this.travel += dt * speed * (warp > 0 ? 1 : rate);
@@ -458,43 +419,24 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         star.visible = false;
         continue;
       }
-      const point = starfieldInto(this.scratchPoint, index, this.travel, STARFIELD);
-      const projected = projectViewInto(this.scratchHead, point.x, point.y, point.z, basis, cx, cy, 200);
-      star.visible = projected.visible;
-      if (!projected.visible) continue;
-      const nearness = Math.min(1, projected.scale);
-      // Rushing past, the near particles swell and brighten.
-      const size = (1 + 3 * nearness * nearness) * (1 + 2.5 * warp * nearness);
-      star.position.set(projected.x, projected.y);
-      star.rotation = 0;
-      star.width = size;
-      star.height = size;
-      star.alpha = Math.min(1, (0.2 + 0.8 * nearness) * (1 + warp));
-      star.tint = index % 9 === 0 ? SYN_CYAN : index % 13 === 0 ? SYN_MAGENTA : emberColor(0.4 + 0.6 * nearness);
-      if (trail > 0) {
-        // The tail sits further down the same path, so every trail points back at the vanishing point.
-        const tailZ = Math.min(STARFIELD.far, point.z + trail);
-        const tail = projectViewInto(this.scratchTail, point.x, point.y, tailZ, basis, cx, cy, 200);
-        if (tail.visible) {
-          // Solid streaks, not grains: the warp's speed lines read as continuous light.
-          sharedShapeBatch.streak(
-            trails,
-            star.tint,
-            star.alpha * 0.7,
-            Math.max(0.6, size * 0.45),
-            tail.x,
-            tail.y,
-            projected.x,
-            projected.y,
-          );
-        }
-      }
+      poseWarpStar(star, trails, index, this.travel, basis, cx, cy, warp, trail, this.starScratch);
     }
     sharedShapeBatch.flush();
+    // The decide screen carries the warp on from this frame.
+    if (launchAt !== undefined && focusedChart !== undefined) {
+      recordLaunchHandoff({
+        chartId: focusedChart.id,
+        launchAtMs: launchAt,
+        lastFrameMs: nowMs,
+        travel: this.travel,
+        level: drive.level,
+      });
+    }
 
-    // The cursor's lock-on lets go as the warp starts, and everything but the rushing particles falls behind.
+    // The cursor's lock-on lets go as the warp starts, and everything but the rushing particles falls away, so the
+    // decide screen takes over a sky of stars alone.
     this.frontLayer.alpha = 1 - settle;
-    const behind = 1 - 0.9 * settle;
+    const behind = 1 - settle;
     for (const node of this.backLayer.children) {
       if (node !== this.starLayer && node !== this.trails && node !== this.ground) node.alpha = behind;
     }
@@ -660,19 +602,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     if (designWidth !== this.designWidth || designHeight !== this.designHeight || !this.built) {
       this.designWidth = designWidth;
       this.designHeight = designHeight;
-      const bands: ReadonlyArray<readonly [number, number]> = [
-        [SYN_DEEP, 0.3],
-        [0x070201, 0.55],
-        [0x040100, 0.8],
-        [SYN_VOID, 1],
-      ];
-      this.ground.clear();
-      let top = 0;
-      for (const [color, until] of bands) {
-        const bottom = designHeight * until;
-        this.ground.rect(0, top, designWidth, bottom - top).fill(color);
-        top = bottom;
-      }
+      paintSpace(this.ground, designWidth, designHeight);
     }
     if (this.built) return;
     this.built = true;

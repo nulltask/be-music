@@ -31,6 +31,8 @@ export interface PlayerShellDeps {
   readonly gameplayView: () => PlayScene | undefined;
   /** The kind of scene on stage, `undefined` between scenes. */
   readonly showing: () => SceneKind | undefined;
+  /** Whether the select screen is playing its launch outro (`SelectScene.launching`). */
+  readonly launching?: () => boolean;
 }
 
 /** The player shell around the stage: its gameplay state, fullscreen and touch controls. */
@@ -41,6 +43,7 @@ export class PlayerShell {
   private readonly deviceProfile: PlayerShellDeps['deviceProfile'];
   private readonly readGameplayView: PlayerShellDeps['gameplayView'];
   private readonly readShowing: PlayerShellDeps['showing'];
+  private readonly readLaunching: PlayerShellDeps['launching'];
 
   public constructor(deps: PlayerShellDeps) {
     this.sceneHost = deps.sceneHost;
@@ -49,6 +52,7 @@ export class PlayerShell {
     this.deviceProfile = deps.deviceProfile;
     this.readGameplayView = deps.gameplayView;
     this.readShowing = deps.showing;
+    this.readLaunching = deps.launching;
   }
 
   /** The play (`createPlayScene`), whichever family draws it: loading behind a decide screen, or on the stage. */
@@ -58,6 +62,8 @@ export class PlayerShell {
 
   /** Last state {@link syncGameplayShellState} applied, so the per-frame check only touches the DOM on a change. */
   private shellGameplayState = '';
+  /** The last applied `inGameplay`, which holds between scenes (see `resolveShellState`). */
+  private wasInGameplay = false;
 
   /**
    * The on-screen pause / quit buttons phones and tablets get during play (they have no Space or Escape key). Pause
@@ -88,6 +94,8 @@ export class PlayerShell {
       playFamily: view?.identity.family,
       paused: view?.isPaused() === true,
       showing: this.readShowing(),
+      launching: this.readLaunching?.() === true,
+      wasInGameplay: this.wasInGameplay,
       // A skin drawing on its portrait stage needs no rotate prompt on a phone held upright.
       portraitStage: this.sceneHost.getStageOrientation() === 'portrait',
       skinHasBox: this.search.skinHasBox,
@@ -97,6 +105,7 @@ export class PlayerShell {
     if (state === this.shellGameplayState) return;
     this.shellGameplayState = state;
     const { inGameplay, touchPlay, paused, portraitStage, searchInSkin, offSelect } = resolved;
+    this.wasInGameplay = inGameplay;
     const { shell } = this.elements;
     shell.classList.toggle('in-gameplay', inGameplay);
     for (const element of shell.querySelectorAll<HTMLElement>('.player-service-header, .service-page-footer')) {

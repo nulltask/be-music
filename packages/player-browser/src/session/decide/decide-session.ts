@@ -80,6 +80,11 @@ export interface DecideSessionOptions {
   readonly progress?: () => number | undefined;
   /** The random source the chart's `#RANDOM` / `#SWITCH` branches are drawn with, in `[0, 1)`. Defaults to `Math.random`. */
   readonly random?: () => number;
+  /**
+   * The chart already drawn (`resolvePlayChart`), when the host drew its branches before the screen was made, to load
+   * the play from the moment the chart was picked: the screen shows those draws instead of drawing its own.
+   */
+  readonly resolved?: ResolvedPlayChart;
   /** The player's keys for the screen's operations. Defaults to the default keys. */
   readonly actions?: ControlActionMap;
   readonly on: DecideSessionEvents;
@@ -116,10 +121,9 @@ export class DecideSession implements SceneSession<DecideFrame, DecideIntent> {
   public constructor(options: DecideSessionOptions) {
     this.options = options;
     this.playOptions = options.playOptions ?? DEFAULT_PLAY_OPTIONS;
-    this.resolved = resolvePlayChart(
-      options.chart.chart,
-      options.random !== undefined ? { random: options.random } : {},
-    );
+    this.resolved =
+      options.resolved ??
+      resolvePlayChart(options.chart.chart, options.random !== undefined ? { random: options.random } : {});
   }
 
   /** On the clock, when input opens. */
