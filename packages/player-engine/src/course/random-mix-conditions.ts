@@ -223,6 +223,32 @@ export function drawRandomMixStage<T extends RandomMixCandidate>(
   random: () => number,
 ): T | undefined {
   const settings = resolveLR2RandomMixSettings(options.settings);
+  const fits = createStageFilter(settings, options);
+  for (const index of randomOrder(pool.length, random)) {
+    const chart = pool[index]!;
+    if (fits(chart)) return preferLevel(pool, chart, settings.preferredLevel, options.excluded);
+  }
+  return undefined;
+}
+
+/**
+ * Whether any chart of `pool` can be stage 1 of a draw ({@link drawRandomMixStage} without `first`): with a BPM range
+ * set, stage 1 must keep one BPM, and the BPM limits apply, so charts that fit the conditions may still give no draw.
+ * It walks `pool` in order and stops at the first chart that can, reading BPMs only as far as it walks.
+ */
+export function hasRandomMixFirstStage<T extends RandomMixCandidate>(
+  pool: readonly T[],
+  options: Pick<RandomMixStageOptions<T>, 'settings' | 'bpmOf'>,
+): boolean {
+  const fits = createStageFilter(resolveLR2RandomMixSettings(options.settings), options);
+  return pool.some(fits);
+}
+
+/** Whether a chart can be the next stage of a draw: the rules {@link drawRandomMixStage} lists, before `preferLevel`. */
+function createStageFilter<T extends RandomMixCandidate>(
+  settings: LR2RandomMixSettings,
+  options: Omit<RandomMixStageOptions<T>, 'settings'>,
+): (chart: T) => boolean {
   const { first, usedFolders, excluded } = options;
   const minBPM = settings.minBPM > 0 ? settings.minBPM : -Infinity;
   const maxBPM = settings.maxBPM > 0 ? settings.maxBPM : Infinity;
@@ -234,7 +260,7 @@ export function drawRandomMixStage<T extends RandomMixCandidate>(
     high = Math.min(maxBPM, firstMax + settings.bpmRange);
   }
   const checksBPM = low > -Infinity || high < Infinity || (first === undefined && settings.bpmRange > 0);
-  const fits = (chart: T): boolean => {
+  return (chart) => {
     if (first !== undefined && chart.keyMode !== first.keyMode) return false;
     if (usedFolders?.has(chart.folder) === true || excluded?.has(chart) === true) return false;
     if (!checksBPM) return true;
@@ -244,11 +270,6 @@ export function drawRandomMixStage<T extends RandomMixCandidate>(
     if (min < low || max > high) return false;
     return first !== undefined || settings.bpmRange <= 0 || min === max;
   };
-  for (const index of randomOrder(pool.length, random)) {
-    const chart = pool[index]!;
-    if (fits(chart)) return preferLevel(pool, chart, settings.preferredLevel, excluded);
-  }
-  return undefined;
 }
 
 /** `GetRandomSongHash`: the chart of `chart`'s folder and key mode in `pool` nearest `level` (0 keeps `chart`). */
