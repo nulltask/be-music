@@ -291,6 +291,7 @@ export class CourseRoute {
         hasRandomMixFirstStage(filterRandomMixCandidates(pool, asked.conditions), {
           settings: asked.settings,
           bpmOf: (candidate) => resolveRandomMixBPM(candidate.chart),
+          allowBPMChanges: asked.conditions.allowBPMChanges,
         }),
     });
     if (closed === undefined) return;
@@ -320,6 +321,7 @@ export class CourseRoute {
       bpmOf: resolveRandomMixBPM,
       md5Of: async (chartEntry) => (await this.records.resolveChartHashes(chartEntry))?.md5,
       random: this.random,
+      allowBPMChanges: conditions.allowBPMChanges,
       endless,
     });
     const stages = await draw.take(endless ? 1 : count);

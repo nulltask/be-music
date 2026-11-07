@@ -357,6 +357,16 @@ function template(
             : nothing
         }
       </div>
+      <label class="random-mix-check">
+        <input
+          class="input"
+          type="checkbox"
+          name="allow-bpm-changes"
+          .checked=${conditions.allowBPMChanges}
+          @change=${(event: Event) => update({ allowBPMChanges: (event.currentTarget as HTMLInputElement).checked })}
+        />
+        <span>${t.allowBPMChanges}</span>
+      </label>
     </fieldset>
     <p class="random-mix-matches" role="status" aria-live="polite" data-empty=${matches === 0 || start.blocked}>
       ${matches === 0 ? t.noMatch : start.blocked ? t.noFirstStage(matches) : t.matches(matches)}
