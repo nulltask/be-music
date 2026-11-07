@@ -10,6 +10,7 @@ import type { PixiSceneHost } from './scene-host.ts';
 import type { SessionKeyTarget } from '../session/session-scene.ts';
 import type { BeatorajaTextureCache } from '../skin/beatoraja/textures.ts';
 import { synesthesiaSkin } from '../skins/synesthesia/index.ts';
+import { SYNESTHESIA_DECIDE_MS } from '../skins/synesthesia/launch-warp.ts';
 import { resolveBeatorajaDecideTiming } from '../view/beatoraja/decide-view.ts';
 import { BuiltInDecideView, resolveBuiltInDecideTiming } from '../view/built-in/decide-view.ts';
 import { resolveLR2DecideTiming } from '../view/lr2/decide-view.ts';
@@ -89,7 +90,15 @@ describe('resolveBuiltInDecideTiming', () => {
   });
 
   it('moves on at once for a skin without a decide screen', () => {
-    expect(resolveBuiltInDecideTiming({ family: 'built-in', skin: synesthesiaSkin }).autoAdvanceMs).toBe(0);
+    expect(
+      resolveBuiltInDecideTiming({ family: 'built-in', skin: { ...synesthesiaSkin, decide: undefined } }).autoAdvanceMs,
+    ).toBe(0);
+  });
+
+  it('shows Synesthesia’s decide screen for its own length', () => {
+    expect(resolveBuiltInDecideTiming({ family: 'built-in', skin: synesthesiaSkin }).autoAdvanceMs).toBe(
+      SYNESTHESIA_DECIDE_MS,
+    );
   });
 });
 
@@ -153,7 +162,7 @@ describe('createDecideScene', () => {
   });
 
   it('asks to continue on a click on the canvas, and stops listening as it leaves', () => {
-    const view = new BuiltInDecideView({ family: 'built-in', skin: synesthesiaSkin });
+    const view = new BuiltInDecideView({ family: 'built-in', skin: { ...synesthesiaSkin, decide: undefined } });
     const fake = createFakeHost();
     const emit = vi.fn();
     view.attach(fake.host, emit);

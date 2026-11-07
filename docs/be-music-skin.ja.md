@@ -402,6 +402,7 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
 
 - **`decide.durationMs`:** 画面を表示する時間（既定 2000）。プレイヤーは Enter、Space、クリックで先に進み、Escape で選曲に戻れます。
 - **`decide.draw(surface, frame)`** は `BeMusicDecideFrame` を受け取ります: `song`、`playOptions`、画面表示からの `elapsedMs`、`nowMs`、`effects`、`audio`、`settings`、`chartImage`。Be-Music player は現在、この画面の `audio` を `undefined` で渡します。
+- **選曲のアウトロからの引き継ぎ:** 決定画面は、選曲画面の決定時のアウトロのすぐ後に同じステージで表示されます。そのためスキンは、最初からやり直さずにアウトロの動きを続けられます。Synesthesia の選曲画面のアウトロは決定時のワープの最初の 210 ms を描き、決定画面は残りを決定からの経過時間で描きます。星の流れの進み具合は選曲画面から受け取ります。`effects` が `'reduced'` のときはフェードを残して動きを止め、`'off'` のときは落ち着いた画面をすぐに出します。
 
 ## 判定タイミング
 
@@ -615,7 +616,7 @@ SDK は、フレームやヘルパーが使う型も export しています。�
   - `subscribe(listener)` で追加を通知でき、ピッカーを更新できます。
   - 検査に通らないスキン（未対応の `apiVersion` など）は、ホストを壊さずに除外されます。
 
-- **組み込みスキン:** `BUILT_IN_BE_MUSIC_SKINS` には Synesthesia（既定）、Plain、Native が入っています。
+- **組み込みスキン:** `BUILT_IN_BE_MUSIC_SKINS` には Synesthesia（既定）、Plain、Native が入っています。Synesthesia と Native には決定画面があり、Plain はそのままプレイに進みます。
 - **プレイヤー:** プレイヤーの Options ダイアログ から、モジュール URL でスキンを追加できます（_Skin & display_ → _Add skin_ → _Skin module URL_）。スキンはページの全権限で動くため、プレイヤーは先に確認を求めます。信頼できるスキンだけを読み込んでください。いまのプレイヤーは `ADD_SKIN_ENABLED` が off の間、_Add skin_ を隠しています（`services/built-in-skins.ts`）。
 
 ## バージョニング
