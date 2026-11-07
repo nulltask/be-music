@@ -29,6 +29,8 @@ export interface RandomMixDrawOptions {
   /** A entry's chart MD5, read only for the songs drawn; `undefined` for one that cannot be hashed (never drawn again). */
   md5Of: (chart: LibraryChart) => Promise<string | undefined>;
   random: () => number;
+  /** Draw a chart whose BPM changes too (`RandomMixConditions.allowBPMChanges`). */
+  allowBPMChanges?: boolean;
   /**
    * An endless draw: once every entry folder has been drawn, the folders are free again (all but the last one drawn,
    * unless it is the only one), so the draw goes on as long as the pool holds a entry.
@@ -96,6 +98,7 @@ export class RandomMixDraw {
         {
           settings: this.options.settings,
           bpmOf: (entry) => this.options.bpmOf(entry.chart),
+          ...(this.options.allowBPMChanges === true ? { allowBPMChanges: true } : {}),
           ...(this.first !== undefined ? { first: this.first } : {}),
           usedFolders: this.usedFolders,
           excluded: this.excluded,
