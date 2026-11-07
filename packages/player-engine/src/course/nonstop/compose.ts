@@ -2,6 +2,7 @@ import { placeNonstopChartOptions, type NonstopChartOptionDiagnostic } from './c
 export type { NonstopChartOptionDiagnostic } from './chart-options.ts';
 import type { ChartTextStage } from '../../core/chart-text.ts';
 import {
+  isHeldLongNote,
   buildChartTextTimeline,
   CHART_OPTION_PROGRAM_VERSION,
   type ChartOptionProgram,
@@ -237,7 +238,7 @@ export function stitchNonstopCourse(
   const asBmson =
     bmsonStage >= 0 ||
     ((options.stitch ?? NONSTOP_STITCH_VERSION) >= 3 &&
-      resolved.some((stage) => stage.notes.some((note) => note.kind === 'ln' && note.lnMode !== 1)));
+      resolved.some((stage) => stage.notes.some((note) => isHeldLongNote(note) && note.lnMode !== 1)));
   if (asBmson && bmsonStage < 0)
     resolved = stages.map((stage) => resolveChart(stage.chart, stage.pms === true ? { chartPath: '.pms' } : {}));
   const wavKeys = new NonstopKeyAllocator(asBmson);

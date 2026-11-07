@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { createEmptyJSON, type BeMusicEvent, type BeMusicJSON } from '../../chart-source/src/index.ts';
-import { countScoredNotes, isInvisibleNoteChannel, resolveChart } from './index.ts';
+import { countScoredNotes, isFreeZoneChannel, isHeldLongNote, isInvisibleNoteChannel, resolveChart } from './index.ts';
 
 function event(measure: number, channel: string, value: string, position: [number, number] = [0, 1]): BeMusicEvent {
   return { measure, channel, position, value };
@@ -230,4 +230,19 @@ test('pairs bmson LN end sounds by pulse despite floating-point beat addition', 
   const note = resolveChart(source).notes[0]!;
   expect(note.endBeat).not.toBe(0.3);
   expect(note.endSoundEvent).toBe(source.events[1]);
+});
+
+describe('isHeldLongNote / isFreeZoneChannel', () => {
+  test('a long note with a tail is held, a FREE ZONE note is not', () => {
+    expect(isHeldLongNote({ kind: 'ln', endBeat: 4 })).toBe(true);
+    expect(isHeldLongNote({ kind: 'ln', endBeat: 4, freeZone: true })).toBe(false);
+    expect(isHeldLongNote({ kind: 'tap', endBeat: undefined })).toBe(false);
+  });
+
+  test('17 and 27 are FREE ZONE only where the play variant has one', () => {
+    expect(isFreeZoneChannel('17', '7')).toBe(true);
+    expect(isFreeZoneChannel('27', '14')).toBe(true);
+    expect(isFreeZoneChannel('17', '9')).toBe(false);
+    expect(isFreeZoneChannel('16', '7')).toBe(false);
+  });
 });
