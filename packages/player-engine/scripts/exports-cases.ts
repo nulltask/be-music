@@ -675,6 +675,14 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  define('player-engine.course.hasRandomMixFirstStage', {
+    run: () => {
+      courseAPI.hasRandomMixFirstStage(benchMixPool, {
+        settings: { ...benchMixSettings, bpmRange: 20, maxBPM: 160 },
+        bpmOf: (chart) => ({ min: chart.minBPM, max: chart.maxBPM }),
+      });
+    },
+  });
   define('player-engine.course.createRandomMixCourse', {
     run: () => {
       courseAPI.createRandomMixCourse(
