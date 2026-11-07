@@ -1,5 +1,16 @@
 # @be-music/app-play
 
+## 0.13.1
+
+### Patch Changes
+
+- 80d471d: Give Synesthesia a decide screen, and lead a RANDOM MIX result back to the select screen.
+  
+  - Start loading the play the moment a chart is picked on the select screen, when a decide screen follows, instead of after the select screen's launch animation, so the wait before the play is shorter.
+  - Hide the site header as soon as a chart is picked instead of when the decide screen appears, so the stage no longer jumps in size in the middle of the launch animation in a window.
+  - A RANDOM MIX's result now always leads back to the select screen. With Loops above 1 or Infinity in the RANDOM MIX dialog, a key on the result started the next run instead, and on AUTO its decide screen went straight on into the play, so there was no way back to the select screen. The dialog no longer asks for Loops: each RANDOM MIX is one draw, and deciding the bar again draws a new one.
+- Updated dependencies: `@be-music/chart-model@0.10.0`, `@be-music/player-skin-sdk@0.11.1`, `@be-music/player-browser@0.18.0`, `@be-music/player-engine@0.17.0`, `@be-music/chart-parser@0.7.1`, `@be-music/player-scene-model@0.8.1`, `@be-music/player-ui@0.8.1`, `@be-music/skin-lr2@0.7.3`, `@be-music/skin-beatoraja@0.7.3`
+
 ## 0.13.0
 
 ### Minor Changes
