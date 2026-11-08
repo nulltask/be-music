@@ -201,7 +201,7 @@ export interface BeatorajaPlayViewOptions {
   /** The course the play is a stage of, with the stage being played. */
   readonly course?: CourseView;
   /** The stages of a stitched NONSTOP chart (`PlaySessionOptions.nonstop`), whose BGA cross-fades at each seam. */
-  readonly nonstop?: { readonly stages: readonly NonstopBGAStage[] };
+  readonly nonstop?: { readonly stages: readonly (NonstopBGAStage & { readonly backBMP?: string })[] };
   /** Where the chart's files are, for its `#STAGEFILE`, `#BACKBMP` and `#BANNER`. */
   readonly source?: BrowserAssetSource;
   /** Where the skin's Lua sounds play (`main_state.audio_*`); they are silent without it. */
@@ -262,7 +262,13 @@ export class BeatorajaPlayView implements PlayView {
     this.options = options;
     this.showInvisibleNotes = options.showInvisibleNotes === true;
     this.timing = resolveBeatorajaPlayTiming(kit.kit.skin);
-    this.chartImages = new BeatorajaViewChartImages(play.chart, options.source);
+    this.chartImages = new BeatorajaViewChartImages(
+      play.chart,
+      options.source,
+      options.nonstop !== undefined
+        ? { stages: options.nonstop.stages, currentSeconds: () => play.currentSeconds() }
+        : undefined,
+    );
     const skin = kit.kit.skin;
     this.playfieldSkin = {
       stage: {

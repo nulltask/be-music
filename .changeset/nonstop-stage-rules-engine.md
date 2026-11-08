@@ -11,3 +11,5 @@ NONSTOP stitching rule version 4 keeps each stage's own rules, which the stitche
 - A negative-BPM reversal inside its stage's window now freezes the rest of the play as LR2 does, instead of the notes, BGM and STOPs past it being played and judged as ordinary ones.
 
 Replays keep their recorded rule version, so earlier runs stitch as they did.
+
+`stitchNonstopCourse` now also gives each stage's `#BACKBMP` (`NonstopStitchStage.backBMP`, through `assetPath`) and sets the stitched chart's `#BACKBMP` to the first stage's.

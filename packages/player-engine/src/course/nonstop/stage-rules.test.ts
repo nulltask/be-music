@@ -139,6 +139,15 @@ describe('NONSTOP stitching keeps each stage’s own rules (rule version 4)', ()
     expect(stitch([plain('#WAV00 boom.wav')], { stitch: 3 }).map.landmineSampleKeys).toBeUndefined();
   });
 
+  test('each stage’s #BACKBMP goes to the map, through assetPath, and the first one to the chart', () => {
+    const { chart, map } = stitch([plain('#BACKBMP back.png'), plain(), plain('#BACKBMP other.png')], {
+      assetPath: (stage, kind, path) => `s${stage}/${kind}/${path}`,
+    });
+    expect(chart.metadata.backBMP).toBe('s0/bmp/back.png');
+    expect(map.stages.map((stage) => stage.backBMP)).toEqual(['s0/bmp/back.png', undefined, 's2/bmp/other.png']);
+    expect(stitch([plain(), plain('#BACKBMP other.png')]).chart.metadata.backBMP).toBeUndefined();
+  });
+
   describe('negative-BPM reversal', () => {
     // The reversal sits at measure 2.5 of the first stage, inside its window.
     const reversing = () => plain('#BPM01 -240', '#00208:0001');

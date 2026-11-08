@@ -121,6 +121,11 @@ export interface NonstopStitchStage {
   lr2StageMarker: boolean;
   /** The stage's song, as its chart names it, for the play screen ({@link resolveNonstopSongInfoState}). */
   songInfo?: NonstopSongInfo;
+  /**
+   * The stage's `#BACKBMP`, through `assetPath`, for the play screen to show while the stage is shown. The stitched
+   * chart's own `#BACKBMP` is the first stage's.
+   */
+  backBMP?: string;
 }
 
 export interface NonstopStitchMap {
@@ -540,6 +545,11 @@ function stitchNonstopCourseAs(
   chart.metadata.bpm = STITCHED_BPM;
   if (options.title !== undefined) chart.metadata.title = options.title;
   if (first.rank !== undefined) chart.metadata.rank = first.rank;
+  const backBMPs = stages.map((stage, index) => {
+    const path = stage.chart.metadata.backBMP?.trim();
+    return path ? assetPath(index, 'bmp', path) : undefined;
+  });
+  if (backBMPs[0] !== undefined) chart.metadata.backBMP = backBMPs[0];
   if (perStageRules && !asBmson && stages[0]!.chart.bms.defExRank !== undefined)
     chart.bms.defExRank = stages[0]!.chart.bms.defExRank;
   const total = stages[totalStage]?.chart.metadata.total;
@@ -626,6 +636,7 @@ function stitchNonstopCourseAs(
             : {}),
           lr2StageMarker: before === 'blank1' || before === 'blank2',
           songInfo: stageSongInfo(stages[index]!.chart),
+          ...(backBMPs[index] !== undefined ? { backBMP: backBMPs[index] } : {}),
         };
       }),
     },
