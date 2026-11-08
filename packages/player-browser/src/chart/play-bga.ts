@@ -10,6 +10,7 @@ import {
   parseBMSExBMP,
   buildKeyBoundBGATimeline,
   createTimingResolver,
+  keysOutBGALayerBlack,
   resolveBMSExBMPColorKey,
   resolvePoorBGAMode,
   type BmsARGB,
@@ -184,7 +185,8 @@ async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: B
     options.bmsonBGACues,
   );
   // The bmson spec draws layer blacks as black ("Unlike BMS Layer Channel #xxx07"); BMS keys them out.
-  const keyOutLayerBlack = chart.sourceFormat !== 'bmson' && swBGAColorKey === undefined;
+  // A BMS stage's image in a NONSTOP chart stitched as bmson keeps the BMS rule (`resources.bmpSourceFormat`).
+  const keyOutLayerBlack = (key: string): boolean => swBGAColorKey === undefined && keysOutBGALayerBlack(chart, key);
   const aliasSources = new Set([...collectBGASubRegions(chart).values()].map((region) => region.sourceBMP));
   const trackKeys = (cues: readonly BGACue[]) =>
     collectBGATextureLoadKeys(chart, { base: cues, layer: [], poor: [] }, undefined).base;
@@ -275,7 +277,7 @@ async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: B
       }
       if (layer.has(key)) {
         const texture = await loadTextureFromBytes(path, bytes, {
-          keyOutBlack: keyOutLayerBlack && bmsColorKey === undefined,
+          keyOutBlack: keyOutLayerBlack(key) && bmsColorKey === undefined,
           ...(bmsColorKey ? { bmsColorKey } : {}),
           ...(swBGAColorKey ? { swBGAColorKey } : {}),
         });

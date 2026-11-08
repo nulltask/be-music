@@ -240,8 +240,13 @@ export function collectBmsWAVVolumeMultipliers(json: Pick<BeMusicJSON, 'bms' | '
  * BMS uses the LR2-compatible monophonic policy: a retrigger stops the still-playing instance of that slot and plays
  * it again from the start. bmson layers sample slices / `c: true` continuation instead, so its slots are polyphonic.
  * Every audio backend (Node mixer, WebAudio session, offline renderer) must consult this single predicate rather than
- * encoding the per-format rule locally.
+ * encoding the per-format rule locally. With `sampleKey`, a slot listed in `resources.wavSourceFormat` follows its own
+ * format's rule (a BMS stage's slot in a NONSTOP chart stitched as bmson stays monophonic).
  */
-export function usesMonophonicWAVPlayback(json: Pick<BeMusicJSON, 'sourceFormat'>): boolean {
-  return json.sourceFormat === 'bms';
+export function usesMonophonicWAVPlayback(
+  json: Pick<BeMusicJSON, 'sourceFormat'> & { resources?: Pick<BeMusicJSON['resources'], 'wavSourceFormat'> },
+  sampleKey?: string,
+): boolean {
+  const slotFormat = sampleKey === undefined ? undefined : json.resources?.wavSourceFormat?.[sampleKey];
+  return (slotFormat ?? json.sourceFormat) === 'bms';
 }

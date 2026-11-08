@@ -280,7 +280,7 @@ export async function createNodeAudioSession({
       if (!window) {
         return;
       }
-      if (usesMonophonicWAVPlayback(json)) {
+      if (usesMonophonicWAVPlayback(json, normalized)) {
         removeActiveVoicesInPlace(activeVoices, (voice) => voice.sampleKey === normalized);
       }
       const startSeconds = output.getClockState().outputSeconds;

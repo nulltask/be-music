@@ -46,7 +46,18 @@ export interface BMSResources {
   wav: Record<string, string>;
   /** Intrinsic per-slot linear gain, e.g. a composed NONSTOP stage's VOLWAV. Omitted slots use unity. */
   wavGain?: Record<string, number>;
+  /**
+   * The format whose playback rules a WAV slot follows where it differs from the chart's `sourceFormat`, e.g. a BMS
+   * stage's slot in a NONSTOP chart stitched as bmson (BMS slots restart on retrigger). Omitted slots follow
+   * `sourceFormat`.
+   */
+  wavSourceFormat?: Record<string, BeMusicSourceFormat>;
   bmp: Record<string, string>;
+  /**
+   * The format whose drawing rules a BMP slot follows where it differs from the chart's `sourceFormat`, e.g. a BMS
+   * stage's image in a NONSTOP chart stitched as bmson (BMS keys out layer black). Omitted slots follow `sourceFormat`.
+   */
+  bmpSourceFormat?: Record<string, BeMusicSourceFormat>;
   bpm: Record<string, number>;
   stop: Record<string, number>;
   text: Record<string, string>;
@@ -512,7 +523,13 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
     resources: {
       wav: { ...json.resources.wav },
       ...(json.resources.wavGain !== undefined ? { wavGain: { ...json.resources.wavGain } } : {}),
+      ...(json.resources.wavSourceFormat !== undefined
+        ? { wavSourceFormat: { ...json.resources.wavSourceFormat } }
+        : {}),
       bmp: { ...json.resources.bmp },
+      ...(json.resources.bmpSourceFormat !== undefined
+        ? { bmpSourceFormat: { ...json.resources.bmpSourceFormat } }
+        : {}),
       bpm: { ...json.resources.bpm },
       stop: { ...json.resources.stop },
       text: { ...json.resources.text },

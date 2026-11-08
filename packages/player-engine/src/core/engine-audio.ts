@@ -94,19 +94,18 @@ export async function createDebugActiveAudioEstimator(
     .filter((window) => window.endSeconds > window.startSeconds)
     .sort((left, right) => left.startSeconds - right.startSeconds);
 
-  if (usesMonophonicWAVPlayback(json)) {
-    const latestBySampleKey = new Map<string, number>();
-    for (let index = 0; index < windows.length; index += 1) {
-      const window = windows[index]!;
-      const previousIndex = latestBySampleKey.get(window.sampleKey);
-      if (previousIndex !== undefined) {
-        const previousWindow = windows[previousIndex]!;
-        if (window.startSeconds < previousWindow.endSeconds) {
-          previousWindow.endSeconds = window.startSeconds;
-        }
+  const latestBySampleKey = new Map<string, number>();
+  for (let index = 0; index < windows.length; index += 1) {
+    const window = windows[index]!;
+    if (!usesMonophonicWAVPlayback(json, window.sampleKey)) continue;
+    const previousIndex = latestBySampleKey.get(window.sampleKey);
+    if (previousIndex !== undefined) {
+      const previousWindow = windows[previousIndex]!;
+      if (window.startSeconds < previousWindow.endSeconds) {
+        previousWindow.endSeconds = window.startSeconds;
       }
-      latestBySampleKey.set(window.sampleKey, index);
     }
+    latestBySampleKey.set(window.sampleKey, index);
   }
 
   let active: DebugSampleWindow[] = [];
