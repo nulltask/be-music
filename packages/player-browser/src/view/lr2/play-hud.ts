@@ -123,9 +123,26 @@ export interface GrooveGaugeBead {
  *
  * Pure function (no Pixi binding) so the cell-selection logic is unit-tested directly.
  */
-export function resolveGrooveGaugeBeads(percent: number, options: { survivalGauge?: boolean } = {}): GrooveGaugeBead[] {
+export function resolveGrooveGaugeBeads(
+  percent: number,
+  options: { survivalGauge?: boolean } = {},
+): readonly GrooveGaugeBead[] {
   const clampedPercent = Math.max(0, Math.min(100, Number.isFinite(percent) ? percent : 0));
   const activeUnits = Math.round((clampedPercent / 100) * LR2_GROOVE_GAUGE_UNITS);
+  // The gauge redraws every frame but has only a hundred-odd states: each list is built once and shared.
+  const key = activeUnits * 2 + (options.survivalGauge ? 1 : 0);
+  let beads = GROOVE_GAUGE_BEADS.get(key);
+  if (beads === undefined) {
+    beads = buildGrooveGaugeBeads(activeUnits, options.survivalGauge === true);
+    GROOVE_GAUGE_BEADS.set(key, beads);
+  }
+  return beads;
+}
+
+const GROOVE_GAUGE_BEADS = new Map<number, readonly GrooveGaugeBead[]>();
+
+function buildGrooveGaugeBeads(activeUnits: number, survivalGauge: boolean): readonly GrooveGaugeBead[] {
+  const options = { survivalGauge };
   const clearZoneUnit = Math.round((LR2_GROOVE_GAUGE_CLEAR_ZONE_PERCENT / 100) * LR2_GROOVE_GAUGE_UNITS);
   const beads: GrooveGaugeBead[] = [];
   for (let unitIndex = 0; unitIndex < LR2_GROOVE_GAUGE_UNITS; unitIndex += 1) {
@@ -133,7 +150,20 @@ export function resolveGrooveGaugeBeads(percent: number, options: { survivalGaug
     const isClearZone = !options.survivalGauge && unitIndex >= clearZoneUnit;
     beads.push({ unitIndex, cellOffset: (isActive ? 0 : 2) + (isClearZone ? 1 : 0) });
   }
-  return beads;
+  return Object.freeze(beads.map((bead) => Object.freeze(bead)));
+}
+
+/** The beads' debug labels, by `cellIndex * LR2_GROOVE_GAUGE_UNITS + unitIndex`, made once each. */
+const BEAD_LABELS = new Map<number, string>();
+
+function beadLabel(unitIndex: number, frameIndex: number, cellIndex: number): string {
+  const key = cellIndex * LR2_GROOVE_GAUGE_UNITS + unitIndex;
+  let label = BEAD_LABELS.get(key);
+  if (label === undefined) {
+    label = `gauge-bead[idx=${unitIndex},frame=${frameIndex},cell=${cellIndex}]`;
+    BEAD_LABELS.set(key, label);
+  }
+  return label;
 }
 
 export function renderGrooveGaugeElement(
@@ -193,7 +223,7 @@ export function renderGrooveGaugeElement(
     }
     const sprite = sink.acquireSprite();
     sprite.texture = cellTexture;
-    sprite.label = `gauge-bead[idx=${unitIndex},frame=${frameIndex},cell=${cellIndex}]`;
+    sprite.label = beadLabel(unitIndex, frameIndex, cellIndex);
     sprite.position.set(dst.x + gauge.addX * unitIndex, dst.y + gauge.addY * unitIndex);
     sprite.width = dst.w;
     sprite.height = dst.h;

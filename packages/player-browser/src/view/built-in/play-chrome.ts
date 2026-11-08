@@ -205,21 +205,27 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   const targetPace = frame?.scoreTargets?.targetPaceEXScore;
   const targetLabel = frame?.scoreTargets?.targetLabel;
   const nowMs = ctx.play.playClock();
+  const songInfo = resolveSongInfoRuntime(ctx, seconds);
+  // One literal with every field, absent ones `undefined`: the skins read this object every frame, and conditional
+  // spreads would hand them a different hidden class from frame to frame (megamorphic reads) and allocate the pieces.
   return {
-    ...(best !== undefined && best > 0 ? { bestEXScore: best } : {}),
-    ...(target !== undefined && target > 0 ? { targetEXScore: target } : {}),
-    ...(target !== undefined && target > 0 && targetPace !== undefined ? { targetPaceEXScore: targetPace } : {}),
-    ...(targetLabel !== undefined ? { targetLabel } : {}),
-    ...(frame?.course !== undefined ? { course: frame.course } : {}),
-    ...(frame?.playerName !== undefined ? { playerName: frame.playerName } : {}),
-    ...(frame !== undefined ? { random1P: frame.playOptions.random1P } : {}),
+    bestEXScore: best !== undefined && best > 0 ? best : undefined,
+    targetEXScore: target !== undefined && target > 0 ? target : undefined,
+    targetPaceEXScore: target !== undefined && target > 0 ? targetPace : undefined,
+    targetLabel,
+    course: frame?.course,
+    playerName: frame?.playerName,
+    random1P: frame?.playOptions.random1P,
     tempo: ctx.play.tempo,
-    ...resolveSongInfoRuntime(ctx, seconds),
+    chartTitle: songInfo.chartTitle,
+    chartArtist: songInfo.chartArtist,
+    chartGenre: songInfo.chartGenre,
+    songInfoFade: songInfo.songInfoFade,
     // The scroll above runs on the chart's tempo; a NONSTOP readout shows the stage's own BPM — see `displayBPM`.
     bpm: ctx.play.displayBPM(seconds) ?? bpm,
     // The player's hi-speed, as the select panel and the host show it (HS-FIX scales only the scroll).
     hiSpeed: play.view.hiSpeed.player,
-    ...(play.view.hiSpeed.floating ? { floatingHiSpeed: true as const } : {}),
+    floatingHiSpeed: play.view.hiSpeed.floating ? true : undefined,
     score: ctx.play.score.score,
     exScore: ctx.play.score.exScore,
     exScoreMax: total * 2,
@@ -238,7 +244,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     lastJudge: seconds <= ctx.play.lastJudgeUntil && !hidesJudge ? ctx.play.lastJudge : undefined,
     judgeSides,
     rank: total <= 0 ? undefined : resolve____RankLabel(ctx.play.score.exScore, total),
-    ...(ctx.play.secondPlayer !== undefined ? { secondPlayer: secondPlayerRuntime(ctx.play.secondPlayer) } : {}),
+    secondPlayer: ctx.play.secondPlayer !== undefined ? secondPlayerRuntime(ctx.play.secondPlayer) : undefined,
     autoplay: ctx.options.autoPlay === true,
     // The camera fills the BGA frame even on a chart without a BGA.
     hasBGA: ctx.play.hasBGA || ctx.play.bgaCamera !== undefined,
@@ -251,7 +257,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     keyBeams: Object.fromEntries(
       ctx.play.laneChannels.map((channel) => [channel, resolveKeyBeamAlpha(ctx.play, channel, 120, nowMs)]),
     ),
-    ...(ctx.play.ghostSide ? { ghostSide: ctx.play.ghostSide } : {}),
+    ghostSide: ctx.play.ghostSide || undefined,
     rulesetLabel: ctx.play.resolveJudgeRuleset(),
     gaugeLabel: formatGaugeLabel(ctx.play.gaugeState.type) ?? 'GROOVE',
     gaugeSurvival: ctx.play.gaugeState.survival === true,
