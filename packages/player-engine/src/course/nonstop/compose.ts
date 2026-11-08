@@ -47,6 +47,7 @@ import { flattenNonstopBGAOpacity, hasBGAOpacity, placeNonstopBGAOpacity } from 
 import { placeNonstopBmsonBGA } from './bmson-bga.ts';
 import { placeNonstopKeyBoundBGA } from './key-bound-bga.ts';
 import { createNonstopBMPAllocator } from './bga-resources.ts';
+import { placeNonstopKeyframes } from './scroll-speed.ts';
 
 /** One stage to stitch: its BMS or bmson chart with control flow resolved, and whether it is a `.pms` chart. */
 /** A stage chart's song, as its metadata names it (blank names left out). */
@@ -287,12 +288,18 @@ function stitchNonstopCourseAs(
   const stopKeys = new NonstopKeyAllocator(asBmson);
   const chart = createEmptyJSON(asBmson ? 'bmson' : 'bms');
   // Rule version 4 keeps more of each stage's own rules: per-slot BMS playback and BGA keying in bmson output,
-  // `#DEFEXRANK` in BMS output, `#EXRANKxx` and 97 / 98 volume changes, each stage's `#WAV00`, and a negative-BPM
-  // reversal, which freezes the rest of the play as it does in LR2.
+  // `#DEFEXRANK` in BMS output, `#EXRANKxx`, 97 / 98 volume, SCROLL and SPEED changes, each stage's `#WAV00`, and a
+  // negative-BPM reversal, which freezes the rest of the play as it does in LR2.
   const perStageRules = (options.stitch ?? NONSTOP_STITCH_VERSION) >= 4;
   const bpmKeys = new NonstopKeyAllocator(asBmson);
   let reversal: { seconds: number; stage: number } | undefined;
   const volumeChannels = new Set<string>();
+  // SCROLL (`SC`) and SPEED (`SP`): the channels an earlier stage set, and one key per distinct value.
+  const keyframeChannels = new Set<string>();
+  const keyframeKeys = {
+    SC: { allocator: new NonstopKeyAllocator(asBmson), byValue: new Map<number, string>(), table: chart.bms.scroll },
+    SP: { allocator: new NonstopKeyAllocator(asBmson), byValue: new Map<number, string>(), table: chart.bms.speed },
+  };
   const landmineSampleKeys: { seconds: number; sampleKey?: string }[] = [];
   const exRankChanges: { seconds: number; exRank: number }[][] = stages.map(() => []);
   let totalStage = stages.length - 1;
@@ -434,6 +441,31 @@ function stitchNonstopCourseAs(
           volumeChannels,
         ),
       );
+      for (const [channel, timeline, interpolate] of [
+        ['SC', chartIndex.scroll, false],
+        ['SP', chartIndex.speed, true],
+      ] as const) {
+        const own = timeline.map((point) => ({
+          seconds: stitchedSeconds(index, chartIndex.timing.beatToSeconds(point.beat)),
+          value: point.speed,
+        }));
+        const keys = keyframeKeys[channel];
+        for (const keyframe of placeNonstopKeyframes(own, window, {
+          interpolate,
+          carried: keyframeChannels.has(channel),
+          origin: placements[index]!.offsetSeconds,
+        })) {
+          let key = keys.byValue.get(keyframe.value);
+          if (key === undefined) {
+            key = keys.allocator.fresh();
+            if (key === undefined) return { ok: false, reason: 'id-space', stage: index };
+            keys.table[key] = keyframe.value;
+            keys.byValue.set(keyframe.value, key);
+          }
+          objects.push({ seconds: keyframe.seconds, channel, value: key, stage: index });
+          keyframeChannels.add(channel);
+        }
+      }
       // LR2 freezes its event pump at a negative BPM for the rest of the play, later stages included (OpenLR2
       // `LR2f.cpp` L12610, L12717-L12723). Like the stage's other BPM changes, it counts only in the stage's window
       // (LR2 drops those from the last-measure line on, L26970-L26976).

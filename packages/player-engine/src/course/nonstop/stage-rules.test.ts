@@ -104,6 +104,30 @@ describe('NONSTOP stitching keeps each stage’s own rules (rule version 4)', ()
     expect(resolveChart(chart).volumeChanges.map((change) => change.gain)).toEqual([0x40 / 0xff]);
   });
 
+  test('SCROLL and SPEED stay with their stage: a later stage starts at 1', () => {
+    const { chart, map } = stitch([plain('#SCROLL01 0.5', '#SPEED01 2', '#002SC:01', '#002SP:01'), plain()]);
+    const resolved = resolveChart(chart);
+    const start = map.stages[1]!.windowStart;
+    const at = (beat: number) => resolved.timing.beatToSeconds(beat);
+    expect(resolved.scroll.map((point) => [at(point.beat), point.speed])).toEqual([
+      [expect.closeTo(2, 3), 0.5],
+      [expect.closeTo(start, 3), 1],
+    ]);
+    expect(resolved.speed.map((point) => [at(point.beat), point.speed])).toEqual([
+      [expect.closeTo(2, 3), 2],
+      [expect.closeTo(start - 0.001, 3), 2],
+      [expect.closeTo(start, 3), 1],
+    ]);
+    const legacy = resolveChart(stitch([plain('#SCROLL01 0.5', '#002SC:01'), plain()], { stitch: 3 }).chart);
+    expect(legacy.scroll).toEqual([]);
+  });
+
+  test('SCROLL survives bmson output', () => {
+    const { chart } = stitch([charge(), plain('#SCROLL01 -1', '#002SC:01')]);
+    expect(chart.sourceFormat).toBe('bmson');
+    expect(resolveChart(chart).scroll.map((point) => point.speed)).toEqual([-1]);
+  });
+
   test('each stage’s mines explode with its own #WAV00', () => {
     const { chart, map } = stitch([plain('#WAV00 boom.wav', '#002D2:0A'), plain('#002D2:0A')]);
     const [first, second] = map.landmineSampleKeys!;
