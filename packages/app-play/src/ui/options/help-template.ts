@@ -633,7 +633,8 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dt>Local data…</dt>
           <dd>
             Shows what the player keeps in this browser: its localStorage keys, its IndexedDB databases (your courses,
-            the replay slots) and how much space they use. It only reads; clear data from its own controls.
+            the replay slots, the parsed charts) and how much space they use. It only reads; clear data from its own
+            controls.
           </dd>
           <dt>Slot 1 auto-save</dt>
           <dd>
@@ -1286,8 +1287,9 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>このブラウザのベスト記録を消します (確認があります)。</dd>
           <dt>Local data…</dt>
           <dd>
-            プレイヤーがこのブラウザに保存しているもの (localStorage のキー、自作コースやリプレイスロットの IndexedDB
-            データベース、使っている容量) を表示します。読むだけなので、データは消すための各操作から消してください。
+            プレイヤーがこのブラウザに保存しているもの (localStorage
+            のキー、自作コース・リプレイスロット・解析済み譜面の IndexedDB データベース、使っている容量)
+            を表示します。読むだけなので、データは消すための各操作から消してください。
           </dd>
           <dt>Slot 1 auto-save</dt>
           <dd>
