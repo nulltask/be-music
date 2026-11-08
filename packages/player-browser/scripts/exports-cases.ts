@@ -336,6 +336,30 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       await playerWebCoreAPI.computeSHA256Hex(BENCH_BYTES);
     },
   });
+  define('player-browser.parsedChartPathKind', {
+    run: () => {
+      playerWebCoreAPI.parsedChartPathKind('Songs/Bench/main.bmson');
+      playerWebCoreAPI.parsedChartPathKind('Songs/Bench/main.pms');
+    },
+  });
+  define('player-browser.parsedChartCacheKey', {
+    run: () => {
+      playerWebCoreAPI.parsedChartCacheKey('0'.repeat(64), 'Songs/Bench/main.bms');
+    },
+  });
+  define('player-browser.parseChartThroughCache', {
+    run: async () => {
+      const entries = new Map<string, Awaited<ReturnType<typeof playerWebCoreAPI.parseChartThroughCache>>>();
+      const cache = {
+        get: async (key: string) => entries.get(key),
+        set: async (key: string, value: Awaited<ReturnType<typeof playerWebCoreAPI.parseChartThroughCache>>) => {
+          entries.set(key, value);
+        },
+      };
+      await playerWebCoreAPI.parseChartThroughCache({ path: 'Songs/Bench/main.bms', bytes: BENCH_BYTES }, cache);
+      await playerWebCoreAPI.parseChartThroughCache({ path: 'Songs/Bench/main.bms', bytes: BENCH_BYTES }, cache);
+    },
+  });
   define('player-browser.createAudioService', {
     run: async () => {
       const service = playerWebCoreAPI.createAudioService({ createContext: () => BENCH_SYSTEM_AUDIO_CONTEXT });
