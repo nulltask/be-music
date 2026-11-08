@@ -226,7 +226,11 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       notes: { notes: play.notes, mines: play.mineNotes, invisible: play.invisibleNotes },
       heldLanes: play.pressedChannels,
       events,
-      audio: play.audioAnalyzer?.sample(play.playClock()) ?? SILENT_AUDIO,
+      // Analysed only when a view reads it: only audio-reactive skins do, and the analysis (an FFT and the waveform,
+      // every frame) is wasted on the rest and with effects off.
+      get audio() {
+        return play.audioAnalyzer?.sample(play.playClock()) ?? SILENT_AUDIO;
+      },
       shown: play.shown,
       playfield,
     };

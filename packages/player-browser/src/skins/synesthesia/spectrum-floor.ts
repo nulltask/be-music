@@ -24,6 +24,8 @@ export class SpectrumHistory {
   private filled = 0;
   /** Fraction of a tick carried over between pushes. */
   private carry = 0;
+  /** Ticks in a row written with every band at zero. */
+  private quietTicks = 0;
 
   public constructor(bands: number = AUDIO_BAND_COUNT, capacity: number = 4 * SPECTRUM_HISTORY_HZ) {
     this.bands = bands;
@@ -39,9 +41,23 @@ export class SpectrumHistory {
     for (let tick = 0; tick < ticks; tick += 1) {
       this.head = (this.head + 1) % this.capacity;
       const base = this.head * this.bands;
-      for (let band = 0; band < this.bands; band += 1) this.frames[base + band] = levels[band] ?? 0;
+      let loud = false;
+      for (let band = 0; band < this.bands; band += 1) {
+        const level = levels[band] ?? 0;
+        this.frames[base + band] = level;
+        if (level !== 0) loud = true;
+      }
+      this.quietTicks = loud ? 0 : this.quietTicks + 1;
       this.filled = Math.min(this.capacity, this.filled + 1);
     }
+  }
+
+  /**
+   * Whether every snapshot held is silent, so every {@link sample} is 0: skins with their effects off (a silent audio
+   * drive) skip sampling the floor's thousands of points.
+   */
+  public get silent(): boolean {
+    return this.quietTicks >= this.filled;
   }
 
   /**
