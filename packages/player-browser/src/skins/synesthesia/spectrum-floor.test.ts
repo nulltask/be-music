@@ -98,3 +98,17 @@ describe('floorRowStep', () => {
     expect(floorRowStep(100000, 200, 6)).toBe(50);
   });
 });
+
+it('reports silence only while every snapshot held is silent', () => {
+  const history = new SpectrumHistory(2, 4);
+  expect(history.silent).toBe(true);
+  history.push([0, 0], 2 / SPECTRUM_HISTORY_HZ);
+  expect(history.silent).toBe(true);
+  history.push([0, 0.5], 1 / SPECTRUM_HISTORY_HZ);
+  expect(history.silent).toBe(false);
+  history.push([0, 0], 3 / SPECTRUM_HISTORY_HZ);
+  expect(history.silent).toBe(false);
+  history.push([0, 0], 1 / SPECTRUM_HISTORY_HZ);
+  expect(history.silent).toBe(true);
+  expect(history.sample(1, 0)).toBe(0);
+});

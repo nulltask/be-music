@@ -604,6 +604,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   }
 
   public frame(nowMs: number): SelectFrame {
+    const analyzer = this.options.audio.analyzer;
     if (this.entered) {
       this.nowMs = Math.max(this.nowMs, nowMs);
       this.settleLaunch();
@@ -639,7 +640,10 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
         ? { courseMaker: this.courseMakerState(this.options.courseMaker) }
         : {}),
       ...(replaySlots !== undefined ? { replaySlots } : {}),
-      audio: this.options.audio.analyzer.sample(nowMs),
+      // Analysed only when a view reads it (an audio-reactive skin with its effects on).
+      get audio() {
+        return analyzer.sample(nowMs);
+      },
     };
   }
 

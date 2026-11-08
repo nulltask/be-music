@@ -240,7 +240,9 @@ export class BuiltInPlayView
     if (!frame.shown) return;
     this.perf.beginTick();
     this.chromeRuntime = undefined;
-    render(this, frame.seconds, frame.playfield.audioAnalyzer !== undefined ? frame.audio : undefined);
+    // With effects off the skins' audio drive is silent, so the frame's analysis is left unread (and unrun).
+    const reactsToAudio = frame.playfield.audioAnalyzer !== undefined && this.options.beMusicEffects !== 'off';
+    render(this, frame.seconds, reactsToAudio ? frame.audio : undefined);
     // A skin drawing through the player's renderer or on its DOM screen draws the frame just collected now.
     const overlayLanes = Array.from(this.play.laneX, ([channel, lane]) => ({
       ...lane,

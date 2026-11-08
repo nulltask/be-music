@@ -1,3 +1,4 @@
+import { SILENT_AUDIO } from '@be-music/player-skin-sdk';
 /**
  * The built-in family's select view: a Be-Music Skin's `select` screen (`BeMusicSelectBinding`), letterboxed into the
  * window, with the README dialog over it. It draws the select session's frames and turns the player's pointer input
@@ -188,7 +189,9 @@ export class BuiltInSelectView implements SelectView {
       renderer.setPointer(onStage ? this.mouseX : undefined, onStage ? this.mouseY : undefined);
       renderer.setListScroll(this.pointer.shownListPull());
       const focused = frame.entries[frame.cursor];
-      renderer.tick(now, focused?.kind === 'chart' ? focused.chart : undefined, frame.startedAtMs, frame.audio);
+      // With effects off the skins' audio drive is silent, so the frame's analysis is left unread (and unrun).
+      const audio = (this.kit.effects ?? 'full') === 'off' ? SILENT_AUDIO : frame.audio;
+      renderer.tick(now, focused?.kind === 'chart' ? focused.chart : undefined, frame.startedAtMs, audio);
     }
     const report = this.perf.endFrame(() => ({ entries: frame.entries.length, charts: frame.library.charts.length }));
     if (report) log.debug('perf', report);

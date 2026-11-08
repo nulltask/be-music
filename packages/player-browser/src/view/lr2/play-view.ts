@@ -301,7 +301,8 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
       });
     });
     this.perf.time('render', () =>
-      render(this, frame.seconds, frame.playfield.audioAnalyzer !== undefined ? frame.audio : undefined),
+      // Nothing an LR2 skin draws reacts to the audio: the frame's analysis is left unread (and unrun).
+      render(this, frame.seconds, undefined),
     );
     const overlayLanes = Array.from(this.play.laneX, ([channel, lane]) => ({
       ...lane,

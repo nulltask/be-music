@@ -180,14 +180,10 @@ function applyExitFadeAlpha(ctx: PlayFrameContext): void {
 }
 
 /**
- * Draws one frame of the play at chart time `seconds`. `audioFrame` is the mix analysed for this frame (a session that
- * already sampled it hands it over, so the analyser is not stepped twice); without one the play's analyser is sampled.
+ * Draws one frame of the play at chart time `seconds`. `audioFrame` is the mix analysed for this frame, for an
+ * audio-reactive skin; the view passes none when nothing it draws reacts to the audio, so the analysis is skipped.
  */
-export function render(
-  ctx: PlayFrameContext,
-  seconds: number,
-  audioFrame: AudioFeatures | undefined = ctx.play.audioAnalyzer?.sample(ctx.play.playClock()),
-): void {
+export function render(ctx: PlayFrameContext, seconds: number, audioFrame: AudioFeatures | undefined): void {
   const screenWidth = ctx.app.screen.width;
   const screenHeight = ctx.app.screen.height;
   const stage = ctx.playfieldSkin.stage;

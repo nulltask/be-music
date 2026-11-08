@@ -196,6 +196,7 @@ function advanceSchools(
   forces: { gather: number; scatter: number },
   bands: readonly number[],
   onset: number,
+  shown: number,
 ): { flocks: Flock[]; swell: number } {
   let state = SCHOOLS.get(key);
   if (!state || state.flocks[0]!.count !== size || nowMs < state.lastMs) {
@@ -207,10 +208,11 @@ function advanceSchools(
     SCHOOLS.set(key, state);
   }
   const dt = (nowMs - state.lastMs) / 1000;
-  state.flocks.forEach((flock, index) => {
+  // Only the schools on screen swim (reduced effects show one); the rest wait where they are.
+  for (let index = 0; index < Math.min(shown, state.flocks.length); index += 1) {
     // Offset each leader's clock so the schools never shadow one another.
-    stepFlock(flock, dt, { seconds: nowMs / 1000 + index * 41.7, ...forces });
-  });
+    stepFlock(state.flocks[index]!, dt, { seconds: nowMs / 1000 + index * 41.7, ...forces });
+  }
   state.kick = stepKick(state.kick, bands, onset, Math.min(0.1, dt));
   state.lastMs = nowMs;
   return { flocks: state.flocks, swell: state.kick.swell };
@@ -289,7 +291,10 @@ export function renderSynesthesiaChrome({
   const hitColor = IMPULSE_COLORS[runtime.impulseKind ?? 'white'];
   // Camera: the background roams between random shots (flying, sometimes hard-cutting) with a handheld drift,
   // reframing floor, rivers, and schools. Reduced effects halve the moves; effects off keep the camera at rest.
-  const camera = mixCamera(REST_CAMERA, roamingCamera(seconds, 7, CAMERA_RANGE, CAMERA_CYCLE_S), effects.amount);
+  const camera =
+    effects.amount > 0
+      ? mixCamera(REST_CAMERA, roamingCamera(seconds, 7, CAMERA_RANGE, CAMERA_CYCLE_S), effects.amount)
+      : REST_CAMERA;
   const horizon = vanishingPoint(camera, VIEW.centerX, VIEW.horizon, FLOOR.focal).y;
   // The space listens to the mix: the ember haze and floor swell on the bass, dust speeds with loudness, rivers weave with the mids, the schools tighten on bass hits and scatter on transients.
   const drive = audioDrive(runtime.audio, runtime.effects);
@@ -327,6 +332,7 @@ export function renderSynesthesiaChrome({
       },
       drive.bands,
       drive.onset,
+      effects.screenWide ? SCHOOL_SPECS.length : 1,
     );
     const shown = effects.screenWide ? schools.length : 1;
     const schoolBasis = cameraBasis(camera, SCRATCH_BASIS);
@@ -603,6 +609,8 @@ function drawFloor(
   const bottom = VIEW.height + 4;
   const groundY = height - camera.y;
   const grains = FLOOR_GRAINS;
+  // A silent history (effects off, or a quiet stretch) leaves the floor flat: no point needs its spectrum looked up.
+  const silent = spectrum.silent;
   const spacing = 90;
   const offset = distance % spacing;
   for (let z = spacing - offset; z < 2400; z += spacing) {
@@ -629,7 +637,7 @@ function drawFloor(
       if (groundDepth <= 1e-3) continue;
       const groundX = centerX + (x1 * focal) / groundDepth;
       if (groundX < -4 || groundX > width + 4) continue;
-      const ridge = SPECTRUM_RIDGE_HEIGHT * spectrum.sample(groundX / width, age) ** 1.5;
+      const ridge = silent ? 0 : SPECTRUM_RIDGE_HEIGHT * spectrum.sample(groundX / width, age) ** 1.5;
       const ly = groundY - ridge - floorRise(x, worldZ, seconds, FLOOR_GROUND);
       const y2 = ly * cosPitch - z1 * sinPitch;
       const depth = focal + ly * sinPitch + z1 * cosPitch;
