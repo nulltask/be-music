@@ -25,6 +25,7 @@
 - Use `feat:` for new features, `fix:` for bug fixes, `docs:` for documentation-only changes, `refactor:` for non-functional code changes, `perf:` for performance improvements, `test:` for tests, `style:` for formatting-only changes, `ci:` for CI configuration, and `chore:` for maintenance tasks.
 - Keep one logical change per commit when possible.
 - For documentation-only updates, append `[ci skip]` at the end of the commit message.
+- Author and commit as `nulltask <nulltask@gmail.com>`, and add no `Co-Authored-By` trailer.
 
 # Branch Naming Rules
 
@@ -44,6 +45,7 @@
 
 - Do not prefix pull request titles with `[codex]`.
 - Use plain, descriptive pull request titles.
+- Do not end pull request descriptions with a "Generated with Claude Code" footer or a session link.
 
 # Changeset Rules
 
