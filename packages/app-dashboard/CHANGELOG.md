@@ -4,7 +4,7 @@
 
 ### Minor Changes
 
-- 81f0500: A new account is welcomed once after it signs up, on `/welcome`, before it goes back to where the sign-up started: it names the account (display name, handle checked as it is typed, avatar), a guest learns what keeping the account gives and keeps it with a passkey, Google or Discord, and it goes on to the app, Play, the Leaderboard or the Dashboard. Every step can wait. The sign-in page gains "Start with a passkey", which makes an account and its passkey in one go, and a guest who keeps the account is renamed from `Anonymous` to `Player` on Accounts too and welcomed again to name it. Run migration `0003_profile_onboarding.sql`; profiles that exist count as welcomed.
+- 2fcf609: A new account is welcomed once after it signs up, on `/welcome`, before it goes back to where the sign-up started: it names the account (display name, handle checked as it is typed, avatar), a guest learns what keeping the account gives and keeps it with a passkey, Google or Discord, and it goes on to the app, Play, the Leaderboard or the Dashboard. Every step can wait. The sign-in page gains "Start with a passkey", which makes an account and its passkey in one go, and a guest who keeps the account is renamed from `Anonymous` to `Player` on Accounts too and welcomed again to name it. Run migration `0003_profile_onboarding.sql`; profiles that exist count as welcomed.
 
 ### Patch Changes
 
@@ -14,7 +14,7 @@
 
 ### Minor Changes
 
-- b74bb64: Run Accounts in the Dashboard.
+- b46629e: Run Accounts in the Dashboard.
   
   - The Dashboard now runs Accounts: sign-in, passkeys, Google and Discord, profiles, avatars and the `/login` and `/account` pages are served from `be-music.app`, and the OIDC issuer is `https://be-music.app/api/auth`. The Dashboard reads the Accounts session directly instead of signing in as an OIDC client, and its sign-out form ends that session. Accounts starts from an empty database, so every user signs in again.
   - The profile page's avatar preview is round, matching the avatar everywhere else, instead of a rounded square.
@@ -34,28 +34,28 @@
 
 ### Patch Changes
 
-- adcaa23: The dashboard footer spells the product name Be-Music.
+- 7b7bd1e: The dashboard footer spells the product name Be-Music.
 
 ## 0.1.3
 
 ### Patch Changes
 
-- c69a154: The dashboard’s play card writes bmson in lowercase, matching the format name.
-- 9300c75: The Dashboard header shows a Beta badge beside Be-Music Dashboard, and the footer says Public Beta and that data may be deleted without notice, in the language of the page.
+- de3e70e: The dashboard’s play card writes bmson in lowercase, matching the format name.
+- e90a500: The Dashboard header shows a Beta badge beside Be-Music Dashboard, and the footer says Public Beta and that data may be deleted without notice, in the language of the page.
 - Updated dependencies: `@be-music/service-auth-client@0.2.0`, `@be-music/service-web-theme@0.3.1`
 
 ## 0.1.2
 
 ### Patch Changes
 
-- 3e694df: Dashboard pages use the shared service header (who is signed in, a link to Play, the viewer's language) and footer, and Basecoat cards and buttons, the same components as the Leaderboard. The be-music label and the preview Donate link stay in this site's own footer row.
+- cf6ed23: Dashboard pages use the shared service header (who is signed in, a link to Play, the viewer's language) and footer, and Basecoat cards and buttons, the same components as the Leaderboard. The be-music label and the preview Donate link stay in this site's own footer row.
 - Updated dependencies: `@be-music/service-web-theme@0.3.0`, `@be-music/service-auth-client@0.1.2`
 
 ## 0.1.1
 
 ### Patch Changes
 
-- ebff0e7: Display the fixed build timestamp and source revision in the service footer.
+- 7a10f67: Display the fixed build timestamp and source revision in the service footer.
   
   Rename the package from `@be-music/dashboard` to `@be-music/app-dashboard` to identify its role consistently. Update imports and package filters to the new name.
 - Updated dependencies: `@be-music/service-auth-client@0.1.1`, `@be-music/service-web-theme@0.2.0`
@@ -64,7 +64,7 @@
 
 ### Minor Changes
 
-- b2818d0: Provide the Dashboard service at the environment's root domain with account status and links to Play, Leaderboard and account management.
+- 8a051a5: Provide the Dashboard service at the environment's root domain with account status and links to Play, Leaderboard and account management.
   
   - Sign in through Accounts OIDC using a host-only session.
   - Retrieve the current public profile directly from Accounts through a Service Binding or HTTPS, without creating a Leaderboard player.

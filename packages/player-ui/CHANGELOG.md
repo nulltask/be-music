@@ -10,7 +10,7 @@
 
 ### Minor Changes
 
-- c60eb63: Add a chart score element and a README dialog.
+- 0f3c127: Add a chart score element and a README dialog.
   
   - Add `<be-music-chart-score>`, which draws a chart as a printed score: its bars in columns, bottom to top, each with its measure number, bar and beat lines, notes, long notes and mines on the play mode's lanes (5 / 7 / 10 / 14 KEY and 9 KEY), and its tempo changes and stops. `layoutChartScore(chart)` lays a resolved chart out bar by bar (measure lengths, BPM changes, stops, long notes across bar lines) with each bar's chart times, and the bars can be picked one or a run at a time (`bar-selection-change`, `chartScoreRangeTimes`). `packChartScoreColumns`, `selectChartScoreBars`, `resolveChartScoreLanes`, `resolveChartScoreColumn` and `chartScoreRowAt` are exported too.
   - `layoutChartScore(chart, { omitEmptyFirstBar: true })` leaves an empty measure 0 out so the score starts at measure 1, with `isChartScoreBarEmpty` and each bar's `soundCount` deciding what is empty. `<be-music-chart-score>`'s `previewing` also takes a run of bars (`{ first, last }`) to outline.
@@ -27,14 +27,14 @@
 
 ### Patch Changes
 
-- 16eee5d: The result screen shows an AUTO PLAY or ASSIST tag under a player's verdict, so an AUTO or assisted play's result is no longer mistaken for a plain one.
+- ba20133: The result screen shows an AUTO PLAY or ASSIST tag under a player's verdict, so an AUTO or assisted play's result is no longer mistaken for a plain one.
 - Updated dependencies: `@be-music/player-skin-sdk@0.10.0`
 
 ## 0.7.0
 
 ### Minor Changes
 
-- 816a5d2: Support consistent note sizing and two-player cabinet presentation.
+- f3900b2: Support consistent note sizing and two-player cabinet presentation.
 
   - Add optional `BeMusicNotesData.whiteLaneWidth`; playfield frames supply it so notes, long-note caps, and mines share a white-key-based height instead of a fixed height.
   - Draw independent players and side-playfield ghosts with separate gauges, scores, and hi-speed panels around a central BGA.
@@ -50,7 +50,7 @@
 
 ### Patch Changes
 
-- 569eb54: The Native playfield tells the long-note kinds apart like the built-in skins:
+- 0af5f8e: The Native playfield tells the long-note kinds apart like the built-in skins:
   
   - An HCN has a zigzag centre line (the other kinds keep it straight), and a back-spin scratch has a chevron on its tail cap, so LN / CN / HCN / BSS read apart without colour.
   - A hell charge note shows a violet HELL colour before it is reached, a bright orange glow with the zigzag flowing into the judgement line while held, and a dim red with the zigzag flowing back up while draining.
@@ -61,49 +61,49 @@
 
 ### Minor Changes
 
-- cafe76b: Add a `cabinet` property to `be-music-gameplay-hud`: a landscape play in the standard layout is arranged as the skin SDK's cabinet layout, with the score graph, stage band, players, judgement panel, BPM and tempo, and the play information behind an Info button.
+- 2356da2: Add a `cabinet` property to `be-music-gameplay-hud`: a landscape play in the standard layout is arranged as the skin SDK's cabinet layout, with the score graph, stage band, players, judgement panel, BPM and tempo, and the play information behind an Info button.
 
 ### Patch Changes
 
-- 7ba64b0: The play settings panel names the lowest auto-shift gauge as LR2 does under LR2 rules (GROOVE, and EASY for ASSIST EASY), since gauge auto-shift now works under every ruleset (#933).
-- 2ee74d2: The Basecoat theme names the system faces instead of Geist, which no host loaded, so text no longer depends on a locally installed font.
+- abb0a9d: The play settings panel names the lowest auto-shift gauge as LR2 does under LR2 rules (GROOVE, and EASY for ASSIST EASY), since gauge auto-shift now works under every ruleset (#933).
+- 46f7786: The Basecoat theme names the system faces instead of Geist, which no host loaded, so text no longer depends on a locally installed font.
 - Updated dependencies: `@be-music/player-skin-sdk@0.7.0`
 
 ## 0.5.0
 
 ### Minor Changes
 
-- 155bd8d: `be-music-preview-select` and `be-music-preview-start` gain an `autoPlay` property: set, they show an **AUTO** checkbox (in the list's header, under the play button) whose change emits the new `auto-play-change` event. Unset, nothing changes.
-- b9bc65c: The preview's lanes now reach down to just above the video controls without running under them: on a phone held upright they stopped well short, and on a phone held sideways (SP or DP) the judgement line sat under the seek bar. `resolvePreviewPortrait` and the new `previewJudgementInset` keep clear only the controls' height on the smallest (320 px) phone and a 16 px gap; `PREVIEW_CONTROLS_CSS_HEIGHT` is exported with it. `be-music-preview-hud` also puts the controls along the bottom of the screen rather than the stage, so a stage letterboxed into the screen keeps them off its lanes.
-- c6437bc: `be-music-preview-start` gains a `load` mode (a download icon and "Load") and a `caption` property, a line of small type under the label such as the file the button loads.
+- 100ff94: `be-music-preview-select` and `be-music-preview-start` gain an `autoPlay` property: set, they show an **AUTO** checkbox (in the list's header, under the play button) whose change emits the new `auto-play-change` event. Unset, nothing changes.
+- 8710db8: The preview's lanes now reach down to just above the video controls without running under them: on a phone held upright they stopped well short, and on a phone held sideways (SP or DP) the judgement line sat under the seek bar. `resolvePreviewPortrait` and the new `previewJudgementInset` keep clear only the controls' height on the smallest (320 px) phone and a 16 px gap; `PREVIEW_CONTROLS_CSS_HEIGHT` is exported with it. `be-music-preview-hud` also puts the controls along the bottom of the screen rather than the stage, so a stage letterboxed into the screen keeps them off its lanes.
+- 7d04409: `be-music-preview-start` gains a `load` mode (a download icon and "Load") and a `caption` property, a line of small type under the label such as the file the button loads.
 
 ## 0.4.0
 
 ### Minor Changes
 
-- 1155634: `be-music-preview-hud` shows a **Back** button under the play button of a paused play; it emits `quit-request`.
-- 2768ab6: `be-music-preview-hud` gains a `stageTapPauses` property (on by default). Turned off, the stage takes no clicks, so only the controls bar pauses the play; the embed turns it off while the viewer plays.
+- dd39de0: `be-music-preview-hud` shows a **Back** button under the play button of a paused play; it emits `quit-request`.
+- ba88581: `be-music-preview-hud` gains a `stageTapPauses` property (on by default). Turned off, the stage takes no clicks, so only the controls bar pauses the play; the embed turns it off while the viewer plays.
 
 ## 0.3.0
 
 ### Minor Changes
 
-- 410843c: Display decoded title artwork in the Native decide heading while retaining accessible title text and the fallback for missing images.
-- 5cc0094: Render per-plane BGA opacity and all NONSTOP stage stacks in Canvas playfields, combining chart opacity, stage crossfades and inherited Canvas alpha while restoring the caller's alpha after drawing.
-- 4480fe0: Apply per-plane BGA origins when painting cropped images, preserving chart-authored placement through Canvas skins and NONSTOP stage stacks.
+- c314b06: Display decoded title artwork in the Native decide heading while retaining accessible title text and the fallback for missing images.
+- df58b33: Render per-plane BGA opacity and all NONSTOP stage stacks in Canvas playfields, combining chart opacity, stage crossfades and inherited Canvas alpha while restoring the caller's alpha after drawing.
+- d61020f: Apply per-plane BGA origins when painting cropped images, preserving chart-authored placement through Canvas skins and NONSTOP stage stacks.
 
 ### Patch Changes
 
-- 916e04c: Draw a white centre line down long-note bodies, the long-note shape the built-in skins share, so the Native skin matches Synesthesia and Plain. The line fades out after an early release.
-- afc65fb: Show the declared generic key count and keyboard identity in gameplay facts.
-- 17a4096: Composite the optional second BGA overlay above the first in shared playfield painting, preserving both in Native and Canvas skins and keeping POOR replacement and overlay modes.
+- 5da9159: Draw a white centre line down long-note bodies, the long-note shape the built-in skins share, so the Native skin matches Synesthesia and Plain. The line fades out after an early release.
+- a69f267: Show the declared generic key count and keyboard identity in gameplay facts.
+- 6a37426: Composite the optional second BGA overlay above the first in shared playfield painting, preserving both in Native and Canvas skins and keeping POOR replacement and overlay modes.
 - Updated dependencies: `@be-music/player-skin-sdk@0.6.0`
 
 ## 0.2.0
 
 ### Minor Changes
 
-- 3e694df: Add `@be-music/player-ui`, Lit Web Components for a player's HTML screens and playfield, with typed presentation properties, semantic events and explicit registration:
+- cf6ed23: Add `@be-music/player-ui`, Lit Web Components for a player's HTML screens and playfield, with typed presentation properties, semantic events and explicit registration:
   
   - Screens and panels: collection browsing with search (marking a `?` chart filter expression that does not parse and showing why), decide and result screens, and the gameplay HUD panels and play settings, a two-player play's 2P player and a paused indicator included. They lay out from each element's own width, so a narrow column stacks on its own.
   - Playfield components that each draw on a canvas the size of their part of the stage: `be-music-bga` (overlay-mode POOR images above the normal layers), `be-music-lanes`, `be-music-notes` (with mines, measure lines, each side's LIFT and the CONSTANT note fade), `be-music-lane-covers`, `be-music-judge-line`, `be-music-bombs` and `be-music-judgment-display` (the combo in tabular figures under a judgment that keeps it, and a flashing GREAT for a PGREAT), placed on the letterboxed stage by `be-music-playfield`. `resolvePlayfieldParts`, `paintPlayfieldParts` and the `BeMusicPlayfieldCanvasElement` base class are exported.

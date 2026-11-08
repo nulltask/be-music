@@ -4,18 +4,18 @@
 
 ### Minor Changes
 
-- e8cd9c2: Add `bms.songText` to `BeMusicJSON`: pomu's `#SONGxx` definitions, kept apart from `resources.text` so they round-trip as written.
+- cd2a0bd: Add `bms.songText` to `BeMusicJSON`: pomu's `#SONGxx` definitions, kept apart from `resources.text` so they round-trip as written.
 
 ## 0.6.0
 
 ### Minor Changes
 
-- ceb5fcc: Preserve the beatoraja bmson up field on source notes and events so LN end keysounds survive document and JSON round trips.
-- 410843c: Represent bmson pre-play title artwork separately from loading and background images with titleImage metadata.
-- c6f70f4: Represent bmson BGA sequences and conditional event metadata, and deep-clone sequence frames and image-set arrays so edits do not mutate the source chart. `BmsonBGAEvent.id` is now optional so an `id_set`-only event keeps its omitted id.
-- c3b783a: Retain opaque bmson node annotations with independently cloned JSON fields, channel ownership and barline metadata. Export helpers for finite JSON copying and scope-specific reserved-key filtering. A value nested deeper than 256 levels is dropped like any other invalid annotation.
-- 3e1855e: Add optional resources.wavGain for intrinsic per-slot linear gain, retaining exact composed audio levels through independent chart clones without changing older JSON defaults.
-- 07a8c75: Retain complete ordered chart option declarations in optional `bms.options` and mark whole-file OPTION programs in control flow. Deep cloning owns the declaration list; the legacy last-value alias remains available.
+- 31ad44a: Preserve the beatoraja bmson up field on source notes and events so LN end keysounds survive document and JSON round trips.
+- c314b06: Represent bmson pre-play title artwork separately from loading and background images with titleImage metadata.
+- bcf7edc: Represent bmson BGA sequences and conditional event metadata, and deep-clone sequence frames and image-set arrays so edits do not mutate the source chart. `BmsonBGAEvent.id` is now optional so an `id_set`-only event keeps its omitted id.
+- 3187914: Retain opaque bmson node annotations with independently cloned JSON fields, channel ownership and barline metadata. Export helpers for finite JSON copying and scope-specific reserved-key filtering. A value nested deeper than 256 levels is dropped like any other invalid annotation.
+- 7ea3be3: Add optional resources.wavGain for intrinsic per-slot linear gain, retaining exact composed audio levels through independent chart clones without changing older JSON defaults.
+- adfaf40: Retain complete ordered chart option declarations in optional `bms.options` and mark whole-file OPTION programs in control flow. Deep cloning owns the declaration list; the legacy last-value alias remains available.
 
 ### Patch Changes
 
@@ -25,8 +25,8 @@
 
 ### Minor Changes
 
-- 69df53c: Add optional bmson IR source-audio slice coordinates, explicit TOTAL units and resource-key normalization beyond two characters for mixed NONSTOP courses. BMS token normalization remains unchanged.
-- 29e69c6: Add `bms.wavNameBytePrefixes` to the chart JSON: the leading bytes of each `#WAV` file name as the file wrote them, by which LR2 groups a chart's sounds for EXTRA MODE and SP TO DP.
+- a82ec63: Add optional bmson IR source-audio slice coordinates, explicit TOTAL units and resource-key normalization beyond two characters for mixed NONSTOP courses. BMS token normalization remains unchanged.
+- aba15df: Add `bms.wavNameBytePrefixes` to the chart JSON: the leading bytes of each `#WAV` file name as the file wrote them, by which LR2 groups a chart's sounds for EXTRA MODE and SP TO DP.
 
 ### Patch Changes
 
@@ -36,7 +36,7 @@
 
 ### Minor Changes
 
-- dca9a2f: Rename the package from `@be-music/json` to `@be-music/chart-source` to identify its role consistently. Update imports and package filters to the new name.
+- 559897f: Rename the package from `@be-music/json` to `@be-music/chart-source` to identify its role consistently. Update imports and package filters to the new name.
 
 ### Patch Changes
 
@@ -46,7 +46,7 @@
 
 ### Minor Changes
 
-- b2818d0: Use canonical uppercase abbreviations in Be-Music types, helpers and JSON keys, including `BeMusicJSON`, `BMSResources`, `createEmptyJSON`, `cloneJSON`, `backBMP`, `initBPM`, `baseBPM`, `exWAV` and `poorBGA`. External BMS and bmson spellings remain unchanged.
+- 8a051a5: Use canonical uppercase abbreviations in Be-Music types, helpers and JSON keys, including `BeMusicJSON`, `BMSResources`, `createEmptyJSON`, `cloneJSON`, `backBMP`, `initBPM`, `baseBPM`, `exWAV` and `poorBGA`. External BMS and bmson spellings remain unchanged.
   
   - Model bmson mine channels and scroll events, preserving authored scroll events during cloning.
   - Mark control-flow headers overridden by a later top-level definition with `overriddenByLaterHeader`.

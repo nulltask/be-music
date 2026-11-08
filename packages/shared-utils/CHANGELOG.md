@@ -4,28 +4,28 @@
 
 ### Minor Changes
 
-- d88e81c: Add `resolveSampleSliceEnvelope`, `sampleSliceEnvelopeGain` and `SAMPLE_SLICE_FADE_SECONDS`, which compute the short linear ramps that keep a bmson sound slice from clicking where it cuts its source file. A continuation slice crossfades with the one before it and sums back to the uncut waveform.
-- c13f3fa: Add runtime-neutral stereo PCM transformation with pitch-rate resampling, independent channel gain, sounding-time limits and cancellation.
-- 9572a31: Add the runtime-neutral `@be-music/shared-utils/png` entry point with `decodePNGToRGBA8`, preserving native color samples and encoded alpha metadata before Canvas premultiplication. Decode indexed palettes, packed grayscale, low-bit Adam7 and PNG transparency into owned RGBA8 pixels.
+- 1285493: Add `resolveSampleSliceEnvelope`, `sampleSliceEnvelopeGain` and `SAMPLE_SLICE_FADE_SECONDS`, which compute the short linear ramps that keep a bmson sound slice from clicking where it cuts its source file. A continuation slice crossfades with the one before it and sums back to the uncut waveform.
+- dd9ba17: Add runtime-neutral stereo PCM transformation with pitch-rate resampling, independent channel gain, sounding-time limits and cancellation.
+- a229436: Add the runtime-neutral `@be-music/shared-utils/png` entry point with `decodePNGToRGBA8`, preserving native color samples and encoded alpha metadata before Canvas premultiplication. Decode indexed palettes, packed grayscale, low-bit Adam7 and PNG transparency into owned RGBA8 pixels.
 
 ## 0.6.0
 
 ### Minor Changes
 
-- 2e435b9: Add `./hash` for synchronous and Web Crypto SHA-256, `./async` for cleanup deadlines with an injectable scheduler, and Node-only `./cli` for main-module detection with optional SEA fallback. Cleanup waits cancel their timeout after settling, and the PCM writers reuse the shared float-to-PCM conversion.
+- b80a4f9: Add `./hash` for synchronous and Web Crypto SHA-256, `./async` for cleanup deadlines with an injectable scheduler, and Node-only `./cli` for main-module detection with optional SEA fallback. Cleanup waits cancel their timeout after settling, and the PCM writers reuse the shared float-to-PCM conversion.
   Rename `writeStereoPcm16LE` and `writeStereoPcm16BE` to `writeStereoPCM16LE` and `writeStereoPCM16BE`.
 
 ## 0.5.0
 
 ### Minor Changes
 
-- dca9a2f: Rename the package from `@be-music/utils` to `@be-music/shared-utils` to identify its role consistently. Update imports and package filters to the new name.
+- 559897f: Rename the package from `@be-music/utils` to `@be-music/shared-utils` to identify its role consistently. Update imports and package filters to the new name.
 
 ## 0.4.0
 
 ### Minor Changes
 
-- b2818d0: Rename ASCII and PCM helpers to the canonical abbreviation spellings, including `normalizeASCIIBase36Code` and `writeStereoPcm16LE`. Update imports of their former names.
+- 8a051a5: Rename ASCII and PCM helpers to the canonical abbreviation spellings, including `normalizeASCIIBase36Code` and `writeStereoPcm16LE`. Update imports of their former names.
 ## 0.3.0
 
 ### Minor Changes
