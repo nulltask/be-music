@@ -21,6 +21,7 @@ import {
   type CourseMaker,
 } from '@be-music/player-browser/collection';
 import { applyChartLevelEdits, readChartLevelEdits } from '../chart-level-edits.ts';
+import { createIndexedDBParsedChartCache, currentParsedChartBuildStamp } from './parsed-chart-database.ts';
 import type { SceneKind, SelectScene } from '@be-music/player-browser/host';
 import {
   skinFamilyRegistry,
@@ -106,6 +107,8 @@ export class LibraryService {
     readonly files: BrowserDroppedFile[];
   }[] = [];
   private readonly collectionStore = new BrowserChartCollectionStore();
+  /** Charts parsed on an earlier visit, by the SHA-256 of their files: a folder dropped again is not parsed again. */
+  private readonly parsedChartCache = createIndexedDBParsedChartCache(currentParsedChartBuildStamp());
   /**
    * Course files dropped so far (`.lr2crs`, beatoraja `course/*.json`) and courses imported from difficulty-table URLs,
    * resolved into `collection.courseFolders`.
@@ -585,6 +588,7 @@ export class LibraryService {
       if (files.length === 0) continue;
       this.collection = await this.collectionStore.appendFromFiles(files, {
         onProgress: (progress) => applyLoadProgress(this.elements, progress),
+        parsedChartCache: this.parsedChartCache,
       });
     }
     applyChartLevelEdits(this.collection.charts, readChartLevelEdits(globalThis.localStorage));
@@ -603,6 +607,7 @@ export class LibraryService {
     // would have.
     this.collection = await this.collectionStore.appendFromFiles(files, {
       onProgress: (progress) => applyLoadProgress(this.elements, progress),
+      parsedChartCache: this.parsedChartCache,
     });
     // The player's own difficulties and levels (LR2's F3 level edit) go over the charts' own.
     applyChartLevelEdits(this.collection.charts, readChartLevelEdits(globalThis.localStorage));
