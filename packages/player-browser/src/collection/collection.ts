@@ -1,5 +1,5 @@
 import { runBrowserTask, getBrowserWorkerCount } from '../compute/index.ts';
-import { parseChartTask, unzipTask } from '../compute/tasks.ts';
+import { unzipTask } from '../compute/tasks.ts';
 import { yieldToTask } from '../compute/yield.ts';
 import { seedLibraryChartPlayVariant, type ChartSourceKind, type LibraryChart } from '@be-music/player-scene-model';
 import {
@@ -20,6 +20,7 @@ import {
 } from './dropped-file.ts';
 import { isMaliciousAssetPath, loadAssetBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
 import { logger } from '../logger.ts';
+import { parseChartThroughCache, type ParsedChartCache } from './parsed-chart-cache.ts';
 
 export { loadAssetBytes, loadAssetFile, asLoadedBytes } from './file-lookup.ts';
 export { type BrowserDroppedFile, DeferredDroppedFile, materializeDroppedFiles } from './dropped-file.ts';
@@ -35,6 +36,8 @@ const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024;
  */
 export interface LoadProgressOptions {
   onProgress?: LoadProgressCallback;
+  /** Parsed charts kept across loads, by the SHA-256 of each chart file; charts found there are not parsed again. */
+  parsedChartCache?: ParsedChartCache;
 }
 
 export class BrowserChartCollectionStore {
@@ -458,9 +461,9 @@ export async function loadChartCollectionFromFiles(
       if (!chartBytes) {
         throw new Error(`chart bytes missing for ${path}`);
       }
-      const input = { path, bytes: chartBytes };
-      const { chart, scored, packed, strings } = await runBrowserTask('parse-chart', input, () =>
-        parseChartTask(input),
+      const { chart, scored, packed, strings } = await parseChartThroughCache(
+        { path, bytes: chartBytes },
+        options.parsedChartCache,
       );
       // The scored notes and the play variant they were read under, without timing every note: the list shows a count.
 
