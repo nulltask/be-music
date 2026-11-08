@@ -29,7 +29,7 @@ const MAX_GRAINS = 5;
  * Where the grains of a point sit, as fractions of the point's size: a golden-angle spiral, so a cluster of any count
  * fills the point's square evenly without lining up into a pattern.
  */
-const GRAIN_OFFSETS: Float32Array = (() => {
+export const GRAIN_OFFSETS: Float32Array = (() => {
   const offsets = new Float32Array(MAX_GRAINS * 2);
   for (let index = 0; index < MAX_GRAINS; index += 1) {
     const radius = index === 0 ? 0 : 0.42 * Math.sqrt(index / (MAX_GRAINS - 1));
