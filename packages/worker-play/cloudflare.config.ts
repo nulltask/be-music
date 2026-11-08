@@ -1,4 +1,5 @@
 import { bindings, defineConfig } from 'cf/config';
+import { cloudflareAccountId } from '../../scripts/cloudflare/env.ts';
 
 /**
  * The Player Worker, one configuration per environment (docs/services.md section 2): the default mode is production
@@ -11,7 +12,7 @@ export default defineConfig(({ mode }) => {
   const suffix = preview ? '-preview' : '';
   return {
     // The Be-Music Cloudflare account. Pinned, so a session signed in to another account cannot deploy here.
-    accountId: '<CLOUDFLARE_ACCOUNT_ID>',
+    accountId: cloudflareAccountId(),
     worker: {
       name: `play${suffix}`,
       compatibilityDate: '2026-06-02',
