@@ -815,10 +815,11 @@ function drawBGAFrame(
   // Floor points scrolling in.
   // A coarser lattice than the main floor: the monitor is small, so this keeps the point count down.
   const offset = (seconds * 90) % 80;
+  const orbitBasis = cameraBasis(orbitCamera, SCRATCH_BASIS);
   for (let z = 80 - offset; z < 1400; z += 80) {
     const nearness = 1 - z / 1400;
     for (let x = -600; x <= 600; x += 40) {
-      const point = projectPoint(viewPoint({ x, y: 70, z }, orbitCamera, orbit), cx, baseHorizon, 220);
+      const point = projectViewInto(SCRATCH_A, x, 70, z, orbitBasis, cx, baseHorizon, 220, orbit);
       if (!point.visible || inside(point.x, point.y)) continue;
       const size = 0.5 + 1.1 * nearness * nearness;
       sharedShapeBatch.rect(

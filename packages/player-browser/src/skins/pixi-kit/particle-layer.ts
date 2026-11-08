@@ -1,11 +1,128 @@
-import { Particle, ParticleContainer, Texture, type Container, type Graphics } from 'pixi.js';
+import { Buffer, BufferUsage, Geometry, GlProgram, GpuProgram, Mesh, Shader, Texture, UniformGroup } from 'pixi.js';
+import type { Container, Graphics } from 'pixi.js';
 
 /**
- * Points and short segments drawn as GPU particles instead of `Graphics` geometry.
+ * Floats a point takes in a {@link PointLayer}'s instance buffer: `x, y, half size`, then the packed colour's bits (read
+ * as `unorm8x4`, the way Pixi's particles read theirs).
+ */
+export const POINT_STRIDE = 4;
+
+/** Points a layer has room for before its first growth. */
+const INITIAL_POINTS = 256;
+
+/** One ±1 quad every layer draws once per point, with the per-point data stepping by instance. */
+const CORNERS = new Float32Array([-1, -1, 1, -1, 1, 1, -1, 1]);
+const QUAD_INDICES = new Uint16Array([0, 1, 2, 0, 2, 3]);
+
+const POINT_VERTEX_GLSL = /* glsl */ `#version 300 es
+in vec2 aPosition;
+in vec3 aPoint;
+in vec4 aColor;
+uniform mat3 uProjectionMatrix;
+uniform mat3 uWorldTransformMatrix;
+uniform vec4 uWorldColorAlpha;
+uniform mat3 uTransformMatrix;
+uniform vec4 uColor;
+uniform vec4 uFrame;
+out vec2 vUV;
+out vec4 vColor;
+
+void main() {
+  mat3 matrix = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix;
+  vec2 world = aPoint.xy + aPosition * aPoint.z;
+  gl_Position = vec4((matrix * vec3(world, 1.0)).xy, 0.0, 1.0);
+  vUV = mix(uFrame.xy, uFrame.zw, aPosition * 0.5 + 0.5);
+  vColor = vec4(aColor.rgb * aColor.a, aColor.a) * uColor * uWorldColorAlpha;
+}
+`;
+
+const POINT_FRAGMENT_GLSL = /* glsl */ `#version 300 es
+precision mediump float;
+in vec2 vUV;
+in vec4 vColor;
+uniform sampler2D uTexture;
+out vec4 finalColor;
+
+void main() {
+  finalColor = texture(uTexture, vUV) * vColor;
+}
+`;
+
+const POINT_WGSL = /* wgsl */ `
+struct GlobalUniforms {
+  uProjectionMatrix: mat3x3<f32>,
+  uWorldTransformMatrix: mat3x3<f32>,
+  uWorldColorAlpha: vec4<f32>,
+  uResolution: vec2<f32>,
+}
+
+struct LocalUniforms {
+  uTransformMatrix: mat3x3<f32>,
+  uColor: vec4<f32>,
+  uRound: f32,
+}
+
+struct PointUniforms {
+  uFrame: vec4<f32>,
+}
+
+@group(0) @binding(0) var<uniform> globalUniforms: GlobalUniforms;
+@group(1) @binding(0) var<uniform> localUniforms: LocalUniforms;
+@group(2) @binding(0) var uTexture: texture_2d<f32>;
+@group(2) @binding(1) var uSampler: sampler;
+@group(2) @binding(2) var<uniform> pointUniforms: PointUniforms;
+
+struct PointOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+  @location(1) color: vec4<f32>,
+}
+
+@vertex
+fn mainVertex(
+  @location(0) aPosition: vec2<f32>,
+  @location(1) aPoint: vec3<f32>,
+  @location(2) aColor: vec4<f32>,
+) -> PointOut {
+  let matrix = globalUniforms.uProjectionMatrix * globalUniforms.uWorldTransformMatrix * localUniforms.uTransformMatrix;
+  let world = aPoint.xy + aPosition * aPoint.z;
+  var out: PointOut;
+  out.position = vec4<f32>((matrix * vec3<f32>(world, 1.0)).xy, 0.0, 1.0);
+  out.uv = mix(pointUniforms.uFrame.xy, pointUniforms.uFrame.zw, aPosition * 0.5 + 0.5);
+  out.color = vec4<f32>(aColor.rgb * aColor.a, aColor.a) * localUniforms.uColor * globalUniforms.uWorldColorAlpha;
+  return out;
+}
+
+@fragment
+fn mainFragment(@location(0) uv: vec2<f32>, @location(1) color: vec4<f32>) -> @location(0) vec4<f32> {
+  return textureSample(uTexture, uSampler, uv) * color;
+}
+`;
+
+let programs: { gl: GlProgram; gpu: GpuProgram } | undefined;
+let corners: Buffer | undefined;
+let quadIndices: Buffer | undefined;
+
+function pointPrograms(): { gl: GlProgram; gpu: GpuProgram } {
+  programs ??= {
+    gl: GlProgram.from({ vertex: POINT_VERTEX_GLSL, fragment: POINT_FRAGMENT_GLSL, name: 'point-layer' }),
+    gpu: GpuProgram.from({
+      name: 'point-layer',
+      vertex: { source: POINT_WGSL, entryPoint: 'mainVertex' },
+      fragment: { source: POINT_WGSL, entryPoint: 'mainFragment' },
+    }),
+  };
+  return programs;
+}
+
+/**
+ * Points drawn as instanced quads instead of `Graphics` geometry.
  *
- * The built-in skins scatter thousands of tiny marks every frame (Synesthesia's floor lattice, dust, and powder). As `Graphics` shapes each one is re-triangulated and re-uploaded per frame, which dominated
- * the skins' frame time and garbage. Here each mark is a {@link Particle} (a 1x1 white texture scaled, rotated, and
- * tinted), kept across frames and only rewritten — no geometry is rebuilt.
+ * The built-in skins scatter thousands of tiny marks every frame (Synesthesia's floor lattice, dust, and powder — some
+ * sixteen thousand a frame). As `Graphics` shapes each one is re-triangulated and re-uploaded per frame; even as Pixi
+ * particles each one is four vertices rebuilt by a per-particle upload loop. Here each mark is four floats written
+ * straight into the layer's instance buffer — `x, y, half size, colour` — and the buffer goes to the GPU as it is, 16
+ * bytes a point, with no per-point object or upload loop. One draw per layer instances a quad over them.
  *
  * A layer rides along with an anchor `Graphics` (a pooled graphics the skin acquires in the same order every frame):
  * it sits right after the anchor in the anchor's parent and copies the anchor's blend mode, so its points paint exactly
@@ -13,73 +130,86 @@ import { Particle, ParticleContainer, Texture, type Container, type Graphics } f
  * dropped, so a layer whose anchor stops receiving points simply goes empty.
  */
 export class PointLayer {
-  private readonly container: ParticleContainer;
-  private readonly particles: Particle[] = [];
+  private readonly mesh: Mesh<Geometry, Shader>;
+  private readonly geometry: Geometry;
+  private readonly buffer: Buffer;
+  private data = new Float32Array(INITIAL_POINTS * POINT_STRIDE);
+  private words = new Uint32Array(this.data.buffer);
   private cursor = 0;
   private touched = false;
-  private shown = 0;
 
   private readonly anchor: Graphics;
-  private readonly texture: Texture;
   /** Position among the anchor's layers; layer `slot` sits `slot + 1` children after the anchor. */
   private readonly slot: number;
 
   public constructor(anchor: Graphics, texture: Texture = Texture.WHITE, slot = 0) {
     this.anchor = anchor;
-    this.texture = texture;
     this.slot = slot;
-    this.container = new ParticleContainer({
-      dynamicProperties: { position: true, vertex: true, color: true, rotation: true, uvs: false },
+    corners ??= new Buffer({ data: CORNERS, usage: BufferUsage.VERTEX });
+    quadIndices ??= new Buffer({ data: QUAD_INDICES, usage: BufferUsage.INDEX });
+    this.buffer = new Buffer({ data: this.data, usage: BufferUsage.VERTEX | BufferUsage.COPY_DST });
+    const stride = POINT_STRIDE * 4;
+    this.geometry = new Geometry({
+      attributes: {
+        aPosition: { buffer: corners, format: 'float32x2' },
+        aPoint: { buffer: this.buffer, format: 'float32x3', stride, offset: 0, instance: true },
+        aColor: { buffer: this.buffer, format: 'unorm8x4', stride, offset: 12, instance: true },
+      },
+      indexBuffer: quadIndices,
     });
-    this.container.label = 'particle-layer';
-    this.container.onRender = () => this.commit();
+    this.geometry.instanceCount = 0;
+    const { uvs } = texture;
+    const { gl, gpu } = pointPrograms();
+    const shader = new Shader({
+      glProgram: gl,
+      gpuProgram: gpu,
+      resources: {
+        uTexture: texture.source,
+        uSampler: texture.source.style,
+        pointUniforms: new UniformGroup({
+          uFrame: { value: new Float32Array([uvs.x0, uvs.y0, uvs.x2, uvs.y2]), type: 'vec4<f32>' },
+        }),
+      },
+    });
+    this.mesh = new Mesh({ geometry: this.geometry, shader, texture });
+    this.mesh.label = 'point-layer';
+    this.mesh.onRender = () => this.commit();
+  }
+
+  /** Points written since the last render. */
+  public get count(): number {
+    return this.touched ? this.cursor : 0;
+  }
+
+  /** The point `index` written since the last render, as `[x, y, half size, packed colour]`. */
+  public pointAt(index: number): [number, number, number, number] {
+    const at = index * POINT_STRIDE;
+    return [this.data[at]!, this.data[at + 1]!, this.data[at + 2]!, this.words[at + 3]!];
   }
 
   /** Writes one square point (or one copy of the layer's texture) `size` px wide, centred on `(cx, cy)`. */
   public point(cx: number, cy: number, size: number, color: number, alpha: number): void {
-    const particle = this.next();
-    particle.x = cx;
-    particle.y = cy;
-    particle.scaleX = size / this.texture.width;
-    particle.scaleY = size / this.texture.height;
-    particle.rotation = 0;
-    this.setColor(particle, color, alpha);
-  }
-
-  /** Writes one straight segment from `(x0, y0)` to `(x1, y1)`, `width` px thick (a rotated thin quad). */
-  public segment(x0: number, y0: number, x1: number, y1: number, width: number, color: number, alpha: number): void {
-    const particle = this.next();
-    const dx = x1 - x0;
-    const dy = y1 - y0;
-    particle.x = (x0 + x1) / 2;
-    particle.y = (y0 + y1) / 2;
-    particle.scaleX = Math.hypot(dx, dy) / this.texture.width;
-    particle.scaleY = width / this.texture.height;
-    particle.rotation = Math.atan2(dy, dx);
-    this.setColor(particle, color, alpha);
-  }
-
-  private setColor(particle: Particle, color: number, alpha: number): void {
-    // The renderer reads only `color`; writing it directly skips the `tint` setter's `Color` parse, which ran for every
-    // point every frame. The particle's `tint` / `alpha` getters are not kept in step (nothing here reads them).
-    const packed = packParticleColor(color, alpha);
-    if (particle.color !== packed) particle.color = packed;
-  }
-
-  private next(): Particle {
     if (!this.touched) {
       // Once per frame, on its first point: the anchor does not move among its siblings between two points.
       this.attach();
       this.touched = true;
       this.cursor = 0;
     }
-    let particle = this.particles[this.cursor];
-    if (!particle) {
-      particle = new Particle({ texture: this.texture, anchorX: 0.5, anchorY: 0.5 });
-      this.particles.push(particle);
-    }
+    const at = this.cursor * POINT_STRIDE;
+    if (at >= this.data.length) this.grow();
+    const data = this.data;
+    data[at] = cx;
+    data[at + 1] = cy;
+    data[at + 2] = size * 0.5;
+    this.words[at + 3] = packParticleColor(color, alpha);
     this.cursor += 1;
-    return particle;
+  }
+
+  private grow(): void {
+    const data = new Float32Array(this.data.length * 2);
+    data.set(this.data);
+    this.data = data;
+    this.words = new Uint32Array(data.buffer);
   }
 
   /**
@@ -89,27 +219,21 @@ export class PointLayer {
   private attach(): void {
     const parent: Container | null = this.anchor.parent;
     if (!parent) return;
-    if (this.container.parent !== parent) parent.addChild(this.container);
+    if (this.mesh.parent !== parent) parent.addChild(this.mesh);
     const target = parent.getChildIndex(this.anchor) + 1 + this.slot;
-    if (parent.getChildIndex(this.container) !== target) {
-      parent.setChildIndex(this.container, Math.min(target, parent.children.length - 1));
+    if (parent.getChildIndex(this.mesh) !== target) {
+      parent.setChildIndex(this.mesh, Math.min(target, parent.children.length - 1));
     }
-    this.container.blendMode = this.anchor.blendMode;
-    this.container.visible = this.anchor.visible;
+    this.mesh.blendMode = this.anchor.blendMode;
+    this.mesh.visible = this.anchor.visible;
   }
 
-  /** Runs just before the container renders: shows this frame's points and drops the rest. */
+  /** Runs just before the mesh renders: uploads this frame's points and drops the rest. */
   private commit(): void {
-    const count = this.touched ? this.cursor : 0;
-    if (count !== this.shown) {
-      const children = this.container.particleChildren;
-      // The active list is always a prefix of the pool. Preserve its backing storage and unchanged entries.
-      const previous = children.length;
-      children.length = count;
-      for (let index = previous; index < count; index += 1) children[index] = this.particles[index]!;
-      this.container.update();
-      this.shown = count;
-    }
+    const count = this.count;
+    this.geometry.instanceCount = count;
+    // Only the points shown go up; a grown array replaces the GPU buffer.
+    if (count > 0) this.buffer.setDataWithSize(this.data, count * POINT_STRIDE, true);
     this.touched = false;
     this.cursor = 0;
   }
@@ -127,9 +251,9 @@ export function packParticleColor(rgb: number, alpha: number): number {
 const LAYERS = new WeakMap<Graphics, Map<Texture, PointLayer>>();
 
 /**
- * The particle layer riding along with `anchor` that draws `texture` (Pixi's 1x1 white by default), created on first
- * use. A particle container batches a single texture, so each texture gets its own layer; an anchor's layers stack in
- * the order they were first asked for.
+ * The point layer riding along with `anchor` that draws `texture` (Pixi's 1x1 white by default), created on first use.
+ * A layer draws a single texture, so each texture gets its own layer; an anchor's layers stack in the order they were
+ * first asked for.
  */
 export function pointLayerFor(anchor: Graphics, texture: Texture = Texture.WHITE): PointLayer {
   let layers = LAYERS.get(anchor);
