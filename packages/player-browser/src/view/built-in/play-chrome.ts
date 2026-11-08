@@ -11,6 +11,7 @@ import { pickActiveBGACue } from '../../chart/bga-timeline.ts';
 
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import { resolve____RankLabel } from '@be-music/player-engine/ruleset';
+import { resolveNonstopSongInfoState, type NonstopSongInfo } from '@be-music/player-engine/course';
 import {
   resolveGameplayLaneGeometry,
   resolveGameplayLayout,
@@ -99,10 +100,39 @@ export interface LaneGeometryContext {
 /** What the skinless chrome's runtime is made from each frame: a play view's members of these names. */
 export interface PlayChromeContext {
   readonly play: PlayfieldRuntime;
-  readonly options: Readonly<Pick<PlaySessionOptions, 'autoPlay' | 'beMusicEffects' | 'judgeTimingAutoAdjust'>>;
+  readonly options: Readonly<
+    Pick<PlaySessionOptions, 'autoPlay' | 'beMusicEffects' | 'judgeTimingAutoAdjust' | 'nonstop'>
+  >;
   readonly audioFrame: AudioFeatures | undefined;
   /** The frame being drawn, for what it carries beside the play: the best record, the course and the player. */
   readonly playFrame?: Pick<PlayFrame, 'scoreTargets' | 'course' | 'playerName' | 'playOptions'>;
+}
+
+type SongInfoRuntime = Pick<
+  SkinlessGameplayChromeRuntime,
+  'chartTitle' | 'chartArtist' | 'chartGenre' | 'songInfoFade'
+>;
+
+/** A NONSTOP stage's song as the runtime names it; a stage without a title keeps the stitched chart's (the course's). */
+function stageSongInfo(info: NonstopSongInfo | undefined, fallbackTitle: string | undefined): SongInfoRuntime {
+  return { chartTitle: info?.title ?? fallbackTitle, chartArtist: info?.artist, chartGenre: info?.genre };
+}
+
+/**
+ * The song info the chrome shows at `seconds`: the chart's, or in a stitched NONSTOP play the stage being played's,
+ * crossfading from the previous stage's as each stage's window starts (`resolveNonstopSongInfoState`).
+ */
+export function resolveSongInfoRuntime(ctx: PlayChromeContext, seconds: number): SongInfoRuntime {
+  const chart = ctx.play.chart;
+  const stages = ctx.options.nonstop?.stages;
+  if (stages === undefined || stages.length === 0) {
+    return { chartTitle: chart?.title, chartArtist: chart?.artist, chartGenre: chart?.genre };
+  }
+  const state = resolveNonstopSongInfoState(stages, seconds);
+  const current = stageSongInfo(stages[state.stage]?.songInfo, chart?.title);
+  if (state.previous === undefined) return current;
+  const { songInfoFade: _fade, ...previous } = stageSongInfo(stages[state.previous]?.songInfo, chart?.title);
+  return { ...current, songInfoFade: { ...previous, progress: state.progress } };
 }
 
 /** Lane rects, playfield bounds, and judgement line of the built-in playfield for the loaded chart. */
@@ -184,9 +214,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     ...(frame?.playerName !== undefined ? { playerName: frame.playerName } : {}),
     ...(frame !== undefined ? { random1P: frame.playOptions.random1P } : {}),
     tempo: ctx.play.tempo,
-    chartTitle: ctx.play.chart?.title,
-    chartArtist: ctx.play.chart?.artist,
-    chartGenre: ctx.play.chart?.genre,
+    ...resolveSongInfoRuntime(ctx, seconds),
     // The scroll above runs on the chart's tempo; a NONSTOP readout shows the stage's own BPM — see `displayBPM`.
     bpm: ctx.play.displayBPM(seconds) ?? bpm,
     // The player's hi-speed, as the select panel and the host show it (HS-FIX scales only the scroll).

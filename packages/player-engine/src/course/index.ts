@@ -13,6 +13,7 @@ export * from './random-mix-conditions.ts';
 export * from './nonstop/plan.ts';
 export * from './nonstop/stage.ts';
 export * from './nonstop/compose.ts';
+export * from './nonstop/song-info.ts';
 export * from './nonstop/readouts.ts';
 export * from './nonstop/pipeline.ts';
 export * from './maker.ts';

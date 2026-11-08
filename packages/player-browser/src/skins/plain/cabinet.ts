@@ -4,6 +4,7 @@ import {
   resolveScratchAngle,
   resolveDifficultyName,
   resolveScorePace,
+  resolveSongInfoLayers,
   resolveStageLabel,
   type BeMusicGameplayFrame,
   type BeMusicGameplayRuntime,
@@ -11,7 +12,7 @@ import {
   type CabinetLayout,
   type ScorePace,
 } from '@be-music/player-skin-sdk';
-import { ACCENT, DANGER, INK, LINE, MUTED, NOTE_FILL, PANEL, TEXT, text } from './theme.ts';
+import { ACCENT, DANGER, INK, LINE, MUTED, NOTE_FILL, PANEL, TEXT, drawSongInfoLayers, text } from './theme.ts';
 
 /** The gauge as a row of cells, the way a cabinet's groove gauge reads. */
 const GAUGE_CELLS = 50;
@@ -328,19 +329,21 @@ function drawPlayers(
   const second = runtime.secondPlayer;
   const titleX = rect.x + plateW;
   const titleW = rect.w - plateW * (second ? 2 : 1) - 8;
-  text(ctx, runtime.chartTitle ?? '', titleX + titleW / 2, rect.y + 17, {
-    size: 15,
-    weight: 800,
-    align: 'center',
-    maxWidth: titleW,
-    nowMs,
-  });
-  text(ctx, runtime.chartArtist ?? '', titleX + titleW / 2, rect.y + 36, {
-    size: 10,
-    color: MUTED,
-    align: 'center',
-    maxWidth: titleW,
-    nowMs,
+  drawSongInfoLayers(ctx, resolveSongInfoLayers(runtime), (info) => {
+    text(ctx, info.chartTitle ?? '', titleX + titleW / 2, rect.y + 17, {
+      size: 15,
+      weight: 800,
+      align: 'center',
+      maxWidth: titleW,
+      nowMs,
+    });
+    text(ctx, info.chartArtist ?? '', titleX + titleW / 2, rect.y + 36, {
+      size: 10,
+      color: MUTED,
+      align: 'center',
+      maxWidth: titleW,
+      nowMs,
+    });
   });
   if (second) {
     const x = rect.x + rect.w - plateW + 4;
@@ -358,8 +361,10 @@ function drawChartStack(
 ): void {
   panel(ctx, rect);
   const inner = rect.w - 16;
-  text(ctx, runtime.chartTitle ?? '', rect.x + 8, rect.y + 12, { size: 13, weight: 800, maxWidth: inner, nowMs });
-  text(ctx, runtime.chartArtist ?? '', rect.x + 8, rect.y + 28, { size: 9, color: MUTED, maxWidth: inner, nowMs });
+  drawSongInfoLayers(ctx, resolveSongInfoLayers(runtime), (info) => {
+    text(ctx, info.chartTitle ?? '', rect.x + 8, rect.y + 12, { size: 13, weight: 800, maxWidth: inner, nowMs });
+    text(ctx, info.chartArtist ?? '', rect.x + 8, rect.y + 28, { size: 9, color: MUTED, maxWidth: inner, nowMs });
+  });
   const difficulty = resolveDifficultyName(runtime.chart);
   const level = runtime.chart?.playLevel;
   let x = rect.x + 8;

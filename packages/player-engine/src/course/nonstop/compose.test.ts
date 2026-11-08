@@ -150,6 +150,21 @@ describe('stitchNonstopCourse', () => {
     expect(a!.bmpKeys.map((key) => result.chart.resources.bmp[key])).toEqual(['s0/bmp/a.bmp']);
   });
 
+  test("keeps each stage's song for the play screen", () => {
+    const named = bms('#TITLE  Song B ', '#SUBTITLE [ANOTHER]', '#ARTIST Someone', '#GENRE ', '#BPM 150', '#00111:01');
+    const result = stitchNonstopCourse([{ chart: stageA }, { chart: named }], {
+      connections: ['fade'],
+      title: 'Course',
+    });
+    if (!result.ok) throw new Error(result.reason);
+    // A blank name is left out, and the stitched chart keeps the course's title.
+    expect(result.map.stages.map((stage) => stage.songInfo)).toEqual([
+      {},
+      { title: 'Song B', subtitle: '[ANOTHER]', artist: 'Someone' },
+    ]);
+    expect(result.chart.metadata.title).toBe('Course');
+  });
+
   test('times the fades and the LR2 stage marker from the connection', () => {
     const cut = stitchNonstopCourse([{ chart: stageA }, { chart: stageB }], { connections: ['cut'] });
     const blank = stitchNonstopCourse([{ chart: stageA }, { chart: stageB }], { connections: ['blank1'] });

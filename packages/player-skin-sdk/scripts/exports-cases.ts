@@ -516,6 +516,15 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.formatScoreDiff(-168);
     },
   });
+  define('player-skin-sdk.resolveSongInfoLayers', {
+    run: () => {
+      skinSdkAPI.resolveSongInfoLayers({
+        chartTitle: 'Bench B',
+        chartArtist: 'be-music',
+        songInfoFade: { chartTitle: 'Bench A', chartArtist: 'be-music', progress: 0.5 },
+      });
+    },
+  });
   define('player-skin-sdk.resolveStageLabel', {
     run: () => {
       skinSdkAPI.resolveStageLabel({ kind: 'grade', title: 'Bench Dan', stages: [{ title: 'a' }], stageIndex: 0 });

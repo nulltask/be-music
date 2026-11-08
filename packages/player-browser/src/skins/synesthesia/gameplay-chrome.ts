@@ -11,6 +11,7 @@ import {
   drawSecondPlayerFigures,
 } from './player-hud.ts';
 import { cabinetWellBottom, drawSynesthesiaCabinet } from './cabinet.ts';
+import { drawSongInfoLayers } from './song-info.ts';
 import { drawSynesthesiaMoments } from './moments.ts';
 import { ChargeCloud } from './charge-cloud.ts';
 import { KICK_REST, stepKick, type KickState } from './kick.ts';
@@ -946,44 +947,48 @@ function drawChartPlate(graphics: Graphics, layer: Container, runtime: Runtime, 
   drawSecondPlayerFigures(layer, runtime, SONG_PLATE, pool);
   const w = SONG_PLATE.w - (runtime.secondPlayer !== undefined ? SECOND_PLAYER_FIGURES_WIDTH : 0);
   // Genre, title, artist — the order every built-in skin uses; the genre rides a small line above the title.
-  const genre = runtime.chartGenre?.trim();
-  const lift = genre ? 5 : 0;
-  if (genre) {
-    addHUDText(
-      layer,
-      genre.toUpperCase(),
-      x + 14,
-      y + 3,
-      { size: 8, weight: '500', fill: SYN_DIM, fontFamily: SYN_TEXT_FONT, letterSpacing: 1, maxWidth: w - 28 },
-      pool,
-    );
-  }
-  addHUDText(
-    layer,
-    runtime.chartTitle?.trim() || 'Untitled chart',
-    x + 14,
-    y + 6 + lift,
-    {
-      size: 15,
-      weight: '500',
-      fill: SYN_WHITE,
-      fontFamily: SYN_TEXT_FONT,
-      maxWidth: w - 28,
-      dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
-    },
-    pool,
-  );
-  const artist = runtime.chartArtist?.trim();
-  if (artist) {
-    addHUDText(
-      layer,
-      artist,
-      x + 14,
-      y + 28,
-      { size: 10, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, maxWidth: w - 28 },
-      pool,
-    );
-  }
+  drawSongInfoLayers(runtime, (info) => {
+    const genre = info.chartGenre?.trim();
+    const lift = genre ? 5 : 0;
+    const artist = info.chartArtist?.trim();
+    return [
+      genre
+        ? addHUDText(
+            layer,
+            genre.toUpperCase(),
+            x + 14,
+            y + 3,
+            { size: 8, weight: '500', fill: SYN_DIM, fontFamily: SYN_TEXT_FONT, letterSpacing: 1, maxWidth: w - 28 },
+            pool,
+          )
+        : undefined,
+      addHUDText(
+        layer,
+        info.chartTitle?.trim() || 'Untitled chart',
+        x + 14,
+        y + 6 + lift,
+        {
+          size: 15,
+          weight: '500',
+          fill: SYN_WHITE,
+          fontFamily: SYN_TEXT_FONT,
+          maxWidth: w - 28,
+          dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
+        },
+        pool,
+      ),
+      artist
+        ? addHUDText(
+            layer,
+            artist,
+            x + 14,
+            y + 28,
+            { size: 10, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, maxWidth: w - 28 },
+            pool,
+          )
+        : undefined,
+    ];
+  });
 }
 
 function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, accent: number, pool: ChildPool): void {
@@ -1206,41 +1211,45 @@ function drawPortraitHUD(
   drawFrame(graphics, plate.x, plate.y, plate.w, plate.h, accent);
   const textX = plate.x + 10;
   const textW = plate.w - 20;
-  const genre = runtime.chartGenre?.trim();
-  addHUDText(
-    layer,
-    genre ? genre.toUpperCase() : 'NOW PLAYING',
-    textX,
-    plate.y + 6,
-    { size: 10, weight: '500', fill: SYN_DIM, fontFamily: SYN_TEXT_FONT, letterSpacing: 1, maxWidth: textW },
-    pool,
-  );
-  addHUDText(
-    layer,
-    runtime.chartTitle?.trim() || 'Untitled chart',
-    textX,
-    plate.y + 19,
-    {
-      size: 14,
-      weight: '500',
-      fill: SYN_WHITE,
-      fontFamily: SYN_TEXT_FONT,
-      maxWidth: textW,
-      dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
-    },
-    pool,
-  );
-  const artist = runtime.chartArtist?.trim();
-  if (artist) {
-    addHUDText(
-      layer,
-      artist,
-      textX,
-      plate.y + 39,
-      { size: 10, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, maxWidth: textW },
-      pool,
-    );
-  }
+  drawSongInfoLayers(runtime, (info) => {
+    const genre = info.chartGenre?.trim();
+    const artist = info.chartArtist?.trim();
+    return [
+      addHUDText(
+        layer,
+        genre ? genre.toUpperCase() : 'NOW PLAYING',
+        textX,
+        plate.y + 6,
+        { size: 10, weight: '500', fill: SYN_DIM, fontFamily: SYN_TEXT_FONT, letterSpacing: 1, maxWidth: textW },
+        pool,
+      ),
+      addHUDText(
+        layer,
+        info.chartTitle?.trim() || 'Untitled chart',
+        textX,
+        plate.y + 19,
+        {
+          size: 14,
+          weight: '500',
+          fill: SYN_WHITE,
+          fontFamily: SYN_TEXT_FONT,
+          maxWidth: textW,
+          dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
+        },
+        pool,
+      ),
+      artist
+        ? addHUDText(
+            layer,
+            artist,
+            textX,
+            plate.y + 39,
+            { size: 10, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, maxWidth: textW },
+            pool,
+          )
+        : undefined,
+    ];
+  });
 
   // Score panel: SCORE and EX on the left of a divider, COMBO and RANK on the right, the rate filament along the foot.
   drawFrame(graphics, score.x, score.y, score.w, score.h, accent);

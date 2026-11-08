@@ -217,6 +217,13 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseAPI.parseLR2NonstopConnections(benchNonstopHeader);
     },
   });
+  define('player-engine.course.resolveNonstopSongInfoState', {
+    run: () => {
+      const stages = [{ windowStart: 0 }, { windowStart: 30 }, { windowStart: 60 }, { windowStart: 90 }];
+      courseAPI.resolveNonstopSongInfoState(stages, 30.2);
+      courseAPI.resolveNonstopSongInfoState(stages, 75);
+    },
+  });
   define('player-engine.course.resolveNonstopLastMeasure', {
     run: () => {
       courseAPI.resolveNonstopLastMeasure(7.25);
