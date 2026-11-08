@@ -293,7 +293,7 @@ ruleset の 5 KEY / 7 KEY 判定幅を切り替えることもありません。
 [BMS 仕様 — player 固有挙動](./bms-spec.ja.md#player-固有挙動) にあります。モードを表す拡張子は `.pms` だけで、それ以外の
 拡張子では使われているレーンで決めます。そのため 6 / 7 鍵の列がない `.bme` 譜面は、beatoraja と同じく `5 KEY SP` /
 `5 KEY DP` です。
-判定の流れは [README — レーンモード自動判定](../README.ja.md#レーンモード自動判定と入力割り当て) にフローチャートで示しています。
+判定の流れは [`@be-music/chart-model` — レーンモード自動判定](../packages/chart-model/README.ja.md#レーンモード自動判定) にフローチャートで示しています。
 現実装で自動判定できる主なモードは次のとおりです。
 
 - `5 KEY SP`
