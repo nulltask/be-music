@@ -295,11 +295,27 @@ export interface BeMusicSecondPlayerRuntime {
   rank?: string;
 }
 
-/** Live gameplay values for the HUD. */
-export interface BeMusicGameplayRuntime {
+/** The song a NONSTOP play's song info crossfades away from ({@link BeMusicGameplayRuntime.songInfoFade}). */
+export interface BeMusicSongInfoFade {
   chartTitle?: string;
   chartArtist?: string;
   chartGenre?: string;
+  /** 0 (the old song alone) to 1 (the new song alone). */
+  progress: number;
+}
+
+/** Live gameplay values for the HUD. */
+export interface BeMusicGameplayRuntime {
+  /** The song's title, artist and genre: in a NONSTOP play, those of the stage being played. */
+  chartTitle?: string;
+  chartArtist?: string;
+  chartGenre?: string;
+  /**
+   * While a NONSTOP play's song info crossfades into the next stage's (`chartTitle` and friends are already the new
+   * song's): the song it replaces, and how far the crossfade is, 0 (the old song alone) to 1 (the new song alone). A skin
+   * draws the old song at `1 - progress` and the new one at `progress`; one that ignores it switches at once.
+   */
+  songInfoFade?: BeMusicSongInfoFade;
   /** BPM at the playhead: follows the chart's tempo changes (and holds through stops), not just its header BPM. */
   bpm?: number;
   hiSpeed?: number;

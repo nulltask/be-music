@@ -357,6 +357,7 @@ flowchart LR
 - **1 プレイに 1 度の瞬間:** `failedAtMs`（プレイ中にゲージが尽きた）、`allNotesDoneAtMs`（最後のノーツが判定された）、`outroAtMs`（譜面が終わった）、`gaugeRiseAtMs`（ゲージが初めて上がった）、`gaugeMaxAtMs`（初めて最大に達した）。どれもその瞬間に固定されるプレイクロック時刻で、それまでは `undefined` です。
 - **推移:** `scoreHistory` と `gaugeHistory`。リザルト画面が受け取るのと同じサンプルです。ホストが更新中の配列そのものなので、読むだけにして変更しないでください。
 - **ペースメーカーと自己ベスト:** `bestEXScore`（このプレイより前のその譜面の自己ベストの EX スコア）と、ホストが決めるペースメーカーの `targetEXScore` と `targetLabel`。`resolveScorePace(runtime)` はそれぞれを判定済みのノーツの割合に合わせ、ホストがペースメーカーを決めていないときは AAA のラインを使います。`formatScoreDiff` は差を表示します（`+0168`）。
+- **NONSTOP の曲情報:** NONSTOP のプレイでは、`chartTitle`、`chartArtist`、`chartGenre` はプレイ中のステージの曲のものです。各ステージが始まると 0.6 秒かけてクロスフェードします。`songInfoFade` は置き換わる前の曲と、クロスフェードの進み具合 `progress`（0〜1）を持ちます。`resolveSongInfoLayers(runtime)` は描く曲情報のレイヤーを奥から順に不透明度付きで返すので、スキンはタイトル部分をレイヤーごとに 1 回ずつ描けば済みます。`songInfoFade` を読まないスキンでは、曲はすぐに切り替わります。
 - **ステージとプレイヤー:** `course`（プレイ中のコースとステージ。`resolveStageLabel` が `1ST STAGE` … `FINAL STAGE`、単曲では `FREE PLAY` と名付けます）、`playerName`（サインイン中のプレイヤー）、`random1P`（1P のレーンオプション）、`tempo`（プレイのテンポ。譜面どおりの速さで 1）。`resolveDifficultyName(runtime.chart)` は `#DIFFICULTY` の名前を返します。
 
 runtime のフィールドはすべて省略可能です。ホストが提供できない値は `undefined` になるので、適切な代替表示を用意してください。

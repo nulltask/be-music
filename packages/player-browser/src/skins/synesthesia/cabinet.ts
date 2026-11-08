@@ -14,6 +14,7 @@ import {
 import type { Container, Graphics } from 'pixi.js';
 import { addHUDNumber, addHUDText, type ChildPool } from '../pixi-kit/index.ts';
 import { drawFrame } from './draw.ts';
+import { drawSongInfoLayers } from './song-info.ts';
 import { clampPercent, drawGaugeCells } from './player-hud.ts';
 import {
   SYN_AMBER,
@@ -405,33 +406,38 @@ function drawPlayers(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): vo
   const second = runtime.secondPlayer;
   const titleX = rect.x + plateW + 4;
   const titleW = rect.w - plateW * (second ? 2 : 1) - 12;
-  addHUDText(
-    layer,
-    runtime.chartTitle?.trim() || 'Untitled chart',
-    titleX + titleW / 2,
-    rect.y + 10,
-    {
-      size: 14,
-      weight: '500',
-      fill: SYN_WHITE,
-      fontFamily: SYN_TEXT_FONT,
-      anchorX: 0.5,
-      maxWidth: titleW,
-      dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
-    },
-    pool,
-  );
-  const artist = runtime.chartArtist?.trim();
-  if (artist) {
-    addHUDText(
+  drawSongInfoLayers(runtime, (info) => {
+    const title = addHUDText(
       layer,
-      artist,
+      info.chartTitle?.trim() || 'Untitled chart',
       titleX + titleW / 2,
-      rect.y + 33,
-      { size: 9, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, anchorX: 0.5, maxWidth: titleW },
+      rect.y + 10,
+      {
+        size: 14,
+        weight: '500',
+        fill: SYN_WHITE,
+        fontFamily: SYN_TEXT_FONT,
+        anchorX: 0.5,
+        maxWidth: titleW,
+        dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
+      },
       pool,
     );
-  }
+    const artist = info.chartArtist?.trim();
+    return [
+      title,
+      artist
+        ? addHUDText(
+            layer,
+            artist,
+            titleX + titleW / 2,
+            rect.y + 33,
+            { size: 9, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, anchorX: 0.5, maxWidth: titleW },
+            pool,
+          )
+        : undefined,
+    ];
+  });
   if (second) {
     const x = rect.x + rect.w - 10;
     addHUDText(layer, 'PLAYER 2P', x, rect.y + 6, { ...labelStyle(), anchorX: 1 }, pool);
@@ -451,29 +457,31 @@ function drawChartStack(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime):
   const { graphics, layer, pool, accent } = draw;
   frame(draw, rect);
   const inner = rect.w - 16;
-  addHUDText(
-    layer,
-    runtime.chartTitle?.trim() || 'Untitled chart',
-    rect.x + 8,
-    rect.y + 5,
-    {
-      size: 12,
-      weight: '500',
-      fill: SYN_WHITE,
-      fontFamily: SYN_TEXT_FONT,
-      maxWidth: inner,
-      dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
-    },
-    pool,
-  );
-  addHUDText(
-    layer,
-    runtime.chartArtist?.trim() ?? '',
-    rect.x + 8,
-    rect.y + 23,
-    { size: 8, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, maxWidth: inner },
-    pool,
-  );
+  drawSongInfoLayers(runtime, (info) => [
+    addHUDText(
+      layer,
+      info.chartTitle?.trim() || 'Untitled chart',
+      rect.x + 8,
+      rect.y + 5,
+      {
+        size: 12,
+        weight: '500',
+        fill: SYN_WHITE,
+        fontFamily: SYN_TEXT_FONT,
+        maxWidth: inner,
+        dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
+      },
+      pool,
+    ),
+    addHUDText(
+      layer,
+      info.chartArtist?.trim() ?? '',
+      rect.x + 8,
+      rect.y + 23,
+      { size: 8, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, maxWidth: inner },
+      pool,
+    ),
+  ]);
   let x = rect.x + 8;
   const difficulty = resolveDifficultyName(runtime.chart);
   if (difficulty) {

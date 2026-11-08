@@ -1,3 +1,4 @@
+import type { BeMusicSongInfoLayer, BeMusicSongInfoText } from '@be-music/player-skin-sdk';
 /** Plain's palette, type, and a few small drawing helpers shared by its three screens. */
 
 export const INK = '#111114';
@@ -153,4 +154,21 @@ export function stat(
 ): void {
   text(ctx, label, x, y, { size: options.labelSize ?? 9, color: MUTED, weight: 700 });
   text(ctx, value, x, y + 16, { size: 16, maxWidth: options.maxWidth, nowMs: options.nowMs });
+}
+
+/**
+ * Draws a NONSTOP play's song info crossfading (`resolveSongInfoLayers`): `draw` once per layer, at that layer's opacity.
+ * The opacity goes on `globalAlpha` and back, not through `save` / `restore`, which would undo the font `text` keeps.
+ */
+export function drawSongInfoLayers(
+  ctx: CanvasRenderingContext2D,
+  layers: readonly BeMusicSongInfoLayer[],
+  draw: (info: BeMusicSongInfoText) => void,
+): void {
+  const base = ctx.globalAlpha;
+  for (const { info, alpha } of layers) {
+    ctx.globalAlpha = base * alpha;
+    draw(info);
+  }
+  ctx.globalAlpha = base;
 }

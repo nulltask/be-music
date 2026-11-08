@@ -10,6 +10,7 @@ import {
   type BeMusicLayoutContext,
   type BGATargetsContext,
   resolveSkinlessGameplayChromeRuntime,
+  resolveSongInfoRuntime,
   type BuiltInChromeContext,
   type PlayChromeContext,
   type SkinlessGameplayChromeRuntime,
@@ -168,4 +169,35 @@ test('a video changes the monitor and target width together while keeping their 
   expect(portrait.h).toBe(wide.h);
   expect(portrait.w / portrait.h).toBeCloseTo(900 / 1600);
   expect(portrait.x + portrait.w / 2).toBeCloseTo(wide.x + wide.w / 2);
+});
+
+test("shows a NONSTOP stage's song, crossfading from the previous stage's as its window starts", () => {
+  const base = chromeContext();
+  const ctx = {
+    ...base,
+    play: { ...base.play, chart: { title: 'Course', artist: 'Course artist', genre: 'Mix' } },
+    options: {
+      nonstop: {
+        stages: [
+          { windowStart: 0, songInfo: { title: 'A', artist: 'Artist A', genre: 'Genre A' } },
+          { windowStart: 30, songInfo: { artist: 'Artist B' } },
+        ],
+      },
+    },
+  } as unknown as PlayChromeContext;
+  expect(resolveSongInfoRuntime(ctx, 10)).toEqual({ chartTitle: 'A', chartArtist: 'Artist A', chartGenre: 'Genre A' });
+  // Stage 2 names no title: the stitched chart's (the course's) stands in.
+  expect(resolveSongInfoRuntime(ctx, 30.3)).toEqual({
+    chartTitle: 'Course',
+    chartArtist: 'Artist B',
+    chartGenre: undefined,
+    songInfoFade: { chartTitle: 'A', chartArtist: 'Artist A', chartGenre: 'Genre A', progress: expect.closeTo(0.5) },
+  });
+  expect(resolveSongInfoRuntime(ctx, 40).songInfoFade).toBeUndefined();
+  // Without NONSTOP, the chart's own song.
+  expect(resolveSongInfoRuntime({ ...ctx, options: {} } as PlayChromeContext, 30.3)).toEqual({
+    chartTitle: 'Course',
+    chartArtist: 'Course artist',
+    chartGenre: 'Mix',
+  });
 });

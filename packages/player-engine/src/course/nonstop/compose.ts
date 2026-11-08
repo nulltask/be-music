@@ -42,12 +42,23 @@ import {
   type NonstopTempoPoint,
 } from './readouts.ts';
 import { createNonstopStageTiming } from './stage.ts';
+import type { NonstopSongInfo } from './song-info.ts';
 import { flattenNonstopBGAOpacity, hasBGAOpacity, placeNonstopBGAOpacity } from './bga-opacity.ts';
 import { placeNonstopBmsonBGA } from './bmson-bga.ts';
 import { placeNonstopKeyBoundBGA } from './key-bound-bga.ts';
 import { createNonstopBMPAllocator } from './bga-resources.ts';
 
 /** One stage to stitch: its BMS or bmson chart with control flow resolved, and whether it is a `.pms` chart. */
+/** A stage chart's song, as its metadata names it (blank names left out). */
+function stageSongInfo(chart: BeMusicJSON): NonstopSongInfo {
+  const info: NonstopSongInfo = {};
+  for (const key of ['title', 'subtitle', 'artist', 'genre'] as const) {
+    const value = chart.metadata[key]?.trim();
+    if (value) info[key] = value;
+  }
+  return info;
+}
+
 export interface NonstopStageInput {
   chart: BeMusicJSON;
   pms?: boolean;
@@ -107,6 +118,8 @@ export interface NonstopStitchStage {
   bgaFadeOut?: NonstopFade;
   /** Whether LR2 announces the stage when it starts (ops 280-289, title text): only after a BLANK connection. */
   lr2StageMarker: boolean;
+  /** The stage's song, as its chart names it, for the play screen ({@link resolveNonstopSongInfoState}). */
+  songInfo?: NonstopSongInfo;
 }
 
 export interface NonstopStitchMap {
@@ -515,6 +528,7 @@ function stitchNonstopCourseAs(
             ? { bgaFadeIn: { start: previousBoundary - BGA_FADE_SECONDS, end: previousBoundary } }
             : {}),
           lr2StageMarker: before === 'blank1' || before === 'blank2',
+          songInfo: stageSongInfo(stages[index]!.chart),
         };
       }),
     },
