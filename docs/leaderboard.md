@@ -40,7 +40,7 @@ See [Services](./services.md) for the architecture and authentication data flow.
   repository holds `op://` references, and a script sets them with `cf` (package README, "Secrets").
 - **Configuration and tooling**: the `cf` CLI is the primary tool (`cloudflare.config.ts`); Wrangler fills the gaps
   `cf` does not cover yet. No Terraform. `cf` is in beta, so its version is pinned and upgrades go through preview
-  first. D1 migrations use the package’s `db:migrate:*` scripts, which call `cf d1 migrations apply`.
+  first. D1 migrations use the package’s `db:migrate:*` scripts, which call `cf d1 migrations apply` with the database ID from the environment (`scripts/cloudflare/env.ts`, [services.md section 6](./services.md#6-deployment)).
 
 ### 2.2 Plan limits
 

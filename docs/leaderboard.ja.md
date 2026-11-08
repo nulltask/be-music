@@ -39,7 +39,7 @@ Leaderboard は Be-Music のオンラインのスコアランキングで、LR2 
 - **secrets**（`BETTER_AUTH_SECRET`、OAuth のクライアントシークレット）は環境ごとに設定します。値は 1Password に置き、リポジトリには `op://` の参照だけを置いて、スクリプトが `cf` で設定します（パッケージの README の「Secrets」）。
 - **構成管理とツール**: `cf` CLI（`cloudflare.config.ts`）を基本にし、`cf` がまだ対応していない部分を Wrangler で
   補います。Terraform は使いません。`cf` は beta なのでバージョンを固定し、上げるときは preview で確かめてから
-  にします。D1 のマイグレーションは `cf d1 migrations apply` を呼ぶ `db:migrate:*` スクリプトで適用します。
+  にします。D1 のマイグレーションは 環境変数のデータベース ID で `cf d1 migrations apply` を呼ぶ `db:migrate:*` スクリプトで適用します（`scripts/cloudflare/env.ts`、[services.ja.md の 6 章](./services.ja.md#6-デプロイ)）。
 
 ### 2.2 プランの制限
 
