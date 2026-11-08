@@ -60,9 +60,13 @@ export class Player {
 
   /**
    * Opens the player with the test hook on the empty select screen. `storage` seeds `localStorage` (the settings the
-   * player remembers) before it starts; the built-in skin's effects are off unless a spec asks for them.
+   * player remembers) before it starts; the built-in skin's effects are off and the render resolution is 1× unless a spec
+   * asks otherwise. `query` adds URL parameters (e.g. `{ renderer: 'webgl' }`).
    */
-  async open(storage: Readonly<Record<string, string>> = {}): Promise<TestHookState> {
+  async open(
+    storage: Readonly<Record<string, string>> = {},
+    query: Readonly<Record<string, string>> = {},
+  ): Promise<TestHookState> {
     await this.page.route(`**${FILE_ROUTE}**`, async (route) => {
       const path = decodeURIComponent(new URL(route.request().url()).pathname.slice(FILE_ROUTE.length));
       await route.fulfill({ body: await readFile(join(fixturesDir(), path)), contentType: 'application/octet-stream' });
@@ -71,9 +75,10 @@ export class Player {
       (entries) => {
         for (const [key, value] of Object.entries(entries)) window.localStorage.setItem(key, value);
       },
-      { 'be-music.skin-effects': 'off', ...storage },
+      // A stored render resolution keeps the first-run resolution benchmark from resizing the canvas mid-spec.
+      { 'be-music.skin-effects': 'off', 'be-music.render-resolution': '1', ...storage },
     );
-    await this.page.goto('/?e2e=1');
+    await this.page.goto(`/?${new URLSearchParams({ e2e: '1', ...query })}`);
     return this.waitFor((state) => state.scene.kind === 'select', 'the select screen');
   }
 

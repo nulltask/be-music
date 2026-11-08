@@ -540,7 +540,8 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>(beatoraja tab) Picks the beatoraja skin for each screen and key mode.</dd>
           <dt>Render resolution</dt>
           <dd>
-            How sharply the canvas draws, from 1× up to the display's pixel ratio; lower it if the frame rate drops.
+            How sharply the canvas draws, from 0.5× up to the display's pixel ratio; lower it if the frame rate drops.
+            Below 1× the picture softens, for GPUs that cannot keep up even at 1×.
           </dd>
           <dt>Auto-detect resolution</dt>
           <dd>Measures the frame rate at each resolution on the screen showing and keeps the highest that holds it.</dd>
@@ -1195,7 +1196,10 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dt>Beatoraja skins</dt>
           <dd>(beatoraja タブ) 画面とキーモードごとに beatoraja のスキンを選びます。</dd>
           <dt>Render resolution</dt>
-          <dd>キャンバスを描く解像度 (1× から画面のピクセル比まで)。フレームレートが落ちるときは下げます。</dd>
+          <dd>
+            キャンバスを描く解像度 (0.5× から画面のピクセル比まで)。フレームレートが落ちるときは下げます。1×
+            未満は画がぼやけますが、1× でも追いつかない GPU 向けです。
+          </dd>
           <dt>Auto-detect resolution</dt>
           <dd>表示中の画面で解像度ごとにフレームレートを測り、保てるいちばん高い解像度にします。</dd>
           <dt>Play layout</dt>

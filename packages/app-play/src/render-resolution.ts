@@ -1,8 +1,8 @@
 /**
- * The player's render resolution setting (canvas pixels per CSS pixel): the Options dialog offers 1× up to the display's
- * `devicePixelRatio` in 0.5 steps, and the pick is remembered. Before any pick the player renders at 1.5× (full density
- * at 2× and above made tablets fill-rate bound: under 30 fps on iPad, 60 fps at 1.5×) and benchmarks the select screen
- * once to pick for the device.
+ * The player's render resolution setting (canvas pixels per CSS pixel): the Options dialog offers 0.5× and 0.75× for GPUs
+ * that cannot fill even a 1× display in time, then 1× up to the display's `devicePixelRatio` in 0.5 steps, and the pick
+ * is remembered. Before any pick the player renders at 1.5× (full density at 2× and above made tablets fill-rate bound:
+ * under 30 fps on iPad, 60 fps at 1.5×) and benchmarks the select screen once to pick for the device.
  */
 
 export const RENDER_RESOLUTION_STORAGE_KEY = 'be-music.render-resolution';
@@ -11,17 +11,18 @@ export const RENDER_RESOLUTION_STORAGE_KEY = 'be-music.render-resolution';
 export const DEFAULT_RENDER_RESOLUTION = 1.5;
 
 const STEP = 0.5;
-const MIN = 1;
+/** Steps below 1×: soft, but they keep a weak GPU (a low-spec laptop's, on a 1× display) at the display's refresh. */
+const LOW_STEPS = [0.5, 0.75] as const;
 
 /**
- * The resolutions offered on a display of `devicePixelRatio`: 1, 1.5, 2, … up to the display's ratio, which closes the
- * list when it falls between steps (e.g. 2.625 on some phones). A display at or below 1× offers its own ratio only.
+ * The resolutions offered on a display of `devicePixelRatio`: 0.5 and 0.75, then 1, 1.5, 2, … up to the display's
+ * ratio, which closes the list when it falls between steps (e.g. 2.625 on some phones). A display below 1× offers the
+ * low steps under its own ratio, then its ratio.
  */
 export function renderResolutionSteps(devicePixelRatio: number): number[] {
   const native = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
-  if (native <= MIN) return [native];
-  const steps: number[] = [];
-  for (let value = MIN; value < native; value += STEP) steps.push(value);
+  const steps: number[] = LOW_STEPS.filter((value) => value < native);
+  for (let value = 1; value < native; value += STEP) steps.push(value);
   steps.push(native);
   return steps;
 }

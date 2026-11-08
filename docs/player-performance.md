@@ -8,7 +8,7 @@ This specification covers the browser measurement harness in `scripts/performanc
 
 Published gameplay frames can be retained by bindings and skin callbacks. Each draw creates its HUD snapshot and published collections; Canvas and DOM share the HUD calculation within that draw. Later draws do not overwrite previously published snapshots.
 
-`packages/player-browser/src/stage/draw-label.ts` caches a label by its owner and original input values. The cache uses weak ownership and preserves the complete label text. `skins/pixi-kit/particle-layer.ts` preserves the unchanged prefix of active particles and skips redundant tint and opacity updates. Lua callbacks are evaluated without a general result-memoization cache.
+`packages/player-browser/src/stage/draw-label.ts` caches a label by its owner and original input values. The cache uses weak ownership and preserves the complete label text. `skins/pixi-kit/particle-layer.ts` draws a skin's points as instanced quads: each point is four floats (`x, y`, half size, packed colour) written into one typed array per layer and uploaded as it is, with no per-point object or upload loop. Pixi's `ParticleContainer` is avoided there because its generated upload code assigns to undeclared variables, boxing doubles onto the global object for every particle every frame. Lua callbacks are evaluated without a general result-memoization cache.
 
 ## Gameplay profiles
 
@@ -20,7 +20,7 @@ PERF_OUTPUT=tmp/performance/current pnpm exec playwright test -c scripts/perform
 
 The harness builds the player with source maps, serves it on a dedicated free port, creates temporary fixtures and removes them afterward. It runs one browser worker with a 1280 × 720 viewport. The fixture has 1,024 notes over 64 measures at 150 BPM. Each skin plays AUTO past chart time 5 seconds before three 15-second captures. The families are Synesthesia with full effects, Native DOM/Canvas, stock LR2 and ModernChic.
 
-`PERF_FAMILIES` selects a comma-separated subset of `built-in,native,lr2,beatoraja`. Setting it omits collection scenarios. With it unset, the harness also drops 300 chart copies and scrolls 150 entries at 50 ms intervals.
+`PERF_CPU_THROTTLE` slows the page's CPU by that factor through CDP (e.g. `4` for a quarter of this machine's speed), which approximates a low-spec machine; the GPU is not throttled. `PERF_RENDERER=webgl` measures the WebGL fallback instead of WebGPU. `PERF_FAMILIES` selects a comma-separated subset of `built-in,native,lr2,beatoraja`. Setting it omits collection scenarios. With it unset, the harness also drops 300 chart copies and scrolls 150 entries at 50 ms intervals.
 
 Each capture records CDP CPU samples, Performance metrics, allocations sampled at 16 KiB intervals, animation-frame intervals and a screenshot. Allocation sampling includes objects collected by minor and major GC; it measures cumulative allocations rather than retained heap. The first frame interval is excluded from percentile calculations. The harness asserts that no browser errors occur.
 

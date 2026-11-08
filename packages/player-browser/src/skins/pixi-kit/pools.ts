@@ -113,7 +113,8 @@ export class ChildPool {
     }
     // Keep `tint` / `alpha` reset so a previous pass's coloured / faded sprite doesn't leak into a fresh draw.
     sprite.visible = true;
-    sprite.tint = 0xffffff;
+    // The tint setter parses a `Color` even when nothing changes; most nodes already sit at white.
+    if (sprite.tint !== 0xffffff) sprite.tint = 0xffffff;
     sprite.alpha = 1;
     sprite.rotation = 0;
     sprite.skew.set(0, 0);
@@ -137,7 +138,7 @@ export class ChildPool {
     }
     graphics.clear();
     graphics.visible = true;
-    graphics.tint = 0xffffff;
+    if (graphics.tint !== 0xffffff) graphics.tint = 0xffffff;
     graphics.alpha = 1;
     graphics.position.set(0, 0);
     graphics.scale.set(1, 1);
@@ -167,7 +168,7 @@ export class ChildPool {
       this.texts.push(text);
     }
     text.visible = true;
-    text.tint = 0xffffff;
+    if (text.tint !== 0xffffff) text.tint = 0xffffff;
     text.alpha = 1;
     text.rotation = 0;
     text.anchor.set(0, 0);

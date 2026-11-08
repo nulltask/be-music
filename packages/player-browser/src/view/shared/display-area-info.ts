@@ -1,3 +1,4 @@
+import { setHidden, setStyle } from './dom-style.ts';
 import { Container, Text } from 'pixi.js';
 import { resolveGreenNumber, type PlaySide } from '@be-music/player-scene-model';
 import type { BeMusicLaneCover } from '@be-music/player-skin-sdk';
@@ -102,9 +103,11 @@ export class DisplayAreaInfoOverlay {
     }
     const root = this.root;
     if (!root) return;
-    root.hidden = labels.length === 0;
-    root.style.opacity = String(opacity);
+    setHidden(root, labels.length === 0);
+    // Nothing to place: skip the measure, which would force a layout every frame.
+    if (labels.length === 0) return;
     const { width, height } = measureLayer(root, screen);
+    setStyle(root, 'opacity', String(opacity));
     const scale = Math.min(width / stage.width, height / stage.height);
     const offsetX = (width - stage.width * scale) / 2;
     const offsetY = (height - stage.height * scale) / 2;
@@ -131,20 +134,20 @@ export class DisplayAreaInfoOverlay {
         root.append(node);
         this.nodes[index] = node;
       }
-      node.hidden = false;
-      node.dataset.side = label.side;
-      node.dataset.edge = label.edge;
+      setHidden(node, false);
+      if (node.dataset.side !== label.side) node.dataset.side = label.side;
+      if (node.dataset.edge !== label.edge) node.dataset.edge = label.edge;
       const name = label.edge === 'sudden' ? 'SUD-LENGTH' : label.edge === 'hidden' ? 'HID-LENGTH' : 'LIFT-LENGTH';
       const text = `${name} ${label.length}`;
       if (node.children[0]!.textContent !== text) node.children[0]!.textContent = text;
       const green = String(label.green ?? '—');
       if (node.children[1]!.textContent !== green) node.children[1]!.textContent = green;
-      node.style.whiteSpace = 'pre';
-      node.style.left = `${offsetX + label.x * scale}px`;
-      node.style.top = `${offsetY + label.y * scale}px`;
-      node.style.transform = label.edge === 'sudden' ? 'translate(-50%, -100%)' : 'translate(-50%, 0)';
+      setStyle(node, 'whiteSpace', 'pre');
+      setStyle(node, 'left', `${offsetX + label.x * scale}px`);
+      setStyle(node, 'top', `${offsetY + label.y * scale}px`);
+      setStyle(node, 'transform', label.edge === 'sudden' ? 'translate(-50%, -100%)' : 'translate(-50%, 0px)');
     });
-    for (let index = labels.length; index < this.nodes.length; index++) this.nodes[index]!.hidden = true;
+    for (let index = labels.length; index < this.nodes.length; index++) setHidden(this.nodes[index]!, true);
   }
 
   private updateCanvas(labels: readonly DisplayAreaLabel[], stageHeight: number): void {

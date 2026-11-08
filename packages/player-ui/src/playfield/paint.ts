@@ -314,12 +314,27 @@ export function paintJudgmentDisplay(
  * `tnum` cannot be turned on; each digit takes the widest digit's advance instead.
  */
 function paintTabular(ctx: BeMusicPlayfieldPaintContext, text: string, x: number, y: number): void {
-  const run = layoutTabularRun(text, (char) => ctx.measureText(char).width);
+  const font = ctx.font;
+  const run = layoutTabularRun(text, (char) => measureChar(ctx, font, char));
   const left = x - run.width / 2;
   const align = ctx.textAlign;
   ctx.textAlign = 'center';
   for (const glyph of run.glyphs) ctx.fillText(glyph.char, left + glyph.x + glyph.w / 2, y);
   ctx.textAlign = align;
+}
+
+/** Advances of the characters {@link paintTabular} has measured, by font: the combo redraws them every frame. */
+const CHAR_WIDTHS = new Map<string, Map<string, number>>();
+
+function measureChar(ctx: BeMusicPlayfieldPaintContext, font: string, char: string): number {
+  let widths = CHAR_WIDTHS.get(font);
+  if (!widths) CHAR_WIDTHS.set(font, (widths = new Map()));
+  let width = widths.get(char);
+  if (width === undefined) {
+    width = ctx.measureText(char).width;
+    widths.set(char, width);
+  }
+  return width;
 }
 
 /** Paints every part on one stage-sized surface, each clipped to its rect as its own canvas would clip it. */

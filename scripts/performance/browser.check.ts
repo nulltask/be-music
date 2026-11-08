@@ -5,11 +5,18 @@ test('capture real-skin CPU and allocation profiles', async ({ player }) => {
   await mkdir(out, { recursive: true });
   const errors: string[] = [];
   player.page.on('pageerror', (e) => errors.push(e.message));
-  await player.open({ 'be-music.built-in-skin': 'synesthesia', 'be-music.skin-effects': 'full' });
+  // PERF_RENDERER=webgl measures the WebGL fallback instead of WebGPU.
+  await player.open(
+    { 'be-music.built-in-skin': 'synesthesia', 'be-music.skin-effects': 'full' },
+    process.env.PERF_RENDERER ? { renderer: process.env.PERF_RENDERER } : {},
+  );
   await player.drop('songs', { prefix: SONGS });
   const cdp = await player.page.context().newCDPSession(player.page);
   await cdp.send('Performance.enable');
   await cdp.send('Profiler.enable');
+  // A slower machine: PERF_CPU_THROTTLE=4 runs the page at a quarter of this one's CPU speed.
+  const throttle = Number(process.env.PERF_CPU_THROTTLE ?? '1');
+  if (throttle > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: throttle });
   const summaries: Array<{
     name: string;
     elapsedMs: number;

@@ -23,7 +23,7 @@ export interface MeasuredSelectScreen {
 /**
  * Whether this visit benchmarks the render resolution on its own: only before the player has picked one (by hand or by
  * an earlier benchmark, `stored`), not when `?resolution=` in `search` pins it, and not where there's nothing to choose
- * (a 1× display).
+ * (a display at the lowest step).
  */
 export function wantsFirstRunResolutionDetect(visit: {
   readonly stored: number | undefined;
@@ -51,7 +51,7 @@ export function isResolutionDetectCancelled(state: {
 }
 /**
  * Before the player has picked a render resolution (by hand or by an earlier benchmark), benchmarks the select screen
- * once, after it settles, to pick one for this device. Skipped where there's nothing to choose (a 1× display) and
+ * once, after it settles, to pick one for this device. Skipped where there's nothing to choose (a display at the lowest step) and
  * when `?resolution=` pins it.
  */
 export function scheduleFirstRunResolutionDetect(this: OptionsDialog): void {

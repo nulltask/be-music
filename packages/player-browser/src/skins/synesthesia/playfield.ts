@@ -340,6 +340,15 @@ function cachedBurst(seed: number, count = BURST_PARTICLES_MAX): BurstParticle[]
 }
 
 const bombMasks = new WeakMap<Container, Graphics>();
+/** The shape each bomb mask was last drawn for ({@link maskShape}). */
+const bombMaskShapes = new WeakMap<Graphics, string>();
+
+/** A key for the bomb mask over lane runs `runs` from `top` to `bottom`. */
+function maskShape(top: number, bottom: number, runs: readonly { left: number; right: number }[]): string {
+  let shape = `${top},${bottom}`;
+  for (const run of runs) shape += `;${run.left},${run.right}`;
+  return shape;
+}
 
 /**
  * The Synesthesia hit: a 3D particle burst in perspective. Layered back to front —
@@ -363,11 +372,22 @@ export function renderSynesthesiaBombs({ layer, pool, bombs, combo, effects, lan
       layer.mask = mask;
       bombMasks.set(layer, mask);
     }
-    const top = Math.min(...lanes.map((lane) => lane.top));
-    const bottom = Math.max(...lanes.map((lane) => lane.bottom)) + 48;
-    mask.clear();
-    for (const run of resolveLaneRuns(lanes)) {
-      mask.rect(run.left - 4, top, run.right - run.left + 8, bottom - top).fill(0xffffff);
+    let top = Number.POSITIVE_INFINITY;
+    let bottom = Number.NEGATIVE_INFINITY;
+    for (const lane of lanes) {
+      top = Math.min(top, lane.top);
+      bottom = Math.max(bottom, lane.bottom);
+    }
+    bottom += 48;
+    const runs = resolveLaneRuns(lanes);
+    // The lanes rarely move, and a rebuilt mask re-triangulates and re-uploads: redraw it only when they do.
+    const shape = maskShape(top, bottom, runs);
+    if (bombMaskShapes.get(mask) !== shape) {
+      bombMaskShapes.set(mask, shape);
+      mask.clear();
+      for (const run of runs) {
+        mask.rect(run.left - 4, top, run.right - run.left + 8, bottom - top).fill(0xffffff);
+      }
     }
   }
   const profile = effectProfile(effects);
@@ -463,6 +483,18 @@ function renderPlainFlashes(pool: ChildPool, bombs: readonly BeMusicBomb[]): voi
   }
 }
 
+const BOMB_LABELS = new Map<string, string>();
+
+/** The bomb graphics' debug label for `channel`, made once per channel. */
+function bombLabel(channel: string): string {
+  let label = BOMB_LABELS.get(channel);
+  if (label === undefined) {
+    label = `synesthesia-bomb[ch=${channel}]`;
+    BOMB_LABELS.set(channel, label);
+  }
+  return label;
+}
+
 const BOMB_HEAD = scratchProjected();
 const BOMB_TAIL = scratchProjected();
 const BOMB_POSITION: Vec3 = { x: 0, y: 0, z: 0 };
@@ -493,7 +525,7 @@ function renderBomb(
   const position = BOMB_POSITION;
 
   const effects = pool.acquireGraphics();
-  effects.label = `synesthesia-bomb[ch=${bomb.channel}]`;
+  effects.label = bombLabel(bomb.channel);
   effects.blendMode = 'add';
 
   // 1. Light pillar.

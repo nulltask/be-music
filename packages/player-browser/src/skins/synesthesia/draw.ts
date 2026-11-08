@@ -29,7 +29,7 @@ const MAX_GRAINS = 5;
  * Where the grains of a point sit, as fractions of the point's size: a golden-angle spiral, so a cluster of any count
  * fills the point's square evenly without lining up into a pattern.
  */
-const GRAIN_OFFSETS: Float32Array = (() => {
+export const GRAIN_OFFSETS: Float32Array = (() => {
   const offsets = new Float32Array(MAX_GRAINS * 2);
   for (let index = 0; index < MAX_GRAINS; index += 1) {
     const radius = index === 0 ? 0 : 0.42 * Math.sqrt(index / (MAX_GRAINS - 1));
@@ -45,11 +45,30 @@ const GRAIN_OFFSETS: Float32Array = (() => {
  * (0.6–1.1 px), there are as many as it takes to cover a share of the point (1–5), and their alpha is set so the
  * cluster gives off about the light the point did. Pure.
  */
-export function grainsFor(size: number, alpha: number): { count: number; size: number; alpha: number } {
+export function grainsFor(size: number, alpha: number, out: Grains = { count: 0, size: 0, alpha: 0 }): Grains {
   const grain = Math.max(0.6, Math.min(1.1, size * 0.5));
   const count = Math.max(1, Math.min(MAX_GRAINS, Math.round((size / grain) ** 2 * 0.45)));
-  return { count, size: grain, alpha: Math.min(1, (alpha * size * size * 0.8) / (count * grain * grain)) };
+  out.count = count;
+  out.size = grain;
+  out.alpha = Math.min(1, (alpha * size * size * 0.8) / (count * grain * grain));
+  return out;
 }
+
+/** How a mark breaks into grains: their count, size and alpha. */
+export interface Grains {
+  count: number;
+  size: number;
+  alpha: number;
+}
+
+/** How a segment breaks into grains: {@link Grains} laid in `lanes` parallel lanes. */
+export interface TrailGrains extends Grains {
+  lanes: number;
+}
+
+/** Scratch results the batch's hot paths write grains into, so a frame of thousands of points allocates none. */
+const SCRATCH_GRAINS: Grains = { count: 0, size: 0, alpha: 0 };
+const SCRATCH_TRAIL: TrailGrains = { count: 0, size: 0, alpha: 0, lanes: 0 };
 
 /** Most grains one segment breaks into. */
 const MAX_TRAIL_GRAINS = 32;
@@ -66,12 +85,17 @@ export function trailGrainsFor(
   length: number,
   width: number,
   alpha: number,
-): { count: number; lanes: number; size: number; alpha: number } {
+  out: TrailGrains = { count: 0, size: 0, alpha: 0, lanes: 0 },
+): TrailGrains {
   const grain = Math.max(0.6, Math.min(1.1, width * 0.6));
   const count = Math.max(1, Math.min(MAX_TRAIL_GRAINS, Math.round(length / 1.6) + 1));
   const lanes = Math.max(1, Math.min(MAX_TRAIL_LANES, Math.round(width / 1.5)));
   const area = Math.max(grain * grain, length * width);
-  return { count, lanes, size: grain, alpha: Math.min(1, (alpha * area * 0.8) / (count * lanes * grain * grain)) };
+  out.count = count;
+  out.lanes = lanes;
+  out.size = grain;
+  out.alpha = Math.min(1, (alpha * area * 0.8) / (count * lanes * grain * grain));
+  return out;
 }
 
 /**
@@ -115,7 +139,7 @@ export class ShapeBatch {
       // Square points become GPU particles (exact colour and alpha, no geometry rebuild), broken into fine grains so
       // every particle in the skin shares the audio orb's fine, dusty texture.
       const layer = pointLayerFor(graphics);
-      const grains = grainsFor(w, Math.min(1, alpha));
+      const grains = grainsFor(w, Math.min(1, alpha), SCRATCH_GRAINS);
       const cx = x + w / 2;
       const cy = y + h / 2;
       for (let index = 0; index < grains.count; index += 1) {
@@ -162,7 +186,7 @@ export class ShapeBatch {
     if (this.points) {
       // Segments break into a trail of fine grains too, so trails, fish and sparks share the dusty texture.
       const length = Math.hypot(x1 - x0, y1 - y0);
-      const grains = trailGrainsFor(length, width, Math.min(1, alpha));
+      const grains = trailGrainsFor(length, width, Math.min(1, alpha), SCRATCH_TRAIL);
       const layer = pointLayerFor(graphics);
       // Wide strokes lay their grains in parallel lanes across the width, so a fatter stroke reads wider, not brighter.
       const nx = length > 0 ? -(y1 - y0) / length : 0;
@@ -322,7 +346,9 @@ export function drawReticle(
     .lineTo(x + bend, bottom)
     .quadraticCurveTo(x, bottom, x, bottom - bend)
     .lineTo(x, bottom - arm)
-    .stroke({ color, width, alpha, cap: 'round' });
+    // Square caps reach as far as round ones would; at these hairline widths the rounding is under a pixel, and Pixi
+    // builds a round cap from a fan of segments for every arm end of every reticle, every frame.
+    .stroke({ color, width, alpha, cap: 'square' });
   if (options.cross) {
     const cx = x + w / 2;
     const cy = y + h / 2;
