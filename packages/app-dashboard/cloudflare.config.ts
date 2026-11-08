@@ -1,3 +1,4 @@
+import { cloudflareAccountId, d1DatabaseId } from '../../scripts/cloudflare/env.ts';
 import { getBuildInfo } from '../../scripts/release/build-info.ts';
 import { bindings, defineConfig } from 'cf/config';
 
@@ -12,8 +13,8 @@ export default defineConfig(({ mode }) => {
   const site = preview ? 'preview.be-music.app' : 'be-music.app';
   const suffix = preview ? '-preview' : '';
   return {
-    // The be-music Cloudflare account. Pinned, so a session signed in to another account cannot deploy here.
-    accountId: '80d4b5fd75f07e61a637b6bb9774186e',
+    // The Be-Music Cloudflare account. Pinned, so a session signed in to another account cannot deploy here.
+    accountId: cloudflareAccountId(),
     worker: {
       name: `dashboard${suffix}`,
       compatibilityDate: '2026-10-19',
@@ -28,7 +29,7 @@ export default defineConfig(({ mode }) => {
         SHOW_DONATE_LINK: bindings.text(String(preview)),
         DB: bindings.d1({
           name: `dashboard${suffix}`,
-          id: preview ? '5ff1bde7-a178-489f-9231-e78d232db866' : '84d08125-de96-4fd4-844e-f5a5c1c8214c',
+          id: d1DatabaseId(preview ? 'DASHBOARD_D1_PREVIEW_ID' : 'DASHBOARD_D1_PRODUCTION_ID'),
         }),
         // Avatars. The bucket keeps its Accounts name (docs/services.md section 2).
         BLOBS: bindings.r2({ name: `accounts${suffix}` }),

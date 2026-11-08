@@ -8,8 +8,8 @@
     "deploy": "pnpm run build:client && cf deploy",
     "deploy:preview": "pnpm run build:client && cf deploy --mode preview",
     "build:client": "node scripts/build-client.ts",
-    "db:migrate:preview": "cf d1 migrations apply 5ff1bde7-a178-489f-9231-e78d232db866 --dir migrations",
-    "db:migrate:production": "cf d1 migrations apply 84d08125-de96-4fd4-844e-f5a5c1c8214c --dir migrations",
+    "db:migrate:preview": "node ../../scripts/cloudflare/d1-migrate.ts DASHBOARD_D1_PREVIEW_ID",
+    "db:migrate:production": "node ../../scripts/cloudflare/d1-migrate.ts DASHBOARD_D1_PRODUCTION_ID",
     "secrets:preview": "node scripts/put-secrets.ts preview",
     "secrets:production": "node scripts/put-secrets.ts production",
     "prepare": "node scripts/build-client.ts"

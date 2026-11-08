@@ -265,6 +265,7 @@ export default defineConfig({
           name: 'benchmark-scripts',
           include: [
             'scripts/bench/**/*.test.ts',
+            'scripts/cloudflare/**/*.test.ts',
             'scripts/course-checklist/**/*.test.ts',
             'scripts/lint/**/*.test.ts',
             'scripts/release/**/*.test.ts',
