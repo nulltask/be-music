@@ -10,7 +10,7 @@
 
 ### Minor Changes
 
-- c60eb63: Wrap the chart score element, and follow the README dialog.
+- 0f3c127: Wrap the chart score element, and follow the README dialog.
   
   - Add the `BeMusicChartScore` wrapper for `<be-music-chart-score>`, with its `layout`, `selection`, `previewing`, `columnBeats`, `beatHeight` and `disabled` props and `onBarSelectionChange`.
   - `BeMusicChartScore`'s `previewing` prop takes a run of bars (`{ first, last }`) as well as one bar.
@@ -66,7 +66,7 @@
 
 ### Minor Changes
 
-- 3e694df: Add `@be-music/player-ui-vue`, typed Vue wrappers for the `@be-music/player-ui` Web Components that forward object properties, typed emits and element refs and register the elements before client mount, among them the playfield components (`BeMusicBGA`, `BeMusicLanes`, `BeMusicNotes`, `BeMusicLaneCovers`, `BeMusicJudgeLine`, `BeMusicBombs`, `BeMusicJudgmentDisplay`, `BeMusicPlayfield`) and the preview components (`BeMusicPlaybackControls`, `BeMusicPreviewHUD`, `BeMusicPreviewSelect` with `images` and `courses`, `BeMusicPreviewStart`).
+- cf6ed23: Add `@be-music/player-ui-vue`, typed Vue wrappers for the `@be-music/player-ui` Web Components that forward object properties, typed emits and element refs and register the elements before client mount, among them the playfield components (`BeMusicBGA`, `BeMusicLanes`, `BeMusicNotes`, `BeMusicLaneCovers`, `BeMusicJudgeLine`, `BeMusicBombs`, `BeMusicJudgmentDisplay`, `BeMusicPlayfield`) and the preview components (`BeMusicPlaybackControls`, `BeMusicPreviewHUD`, `BeMusicPreviewSelect` with `images` and `courses`, `BeMusicPreviewStart`).
 
 ### Patch Changes
 

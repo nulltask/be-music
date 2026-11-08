@@ -10,7 +10,7 @@
 
 ### Patch Changes
 
-- e8cd9c2: The fast clone path requires `bms.songText`, so a chart from before it is normalized on the slow path.
+- cd2a0bd: The fast clone path requires `bms.songText`, so a chart from before it is normalized on the slow path.
 - Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-parser@0.7.0`, `@be-music/chart-source@0.7.0`, `@be-music/chart-writer@0.6.1`
 
 ## 0.4.2
@@ -29,7 +29,7 @@
 
 ### Minor Changes
 
-- dca9a2f: Rename the package from `@be-music/editor` to `@be-music/chart-editor` to identify its role consistently. Update imports and package filters to the new name.
+- 559897f: Rename the package from `@be-music/editor` to `@be-music/chart-editor` to identify its role consistently. Update imports and package filters to the new name.
 
 ### Patch Changes
 
@@ -39,7 +39,7 @@
 
 ### Minor Changes
 
-- b2818d0: Use the canonical Be-Music JSON types and keys. Rename the JSON file helpers to `loadJSONFile`, `saveJSONFile` and `createBlankJSON`; update callers of the former names.
+- 8a051a5: Use the canonical Be-Music JSON types and keys. Rename the JSON file helpers to `loadJSONFile`, `saveJSONFile` and `createBlankJSON`; update callers of the former names.
 
 ### Patch Changes
 

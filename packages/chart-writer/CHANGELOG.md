@@ -10,28 +10,28 @@
 
 ### Patch Changes
 
-- 6cab49e: Converting a BMS chart to bmson rounded every object to a fixed 240 pulses per beat, so off-grid notes, BPM changes and BGA cues moved, by up to 400 ms on extreme-BPM gimmick charts. Without a `resolution` option, `stringifyBmson` now picks the least multiple of 240 at which every position and measure boundary lands on a whole pulse, capped at 61,440 (positions past the cap round to it, under 0.5 / 61,440 beat). A bmson source and an explicit `resolution` keep their resolution.
-- e8cd9c2: BMS output writes pomu `#SONGxx` definitions back as `#SONGxx`, and `areBMSChartsEquivalent` compares them.
+- ed67f88: Converting a BMS chart to bmson rounded every object to a fixed 240 pulses per beat, so off-grid notes, BPM changes and BGA cues moved, by up to 400 ms on extreme-BPM gimmick charts. Without a `resolution` option, `stringifyBmson` now picks the least multiple of 240 at which every position and measure boundary lands on a whole pulse, capped at 61,440 (positions past the cap round to it, under 0.5 / 61,440 beat). A bmson source and an explicit `resolution` keep their resolution.
+- cd2a0bd: BMS output writes pomu `#SONGxx` definitions back as `#SONGxx`, and `areBMSChartsEquivalent` compares them.
 - Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-parser@0.7.0`, `@be-music/chart-source@0.7.0`
 
 ## 0.6.0
 
 ### Minor Changes
 
-- ceb5fcc: Write bmson up flags and per-note long-note types through preserved and canonical output, including edits. Omit playable end-sound entries during lossy BMS conversion instead of creating extra taps.
-- 0984e30: Carry ordinary BGA across format conversions instead of dropping it. `stringifyBmson` writes a BMS chart's `#BMPxx` images and `04` / `07` / `06` cues as bmson header and base / layer / POOR events (with `#BMP00` as the initial POOR image), and `stringifyBMS` writes a bmson chart's header and events as `#BMPxx` resources and `04` / `07` / `06` objects. A new `onDiagnostic` option on both reports what the target format cannot represent (layer2 cues, BMS BGA extensions, bmson sequences and conditional layers, layer black transparency, `#POORBGA 1`) instead of losing it silently.
-- c6f70f4: Round-trip bmson BGA sequences and event id_set, condition and interval fields, including edited values and canonical output. An event whose source omitted `id` is written without one.
-- c3b783a: Re-emit opaque bmson annotations on preserved and canonical output, following edited nodes and independent channel slots. Filter reserved keys and invalidate stale annotations after edits.
+- 31ad44a: Write bmson up flags and per-note long-note types through preserved and canonical output, including edits. Omit playable end-sound entries during lossy BMS conversion instead of creating extra taps.
+- e39e54c: Carry ordinary BGA across format conversions instead of dropping it. `stringifyBmson` writes a BMS chart's `#BMPxx` images and `04` / `07` / `06` cues as bmson header and base / layer / POOR events (with `#BMP00` as the initial POOR image), and `stringifyBMS` writes a bmson chart's header and events as `#BMPxx` resources and `04` / `07` / `06` objects. A new `onDiagnostic` option on both reports what the target format cannot represent (layer2 cues, BMS BGA extensions, bmson sequences and conditional layers, layer black transparency, `#POORBGA 1`) instead of losing it silently.
+- bcf7edc: Round-trip bmson BGA sequences and event id_set, condition and interval fields, including edited values and canonical output. An event whose source omitted `id` is written without one.
+- 3187914: Re-emit opaque bmson annotations on preserved and canonical output, following edited nodes and independent channel slots. Filter reserved keys and invalidate stale annotations after edits.
 
 ### Patch Changes
 
-- 410843c: Keep bmson title_image in both preserved and canonical output so title artwork survives round trips.
-- 4e4b0c3: Changing bmson output resolution no longer shortens long notes or moves BGA cues. Scale absolute LN endpoints, every BGA event plane and default-resolution barlines consistently; retain millisecond sequence timings and explicit empty barlines. Reject a pulse grid that would turn a positive LN into a tap.
-- e66f84f: Preserve long bmson resource keys in canonical output and reject BMS export explicitly when two-character IDs cannot represent the chart.
-- 86f4978: Preserve the effective HDX LONGMODE as ln_type when converting a BMS chart to bmson.
-- 3e1855e: Preserve representable intrinsic slot gain as integer WAVCMD volume in BMS output. Reject lossy percentage conversion and unsupported bmson gain explicitly, including when preservation validation is skipped.
-- 07a8c75: Write every chart option declaration in order and preserve conditional OPTION programs without duplicating unconditional values. Detect edits to earlier declarations when validating preserved source.
-- afc65fb: Keep authored generic bmson lane positions in canonical output, including sparse and second-bank keys. Retain consecutive numbering for synthesized generic BMS conversions and reject BMS export that cannot preserve an explicit generic keyboard.
+- c314b06: Keep bmson title_image in both preserved and canonical output so title artwork survives round trips.
+- 892e72c: Changing bmson output resolution no longer shortens long notes or moves BGA cues. Scale absolute LN endpoints, every BGA event plane and default-resolution barlines consistently; retain millisecond sequence timings and explicit empty barlines. Reject a pulse grid that would turn a positive LN into a tap.
+- 32c7fb5: Preserve long bmson resource keys in canonical output and reject BMS export explicitly when two-character IDs cannot represent the chart.
+- 1a8aa70: Preserve the effective HDX LONGMODE as ln_type when converting a BMS chart to bmson.
+- 7ea3be3: Preserve representable intrinsic slot gain as integer WAVCMD volume in BMS output. Reject lossy percentage conversion and unsupported bmson gain explicitly, including when preservation validation is skipped.
+- adfaf40: Write every chart option declaration in order and preserve conditional OPTION programs without duplicating unconditional values. Detect edits to earlier declarations when validating preserved source.
+- a69f267: Keep authored generic bmson lane positions in canonical output, including sparse and second-bank keys. Retain consecutive numbering for synthesized generic BMS conversions and reject BMS export that cannot preserve an explicit generic keyboard.
 - Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/chart-parser@0.6.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`
 
 ## 0.5.1
@@ -44,7 +44,7 @@
 
 ### Minor Changes
 
-- dca9a2f: Rename the package from `@be-music/stringifier` to `@be-music/chart-writer` to identify its role consistently. Update imports and package filters to the new name.
+- 559897f: Rename the package from `@be-music/stringifier` to `@be-music/chart-writer` to identify its role consistently. Update imports and package filters to the new name.
 
 ### Patch Changes
 
@@ -54,7 +54,7 @@
 
 ### Minor Changes
 
-- b2818d0: Preserve chart meaning when writing BMS and bmson.
+- 8a051a5: Preserve chart meaning when writing BMS and bmson.
   
   - Write bmson keyboard-mode and scroll-event extensions.
   - Preserve long notes, mines, hidden notes and their lane mappings when converting formats.

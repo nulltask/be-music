@@ -10,21 +10,21 @@
 
 ### Patch Changes
 
-- 7154192: A chart without `#DIFFICULTY` lights the difficulty ops, bar level kind, difficulty text and folder level numbers of the difficulty its names, else its note count, suggest instead of the undefined ones.
+- 81f6f5e: A chart without `#DIFFICULTY` lights the difficulty ops, bar level kind, difficulty text and folder level numbers of the difficulty its names, else its note count, suggest instead of the undefined ones.
 - Updated dependencies: `@be-music/player-engine@0.16.0`, `@be-music/player-scene-model@0.8.0`
 
 ## 0.7.1
 
 ### Patch Changes
 
-- 16eee5d: The result screen kept AUTOPLAY OFF (op 32) lit after an AUTO play. It now lights AUTOPLAY (op 33) for a full AUTO play's result, as the play screen does, so a skin's AUTO PLAY indicator shows there too.
+- ba20133: The result screen kept AUTOPLAY OFF (op 32) lit after an AUTO play. It now lights AUTOPLAY (op 33) for a full AUTO play's result, as the play screen does, so a skin's AUTO PLAY indicator shows there too.
 - Updated dependencies: `@be-music/player-engine@0.15.1`, `@be-music/player-scene-model@0.7.0`
 
 ## 0.7.0
 
 ### Minor Changes
 
-- cbd8be0: Parse the LR2 `#SCENETIME` directive into `LR2SkinTiming.sceneTime` so hosts can preserve the authored scene duration, including zero-duration transitions.
+- 335f3c1: Parse the LR2 `#SCENETIME` directive into `LR2SkinTiming.sceneTime` so hosts can preserve the authored scene duration, including zero-duration transitions.
 
 ### Patch Changes
 
@@ -40,53 +40,53 @@
 
 ### Minor Changes
 
-- d323615: Add LR2's course IR flag to the select state: text 183 reads the selected course's flag (`ON` / `OFF`, `OFF` on any other bar) and button 253 draws cell 1 once the course is flagged. New `LR2_BUTTON.COURSE_IR`, `LR2_TEXT.COURSE_IR`, `resolveLR2CourseIRText` and `resolveLR2CourseIRButtonState`, and `resolveLR2CourseMakerAction` maps button 253 to `{ kind: 'ir' }`.
-- cbc1cf4: `LR2PlayFrame.target` (an `LR2PlayTarget`: the target's EX score now and over the chart) feeds number 151 (TARGET_SCORE), number 153 (the EX score less it) and bar graphs 14 / 15 (the target now and final over the chart's highest EX score). Without a target they read as before.
-- 2c453cc: LR2's RANDOM buttons (42 / 43) step only through LR2's own six lane options: `@be-music/skin-lr2/state` adds `stepLR2LaneOption`, which moves to the next of OFF, MIRROR, RANDOM, S-RANDOM, SCATTER and CONVERGE, stepping on from another source's RANDOM, S-RANDOM or CONVERGE by its name and moving any other value to OFF (ADR 0019). The buttons draw SCATTER and CONVERGE on cells 4 and 5, and the buttons and labels read a source-qualified value by its bare name, so `beatoraja:S-RANDOM` draws the S-RANDOM cell and label and another source's one-player BATTLE reads as BATTLE.
+- fa9ce58: Add LR2's course IR flag to the select state: text 183 reads the selected course's flag (`ON` / `OFF`, `OFF` on any other bar) and button 253 draws cell 1 once the course is flagged. New `LR2_BUTTON.COURSE_IR`, `LR2_TEXT.COURSE_IR`, `resolveLR2CourseIRText` and `resolveLR2CourseIRButtonState`, and `resolveLR2CourseMakerAction` maps button 253 to `{ kind: 'ir' }`.
+- e163ae3: `LR2PlayFrame.target` (an `LR2PlayTarget`: the target's EX score now and over the chart) feeds number 151 (TARGET_SCORE), number 153 (the EX score less it) and bar graphs 14 / 15 (the target now and final over the chart's highest EX score). Without a target they read as before.
+- b62ff09: LR2's RANDOM buttons (42 / 43) step only through LR2's own six lane options: `@be-music/skin-lr2/state` adds `stepLR2LaneOption`, which moves to the next of OFF, MIRROR, RANDOM, S-RANDOM, SCATTER and CONVERGE, stepping on from another source's RANDOM, S-RANDOM or CONVERGE by its name and moving any other value to OFF (ADR 0019). The buttons draw SCATTER and CONVERGE on cells 4 and 5, and the buttons and labels read a source-qualified value by its bare name, so `beatoraja:S-RANDOM` draws the S-RANDOM cell and label and another source's one-player BATTLE reads as BATTLE.
 
 ### Patch Changes
 
-- cf0df8c: The new LIGHT ASSIST EASY lamp reads as LR2's EASY bar lamp, as ASSIST EASY does.
+- 232d977: The new LIGHT ASSIST EASY lamp reads as LR2's EASY bar lamp, as ASSIST EASY does.
 - Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-source@0.7.0`, `@be-music/player-engine@0.13.0`, `@be-music/player-scene-model@0.5.0`
 
 ## 0.5.0
 
 ### Minor Changes
 
-- 3928de4: Select the proper play skin for opt-in PLAYER header modes and label explicit COUPLE selections.
+- b955178: Select the proper play skin for opt-in PLAYER header modes and label explicit COUPLE selections.
 
 ### Patch Changes
 
-- afc65fb: Borrow a single-player theme frame for generic bmson keyboards while their note columns use the host fallback geometry. Keep unknown key counts from producing an invalid key-mode operation.
+- a69f267: Borrow a single-player theme frame for generic bmson keyboards while their note columns use the host fallback geometry. Keep unknown key counts from producing an invalid key-mode operation.
 - Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/player-engine@0.12.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`, `@be-music/player-scene-model@0.4.0`
 
 ## 0.4.0
 
 ### Minor Changes
 
-- 582ad35: Add optional per-side judgments to LR2 play frames and expose the judgment display conditions used by colored lasers. Preserve the first destination row's controls so later zeroes do not restart intro animations, and prefer the matching SP/DP layout when a key mode is unavailable.
-- 7ab40af: Support resource-slot inheritance for IMAGE/LR2FONT CONTINUE and indexed HD/FHD resolution declarations. Correct the 14KEY/9KEY skin type mapping, honor the selected skin’s key-mode conditions, and resolve standalone theme assets by their longest matching directory suffix so same-named Play and Result textures or fonts are not confused.
-- 85f13dc: Expose the stage-failure sound through `systemSounds.playStop`, resolving sound-set `#STOP` paths with the stock `playstop` fallback.
-- b506535: LR2's judge timing on the select panel: button 74 (`LR2_BUTTON.JUDGE_TIMING`) steps it by 1 ms within ±99 (`stepLR2JudgeTiming`, `LR2_JUDGE_TIMING_LIMIT_MS`), button 75 (`LR2_BUTTON.JUDGE_AUTO_ADJUST`) cycles OFF, ON and SILENT (`LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE`) and draws that cell, text 80 labels the setting instead of always reading OFF, and number 12 shows the judge timing on the select screen and, from the frame's `judgeTimingMs`, during play instead of 0 (#777).
-- 3d2bc84: Render an externally selected EX-HARD gauge with the red survival presentation and a valid original sprite cell.
+- 995c2c6: Add optional per-side judgments to LR2 play frames and expose the judgment display conditions used by colored lasers. Preserve the first destination row's controls so later zeroes do not restart intro animations, and prefer the matching SP/DP layout when a key mode is unavailable.
+- e953291: Support resource-slot inheritance for IMAGE/LR2FONT CONTINUE and indexed HD/FHD resolution declarations. Correct the 14KEY/9KEY skin type mapping, honor the selected skin’s key-mode conditions, and resolve standalone theme assets by their longest matching directory suffix so same-named Play and Result textures or fonts are not confused.
+- b3f593e: Expose the stage-failure sound through `systemSounds.playStop`, resolving sound-set `#STOP` paths with the stock `playstop` fallback.
+- 5fdf091: LR2's judge timing on the select panel: button 74 (`LR2_BUTTON.JUDGE_TIMING`) steps it by 1 ms within ±99 (`stepLR2JudgeTiming`, `LR2_JUDGE_TIMING_LIMIT_MS`), button 75 (`LR2_BUTTON.JUDGE_AUTO_ADJUST`) cycles OFF, ON and SILENT (`LR2_JUDGE_TIMING_AUTO_ADJUST_CYCLE`) and draws that cell, text 80 labels the setting instead of always reading OFF, and number 12 shows the judge timing on the select screen and, from the frame's `judgeTimingMs`, during play instead of 0 (#777).
+- 4fb174c: Render an externally selected EX-HARD gauge with the red survival presentation and a valid original sprite cell.
   
   Use the original EASY sprite cell and normal gauge presentation for externally selected ASSIST EASY.
   
   Show LR2 BATTLE on LR2 skins: the select screen's BATTLE button and label, the 2P player's numbers, ranks, gauge ranges and groove gauge, the battle and EXTRA MODE ops, key-mode ops that follow the source chart, and the BATTLE play skins (`#INFORMATION` types 12 and 13).
-- 77d8ec1: Support LR2's RANDOM MIX select buttons 260-266 and texts 190-196: `resolveLR2CourseMakerAction` maps the buttons to a `random-mix` action, `resolveLR2RandomMixButtonState` draws them at the value they edit, and `resolveLR2RandomMixText` / `formatLR2RandomMixSetting` write the settings as LR2 does (`OFF`, `NO LIMIT`, `LEVEL n`, `+- nBPM`, `n BPM`, `RANDOM`, `n STAGE`). A RANDOM MIX bar draws bar body 9, falling back to the course body.
-- 3ffc4f8: Light REPLAY PLAYING (op 84) instead of REPLAY OFF (op 82) on the play screen of a replay (`LR2PlaySetup.replay`) and on the result of one (`PlayResult.fromReplay`), as LR2 keeps its replay status on through the results.
-- affc51c: `resolveLR2PlayTimers` takes a `seek` moment: it stops the timers the judgments and the lanes started (gauge rise and full gauge, judgements, full combo, the bomb, long-note hold, key-on and key-off banks) and keeps the scene's, running the full-gauge timer again when the gauge is full at the second sought, so a play screen sought to another second no longer shows the judge plates, bombs and lane beams of the old position.
+- 5d247bf: Support LR2's RANDOM MIX select buttons 260-266 and texts 190-196: `resolveLR2CourseMakerAction` maps the buttons to a `random-mix` action, `resolveLR2RandomMixButtonState` draws them at the value they edit, and `resolveLR2RandomMixText` / `formatLR2RandomMixSetting` write the settings as LR2 does (`OFF`, `NO LIMIT`, `LEVEL n`, `+- nBPM`, `n BPM`, `RANDOM`, `n STAGE`). A RANDOM MIX bar draws bar body 9, falling back to the course body.
+- 572a710: Light REPLAY PLAYING (op 84) instead of REPLAY OFF (op 82) on the play screen of a replay (`LR2PlaySetup.replay`) and on the result of one (`PlayResult.fromReplay`), as LR2 keeps its replay status on through the results.
+- 140d1b4: `resolveLR2PlayTimers` takes a `seek` moment: it stops the timers the judgments and the lanes started (gauge rise and full gauge, judgements, full combo, the bomb, long-note hold, key-on and key-off banks) and keeps the scene's, running the full-gauge timer again when the gauge is full at the second sought, so a play screen sought to another second no longer shows the judge plates, bombs and lane beams of the old position.
 
 ### Patch Changes
 
-- a83e326: Use the renamed That-Which-Must-Not-Be-Named rank helpers when resolving play and result skin state.
+- 745a0db: Use the renamed That-Which-Must-Not-Be-Named rank helpers when resolving play and result skin state.
 - Updated dependencies: `@be-music/player-engine@0.11.0`, `@be-music/chart-model@0.7.0`, `@be-music/chart-source@0.5.0`, `@be-music/player-scene-model@0.3.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.3.0
 
 ### Minor Changes
 
-- 9a0c3f9: Rename the play-skin chart description to `LR2PlaySkinChart` and consume canonical chart, replay, and judgment models. Keep LR2 format identifiers and skin operation values unchanged.
+- ad210fa: Rename the play-skin chart description to `LR2PlaySkinChart` and consume canonical chart, replay, and judgment models. Keep LR2 format identifiers and skin operation values unchanged.
   
   Rename the package from `@be-music/lr2-skin` to `@be-music/skin-lr2` to identify its role consistently. Update imports and package filters to the new name.
 
@@ -98,7 +98,7 @@
 
 ### Minor Changes
 
-- b2818d0: Provide `@be-music/skin-lr2/ids` and `@be-music/skin-lr2/state` for named LR2 skin vocabulary and deterministic scene-state resolution.
+- 8a051a5: Provide `@be-music/skin-lr2/ids` and `@be-music/skin-lr2/state` for named LR2 skin vocabulary and deterministic scene-state resolution.
   
   - Resolve screen options, numbers, text, sliders, graphs, buttons and timers from shared select, decide, play, result and course models.
   - Load course-screen definitions and theme system sounds.

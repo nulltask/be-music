@@ -10,7 +10,7 @@
 
 ### Minor Changes
 
-- a8f6fed: Add the `BeMusicChartScore` wrapper for `<be-music-chart-score>`, with `onBarSelectionChange`.
+- 57b6754: Add the `BeMusicChartScore` wrapper for `<be-music-chart-score>`, with `onBarSelectionChange`.
 
 ### Patch Changes
 
@@ -62,7 +62,7 @@
 
 ### Minor Changes
 
-- 3e694df: Add `@be-music/player-ui-react`, typed React wrappers for the `@be-music/player-ui` Web Components that forward object properties, custom events and element refs and register the elements on client mount, among them the playfield components (`BeMusicBGA`, `BeMusicLanes`, `BeMusicNotes`, `BeMusicLaneCovers`, `BeMusicJudgeLine`, `BeMusicBombs`, `BeMusicJudgmentDisplay`, `BeMusicPlayfield`) and the preview components (`BeMusicPlaybackControls`, `BeMusicPreviewHUD`, `BeMusicPreviewSelect`, `BeMusicPreviewStart`).
+- cf6ed23: Add `@be-music/player-ui-react`, typed React wrappers for the `@be-music/player-ui` Web Components that forward object properties, custom events and element refs and register the elements on client mount, among them the playfield components (`BeMusicBGA`, `BeMusicLanes`, `BeMusicNotes`, `BeMusicLaneCovers`, `BeMusicJudgeLine`, `BeMusicBombs`, `BeMusicJudgmentDisplay`, `BeMusicPlayfield`) and the preview components (`BeMusicPlaybackControls`, `BeMusicPreviewHUD`, `BeMusicPreviewSelect`, `BeMusicPreviewStart`).
 
 ### Patch Changes
 

@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- 80d471d: Give Synesthesia a decide screen, and lead a RANDOM MIX result back to the select screen.
+- 7681fe4: Give Synesthesia a decide screen, and lead a RANDOM MIX result back to the select screen.
   
   - Start loading the play the moment a chart is picked on the select screen, when a decide screen follows, instead of after the select screen's launch animation, so the wait before the play is shorter.
   - Hide the site header as soon as a chart is picked instead of when the decide screen appears, so the stage no longer jumps in size in the middle of the launch animation in a window.
@@ -15,7 +15,7 @@
 
 ### Minor Changes
 
-- c60eb63: Pick PRACTICE bars on the chart, set RANDOM MIX conditions, and show a camera in the BGA frame.
+- 0f3c127: Pick PRACTICE bars on the chart, set RANDOM MIX conditions, and show a camera in the BGA frame.
   
   - PRACTICE picks its range on the chart: with PRACTICE on, starting a chart opens its score, where a press on a bar plays that bar alone (another bar cuts it short), Shift or a drag picks a run of bars, and Start practice loops them (the whole chart with none picked). The dialog also sets GAUGE TYPE, GAUGE CATEGORY, GAUGE VALUE, JUDGERANK and TOTAL (saved with the settings, so it opens on the last values), and Play without practice plays the chart as a regular play this time, leaving PRACTICE on. Each chart's pick is kept for the page's life, so a retry loops the same bars. The START TIME / END TIME settings and the note-density range picker are removed from Options; settings saved with them still load.
   - The PRACTICE bar picker starts its score at measure 1 when measure 0 is empty, and a run of bars picked (Shift, a drag) now sounds whole once it settles, cutting the audition playing, as a press on one bar does.
@@ -38,7 +38,7 @@
 
 ### Minor Changes
 
-- b74bb64: Choose when plays go to the Leaderboard, and polish Options, Help and guest accounts.
+- b46629e: Choose when plays go to the Leaderboard, and polish Options, Help and guest accounts.
   
   - Options → Leaderboard → Submit when sends a play only when its EX-SCORE improves (a chart's first play is always sent), or every time. A play that is not sent says so on the result screen.
   - Call guest accounts guests, and say that a passkey, Google or Discord keeps one.
@@ -61,7 +61,7 @@
 
 ### Minor Changes
 
-- 816a5d2: Improve player setup, keyboard controls, and offline use.
+- f3900b2: Improve player setup, keyboard controls, and offline use.
 
   - Load ZIP files dropped directly onto the player or selected with Open files. Keep ZIPs nested inside dropped folders unopened unless they are dropped separately.
   - Make Be-Music Play installable with an offline app shell and an Install button. Cache the FFmpeg core and UI fonts during service-worker installation on a best-effort basis, retry missing assets on use, and request persistent storage for installed players. Keep authentication, APIs, URL-loaded archives, and the embed page outside the offline cache.
@@ -84,23 +84,23 @@
 
 ### Patch Changes
 
-- adcaa23: The page title and the Help dialog's title read "Be-Music Play" (they were "be-music web player" and "be-music player"), and the preview embed's label and skin author spell the product name Be-Music, matching the site header.
-- 3f2778d: The replay slots and course maker cards no longer cover the Debug Menu: overlays now stack with the site header on top, then the Debug Menu, then every other card and panel.
-- 2e4e246: PRACTICE is quicker to set up and to repeat:
+- 7b7bd1e: The page title and the Help dialog's title read "Be-Music Play" (they were "be-music web player" and "be-music player"), and the preview embed's label and skin author spell the product name Be-Music, matching the site header.
+- 9a1f18b: The replay slots and course maker cards no longer cover the Debug Menu: overlays now stack with the site header on top, then the Debug Menu, then every other card and panel.
+- 8dea69b: PRACTICE is quicker to set up and to repeat:
   
   - Debug Menu's PRACTICE folder shows the note-density graph of the chart under the cursor with a start and an end handle to drag (mouse or touch), so aiming at a passage no longer means guessing millisecond numbers. The handles snap to measure starts, the caption shows the range's times (m:ss.s) and measure numbers, and START TIME / END TIME follow the handles and the other way round. The picker shows only while PRACTICE is on and is disabled during a play like the other PRACTICE settings.
   - The play starts one bar before the bar the range starts in and loops one bar after the bar it ends in, instead of 1000 ms on either side, so each loop comes back in time with the music.
   - Loops no longer show NOW LOADING: when the range ends, it plays again at once in the same play screen, without decoding the chart's samples again, until ESC.
-- 9440d77: Quick retry (F5, and R on the result screen) of a chart with many samples reaches its first note much sooner: its decoded samples are kept from the play before, so NOW LOADING no longer waits for them to decode again. The retry is still a fresh play with a new replay and RANDOM draw. The kept samples are freed on going back to the select screen, on starting another chart and when the page is left (`pagehide`).
+- d07b3a2: Quick retry (F5, and R on the result screen) of a chart with many samples reaches its first note much sooner: its decoded samples are kept from the play before, so NOW LOADING no longer waits for them to decode again. The retry is still a fresh play with a new replay and RANDOM draw. The kept samples are freed on going back to the select screen, on starting another chart and when the page is left (`pagehide`).
 - Updated dependencies: `@be-music/player-browser@0.15.0`, `@be-music/player-engine@0.14.0`, `@be-music/player-scene-model@0.6.0`, `@be-music/player-skin-sdk@0.8.0`, `@be-music/skin-beatoraja@0.6.1`, `@be-music/skin-lr2@0.6.1`
 
 ## 0.10.0
 
 ### Minor Changes
 
-- 556af54: New play option Debug Menu → Play options → **ANY KEY (PC)** (off by default, shown with the ???? judge rules only): whichever key you press takes the nearest note on any lane, the scratch included, and a long note stays held until that key is released. As on the PC edition, a play with it saves no record and is stored unranked on the Leaderboard. It is disabled during a play, and a replay plays back with the switch it recorded.
-- fcfc355: The player now keeps a dan rank: clearing a GRADE course named after a dan (`七段`, `発狂皆伝`, …) keeps the highest dan per judge ruleset and key mode, and the select screen of a be-music skin shows it. Only runs played from now on count; earlier course records are not read back.
-- fc53ca7: New replay ghost in Debug Menu → Play options → Replay / ghost (off by default):
+- 1b8b0b6: New play option Debug Menu → Play options → **ANY KEY (PC)** (off by default, shown with the ???? judge rules only): whichever key you press takes the nearest note on any lane, the scratch included, and a long note stays held until that key is released. As on the PC edition, a play with it saves no record and is stored unranked on the Leaderboard. It is disabled during a play, and a replay plays back with the switch it recorded.
+- 64ccdf5: The player now keeps a dan rank: clearing a GRADE course named after a dan (`七段`, `発狂皆伝`, …) keeps the highest dan per judge ruleset and key mode, and the select screen of a be-music skin shows it. Only runs played from now on count; earlier course records are not read back.
+- 3274fae: New replay ghost in Debug Menu → Play options → Replay / ghost (off by default):
   
   - **Ghost** picks the replay: OFF, OWN BEST (the chart's replay slot with the highest EX score), REPLAY SLOT 1-4, LEADERBOARD TOP (the replay of the chart's top run under your ruleset) or REPLAY FILE, chosen with **Ghost replay file…**.
   - **Ghost mode** picks how it shows: SECOND PLAYFIELD (beside the play on the built-in skins, for 5 / 7 KEY single play), PACEMAKER (the ghost's EX score at the notes you have judged, as the score graph's pacemaker and the target numbers on every skin family), or PACEMAKER + LANES (the pacemaker with the ghost's key presses and judgments over your own lanes on the built-in skins).
@@ -110,18 +110,18 @@
 
 ### Patch Changes
 
-- 6e6aeeb: The embed preview's ← / → seek five seconds only during AUTO play, as the main play does, and no longer seek while the viewer plays (`mode=play`). Help says the arrows seek in AUTO play.
-- cf0df8c: Assisted plays no longer raise local best scores. Each play is recorded by its judge ruleset's assist rule: an assisted play moves only its limited lamp and its play count, LR2's D-BATTLE, SP TO DP and EXTRA MODE keep a lamp of their own, a `no-save` play (That-Which-Must-Not-Be-Named's BATTLE) keeps nothing, and an assisted course stage or run leaves the records alone. A play given up with ESC is recorded once its replay is ready, so the same rule applies to it. Records stored before this change keep their values.
-- 603bc4c: The built-in play screen shows the signed-in Leaderboard account's name.
-- 8c3eaf8: A GRADE / EXPERT course stage no longer updates the record of a chart whose NOTES COPY makes it a double-play chart outside the course, because the stage plays it single.
-- 814de2b: Courses you made can be registered for IR, from an LR2 skin's button 253 or the My courses dialog (after a confirmation), so their runs are ranked; a registered course's connections and constraints can no longer be changed. Courses saved without the flag now read back unregistered rather than ranked, so no course turns read-only without being registered.
-- 63334f3: The collapsed Debug Menu keeps its normal width on phones instead of a separate 116px width. During play it still shrinks to the corner tab so it does not cover Pause.
-- 7a71f0e: Dragging a chart onto the player no longer lights a frame around the stage. The drop card is the only reaction.
-- 8a78676: The Help dialog no longer jumps and recenters when the open-source license list replaces the loading line.
-- c69a154: The player shell, sign-in, loading, course maker, replay prompts and embed preview follow the browser language, in Japanese and English.
-- 51dd4c6: Old local saves are ignored: replay slots, made courses, skin settings, chart best records, and debug menu settings are written as version 0, and any other version is treated as absent.
-- 9300c75: The player shows a Beta badge beside its title and in the corner of the embed preview, and the start screen and Help say Public Beta and that data may be deleted without notice, in English and Japanese.
-- a5e2b64: The Debug Menu offers play options under every judge ruleset instead of only their source's:
+- 35ef882: The embed preview's ← / → seek five seconds only during AUTO play, as the main play does, and no longer seek while the viewer plays (`mode=play`). Help says the arrows seek in AUTO play.
+- 232d977: Assisted plays no longer raise local best scores. Each play is recorded by its judge ruleset's assist rule: an assisted play moves only its limited lamp and its play count, LR2's D-BATTLE, SP TO DP and EXTRA MODE keep a lamp of their own, a `no-save` play (That-Which-Must-Not-Be-Named's BATTLE) keeps nothing, and an assisted course stage or run leaves the records alone. A play given up with ESC is recorded once its replay is ready, so the same rule applies to it. Records stored before this change keep their values.
+- 539a2cb: The built-in play screen shows the signed-in Leaderboard account's name.
+- 05b661c: A GRADE / EXPERT course stage no longer updates the record of a chart whose NOTES COPY makes it a double-play chart outside the course, because the stage plays it single.
+- 8507c15: Courses you made can be registered for IR, from an LR2 skin's button 253 or the My courses dialog (after a confirmation), so their runs are ranked; a registered course's connections and constraints can no longer be changed. Courses saved without the flag now read back unregistered rather than ranked, so no course turns read-only without being registered.
+- 20108bc: The collapsed Debug Menu keeps its normal width on phones instead of a separate 116px width. During play it still shrinks to the corner tab so it does not cover Pause.
+- f68bc6a: Dragging a chart onto the player no longer lights a frame around the stage. The drop card is the only reaction.
+- f4574b5: The Help dialog no longer jumps and recenters when the open-source license list replaces the loading line.
+- de3e70e: The player shell, sign-in, loading, course maker, replay prompts and embed preview follow the browser language, in Japanese and English.
+- 1b58c1b: Old local saves are ignored: replay slots, made courses, skin settings, chart best records, and debug menu settings are written as version 0, and any other version is treated as absent.
+- e90a500: The player shows a Beta badge beside its title and in the corner of the embed preview, and the start screen and Help say Public Beta and that data may be deleted without notice, in English and Japanese.
+- e15d741: The Debug Menu offers play options under every judge ruleset instead of only their source's:
   
   - Every lane and battle option, grouped by source with the ruleset's own first: RANDOM, S-RANDOM and CONVERGE once per source (RANDOM (LR2), RANDOM (beatoraja), ...), BATTLE (LR2) two-player play also under beatoraja rules, and BATTLE (beatoraja) and BATTLE (????) apart. Saved settings with a bare RANDOM, S-RANDOM, CONVERGE or BATTLE are read as the qualified value of the ruleset they were saved with.
   - ADD LN / CN / HCN / ALL and their add rate.
@@ -130,37 +130,37 @@
   - Gauge auto-shift, whose lowest gauge reads as the ruleset's gauges (EASY or GROOVE under LR2).
   
   The Leaderboard status line names the rulesets that judged a play only up to its failure or could not judge it at all.
-- fe5cf63: The player uses the shared site header and stays dark. The play header spans the viewport, with the brand at the left edge and the actions at the right. Settings sits where other sites put Play and toggles the Debug Menu, and a fullscreen button sits beside it. Fullscreen covers the play surface with the Debug Menu inside it, which fullscreen used to hide, and leaves the site header and footer outside it.
-- c0cf68e: Dropping charts hashed every chart in the library again to match courses, even with no course to match. It now hashes them only when a course with fixed stages needs them, which took about 17% off loading a 34-track folder.
-- 6e6aeeb: Google and Discord in the player's sign-in and sign-up dialogs were disabled and labelled coming soon, so they now start Accounts the same way a passkey does. Each button shows its provider's mark (a Google G, the Discord logo, a passkey) beside the label, and the Google and Discord buttons no longer sit flush against each other.
-- 996c83c: The player loads only the web fonts a skin draws with (Orbitron and M PLUS 1p for Synesthesia), no longer Anton, Azeret Mono, Dela Gothic One, Inter, LINE Seed JP or Michroma, and the page uses the system faces in place of Geist.
+- 9d2a360: The player uses the shared site header and stays dark. The play header spans the viewport, with the brand at the left edge and the actions at the right. Settings sits where other sites put Play and toggles the Debug Menu, and a fullscreen button sits beside it. Fullscreen covers the play surface with the Debug Menu inside it, which fullscreen used to hide, and leaves the site header and footer outside it.
+- 07c2cf3: Dropping charts hashed every chart in the library again to match courses, even with no course to match. It now hashes them only when a course with fixed stages needs them, which took about 17% off loading a 34-track folder.
+- 35ef882: Google and Discord in the player's sign-in and sign-up dialogs were disabled and labelled coming soon, so they now start Accounts the same way a passkey does. Each button shows its provider's mark (a Google G, the Discord logo, a passkey) beside the label, and the Google and Discord buttons no longer sit flush against each other.
+- 9935868: The player loads only the web fonts a skin draws with (Orbitron and M PLUS 1p for Synesthesia), no longer Anton, Azeret Mono, Dela Gothic One, Inter, LINE Seed JP or Michroma, and the page uses the system faces in place of Geist.
 - Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-parser@0.7.0`, `@be-music/chart-source@0.7.0`, `@be-music/player-browser@0.14.0`, `@be-music/player-engine@0.13.0`, `@be-music/player-scene-model@0.5.0`, `@be-music/player-skin-sdk@0.7.0`, `@be-music/service-web-theme@0.3.1`, `@be-music/skin-beatoraja@0.6.0`, `@be-music/skin-lr2@0.6.0`
 
 ## 0.9.0
 
 ### Minor Changes
 
-- 155bd8d: The embed can switch between the AUTO preview and the viewer's own play without changing `?mode=`: an **AUTO** checkbox sits in the chart list's header and under the play button of a single chart, starting from `?mode=`. Changing it under the play button loads the play again in the other mode.
-- c6437bc: On a phone or tablet, and wherever the browser asks to save data, the embed no longer starts downloading the track as soon as it opens: it shows a **Load** button with the archive's file name and size, and downloads once it is pressed.
+- 100ff94: The embed can switch between the AUTO preview and the viewer's own play without changing `?mode=`: an **AUTO** checkbox sits in the chart list's header and under the play button of a single chart, starting from `?mode=`. Changing it under the play button loads the play again in the other mode.
+- 7d04409: On a phone or tablet, and wherever the browser asks to save data, the embed no longer starts downloading the track as soon as it opens: it shows a **Load** button with the archive's file name and size, and downloads once it is pressed.
 
 ### Patch Changes
 
-- b9bc65c: The embed's lanes now reach down to just above the seek bar without running under it: on a phone held upright they stopped well short, on a phone held sideways the judgement line sat under the seek bar, and a DP chart on a phone held upright had the controls over its lanes.
+- 8710db8: The embed's lanes now reach down to just above the seek bar without running under it: on a phone held upright they stopped well short, on a phone held sideways the judgement line sat under the seek bar, and a DP chart on a phone held upright had the controls over its lanes.
 - Updated dependencies: `@be-music/player-browser@0.13.2`
 
 ## 0.8.1
 
 ### Patch Changes
 
-- 2768ab6: A tap or click on the stage no longer pauses the viewer's own play in the embed (`mode=play`): it is part of playing, not a request to stop. Pause with the controls bar or the play's pause key instead. The AUTO preview still pauses and resumes on a click.
-- 1155634: A phone or tablet had no way to leave an embed's play for the chart list before the chart ended, since Escape is its only exit. A paused play now shows **Back** under the play button, which leaves the play for the list (or the replay button).
+- ba88581: A tap or click on the stage no longer pauses the viewer's own play in the embed (`mode=play`): it is part of playing, not a request to stop. Pause with the controls bar or the play's pause key instead. The AUTO preview still pauses and resumes on a click.
+- dd39de0: A phone or tablet had no way to leave an embed's play for the chart list before the chart ended, since Escape is its only exit. A paused play now shows **Back** under the play button, which leaves the play for the list (or the replay button).
 - Updated dependencies: `@be-music/player-browser@0.13.1`
 
 ## 0.8.0
 
 ### Minor Changes
 
-- bcece14: The embed can now let the viewer play a chart instead of only previewing it: add `mode=play` to `/embed/?track=…` to play with the default lane keys, judged as a normal play without seeking. While playing, M and F are lanes, so the mute and full-screen shortcuts apply only before the play starts. `mode=preview` or no `mode` keeps the AUTO preview. Neither mode records a replay or score.
+- 5578573: The embed can now let the viewer play a chart instead of only previewing it: add `mode=play` to `/embed/?track=…` to play with the default lane keys, judged as a normal play without seeking. While playing, M and F are lanes, so the mute and full-screen shortcuts apply only before the play starts. `mode=preview` or no `mode` keeps the AUTO preview. Neither mode records a replay or score.
 
 ### Patch Changes
 
@@ -170,47 +170,47 @@
 
 ### Minor Changes
 
-- f9c1c24: Add **BPM change warning (AC)** to Debug Menu → Play options, saved with the other settings and described in the Help.
-- a92aaa4: Replay a whole course from its course replay: dropping a `*.bmcourse.json` (or picking it with Open files) plays the recorded run back as its course once every stage chart is loaded, each stage from its own replay with its recorded carry-in, showing each stage's result and the course result, and stopping where the run stopped. A NONSTOP run plays its stitched replay as one chart. A course replay keeps no record, saves no replay and submits nothing to the Leaderboard, and a dialog lists the stage charts that are missing. A dropped `*.bmplay.json` whose chart is not loaded now names it in the same dialog and returns to the select screen, instead of leaving the screen blank.
-- 9768d05: Add the embed page `/embed/?track=<URL>`, a preview of a chart archive for iframes. A track with several charts lists them with each chart's `#STAGEFILE` (or its `#BANNER`), a single chart (or the one `&chart=<file name or path>` names) waits behind a play button, and the chart plays in AUTO with the lanes on the left and the BGA as large as fits beside them (above them on a tall screen), with the play status beside or under it. Video-player controls (a thin seek bar, mute with a volume slider, full screen, a click on the picture to play or pause, keyboard shortcuts) fade out with the pointer after 3 seconds without input during a play. A progress bar shows the download and the reading of the charts. Like a video, the preview plays its sound with an iPhone or iPad in silent mode. A play ends back on the list, or on a replay button.
+- 1b43203: Add **BPM change warning (AC)** to Debug Menu → Play options, saved with the other settings and described in the Help.
+- 566afa7: Replay a whole course from its course replay: dropping a `*.bmcourse.json` (or picking it with Open files) plays the recorded run back as its course once every stage chart is loaded, each stage from its own replay with its recorded carry-in, showing each stage's result and the course result, and stopping where the run stopped. A NONSTOP run plays its stitched replay as one chart. A course replay keeps no record, saves no replay and submits nothing to the Leaderboard, and a dialog lists the stage charts that are missing. A dropped `*.bmplay.json` whose chart is not loaded now names it in the same dialog and returns to the select screen, instead of leaving the screen blank.
+- 5a303ce: Add the embed page `/embed/?track=<URL>`, a preview of a chart archive for iframes. A track with several charts lists them with each chart's `#STAGEFILE` (or its `#BANNER`), a single chart (or the one `&chart=<file name or path>` names) waits behind a play button, and the chart plays in AUTO with the lanes on the left and the BGA as large as fits beside them (above them on a tall screen), with the play status beside or under it. Video-player controls (a thin seek bar, mute with a volume slider, full screen, a click on the picture to play or pause, keyboard shortcuts) fade out with the pointer after 3 seconds without input during a play. A progress bar shows the download and the reading of the charts. Like a video, the preview plays its sound with an iPhone or iPad in silent mode. A play ends back on the list, or on a replay button.
   LR2 and beatoraja course files inside the archive can be previewed with `course` and an optional `courseName`: EXPERT and GRADE stages play in order with carried gauge and combo, and LR2 NONSTOP courses are stitched as in the player.
-- cd8cae6: Add **Local data…** to Debug Menu → Library & records: a read-only view of what the player keeps in this browser (its `localStorage` keys, its IndexedDB databases with their records, and the storage estimate), with each value shown on demand and a replay slot's compressed replay readable as JSON.
-- cc1495f: Add LR2's RANDOM MIX bar to MY COURSES and MY NONSTOP: deciding it draws a course from the library by the RANDOM MIX settings in the key filter's key mode and plays it (AUTO plays it on AUTO), keeping the draw as the folder's newest course `RANDOM MIX` until the next draw replaces it. The settings are edited with an LR2 skin's buttons 260-266 or in Debug Menu → Course → My courses…, and are kept in this browser with the courses.
-- d0939cc: Keep up to four replays per chart and per course in the browser, as beatoraja does: save a play into a slot on its result screen (keys 1-4, a beatoraja skin's replay buttons, or the replay-slot card on the built-in, Native and LR2 skins), give each slot an auto-save rule in Debug Menu → Library & records → Replay slots (by default slot 1 keeps the best EX score, slot 2 the best clear lamp, slot 3 the fewest BP and slot 4 the latest play), and replay a slot from the select screen. Replays are stored gzip-compressed in their own IndexedDB database (`be-music-replays`) under a 500 MB budget; past it the lowest-scoring replays are removed first.
-- 6a447df: With Submit to Leaderboard on, a play at another tempo (finished or given up with ESC), a course run with a stage at another tempo and a run of a made or random course are now sent instead of skipped, and the status line says when the Leaderboard stored one without ranking it (#788). Fully AUTO plays and replay playback are still not sent.
-- 74127d3: Offer Native (DOM screens around a canvas playfield) alongside the Canvas skins in the built-in skin picker. Search shortcuts go to its search input, and the double-click fullscreen toggle and the phone's first-tap fullscreen work on its screens.
+- 082f08e: Add **Local data…** to Debug Menu → Library & records: a read-only view of what the player keeps in this browser (its `localStorage` keys, its IndexedDB databases with their records, and the storage estimate), with each value shown on demand and a replay slot's compressed replay readable as JSON.
+- 1d82191: Add LR2's RANDOM MIX bar to MY COURSES and MY NONSTOP: deciding it draws a course from the library by the RANDOM MIX settings in the key filter's key mode and plays it (AUTO plays it on AUTO), keeping the draw as the folder's newest course `RANDOM MIX` until the next draw replaces it. The settings are edited with an LR2 skin's buttons 260-266 or in Debug Menu → Course → My courses…, and are kept in this browser with the courses.
+- 54698f1: Keep up to four replays per chart and per course in the browser, as beatoraja does: save a play into a slot on its result screen (keys 1-4, a beatoraja skin's replay buttons, or the replay-slot card on the built-in, Native and LR2 skins), give each slot an auto-save rule in Debug Menu → Library & records → Replay slots (by default slot 1 keeps the best EX score, slot 2 the best clear lamp, slot 3 the fewest BP and slot 4 the latest play), and replay a slot from the select screen. Replays are stored gzip-compressed in their own IndexedDB database (`be-music-replays`) under a 500 MB budget; past it the lowest-scoring replays are removed first.
+- dea04e3: With Submit to Leaderboard on, a play at another tempo (finished or given up with ESC), a course run with a stage at another tempo and a run of a made or random course are now sent instead of skipped, and the status line says when the Leaderboard stored one without ranking it (#788). Fully AUTO plays and replay playback are still not sent.
+- 04cb631: Offer Native (DOM screens around a canvas playfield) alongside the Canvas skins in the built-in skin picker. Search shortcuts go to its search input, and the double-click fullscreen toggle and the phone's first-tap fullscreen work on its screens.
   Group skin settings into Built-in, LR2 and beatoraja tabs and confirm detected skin imports before switching, keeping the current skin when canceled while still importing dropped charts.
-- a27908a: Replace lil-gui with Tweakpane throughout the Debug Menu and skin configuration. Use native action buttons, read-only multiline status monitors, an FPS history graph, mutable theme lists, and tabbed skin options with 2D position controls. Preserve remembered folder states, live settings, play-time locks, and recording feedback.
+- 7b27393: Replace lil-gui with Tweakpane throughout the Debug Menu and skin configuration. Use native action buttons, read-only multiline status monitors, an FPS history graph, mutable theme lists, and tabbed skin options with 2D position controls. Preserve remembered folder states, live settings, play-time locks, and recording feedback.
 
 ### Patch Changes
 
-- a83e326: Display `????` in the judgment ruleset selector and store new best records under `____`.
-- e95c9bb: The player's HTML chrome (dialogs, buttons, cards, inputs, the embed overlay, drop, help, search and the Debug Menu) uses Basecoat and its primary and destructive colors, the same components as the other services, instead of the old gold accent. The playfield stays on the skin.
-- 69df53c: Allow intended-placement NONSTOP courses to include bmson stages and identify the mixed stitched play as a bmson chart.
-- a8896a9: Type `?` and an SQL filter in the select screen's search to list the charts it selects, such as `?level >= 12 AND score.clear < 5` (beatoraja's random-course filters, with `score.` and `information.` columns). While the filter does not parse, the search field is marked and the reason shows under it. Random courses now filter by the player's best records too.
-- 4a4b111: Remember every Debug Menu setting immediately, and restore it after Safari deletes script-written storage. Keep reset retries across visits, prevent late responses from reverting edits, and persist individual skin resets.
+- 745a0db: Display `????` in the judgment ruleset selector and store new best records under `____`.
+- 823a99e: The player's HTML chrome (dialogs, buttons, cards, inputs, the embed overlay, drop, help, search and the Debug Menu) uses Basecoat and its primary and destructive colors, the same components as the other services, instead of the old gold accent. The playfield stays on the skin.
+- a82ec63: Allow intended-placement NONSTOP courses to include bmson stages and identify the mixed stitched play as a bmson chart.
+- 48f2fe2: Type `?` and an SQL filter in the select screen's search to list the charts it selects, such as `?level >= 12 AND score.clear < 5` (beatoraja's random-course filters, with `score.` and `information.` columns). While the filter does not parse, the search field is marked and the reason shows under it. Random courses now filter by the player's best records too.
+- 95cdf96: Remember every Debug Menu setting immediately, and restore it after Safari deletes script-written storage. Keep reset retries across visits, prevent late responses from reverting edits, and persist individual skin resets.
   Move settings, best records and saved courses from the former demo storage namespace to the player's without overwriting current data.
-- 911cbe7: A single play quit with ESC is now saved as a FAILED play, as LR2 and beatoraja save one, and sent to the Leaderboard: before, it returned to select with no record. Every play's BP now also counts the notes it never judged, so a play that dies early no longer lowers the best BP; existing records are left as they are.
-- 85f13dc: Wire LR2 and beatoraja theme stop sounds into gameplay so failed stages play their stop cue.
-- 8c7b28e: beatoraja Lua skins spend less time per frame: the bundled fengari-web is patched to clear Lua stack slots by assignment instead of `delete`, which left the stack array holey on every call and return. Evaluating ModernChic's per-frame Lua functions takes about 2.3x less time on the play skin and 3.2x less on the music select skin.
-- 17aebd5: Show the shared service footer on the player's start screen, and leave the help overlay's build line at the bottom of that dialog.
-- 3e694df: Rework the Help:
+- 732ee96: A single play quit with ESC is now saved as a FAILED play, as LR2 and beatoraja save one, and sent to the Leaderboard: before, it returned to select with no record. Every play's BP now also counts the notes it never judged, so a play that dies early no longer lowers the best BP; existing records are left as they are.
+- b3f593e: Wire LR2 and beatoraja theme stop sounds into gameplay so failed stages play their stop cue.
+- 1f4944a: beatoraja Lua skins spend less time per frame: the bundled fengari-web is patched to clear Lua stack slots by assignment instead of `delete`, which left the stack array holey on every call and return. Evaluating ModernChic's per-frame Lua functions takes about 2.3x less time on the play skin and 3.2x less on the music select skin.
+- c67a1af: Show the shared service footer on the player's start screen, and leave the help overlay's build line at the bottom of that dialog.
+- cf6ed23: Rework the Help:
   
   - Usage covers Native, the 2P seventh key, PMS keys, the lane cover keys, seeking, courses and saved settings. It had still listed two built-in skins and six 2P keys.
   - A new Options tab describes every Debug Menu control folder by folder, the play options included, and when each control appears.
   - Open source lists the third-party packages the build actually includes, read from the bundled modules (with the stylesheet's frameworks and the served ffmpeg core), instead of walking dependencies: packages it missed (Lit, fengari, alien-signals, Tailwind CSS, Basecoat) are listed, type-only and tree-shaken packages are not, and packages that publish no LICENSE file show their upstream text (@ffmpeg/core's says where its GPL source is). Each license text starts folded, and the list loads when the tab opens.
-- db37600: Keep successful random-course draws as fixed bars in their source folders, with local timestamps and unique identifiers, so the same stages can be played again. Retain the latest 100 draws for the session and return the cursor to the new bar.
-- a95c53c: Skin system stays available during a play and swaps the drawing family without ending the chart, and so does dropping an LR2 or beatoraja skin during a play; a drop that also brings charts still returns to the select screen. The other skin controls stay disabled during a play, and the select screen uses the new family when the play returns.
-- bc52a10: Debug Menu's **Auto judge timing** picks OFF, beatoraja's calibration, or LR2's ON or SILENT under every judge ruleset, and **Judge timing (ms)** is the timing both move. The Help describes the modes (#777).
-- 0b4e3c4: Add a Debug Menu Audio switch, Peak gain (next play), that stays off until it is turned on for the visit.
-- 1e62cb3: Starting a chart with a lane option that does not fit it (for example beatoraja CONVERGE on a 7KEY chart) no longer leaves the play screen black: a dialog names the option, and closing it goes back to the select screen to change it.
-- b09a6cf: Expose every new play option in Debug Menu with saved preferences, offering each ruleset its own choices and locking the ones a running play cannot change: HS-FIX including START BPM (kept in sync with the select screens), the four AC 34 display-area information choices and the per-side cover settings, independent AUTO SCRATCH sides, the source-specific LEGACY NOTE and LN REMOVE, AC 34's A-SCR & LEGACY NOTE preset in one action, EX-HARD for beatoraja and AC rules with HAZARD labelled apart, ASSIST EASY for beatoraja and ASSISTED EASY for AC rules, and the other judgment, hi-speed, view, arrangement, modifier, gauge, battle and PRACTICE options.
+- 031f430: Keep successful random-course draws as fixed bars in their source folders, with local timestamps and unique identifiers, so the same stages can be played again. Retain the latest 100 draws for the session and return the cursor to the new bar.
+- 5bde3c2: Skin system stays available during a play and swaps the drawing family without ending the chart, and so does dropping an LR2 or beatoraja skin during a play; a drop that also brings charts still returns to the select screen. The other skin controls stay disabled during a play, and the select screen uses the new family when the play returns.
+- 7a6fb92: Debug Menu's **Auto judge timing** picks OFF, beatoraja's calibration, or LR2's ON or SILENT under every judge ruleset, and **Judge timing (ms)** is the timing both move. The Help describes the modes (#777).
+- fdf75c4: Add a Debug Menu Audio switch, Peak gain (next play), that stays off until it is turned on for the visit.
+- e091cfa: Starting a chart with a lane option that does not fit it (for example beatoraja CONVERGE on a 7KEY chart) no longer leaves the play screen black: a dialog names the option, and closing it goes back to the select screen to change it.
+- 9995058: Expose every new play option in Debug Menu with saved preferences, offering each ruleset its own choices and locking the ones a running play cannot change: HS-FIX including START BPM (kept in sync with the select screens), the four AC 34 display-area information choices and the per-side cover settings, independent AUTO SCRATCH sides, the source-specific LEGACY NOTE and LN REMOVE, AC 34's A-SCR & LEGACY NOTE preset in one action, EX-HARD for beatoraja and AC rules with HAZARD labelled apart, ASSIST EASY for beatoraja and ASSISTED EASY for AC rules, and the other judgment, hi-speed, view, arrangement, modifier, gauge, battle and PRACTICE options.
   The options that only transform the chart or the view are offered under every judge ruleset and kept when Judgment windows changes: HS-FIX CONSTANT, CLASSIC / Normal / FLOATING HI-SPEED and the fixed display area, scroll and mine modifiers, both EXTRAs, 7 TO 9, BATTLE AS / D-BATTLE / SP TO DP, the source-specific lane options, SYNCHRONIZE / SYMMETRY RANDOM, M-RAN, and Reuse previous arrangement (for a play under the same rules). Choices the new ruleset does not support are reset (#774).
   A replay restores each recorded AUTO SCRATCH side on its own, and an older replay's combined switch applies to both sides.
   A battle mode plays on the converted chart's LR2 play skin, PRACTICE starts again after each run, and a two-player result stays out of the records and the Leaderboard while its replay is still saved.
-- 4b9f91d: Drop the hidden Phantom and Lattice skins and the "Add Lattice" button. "Add skin" (a skin module from a URL) stays hidden behind `ADD_SKIN_ENABLED`.
-- a8b3052: Add a persistent Audio mute switch that silences all player sounds while retaining the master volume setting.
-- 7a776a0: Keep bulk chart imports, ZIP expansion, and WSOLA time stretching off the main thread. Add a persistent Debug Panel CPU worker setting, defaulting to half the browser-reported logical CPU count, rounded down with a minimum of one.
+- 283d6ba: Drop the hidden Phantom and Lattice skins and the "Add Lattice" button. "Add skin" (a skin module from a URL) stays hidden behind `ADD_SKIN_ENABLED`.
+- e973ff7: Add a persistent Audio mute switch that silences all player sounds while retaining the master volume setting.
+- 24ac39a: Keep bulk chart imports, ZIP expansion, and WSOLA time stretching off the main thread. Add a persistent Debug Panel CPU worker setting, defaulting to half the browser-reported logical CPU count, rounded down with a minimum of one.
   
   Add a persistent Tempo enable switch that bypasses the saved percentage when off, and make WSOLA the default and first keep-pitch algorithm.
 - Updated dependencies: `@be-music/skin-beatoraja@0.5.0`, `@be-music/player-engine@0.11.0`, `@be-music/player-browser@0.12.0`, `@be-music/chart-model@0.7.0`, `@be-music/chart-parser@0.5.0`, `@be-music/chart-source@0.5.0`, `@be-music/player-scene-model@0.3.0`, `@be-music/skin-lr2@0.4.0`, `@be-music/player-skin-sdk@0.5.0`, `@be-music/service-web-theme@0.3.0`, `@be-music/shared-utils@0.6.0`
@@ -219,10 +219,10 @@
 
 ### Patch Changes
 
-- ebff0e7: Display the build timestamp and source revision in the start-card and help footers without covering the playfield.
+- 7a10f67: Display the build timestamp and source revision in the start-card and help footers without covering the playfield.
   
   Rename the package from `@be-music/player-web-demo` to `@be-music/app-play` to identify its role consistently. Update imports and package filters to the new name.
-- 9a0c3f9: Use chart-based navigation, image, and best-record names, and replay terminology for saved recording data and controls. Update the test hook to expose chart bars and chart counts consistently.
+- ad210fa: Use chart-based navigation, image, and best-record names, and replay terminology for saved recording data and controls. Update the test hook to expose chart bars and chart counts consistently.
   
   Align help, course messages, loading statuses, and replay controls with the chart and replay vocabulary.
 - Updated dependencies: `@be-music/skin-beatoraja@0.4.0`, `@be-music/chart-model@0.6.0`, `@be-music/chart-parser@0.4.0`, `@be-music/chart-source@0.4.0`, `@be-music/skin-lr2@0.3.0`, `@be-music/player-engine@0.10.0`, `@be-music/player-browser@0.11.0`, `@be-music/player-scene-model@0.2.0`, `@be-music/player-skin-sdk@0.4.0`, `@be-music/service-web-theme@0.2.0`
@@ -231,7 +231,7 @@
 
 ### Minor Changes
 
-- b2818d0: Offer course playback, recording, Accounts sign-in and Leaderboard submission in the browser player.
+- 8a051a5: Offer course playback, recording, Accounts sign-in and Leaderboard submission in the browser player.
   
   - Load LR2/beatoraja courses and difficulty-table courses, create and persist EXPERT/NONSTOP/GRADE courses, edit constraints and connections, and export course files. New user-created courses start unranked.
   - Submit eligible manual single plays and complete course runs to Leaderboard, retain local records, and replay or retry with the recorded mode and random outcomes.

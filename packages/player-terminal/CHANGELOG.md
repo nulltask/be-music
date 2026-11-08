@@ -10,7 +10,7 @@
 
 ### Patch Changes
 
-- 7154192: Charts without `#DIFFICULTY` are listed, sorted and filtered under the difficulty their names suggest, else their note count gives, and the DIFF column marks it as estimated (`3?` from the names, `3??` from the note count). The estimate is not kept in the chart cache, so cached charts pick it up too.
+- 81f6f5e: Charts without `#DIFFICULTY` are listed, sorted and filtered under the difficulty their names suggest, else their note count gives, and the DIFF column marks it as estimated (`3?` from the names, `3??` from the note count). The estimate is not kept in the chart cache, so cached charts pick it up too.
 - Updated dependencies: `@be-music/player-engine@0.16.0`, `@be-music/player-node-audio@0.2.6`
 
 ## 0.9.4
@@ -35,58 +35,58 @@
 
 ### Patch Changes
 
-- ebe2fc2: A keyed, `#BGA`-cropped or resized video kept a transformed copy of every frame it had decoded, one per transform, so long movies held several copies. Mapped videos now transform a frame when it is shown and keep only the eight most recent.
-- 7188106: The terminal grid applies chart-authored display options: CHANGE-HS and the Y waves move notes along the lane, notes a HIDDEN option makes less than half opaque are hidden, REVERSE flips the grid so the judge row is on top, HIDJUDGE blanks the judge line, and DARK hides the BGA. The sprite-only CRAZY effects and M-SUDDEN have no grid form and are not drawn.
-- d268b7e: `bms-replay` no longer stops on a replay a ruleset cannot read: it prints that ruleset as not simulated with the reason, and marks a result judged only up to the played run's failure as TRUNCATED.
+- 905f9e6: A keyed, `#BGA`-cropped or resized video kept a transformed copy of every frame it had decoded, one per transform, so long movies held several copies. Mapped videos now transform a frame when it is shown and keep only the eight most recent.
+- b4610c1: The terminal grid applies chart-authored display options: CHANGE-HS and the Y waves move notes along the lane, notes a HIDDEN option makes less than half opaque are hidden, REVERSE flips the grid so the judge row is on top, HIDJUDGE blanks the judge line, and DARK hides the BGA. The sprite-only CRAZY effects and M-SUDDEN have no grid form and are not drawn.
+- a1c2c55: `bms-replay` no longer stops on a replay a ruleset cannot read: it prints that ruleset as not simulated with the reason, and marks a result judged only up to the played run's failure as TRUNCATED.
 - Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-parser@0.7.0`, `@be-music/chart-source@0.7.0`, `@be-music/player-engine@0.13.0`, `@be-music/chart-audio-renderer@0.5.1`, `@be-music/player-node-audio@0.2.2`
 
 ## 0.9.0
 
 ### Minor Changes
 
-- afc65fb: Display generic bmson note columns and input labels with normal white-key styling, including storage channels otherwise used for scratch and FREE ZONE. Preserve F1–F24 press, repeat and release across kitty functional encodings and Win32 input mode.
-- 5992a52: Apply exact chart-authored HI-SPEED to terminal note spacing and readouts. Extend `resolveVisibleBeatsForTUIGrid` with authored mode, preserving the full native range while keeping user-mode limits unchanged.
-- cae8368: Render engine-driven bmson BGA sequence frames through ANSI and Kitty, loading all referenced alternatives and preserving source alpha, frame clocks and authored sequence lifetimes beyond the ordinary POOR window. Forward NONSTOP program sidecars through Node workers and apply FIT movie clocks to stage-owned resources.
-- 3f3de70: Add --bmson-total-mode spec to disable recovery for bmson percentage TOTAL 0 while preserving the existing default.
-- d869b05: Apply EXBMP transparent-color keys to opaque video frames before cropping and resizing. Preserve unselected black pixels and native borders across base, both overlays, POOR and implicit BMP00, including later streaming frames and resize/seek cache changes.
-- dcb4256: Apply independent BGA opacity channels `0B`–`0E` to base, both overlays and POOR in ANSI and Kitty output. Blend over lower layers or the black canvas, refresh static-image caches on opacity changes, and restore the correct state after seeking or resizing. Allow renderer callers to supply precomputed opacity timelines.
-- 4324783: Render engine-selected SWBGA frames in ANSI and Kitty output, including BMP00, placed aliases, EXBMP resources and keyed video frames. Accept optional input-bound frame state in the renderer, preserve normal BGA resources and restore the underlying planes after release or expiry.
-- 458b6f3: Accept host-remapped NONSTOP SWBGA selections in the BGA loader and carry them through Node UI workers. Render stage frames with the FIT source-video rate and restore normal BGA when the animation ends.
-- b14b94b: Renderer source frames accept optional per-pixel alpha coverage. Semi-transparent PNG and encoded-alpha BMP BGA pixels now blend with lower planes instead of becoming opaque or disappearing. Preserve source coverage through EXBMP keying, sub-region crops, nearest/Lanczos scaling and worker transfers, combine it with plane opacity and tint, and flatten the final result against the BGA background for ANSI and Kitty. Filter associated RGB during resizing to avoid transparent-color fringes. A 32-bit BMP whose alpha bytes are all zero stays opaque, as browsers decode it.
+- a69f267: Display generic bmson note columns and input labels with normal white-key styling, including storage channels otherwise used for scratch and FREE ZONE. Preserve F1–F24 press, repeat and release across kitty functional encodings and Win32 input mode.
+- 9a70860: Apply exact chart-authored HI-SPEED to terminal note spacing and readouts. Extend `resolveVisibleBeatsForTUIGrid` with authored mode, preserving the full native range while keeping user-mode limits unchanged.
+- 8499e3a: Render engine-driven bmson BGA sequence frames through ANSI and Kitty, loading all referenced alternatives and preserving source alpha, frame clocks and authored sequence lifetimes beyond the ordinary POOR window. Forward NONSTOP program sidecars through Node workers and apply FIT movie clocks to stage-owned resources.
+- 817e848: Add --bmson-total-mode spec to disable recovery for bmson percentage TOTAL 0 while preserving the existing default.
+- 28635b5: Apply EXBMP transparent-color keys to opaque video frames before cropping and resizing. Preserve unselected black pixels and native borders across base, both overlays, POOR and implicit BMP00, including later streaming frames and resize/seek cache changes.
+- ae5ec48: Apply independent BGA opacity channels `0B`–`0E` to base, both overlays and POOR in ANSI and Kitty output. Blend over lower layers or the black canvas, refresh static-image caches on opacity changes, and restore the correct state after seeking or resizing. Allow renderer callers to supply precomputed opacity timelines.
+- 7012b7c: Render engine-selected SWBGA frames in ANSI and Kitty output, including BMP00, placed aliases, EXBMP resources and keyed video frames. Accept optional input-bound frame state in the renderer, preserve normal BGA resources and restore the underlying planes after release or expiry.
+- af3fa9a: Accept host-remapped NONSTOP SWBGA selections in the BGA loader and carry them through Node UI workers. Render stage frames with the FIT source-video rate and restore normal BGA when the animation ends.
+- 57f8226: Renderer source frames accept optional per-pixel alpha coverage. Semi-transparent PNG and encoded-alpha BMP BGA pixels now blend with lower planes instead of becoming opaque or disappearing. Preserve source coverage through EXBMP keying, sub-region crops, nearest/Lanczos scaling and worker transfers, combine it with plane opacity and tint, and flatten the final result against the BGA background for ANSI and Kitty. Filter associated RGB during resizing to avoid transparent-color fringes. A 32-bit BMP whose alpha bytes are all zero stays opaque, as browsers decode it.
 
 ### Patch Changes
 
-- b33db20: Load bmson BGA header filenames for base, layer and POOR images and videos instead of looking them up as BMS BMP slots.
-- 274133e: Display chart text in a dedicated terminal row, clearing replaced selections and preventing embedded control characters from changing the screen layout.
+- 2ca8cc6: Load bmson BGA header filenames for base, layer and POOR images and videos instead of looking them up as BMS BMP slots.
+- 0ff0eab: Display chart text in a dedicated terminal row, clearing replaced selections and preventing embedded control characters from changing the screen layout.
   
   Forward structured NONSTOP text programs through gameplay-worker play options; the terminal displays the engine’s selected stage text.
-- 460823d: Carry host-compiled NONSTOP option diagnostics through gameplay-worker options alongside the effective display program, retaining stage and source-time provenance.
-- 4480fe0: Keep long sub-region source ids in internal mixed-NONSTOP bmson charts instead of truncating them to a different resource.
-- 5c820d9: Apply channel-scoped BGA RGB multipliers and shared alpha controls in ANSI and Kitty output. Include color changes in render caches and preserve the source frame through POOR composition, resizing and backward seeks.
-- de8a8d3: Render `#BGAxx` sub-region cues on base, both overlays and POOR instead of displaying missing-resource frames. Crop original image/video coordinates before fitting the BMS canvas, preserve authored placement and transparency, and apply the crop to streamed video frames without shifting coordinates through automatic black-border removal.
-- 4b09c06: Apply EXBMP transparent-color keys to native still-image pixels before resizing and sub-region cropping. Preserve unkeyed black pixels, distinguish encoded alpha from inserted RGBA bytes and separate caches for different keys of the same image, including implicit POOR and stitched resources. Expand indexed PNG palettes, packed grayscale and encoded PNG transparency before keying.
-- 8586109: Load BGA images declared only through `#EXBMPxx`, including the implicit POOR image in slot `00`, instead of displaying a missing-resource frame. Preserve explicit `#BMPxx` filenames when both declarations exist.
-- ca29ca8: Keep image pixel buffers intact when worker conversion fails, so fallback BGA conversion displays the original colors instead of a black image.
-- 27dba16: Decode BGA codecs supported by the bundled LibAV build, including HEVC and VP9/WebM, instead of rejecting every codec except MPEG-1, H.264 and MJPEG. Stop the loading pass after its first converted frame.
+- 6a4963a: Carry host-compiled NONSTOP option diagnostics through gameplay-worker options alongside the effective display program, retaining stage and source-time provenance.
+- d61020f: Keep long sub-region source ids in internal mixed-NONSTOP bmson charts instead of truncating them to a different resource.
+- 1618b3e: Apply channel-scoped BGA RGB multipliers and shared alpha controls in ANSI and Kitty output. Include color changes in render caches and preserve the source frame through POOR composition, resizing and backward seeks.
+- 34d8f47: Render `#BGAxx` sub-region cues on base, both overlays and POOR instead of displaying missing-resource frames. Crop original image/video coordinates before fitting the BMS canvas, preserve authored placement and transparency, and apply the crop to streamed video frames without shifting coordinates through automatic black-border removal.
+- 12a52f6: Apply EXBMP transparent-color keys to native still-image pixels before resizing and sub-region cropping. Preserve unkeyed black pixels, distinguish encoded alpha from inserted RGBA bytes and separate caches for different keys of the same image, including implicit POOR and stitched resources. Expand indexed PNG palettes, packed grayscale and encoded PNG transparency before keying.
+- 9382160: Load BGA images declared only through `#EXBMPxx`, including the implicit POOR image in slot `00`, instead of displaying a missing-resource frame. Preserve explicit `#BMPxx` filenames when both declarations exist.
+- f282652: Keep image pixel buffers intact when worker conversion fails, so fallback BGA conversion displays the original colors instead of a black image.
+- e7e8d21: Decode BGA codecs supported by the bundled LibAV build, including HEVC and VP9/WebM, instead of rejecting every codec except MPEG-1, H.264 and MJPEG. Stop the loading pass after its first converted frame.
 - Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/player-engine@0.12.0`, `@be-music/chart-parser@0.6.0`, `@be-music/chart-audio-renderer@0.5.0`, `@be-music/chart-source@0.6.0`, `@be-music/player-node-audio@0.2.1`, `@be-music/shared-utils@0.7.0`
 
 ## 0.8.0
 
 ### Minor Changes
 
-- 8a8364d: Add `--no-end-on-failure`, which keeps judging to the end of the chart after a survival gauge empties instead of ending the play there, for practice.
+- 0e49116: Add `--no-end-on-failure`, which keeps judging to the end of the chart after a survival gauge empties instead of ending the play there, for practice.
 
 ### Patch Changes
 
-- a83e326: Use `____` for the That-Which-Must-Not-Be-Named ruleset CLI argument and `????` in replay comparison reports.
-- f994ec4: Honor POOR BGA overlay and hidden modes in ANSI and Kitty rendering. Preserve PNG transparency for overlays and keep the normal BGA cache intact when POOR display is disabled.
+- 745a0db: Use `____` for the That-Which-Must-Not-Be-Named ruleset CLI argument and `????` in replay comparison reports.
+- 603b23a: Honor POOR BGA overlay and hidden modes in ANSI and Kitty rendering. Preserve PNG transparency for overlays and keep the normal BGA cache intact when POOR display is disabled.
 - Updated dependencies: `@be-music/player-engine@0.11.0`, `@be-music/chart-audio-renderer@0.4.1`, `@be-music/chart-model@0.7.0`, `@be-music/chart-parser@0.5.0`, `@be-music/chart-source@0.5.0`, `@be-music/player-node-audio@0.2.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.7.0
 
 ### Minor Changes
 
-- 9a0c3f9: Rename the replay inspection command to `bms-replay` and the recording APIs and modules to replay terminology. Adopt canonical chart and judgment types; the previous command and API spellings are removed.
+- ad210fa: Rename the replay inspection command to `bms-replay` and the recording APIs and modules to replay terminology. Adopt canonical chart and judgment types; the previous command and API spellings are removed.
   
   Rename the package from `@be-music/player-tui` to `@be-music/player-terminal` to identify its role consistently. Update imports and package filters to the new name.
 
@@ -98,7 +98,7 @@
 
 ### Minor Changes
 
-- b2818d0: Keep terminal playback, audio previews and chart summaries consistent with the shared chart and player rules.
+- 8a051a5: Keep terminal playback, audio previews and chart summaries consistent with the shared chart and player rules.
   
   - Resolve RANDOM/SWITCH outcomes once for both rendered audio and playback.
   - Use the shared lane-mode and scored-note rules, including PMS, FREE ZONE and keyboard modes.

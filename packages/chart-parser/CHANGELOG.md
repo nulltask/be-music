@@ -10,7 +10,7 @@
 
 ### Minor Changes
 
-- e8cd9c2: Read pomu `#SONGxx`, the obsolete name of `#TEXTxx`, into `bms.songText`, including inside `#RANDOM` / `#SWITCH` branches and with base-62 keys. Older Be-Music JSON that kept `#SONGxx` in `metadata.extras` is moved into it on load.
+- cd2a0bd: Read pomu `#SONGxx`, the obsolete name of `#TEXTxx`, into `bms.songText`, including inside `#RANDOM` / `#SWITCH` branches and with base-62 keys. Older Be-Music JSON that kept `#SONGxx` in `metadata.extras` is moved into it on load.
 
 ### Patch Changes
 
@@ -20,37 +20,37 @@
 
 ### Minor Changes
 
-- ceb5fcc: Read boolean bmson up fields and retain them through Be-Music JSON so consumers can distinguish LN end sounds from ordinary taps.
-- 410843c: Read and preserve bmson info.title_image, including through Be-Music JSON normalization.
-- c6f70f4: Preserve beatoraja bmson BGA sequences, end markers and conditional image sets through raw input and Be-Music JSON normalization, including events with no ordinary image id, which keep the id absent instead of reading it as `0`.
-- c3b783a: Preserve nonexecuted bmson fields on valid normalized root, info, channel, note, timing and BGA nodes, including hidden-note damage, through Be-Music JSON without changing playback semantics.
+- 31ad44a: Read boolean bmson up fields and retain them through Be-Music JSON so consumers can distinguish LN end sounds from ordinary taps.
+- c314b06: Read and preserve bmson info.title_image, including through Be-Music JSON normalization.
+- bcf7edc: Preserve beatoraja bmson BGA sequences, end markers and conditional image sets through raw input and Be-Music JSON normalization, including events with no ordinary image id, which keep the id absent instead of reading it as `0`.
+- 3187914: Preserve nonexecuted bmson fields on valid normalized root, info, channel, note, timing and BGA nodes, including hidden-note damage, through Be-Music JSON without changing playback semantics.
 
 ### Patch Changes
 
-- e4d00c9: Reject null, malformed and unsupported bmson versions before interpreting chart data, and support stable 1.0.0 with optional SemVer build metadata. Read a missing-version legacy v0.21 chart by converting its fields and timing as Bemuse does, instead of treating it as the modern format; a missing version on a chart with only 1.0.0 fields is rejected as ambiguous.
-- e66f84f: Retain every bmson sound, key and mine channel and every distinct BPM, STOP and SCROLL value beyond the two-character BMS key capacity; preserve long keys through Be-Music JSON reloads.
-- 2cfc7ae: Read nanasi `#EXBPMxx` as an alias of `#BPMxx`. Channel `08` tempo changes that only `#EXBPMxx` defined were dropped as undefined references, so such charts kept the previous tempo. The alias is stored and written back as `#BPMxx`, follows the file-order rule for its index and applies inside control-flow branches; Be-Music JSON that kept it in `metadata.extras` migrates into `resources.bpm` unless `#BPMxx` defines the index.
-- 3e1855e: Validate and preserve optional intrinsic sample gain through Be-Music JSON round trips, including case-sensitive base-62 slot ids.
-- 07a8c75: Preserve repeated OPTION declarations and their vendor arguments instead of retaining only the last line. Resolve conditional and unconditional declarations in original order, and retain the ordered program through Be-Music JSON.
-- afc65fb: Use the shared generic lane table for `generic-Nkeys` bmson with 1–70 keys. Out-of-range or malformed `generic-` hints are read as unknown hints (`beat-7k` where the lanes fit, as beatoraja does) instead of clamping them or routing extra columns into unrelated channel families.
+- 515407d: Reject null, malformed and unsupported bmson versions before interpreting chart data, and support stable 1.0.0 with optional SemVer build metadata. Read a missing-version legacy v0.21 chart by converting its fields and timing as Bemuse does, instead of treating it as the modern format; a missing version on a chart with only 1.0.0 fields is rejected as ambiguous.
+- 32c7fb5: Retain every bmson sound, key and mine channel and every distinct BPM, STOP and SCROLL value beyond the two-character BMS key capacity; preserve long keys through Be-Music JSON reloads.
+- 8926505: Read nanasi `#EXBPMxx` as an alias of `#BPMxx`. Channel `08` tempo changes that only `#EXBPMxx` defined were dropped as undefined references, so such charts kept the previous tempo. The alias is stored and written back as `#BPMxx`, follows the file-order rule for its index and applies inside control-flow branches; Be-Music JSON that kept it in `metadata.extras` migrates into `resources.bpm` unless `#BPMxx` defines the index.
+- 7ea3be3: Validate and preserve optional intrinsic sample gain through Be-Music JSON round trips, including case-sensitive base-62 slot ids.
+- adfaf40: Preserve repeated OPTION declarations and their vendor arguments instead of retaining only the last line. Resolve conditional and unconditional declarations in original order, and retain the ordered program through Be-Music JSON.
+- a69f267: Use the shared generic lane table for `generic-Nkeys` bmson with 1–70 keys. Out-of-range or malformed `generic-` hints are read as unknown hints (`beat-7k` where the lanes fit, as beatoraja does) instead of clamping them or routing extra columns into unrelated channel families.
 - Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`
 
 ## 0.5.0
 
 ### Minor Changes
 
-- 29e69c6: Add `parseBMSBytes` and keep the leading bytes of each `#WAV` file name (`bms.wavNameBytePrefixes`), by which LR2 groups a chart's sounds into families for EXTRA MODE and SP TO DP.
+- aba15df: Add `parseBMSBytes` and keep the leading bytes of each `#WAV` file name (`bms.wavNameBytePrefixes`), by which LR2 groups a chart's sounds into families for EXTRA MODE and SP TO DP.
 
 ### Patch Changes
 
-- 69df53c: Preserve extended bmson resource keys, source-audio slice coordinates and explicit TOTAL units when reading Be-Music JSON for stitched NONSTOP charts.
+- a82ec63: Preserve extended bmson resource keys, source-audio slice coordinates and explicit TOTAL units when reading Be-Music JSON for stitched NONSTOP charts.
 - Updated dependencies: `@be-music/chart-model@0.7.0`, `@be-music/chart-source@0.5.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.4.0
 
 ### Minor Changes
 
-- dca9a2f: Rename the package from `@be-music/parser` to `@be-music/chart-parser` to identify its role consistently. Update imports and package filters to the new name.
+- 559897f: Rename the package from `@be-music/parser` to `@be-music/chart-parser` to identify its role consistently. Update imports and package filters to the new name.
 
 ### Patch Changes
 
@@ -60,7 +60,7 @@
 
 ### Minor Changes
 
-- b2818d0: Parse BMS and bmson using shared chart semantics and canonical Be-Music JSON names.
+- 8a051a5: Parse BMS and bmson using shared chart semantics and canonical Be-Music JSON names.
   
   - Support explicit RANDOM/SWITCH outcomes with `resolveBMSControlFlowWithDraws` and reject outcomes that do not belong to the chart.
   - Decode EUC-KR Korean charts and honor EUC-KR/CP949 charset declarations.

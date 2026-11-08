@@ -4,14 +4,14 @@
 
 ### Patch Changes
 
-- c5e848d: A chart whose only tails are FREE ZONE notes (channel `17` / `27`, as in BM98-era charts) no longer counts long notes in `resolveChartStats`, so the built-in skins stop tagging it `LN`.
+- c967103: A chart whose only tails are FREE ZONE notes (channel `17` / `27`, as in BM98-era charts) no longer counts long notes in `resolveChartStats`, so the built-in skins stop tagging it `LN`.
 - Updated dependencies: `@be-music/chart-model@0.10.0`, `@be-music/player-engine@0.17.0`, `@be-music/player-scene-model@0.8.1`
 
 ## 0.11.0
 
 ### Minor Changes
 
-- c60eb63: Mark an estimated difficulty, and tell a skin whether a chart has a README.
+- 0f3c127: Mark an estimated difficulty, and tell a skin whether a chart has a README.
   
   - Mark an estimated difficulty: `resolveDifficultyName` returns `HYPER?` for one read from the chart's names and `HYPER??` for one from its note count, and the new `resolveDifficulty` returns the name with its `basis`. `DIFFICULTY_BASIS_MARKS` holds the marks.
   - The select frame tells a skin whether the chart under the cursor has a README: `BeMusicSelectFrame.hasReadme` for a canvas skin and `BeMusicDOMSelectFrame.hasReadme` for a DOM skin, so a README button can be enabled only then. The host shows the README in its own dialog, so `BeMusicDOMSelectFrame.readText` is removed. `BeMusicSelectActions.toggleReadme` is now declared as a property, like the other actions.
@@ -24,7 +24,7 @@
 
 ### Minor Changes
 
-- b74bb64: Result play tags and two-player figure boxes.
+- b46629e: Result play tags and two-player figure boxes.
   
   - Adds `resolveResultPlayTag`, the tag a result screen shows beside its verdict: `AUTO PLAY` for a full AUTO play, `ASSIST` for a play whose replay used an assisted option by the assist policy the clear lamp and the Leaderboard follow, so neither reads as a plain play.
   - Fix the HI-SPEED label spilling out of its box in 5-key two-player play (a ghost on the second playfield): each side's gauge, score and hi-speed boxes now keep their 7-key size and position instead of shrinking with the narrower lane bank.
@@ -37,7 +37,7 @@
 
 ### Minor Changes
 
-- 816a5d2: Add shared note sizing and independent two-player layout support.
+- f3900b2: Add shared note sizing and independent two-player layout support.
 
   - Export `NOTE_HEIGHT_LANE_RATIO` (0.21), `noteHeightForLane`, `resolveNoteHeight`, and `findWhiteLaneWidth` so skins can size every note from the playfield's white-key lane width.
   - Add `twoPlayer` layout input and output, stage `twoPlayerSideInset`, and an optional `twoPlayer` argument to `resolveBGARect` and lane geometry resolution. Keep independent players or replay ghosts on opposite sides of the monitor while double-play charts retain their shared field.
@@ -54,7 +54,7 @@
 
 ### Minor Changes
 
-- ba416ea: Skins can tell the long-note kinds and a hell charge note's state apart:
+- a6ac50a: Skins can tell the long-note kinds and a hell charge note's state apart:
   
   - `BeMusicLongNote.backSpinScratch` marks a back-spin scratch, and new helpers draw the kinds by shape rather than colour: `resolveLongNoteMarks`, `isBackSpinScratchLongNote`, `hellChargeZigzag` (an HCN's zigzag centre line, as a polyline that can flow either way) and `backSpinChevron` (the chevron on a BSS's tail cap).
   - A released hell charge note no longer reads as dropped for good: `BeMusicLongNoteState` gains `'draining'`, the state of an HCN whose lane is up while it passes the judgement line (let go early or missed at the head), which goes back to `'held'` when the lane is pressed again.
@@ -68,59 +68,59 @@
 
 ### Minor Changes
 
-- 6624b34: New `BeMusicGameplayRuntime.targetPaceEXScore`: the pacemaker's EX score at this point of the play when the host knows it (a replay ghost). `resolveScorePace` takes it in place of the target held to the share of notes judged, so a score graph paces against where the ghost really stood.
-- 9a8b50c: Add the cabinet play layout:
+- b4bba7c: New `BeMusicGameplayRuntime.targetPaceEXScore`: the pacemaker's EX score at this point of the play when the host knows it (a replay ghost). `resolveScorePace` takes it in place of the target held to the share of notes judged, so a score graph paces against where the ghost really stood.
+- f985491: Add the cabinet play layout:
   
   - `cabinetStage`, `resolveCabinetBGARect` and `resolveCabinetLayout` place the keys, gauge, score, hi-speed, score graph, stage band, players, judgement panel, BPM and tempo around the standard lanes, and centre a double-play field on the stage with the chart and judgement panel in a left column.
   - A stage's playfield bounds take `doublePlayCenterX` to centre double-play lanes, and `resolveBGARect` receives the playfield's left edge.
   - `resolveScorePace` and `formatScoreDiff` drive a score graph against a pacemaker and the best record, `resolveStageLabel` names the stage, and `resolveDifficultyName` reads `#DIFFICULTY`.
   - The gameplay runtime gains `bestEXScore`, `targetEXScore`, `targetLabel`, `course`, `playerName`, `tempo` and `random1P`, and the DOM gameplay frame's layout gains `mode` and `lanes`.
-- fcfc355: The select frame gains `danRanks`, the player's dan rank in each key mode (`BeMusicDanRank`), and `describeDanRanks` puts them on one line (`7K 七段 · 14K 初段`).
+- 64ccdf5: The select frame gains `danRanks`, the player's dan rank in each key mode (`BeMusicDanRank`), and `describeDanRanks` puts them on one line (`7K 七段 · 14K 初段`).
 
 ### Patch Changes
 
-- 20b8f86: `DEFAULT_TEXT_FONT` is the system sans-serif, so a skin that names no face draws without web fonts; a skin that wants one names it and lists it in `fontLoads`.
+- 270e291: `DEFAULT_TEXT_FONT` is the system sans-serif, so a skin that names no face draws without web fonts; a skin that wants one names it and lists it in `fontLoads`.
 - Updated dependencies: `@be-music/chart-model@0.9.0`, `@be-music/chart-source@0.7.0`, `@be-music/player-engine@0.13.0`, `@be-music/player-scene-model@0.5.0`
 
 ## 0.6.0
 
 ### Minor Changes
 
-- 410843c: Expose titleImage as a chart-image kind and provide a title artwork URL on DOM decide frames.
-- d3ba8d2: Add `BeMusicLongNote.releasedElapsedMs`, the time since the player let go of a long note early and it was judged dropped, and `longNoteCentreLineAlpha` / `LONG_NOTE_CENTRE_LINE_FADE_MS` so skins can fade a long note's centre line out after the release.
-- 17a4096: Expose the independent channel 0A overlay as the optional BGA frame layer2 image so custom skins can composite both overlays above the base.
-- 5cc0094: Add optional per-plane `opacity` and ordered NONSTOP `stacks` to `BeMusicBGAFrame`, including each stack's crossfade alpha. Existing top-level layer fields remain available to skins that do not consume the new data.
-- 4480fe0: Expose optional per-plane `BeMusicBGAFrame.origins` for authored sub-region placement on the 256×256 BGA canvas, including each NONSTOP stack.
+- c314b06: Expose titleImage as a chart-image kind and provide a title artwork URL on DOM decide frames.
+- 4027720: Add `BeMusicLongNote.releasedElapsedMs`, the time since the player let go of a long note early and it was judged dropped, and `longNoteCentreLineAlpha` / `LONG_NOTE_CENTRE_LINE_FADE_MS` so skins can fade a long note's centre line out after the release.
+- 6a37426: Expose the independent channel 0A overlay as the optional BGA frame layer2 image so custom skins can composite both overlays above the base.
+- df58b33: Add optional per-plane `opacity` and ordered NONSTOP `stacks` to `BeMusicBGAFrame`, including each stack's crossfade alpha. Existing top-level layer fields remain available to skins that do not consume the new data.
+- d61020f: Expose optional per-plane `BeMusicBGAFrame.origins` for authored sub-region placement on the 256×256 BGA canvas, including each NONSTOP stack.
 
 ### Patch Changes
 
-- afc65fb: Lay out generic bmson keyboards as equal-width normal keys on one continuous side, without scratch widths or a double-play gap.
+- a69f267: Lay out generic bmson keyboards as equal-width normal keys on one continuous side, without scratch widths or a double-play gap.
 - Updated dependencies: `@be-music/chart-model@0.8.0`, `@be-music/player-engine@0.12.0`, `@be-music/chart-source@0.6.0`, `@be-music/shared-utils@0.7.0`, `@be-music/player-scene-model@0.4.0`
 
 ## 0.5.0
 
 ### Minor Changes
 
-- 74127d3: Allow `BeMusicSkin` to mount native DOM select, decide and result screens and a DOM gameplay screen alongside Canvas surfaces, with DOM frame, action and lifecycle contracts and validated screen factories. DOM gameplay frames carry the stage geometry (playfield bounds per input layout, and the BGA rect in `layout`) so native HUDs can avoid the lanes, and DOM skins get the shared gameplay HUD runtime, play options, course context and full immutable play state.
+- 04cb631: Allow `BeMusicSkin` to mount native DOM select, decide and result screens and a DOM gameplay screen alongside Canvas surfaces, with DOM frame, action and lifecycle contracts and validated screen factories. DOM gameplay frames carry the stage geometry (playfield bounds per input layout, and the BGA rect in `layout`) so native HUDs can avoid the lanes, and DOM skins get the shared gameplay HUD runtime, play options, course context and full immutable play state.
   A skin that sets `gameplay.drawsOnDOM` draws the playfield in its DOM gameplay screen: it receives every `BeMusicGameplayFrame` through the screen's `drawPlayfield(frame)` (`BeMusicDOMGameplayScreen`) and needs no Canvas surface for gameplay. Validation reports `drawsOnDOM` without a `dom.gameplay` screen.
   DOM gameplay screens can seek through `BeMusicDOMGameplayActions.seek(seconds)` and `BeMusicDOMGameplayFrame.seekable`.
-- a83e326: Rename the That-Which-Must-Not-Be-Named lane geometry constants and helper to use `____` in their exported names.
-- 01cd4cd: A stage can be fluid: `BeMusicStage.resize(size)` lets a skin lay its stage out at the screen's aspect ratio instead of being letterboxed into it. `resolveBeMusicStage` resizes a fluid stage to the screen, keeping its 480 px short side, and the new `resolveFluidStageSize` and `resolveFluidStage` expose that sizing. Stages without `resize` keep their fixed size.
-- 29e69c6: Add a two-player play's 2P player to the gameplay runtime and DOM frame (`runtime.secondPlayer`, `state2P`), the floating hi-speed flag, per-side LIFT and note opacity for CONSTANT, so skins can draw them.
-- f994ec4: Expose optional `poorOverlays` on BGA frames so skins can render `#POORBGA 1` over the normal layers.
-- a8896a9: `BeMusicDOMSelectFrame` carries `searchError`, why the chart filter expression searched for does not parse, for a DOM select screen to show.
-- 2e435b9: Export the shared `clamp` helper so skins can reuse numeric bounds through the SDK without importing player internals or extra utility packages.
+- 745a0db: Rename the That-Which-Must-Not-Be-Named lane geometry constants and helper to use `____` in their exported names.
+- 06c331a: A stage can be fluid: `BeMusicStage.resize(size)` lets a skin lay its stage out at the screen's aspect ratio instead of being letterboxed into it. `resolveBeMusicStage` resizes a fluid stage to the screen, keeping its 480 px short side, and the new `resolveFluidStageSize` and `resolveFluidStage` expose that sizing. Stages without `resize` keep their fixed size.
+- aba15df: Add a two-player play's 2P player to the gameplay runtime and DOM frame (`runtime.secondPlayer`, `state2P`), the floating hi-speed flag, per-side LIFT and note opacity for CONSTANT, so skins can draw them.
+- 603b23a: Expose optional `poorOverlays` on BGA frames so skins can render `#POORBGA 1` over the normal layers.
+- 48f2fe2: `BeMusicDOMSelectFrame` carries `searchError`, why the chart filter expression searched for does not parse, for a DOM select screen to show.
+- b80a4f9: Export the shared `clamp` helper so skins can reuse numeric bounds through the SDK without importing player internals or extra utility packages.
 
 ### Patch Changes
 
-- 6fc13f5: A RANDOM MIX bar reads `draw a course` with an `RND` badge in the select list, and a course folder's count leaves it out, as it does the NEW COURSE bar.
+- 004651b: A RANDOM MIX bar reads `draw a course` with an `RND` badge in the select list, and a course folder's count leaves it out, as it does the NEW COURSE bar.
 - Updated dependencies: `@be-music/player-engine@0.11.0`, `@be-music/chart-model@0.7.0`, `@be-music/chart-source@0.5.0`, `@be-music/player-scene-model@0.3.0`, `@be-music/shared-utils@0.6.0`
 
 ## 0.4.0
 
 ### Minor Changes
 
-- 9a0c3f9: Use chart-based names for chart facts, images, and best records, including `ChartStats`, `BeMusicChartBestRecord`, `chartBestRecord`, and `courseBestRecord`. Rename judgment types and consume result data through `chart` and `replay`. Keep `BeMusicStage` unchanged; previous renamed API spellings are removed.
+- ad210fa: Use chart-based names for chart facts, images, and best records, including `ChartStats`, `BeMusicChartBestRecord`, `chartBestRecord`, and `courseBestRecord`. Rename judgment types and consume result data through `chart` and `replay`. Keep `BeMusicStage` unchanged; previous renamed API spellings are removed.
   
   Rename the package from `@be-music/skin-sdk` to `@be-music/player-skin-sdk` to identify its role consistently. Update imports and package filters to the new name.
 
@@ -132,7 +132,7 @@
 
 ### Minor Changes
 
-- b2818d0: Expose shared player-scene-model library entries, play options, play/results and course data to custom skins.
+- 8a051a5: Expose shared player-scene-model library entries, play options, play/results and course data to custom skins.
   
   - Support course bars and records, keyboard-wheel lanes, 24/48-key filters, additional sort modes, touch-scroll rows and in-place search state.
   - Provide chart facts from the resolved chart, shared clear-lamp/rank vocabulary and result presentation for single plays, course stages and complete runs.
