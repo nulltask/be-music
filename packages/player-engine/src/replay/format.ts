@@ -177,7 +177,11 @@ export interface ReplayJudgeRank {
    * `timeUs` on, the windows a chart opening with `rank` gets (`'chart'`) or LR2's NONSTOP rank table
    * (`'lr2-nonstop'`). Absent in logs recorded before it existed, which played with the first stage's rank throughout.
    */
-  stageRanks?: Array<{ timeUs: number; rank: number; table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank' }>;
+  stageRanks?: Array<{
+    timeUs: number;
+    rank: number;
+    table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank' | 'bms-exrank-change';
+  }>;
 }
 
 export interface ReplayChart {
@@ -654,8 +658,16 @@ function parseStageRanks(value: unknown): ReplayJudgeRank['stageRanks'] {
     const path = `chart.judgeRank.stageRanks[${index}]`;
     const record = expectRecord(entry, path);
     const table = record.table;
-    if (table !== 'chart' && table !== 'lr2-nonstop' && table !== 'bmson' && table !== 'bms-exrank') {
-      throw new ReplayParseError(`${path}.table: expected 'chart', 'lr2-nonstop', 'bmson' or 'bms-exrank'`);
+    if (
+      table !== 'chart' &&
+      table !== 'lr2-nonstop' &&
+      table !== 'bmson' &&
+      table !== 'bms-exrank' &&
+      table !== 'bms-exrank-change'
+    ) {
+      throw new ReplayParseError(
+        `${path}.table: expected 'chart', 'lr2-nonstop', 'bmson', 'bms-exrank' or 'bms-exrank-change'`,
+      );
     }
     return {
       timeUs: expectFiniteNumber(record.timeUs, `${path}.timeUs`),

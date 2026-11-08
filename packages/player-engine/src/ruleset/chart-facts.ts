@@ -52,7 +52,7 @@ export function rulesetChartFactsFromChart(
   stageRanks: ReadonlyArray<{
     seconds: number;
     rank: number;
-    table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank';
+    table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank' | 'bms-exrank-change';
   }> = [],
 ): RulesetChartFacts {
   const resolved = chart.resolvedChart ?? resolveChart(json);

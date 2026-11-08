@@ -563,6 +563,7 @@ test('replay round-trip preserves mixed NONSTOP rank units and absolute TOTAL', 
   replay.chart.judgeRank.stageRanks = [
     { timeUs: 0, rank: 125, table: 'bmson' },
     { timeUs: 1e6, rank: 150, table: 'bms-exrank' },
+    { timeUs: 2e6, rank: 50, table: 'bms-exrank-change' },
   ];
   const parsed = parseReplay(serializeReplay(replay));
   expect(parsed.chart.totalUnit).toBe('absolute');
