@@ -25,6 +25,7 @@
 - Use `feat:` for new features, `fix:` for bug fixes, `docs:` for documentation-only changes, `refactor:` for non-functional code changes, `perf:` for performance improvements, `test:` for tests, `style:` for formatting-only changes, `ci:` for CI configuration, and `chore:` for maintenance tasks.
 - Keep one logical change per commit when possible.
 - For documentation-only updates, append `[ci skip]` at the end of the commit message.
+- Author and commit as `nulltask <nulltask@gmail.com>`, and add no `Co-Authored-By` trailer.
 
 # Branch Naming Rules
 
@@ -44,9 +45,11 @@
 
 - Do not prefix pull request titles with `[codex]`.
 - Use plain, descriptive pull request titles.
+- Do not end pull request descriptions with a "Generated with Claude Code" footer or a session link.
 
 # Changeset Rules
 
+- Add the changeset in the same pull request as the change it describes: a PR with a `feat` / `fix` / `perf` change to a package, or a bump of a public runtime dependency, carries its `.changeset/*.md`. Follow the rules below for which changes need one and how to write it.
 - Base the unreleased set on the diff from the last release: list candidates with `git log --oneline origin/main..origin/devel`. Skip commits already covered by an existing `.changeset/*.md` and only add entries for the uncovered ones.
 - One changeset per package. Putting several packages in a single markdown makes Changesets duplicate the same note into every package's CHANGELOG. For a commit that spans multiple packages, split it into one changeset per package and write each note from that package's own perspective.
 - Only write entries that are worth landing in a CHANGELOG:

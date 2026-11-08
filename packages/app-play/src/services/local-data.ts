@@ -36,6 +36,13 @@ const DATABASES: Readonly<Record<string, { description: string; stores: Readonly
       meta: 'Storage revision',
     },
   },
+  'be-music-charts': {
+    description: 'Parsed charts, so a folder dropped again loads faster',
+    stores: {
+      parsedCharts: 'Each chart’s parse result, by the SHA-256 of its file',
+      meta: 'The build that parsed them',
+    },
+  },
 };
 
 /** One `localStorage` entry. */
