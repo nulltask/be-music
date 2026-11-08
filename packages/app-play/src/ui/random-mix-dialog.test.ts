@@ -9,16 +9,19 @@ describe('RANDOM MIX dialog', () => {
     expect(toggleRandomMixValue([5, 7], 5, false)).toEqual([7]);
   });
 
-  test('opens on the library key modes and caps a NONSTOP count', () => {
-    const initial = { ...DEFAULT_RANDOM_MIX_CONDITIONS, keyModes: [7, 9], count: 'infinity' as const };
+  test('opens on one key mode the library has and caps a NONSTOP count', () => {
+    const initial = { ...DEFAULT_RANDOM_MIX_CONDITIONS, keyMode: 14, count: 'infinity' as const };
     expect(resolveRandomMixDialogConditions({ kind: 'expert', keyModes: [7, 14], initial })).toMatchObject({
-      keyModes: [7],
+      keyMode: 14,
       count: 'infinity',
     });
-    // No key mode the library has: all of them.
+    // A key mode the library lacks: 7 keys when it has them, else its lowest.
+    expect(resolveRandomMixDialogConditions({ kind: 'expert', keyModes: [5, 7], initial }).keyMode).toBe(7);
     expect(resolveRandomMixDialogConditions({ kind: 'nonstop', keyModes: [5, 10], initial })).toMatchObject({
-      keyModes: [5, 10],
+      keyMode: 5,
       count: 5,
     });
+    // An empty library keeps what was asked.
+    expect(resolveRandomMixDialogConditions({ kind: 'expert', keyModes: [], initial }).keyMode).toBe(14);
   });
 });

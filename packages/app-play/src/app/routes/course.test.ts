@@ -68,7 +68,7 @@ function choice(conditions: RandomMixConditions, confirmed = true) {
 }
 
 /** RANDOM MIX conditions for the fixture songs, which read as 5 keys (they have no notes). */
-const MIX5: RandomMixConditions = { ...DEFAULT_RANDOM_MIX_CONDITIONS, keyModes: [5] };
+const MIX5: RandomMixConditions = { ...DEFAULT_RANDOM_MIX_CONDITIONS, keyMode: 5 };
 
 /** The RANDOM MIX bar of a course folder. */
 function randomMixBar(kind: 'expert' | 'nonstop'): LibraryCourse {
@@ -252,7 +252,7 @@ describe('CourseRoute: starting a course', () => {
       defaultConnection: 'fade',
     });
     expect(request.countMatches(MIX5)).toBe(2);
-    expect(request.countMatches({ ...MIX5, keyModes: [14] })).toBe(0);
+    expect(request.countMatches({ ...MIX5, keyMode: 14 })).toBe(0);
     // Charts can fit the conditions yet give no stage 1 under the draw settings (the BPM limits here), which OK checks.
     const settings = { ...DEFAULT_LR2_RANDOM_MIX_SETTINGS, bpmRange: 0 };
     expect(request.canStart({ conditions: MIX5, settings, defaultConnection: 'fade' })).toBe(true);

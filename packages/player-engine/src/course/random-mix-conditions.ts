@@ -4,7 +4,7 @@ import { LR2_RANDOM_MIX_NAME, resolveLR2RandomMixSettings, type LR2RandomMixSett
 
 /*
  * The conditions the RANDOM MIX dialog sets before a draw, and the draw itself one stage at a time. LR2 draws a RANDOM
- * MIX by its `config.course` values alone (`random-mix.ts`); Be-Music asks first which key modes, which levels or
+ * MIX by its `config.course` values alone (`random-mix.ts`); Be-Music asks first which key mode, which levels or
  * difficulties and how many stages, endless included, and keeps LR2's BPM limits, BPM range and favorite level.
  *
  * A stage is drawn by walking the pool in a random order and taking the first chart that fits, so a draw reads only as
@@ -28,8 +28,11 @@ export type RandomMixCount = number | 'infinity';
 
 /** What a RANDOM MIX draws from (the RANDOM MIX dialog). */
 export interface RandomMixConditions {
-  /** The key modes (`5`, `7`, `9`, `10`, `14`, ...) a draw may be in; each draw keeps stage 1's. */
-  keyModes: number[];
+  /**
+   * The key mode (`5`, `7`, `9`, `10`, `14`, ...) every stage is in. One only, as LR2 draws in the one key mode of its
+   * select key filter: a course is played in one lane layout, and a NONSTOP mix is one stitched chart.
+   */
+  keyMode: number;
   /** Whether the charts are narrowed by play level (`minLevel` / `maxLevel`) or by `#DIFFICULTY` (`difficulties`). */
   by: 'level' | 'difficulty';
   /** The lowest play level; 0 is no limit. */
@@ -53,7 +56,7 @@ export interface RandomMixConditions {
 
 /** The conditions before the dialog was ever confirmed: 7 keys, any level, five stages (LR2's defaults). */
 export const DEFAULT_RANDOM_MIX_CONDITIONS: Readonly<RandomMixConditions> = {
-  keyModes: [7],
+  keyMode: 7,
   by: 'level',
   minLevel: 0,
   maxLevel: 0,
@@ -78,9 +81,22 @@ function integerSet(value: unknown): number[] | undefined {
 }
 
 /**
+ * The key mode of stored conditions: `keyMode`, or for conditions an earlier version kept as a set of `keyModes`, the
+ * fallback's when the set holds it and else the set's lowest.
+ */
+function storedKeyMode(stored: Record<string, unknown>, fallback: number): number {
+  const { keyMode } = stored;
+  if (typeof keyMode === 'number' && Number.isInteger(keyMode) && keyMode > 0) return keyMode;
+  const legacy = integerSet(stored.keyModes);
+  if (legacy === undefined || legacy.length === 0) return fallback;
+  return legacy.includes(fallback) ? fallback : legacy[0]!;
+}
+
+/**
  * Conditions read back from storage (or `fallback` for each value that is missing or malformed): levels clamped to
  * 0-99, difficulties kept to {@link RANDOM_MIX_DIFFICULTIES} and a count clamped to 1-{@link RANDOM_MIX_MAX_COUNT}. The
- * `loops` an earlier version kept is dropped: each RANDOM MIX is one draw.
+ * `loops` an earlier version kept is dropped: each RANDOM MIX is one draw. The `keyModes` set an earlier version kept is
+ * read as one key mode.
  */
 export function normalizeRandomMixConditions(
   value: unknown,
@@ -91,7 +107,7 @@ export function normalizeRandomMixConditions(
     RANDOM_MIX_DIFFICULTIES.includes(difficulty),
   );
   return {
-    keyModes: integerSet(stored.keyModes) ?? [...fallback.keyModes],
+    keyMode: storedKeyMode(stored, fallback.keyMode),
     by: stored.by === 'difficulty' || stored.by === 'level' ? stored.by : fallback.by,
     minLevel: clampInteger(stored.minLevel, 0, 99, fallback.minLevel),
     maxLevel: clampInteger(stored.maxLevel, 0, 99, fallback.maxLevel),
@@ -145,7 +161,7 @@ export interface RandomMixCandidate {
  * estimated difficulty when `estimateDifficulty` is on).
  */
 export function matchesRandomMixConditions(chart: RandomMixCandidate, conditions: RandomMixConditions): boolean {
-  if (!conditions.keyModes.includes(chart.keyMode)) return false;
+  if (chart.keyMode !== conditions.keyMode) return false;
   if (conditions.by === 'difficulty') {
     const difficulty = chart.difficulty ?? (conditions.estimateDifficulty ? chart.estimatedDifficulty : undefined);
     return difficulty !== undefined && conditions.difficulties.includes(difficulty);

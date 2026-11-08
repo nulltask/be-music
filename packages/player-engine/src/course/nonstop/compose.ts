@@ -187,7 +187,9 @@ interface StitchedStop {
  *
  * A note of a later stage that lands before the previous stage's last note, or within 0.1 s of it on a lane that
  * note's stage also used there, becomes background sound, as LR2 does at the seam. Keysound and BGA keys are renumbered
- * into one base-62 space (`#BASE 62`); BMS output refuses more than 3843 of either (`id-space`), while bmson output uses longer keys. The chart's
+ * into one base-62 space (`#BASE 62`); bmson output uses longer keys. BMS output holds at most 3843 of either, so from
+ * rule version 3 a course of BMS stages past that (four or five keysound-heavy charts often are) is stitched as bmson
+ * instead, as one with CN / HCN long notes is; earlier versions refuse it (`id-space`). The chart's
  * judge rank is the first stage's (the map's `stageRanks` change it for later stages). LR2 keeps the last TOTAL
  * declaration across the stage loop, including when later stages omit it. Version 1 retains its former last-stage-only
  * TOTAL rule for existing replays. A stitching rule version it does not know is refused (`stitch-version`).
@@ -195,6 +197,20 @@ interface StitchedStop {
 export function stitchNonstopCourse(
   stages: readonly NonstopStageInput[],
   options: StitchNonstopOptions,
+): StitchNonstopResult {
+  const result = stitchNonstopCourseAs(stages, options, false);
+  // A course BMS output cannot key is stitched as bmson: this changes no course that stitched before, so the replays of
+  // earlier runs stitch as they did.
+  if (!result.ok && result.reason === 'id-space' && (options.stitch ?? NONSTOP_STITCH_VERSION) >= 3)
+    return stitchNonstopCourseAs(stages, options, true);
+  return result;
+}
+
+/** {@link stitchNonstopCourse}, with bmson output forced by `bmsonOutput`. */
+function stitchNonstopCourseAs(
+  stages: readonly NonstopStageInput[],
+  options: StitchNonstopOptions,
+  bmsonOutput: boolean,
 ): StitchNonstopResult {
   if (!NONSTOP_STITCH_VERSIONS.includes(options.stitch ?? NONSTOP_STITCH_VERSION)) {
     return { ok: false, reason: 'stitch-version' };
@@ -236,6 +252,7 @@ export function stitchNonstopCourse(
 
   // BMS has one global LNMODE. Version 3 uses per-note bmson types when a BMS stage needs CN/HCN.
   const asBmson =
+    bmsonOutput ||
     bmsonStage >= 0 ||
     ((options.stitch ?? NONSTOP_STITCH_VERSION) >= 3 &&
       resolved.some((stage) => stage.notes.some((note) => isHeldLongNote(note) && note.lnMode !== 1)));

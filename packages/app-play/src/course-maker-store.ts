@@ -77,7 +77,6 @@ export function serializeMadeCourses(made: MadeCourses): StoredMadeCourses {
       ? {
           randomMixConditions: {
             ...made.randomMixConditions,
-            keyModes: [...made.randomMixConditions.keyModes],
             difficulties: [...made.randomMixConditions.difficulties],
           },
         }
