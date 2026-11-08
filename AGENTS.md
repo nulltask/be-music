@@ -101,6 +101,7 @@
 # Benchmark Rules
 
 - When exported functions are added or removed, update benchmarks accordingly (add or delete benchmark cases).
+- A package's cases are registered through `scripts/bench/packages/`, usually from `packages/<package>/scripts/exports-cases.ts`, keyed `<package>.<export>`. The benchmark (and the CI job `Benchmark (PR)`) fails when an exported function has no case or a case names a removed export, so check coverage locally with `pnpm run bench --packages <package> --time 5 --warmup-time 2`.
 
 # Layering and File-Size Rules
 
