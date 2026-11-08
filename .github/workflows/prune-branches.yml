@@ -1,0 +1,92 @@
+name: Prune closed PR branches
+
+# Deletes the branches of pull requests that were merged or closed, once a day. A branch is deleted only when:
+#
+# - it is not `main`, `devel`, the default branch or a protected branch (these are never deleted, whatever else holds),
+# - no open pull request uses it as its head or its base, and
+# - a merged or closed pull request from this repository had it as its head at the commit the branch still points to,
+#   so a branch that gained commits after its pull request closed is kept.
+#
+# Run it by hand with `dry_run` to list what it would delete without deleting anything.
+
+on:
+  schedule:
+    # 04:23 JST.
+    - cron: '23 19 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: List the branches it would delete, without deleting them
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prune-branches
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      OWNER: ${{ github.repository_owner }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      # A scheduled run has no inputs: it deletes.
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+
+    steps:
+      - name: Delete the branches of closed pull requests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Branches that are never deleted. Checked again right before each delete.
+          is_kept() {
+            case "$1" in
+              main | devel | "$DEFAULT_BRANCH" | '') return 0 ;;
+            esac
+            return 1
+          }
+
+          # Heads and bases of open pull requests from this repository.
+          in_use=$(gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" |
+            jq -r --arg repo "$REPO" '.[] | (select(.head.repo.full_name == $repo) | .head.ref), .base.ref' | sort -u)
+
+          deleted=0
+          while IFS=$'\t' read -r branch sha protected; do
+            if is_kept "$branch" || [ "$protected" = true ]; then
+              continue
+            fi
+            if grep -Fxq -- "$branch" <<<"$in_use"; then
+              echo "keep $branch: an open pull request uses it"
+              continue
+            fi
+            # The closed pull requests whose head was this branch at its current commit.
+            closed=$(gh api --method GET "repos/$REPO/pulls" -f state=closed -f head="$OWNER:$branch" -f per_page=100 |
+              jq -r --arg repo "$REPO" --arg ref "$branch" --arg sha "$sha" \
+                '[.[] | select(.head.repo.full_name == $repo and .head.ref == $ref and .head.sha == $sha)
+                  | "#\(.number)"] | join(", ")')
+            if [ -z "$closed" ]; then
+              continue
+            fi
+            if is_kept "$branch"; then
+              echo "::error::refusing to delete $branch"
+              exit 1
+            fi
+            if [ "$DRY_RUN" = true ]; then
+              echo "would delete $branch ($closed)"
+            else
+              gh api --method DELETE "repos/$REPO/git/refs/heads/$branch"
+              echo "deleted $branch ($closed)"
+            fi
+            deleted=$((deleted + 1))
+          done < <(gh api --paginate "repos/$REPO/branches?per_page=100" --jq '.[] | [.name, .commit.sha, .protected] | @tsv')
+
+          echo "$deleted branch(es) $([ "$DRY_RUN" = true ] && echo 'would be ' || true)deleted"
