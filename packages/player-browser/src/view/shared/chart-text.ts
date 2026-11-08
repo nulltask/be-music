@@ -1,5 +1,6 @@
 import { Container, Text } from 'pixi.js';
 import { measureLayer } from './display-area-info.ts';
+import { setHidden, setStyle } from './dom-style.ts';
 
 /** Plain chart-authored text, shared by all play families. No HTML interpretation or pointer handling. */
 export class ChartTextOverlay {
@@ -71,18 +72,18 @@ export class ChartTextOverlay {
     }
     const root = this.root;
     if (!root) return;
-    root.hidden = text.length === 0;
-    if (root.textContent !== text) root.textContent = text;
+    setHidden(root, text.length === 0);
+    // Nothing to show: skip the measure, which would force a layout every frame.
+    if (text.length === 0) return;
     const { width, height } = measureLayer(root.parentElement ?? root, screen);
+    if (root.textContent !== text) root.textContent = text;
     const scale = Math.min(width / stage.width, height / stage.height);
-    Object.assign(root.style, {
-      left: `${(width - stage.width * scale) / 2 + stage.width * scale * 0.05}px`,
-      top: `${(height - stage.height * scale) / 2 + stage.height * scale * 0.08}px`,
-      width: `${stage.width * scale * 0.9}px`,
-      maxHeight: `${stage.height * scale * 0.3}px`,
-      fontSize: `${size * scale}px`,
-      opacity: String(opacity),
-    });
+    setStyle(root, 'left', `${(width - stage.width * scale) / 2 + stage.width * scale * 0.05}px`);
+    setStyle(root, 'top', `${(height - stage.height * scale) / 2 + stage.height * scale * 0.08}px`);
+    setStyle(root, 'width', `${stage.width * scale * 0.9}px`);
+    setStyle(root, 'maxHeight', `${stage.height * scale * 0.3}px`);
+    setStyle(root, 'fontSize', `${size * scale}px`);
+    setStyle(root, 'opacity', String(opacity));
   }
 
   hide(): void {

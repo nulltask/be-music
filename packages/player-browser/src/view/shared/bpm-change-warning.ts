@@ -2,6 +2,7 @@ import { Container, Graphics, Text } from 'pixi.js';
 import type { TimingResolver } from '@be-music/chart-model';
 import type { PlaySide } from '@be-music/player-scene-model';
 import { measureLayer, type DisplayAreaLane } from './display-area-info.ts';
+import { setHidden, setStyle } from './dom-style.ts';
 
 /**
  * AC 34's BPM-change warning (#746). The official introduction draws `<current> » <next>` in a framed box centred on the
@@ -183,9 +184,11 @@ export class BPMChangeWarningOverlay {
     }
     const root = this.root;
     if (!root) return;
-    root.hidden = placements.length === 0;
-    root.style.opacity = String(opacity * (warning === undefined ? 1 : fadeProgress(warning)));
+    setHidden(root, placements.length === 0);
+    // Nothing to place: skip the measure, which would force a layout every frame.
+    if (placements.length === 0) return;
     const { width, height } = measureLayer(root, screen);
+    setStyle(root, 'opacity', String(opacity * (warning === undefined ? 1 : fadeProgress(warning))));
     const scale = Math.min(width / stage.width, height / stage.height);
     const offsetX = (width - stage.width * scale) / 2;
     const offsetY = (height - stage.height * scale) / 2;
@@ -209,19 +212,19 @@ export class BPMChangeWarningOverlay {
       }
       const color = warning!.rising ? '#4aa8ff' : '#ff5a5a';
       const size = placement.size * scale;
-      node.hidden = false;
+      setHidden(node, false);
       node.dataset.side = placement.side;
       node.dataset.direction = warning!.rising ? 'rising' : 'falling';
       if (node.textContent !== text) node.textContent = text;
-      node.style.fontSize = `${size}px`;
-      node.style.color = color;
-      node.style.borderColor = color;
-      node.style.borderWidth = `${Math.max(1, size / 8)}px`;
-      node.style.padding = `${size * 0.1}px ${size * 0.6}px`;
-      node.style.left = `${offsetX + placement.x * scale}px`;
-      node.style.top = `${offsetY + placement.y * scale}px`;
+      setStyle(node, 'fontSize', `${size}px`);
+      setStyle(node, 'color', color);
+      setStyle(node, 'borderColor', color);
+      setStyle(node, 'borderWidth', `${Math.max(1, size / 8)}px`);
+      setStyle(node, 'padding', `${size * 0.1}px ${size * 0.6}px`);
+      setStyle(node, 'left', `${offsetX + placement.x * scale}px`);
+      setStyle(node, 'top', `${offsetY + placement.y * scale}px`);
     });
-    for (let index = placements.length; index < this.nodes.length; index++) this.nodes[index]!.hidden = true;
+    for (let index = placements.length; index < this.nodes.length; index++) setHidden(this.nodes[index]!, true);
   }
 
   private updateCanvas(
