@@ -106,7 +106,7 @@ describe('made courses storage', () => {
 
   test('keeps the RANDOM MIX dialog conditions, endless counts included', () => {
     const conditions = {
-      keyModes: [7, 14],
+      keyMode: 14,
       by: 'difficulty' as const,
       minLevel: 3,
       maxLevel: 12,

@@ -51,7 +51,7 @@ describe('RANDOM MIX conditions', () => {
     expect(normalizeRandomMixConditions(undefined)).toEqual(DEFAULT_RANDOM_MIX_CONDITIONS);
     expect(
       normalizeRandomMixConditions({
-        keyModes: [14, 7, 7, 'x', -1],
+        keyMode: 14,
         by: 'difficulty',
         minLevel: 120,
         maxLevel: -4,
@@ -62,7 +62,7 @@ describe('RANDOM MIX conditions', () => {
         loops: 500,
       }),
     ).toEqual({
-      keyModes: [7, 14],
+      keyMode: 14,
       by: 'difficulty',
       minLevel: 99,
       maxLevel: 0,
@@ -75,6 +75,19 @@ describe('RANDOM MIX conditions', () => {
       ...DEFAULT_RANDOM_MIX_CONDITIONS,
       count: 1,
     });
+  });
+
+  test('normalize reads the key-mode set an earlier version kept as one key mode', () => {
+    // The fallback's key mode when the set holds it, else the set's lowest.
+    expect(normalizeRandomMixConditions({ keyModes: [14, 7, 'x', -1] }).keyMode).toBe(7);
+    expect(normalizeRandomMixConditions({ keyModes: [14, 10] }).keyMode).toBe(10);
+    expect(normalizeRandomMixConditions({ keyModes: [] }).keyMode).toBe(7);
+    // A stored key mode wins over a leftover set; a malformed one falls back.
+    expect(normalizeRandomMixConditions({ keyMode: 5, keyModes: [14] }).keyMode).toBe(5);
+    expect(normalizeRandomMixConditions({ keyMode: 0 }).keyMode).toBe(7);
+    expect(
+      normalizeRandomMixConditions({ keyMode: 7.5 }, { ...DEFAULT_RANDOM_MIX_CONDITIONS, keyMode: 9 }).keyMode,
+    ).toBe(9);
   });
 
   test('a chart matches by key mode and then by level range or difficulty', () => {
@@ -97,7 +110,8 @@ describe('RANDOM MIX conditions', () => {
 
   test('filter keeps library order and lists the key modes', () => {
     const charts = [chart(1, { keyMode: 14 }), chart(2), chart(3, { keyMode: 5 }), chart(4)];
-    expect(filterRandomMixCandidates(charts, conditions({ keyModes: [7, 5] })).map((c) => c.n)).toEqual([2, 3, 4]);
+    expect(filterRandomMixCandidates(charts, conditions({ keyMode: 7 })).map((c) => c.n)).toEqual([2, 4]);
+    expect(filterRandomMixCandidates(charts, conditions({ keyMode: 5 })).map((c) => c.n)).toEqual([3]);
     expect(listRandomMixKeyModes(charts)).toEqual([5, 7, 14]);
   });
 

@@ -1,5 +1,6 @@
 import { html, nothing, render, type TemplateResult } from 'lit';
 import {
+  DEFAULT_RANDOM_MIX_CONDITIONS,
   RANDOM_MIX_DIFFICULTIES,
   RANDOM_MIX_MAX_COUNT,
   RANDOM_MIX_NONSTOP_MAX_COUNT,
@@ -12,7 +13,7 @@ import {
 import { connectionSelect, RANDOM_MIX_FIELDS, randomMixSelect } from '../course-maker-panel.ts';
 import { playerText } from '../player-copy.ts';
 
-// The RANDOM MIX dialog: deciding a RANDOM MIX bar asks which charts to draw from (key modes, a level range or the
+// The RANDOM MIX dialog: deciding a RANDOM MIX bar asks which charts to draw from (a key mode, a level range or the
 // difficulties) and how many stages (or endless), with the draw settings the Options dialog's My courses also sets
 // (LR2's favorite level, BPM range and BPM limits, and a NONSTOP mix's connection), then OK starts the mix. It opens on
 // what was last confirmed, and says how many charts match; OK is off while none does.
@@ -62,16 +63,19 @@ export function toggleRandomMixValue(values: readonly number[], value: number, o
 }
 
 /**
- * The conditions as the dialog first shows them: key modes the library lacks are dropped (all offered ones when none is
- * left), and a NONSTOP mix's count is capped.
+ * The conditions as the dialog first shows them: a key mode the library lacks gives way to the default one (7 keys), or
+ * to the library's lowest when it lacks that too, and a NONSTOP mix's count is capped.
  */
 export function resolveRandomMixDialogConditions(
   request: Pick<RandomMixDialogRequest, 'kind' | 'keyModes' | 'initial'>,
 ): RandomMixConditions {
-  const offered = request.initial.keyModes.filter((keyMode) => request.keyModes.includes(keyMode));
+  const offered = request.keyModes;
+  const preferred = [request.initial.keyMode, DEFAULT_RANDOM_MIX_CONDITIONS.keyMode].find((keyMode) =>
+    offered.includes(keyMode),
+  );
   return {
     ...request.initial,
-    keyModes: offered.length > 0 ? offered : [...request.keyModes],
+    keyMode: preferred ?? offered[0] ?? request.initial.keyMode,
     count: resolveRandomMixCount(request.kind, request.initial.count),
   };
 }
@@ -248,24 +252,17 @@ function template(
     </header>
     <fieldset class="random-mix-group">
       <legend class="label">${t.keys}</legend>
-      <div class="random-mix-choices">
+      <div class="random-mix-choices" role="radiogroup">
         ${request.keyModes.map(
           (keyMode) =>
             html`<label class="random-mix-check">
               <input
                 class="input"
-                type="checkbox"
-                name="key-mode"
+                type="radio"
+                name="random-mix-key-mode"
                 value=${keyMode}
-                .checked=${conditions.keyModes.includes(keyMode)}
-                @change=${(event: Event) =>
-                  update({
-                    keyModes: toggleRandomMixValue(
-                      conditions.keyModes,
-                      keyMode,
-                      (event.currentTarget as HTMLInputElement).checked,
-                    ),
-                  })}
+                .checked=${conditions.keyMode === keyMode}
+                @change=${() => update({ keyMode })}
               />
               <span>${t.keyMode(keyMode)}</span>
             </label>`,

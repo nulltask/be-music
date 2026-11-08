@@ -204,7 +204,7 @@ describe('stitchNonstopCourse', () => {
     expect(lr2.map.stageRanks).toEqual([{ seconds: b!.offsetSeconds, rank: 1, table: 'lr2-nonstop' }]);
   });
 
-  test('refuses bmson under LR2 placement and BMS courses past the key space', () => {
+  test('refuses bmson under LR2 placement and, before rule version 3, BMS courses past the key space', () => {
     expect(stitchNonstopCourse([{ chart: createEmptyJSON('bmson') }], { connections: [], placement: 'lr2' })).toEqual({
       ok: false,
       reason: 'bmson',
@@ -225,10 +225,9 @@ describe('stitchNonstopCourse', () => {
     }
     const crowdedStage = { chart: crowded };
     expect(stitchNonstopCourse([crowdedStage, crowdedStage], { connections: ['fade'] }).ok).toBe(true);
-    expect(stitchNonstopCourse([crowdedStage, crowdedStage, crowdedStage], { connections: [] })).toMatchObject({
-      ok: false,
-      reason: 'id-space',
-    });
+    expect(
+      stitchNonstopCourse([crowdedStage, crowdedStage, crowdedStage], { connections: [], stitch: 2 }),
+    ).toMatchObject({ ok: false, reason: 'id-space' });
     expect(stitchNonstopCourse([], { connections: [] })).toEqual({ ok: false, reason: 'no-stage' });
     // Stitching rules this build does not know are refused, not guessed at.
     expect(stitchNonstopCourse([], { connections: [], stitch: NONSTOP_STITCH_VERSION + 1 })).toEqual({
@@ -336,6 +335,31 @@ describe('bmson NONSTOP stitching', () => {
       (trigger) => result.chart.resources.wav[trigger.sampleKey] === 'sliced.wav',
     );
     expect(slices.map((trigger) => trigger.sampleOffsetSeconds)).toEqual([0, 0.5, 1, 0]);
+  });
+
+  test('stitches a BMS course past the BMS key space as bmson, keeping every keysound', () => {
+    // Three stages using every base-36 key (1295 each) need 3885 stitched keys, past the 3843 base 62 holds.
+    const crowded = createEmptyJSON('bms');
+    for (let index = 1; index <= 1295; index += 1) {
+      const key = index.toString(36).toUpperCase().padStart(2, '0');
+      crowded.resources.wav[key] = `${key}.wav`;
+      crowded.events.push({ measure: Math.floor(index / 16), position: [index % 16, 16], channel: '11', value: key });
+    }
+    const stages = [crowded, crowded, crowded].map((chart) => ({ chart }));
+    const result = stitchNonstopCourse(stages, { connections: ['blank2', 'blank2'] });
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.chart.sourceFormat).toBe('bmson');
+    expect(Object.keys(result.chart.resources.wav)).toHaveLength(3 * 1295);
+    expect(result.map.stages.map((stage) => stage.wavKeys.length)).toEqual([1295, 1295, 1295]);
+    // Every note of every stage is kept, each with its own sample.
+    const notes = resolveChart(result.chart).notes;
+    expect(notes).toHaveLength(3 * 1295);
+    expect(new Set(notes.map((note) => note.sampleKey)).size).toBe(3 * 1295);
+    // A course that fits BMS output stays BMS.
+    expect(stitchNonstopCourse(stages.slice(0, 2), { connections: ['blank2'] })).toMatchObject({
+      ok: true,
+      chart: { sourceFormat: 'bms' },
+    });
   });
 
   test('does not exhaust the BMS two-character key space in a mixed course', () => {
