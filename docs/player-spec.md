@@ -294,7 +294,7 @@ switch the beatoraja ruleset between its 5 KEY and 7 KEY judge windows. The dete
 [BMS spec — Player-Specific Behavior](./bms-spec.md#player-specific-behavior). Only `.pms` names a mode; every other
 extension leaves the decision to the lanes in use, so a `.bme` chart without a 6 / 7 key column is `5 KEY SP` /
 `5 KEY DP`, as in beatoraja.
-The decision is drawn as a flowchart in [README — Automatic lane mode determination](../README.md#automatic-lane-mode-determination-and-input-assignment).
+The decision is drawn as a flowchart in [`@be-music/chart-model` — Automatic lane mode determination](../packages/chart-model/README.md#automatic-lane-mode-determination).
 The main modes the current implementation determines automatically are as follows.
 
 - `5 KEY SP`

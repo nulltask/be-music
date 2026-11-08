@@ -53,28 +53,30 @@ Be-Music is an open-source project for playing and working with BMS and bmson ch
 
 ## Packages
 
-- `@be-music/chart-source`: pure IR of BMS/bmson intermediate representation (JSON compatible) dedicated to Be-Music internal processing
-- `@be-music/chart-model`: chart semantics helper such as beat resolution, event order, long note resolution, etc.
-- `@be-music/shared-utils`: Generic utilities reused across all packages, with narrow subpath exports for browser-safe core helpers and Node-facing helpers
-- `@be-music/chart-parser`: `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON parser
-- `@be-music/chart-writer`: Stringization from JSON to `.bms` / `.bmson`
-- `@be-music/chart-audio-renderer`: Render the music score and output `.wav` / `.aiff`
-- `@be-music/player-engine`: Shared rules and playback engine: one play loop (manual, auto, replay), judgment, scoring, gauges and clear lamps, best records, course runs and NONSTOP, the replay format, and the runtime contracts hosts plug into
-- `@be-music/player-node-audio`: Host adapter for Node audio sessions, sample decoding, and PCM output
-- `@be-music/player-terminal`: Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds, plus the `bms-replay` replay re-simulator
-- `@be-music/player-scene-model`: Runtime-neutral scene models — library entries, browsing, play options, play state and results, course views, system sounds — shared by every skin family
-- `@be-music/skin-lr2`: Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
-- `@be-music/skin-beatoraja`: Renderer-independent beatoraja JSON/Lua skin parser, normalizer, and theme loader
-- `@be-music/player-skin-sdk`: Framework-free SDK for writing Be-Music Skins for the browser player
-- `@be-music/player-ui`, `@be-music/player-ui-react`, `@be-music/player-ui-vue`: [Reusable Lit Web Components, with typed React and Vue wrappers](./packages/player-ui/README.md)
-- `@be-music/player-browser`: Browser PixiJS runtime: every select, decide, play and result screen as a scene session drawn by a built-in, LR2 or beatoraja family view, behind one host API, plus the audio service, the chart collection, skin loading and gameplay recording
-- `@be-music/app-play`: Private Vite player that wires folder/ZIP drops, LR2/beatoraja themes, the Options dialog and browser playback together, as services behind one scene router
-- `@be-music/app-leaderboard`: Private Leaderboard API on Cloudflare Workers: replay submission, verification by re-simulation, and rankings
-- `@be-music/app-dashboard`: Private service dashboard and the Accounts service: the OIDC provider for sign-in, passkeys, and linked providers
-- `@be-music/worker-play`: Player delivery Worker for static assets, OIDC sessions, settings, Leaderboard forwarding, and URL/media proxies
-- `@be-music/service-auth-client`: Shared OIDC client, service sessions, and API token verification
-- `@be-music/service-web-theme`: Shared service styles and Lit views, with separate client and server entries
-- `@be-music/chart-editor`: CLI editor (import/edit/export)
+Each package's README covers its usage, options and compatibility status.
+
+- [`@be-music/chart-source`](./packages/chart-source/README.md): pure IR of BMS/bmson intermediate representation (JSON compatible) dedicated to Be-Music internal processing
+- [`@be-music/chart-model`](./packages/chart-model/README.md): chart semantics helper such as beat resolution, event order, long note resolution, etc.
+- [`@be-music/shared-utils`](./packages/shared-utils/README.md): Generic utilities reused across all packages, with narrow subpath exports for browser-safe core helpers and Node-facing helpers
+- [`@be-music/chart-parser`](./packages/chart-parser/README.md): `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON parser
+- [`@be-music/chart-writer`](./packages/chart-writer/README.md): Stringization from JSON to `.bms` / `.bmson`
+- [`@be-music/chart-audio-renderer`](./packages/chart-audio-renderer/README.md): Render the music score and output `.wav` / `.aiff`
+- [`@be-music/player-engine`](./packages/player-engine/README.md): Shared rules and playback engine: one play loop (manual, auto, replay), judgment, scoring, gauges and clear lamps, best records, course runs and NONSTOP, the replay format, and the runtime contracts hosts plug into
+- [`@be-music/player-node-audio`](./packages/player-node-audio/README.md): Host adapter for Node audio sessions, sample decoding, and PCM output
+- [`@be-music/player-terminal`](./packages/player-terminal/README.md): Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds, plus the `bms-replay` replay re-simulator
+- [`@be-music/player-scene-model`](./packages/player-scene-model/README.md): Runtime-neutral scene models — library entries, browsing, play options, play state and results, course views, system sounds — shared by every skin family
+- [`@be-music/skin-lr2`](./packages/skin-lr2/README.md): Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
+- [`@be-music/skin-beatoraja`](./packages/skin-beatoraja/README.md): Renderer-independent beatoraja JSON/Lua skin parser, normalizer, and theme loader
+- [`@be-music/player-skin-sdk`](./packages/player-skin-sdk/README.md): Framework-free SDK for writing Be-Music Skins for the browser player
+- [`@be-music/player-ui`](./packages/player-ui/README.md), [`@be-music/player-ui-react`](./packages/player-ui-react/README.md), [`@be-music/player-ui-vue`](./packages/player-ui-vue/README.md): Reusable Lit Web Components, with typed React and Vue wrappers
+- [`@be-music/player-browser`](./packages/player-browser/README.md): Browser PixiJS runtime: every select, decide, play and result screen as a scene session drawn by a built-in, LR2 or beatoraja family view, behind one host API, plus the audio service, the chart collection, skin loading and gameplay recording
+- [`@be-music/app-play`](./packages/app-play/README.md): Private Vite player that wires folder/ZIP drops, LR2/beatoraja themes, the Options dialog and browser playback together, as services behind one scene router
+- [`@be-music/app-leaderboard`](./packages/app-leaderboard/README.md): Private Leaderboard API on Cloudflare Workers: replay submission, verification by re-simulation, and rankings
+- [`@be-music/app-dashboard`](./packages/app-dashboard/README.md): Private service dashboard and the Accounts service: the OIDC provider for sign-in, passkeys, and linked providers
+- [`@be-music/worker-play`](./packages/worker-play/README.md): Player delivery Worker for static assets, OIDC sessions, settings, Leaderboard forwarding, and URL/media proxies
+- [`@be-music/service-auth-client`](./packages/service-auth-client/README.md): Shared OIDC client, service sessions, and API token verification
+- [`@be-music/service-web-theme`](./packages/service-web-theme/README.md): Shared service styles and Lit views, with separate client and server entries
+- [`@be-music/chart-editor`](./packages/chart-editor/README.md): CLI editor (import/edit/export)
 
 The diagram shows the chart and player layers, including the Leaderboard's engine dependency. An arrow points from a package to a package that depends on it; a dependency already reached through another arrow is not drawn again (`@be-music/shared-utils` sits under almost every package). [Architecture — Target architecture](./docs/architecture.md#target-architecture) shows the same layers inside the packages.
 
@@ -184,403 +186,20 @@ The tag is created in the format `@be-music/package-name@x.y.z`.
 - [BMS/bmson intermediate representation (`@be-music/chart-source`) implementation specification](./docs/json-spec.md)
 - [Glossary](./docs/glossary.md)
 
-`@be-music/chart-source` is Be-Music's internal data model. It is not designed as a distribution format or a reusable exchange format with other tools.
-The semantics helper of the score is separated into `@be-music/chart-model`, and `@be-music/chart-source` itself is responsible for pure IR and round-trip preservation.
-
-## Compatibility status summary
-
-### chart-parser (`@be-music/chart-parser`)
-
-- Preserves BMS header/object lines/control syntax
-- Interpret `#WAVxx` / `#BMPxx` / `#BPMxx` / `#STOPxx` / `#TEXTxx`
-- Contains BMS extension headers (`#PREVIEW`, `#LNTYPE`, `#LNMODE`, `#LNOBJ`, `#VOLWAV`, `#SCROLLxx`, `#VIDEOFILE`, etc.)
-- Interpret bmson's `info` / `lines` / `sound_channels` / `bpm_events` / `stop_events` / `bga`, and beatoraja's `scroll_events` / `key_channels` / `mine_channels` extensions
-- BMS text character code guessing (`Shift_JIS`, `UTF-8`, `EUC-JP`, `latin1`, etc.)
-- bmson `info.init_bpm` is required by the parser; missing or invalid values fail early instead of falling back to `130`
-- The beatoraja bmson extensions are mapped through the `mode_hint` lane resolver as beatoraja reads them: `mine_channels` become mines that preserve per-mine `damage`, and `key_channels` become hidden (invisible) notes
-
-### chart-writer (`@be-music/chart-writer`)
-
-- Output BMS/bmson from intermediate representation (JSON)
-- Stable reproduction of bar resolution using `position: [numerator, denominator]`
-- Output bmson extension information (`info` extension, `bga`, `notes.l/c`)
-- Preserve BMS source structure when the stored `preservation` layer still matches the normalized events
-
-### chart-audio-renderer (`@be-music/chart-audio-renderer`)
-
-- Supports BMS / bmson / JSON input
-- Output format `.wav` / `.aiff`
-- Sample loading: `WAV` / `MP3` / `OGG` (Vorbis/Opus) / `OPUS`
-- Reflects bar length / BPM / STOP
-- 100001 times the BPM gimmick value of LR2 series is processed by time resolution
-- Applies `#VOLWAV`, `#xxx97` / `#xxx98`, bmson `notes.c`, `#WAVCMD 01 xx vv`, and `#EXWAVxx v` volume scaling
-
-### player-engine (`@be-music/player-engine`)
-
-- Shared `autoPlay()` / `manualPlay()` engine for terminal and browser runtimes: one play loop with manual, auto and replay judge strategies over a deterministic judge core (see [Architecture](./docs/architecture.md#the-engine-judge-core-and-one-play-loop))
-- UI and input signal buses for lane flashes, POOR BGA commands, frame snapshots, pause, restart, and high-speed changes
-- Shared note extraction for playable notes, legacy long notes, `#LNOBJ`, FREE ZONE, mines, and invisible notes
-- Shared judgment windows, dynamic `#EXRANKxx` changes, score, groove gauge, scroll-distance, BGA timelines, and result summaries
-- Browser-safe entries next to the engine root: `signals`, `lanes`, `display`, `ruleset`, `replay`, `records` and `course` (see [Player spec — Entry points](./docs/player-spec.md#entry-points))
-- `ruleset`: the vocabulary hosts, skins and the Leaderboard share: gauges, clear lamps, BP and the score (`ScoreSummary`, `computeScoreRate`, the DJ Ranks, LR2's money score)
-- `course`, `records` and `replay`: course runs, the NONSTOP pipeline and the course stage rules; best records per judge ruleset; the replay format, its recorder and its simulator
-
-### Node audio (`@be-music/player-node-audio`)
-
-- Host-provided Node audio session, realtime sample mixing, and PCM output through `node-web-audio-api`
-- Owns the `chart-audio-renderer` dependency; `player-engine` imports neither audio rendering nor Node output
-- Configure `createAudioSession: createNodeAudioSession` for Node engine calls; the terminal player does this automatically (see [Player spec](./docs/player-spec.md#node-audio-adapter))
-
-### scene models (`@be-music/player-scene-model`)
-
-- Runtime-neutral models of every screen, independent of the skin family: library entries in chart wording (`LibraryChart`, `LibraryFolder`, `LibraryCourse`), the browse model (`reduceBrowse`, `BrowseSnapshot`), play options, the play state (`PlayState`), the play result (`PlayResult`), course views and system sound sets
-- Used by the web runtime, the skin SDK and the LR2 and beatoraja state resolvers
-- See [Scene models](./docs/scene-model.md)
-
-### terminal player (`@be-music/player-terminal`)
-
-- 3 modes: MANUAL / AUTO SCRATCH / AUTO
-- TUI play screen and song selection screen
-- Metadata / preview / banner display on song selection screen
-- Local cache of song list metadata (`~/.be-music/chart-selection-cache.json`)
-- HIGH-SPEED (`0.5` ~ `10.0`, `0.5` increments)
-- TUI refresh rate setting (`--tui-fps`, default `60`)
-- Judgment: `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR` (with `FAST` / `SLOW` tally)
-- 200,000 points SCORE and That-Which-Must-Not-Be-Named compliant EX-SCORE
-- Show invisible notes (`--show-invisible-notes`)
-- Exclusive handling of FREE ZONE (`17` / `27`)
-- BGA image drawing (`BMP` / `PNG` / `JPEG`) and video drawing (`mpeg1video` / `h264` / `mjpeg`)
-- Video BGA progressive decoding (switch to old method with `--no-video-bga-streaming`)
-- Kitty graphics protocol drawing switching using `--kitty-graphics` / `--no-kitty-graphics` (default: on)
-- Play with `node-web-audio-api` fixed backend
-- Optional BMS `#LNTYPE` auto-detection when omitted (`--ln-type-auto` / `--no-ln-type-auto`)
-- Optional pre-playback audio rendering (`--render-audio`) and per-bus volume tuning (`--volume`, `--bgm-volume`, `--key-volume`)
-- Output dynamics tuning with compressor/limiter switches and threshold/release controls
-- Structured log output (`~/.be-music/logs/player.ndjson`, overwritten with `--log-file`)
-- Node worker split for gameplay, TUI rendering, and video BGA decoding
-- `bms-replay` CLI that re-derives LR2 / beatoraja / That-Which-Must-Not-Be-Named results from a recorded replay (see [Replay specification](./docs/replay.md))
-
-### LR2 skin (`@be-music/skin-lr2`)
-
-- Parses LR2 select / decide / play / result skin CSV files independently from PixiJS
-- Resolves `#INCLUDE`, `#CUSTOMOPTION`, `#CUSTOMFILE`, `#LR2FONT`, system font declarations, skin timers, op conditions, and play-skin variants
-- Parses image, number, text, slider, bargraph, button, BGA, judge-line, measure-line, gauge, score-chart, and result graph elements
-- Loads theme assets with case-insensitive and wildcard lookup, TGA decoding, and DXA archive extraction
-- Supports authored HD resolutions, coordinate-based canvas detection, and image resources inherited across includes (see [HD support and limits](./docs/lr2-skin.md#hd-coordinate-space-and-resources))
-
-### beatoraja skin (`@be-music/skin-beatoraja`)
-
-- Parses beatoraja JSON skins and Lua `.luaskin` entries independently from PixiJS
-- Evaluates the beatoraja two-phase Lua contract on a restricted Fengari sandbox
-- Discovers play / select / decide / result / course-result entries, with play skins grouped by `5` / `7` / `9` / `10` / `14` / `24` / `24d` — every one of them mountable for gameplay
-- Resolves `property[]`, `filepath[]`, category groups, custom offsets, wildcard source paths, and case-insensitive assets
-- Normalizes image, imageset, value, float-value, text, slider, note, judge, gauge, graph, BPM graph, timing graph, song-list, custom event, destination, and PM character elements
-
-### Be-Music Skin SDK (`@be-music/player-skin-sdk`)
-
-- Skin contract for the browser player's built-in family: the skin composes Canvas rendering and optional DOM screens from presentation data
-- Imports no rendering framework; a skin brings its own (Canvas 2D, WebGL / WebGPU, PixiJS, three.js, …)
-- Stage, lane layout, touch / portrait layout, moment, judgement word, loading, audio drive, song fact, result track, skin settings, and motion helpers
-- See [Writing a Be-Music Skin](./docs/be-music-skin.md)
-
-### Reusable player UI
-
-`@be-music/player-ui` provides Lit Web Components for select, decide and result screens, the gameplay HUD, and score, judgment and gauge panels. Use the same components as Native Skin through the typed `@be-music/player-ui-react` and `@be-music/player-ui-vue` wrappers. Connect presentation data and request events while the host owns playback timing and audio. See the [Player UI guide](./packages/player-ui/README.md) for registration, events, themes and SSR limits.
-
-### browser player (`@be-music/player-browser` / `@be-music/app-play`)
-
-- Browser song library for dropped folders, ZIPs, and mixed song/LR2/beatoraja theme drops
-- Lazy browser asset loading for large audio/video files, with case-insensitive path lookup
-- Built-in Be-Music Skins (Synesthesia by default, Plain, and Native (DOM + Canvas)) for select, gameplay, and result, and for a decide screen when the skin declares one
-- Touch play and a touch gameplay layout on touch-first devices, portrait stages for skins that provide one, and per-skin settings
-- LR2 select / decide / gameplay / result skin parsing and rendering on PixiJS
-- beatoraja select / decide / gameplay / result skin parsing and rendering on PixiJS
-- One scene session per screen holds its behaviour (browsing, chart preparation, engine, input, sound, endings) for every family; the built-in, LR2 and beatoraja family views only draw it and return intents (see [Scene sessions and family views](./docs/player-web.md#scene-sessions-and-family-views))
-- Designed entries: `@be-music/player-browser/host` (`PixiSceneHost`, `createSelectScene` / `createDecideScene` / `createPlayScene` / `createResultScene`), `/skin`, `/collection`, `/audio`, `/recording`, `/compute` and `/controller` (see [Entry points](./docs/player-web.md#entry-points))
-- Shared LR2 Pixi helpers for destination interpolation, sprite transforms, numbers, text, sliders, and bargraphs
-- Shared beatoraja Pixi helpers for destination sampling, source-cell selection, text, values, sliders, gauges, graphs, timing visualizers, notes, markers, BGA, and runtime op/timer wiring
-- Shared playback semantics with the terminal player for notes, timing, scroll distance, BGA cues, score, and results
-- One audio service on one system `AudioContext` for the select BGM, cues, jingles, chart preview and skin sounds, and a WebAudio bus per play with split key/BGM/master compressor controls
-- BGA still/video rendering, browser-side video transcode fallback, and MP4 / WebM gameplay recording
-- Single PixiJS scene host that owns one renderer context and shows one scene at a time; the player's scene router owns every transition and disposes the scene that left
-- In-scene LR2 and beatoraja PLAY OPTION controls for hi-speed, BGA mode/size, filters, sort, HS-FIX, lane cover, lift, auto-scratch, DP flip, random/mirror modes, gauge variants, and skin options
-
-### chart-editor (`@be-music/chart-editor`)
-
-- `init`, `import`, `export`, `set-meta`, `add-note`, `delete-note`, `list-notes`
-
-## Main commands
-
-### 1. Convert BMS/bmson to JSON
-
-```bash
-pnpm run parse chart.bms chart.json
-```
-
-### 2. Convert JSON to BMS/bmson
-
-```bash
-pnpm run stringify chart.json chart.bms --format bms
-pnpm run stringify chart.json chart.bmson --format bmson
-```
-
-### 3. Audio rendering
-
-```bash
-pnpm run audio-render chart.bms out.wav
-pnpm run audio-render chart.bms out.aiff --sample-rate 48000
-```
-
-### 4. Player
-
-```bash
-# Autoplay
-pnpm run player chart.bms --auto
-
-# Autoplay scratch only (16ch/26ch)
-pnpm run player chart.bms --auto-scratch
-
-# Manual play
-pnpm run player chart.bms
-
-# Disable TUI
-pnpm run player chart.bms --no-tui
-
-# Initial HIGH-SPEED value
-pnpm run player chart.bms --high-speed 3.5
-
-# TUI refresh rate
-pnpm run player chart.bms --tui-fps 120
-
-# Disable progressive decode for video BGA
-pnpm run player chart.bms --no-video-bga-streaming
-
-# Show invisible channels (31-39/41-49) as green notes
-pnpm run player chart.bms --show-invisible-notes
-
-# Render BGA / STAGEFILE / BANNER images with the Kitty graphics protocol
-pnpm run player chart.bms --kitty-graphics
-
-# Override the structured log output path
-pnpm run player chart.bms --log-file /tmp/be-music.ndjson
-
-# Disable audio
-pnpm run player chart.bms --no-audio
-
-# Disable the output limiter
-pnpm run player chart.bms --no-limiter
-
-# Enable the compressor
-pnpm run player chart.bms --compressor --compressor-threshold-db -10 --compressor-ratio 3
-
-# Render audio before playback without in-game audio
-pnpm run player chart.bms --render-audio preview.wav --no-audio
-
-# Tune visible-note cap for dense charts
-pnpm run player chart.bms --tui-visible-notes-limit 4096
-
-# Disable automatic #LNTYPE inference when missing
-pnpm run player chart.bms --no-ln-type-auto
-```
-
-### 5. Browser player
-
-```bash
-pnpm run player:web
-```
-
-The player starts a Vite dev server. Drop a BMS/bmson song folder, an LR2 theme folder, a beatoraja theme folder, a ZIP, or a song folder and LR2/beatoraja theme folder together into the browser.
-
-The player can also load archives from a URL: `?music=<zip URL>&skin=<zip URL>` (either parameter may be omitted) feeds the archives into the same pipeline as a drop. Cross-origin `https` URLs are fetched through the same-origin proxy route `/__url-load-proxy`, served by the Vite dev server and by the Cloudflare Worker.
-
-The player is served by the Player Worker (`packages/worker-play`): Static Assets for the built player plus a Worker that streams the ffmpeg core from R2 and forwards the Leaderboard's API. Pushes to `main` and `devel` deploy every service to production and the preview (`.github/workflows/deploy.yml`, [Services and environments](./docs/services.md)). To deploy the Player by hand:
-
-```bash
-pnpm --filter @be-music/app-play run cf:r2:push # when the pinned @ffmpeg/core changes: upload the core to R2
-pnpm --filter @be-music/worker-play run deploy                # production, play.be-music.app
-pnpm --filter @be-music/worker-play run deploy:preview        # preview, play.preview.be-music.app
-```
-
-`deploy` builds the player and runs `cf deploy`. The ffmpeg core (`ffmpeg-core.wasm` / `ffmpeg-core.js`) exceeds the Static Assets per-file limit, so it lives in R2 and is served through the Worker.
-
-### 6. Editor
-
-```bash
-pnpm run editor import chart.bms chart.json
-pnpm run editor add-note chart.json 0 11 1 2 01
-pnpm run editor export chart.json chart.bms
-```
-
-### 7. Replay re-simulation
-
-```bash
-pnpm run replay -- /path/to/Song.bmplay.json
-pnpm run replay -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
-```
-
-See [Replay specification](./docs/replay.md) for the options.
-
-## Terminal player operations
-
-These controls apply to the terminal player. Browser controls follow the selected skin family and key configuration; see [Browser player controls](./docs/player-web.md#options-dialog).
-
-### Song selection screen
-
-- `↑/↓` or `k/j`: Move
-- `←/→` or `h/l`: Move page
-- `Ctrl+b / Ctrl+f`: Move page
-- `g` or `Home` / `G` or `End`: Jump to the first / last entry
-- `1-5`: DIFFICULTY filter
-- `0`: DIFFICULTY filter cancellation
-- `a`: `MANUAL -> AUTO SCRATCH -> AUTO` switching
-- `s`: HIGH-SPEED increase (`+0.5`)
-- `S`: HIGH-SPEED decrease (`-0.5`)
-- `Enter`: Start
-- `Esc` or `Ctrl+C`: Exit
-
-### Playing
-
-- `Space`: Pause/Resume
-- `Alt`/`Option` + Odd lane input: HIGH-SPEED decrease (`-0.5`)
-- `Alt`/`Option` + Even lane input: HIGH-SPEED increase (`+0.5`)
-- `Esc`: Finish playing and go to results
-- `Ctrl+C`: Exit
-
-### Results screen
-
-- `Enter` or `Esc`: Return to song selection screen
-- `r`: Play the same chart again (single-chart mode)
-
-## Automatic lane mode determination and input assignment
-
-### Automatic judgment
-
-Automatically determines the next mode based on the channel used.
-
-- `5 KEY SP`
-- `5 KEY DP`
-- `7 KEY SP`
-- `14 KEY DP`
-- `9 KEY`
-- `24 KEY SP`
-- `48 KEY DP`
-
-Only the `.pms` extension takes part: a `.pms` file is `9 KEY` ahead of the lane rules. `.bms`, `.bme` and `.bml` files are decided by the lanes in use, so a `.bme` chart without the 6 / 7 key columns is `5 KEY`.
-
-- A full `11..19` one-player keyboard or PMS-STD `22..25` without traditional That-Which-Must-Not-Be-Named 2P channels also resolves to `9 KEY`.
-- Any extended lane channel (`1A..1O` / `2A..2O`, or the wheel `1P` / `1Q` / `2P` / `2Q`) resolves to `24 KEY SP` / `48 KEY DP` ahead of every other rule, and so does a bmson `keyboard-24k` / `keyboard-24k-double` `mode_hint`.
-
-The rule (`resolveChartPlayVariant` in `@be-music/chart-model`) checks in this order, and the first match wins. The 9 KEY lane pattern is any of three content rules: `#PLAYER 3` with `17` and without `21` / `26..29`, all of `11..19` without a 2P lane, or `22..25` without `21` / `26..29`. "2P" means any `2x` lane in use; lane usage counts the `1x` / `2x` lanes and the `5x` / `6x` long notes, never mines or invisible objects.
-
-```mermaid
-flowchart TD
-  hint{"bmson keyboard<br/>mode_hint?"} -->|"keyboard-24k(-double)"| kb["24 KEY SP / 48 KEY DP"]
-  hint -->|no| ext{"extended lane<br/>1A..1Q / 2A..2Q?"}
-  ext -->|"yes: 2P ? 48 : 24"| kb
-  ext -->|no| pms{".pms?"}
-  pms -->|yes| nine["9 KEY"]
-  pms -->|no| sig{"9 KEY lane<br/>pattern?"}
-  sig -->|yes| nine
-  sig -->|no| ____{"18 / 19 / 28 / 29<br/>in use?"}
-  ____ -->|"yes: 2P ? 14 : 7"| seven["7 KEY SP / 14 KEY DP"]
-  ____ -->|"no: 2P ? 10 : 5"| five["5 KEY SP / 5 KEY DP"]
-```
-
-### Representative mode channels and inputs
-
-| Mode                     | Channel -> Input                                                                                                                              |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `5 KEY SP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`                                                                         |
-| `5 KEY DP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `26 -> RShift`  |
-| `7 KEY SP`               | `5 KEY SP` + `18 -> f`, `19 -> v`                                                                                                             |
-| `14 KEY DP`              | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift`                                      |
-| `9 KEY (BME-compatible)` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b`                                             |
-| `9 KEY (PMS-STD)`        | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `22 -> f`, `23 -> v`, `24 -> g`, `25 -> b`                                             |
-| `24 KEY SP`              | `11..19` + `1A..1O` (24 keys, no scratch) -> `a s d f g h j k l ; q w e r u i o p z x c v b n`; wheel `1P -> Tab` (up), `1Q -> LShift` (down) |
-| `48 KEY DP`              | `24 KEY SP` + `21..29` + `2A..2O`, the 2P keys running past the printable-key pool onto function keys; 2P wheel `2P -> Enter`, `2Q -> RShift` |
-
-## FREE ZONE (`17` / `27`)
-
-- Other than 9KEY and the 24KEY / 48KEY keyboard modes, it is treated as FREE ZONE.
-- Do not create an independent lane, but draw on top of the scratch lane (`16` / `26`).
-- The note length is fixed at a quarter note.
-- Since it is not subject to judgment, it is not included in `TOTAL` / `EX-SCORE` / `SCORE`.
-- When determining 9KEY or 24KEY / 48KEY, `17` / `27` is treated as the normal lane note.
-
-## Keyboard input (kitty keyboard protocol)
-
-- Automatic opt-in to kitty keyboard protocol when starting play.
-- On compatible terminals, pressing and lifting of Left Shift and Right Shift will be handled individually.
-- Incompatible terminals will fall back to conventional input.
-- Even during fallback, scratch input can be replaced with `a` (1P) / `]` (2P).
-
-## BGA implementation
-
-- Combine and draw `04` (base) and `07` (layer).
-- Black (`#000000`) in layer is treated as a transparent color.
-- `#BANNER` / bmson `banner_image` is displayed in the song introduction block on the song selection screen.
-- On compatible terminals, the kitty graphics protocol is used to display gameplay BGA, `#STAGEFILE` loading screen, and song selection screen banner as images by default.
-- Add `--no-kitty-graphics` to return to ANSI drawing.
-- BGA recalculates and updates the display size when resizing the window.
-- Video BGA is decoded with `@uwx/libav.js-fat`.
-  - Supported codecs: `mpeg1video`, `h264`, `mjpeg`
-  - Does not decode audio tracks.
-  - By default, playback starts after the first frame is acquired, and the remaining frames are decoded gradually in the background.
-  - Add `--no-video-bga-streaming` to revert to the old method of decoding all frames before playback.
-
-## Score and judgment
-
-- Judgment type: `PERFECT`, `GREAT`, `GOOD`, `BAD`, `POOR`
-- `FAST` / `SLOW` is added only when pressing `GREAT` / `GOOD` quickly or slowly.
-- A blank keystroke without a corresponding unjudged note fires LR2-style empty POOR: it does not change judgment counters, score, EX-SCORE, or combo, but it applies the empty-POOR gauge delta and triggers POOR BGA.
-- EX-SCORE:
-  - `PERFECT = +2`
-  - `GREAT = +1`
-- SCORE (200000 points):
-  - Judgment base points 150000 + Combo additional points 50000
-  - `BAD` / `POOR` does not add points, disconnects the combo
-
-## Settings/Cache/Log
-
-`@be-music/player-terminal` saves the following locally.
-
-- Play Mode (`manual` / `auto-scratch` / `auto`)
-- HIGH-SPEED
-- Per-directory last selected chart file and music-select focus key
-
-Storage location and usage:
-
-- `~/.be-music/player.json`
-  - Play Mode, HIGH-SPEED, last selected chart file by directory, and music-select focus key by directory
-- `~/.be-music/chart-selection-cache.json`
-  - Song list metadata cache
-  - Reuse is determined by `contentHash` in the chart body, and saved entries are verified by `cacheHash`
-- `~/.be-music/logs/player.ndjson`
-  - Structured log when running `player`
-  - If `--log-file <path>` is specified, use that path
-
-## SEA (Single Executable Applications)
-
-```bash
-# Build the player SEA binary
-pnpm run player:sea
-
-# Build the chart-audio-renderer SEA binary
-pnpm run audio-renderer:sea
-
-# Build outputs
-./packages/player-terminal/dist-sea/be-music-player chart.bms
-./packages/chart-audio-renderer/dist-sea/be-music-audio-render chart.bms output.wav
-
-# When specifying the Node executable explicitly
-pnpm run player:sea --node-binary /path/to/node
-pnpm run audio-renderer:sea --node-binary /path/to/node
-```
-
-supplement:
-
-- Requires Node.js 26+.
-- SEA generation uses built-in `--build-sea`.
+## Command-line tools
+
+The root `package.json` runs each package's CLI and dev server. See the package READMEs for the options.
+
+| Command                                       | Package                                                                       |
+| --------------------------------------------- | ----------------------------------------------------------------------------- |
+| `pnpm run parse`                              | [`@be-music/chart-parser`](./packages/chart-parser/README.md)                 |
+| `pnpm run stringify`                          | [`@be-music/chart-writer`](./packages/chart-writer/README.md)                 |
+| `pnpm run audio-render`, `audio-renderer:sea` | [`@be-music/chart-audio-renderer`](./packages/chart-audio-renderer/README.md) |
+| `pnpm run editor`                             | [`@be-music/chart-editor`](./packages/chart-editor/README.md)                 |
+| `pnpm run player`, `replay`, `player:sea`     | [`@be-music/player-terminal`](./packages/player-terminal/README.md)           |
+| `pnpm run player:web`                         | [`@be-music/app-play`](./packages/app-play/README.md)                         |
+
+Deploying the services is described in [Services and environments](./docs/services.md) and in each service package's README.
 
 ## Exports Benchmark
 
