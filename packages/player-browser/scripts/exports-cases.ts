@@ -684,6 +684,12 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       await playerWebCoreAPI.loadBeatorajaChartImages(BENCH_SONG, BENCH_SOURCE);
     },
   });
+  define('player-browser.loadBeatorajaChartImage', {
+    run: async () => {
+      // A path the bench source does not hold: the lookup misses without decoding anything.
+      await playerWebCoreAPI.loadBeatorajaChartImage(BENCH_SONG.chartPath, 'back.png', BENCH_SOURCE);
+    },
+  });
   define('player-browser.resolveBeatorajaChartImage', {
     run: () => {
       playerWebCoreAPI.resolveBeatorajaChartImage({}, -100);
