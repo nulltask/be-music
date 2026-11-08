@@ -346,7 +346,9 @@ export function drawReticle(
     .lineTo(x + bend, bottom)
     .quadraticCurveTo(x, bottom, x, bottom - bend)
     .lineTo(x, bottom - arm)
-    .stroke({ color, width, alpha, cap: 'round' });
+    // Square caps reach as far as round ones would; at these hairline widths the rounding is under a pixel, and Pixi
+    // builds a round cap from a fan of segments for every arm end of every reticle, every frame.
+    .stroke({ color, width, alpha, cap: 'square' });
   if (options.cross) {
     const cx = x + w / 2;
     const cy = y + h / 2;
