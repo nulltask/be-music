@@ -2,10 +2,15 @@ import { parseLR2NonstopConnections, type CourseKind, type NonstopConnection } f
 import { resolveLibraryChartDifficultyValue } from '../library/difficulty.ts';
 import type { LibraryCourse } from '../library/entries.ts';
 
-/** One stage of a course, as a skin shows it: the stage chart's title, subtitle, play level and difficulty. */
+/**
+ * One stage of a course, as a skin shows it: the stage chart's title, subtitle, artist, genre, play level and
+ * difficulty.
+ */
 export interface CourseStageView {
   title: string;
   subtitle?: string;
+  artist?: string;
+  genre?: string;
   level?: number;
   /** The chart's `#DIFFICULTY` (1 BEGINNER … 5 INSANE); absent when the chart names none or is not in the library. */
   difficulty?: number;
@@ -42,6 +47,8 @@ export function resolveCourseView(course: LibraryCourse, stageIndex?: number): C
       return {
         title: chart?.title ?? stage.title,
         ...(chart?.subtitle !== undefined ? { subtitle: chart.subtitle } : {}),
+        ...(chart?.artist !== undefined ? { artist: chart.artist } : {}),
+        ...(chart?.genre !== undefined ? { genre: chart.genre } : {}),
         ...(level !== undefined && Number.isFinite(level) ? { level } : {}),
         ...(difficulty !== undefined && Number.isFinite(difficulty) ? { difficulty } : {}),
       };

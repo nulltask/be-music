@@ -3,6 +3,7 @@ import { resolveClearLamp } from '@be-music/player-engine/ruleset';
 import { isAutoPlayResult } from '@be-music/player-scene-model';
 import type { BeMusicResultData } from './result-data.ts';
 import { formatPlayVariantLabel } from './chart-stats.ts';
+import { COURSE_KIND_LABELS } from './select-list.ts';
 
 /**
  * The play's clear lamp as the result track column labels it: `PERFECT` (every note a PGREAT), `FULL COMBO` (no BAD /
@@ -88,4 +89,62 @@ export function resolveResultTrackRows(result: Pick<BeMusicResultData, 'score' |
     },
     { label: 'COMBO BREAK', value: String(Math.max(0, score.bad + score.poor)) },
   ];
+}
+
+/** One stage of a course run, as its result's track column lists it. */
+export interface ResultCourseStageRow {
+  /** The stage number, from 1. */
+  stage: number;
+  title: string;
+  subtitle?: string;
+  artist?: string;
+  genre?: string;
+  /** The chart's play level, `-` when unknown. */
+  level: string;
+  /** The chart's `#DIFFICULTY` (1 BEGINNER … 5 INSANE), when known. */
+  difficulty?: number;
+  /** The run reached the stage; a stage after the one a course failed on reads `false`. */
+  played: boolean;
+}
+
+/** What the track column of a course run's result shows in place of one chart: the course and its stages. */
+export interface ResultCourseCard {
+  /** `DAN`, `COURSE` or `NONSTOP`. */
+  kind: string;
+  title: string;
+  /** The stages reached out of the course's, and the trophy earned (`2 / 4 STAGES · goldmedal`). */
+  detail: string;
+  stages: ResultCourseStageRow[];
+}
+
+/**
+ * The course card of a course run's result (an EXPERT / GRADE run, or a NONSTOP run, its stitched play as one): the
+ * course and every stage chart it plays in order, the ones the run never reached marked unplayed. `undefined` for any
+ * other result, a course stage's included, whose track column shows its own chart.
+ */
+export function resolveResultCourseCard(
+  result: Pick<BeMusicResultData, 'run' | 'course' | 'courseRun'>,
+): ResultCourseCard | undefined {
+  const { course, courseRun } = result;
+  if (course === undefined || course.stageIndex !== undefined) return undefined;
+  if (result.run !== 'course' && result.run !== 'nonstop') return undefined;
+  const total = course.stages.length;
+  // A NONSTOP run without a course log (a practice run) played every stage of its stitched chart.
+  const reached = Math.min(total, courseRun?.stagesPlayed ?? total);
+  const detail = [`${reached} / ${total} STAGES`, ...(courseRun?.trophy !== undefined ? [courseRun.trophy] : [])];
+  return {
+    kind: COURSE_KIND_LABELS[course.kind],
+    title: course.title,
+    detail: detail.join(' · '),
+    stages: course.stages.map((stage, index) => ({
+      stage: index + 1,
+      title: stage.title,
+      ...(stage.subtitle !== undefined ? { subtitle: stage.subtitle } : {}),
+      ...(stage.artist !== undefined ? { artist: stage.artist } : {}),
+      ...(stage.genre !== undefined ? { genre: stage.genre } : {}),
+      level: stage.level !== undefined ? String(stage.level) : '-',
+      ...(stage.difficulty !== undefined ? { difficulty: stage.difficulty } : {}),
+      played: index < reached,
+    })),
+  };
 }

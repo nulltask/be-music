@@ -1,4 +1,5 @@
 import {
+  resolveResultCourseCard,
   resolveResultLamp,
   resolveResultPlayTag,
   resolveResultTrackRows,
@@ -6,6 +7,7 @@ import {
   type BeMusicResultData,
   type BeMusicResultFrame,
   type BeMusicSurface,
+  type ResultCourseCard,
   resolveResultVerdict,
 } from '@be-music/player-skin-sdk';
 import { resolvePortraitResult } from './layout.ts';
@@ -64,16 +66,22 @@ export function drawResult(surface: BeMusicSurface<'2d'>, frame: BeMusicResultFr
   const x = width - MARGIN - 220;
   ctx.fillStyle = PANEL;
   ctx.fillRect(x, 60, 220, 330);
-  // Genre, title, artist — the order every built-in skin uses.
-  const lift = result.chart.genre ? 12 : 0;
-  if (result.chart.genre) text(ctx, result.chart.genre, x + 14, 78, { size: 10, color: MUTED, maxWidth: 192, nowMs });
-  text(ctx, result.chart.title, x + 14, 82 + lift, { size: 14, weight: 800, maxWidth: 192, nowMs });
-  text(ctx, result.chart.artist ?? '', x + 14, 102 + lift, { size: 11, color: MUTED, maxWidth: 192, nowMs });
-  resolveResultTrackRows(result).forEach((row, index) => {
-    const y = 140 + index * 34;
-    text(ctx, row.label, x + 14, y, { size: 10, color: MUTED, weight: 700 });
-    text(ctx, row.value, x + 206, y, { size: 14, align: 'right', maxWidth: 120, nowMs });
-  });
+  const course = resolveResultCourseCard(result);
+  if (course !== undefined) {
+    // A course run lists the charts it played in place of one chart's facts.
+    drawCourseCard(ctx, course, { left: x + 14, right: x + 206, top: 78, rowsY: 140, bottom: 380, nowMs });
+  } else {
+    // Genre, title, artist — the order every built-in skin uses.
+    const lift = result.chart.genre ? 12 : 0;
+    if (result.chart.genre) text(ctx, result.chart.genre, x + 14, 78, { size: 10, color: MUTED, maxWidth: 192, nowMs });
+    text(ctx, result.chart.title, x + 14, 82 + lift, { size: 14, weight: 800, maxWidth: 192, nowMs });
+    text(ctx, result.chart.artist ?? '', x + 14, 102 + lift, { size: 11, color: MUTED, maxWidth: 192, nowMs });
+    resolveResultTrackRows(result).forEach((row, index) => {
+      const y = 140 + index * 34;
+      text(ctx, row.label, x + 14, y, { size: 10, color: MUTED, weight: 700 });
+      text(ctx, row.value, x + 206, y, { size: 14, align: 'right', maxWidth: 120, nowMs });
+    });
+  }
 
   // Between the 1P counts and the chart panel.
   if (result.secondPlayer) drawSecondPlayer(ctx, result.secondPlayer, 240, 236, width - MARGIN - 220 - 16 - 240, nowMs);
@@ -219,6 +227,19 @@ function drawPortraitResult(
   const left = track.x + 14;
   const right = track.x + track.w - 14;
   const textW = right - left;
+  const course = resolveResultCourseCard(result);
+  if (course !== undefined) {
+    // A course run lists the charts it played in place of one chart's facts.
+    drawCourseCard(ctx, course, {
+      left,
+      right,
+      top: track.y + 18,
+      rowsY: grid.trackRowsY - 8,
+      bottom: track.y + track.h - 8,
+      nowMs,
+    });
+    return;
+  }
   const lift = result.chart.genre ? 12 : 0;
   if (result.chart.genre) {
     text(ctx, result.chart.genre, left, track.y + 18, { size: 10, color: MUTED, maxWidth: textW, nowMs });
@@ -230,4 +251,34 @@ function drawPortraitResult(
     text(ctx, row.label, left, y, { size: 10, color: MUTED, weight: 700 });
     text(ctx, row.value, right, y, { size: 14, align: 'right', maxWidth: textW - 120, nowMs });
   });
+}
+
+/**
+ * A course run's card in the chart panel: the course's kind, name and how far the run went (from `top`), then every
+ * stage chart in order — its number, title and level, and its artist when the rows have the room — from `rowsY` down to
+ * `bottom`. A stage the run never reached is dimmed.
+ */
+function drawCourseCard(
+  ctx: CanvasRenderingContext2D,
+  course: ResultCourseCard,
+  area: { left: number; right: number; top: number; rowsY: number; bottom: number; nowMs: number },
+): void {
+  const { left, right, top, rowsY, nowMs } = area;
+  const textW = right - left;
+  text(ctx, course.kind, left, top, { size: 10, color: MUTED, weight: 700 });
+  text(ctx, course.title, left, top + 18, { size: 14, weight: 800, maxWidth: textW, nowMs });
+  text(ctx, course.detail, left, top + 38, { size: 11, color: MUTED, maxWidth: textW, nowMs });
+  const pitch = Math.min(34, (area.bottom - rowsY) / Math.max(1, course.stages.length));
+  const withArtist = pitch >= 28;
+  course.stages.forEach((stage, index) => {
+    const y = rowsY + index * pitch + (withArtist ? 6 : pitch / 2);
+    ctx.globalAlpha = stage.played ? 1 : 0.4;
+    text(ctx, String(stage.stage), left, y, { size: 10, color: MUTED, weight: 700 });
+    text(ctx, stage.title, left + 16, y, { size: 12, weight: 700, maxWidth: textW - 16 - 30, nowMs });
+    text(ctx, stage.level, right, y, { size: 12, align: 'right', maxWidth: 26 });
+    if (withArtist && stage.artist !== undefined) {
+      text(ctx, stage.artist, left + 16, y + 14, { size: 10, color: MUTED, maxWidth: textW - 16, nowMs });
+    }
+  });
+  ctx.globalAlpha = 1;
 }

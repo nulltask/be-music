@@ -28,6 +28,7 @@ import {
 import {
   easeOutBack,
   easeOutCubic,
+  resolveResultCourseCard,
   resolveResultLamp,
   resolveResultPlayTag,
   resolveResultTrackRows,
@@ -35,6 +36,7 @@ import {
   stageProgress,
   resolveResultVerdict,
   type BeMusicResultData,
+  type ResultCourseCard,
   type ResultTrackRow,
 } from '@be-music/player-skin-sdk';
 import { resolveResultGrid } from './result-grid.ts';
@@ -335,46 +337,64 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   glass(track.g, trackX, trackTop, trackW, trackH, accent);
   const trackTextX = trackX + 14;
   const trackTextW = trackW - 28;
-  label('TRACK', trackTextX, trackTop + 12, track.root, SYN_EMBER);
-  // Genre, title, artist — the order every built-in skin uses.
-  const genreLift = result.chart.genre ? 14 : 0;
-  if (result.chart.genre) {
-    label(result.chart.genre.toUpperCase(), trackTextX, trackTop + 30, track.root, SYN_DIM, trackTextW);
-  }
-  text(track.root, result.chart.title || 'Untitled chart', trackTextX, trackTop + 30 + genreLift, {
-    size: 15,
-    weight: '500',
-    fill: SYN_WHITE,
-    fontFamily: SYN_TEXT_FONT,
-    maxWidth: trackTextW,
-    dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
-  });
-  text(track.root, result.chart.artist ?? '', trackTextX, trackTop + 52 + genreLift, {
-    size: 10,
-    weight: '300',
-    fill: SYN_MIST,
-    fontFamily: SYN_TEXT_FONT,
-    maxWidth: trackTextW,
-  });
-  track.g.rect(trackTextX, trackTop + 88, trackTextW, 1).fill({ color: accent, alpha: 0.3 });
-  // The fact rows run down one column (landscape) or fill two side by side (portrait), 34 / 30 px apart; a two-player
-  // play adds the 2P player's.
   const columns = grid.trackColumns;
-  const columnGap = 24;
-  const columnW = (trackTextW - columnGap * (columns - 1)) / columns;
-  const rowPitch = columns > 1 ? 30 : 34;
-  [...resolveResultTrackRows(result), ...secondPlayerRows(result)].forEach((row, index) => {
-    const columnX = trackTextX + (index % columns) * (columnW + columnGap);
-    const rowY = trackTop + 100 + Math.floor(index / columns) * rowPitch;
-    label(row.label, columnX, rowY + 4, track.root, SYN_DIM, columnW - 50);
-    text(track.root, row.value, columnX + columnW, rowY + 9, {
-      ...display(columns > 1 ? 13 : 15, SYN_WHITE),
-      anchorX: 1,
-      anchorY: 0.5,
-      maxWidth: columns > 1 ? 56 : trackTextW - 90,
+  const course = resolveResultCourseCard(result);
+  if (course !== undefined) {
+    // A course run lists the charts it played in place of one chart's facts.
+    label(course.kind, trackTextX, trackTop + 12, track.root, SYN_EMBER);
+    drawCourseCard(course, {
+      target: track.root,
+      g: track.g,
+      x: trackTextX,
+      top: trackTop,
+      w: trackTextW,
+      bottom: trackTop + trackH - (columns > 1 ? 44 : 50) - 8,
+      columns,
+      accent,
+      text,
+      label,
     });
-    track.g.rect(columnX, rowY + 24, columnW, 1).fill({ color: SYN_DIM, alpha: 0.3 });
-  });
+  } else {
+    label('TRACK', trackTextX, trackTop + 12, track.root, SYN_EMBER);
+    // Genre, title, artist — the order every built-in skin uses.
+    const genreLift = result.chart.genre ? 14 : 0;
+    if (result.chart.genre) {
+      label(result.chart.genre.toUpperCase(), trackTextX, trackTop + 30, track.root, SYN_DIM, trackTextW);
+    }
+    text(track.root, result.chart.title || 'Untitled chart', trackTextX, trackTop + 30 + genreLift, {
+      size: 15,
+      weight: '500',
+      fill: SYN_WHITE,
+      fontFamily: SYN_TEXT_FONT,
+      maxWidth: trackTextW,
+      dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
+    });
+    text(track.root, result.chart.artist ?? '', trackTextX, trackTop + 52 + genreLift, {
+      size: 10,
+      weight: '300',
+      fill: SYN_MIST,
+      fontFamily: SYN_TEXT_FONT,
+      maxWidth: trackTextW,
+    });
+    track.g.rect(trackTextX, trackTop + 88, trackTextW, 1).fill({ color: accent, alpha: 0.3 });
+    // The fact rows run down one column (landscape) or fill two side by side (portrait), 34 / 30 px apart; a two-player
+    // play adds the 2P player's.
+    const columnGap = 24;
+    const columnW = (trackTextW - columnGap * (columns - 1)) / columns;
+    const rowPitch = columns > 1 ? 30 : 34;
+    [...resolveResultTrackRows(result), ...secondPlayerRows(result)].forEach((row, index) => {
+      const columnX = trackTextX + (index % columns) * (columnW + columnGap);
+      const rowY = trackTop + 100 + Math.floor(index / columns) * rowPitch;
+      label(row.label, columnX, rowY + 4, track.root, SYN_DIM, columnW - 50);
+      text(track.root, row.value, columnX + columnW, rowY + 9, {
+        ...display(columns > 1 ? 13 : 15, SYN_WHITE),
+        anchorX: 1,
+        anchorY: 0.5,
+        maxWidth: columns > 1 ? 56 : trackTextW - 90,
+      });
+      track.g.rect(columnX, rowY + 24, columnW, 1).fill({ color: SYN_DIM, alpha: 0.3 });
+    });
+  }
   const lamp = resolveResultLamp(result);
   const lampColor =
     lamp === 'PERFECT' ? SYN_WHITE : lamp === 'FULL COMBO' ? SYN_CYAN : lamp === 'CLEAR' ? SYN_AMBER : SYN_RED;
@@ -390,6 +410,94 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
     dropShadow: { color: lampColor, distance: 0, blur: 12, alpha: 1 },
   });
   rise(track.root, 680);
+}
+
+/**
+ * A course run's card in the track column: the course's name and how far the run went, then every stage chart in order
+ * (its number, title, level and artist), between the divider and `bottom`. The stages share the room, and drop the artist
+ * line when it gets tight; a stage the run never reached is dimmed. A portrait card closes up its header and lays the
+ * stages out in `columns` columns.
+ */
+function drawCourseCard(
+  course: ResultCourseCard,
+  area: {
+    target: Container;
+    g: Graphics;
+    x: number;
+    top: number;
+    w: number;
+    bottom: number;
+    columns: number;
+    accent: number;
+    text: (target: Container, value: string, x: number, y: number, options: SkinTextOptions) => unknown;
+    label: (value: string, x: number, y: number, target: Container, fill?: number, maxWidth?: number) => unknown;
+  },
+): void {
+  const { target, g, x, top, w, columns, accent, text, label } = area;
+  text(target, course.title || 'Untitled course', x, top + 30, {
+    size: 15,
+    weight: '500',
+    fill: SYN_WHITE,
+    fontFamily: SYN_TEXT_FONT,
+    maxWidth: w,
+    dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
+  });
+  // A portrait card is short: its header closes up so the stages get the room.
+  const compact = columns > 1;
+  label(course.detail, x, top + (compact ? 53 : 56), target, SYN_MIST, w);
+  const dividerY = top + (compact ? 68 : 88);
+  g.rect(x, dividerY, w, 1).fill({ color: accent, alpha: 0.3 });
+  const rowsTop = dividerY + 6;
+  const columnGap = 24;
+  const columnW = (w - columnGap * (columns - 1)) / columns;
+  const perColumn = Math.max(1, Math.ceil(course.stages.length / columns));
+  const pitch = Math.min(40, (area.bottom - rowsTop) / perColumn);
+  const withArtist = pitch >= 30;
+  const numberW = 24;
+  const levelW = 34;
+  course.stages.forEach((stage, index) => {
+    const column = Math.floor(index / perColumn);
+    const rowX = x + column * (columnW + columnGap);
+    const rowY = rowsTop + (index % perColumn) * pitch;
+    const row = new Container();
+    row.label = `synesthesia-result/course-stage-${stage.stage}`;
+    row.alpha = stage.played ? 1 : 0.35;
+    target.addChild(row);
+    const middle = rowY + (withArtist ? 9 : pitch / 2);
+    text(row, String(stage.stage).padStart(2, '0'), rowX, middle, {
+      size: 11,
+      fill: SYN_EMBER,
+      fontFamily: SYN_DISPLAY_FONT,
+      anchorY: 0.5,
+    });
+    text(row, stage.title || 'Untitled chart', rowX + numberW, middle, {
+      size: 12,
+      weight: '500',
+      fill: SYN_WHITE,
+      fontFamily: SYN_TEXT_FONT,
+      anchorY: 0.5,
+      maxWidth: columnW - numberW - levelW,
+    });
+    text(row, stage.level, rowX + columnW, middle, {
+      size: 12,
+      fill: SYN_WHITE,
+      fontFamily: SYN_DISPLAY_FONT,
+      anchorX: 1,
+      anchorY: 0.5,
+      maxWidth: levelW - 4,
+    });
+    if (withArtist && stage.artist !== undefined) {
+      text(row, stage.artist, rowX + numberW, rowY + 23, {
+        size: 9,
+        weight: '300',
+        fill: SYN_MIST,
+        fontFamily: SYN_TEXT_FONT,
+        anchorY: 0.5,
+        maxWidth: columnW - numberW,
+      });
+    }
+    g.rect(rowX, rowY + pitch - 3, columnW, 1).fill({ color: SYN_DIM, alpha: 0.3 });
+  });
 }
 
 /** The 2P player's rows of a two-player play (LR2 BATTLE): its EX score and gauge. */

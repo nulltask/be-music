@@ -36,6 +36,16 @@ describe('resolveCourseView', () => {
     });
   });
 
+  it('carries each stage chart’s artist and genre', () => {
+    const course: LibraryCourse = {
+      id: 'dan#0',
+      definition,
+      stages: [{ title: 'A', chart: chart('A', { artist: 'Composer', genre: 'TECHNO' }) }],
+      playable: true,
+    };
+    expect(resolveCourseView(course).stages).toEqual([{ title: 'A', artist: 'Composer', genre: 'TECHNO' }]);
+  });
+
   it('carries each stage chart’s difficulty', () => {
     const hyper = chart('H');
     hyper.chart.metadata.difficulty = 3;

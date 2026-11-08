@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 import type { BeMusicResultData } from './result-data.ts';
 import {
+  resolveResultCourseCard,
   resolveResultLamp,
   resolveResultPlayTag,
   resolveResultTrackRows,
@@ -105,5 +106,62 @@ describe('resolveResultPlayTag', () => {
   it('leaves a plain play untagged, and a play without a replay that was not AUTO', () => {
     expect(resolveResultPlayTag({ replay: replay() })).toBeUndefined();
     expect(resolveResultPlayTag({})).toBeUndefined();
+  });
+});
+
+describe('resolveResultCourseCard', () => {
+  const course: NonNullable<BeMusicResultData['course']> = {
+    kind: 'grade',
+    title: 'Dan 1',
+    stages: [
+      { title: 'A', subtitle: '[SPA]', artist: 'Composer A', genre: 'TECHNO', level: 10, difficulty: 4 },
+      { title: 'B', artist: 'Composer B', level: 11 },
+      { title: 'C' },
+    ],
+  };
+
+  it('lists every stage of a course run, marking the ones the run never reached', () => {
+    const card = resolveResultCourseCard({ run: 'course', course, courseRun: { stagesPlayed: 2 } });
+    expect(card).toEqual({
+      kind: 'DAN',
+      title: 'Dan 1',
+      detail: '2 / 3 STAGES',
+      stages: [
+        {
+          stage: 1,
+          title: 'A',
+          subtitle: '[SPA]',
+          artist: 'Composer A',
+          genre: 'TECHNO',
+          level: '10',
+          difficulty: 4,
+          played: true,
+        },
+        { stage: 2, title: 'B', artist: 'Composer B', level: '11', played: true },
+        { stage: 3, title: 'C', level: '-', played: false },
+      ],
+    });
+  });
+
+  it('names the trophy the run earned', () => {
+    const card = resolveResultCourseCard({
+      run: 'course',
+      course: { ...course, kind: 'expert' },
+      courseRun: { stagesPlayed: 3, trophy: 'goldmedal' },
+    });
+    expect(card?.kind).toBe('COURSE');
+    expect(card?.detail).toBe('3 / 3 STAGES · goldmedal');
+  });
+
+  it('reads every stage of a NONSTOP run without a course log as played', () => {
+    const card = resolveResultCourseCard({ run: 'nonstop', course: { ...course, kind: 'nonstop' } });
+    expect(card?.kind).toBe('NONSTOP');
+    expect(card?.detail).toBe('3 / 3 STAGES');
+    expect(card?.stages.every((stage) => stage.played)).toBe(true);
+  });
+
+  it('leaves a single play and a course stage to their own chart', () => {
+    expect(resolveResultCourseCard({ run: 'single' })).toBeUndefined();
+    expect(resolveResultCourseCard({ run: 'stage', course: { ...course, stageIndex: 1 } })).toBeUndefined();
   });
 });
