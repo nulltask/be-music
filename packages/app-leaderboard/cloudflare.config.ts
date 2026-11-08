@@ -1,3 +1,4 @@
+import { cloudflareAccountId, d1DatabaseId } from '../../scripts/cloudflare/env.ts';
 import { getBuildInfo } from '../../scripts/release/build-info.ts';
 import { bindings, defineConfig, triggers } from 'cf/config';
 
@@ -14,10 +15,11 @@ export default defineConfig(({ mode }) => {
   const suffix = preview ? '-preview' : '';
   // `be-music.app` for production, `preview.be-music.app` for the preview.
   const site = preview ? 'preview.be-music.app' : 'be-music.app';
-  // Created with `cf d1 create` (primary location APAC); the ids are not secret.
-  const databaseId = preview ? '046723a8-244b-42ca-ad49-01c1914333f1' : '2cb01ebf-4a70-4582-bb38-4e2e925bff61';
+  // Created with `cf d1 create` (primary location APAC).
+  const databaseId = d1DatabaseId(preview ? 'LEADERBOARD_D1_PREVIEW_ID' : 'LEADERBOARD_D1_PRODUCTION_ID');
   return {
-    accountId: '80d4b5fd75f07e61a637b6bb9774186e',
+    // The Be-Music Cloudflare account. Pinned, so a session signed in to another account cannot deploy here.
+    accountId: cloudflareAccountId(),
     worker: {
       name: `leaderboard${suffix}`,
       compatibilityDate: '2026-10-01',
