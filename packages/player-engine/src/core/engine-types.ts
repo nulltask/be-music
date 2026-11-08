@@ -224,11 +224,17 @@ export interface PlayerPlaySettings {
   startAtSeconds?: number;
 }
 
+/** From `seconds` on, mines explode with the `sampleKey` WAV slot (silent without one). */
+export interface LandmineSampleKeyCue {
+  seconds: number;
+  sampleKey?: string;
+}
+
 /** One judge rank change of {@link PlayerPlaySettings.stageRanks}. */
 export interface PlayerStageRank {
   seconds: number;
   rank: number;
-  table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank';
+  table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank' | 'bms-exrank-change';
 }
 
 /**
@@ -252,6 +258,11 @@ export interface PlayerPlayRuntime {
   keyBoundBGACues?: readonly KeyBoundBGACue[];
   /** Remapped bmson event animations supplied by a NONSTOP host. */
   bmsonBGACues?: readonly BmsonBGAEventCue[];
+  /**
+   * The WAV slot a mine explodes with, by chart time, in place of `#WAV00` (`NonstopStitchMap.landmineSampleKeys`): a
+   * mine uses the last cue at or before its own time, and a cue without `sampleKey` keeps it silent. Absent: `#WAV00`.
+   */
+  landmineSampleKeys?: readonly LandmineSampleKeyCue[];
   /**
    * Pre-built playback chart data the host wants the engine to use verbatim instead of running its own
    * `preparePlaybackChartData` pass. When provided, the engine treats the supplied {@link PreparedPlaybackChartData}

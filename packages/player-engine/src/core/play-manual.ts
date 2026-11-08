@@ -61,6 +61,9 @@ export function createPlayJudgeCore(
       // Only the terminal log writes traces; with a UI they would be built and discarded on every judgment.
       omitTraceEffects: session.uiEnabled,
       wavResources: session.wavResources,
+      ...(session.options.landmineSampleKeys !== undefined
+        ? { landmineSampleKeys: session.options.landmineSampleKeys }
+        : {}),
       idBase: session.idBase,
       sourceFormat: resolvedJSON.sourceFormat,
       // LR2 negative-BPM reversal (#134): timing stays monotonic (the resolver integrates |BPM|), but from this chart
