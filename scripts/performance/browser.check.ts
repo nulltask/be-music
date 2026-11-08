@@ -5,9 +5,9 @@ test('capture real-skin CPU and allocation profiles', async ({ player }) => {
   await mkdir(out, { recursive: true });
   const errors: string[] = [];
   player.page.on('pageerror', (e) => errors.push(e.message));
-  // PERF_RENDERER=webgl measures the WebGL fallback instead of WebGPU.
+  // PERF_RENDERER=webgl measures the WebGL fallback instead of WebGPU; PERF_EFFECTS=reduced|off the skin's lighter effects.
   await player.open(
-    { 'be-music.built-in-skin': 'synesthesia', 'be-music.skin-effects': 'full' },
+    { 'be-music.built-in-skin': 'synesthesia', 'be-music.skin-effects': process.env.PERF_EFFECTS ?? 'full' },
     process.env.PERF_RENDERER ? { renderer: process.env.PERF_RENDERER } : {},
   );
   await player.drop('songs', { prefix: SONGS });
