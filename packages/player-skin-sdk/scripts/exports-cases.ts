@@ -64,6 +64,21 @@ const BENCH_RESULT = {
   gaugeHistory: [{ progress: 0, value: 20 }],
   scoreHistory: [{ progress: 0, exScore: 0 }],
 } satisfies skinSdkAPI.BeMusicResultData;
+const BENCH_COURSE_RESULT = {
+  ...BENCH_RESULT,
+  run: 'course',
+  course: {
+    kind: 'grade',
+    title: 'Bench Dan',
+    stages: [
+      { title: 'Bench', artist: 'be-music', level: 12, difficulty: 4 },
+      { title: 'Bench 2', artist: 'be-music', level: 12 },
+      { title: 'Bench 3', level: 12 },
+      { title: 'Bench 4', level: 12 },
+    ],
+  },
+  courseRun: { stagesPlayed: 3 },
+} satisfies skinSdkAPI.BeMusicResultData;
 const BENCH_CHANNELS_7K = ['16', '11', '12', '13', '14', '15', '18', '19'];
 const BENCH_SELECT_ENTRIES: readonly number[] = Array.from({ length: 40 }, (_, index) => index);
 const BENCH_LAYOUT_INPUT = { laneChannels: BENCH_CHANNELS_7K, playVariant: '7' } as const;
@@ -380,6 +395,11 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
   define('player-skin-sdk.resolveResultTrackRows', {
     run: () => {
       skinSdkAPI.resolveResultTrackRows(BENCH_RESULT);
+    },
+  });
+  define('player-skin-sdk.resolveResultCourseCard', {
+    run: () => {
+      skinSdkAPI.resolveResultCourseCard(BENCH_COURSE_RESULT);
     },
   });
   define('player-skin-sdk.resolveGameplayLaneGeometry', {
