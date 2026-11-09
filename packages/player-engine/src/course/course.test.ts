@@ -349,4 +349,14 @@ describe('LR2 stage limit', () => {
     expect(countLR2UnplayedStages(short!)).toBe(0);
     expect(countLR2UnplayedStages({ ...expert!, source: { format: 'beatoraja-json' } })).toBe(0);
   });
+
+  test('reads every stage with maxStages: Infinity, and as many as asked otherwise', () => {
+    const md5s = ['1', '2', '3', '4', '5', '6', '7'].map((digit) => digit.repeat(32));
+    const header = `${'0'.repeat(10)}0${'0'.repeat(21)}`;
+    const text = `<courselist><course><title>E</title><type>0</type><hash>${header}${md5s.join('')}</hash></course></courselist>`;
+    const [whole] = parseLR2CourseFile(text, { maxStages: Number.POSITIVE_INFINITY });
+    expect(whole!.stages.map((stage) => stage.md5)).toEqual(md5s);
+    expect(countLR2UnplayedStages(whole!)).toBe(0);
+    expect(parseLR2CourseFile(text, { maxStages: 6 })[0]!.stages).toHaveLength(6);
+  });
 });

@@ -301,6 +301,18 @@ export const PLAYER_APP_TEMPLATE = html`
         aria-describedby="random-mix-dialog-hint"
       ></dialog>
       <!--
+      The RANDOM MIX save dialog: once a RANDOM MIX run is over and its result
+      left, it asks whether to keep the run's course, named by when it ended.
+      Lit renders into the empty dialog (\`promptRandomMixSave\`,
+      ui/random-mix-save-dialog.ts).
+    -->
+      <dialog
+        class="dialog account-dialog"
+        id="random-mix-save-dialog"
+        aria-labelledby="random-mix-save-dialog-title"
+        aria-describedby="random-mix-save-dialog-hint"
+      ></dialog>
+      <!--
       A dropped replay (\`*.bmplay.json\`) whose chart is not loaded, or a course
       replay (\`*.bmcourse.json\`) whose stage charts are not all loaded: it lists
       the missing charts and the replay does not start. Filled by

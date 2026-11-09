@@ -23,6 +23,13 @@ import {
 } from '@be-music/player-engine/course';
 import { RandomMixDraw, type RandomMixPoolChart } from '../../random-mix-draw.ts';
 import type { RandomMixDialogRequest, RandomMixDialogResult } from '../../ui/random-mix-dialog.ts';
+import {
+  finishRandomMix,
+  saveFinishedRandomMix,
+  type FinishedRandomMix,
+  type RandomMixRun,
+  type RandomMixSaveRequest,
+} from '../../random-mix-save.ts';
 import { playerText } from '../../player-copy.ts';
 import type {
   BeMusicCourseReplay,
@@ -95,10 +102,18 @@ export interface CourseRouteDeps {
       | 'setRandomMixSettings'
       | 'defaultConnection'
       | 'setDefaultConnection'
+      | 'saveRandomMix'
     >;
   };
   /** Opens the RANDOM MIX dialog: what it held when it closed and whether OK confirmed it. */
   readonly promptRandomMix: (request: RandomMixDialogRequest) => Promise<RandomMixDialogResult | undefined>;
+  /**
+   * Opens the RANDOM MIX save dialog once a run is over: the name to save its course under, or `undefined` when the
+   * player does not save it.
+   */
+  readonly promptRandomMixSave: (request: RandomMixSaveRequest) => Promise<string | undefined>;
+  /** The clock a RANDOM MIX run's end is read from (the name the save dialog offers). Default `new Date()`. */
+  readonly now?: () => Date;
   /** The source of chance a RANDOM MIX draws with. Default `Math.random`. */
   readonly random?: () => number;
   /** The course replay's auto-save, by the setting latched at the last stage's start. */
@@ -156,6 +171,12 @@ export class CourseRoute {
   private readonly records: CourseRouteDeps['records'];
   private readonly courseMaker: CourseRouteDeps['courseMaker'];
   private readonly promptRandomMix: CourseRouteDeps['promptRandomMix'];
+  private readonly promptRandomMixSave: CourseRouteDeps['promptRandomMixSave'];
+  private readonly now: () => Date;
+  /** The NONSTOP RANDOM MIX being played: its course bar, which its result names, and what it was started with. */
+  private nonstopRandomMix: { course: LibraryCourse; run: RandomMixRun } | undefined;
+  /** A RANDOM MIX run that is over, its save dialog not yet shown: it opens once the select screen is back. */
+  private finishedRandomMix: FinishedRandomMix | undefined;
   private readonly random: () => number;
   private readonly replayAutoSave: CourseRouteDeps['replayAutoSave'];
   private readonly leaderboard: CourseRouteDeps['leaderboard'];
@@ -178,6 +199,8 @@ export class CourseRoute {
     this.records = deps.records;
     this.courseMaker = deps.courseMaker;
     this.promptRandomMix = deps.promptRandomMix;
+    this.promptRandomMixSave = deps.promptRandomMixSave;
+    this.now = deps.now ?? (() => new Date());
     this.random = deps.random ?? Math.random;
     this.replayAutoSave = deps.replayAutoSave;
     this.leaderboard = deps.leaderboard;
@@ -307,15 +330,22 @@ export class CourseRoute {
   }
 
   /**
-   * Draws one RANDOM MIX run by the conditions last confirmed and plays it: a run of five stages or fewer is kept as its
-   * folder's newest course, as LR2 keeps its draw; a longer or endless one is played without being kept. An endless
-   * run draws each stage as it reaches it.
+   * Draws one RANDOM MIX run by the conditions last confirmed and plays it: a counted run is kept as its folder's newest
+   * course, as LR2 keeps its draw; an endless one is played without being kept, and draws each stage as it reaches it.
+   * The run remembers what it was started with, which the save dialog shows once it is over.
    */
   private async playRandomMix(kind: 'expert' | 'nonstop', pool: readonly RandomMixPoolChart[]): Promise<void> {
     const maker = this.courseMaker.maker;
     const conditions = maker.randomMixConditions;
     const count = resolveRandomMixCount(kind, conditions.count);
     const endless = count === 'infinity';
+    // What the run is started with, which the save dialog shows once it is over.
+    const setup = {
+      kind,
+      conditions: { ...conditions, difficulties: [...conditions.difficulties], count },
+      settings: { ...maker.randomMixSettings },
+      defaultConnection: maker.defaultConnection,
+    };
     const draw = new RandomMixDraw(filterRandomMixCandidates(pool, conditions), {
       settings: maker.randomMixSettings,
       bpmOf: resolveRandomMixBPM,
@@ -341,8 +371,11 @@ export class CourseRoute {
     const barId = kept ? `maker:${kind}#0` : createRandomMixEntry(kind).id;
     const navigation = this.courses.takeReturnNavigation() ?? this.selectNavigation();
     this.courses.leaveSelect(navigation !== undefined ? { ...navigation, focusKey: `course:${barId}` } : undefined);
+    const run: RandomMixRun = { setup, ...(kept ? { kept: course } : {}) };
     if (kind === 'nonstop') {
-      await this.startNonstopCourse(createDrawnRandomMixEntry(course, stages), { decide: true });
+      const entry = createDrawnRandomMixEntry(course, stages);
+      this.nonstopRandomMix = { course: entry, run };
+      await this.startNonstopCourse(entry, { decide: true });
       return;
     }
     const endlessMix: EndlessRandomMix | undefined = endless
@@ -357,6 +390,7 @@ export class CourseRoute {
       ...(endlessMix !== undefined ? { endless: endlessMix } : {}),
       ...(kept ? {} : { unkept: true }),
     });
+    active.randomMix = run;
     await this.showDecide(
       courseDecideSong(entry, stages[0]!.chart),
       {},
@@ -365,6 +399,32 @@ export class CourseRoute {
         cancel: () => this.courses.cancelRun(active),
       },
     );
+  }
+
+  /**
+   * Called when a NONSTOP run played live reaches its result (`NonstopRoute`): when it is the NONSTOP RANDOM MIX being
+   * played, the mix is over, and the select screen offers to save it once the result is left. A retry from the result
+   * plays it again, and the save waits for the run that leaves it.
+   */
+  public noteNonstopResult(course: LibraryCourse): void {
+    const mix = this.nonstopRandomMix;
+    if (mix === undefined || mix.course !== course) return;
+    this.finishedRandomMix = finishRandomMix(mix.run, course, this.now());
+  }
+
+  /**
+   * Opens the save dialog for a RANDOM MIX run that is over, once the select screen is back (its result left); does
+   * nothing when no run waits. Saving keeps the run's course as one of the player's own, named as the dialog says.
+   */
+  public async offerRandomMixSave(): Promise<void> {
+    const finished = this.finishedRandomMix;
+    if (finished === undefined) return;
+    this.finishedRandomMix = undefined;
+    if (this.nonstopRandomMix?.course.definition === finished.course) this.nonstopRandomMix = undefined;
+    const name = await this.promptRandomMixSave(finished.request);
+    if (name === undefined) return;
+    const saved = saveFinishedRandomMix(this.courseMaker.maker, finished, name);
+    this.setStatus(playerText().course.saved(saved.name));
   }
 
   /**
@@ -444,6 +504,8 @@ export class CourseRoute {
     // An endless run's course is the stages it played, the one drawn ahead dropped.
     settleEndlessCourse(active);
     const { course, run } = active;
+    // A RANDOM MIX is over, played through or given up: the select screen offers to save it once the result is left.
+    if (active.randomMix !== undefined) this.finishedRandomMix = finishRandomMix(active.randomMix, course, this.now());
     // A course replay shows the run it recorded, and keeps nothing.
     const replay = active.replay !== undefined && !run.practice;
     const courseLog = run.practice

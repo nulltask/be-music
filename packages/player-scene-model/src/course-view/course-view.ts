@@ -64,3 +64,25 @@ export function resolveCourseView(course: LibraryCourse, stageIndex?: number): C
       : {}),
   };
 }
+
+/** How long a course result's stage list stays at one position while it scrolls ({@link scrollCourseStages}). */
+export const COURSE_STAGE_SCROLL_STEP_MS = 2000;
+
+/**
+ * A course run's result as its stage list shows at `elapsedMs` into the screen, when the course has more stages than
+ * the skin has rows (`rows`: LR2's five, beatoraja's ten): the list scrolls up one stage every `stepMs` until its last
+ * stage reaches the bottom row, then starts again from stage 1, so every stage is shown in turn. A course that fits, or
+ * a stage being played (`stageIndex`, whose stage slots the skin marks), is returned as it is.
+ */
+export function scrollCourseStages(
+  course: CourseView,
+  elapsedMs: number,
+  rows: number,
+  stepMs: number = COURSE_STAGE_SCROLL_STEP_MS,
+): CourseView {
+  const positions = course.stages.length - Math.max(1, Math.floor(rows)) + 1;
+  if (positions <= 1 || course.stageIndex !== undefined || !(stepMs > 0)) return course;
+  const step = Number.isFinite(elapsedMs) ? Math.floor(Math.max(0, elapsedMs) / stepMs) : 0;
+  const offset = step % positions;
+  return offset === 0 ? course : { ...course, stages: course.stages.slice(offset) };
+}

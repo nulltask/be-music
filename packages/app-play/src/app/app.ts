@@ -1,4 +1,5 @@
 import { promptRandomMixConditions } from '../ui/random-mix-dialog.ts';
+import { promptRandomMixSave } from '../ui/random-mix-save-dialog.ts';
 import { playerText } from '../player-copy.ts';
 import { BGACameraService } from '../services/bga-camera.ts';
 import { requestPlayerWindowClose } from '../ui/close-window.ts';
@@ -418,6 +419,7 @@ export class PlayerWebApp {
       showBeatorajaResult: (data, options) => this.resultRoute.showBeatorajaResult(data, options),
       courseReplaySlots: (courseLog, native, kept) => this.resultRoute.courseReplaySlots(courseLog, native, kept),
       unlockReplayOptions: () => this.unlockReplayOptions(),
+      onRunResult: (course) => this.courseRoute.noteNonstopResult(course),
     });
     this.courseRoute = new CourseRoute({
       courses: this.courses,
@@ -425,6 +427,7 @@ export class PlayerWebApp {
       records: this.records,
       courseMaker: this.courseMaker,
       promptRandomMix: (request) => promptRandomMixConditions(request),
+      promptRandomMixSave: (request) => promptRandomMixSave(request),
       replayAutoSave: this.replayAutoSave,
       leaderboard: this.leaderboard,
       familyKits: this.familyKits,
@@ -890,9 +893,11 @@ export class PlayerWebApp {
    * kept for a quick retry go: the next play is most likely another chart, and they would sit through the select
    * screen.
    */
-  private showSelect(): Promise<void> {
+  private async showSelect(): Promise<void> {
     this.audio.chartSamples.release();
-    return this.selectRoute.showSelect();
+    await this.selectRoute.showSelect();
+    // A RANDOM MIX run that just ended offers to save its course over the select screen.
+    void this.courseRoute.offerRandomMixSave();
   }
 
   /**

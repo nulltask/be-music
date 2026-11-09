@@ -365,6 +365,23 @@ export class CourseMaker {
     return edited;
   }
 
+  /**
+   * Saves a RANDOM MIX the player has played as a course of their own, named `name` (the course's name when blank): the
+   * draw kept as its folder's newest course is renamed and stops being the draw the next one replaces, whatever its new
+   * name; a draw that was not kept (an endless run's stages) joins the saved courses as the newest of its kind.
+   */
+  saveRandomMix(course: CourseDefinition, name: string): CourseDefinition {
+    const named = { ...course, name: name.trim() || course.name };
+    if (this.owns(course)) {
+      const edited = this.replace(course, named);
+      this.lastRandomMixes.delete(edited);
+      return edited;
+    }
+    this.savedCourses = [named, ...this.savedCourses];
+    this.emit('courses');
+    return named;
+  }
+
   /** Replaces a saved course's constraints; refused (`undefined`) for a read-only course. */
   setCourseConstraints(
     course: CourseDefinition,

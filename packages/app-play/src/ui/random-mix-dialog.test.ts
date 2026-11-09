@@ -9,7 +9,7 @@ describe('RANDOM MIX dialog', () => {
     expect(toggleRandomMixValue([5, 7], 5, false)).toEqual([7]);
   });
 
-  test('opens on one key mode the library has and caps a NONSTOP count', () => {
+  test('opens on one key mode the library has, and a NONSTOP count as counted', () => {
     const initial = { ...DEFAULT_RANDOM_MIX_CONDITIONS, keyMode: 14, count: 'infinity' as const };
     expect(resolveRandomMixDialogConditions({ kind: 'expert', keyModes: [7, 14], initial })).toMatchObject({
       keyMode: 14,
@@ -21,6 +21,10 @@ describe('RANDOM MIX dialog', () => {
       keyMode: 5,
       count: 5,
     });
+    // A NONSTOP count is not capped at five, as an EXPERT one is not.
+    expect(
+      resolveRandomMixDialogConditions({ kind: 'nonstop', keyModes: [7], initial: { ...initial, count: 40 } }).count,
+    ).toBe(40);
     // An empty library keeps what was asked.
     expect(resolveRandomMixDialogConditions({ kind: 'expert', keyModes: [], initial }).keyMode).toBe(14);
   });

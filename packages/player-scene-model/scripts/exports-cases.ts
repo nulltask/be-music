@@ -600,6 +600,11 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.resolveCourseView(BENCH_COURSE, 0);
     },
   });
+  define('player-scene-model.scrollCourseStages', {
+    run: () => {
+      sceneModelAPI.scrollCourseStages(sceneModelAPI.resolveCourseView(BENCH_COURSE), 4000, 1);
+    },
+  });
   define('player-scene-model.createCourseCombo', {
     run: () => {
       sceneModelAPI.createCourseCombo({ combo: 12, maxCombo: 30 });

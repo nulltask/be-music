@@ -115,13 +115,16 @@ describe('RANDOM MIX conditions', () => {
     expect(listRandomMixKeyModes(charts)).toEqual([5, 7, 14]);
   });
 
-  test('a NONSTOP draw is capped and never endless; only five stages or fewer are kept', () => {
+  test('a NONSTOP draw counts as an EXPERT one but is never endless; every counted draw is kept', () => {
     expect(resolveRandomMixCount('nonstop', 'infinity')).toBe(5);
-    expect(resolveRandomMixCount('nonstop', 40)).toBe(5);
+    expect(resolveRandomMixCount('nonstop', 40)).toBe(40);
+    expect(resolveRandomMixCount('nonstop', 99)).toBe(99);
     expect(resolveRandomMixCount('nonstop', 3)).toBe(3);
     expect(resolveRandomMixCount('expert', 'infinity')).toBe('infinity');
+    expect(resolveRandomMixCount('expert', 40)).toBe(40);
     expect(isRandomMixKept(5)).toBe(true);
-    expect(isRandomMixKept(6)).toBe(false);
+    expect(isRandomMixKept(6)).toBe(true);
+    expect(isRandomMixKept(99)).toBe(true);
     expect(isRandomMixKept('infinity')).toBe(false);
   });
 });
@@ -207,6 +210,17 @@ describe('createRandomMixCourse', () => {
     expect(course).toMatchObject({ name: 'RANDOM MIX', kind: 'expert', keyMode: 7, release: false });
     expect(course.stages.map((stage) => stage.md5)).toEqual(['a'.repeat(32), 'b'.repeat(32)]);
     expect(createRandomMixCourse('expert', [])).toBeUndefined();
+  });
+
+  test('gives a NONSTOP draw the default connection after every stage, past the ten an LR2 hash holds', () => {
+    const stages = Array.from({ length: 12 }, (_, index) => ({
+      md5: index.toString(16).padStart(32, '0'),
+      keyMode: 7,
+    }));
+    const course = createRandomMixCourse('nonstop', stages, { defaultConnection: 'cut' })!;
+    expect(course.stages).toHaveLength(12);
+    expect(course.connections).toEqual(Array.from({ length: 11 }, () => 'cut'));
+    expect(createRandomMixCourse('expert', stages)!.connections).toBeUndefined();
   });
 });
 
