@@ -168,28 +168,39 @@ describe('resolveResultCourseCard', () => {
 });
 
 describe('resolveResultCourseScroll', () => {
-  const timing = { holdMs: 1000, pxPerSecond: 50 };
+  const timing = { holdMs: 1000, pxPerSecond: 50, fadeMs: 500 };
+  const at = (overflowPx: number, elapsedMs: number) => resolveResultCourseScroll(overflowPx, elapsedMs, timing);
 
-  it('rests at the top, scrolls to the bottom, rests there, then starts over', () => {
-    // 100 px past the card: 2 s of scrolling between two 1 s rests, a 4 s cycle.
-    expect(resolveResultCourseScroll(100, 500, timing)).toBe(0);
-    expect(resolveResultCourseScroll(100, 2000, timing)).toBe(50);
-    expect(resolveResultCourseScroll(100, 3000, timing)).toBe(100);
-    expect(resolveResultCourseScroll(100, 3999, timing)).toBe(100);
-    expect(resolveResultCourseScroll(100, 4000, timing)).toBe(0);
-    expect(resolveResultCourseScroll(100, 6000, timing)).toBe(50);
+  it('rests at the top, scrolls to the bottom, rests, fades out and fades back in at the top', () => {
+    // 100 px past the card: a 1 s rest, 2 s of scrolling, a 1 s rest, then a 0.5 s fade out and a 0.5 s fade in.
+    expect(at(100, 500)).toEqual({ offsetPx: 0, alpha: 1 });
+    expect(at(100, 2000)).toEqual({ offsetPx: 50, alpha: 1 });
+    expect(at(100, 3500)).toEqual({ offsetPx: 100, alpha: 1 });
+    expect(at(100, 4250)).toEqual({ offsetPx: 100, alpha: 0.5 });
+    expect(at(100, 4750)).toEqual({ offsetPx: 0, alpha: 0.5 });
+    // The cycle is 5 s: it starts over, fully shown at the top.
+    expect(at(100, 5000)).toEqual({ offsetPx: 0, alpha: 1 });
+    expect(at(100, 7000)).toEqual({ offsetPx: 50, alpha: 1 });
+  });
+
+  it('jumps back without a fade when the fade takes no time', () => {
+    const cut = { ...timing, fadeMs: 0 };
+    expect(resolveResultCourseScroll(100, 3999, cut)).toEqual({ offsetPx: 100, alpha: 1 });
+    expect(resolveResultCourseScroll(100, 4000, cut)).toEqual({ offsetPx: 0, alpha: 1 });
   });
 
   it('keeps a list that fits, and the result before it shows, at the top', () => {
-    expect(resolveResultCourseScroll(0, 5000, timing)).toBe(0);
-    expect(resolveResultCourseScroll(-20, 5000, timing)).toBe(0);
-    expect(resolveResultCourseScroll(100, 0, timing)).toBe(0);
-    expect(resolveResultCourseScroll(100, Number.NaN, timing)).toBe(0);
-    expect(resolveResultCourseScroll(100, Number.POSITIVE_INFINITY, timing)).toBe(0);
-    expect(resolveResultCourseScroll(100, 5000, { holdMs: 0, pxPerSecond: 0 })).toBe(0);
+    const top = { offsetPx: 0, alpha: 1 };
+    expect(at(0, 5000)).toEqual(top);
+    expect(at(-20, 5000)).toEqual(top);
+    expect(at(100, 0)).toEqual(top);
+    expect(at(100, Number.NaN)).toEqual(top);
+    expect(at(100, Number.POSITIVE_INFINITY)).toEqual(top);
+    expect(resolveResultCourseScroll(100, 5000, { ...timing, pxPerSecond: 0 })).toEqual(top);
   });
 
   it('uses the built-in skins timing by default', () => {
-    expect(resolveResultCourseScroll(60, 2500 + 1000)).toBeCloseTo(30);
+    expect(resolveResultCourseScroll(60, 2500 + 1000).offsetPx).toBeCloseTo(30);
+    expect(resolveResultCourseScroll(60, 2500 + 2000 + 2500 + 200).alpha).toBeCloseTo(0.5);
   });
 });

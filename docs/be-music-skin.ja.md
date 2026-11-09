@@ -396,7 +396,7 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
 - `nowMs`、`effects`。
 - `settings` と `chartImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照。
 
-`resolveResultCourseCard` はコースの実行のカード（コースとすべてのステージの譜面）を返します。ステージを通常の高さで並べるとカードからはみ出すときは、`resolveResultCourseScroll(overflowPx, frame.shownMs)` がリストを上へスクロールした量を返します。先頭で止まり、最後のステージがいちばん下に来るまでスクロールし、止まってから最初に戻ります。組み込みスキンもこのとおりに動きます。
+`resolveResultCourseCard` はコースの実行のカード（コースとすべてのステージの譜面）を返します。ステージを通常の高さで並べるとカードからはみ出すときは、`resolveResultCourseScroll(overflowPx, frame.shownMs)` がリストを上へスクロールした量（`offsetPx`）と不透明度（`alpha`）を返します。先頭で止まり、最後のステージがいちばん下に来るまでスクロールし、止まってからフェードアウトし、先頭でフェードインして最初に戻ります。組み込みスキンもこのとおりに動きます。
 
 `resolveResultVerdict`（`STAGE CLEAR` / `FAILED`、コースの実行なら `COURSE CLEAR` / `COURSE FAILED`）、`resolveResultLamp`、`resolveResultTrackRows` が、組み込みスキンの表示する見出し、クリアランプ（唯一のクリアランプの規則で、beatoraja のランプで決めたもの）、トラック行を返します。`binJudgmentTimings(result.judgeTimings, binMs, rangeMs?)` でタイミングをヒストグラムにできます。
 

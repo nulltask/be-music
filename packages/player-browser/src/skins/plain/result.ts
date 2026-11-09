@@ -270,7 +270,7 @@ const COURSE_STAGE_PITCH = 34;
  * A course run's card in the chart panel: the course's kind, name and how far the run went (from `top`), then every
  * stage chart in order — its number, title, level and artist — from `rowsY` down to `bottom`, each at its usual
  * height. Stages past `bottom` are cut off, and the list scrolls up through them and starts over
- * (`resolveResultCourseScroll`), so every stage is shown in turn. A stage the run never reached is dimmed.
+ * (`resolveResultCourseScroll`), fading out at the bottom and back in at the top, so every stage is shown in turn. A stage the run never reached is dimmed.
  */
 function drawCourseCard(
   ctx: CanvasRenderingContext2D,
@@ -292,9 +292,9 @@ function drawCourseCard(
   ctx.rect(left - 2, viewTop, textW + 4, bottom - viewTop);
   ctx.clip();
   course.stages.forEach((stage, index) => {
-    const y = rowsY + 6 + index * COURSE_STAGE_PITCH - scroll;
+    const y = rowsY + 6 + index * COURSE_STAGE_PITCH - scroll.offsetPx;
     if (y + 24 < viewTop || y - 16 > bottom) return;
-    ctx.globalAlpha = stage.played ? 1 : 0.4;
+    ctx.globalAlpha = (stage.played ? 1 : 0.4) * scroll.alpha;
     text(ctx, String(stage.stage), left, y, { size: 10, color: MUTED, weight: 700 });
     text(ctx, stage.title, left + 16, y, { size: 12, weight: 700, maxWidth: textW - 16 - 30, nowMs });
     text(ctx, stage.level, right, y, { size: 12, align: 'right', maxWidth: 26 });

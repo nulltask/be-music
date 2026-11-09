@@ -396,7 +396,7 @@ Every runtime field is optional. A host that can't provide one leaves it `undefi
 - `nowMs` and `effects`.
 - `settings` and `chartImage`: see [Skin settings](#skin-settings) and [Song images](#chart-images).
 
-`resolveResultCourseCard` gives a course run's card (the course and every stage chart). When its stages laid out at their usual height run past the card, `resolveResultCourseScroll(overflowPx, frame.shownMs)` gives how far the list has scrolled up: it rests at the top, scrolls until the last stage is at the bottom, rests, and starts over, as the built-in skins do.
+`resolveResultCourseCard` gives a course run's card (the course and every stage chart). When its stages laid out at their usual height run past the card, `resolveResultCourseScroll(overflowPx, frame.shownMs)` gives how far the list has scrolled up (`offsetPx`) and how opaque it is (`alpha`): it rests at the top, scrolls until the last stage is at the bottom, rests, fades out, and fades back in at the top to start over, as the built-in skins do.
 
 `resolveResultVerdict` (`STAGE CLEAR` / `FAILED`, or `COURSE CLEAR` / `COURSE FAILED` for a course run), `resolveResultLamp` and `resolveResultTrackRows` give the headline, clear lamp (the one clear-lamp rule, on beatoraja's lamps) and track rows the built-in skins show. `binJudgmentTimings(result.judgeTimings, binMs, rangeMs?)` turns the timings into a histogram.
 
