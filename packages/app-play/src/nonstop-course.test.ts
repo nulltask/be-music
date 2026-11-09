@@ -67,8 +67,8 @@ function presses(chart: LibraryChart['chart']): ReplayInputEvent[] {
 const sourceOf = (entry: LibraryChart) => [STAGE_A, STAGE_B].find((stage) => stage.chart.id === entry.id)?.source;
 
 describe('prepareNonstopPlay', () => {
-  test("stitches the stages into one song played from the stages' own files", () => {
-    const prepared = prepareNonstopPlay(course(), { sourceOf, random: () => 0 });
+  test("stitches the stages into one song played from the stages' own files", async () => {
+    const prepared = await prepareNonstopPlay(course(), { sourceOf, random: () => 0 });
     if (!prepared.ok) throw new Error(prepared.reason);
     const { chart: stitched, source } = prepared.prepared;
     const { map, connections } = prepared.prepared.stitched;
@@ -78,16 +78,16 @@ describe('prepareNonstopPlay', () => {
     expect(map.stages).toHaveLength(2);
   });
 
-  test('refuses a course with a stage missing from the collection', () => {
+  test('refuses a course with a stage missing from the collection', async () => {
     const entry = course();
     entry.stages = [entry.stages[0]!, { title: 'gone' }];
-    expect(prepareNonstopPlay(entry, { sourceOf })).toEqual({ ok: false, reason: 'missing-stage', stage: 1 });
+    expect(await prepareNonstopPlay(entry, { sourceOf })).toEqual({ ok: false, reason: 'missing-stage', stage: 1 });
   });
 });
 
 describe('a NONSTOP run in the player', () => {
   test('records the stitched play with each stage cut out of it, named by its chart and file hashes', async () => {
-    const prepared = prepareNonstopPlay(course(), {
+    const prepared = await prepareNonstopPlay(course(), {
       sourceOf,
       random: () => 0,
       hashesOf: (chartEntry) => ({ md5: chartEntry.id.repeat(32) }),

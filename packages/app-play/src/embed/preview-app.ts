@@ -279,7 +279,7 @@ export class PreviewApp {
     this.showOverlay(undefined);
     this.courseRun = undefined;
     if (course.definition.kind === 'nonstop') {
-      const result = prepareNonstopPlay(course, {
+      const result = await prepareNonstopPlay(course, {
         sourceOf: (chart) => this.sourceOf(chart).source,
       });
       if (!result.ok) throw new Error(describeNonstopPrepareFailure(course.definition.name, result));

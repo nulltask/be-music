@@ -5,6 +5,7 @@ import { seedLibraryChartPlayVariant, type ChartSourceKind, type LibraryChart } 
 import {
   basename,
   dirname,
+  findCaseInsensitiveMapPath,
   normalizePath,
   readFilesIntoEntryMap,
   runWithConcurrency,
@@ -18,7 +19,7 @@ import {
   materializeDroppedFiles,
   withRelativePath,
 } from './dropped-file.ts';
-import { isMaliciousAssetPath, loadAssetBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
+import { isMaliciousAssetPath, loadAssetBytes } from './file-lookup.ts';
 import { logger } from '../logger.ts';
 import { parseChartThroughCache, type ParsedChartCache } from './parsed-chart-cache.ts';
 
@@ -577,7 +578,7 @@ export function resolveChartSource(
  *
  * Lookup is **case-insensitive** at every candidate step: real-world BMS archives routinely mix `KICK.WAV` / `kick.WAV`
  * / `Kick.wav`, and demanding the chart's casing match the file's would scuttle a large fraction of legitimate drops on
- * case-sensitive filesystems (and in `webkitRelativePath` directory drops). The `lookupBytesCaseInsensitive` helper
+ * case-sensitive filesystems (and in `webkitRelativePath` directory drops). The `findCaseInsensitiveMapPath` helper
  * builds a lazy lower-key index the first time it's called per source and caches it via WeakMap.
  */
 export function resolveChartAsset(
@@ -610,7 +611,18 @@ function resolveChartAssetInFolder(
   assetPath: string,
   excludedEntries?: ReadonlySet<BrowserAssetEntry>,
 ): BrowserAssetEntry | undefined {
-  // bmson 1.0.0 spec MUST: reject malicious paths at the chart-asset entry point. `lookupBytesCaseInsensitive` also
+  const key = resolveChartAssetKeyInFolder(source, chartPath, assetPath, excludedEntries);
+  return key === undefined ? undefined : source.files.get(key);
+}
+
+/** {@link resolveChartAssetInFolder}, naming the key in `source.files` it found the file under. */
+function resolveChartAssetKeyInFolder(
+  source: BrowserAssetSource,
+  chartPath: string,
+  assetPath: string,
+  excludedEntries?: ReadonlySet<BrowserAssetEntry>,
+): string | undefined {
+  // bmson 1.0.0 spec MUST: reject malicious paths at the chart-asset entry point. `findCaseInsensitiveMapPath` also
   // vets each candidate as defense-in-depth, but short-circuiting here means we don't even synthesize the joined
   // `${base}/${assetPath}` candidate for a path the chart never had any business referencing.
   if (isMaliciousAssetPath(assetPath)) {
@@ -626,9 +638,11 @@ function resolveChartAssetInFolder(
     baseName,
   ];
   for (const candidate of candidates) {
-    const entry = lookupBytesCaseInsensitive(source.files, candidate);
-    if (entry && !excludedEntries?.has(entry)) {
-      return entry;
+    const key = findCaseInsensitiveMapPath(source.files, candidate, { rejectCandidate: isMaliciousAssetPath });
+    if (key === undefined) continue;
+    const entry = source.files.get(key);
+    if (entry !== undefined && !excludedEntries?.has(entry)) {
+      return key;
     }
   }
   return undefined;
@@ -669,6 +683,70 @@ export function resolveChartAudioAsset(
   const compositeCandidates = source.audioFallbacks?.get(normalizePath(assetPath));
   if (compositeCandidates !== undefined)
     return compositeCandidates.find((entry) => !options.excludedEntries?.has(entry));
+  const key = resolveChartAudioKey(source, chartPath, assetPath, options);
+  return key === undefined ? undefined : source.files.get(key);
+}
+
+/**
+ * Every file {@link resolveChartAudioAsset} can play for `assetPath`, best first: the one it returns, then each one it
+ * would fall back to once the ones before it fail to decode (`excludedEntries`), found in one pass over the folder and
+ * codec fallbacks. Each comes with the key in `source.files` it is stored under (`key`), so a host that re-files the
+ * assets (a stitched NONSTOP chart's composite source) needs no reverse lookup over the source's files; a composite
+ * source's own fallbacks (`audioFallbacks`) have none.
+ */
+export function resolveChartAudioAssetCandidates(
+  source: BrowserAssetSource,
+  chartPath: string,
+  assetPath: string,
+  options: Pick<ResolveChartAudioAssetOptions, 'pathPrefix'> = {},
+): Array<{ entry: BrowserAssetEntry; key: string | undefined }> {
+  if (isMaliciousAssetPath(assetPath)) return [];
+  const compositeCandidates = source.audioFallbacks?.get(normalizePath(assetPath));
+  if (compositeCandidates !== undefined) {
+    return [...new Set(compositeCandidates)].map((entry) => ({ entry, key: undefined }));
+  }
+  const found: Array<{ entry: BrowserAssetEntry; key: string | undefined }> = [];
+  const seen = new Set<BrowserAssetEntry>();
+  const tried = new Set<string>();
+  const collect = (folderChartPath: string, path: string): void => {
+    if (isMaliciousAssetPath(path)) return;
+    const base = dirname(folderChartPath);
+    const normalized = normalizePath(path);
+    const baseName = basename(normalized);
+    for (const candidate of [
+      normalizePath(`${base}/${normalized}`),
+      normalized,
+      normalizePath(`${base}/${baseName}`),
+      baseName,
+    ]) {
+      if (tried.has(candidate)) continue;
+      tried.add(candidate);
+      const key = findCaseInsensitiveMapPath(source.files, candidate, { rejectCandidate: isMaliciousAssetPath });
+      const entry = key === undefined ? undefined : source.files.get(key);
+      if (entry === undefined || seen.has(entry)) continue;
+      seen.add(entry);
+      found.push({ entry, key });
+    }
+  };
+  // The order of resolveChartAudioKey: every codec in the chart's folder before any in its parent, each with the
+  // `#PATH_WAV` prefix before the bare name.
+  for (const folderChartPath of chartLookupFolders(chartPath)) {
+    for (const candidate of audioFallbackPaths(assetPath.replaceAll('\\', '/'))) {
+      const prefixed = joinPathWAVPrefix(options.pathPrefix, candidate);
+      if (prefixed !== undefined) collect(folderChartPath, prefixed);
+      collect(folderChartPath, candidate);
+    }
+  }
+  return found;
+}
+
+/** The key of {@link resolveChartAudioAsset}'s file in `source.files`, from its folder and codec fallbacks. */
+function resolveChartAudioKey(
+  source: BrowserAssetSource,
+  chartPath: string,
+  assetPath: string,
+  options: ResolveChartAudioAssetOptions,
+): string | undefined {
   // Every codec in the chart's folder before any in its parent, as LR2 does.
   for (const folderChartPath of chartLookupFolders(chartPath)) {
     for (const candidate of audioFallbackPaths(assetPath.replaceAll('\\', '/'))) {
@@ -677,13 +755,11 @@ export function resolveChartAudioAsset(
       // before.
       const prefixed = joinPathWAVPrefix(options.pathPrefix, candidate);
       if (prefixed !== undefined) {
-        const entry = resolveChartAssetInFolder(source, folderChartPath, prefixed, options.excludedEntries);
-        if (entry) return entry;
+        const key = resolveChartAssetKeyInFolder(source, folderChartPath, prefixed, options.excludedEntries);
+        if (key !== undefined) return key;
       }
-      const entry = resolveChartAssetInFolder(source, folderChartPath, candidate, options.excludedEntries);
-      if (entry) {
-        return entry;
-      }
+      const key = resolveChartAssetKeyInFolder(source, folderChartPath, candidate, options.excludedEntries);
+      if (key !== undefined) return key;
     }
   }
   return undefined;
@@ -758,13 +834,14 @@ export function resolveChartBGAAsset(
   source: BrowserAssetSource,
   chartPath: string,
   assetPath: string,
-): { entry: BrowserAssetEntry; path: string } | undefined {
+): { entry: BrowserAssetEntry; path: string; key: string } | undefined {
   // Every extension in the chart's folder before any in its parent, as LR2 does.
   for (const folderChartPath of chartLookupFolders(chartPath)) {
     for (const candidate of imageFallbackPaths(assetPath)) {
-      const entry = resolveChartAssetInFolder(source, folderChartPath, candidate);
-      if (entry) {
-        return { entry, path: candidate };
+      const key = resolveChartAssetKeyInFolder(source, folderChartPath, candidate);
+      const entry = key === undefined ? undefined : source.files.get(key);
+      if (key !== undefined && entry !== undefined) {
+        return { entry, path: candidate, key };
       }
     }
   }

@@ -5,6 +5,7 @@ import {
   loadChartCollectionFromFiles,
   resolveChartAsset,
   resolveChartAudioAsset,
+  resolveChartAudioAssetCandidates,
   resolveChartBGAAsset,
   resolveChartImageAsset,
 } from './collection.ts';
@@ -354,7 +355,11 @@ describe('resolveChartBGAAsset', () => {
   test('finds a video re-encoded under another video extension, and names it', () => {
     const MP4_BYTES = new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70]);
     const source = makeAssetSource({ 'Song/_bga.mp4': MP4_BYTES });
-    expect(resolveChartBGAAsset(source, 'Song/main.bms', '_bga.mpg')).toEqual({ entry: MP4_BYTES, path: '_bga.mp4' });
+    expect(resolveChartBGAAsset(source, 'Song/main.bms', '_bga.mpg')).toEqual({
+      entry: MP4_BYTES,
+      path: '_bga.mp4',
+      key: 'Song/_bga.mp4',
+    });
     expect(resolveChartBGAAsset(source, 'Song/main.bms', '_bga.wmv')?.path).toBe('_bga.mp4');
   });
 
@@ -366,6 +371,16 @@ describe('resolveChartBGAAsset', () => {
     expect(resolveChartBGAAsset(both, 'Song/main.bms', 'm.mpg')?.path).toBe('m.mpg');
     const legacy = makeAssetSource({ 'Song/m.wmv': WMV, 'Song/m.mp4': MP4 });
     expect(resolveChartBGAAsset(legacy, 'Song/main.bms', 'm.avi')?.path).toBe('m.mp4');
+  });
+
+  test('names the key the file is stored under, whatever case the chart wrote it in', () => {
+    const PNG = new Uint8Array([0x89]);
+    const source = makeAssetSource({ 'Song/Images/BG.PNG': PNG });
+    expect(resolveChartBGAAsset(source, 'Song/main.bms', 'images/bg.png')).toEqual({
+      entry: PNG,
+      path: 'images/bg.png',
+      key: 'Song/Images/BG.PNG',
+    });
   });
 
   test('still never answers a video with an image', () => {
@@ -388,7 +403,11 @@ describe('parent-folder retry (LR2)', () => {
     });
     const chart = 'Pack/Song/差分用/hard.bms';
     expect(resolveChartAudioAsset(source, chart, 'kick.wav')).toBe(OGG);
-    expect(resolveChartBGAAsset(source, chart, '_bga.mpg')).toEqual({ entry: MP4, path: '_bga.mp4' });
+    expect(resolveChartBGAAsset(source, chart, '_bga.mpg')).toEqual({
+      entry: MP4,
+      path: '_bga.mp4',
+      key: 'Pack/Song/_bga.mp4',
+    });
     expect(resolveChartImageAsset(source, chart, 'stage.bmp')).toBe(PNG);
     expect(resolveChartAsset(source, chart, 'stage.png')).toBe(PNG);
   });
@@ -403,6 +422,52 @@ describe('parent-folder retry (LR2)', () => {
     const source = makeAssetSource({ 'Pack/kick.ogg': OGG });
     expect(resolveChartAudioAsset(source, 'Pack/Song/sub/hard.bms', 'kick.wav')).toBeUndefined();
     expect(resolveChartAudioAsset(source, 'Pack/Song/hard.bms', 'kick.wav')).toBe(OGG);
+  });
+});
+
+describe('resolveChartAudioAssetCandidates', () => {
+  test('lists every file the resolver falls back to, best first, each with its key', () => {
+    const PREFIXED = new Uint8Array([1]);
+    const BARE = new Uint8Array([2]);
+    const PARENT = new Uint8Array([3]);
+    const source = makeAssetSource({
+      'Song/sub/audio/KICK.opus': PREFIXED,
+      'Song/sub/kick.ogg': BARE,
+      'Song/kick.wav': PARENT,
+    });
+    const found = resolveChartAudioAssetCandidates(source, 'Song/sub/main.bms', 'kick.wav', { pathPrefix: 'audio/' });
+    expect(found).toEqual([
+      { entry: PREFIXED, key: 'Song/sub/audio/KICK.opus' },
+      { entry: BARE, key: 'Song/sub/kick.ogg' },
+      { entry: PARENT, key: 'Song/kick.wav' },
+    ]);
+    // The same files, in the same order, as the resolver gives them one decode failure at a time.
+    const excludedEntries = new Set<BrowserAssetEntry>();
+    for (const { entry } of found) {
+      expect(
+        resolveChartAudioAsset(source, 'Song/sub/main.bms', 'kick.wav', { pathPrefix: 'audio/', excludedEntries }),
+      ).toBe(entry);
+      excludedEntries.add(entry);
+    }
+    expect(
+      resolveChartAudioAsset(source, 'Song/sub/main.bms', 'kick.wav', { pathPrefix: 'audio/', excludedEntries }),
+    ).toBeUndefined();
+  });
+
+  test("gives a composite source's own fallbacks without keys, and nothing for a missing or malicious path", () => {
+    const A = new Uint8Array([1]);
+    const B = new Uint8Array([2]);
+    const composite: BrowserAssetSource = {
+      ...makeAssetSource({ 's0/kick.ogg': A }),
+      audioFallbacks: new Map([['s0/kick.ogg', [A, B, A]]]),
+    };
+    expect(resolveChartAudioAssetCandidates(composite, 'nonstop.bms', 's0/kick.ogg')).toEqual([
+      { entry: A, key: undefined },
+      { entry: B, key: undefined },
+    ]);
+    const plain = makeAssetSource({ 'Song/kick.wav': A });
+    expect(resolveChartAudioAssetCandidates(plain, 'Song/main.bms', 'snare.wav')).toEqual([]);
+    expect(resolveChartAudioAssetCandidates(plain, 'Song/main.bms', '../kick.wav')).toEqual([]);
   });
 });
 

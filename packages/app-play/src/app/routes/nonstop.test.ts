@@ -145,7 +145,7 @@ function harness(options: { family?: 'built-in' | 'beatoraja' } = {}) {
 
 beforeEach(() => {
   vi.mocked(prepareNonstopPlay).mockReset();
-  vi.mocked(prepareNonstopPlay).mockImplementation((course, options) => stitched(course, options.placement));
+  vi.mocked(prepareNonstopPlay).mockImplementation(async (course, options) => stitched(course, options.placement));
   vi.mocked(buildNonstopCourseReplay).mockReset();
   vi.mocked(buildNonstopCourseReplay).mockImplementation(() => nonstopLog());
 });
@@ -194,7 +194,7 @@ describe('NonstopRoute: starting and restitching', () => {
 
   test('a course that cannot be stitched says why and plays nothing', async () => {
     const h = harness();
-    vi.mocked(prepareNonstopPlay).mockReturnValueOnce({ ok: false, reason: 'missing-stage', stage: 1 });
+    vi.mocked(prepareNonstopPlay).mockResolvedValueOnce({ ok: false, reason: 'missing-stage', stage: 1 });
     await h.route.startNonstopCourse(nonstopCourse(), { decide: true });
     expect(h.deps.setStatus).toHaveBeenCalledWith('Nonstop: cannot stitch the NONSTOP course: missing-stage (stage 2)');
     expect(h.deps.showDecide).not.toHaveBeenCalled();

@@ -27,8 +27,12 @@ export type NonstopPlayFailure = 'missing-stage' | NonstopPrepareFailure;
  * asset plumbing (each stage's files found in its own source, `createNonstopAssets`) and the song entry the scenes play.
  * `hashesOf` gives each stage's file hashes, which its cut-out replay records. A recorded run is stitched again as it was
  * played: with each stage's recorded draws (`stageDraws`) and the stitching rules it was built by (`stitch`).
+ *
+ * The stages' WAV / BMP files are looked up first, a slice at a time between host tasks (`createNonstopAssets`'s
+ * `prefetch`): on a library of many thousand files the lookups are most of the work, and the stitch that follows runs in
+ * one go.
  */
-export function prepareNonstopPlay(
+export async function prepareNonstopPlay(
   course: LibraryCourse,
   options: {
     sourceOf: (chartEntry: LibraryChart) => BrowserAssetSource | undefined;
@@ -38,7 +42,7 @@ export function prepareNonstopPlay(
     stageDraws?: ReadonlyArray<RandomDraws | undefined>;
     stitch?: number;
   },
-): { ok: true; prepared: PreparedNonstopPlay } | { ok: false; reason: NonstopPlayFailure; stage?: number } {
+): Promise<{ ok: true; prepared: PreparedNonstopPlay } | { ok: false; reason: NonstopPlayFailure; stage?: number }> {
   const chartEntries = course.stages.map((stage) => stage.chart);
   const sources = chartEntries.map((chartEntry) =>
     chartEntry !== undefined ? options.sourceOf(chartEntry) : undefined,
@@ -48,7 +52,14 @@ export function prepareNonstopPlay(
   );
   if (missing >= 0) return { ok: false, reason: 'missing-stage', stage: missing };
   const stages = chartEntries as LibraryChart[];
-  let assets: ReturnType<typeof createNonstopAssets> | undefined;
+  const assets = createNonstopAssets(
+    stages.map((chartEntry, index) => ({
+      chart: chartEntry.chart,
+      source: sources[index]!,
+      chartPath: chartEntry.chartPath,
+    })),
+  );
+  await assets.prefetch();
   const stitched = prepareNonstopCourse(
     stages.map((chartEntry, index) => {
       const hashes = options.hashesOf?.(chartEntry);
@@ -74,9 +85,7 @@ export function prepareNonstopPlay(
       title: course.definition.name,
       ...(options.random !== undefined ? { random: options.random } : {}),
       assetPath: (stageCharts) => {
-        assets = createNonstopAssets(
-          stageCharts.map((chart, index) => ({ chart, source: sources[index]!, chartPath: stages[index]!.chartPath })),
-        );
+        assets.setStageCharts(stageCharts);
         return assets.assetPath;
       },
     },
@@ -84,8 +93,7 @@ export function prepareNonstopPlay(
   if (!stitched.ok) {
     return { ok: false, reason: stitched.reason, ...(stitched.stage !== undefined ? { stage: stitched.stage } : {}) };
   }
-  // The pipeline hands the stage charts to `assetPath` before it stitches them, so the assets are there.
-  const { source } = assets!;
+  const { source } = assets;
   const chartEntry: LibraryChart = {
     ...stages[0]!,
     id: `nonstop:${course.id}`,
