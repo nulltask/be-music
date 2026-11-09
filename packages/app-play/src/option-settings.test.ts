@@ -217,6 +217,7 @@ describe('captureOptionSettings', () => {
       skinEffects: 'off',
       renderResolution: 1,
       playLayout: 'touch',
+      renderer: 'webgpu',
       recordingFormat: 'mp4/avc',
       workerCount: 3,
       compressorTuning: defaultCompressorTunings(),

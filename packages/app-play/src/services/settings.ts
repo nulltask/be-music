@@ -86,6 +86,36 @@ export function storeSkinEffects(
   }
 }
 
+export const RENDERER_STORAGE_KEY = 'be-music.renderer';
+
+/** The renderer the player draws with: WebGL 2 or WebGPU. */
+export type RendererChoice = 'webgl' | 'webgpu';
+
+/**
+ * Stored renderer pick, else WebGL 2: on a laptop's integrated GPU the WebGPU path drew the built-in skin at 1920 × 1080
+ * well under the display's rate where WebGL 2 kept up.
+ */
+export function readStoredRenderer(storage: SettingStorage | undefined = defaultSettingStorage()): RendererChoice {
+  try {
+    return storage?.getItem(RENDERER_STORAGE_KEY) === 'webgpu' ? 'webgpu' : 'webgl';
+  } catch {
+    // Storage blocked — the default.
+    return 'webgl';
+  }
+}
+
+/** Remembers the renderer pick; it takes effect when the player next loads. */
+export function storeRenderer(
+  renderer: RendererChoice,
+  storage: SettingStorage | undefined = defaultSettingStorage(),
+): void {
+  try {
+    storage?.setItem(RENDERER_STORAGE_KEY, renderer);
+  } catch {
+    // Private windows / blocked storage: the pick lasts for this session only.
+  }
+}
+
 export const PLAY_LAYOUT_STORAGE_KEY = 'be-music.play-layout';
 
 /** Stored Options dialog play-layout pick, `'auto'` when none. */
@@ -334,6 +364,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
       readStoredRenderResolution(storage) ?? DEFAULT_RENDER_RESOLUTION,
     ),
     playLayout: readStoredPlayLayout(storage),
+    renderer: readStoredRenderer(storage),
     status: 'Ready',
     openFolder: inputs.actions.openFolder,
     openFiles: inputs.actions.openFiles,

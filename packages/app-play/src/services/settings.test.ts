@@ -13,6 +13,9 @@ import {
   PLAY_LAYOUT_STORAGE_KEY,
   readStoredBuiltInSkinId,
   readStoredPlayLayout,
+  readStoredRenderer,
+  RENDERER_STORAGE_KEY,
+  storeRenderer,
   readStoredRecordingFormat,
   readStoredSkinEffects,
   readStoredVolumes,
@@ -114,6 +117,22 @@ describe('skin effects', () => {
     storeSkinEffects('reduced', storage);
     expect(storage.values.get(SKIN_EFFECTS_STORAGE_KEY)).toBe('reduced');
     expect(() => storeSkinEffects('off', blockedStorage)).not.toThrow();
+  });
+});
+
+describe('renderer', () => {
+  test('reads WebGPU when picked, else WebGL 2', () => {
+    expect(readStoredRenderer(memoryStorage({ [RENDERER_STORAGE_KEY]: 'webgpu' }))).toBe('webgpu');
+    expect(readStoredRenderer(memoryStorage({ [RENDERER_STORAGE_KEY]: 'webgl' }))).toBe('webgl');
+    expect(readStoredRenderer(memoryStorage({ [RENDERER_STORAGE_KEY]: 'canvas' }))).toBe('webgl');
+    expect(readStoredRenderer(memoryStorage())).toBe('webgl');
+    expect(readStoredRenderer(blockedStorage)).toBe('webgl');
+  });
+
+  test('stores a pick', () => {
+    const storage = memoryStorage();
+    storeRenderer('webgpu', storage);
+    expect(readStoredRenderer(storage)).toBe('webgpu');
   });
 });
 
