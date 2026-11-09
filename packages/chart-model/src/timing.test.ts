@@ -80,7 +80,7 @@ describe('timing', () => {
     expect(createTimingResolver(json).stopPoints.map((point) => point.seconds)).toEqual([1]);
   });
 
-  test('drops zero and undefined BMS STOPs, and non-positive bmson stops and #STP lines', () => {
+  test('plays zero and undefined BMS STOPs as LR2 does, and drops non-positive bmson stops and #STP lines', () => {
     const bms = createEmptyJSON('bms');
     bms.metadata.bpm = 120;
     bms.resources.stop['01'] = 0;
@@ -89,12 +89,18 @@ describe('timing', () => {
       { measure: 1, channel: '09', position: [0, 1], value: '01' },
       { measure: 1, channel: '09', position: [1, 2], value: '02' },
     ];
-    expect(createTimingResolver(bms).stopPoints).toEqual([]);
+    // `#STOP01 0` and the undefined `02` both leave LR2's slot at -1: -1/192 of a 120 BPM measure each.
+    expect(createTimingResolver(bms).stopPoints.map((point) => point.seconds)).toEqual([-2 / 192, -2 / 192]);
 
     const bmson = createEmptyJSON('bmson');
     bmson.metadata.bpm = 120;
     bmson.resources.stop['01'] = -48;
-    bmson.events = [{ measure: 1, channel: '09', position: [0, 1], value: '01' }];
+    bmson.resources.stop['02'] = 0;
+    bmson.events = [
+      { measure: 1, channel: '09', position: [0, 1], value: '01' },
+      { measure: 1, channel: '09', position: [1, 4], value: '02' },
+      { measure: 1, channel: '09', position: [1, 2], value: '03' },
+    ];
     expect(createTimingResolver(bmson).stopPoints).toEqual([]);
   });
 

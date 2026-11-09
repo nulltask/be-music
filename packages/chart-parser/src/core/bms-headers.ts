@@ -312,7 +312,7 @@ function applyIndexedHeaderLine(
       if (directive === 'BPM') {
         applyIndexedNumberValue(json.resources.bpm, key, value);
       } else {
-        applyIndexedNumberValue(json.resources.stop, key, value);
+        applyStopValue(json.resources.stop, key, value);
       }
       return;
     }
@@ -323,6 +323,18 @@ function applyIndexedStringValue(values: Record<string, string>, key: string, va
   if (value.length > 0) {
     values[key] = value;
   }
+}
+
+/**
+ * `#STOPxx`. LR2 stores only a value above 0 (OpenLR2 L26324-26331), so a zero or negative definition never replaces
+ * a positive one made earlier: `#STOP01 96` then `#STOP01 -5` keeps 96.
+ */
+function applyStopValue(values: Record<string, number>, key: string, value: string): void {
+  const numericValue = Number.parseFloat(value);
+  if (!Number.isFinite(numericValue) || (numericValue <= 0 && (values[key] ?? 0) > 0)) {
+    return;
+  }
+  values[key] = numericValue;
 }
 
 function applyIndexedNumberValue(values: Record<string, number>, key: string, value: string): void {
