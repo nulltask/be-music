@@ -892,6 +892,11 @@ export interface BeMusicResultFrame {
   ratePercent: number;
   /** Milliseconds since the scene mounted, or `Infinity` once the player skipped the entrance. */
   elapsedMs: number;
+  /**
+   * Milliseconds since the scene mounted, going on after the entrance is skipped or settles: for what keeps moving while
+   * the result is shown, such as a course card's stage list scrolling (`resolveResultCourseScroll`).
+   */
+  shownMs: number;
   nowMs: number;
   effects: BeMusicEffectLevel;
   chartImage: BeMusicChartImageLookup;

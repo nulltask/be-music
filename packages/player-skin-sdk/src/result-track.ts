@@ -148,3 +148,33 @@ export function resolveResultCourseCard(
     })),
   };
 }
+
+/** How a course card's stage list scrolls when its stages do not fit ({@link resolveResultCourseScroll}). */
+export interface ResultCourseScrollTiming {
+  /** How long the list rests at the top, and again at the bottom, before it moves on. */
+  holdMs: number;
+  /** How fast it scrolls, in px per second. */
+  pxPerSecond: number;
+}
+
+/** The built-in skins' timing: a 2.5 s rest at each end, 30 px a second between. */
+export const RESULT_COURSE_SCROLL_TIMING: Readonly<ResultCourseScrollTiming> = { holdMs: 2500, pxPerSecond: 30 };
+
+/**
+ * How far (px, 0..`overflowPx`) a course card's stage list has scrolled up `elapsedMs` into the result, when the stages
+ * laid out at their usual height run `overflowPx` past the card: it rests at the top, scrolls up until the last stage is
+ * at the bottom, rests there, then starts again from the top. 0 for a list that fits, and before the result shows.
+ */
+export function resolveResultCourseScroll(
+  overflowPx: number,
+  elapsedMs: number,
+  timing: Readonly<ResultCourseScrollTiming> = RESULT_COURSE_SCROLL_TIMING,
+): number {
+  if (!(overflowPx > 0) || !(elapsedMs > 0) || !Number.isFinite(elapsedMs) || !(timing.pxPerSecond > 0)) return 0;
+  const hold = Math.max(0, timing.holdMs);
+  const travel = (overflowPx / timing.pxPerSecond) * 1000;
+  const t = elapsedMs % (hold * 2 + travel);
+  if (t < hold) return 0;
+  if (t < hold + travel) return ((t - hold) / travel) * overflowPx;
+  return overflowPx;
+}

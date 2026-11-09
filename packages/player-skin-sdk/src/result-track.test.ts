@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import type { BeMusicResultData } from './result-data.ts';
 import {
   resolveResultCourseCard,
+  resolveResultCourseScroll,
   resolveResultLamp,
   resolveResultPlayTag,
   resolveResultTrackRows,
@@ -163,5 +164,32 @@ describe('resolveResultCourseCard', () => {
   it('leaves a single play and a course stage to their own chart', () => {
     expect(resolveResultCourseCard({ run: 'single' })).toBeUndefined();
     expect(resolveResultCourseCard({ run: 'stage', course: { ...course, stageIndex: 1 } })).toBeUndefined();
+  });
+});
+
+describe('resolveResultCourseScroll', () => {
+  const timing = { holdMs: 1000, pxPerSecond: 50 };
+
+  it('rests at the top, scrolls to the bottom, rests there, then starts over', () => {
+    // 100 px past the card: 2 s of scrolling between two 1 s rests, a 4 s cycle.
+    expect(resolveResultCourseScroll(100, 500, timing)).toBe(0);
+    expect(resolveResultCourseScroll(100, 2000, timing)).toBe(50);
+    expect(resolveResultCourseScroll(100, 3000, timing)).toBe(100);
+    expect(resolveResultCourseScroll(100, 3999, timing)).toBe(100);
+    expect(resolveResultCourseScroll(100, 4000, timing)).toBe(0);
+    expect(resolveResultCourseScroll(100, 6000, timing)).toBe(50);
+  });
+
+  it('keeps a list that fits, and the result before it shows, at the top', () => {
+    expect(resolveResultCourseScroll(0, 5000, timing)).toBe(0);
+    expect(resolveResultCourseScroll(-20, 5000, timing)).toBe(0);
+    expect(resolveResultCourseScroll(100, 0, timing)).toBe(0);
+    expect(resolveResultCourseScroll(100, Number.NaN, timing)).toBe(0);
+    expect(resolveResultCourseScroll(100, Number.POSITIVE_INFINITY, timing)).toBe(0);
+    expect(resolveResultCourseScroll(100, 5000, { holdMs: 0, pxPerSecond: 0 })).toBe(0);
+  });
+
+  it('uses the built-in skins timing by default', () => {
+    expect(resolveResultCourseScroll(60, 2500 + 1000)).toBeCloseTo(30);
   });
 });

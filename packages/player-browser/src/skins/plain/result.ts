@@ -1,5 +1,6 @@
 import {
   resolveResultCourseCard,
+  resolveResultCourseScroll,
   resolveResultLamp,
   resolveResultPlayTag,
   resolveResultTrackRows,
@@ -69,7 +70,15 @@ export function drawResult(surface: BeMusicSurface<'2d'>, frame: BeMusicResultFr
   const course = resolveResultCourseCard(result);
   if (course !== undefined) {
     // A course run lists the charts it played in place of one chart's facts.
-    drawCourseCard(ctx, course, { left: x + 14, right: x + 206, top: 78, rowsY: 140, bottom: 380, nowMs });
+    drawCourseCard(ctx, course, {
+      left: x + 14,
+      right: x + 206,
+      top: 78,
+      rowsY: 140,
+      bottom: 380,
+      nowMs,
+      elapsedMs: frame.shownMs,
+    });
   } else {
     // Genre, title, artist — the order every built-in skin uses.
     const lift = result.chart.genre ? 12 : 0;
@@ -237,6 +246,7 @@ function drawPortraitResult(
       rowsY: grid.trackRowsY - 8,
       bottom: track.y + track.h - 8,
       nowMs,
+      elapsedMs: frame.shownMs,
     });
     return;
   }
@@ -253,32 +263,45 @@ function drawPortraitResult(
   });
 }
 
+/** How far apart the stages of a course card sit: a title line and an artist line. */
+const COURSE_STAGE_PITCH = 34;
+
 /**
  * A course run's card in the chart panel: the course's kind, name and how far the run went (from `top`), then every
- * stage chart in order — its number, title and level, and its artist when the rows have the room — from `rowsY` down to
- * `bottom`. A stage the run never reached is dimmed.
+ * stage chart in order — its number, title, level and artist — from `rowsY` down to `bottom`, each at its usual
+ * height. Stages past `bottom` are cut off, and the list scrolls up through them and starts over
+ * (`resolveResultCourseScroll`), so every stage is shown in turn. A stage the run never reached is dimmed.
  */
 function drawCourseCard(
   ctx: CanvasRenderingContext2D,
   course: ResultCourseCard,
-  area: { left: number; right: number; top: number; rowsY: number; bottom: number; nowMs: number },
+  area: { left: number; right: number; top: number; rowsY: number; bottom: number; nowMs: number; elapsedMs: number },
 ): void {
-  const { left, right, top, rowsY, nowMs } = area;
+  const { left, right, top, rowsY, bottom, nowMs } = area;
   const textW = right - left;
   text(ctx, course.kind, left, top, { size: 10, color: MUTED, weight: 700 });
   text(ctx, course.title, left, top + 18, { size: 14, weight: 800, maxWidth: textW, nowMs });
   text(ctx, course.detail, left, top + 38, { size: 11, color: MUTED, maxWidth: textW, nowMs });
-  const pitch = Math.min(34, (area.bottom - rowsY) / Math.max(1, course.stages.length));
-  const withArtist = pitch >= 28;
+  // A row's title is centred 6 px under its top line and its artist 14 px under that, ending 21 px under the title.
+  const viewTop = rowsY - 4;
+  const contentBottom = rowsY + 6 + (course.stages.length - 1) * COURSE_STAGE_PITCH + 21;
+  const overflow = contentBottom - bottom;
+  const scroll = resolveResultCourseScroll(overflow, area.elapsedMs);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(left - 2, viewTop, textW + 4, bottom - viewTop);
+  ctx.clip();
   course.stages.forEach((stage, index) => {
-    const y = rowsY + index * pitch + (withArtist ? 6 : pitch / 2);
+    const y = rowsY + 6 + index * COURSE_STAGE_PITCH - scroll;
+    if (y + 24 < viewTop || y - 16 > bottom) return;
     ctx.globalAlpha = stage.played ? 1 : 0.4;
     text(ctx, String(stage.stage), left, y, { size: 10, color: MUTED, weight: 700 });
     text(ctx, stage.title, left + 16, y, { size: 12, weight: 700, maxWidth: textW - 16 - 30, nowMs });
     text(ctx, stage.level, right, y, { size: 12, align: 'right', maxWidth: 26 });
-    if (withArtist && stage.artist !== undefined) {
+    if (stage.artist !== undefined) {
       text(ctx, stage.artist, left + 16, y + 14, { size: 10, color: MUTED, maxWidth: textW - 16, nowMs });
     }
   });
   ctx.globalAlpha = 1;
+  ctx.restore();
 }
