@@ -407,6 +407,11 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.resolveResultCourseCard(BENCH_COURSE_RESULT);
     },
   });
+  define('player-skin-sdk.resolveResultCourseScroll', {
+    run: () => {
+      skinSdkAPI.resolveResultCourseScroll(120, 4200);
+    },
+  });
   define('player-skin-sdk.resolveGameplayLaneGeometry', {
     run: () => {
       skinSdkAPI.resolveGameplayLaneGeometry(BENCH_CHANNELS_7K, BENCH_CHANNELS_7K.length, '7', 'touch');

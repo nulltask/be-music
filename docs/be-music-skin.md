@@ -392,8 +392,11 @@ Every runtime field is optional. A host that can't provide one leaves it `undefi
 - `result` (`BeMusicResultData`): scores, judgement counts, gauge and score history, and the replay. When the host provides them, also `lamp` (the clear lamp: `FAILED`, the gauge it was cleared on, `FULL_COMBO`, `PERFECT`, `MAX`), `gaugeType`, `judgeRuleset`, `fast` / `slow`, `judgeTimings` (every timed judgement of the play), `run` (`'single'`, `'stage'` for a course stage, `'course'` for a whole EXPERT / GRADE course with the stages summed, or `'nonstop'`), `course` (the course a stage or run belongs to) and `courseRun` (a course run's stages played and trophy).
 - `rankLabel` (That-Which-Must-Not-Be-Named DJ level) and `ratePercent`.
 - `elapsedMs` since the scene mounted, or `Infinity` once the player skipped the entrance.
+- `shownMs` since the scene mounted, going on after the entrance: for what keeps moving while the result is shown.
 - `nowMs` and `effects`.
 - `settings` and `chartImage`: see [Skin settings](#skin-settings) and [Song images](#chart-images).
+
+`resolveResultCourseCard` gives a course run's card (the course and every stage chart). When its stages laid out at their usual height run past the card, `resolveResultCourseScroll(overflowPx, frame.shownMs)` gives how far the list has scrolled up: it rests at the top, scrolls until the last stage is at the bottom, rests, and starts over, as the built-in skins do.
 
 `resolveResultVerdict` (`STAGE CLEAR` / `FAILED`, or `COURSE CLEAR` / `COURSE FAILED` for a course run), `resolveResultLamp` and `resolveResultTrackRows` give the headline, clear lamp (the one clear-lamp rule, on beatoraja's lamps) and track rows the built-in skins show. `binJudgmentTimings(result.judgeTimings, binMs, rangeMs?)` turns the timings into a histogram.
 
