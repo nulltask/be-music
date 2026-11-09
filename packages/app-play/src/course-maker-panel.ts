@@ -9,6 +9,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import {
   courseConstraintGroup,
+  LR2_MAX_PLAYED_STAGES,
   LR2_NONSTOP_CONNECTIONS,
   LR2_RANDOM_MIX_SETTING_RANGES,
   parseLR2NonstopConnections,
@@ -392,7 +393,12 @@ export class CourseMakerPanel {
             data-size="sm"
             data-variant="outline"
             ?disabled=${courses.length === 0}
-            @click=${() => download('my-courses.lr2crs', serializeLR2CourseFile(this.maker.courses))}
+            @click=${() =>
+              // LR2 plays a course's first five stages: a longer course is written as those.
+              download(
+                'my-courses.lr2crs',
+                serializeLR2CourseFile(this.maker.courses, { maxStages: LR2_MAX_PLAYED_STAGES }),
+              )}
           >
             ${copy.exportLr2}
           </button>

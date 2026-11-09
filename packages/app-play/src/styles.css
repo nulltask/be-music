@@ -2529,6 +2529,46 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   color: var(--destructive);
 }
 
+/* The RANDOM MIX save dialog: the stages drawn and the settings the run started with, read-only. */
+.random-mix-save-stages {
+  display: grid;
+  gap: 0.25rem;
+  max-height: 12rem;
+  overflow-y: auto;
+  padding-inline-start: 1.75rem;
+  list-style: decimal;
+  font-size: 0.875rem;
+}
+.random-mix-save-stage {
+  min-width: 0;
+}
+.random-mix-save-title,
+.random-mix-save-artist {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.random-mix-save-artist {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+.random-mix-save-setup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+.random-mix-save-row {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+.random-mix-save-row > dt {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+
 /* The charts a dropped replay or course replay needs that are not loaded. */
 .replay-missing-list {
   list-style: disc;

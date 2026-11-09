@@ -132,6 +132,40 @@ describe('made courses storage', () => {
     expect(parseMadeCourses(older).randomMixConditions).toBeUndefined();
   });
 
+  test('keeps every stage of a long course and a NONSTOP course connections past the hash', () => {
+    const draft = createCourseDraft('nonstop', 'Long');
+    const base = finishCourseDraft({
+      ...draft,
+      stages: [{ md5: '1'.repeat(32), keyMode: 7 }],
+    })!;
+    const md5s = Array.from({ length: 12 }, (_, index) => index.toString(16).padStart(32, '0'));
+    const header = base.source.format === 'lr2crs' ? base.source.header : '';
+    const long = {
+      ...base,
+      stages: md5s.map((md5, index) => ({ md5, title: `Stage ${index + 1}` })),
+      connections: Array.from({ length: 11 }, (_, index) => (index % 2 === 0 ? 'cut' : 'blank2') as 'cut' | 'blank2'),
+      source: { ...base.source, header, hash: `${header}${md5s.join('')}` },
+    } as typeof base;
+    const read = parseMadeCourses(
+      JSON.parse(
+        JSON.stringify(
+          serializeMadeCourses({ courses: [long], defaultConnection: 'fade', randomMixSettings: MIX, randomMixes: [] }),
+        ),
+      ),
+    );
+    expect(read.courses[0]!.stages).toEqual(long.stages);
+    expect(read.courses[0]!.connections).toEqual(long.connections);
+    // A record saved before the connections were kept reads them from the hash.
+    const stored = serializeMadeCourses({
+      courses: [long],
+      defaultConnection: 'fade',
+      randomMixSettings: MIX,
+      randomMixes: [],
+    });
+    const { connections: _connections, ...older } = stored;
+    expect(parseMadeCourses(older).courses[0]!.connections).toHaveLength(10);
+  });
+
   test('reads nothing from a missing, foreign or older record', () => {
     const empty = { courses: [], defaultConnection: 'fade', randomMixSettings: MIX, randomMixes: [] };
     expect(parseMadeCourses(undefined)).toEqual(empty);

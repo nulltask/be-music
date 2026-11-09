@@ -123,6 +123,21 @@ describe('withNonstopConnection', () => {
     const nonstop = finishCourseDraft(draftOf('nonstop', 2))!;
     expect(withNonstopConnection(nonstop, 9, 'cut')).toBe(nonstop);
   });
+
+  it('keeps the connections past the ten the hash holds', () => {
+    const md5s = Array.from({ length: 13 }, (_, index) => index.toString(16).padStart(32, '0'));
+    const long = finishCourseDraft(draftOf('nonstop', 1))!;
+    const course = {
+      ...long,
+      stages: md5s.map((md5) => ({ md5 })),
+      connections: Array.from({ length: 12 }, () => 'blank1' as const),
+      source: { ...long.source, hash: `${(long.source as { header: string }).header}${md5s.join('')}` },
+    } as typeof long;
+    const edited = withNonstopConnection(course, 2, 'cut');
+    expect(edited.connections).toHaveLength(12);
+    expect(edited.connections![2]).toBe('cut');
+    expect(edited.connections!.slice(10)).toEqual(['blank1', 'blank1']);
+  });
 });
 
 describe('serializeLR2CourseFile', () => {
@@ -163,6 +178,23 @@ describe('serializeLR2CourseFile', () => {
       },
     ]);
     expect(parseLR2CourseFile(text).map((course) => course.name)).toEqual(['Table']);
+  });
+
+  it('writes every stage by default, and only the first maxStages when asked', () => {
+    const md5s = Array.from({ length: 7 }, (_, index) => index.toString(16).padStart(32, '0'));
+    const base = finishCourseDraft(draftOf('expert', 1))!;
+    const long = {
+      ...base,
+      stages: md5s.map((md5) => ({ md5 })),
+      source: { ...base.source, hash: `${(base.source as { header: string }).header}${md5s.join('')}` },
+    } as typeof base;
+    const table = { ...long, source: { format: 'beatoraja-json' as const } };
+    const whole = parseLR2CourseFile(serializeLR2CourseFile([long, table]), { maxStages: Number.POSITIVE_INFINITY });
+    expect(whole.map((course) => course.stages.length)).toEqual([7, 7]);
+    const cut = parseLR2CourseFile(serializeLR2CourseFile([long, table], { maxStages: 5 }), {
+      maxStages: Number.POSITIVE_INFINITY,
+    });
+    expect(cut.map((course) => course.stages.map((stage) => stage.md5))).toEqual([md5s.slice(0, 5), md5s.slice(0, 5)]);
   });
 });
 

@@ -50,4 +50,44 @@ test('draws a RANDOM MIX from its bar, plays it and keeps it as the folder newes
   expect(select.cursor?.bar?.title).toBe('RANDOM MIX');
   expect(select.cursor?.bar?.course).toMatchObject({ kind: 'expert', randomMix: false, playable: true });
   expect(select.cursor?.bar?.course?.stages).toHaveLength(stageCount);
+  // Back on the select screen, the save dialog offers the run's course under the date and time it ended, with every
+  // stage drawn and the settings it started with, read-only.
+  const save = player.page.locator('#random-mix-save-dialog');
+  await expect(save).toBeVisible();
+  const name = save.locator('#random-mix-save-name');
+  await expect(name).toHaveValue(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  await expect(save.locator('.random-mix-save-stage')).toHaveCount(stageCount);
+  await expect(save.locator('.random-mix-save-row')).not.toHaveCount(0);
+  // The name is the only field: the settings are text.
+  await expect(save.locator('input, select, textarea')).toHaveCount(1);
+  await name.fill('My mix');
+  await save.locator('button[value="save"]').click();
+  await expect(save).toBeHidden();
+  const saved = await player.waitFor((s) => s.cursor?.bar?.title === 'My mix', 'the saved RANDOM MIX');
+  expect(saved.cursor?.bar?.course?.stages).toHaveLength(stageCount);
+});
+
+test('offers to save a RANDOM MIX given up mid-run, listing every stage drawn', async ({ player }) => {
+  test.setTimeout(240_000);
+  await openWithLibrary(player);
+  await player.openFolder('MY COURSES');
+  await player.cursorTo((bar) => bar.course?.randomMix === true, 'the RANDOM MIX bar');
+  await player.setOption(['Play options'], 'Auto play', true);
+  await player.key('Enter');
+  const dialog = player.page.locator('#random-mix-dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.locator('button[value="ok"]').click();
+  const play = await player.waitFor((s) => s.scene.kind === 'play', 'the drawn RANDOM MIX');
+  const stageCount = play.play?.course?.stageCount ?? 0;
+  // ESC gives the run up: its course result shows, then the select screen offers to save it.
+  await player.key('Escape');
+  await player.waitFor((s) => s.scene.kind === 'result' && s.results.at(-1)?.run === 'course', 'the course result');
+  await player.leaveResult();
+  const save = player.page.locator('#random-mix-save-dialog');
+  await expect(save).toBeVisible();
+  await expect(save.locator('.random-mix-save-stage')).toHaveCount(stageCount);
+  await save.locator('button[value=""]').click();
+  await expect(save).toBeHidden();
+  const select = await player.waitFor((s) => s.scene.kind === 'select', 'the select screen');
+  expect(select.cursor?.bar?.title).toBe('RANDOM MIX');
 });

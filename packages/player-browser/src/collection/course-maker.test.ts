@@ -260,6 +260,31 @@ describe('RANDOM MIX', () => {
     expect(createRandomMixCandidate(DOUBLE).difficulty).toBeUndefined();
   });
 
+  test('saves a played RANDOM MIX as a course of the player own', () => {
+    const changes: CourseMakerChange[] = [];
+    const courses = maker(changes);
+    const drawn = courses.drawRandomMix('expert', 7, charts, () => 0);
+    if (!drawn.ok) throw new Error('draw failed');
+    // The kept draw is renamed and no longer the draw the next one replaces, even under the draw's own name.
+    const saved = courses.saveRandomMix(drawn.course, 'RANDOM MIX');
+    expect(saved).toMatchObject({ name: 'RANDOM MIX', stages: drawn.course.stages });
+    expect(courses.courses).toEqual([saved]);
+    expect(courses.randomMixes).toEqual([]);
+    courses.drawRandomMix('expert', 7, charts, () => 0);
+    expect(courses.courses).toHaveLength(2);
+    expect(courses.courses).toContain(saved);
+    // A draw that was not kept (an endless run's) joins as the newest course; a blank name keeps the course's.
+    const unkept = { ...drawn.course, stages: [...drawn.course.stages, ...drawn.course.stages] };
+    changes.length = 0;
+    const added = courses.saveRandomMix(unkept, '  ');
+    expect(added).toMatchObject({ name: 'RANDOM MIX', stages: unkept.stages });
+    expect(courses.courses[0]).toBe(added);
+    expect(courses.courses).toHaveLength(3);
+    expect(courses.randomMixes).not.toContain(added);
+    expect(changes).toEqual(['courses']);
+    expect(courses.saveRandomMix(courses.courses[1]!, ' 2026-11-09 21:34 ').name).toBe('2026-11-09 21:34');
+  });
+
   test('keeps a draw made elsewhere, and the dialog conditions across a restore', () => {
     const changes: CourseMakerChange[] = [];
     const courses = maker(changes);

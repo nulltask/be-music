@@ -3,7 +3,6 @@ import {
   DEFAULT_RANDOM_MIX_CONDITIONS,
   RANDOM_MIX_DIFFICULTIES,
   RANDOM_MIX_MAX_COUNT,
-  RANDOM_MIX_NONSTOP_MAX_COUNT,
   resolveRandomMixCount,
   type LR2RandomMixSettings,
   type NonstopConnection,
@@ -18,7 +17,8 @@ import { playerText } from '../player-copy.ts';
 // (LR2's favorite level, BPM range and BPM limits, and a NONSTOP mix's connection), then OK starts the mix. It opens on
 // what was last confirmed, and says how many charts match; OK is off while none does.
 
-const DIFFICULTY_NAMES: Readonly<Record<number, string>> = {
+/** The `#DIFFICULTY` names the RANDOM MIX dialogs show. */
+export const RANDOM_MIX_DIFFICULTY_NAMES: Readonly<Record<number, string>> = {
   1: 'BEGINNER',
   2: 'NORMAL',
   3: 'HYPER',
@@ -28,7 +28,7 @@ const DIFFICULTY_NAMES: Readonly<Record<number, string>> = {
 
 /** What the dialog is opened with. */
 export interface RandomMixDialogRequest {
-  /** The course folder the RANDOM MIX bar is in: a NONSTOP mix has at most five stages and no endless count. */
+  /** The course folder the RANDOM MIX bar is in: a NONSTOP mix has no endless count. */
   kind: 'expert' | 'nonstop';
   /** The key modes the library has, ascending: the ones offered. */
   keyModes: readonly number[];
@@ -64,7 +64,7 @@ export function toggleRandomMixValue(values: readonly number[], value: number, o
 
 /**
  * The conditions as the dialog first shows them: a key mode the library lacks gives way to the default one (7 keys), or
- * to the library's lowest when it lacks that too, and a NONSTOP mix's count is capped.
+ * to the library's lowest when it lacks that too, and a NONSTOP mix's endless count reads as five stages.
  */
 export function resolveRandomMixDialogConditions(
   request: Pick<RandomMixDialogRequest, 'kind' | 'keyModes' | 'initial'>,
@@ -202,7 +202,6 @@ function template(
   const t = playerText().course.randomMixDialog;
   const matches = request.countMatches(conditions);
   const nonstop = request.kind === 'nonstop';
-  const countMax = nonstop ? RANDOM_MIX_NONSTOP_MAX_COUNT : RANDOM_MIX_MAX_COUNT;
   const levelInput = (id: string, label: string, key: 'minLevel' | 'maxLevel') =>
     html`<label class="random-mix-level" for=${id}>
       <span class="label">${label}</span>
@@ -313,7 +312,7 @@ function template(
                             ),
                           })}
                       />
-                      <span>${DIFFICULTY_NAMES[difficulty]}</span>
+                      <span>${RANDOM_MIX_DIFFICULTY_NAMES[difficulty]}</span>
                     </label>`,
                 )}
               </div>
@@ -331,8 +330,10 @@ function template(
       }
     </fieldset>
     <div class="random-mix-group">
-      ${countField('random-mix-count', t.count, conditions.count, countMax, !nonstop, (count) => update({ count }))}
-      ${nonstop ? html`<p class="random-mix-note">${t.nonstopLimit(RANDOM_MIX_NONSTOP_MAX_COUNT)}</p>` : nothing}
+      ${countField('random-mix-count', t.count, conditions.count, RANDOM_MIX_MAX_COUNT, !nonstop, (count) =>
+        update({ count }),
+      )}
+      ${nonstop ? html`<p class="random-mix-note">${t.nonstopNoInfinity}</p>` : nothing}
     </div>
     <fieldset class="random-mix-group">
       <legend class="label">${t.settings}</legend>

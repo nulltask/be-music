@@ -14,14 +14,8 @@ import { LR2_RANDOM_MIX_NAME, resolveLR2RandomMixSettings, type LR2RandomMixSett
 /** The `#DIFFICULTY` values the dialog offers: BEGINNER, NORMAL, HYPER, ANOTHER, INSANE. */
 export const RANDOM_MIX_DIFFICULTIES: readonly number[] = [1, 2, 3, 4, 5];
 
-/** The most stages a counted EXPERT RANDOM MIX has. */
+/** The most stages a counted RANDOM MIX has, EXPERT and NONSTOP alike. */
 export const RANDOM_MIX_MAX_COUNT = 99;
-
-/**
- * The most stages a NONSTOP RANDOM MIX has: the five a course LR2 plays holds, so a NONSTOP draw, played as one stitched
- * chart, is always kept as its folder's newest course.
- */
-export const RANDOM_MIX_NONSTOP_MAX_COUNT: number = LR2_COURSE_MAKER_MAX_STAGES;
 
 /** The stage count of a RANDOM MIX: a number of stages, or `infinity` for one that goes on until the gauge empties. */
 export type RandomMixCount = number | 'infinity';
@@ -123,21 +117,21 @@ export function normalizeRandomMixConditions(
 }
 
 /**
- * The stage count a draw of `kind` takes: a NONSTOP RANDOM MIX, one stitched chart, has at most
- * {@link RANDOM_MIX_NONSTOP_MAX_COUNT} stages and no endless count.
+ * The stage count a draw of `kind` takes: a NONSTOP RANDOM MIX, one stitched chart drawn before it starts, has the same
+ * 1-{@link RANDOM_MIX_MAX_COUNT} stages as an EXPERT one but no endless count, which reads as the default five.
  */
 export function resolveRandomMixCount(kind: 'expert' | 'nonstop', count: RandomMixCount): RandomMixCount {
-  if (kind === 'nonstop')
-    return count === 'infinity' ? RANDOM_MIX_NONSTOP_MAX_COUNT : Math.min(count, RANDOM_MIX_NONSTOP_MAX_COUNT);
+  if (kind === 'nonstop' && count === 'infinity') return DEFAULT_RANDOM_MIX_CONDITIONS.count;
   return count;
 }
 
 /**
- * Whether a drawn course of `count` stages is kept as its folder's newest course: the player's courses are kept as LR2
- * course files, which hold the five stages LR2 plays, so a longer or endless draw is played and not kept.
+ * Whether a drawn course of `count` stages is kept as its folder's newest course: a counted draw is, however many
+ * stages it has (the player's courses keep every stage); an endless draw, which has no last stage, is played and not
+ * kept.
  */
 export function isRandomMixKept(count: RandomMixCount): boolean {
-  return count !== 'infinity' && count <= LR2_COURSE_MAKER_MAX_STAGES;
+  return count !== 'infinity';
 }
 
 /** One chart a RANDOM MIX can draw, by what the conditions read: its folder, key mode, play level and difficulty. */
@@ -331,8 +325,8 @@ export interface RandomMixStage {
 
 /**
  * A RANDOM MIX course of the drawn stages: a course the player made, named {@link LR2_RANDOM_MIX_NAME}, in stage 1's key
- * mode, unranked (`release: false`); a NONSTOP one gets `defaultConnection` after every stage. `undefined` without a
- * stage.
+ * mode, unranked (`release: false`); a NONSTOP one gets `defaultConnection` after every stage, past the ten an LR2 course
+ * hash holds too. `undefined` without a stage.
  */
 export function createRandomMixCourse(
   kind: 'expert' | 'nonstop',
@@ -340,7 +334,7 @@ export function createRandomMixCourse(
   options: { defaultConnection?: NonstopConnection } = {},
 ): CourseDefinition | undefined {
   if (stages.length === 0) return undefined;
-  return finishCourseDraft(
+  const course = finishCourseDraft(
     {
       kind,
       name: LR2_RANDOM_MIX_NAME,
@@ -354,4 +348,8 @@ export function createRandomMixCourse(
     },
     options.defaultConnection !== undefined ? { defaultConnection: options.defaultConnection } : {},
   );
+  // `finishCourseDraft` gives the default only after LR2's five course-maker stages; a draw has it after every one.
+  if (course?.kind === 'nonstop')
+    course.connections = Array.from({ length: stages.length - 1 }, () => options.defaultConnection ?? 'fade');
+  return course;
 }

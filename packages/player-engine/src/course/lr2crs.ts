@@ -50,8 +50,15 @@ export function parseLR2NonstopConnections(header: string): NonstopConnection[] 
  *   applies (`isLR2GradeCourse`). A table's legacy `grade` list keeps jbmstable-parser's `grade_mirror`.
  *
  * Courses with no stage or an unknown type are skipped. Accepts raw bytes (decoded by {@link decodeCourseText}) or text.
+ *
+ * `options.maxStages` reads up to that many stages instead of LR2's five: a host that keeps courses of its own in this
+ * format, longer ones included, reads them back whole with `Infinity`.
  */
-export function parseLR2CourseFile(input: Uint8Array | string): CourseDefinition[] {
+export function parseLR2CourseFile(
+  input: Uint8Array | string,
+  options: { maxStages?: number } = {},
+): CourseDefinition[] {
+  const maxStages = options.maxStages ?? LR2_MAX_PLAYED_STAGES;
   const root = parseCourseXML(typeof input === 'string' ? input : decodeCourseText(input));
   if (root === undefined || root.name !== 'courselist') return [];
   const courses: CourseDefinition[] = [];
@@ -65,8 +72,8 @@ export function parseLR2CourseFile(input: Uint8Array | string): CourseDefinition
     const type = typeText === undefined || typeText === '' ? Number.NaN : Number(typeText);
     const kind = LR2_COURSE_KINDS[type];
     if (kind === undefined) continue;
-    // LR2 plays only a course's first five stages, so the course is read as those.
-    const stageCount = Math.min(Math.floor(hash.length / LR2_HASH_BLOCK) - 1, LR2_MAX_PLAYED_STAGES);
+    // LR2 plays only a course's first five stages, so the course is read as those (unless asked for more).
+    const stageCount = Math.min(Math.floor(hash.length / LR2_HASH_BLOCK) - 1, maxStages);
     const stages = [];
     for (let index = 0; index < stageCount; index += 1) {
       const start = LR2_HASH_BLOCK * (index + 1);
