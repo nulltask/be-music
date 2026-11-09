@@ -1033,6 +1033,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreAPI.resolveChartAudioAsset(BENCH_SOURCE, BENCH_SONG.chartPath, 'kick.wav');
     },
   });
+  define('player-browser.resolveChartAudioAssetCandidates', {
+    run: () => {
+      playerWebCoreAPI.resolveChartAudioAssetCandidates(BENCH_SOURCE, BENCH_SONG.chartPath, 'kick.wav');
+    },
+  });
   define('player-browser.resolveChartBGAAsset', {
     run: () => {
       playerWebCoreAPI.resolveChartBGAAsset(BENCH_SOURCE, BENCH_SONG.chartPath, '_bga.mpg');

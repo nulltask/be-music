@@ -161,7 +161,7 @@ export class NonstopRoute {
       const found = await this.records.resolveChartHashes(stage.chart);
       if (found !== undefined) hashes.set(stage.chart.id, found);
     }
-    const prepared = prepareNonstopPlay(course, {
+    const prepared = await prepareNonstopPlay(course, {
       sourceOf: (chartEntry) => resolveChartSource(this.library.collection, chartEntry),
       hashesOf: (chartEntry) => hashes.get(chartEntry.id),
       ...(run !== undefined
