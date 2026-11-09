@@ -118,6 +118,19 @@ describe('stitchNonstopCourse', () => {
     expect(stitched.timing.stopPoints[0]!.seconds).toBeCloseTo((96 / 192) * (240 / 180), 6);
   });
 
+  test('carries a negative STOP into the note times and writes no #STOP for it', () => {
+    const stage = bms('#BPM 120', '#STOP01 -96', '#WAV01 a.wav', '#00109:01', '#00111:01', '#00211:01');
+    const result = stitchNonstopCourse([{ chart: stage }], { connections: [] });
+    if (!result.ok) throw new Error('stitch failed');
+    const stitched = resolveChart(result.chart);
+    expect(stitched.timing.stopPoints).toEqual([]);
+    const placement = result.map.stages[0]!.placement;
+    const expected = resolveChart(stage).notes.map((note) => placement.offsetSeconds + note.seconds / placement.rate);
+    // LR2 plays the STOP as -1/192 of a 120 BPM measure: the note after it comes 2/192 s early.
+    expect(expected[1]! - expected[0]!).toBeCloseTo(2 - 2 / 192, 6);
+    noteSeconds(stitched).forEach((seconds, index) => expect(seconds).toBeCloseTo(expected[index]!, 2));
+  });
+
   test("shows each stage's bar lines inside its window", () => {
     const result = stitchNonstopCourse([{ chart: stageA }, { chart: stageB }], { connections: ['fade'] });
     if (!result.ok) throw new Error('stitch failed');

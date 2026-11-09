@@ -49,6 +49,20 @@ describe('timeline', () => {
     expect(beatAtSeconds(3.5)).toBeCloseTo(3, 6);
   });
 
+  test('createBeatAtSecondsResolver: jumps ahead at a negative STOP, not before it', () => {
+    const json = createEmptyJSON('bms');
+    json.metadata.bpm = 120;
+    json.resources.stop['01'] = -192;
+    json.events = [createStopEvent(0, 2, 4, '01')];
+
+    // LR2 plays it as -1/192 of a measure: 2 / 192 s at 120 BPM, which is 1/48 beat.
+    const beatAtSeconds = createBeatAtSecondsResolver(json);
+    expect(beatAtSeconds(0.995)).toBeCloseTo(1.99, 6);
+    expect(beatAtSeconds(1)).toBeCloseTo(2 + 1 / 48, 6);
+    expect(beatAtSeconds(1.5)).toBeCloseTo(3 + 1 / 48, 6);
+    expect(beatAtSeconds(0.5)).toBeCloseTo(1, 6);
+  });
+
   test('createBeatAtSecondsResolver: keeps beat fixed during bemaniaDX-style STP windows', () => {
     const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;

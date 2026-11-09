@@ -486,6 +486,16 @@ describe('positions are exact (findings A2 – A5)', () => {
     expect(document.notes).toContainEqual({ m: '3', p: '1/3', lane: '13' });
   });
 
+  test('writes a negative STOP as the -1/48 beat LR2 plays, and drops a zero STOP', () => {
+    expect(playDocument(chart('#STOP01 -96', '#00309:01')).timeline).toEqual([
+      { m: '3', p: '0', type: 'stop', v: '-1/48' },
+    ]);
+    expect(playDocument(chart('#STOP01 -5', '#00309:01')).timeline).toEqual(
+      playDocument(chart('#STOP01 -96', '#00309:01')).timeline,
+    );
+    expect(playDocument(chart('#STOP01 0', '#00309:01')).timeline).toEqual([]);
+  });
+
   test('takes long-note ends exactly', () => {
     const cells = Array.from({ length: 384 }, (_, at) => (at === 19 ? 'ZZ' : at === 0 ? '01' : '00')).join('');
     const document = playDocument(chart('#LNOBJ ZZ', `#00314:${cells}`));

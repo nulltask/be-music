@@ -749,7 +749,8 @@ function lastChangePerTime(
 
 /**
  * STOPs in beats (`collectStopChanges`: of several BMS `#STOPxx` at one position the last wins, bmson stops on one pulse
- * add up). A bmson stop's length is read exactly from its `duration` in pulses.
+ * add up). A bmson stop's length is read exactly from its `duration` in pulses. A negative BMS `#STOPxx` is the
+ * `-1/48` beat LR2 plays for it.
  */
 function computeStops(context: ItemContext, events: BeMusicEvent[]): TimelineItem[] {
   const { json, bmson } = context;
@@ -772,7 +773,7 @@ function computeStops(context: ItemContext, events: BeMusicEvent[]): TimelineIte
       const units = rationalFromNumber(stop.duration);
       beats = units && divideRational(snapValue(units), STOP_UNITS_PER_BEAT);
     }
-    if (beats === undefined || beats.n <= 0n) {
+    if (beats === undefined || beats.n === 0n) {
       continue;
     }
     const time = eventTime(stop.event);
