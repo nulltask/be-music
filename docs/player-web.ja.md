@@ -848,8 +848,8 @@ beatoraja のプレイスキンは表示の選択であって ruleset ではな�
 
 ## Renderer と performance control
 
-- PixiJS は既定で WebGPU preference を使い、browser が初期化できない場合は PixiJS 側で fallback します。
-- `?renderer=webgl` で renderer 比較用に WebGL を強制できます。
+- stage は既定で WebGL 2 で描きます。Options → Skin & display → Renderer で WebGPU に切り替えられ（`be-music.renderer` に保存し、次の読み込みで反映）、browser が WebGPU を初期化できない場合は PixiJS が WebGL 2 に fallback します。ノート PC の内蔵 GPU では、WebGPU で 1920 × 1080 の Synesthesia が約 80 fps だったのに対し WebGL 2 では 135 fps 出たため、WebGL 2 を既定にしています。
+- `?renderer=webgl` / `?renderer=webgpu` で renderer 比較用に選択を上書きできます。
 - skin / BGA texture は LR2 / beatoraja の pixel-art asset を保つため nearest sampling を使います。
 - beatoraja source texture は bitmap が保守的な GPU texture-size cap を超える場合、upload 前に downscale します。
 - gameplay path は decide scene から gameplay へ渡す前に、chart parse、audio decode、BGA resource preload を進めます。

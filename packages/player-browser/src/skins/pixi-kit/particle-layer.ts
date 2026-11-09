@@ -14,13 +14,18 @@ const INITIAL_POINTS = 256;
 const CORNERS = new Float32Array([-1, -1, 1, -1, 1, 1, -1, 1]);
 const QUAD_INDICES = new Uint16Array([0, 1, 2, 0, 2, 3]);
 
+/** Narrowest a point is drawn, in device pixels; a smaller one grows to it and fades by the area it gained. */
+const MIN_POINT_PIXELS = '1.0';
+
 const POINT_VERTEX_GLSL = /* glsl */ `#version 300 es
+const float MIN_POINT_PIXELS = ${MIN_POINT_PIXELS};
 in vec2 aPosition;
 in vec3 aPoint;
 in vec4 aColor;
 uniform mat3 uProjectionMatrix;
 uniform mat3 uWorldTransformMatrix;
 uniform vec4 uWorldColorAlpha;
+uniform vec2 uResolution;
 uniform mat3 uTransformMatrix;
 uniform vec4 uColor;
 uniform vec4 uFrame;
@@ -29,10 +34,15 @@ out vec4 vColor;
 
 void main() {
   mat3 matrix = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix;
-  vec2 world = aPoint.xy + aPosition * aPoint.z;
+  // A point under a device pixel across grows to one pixel and fades by the area it gained, so it gives off the same
+  // light without dropping out between pixel centres (the player's skin texture is not multisampled).
+  float side = aPoint.z * length(matrix[0].xy) * uResolution.x;
+  float grown = max(side, MIN_POINT_PIXELS);
+  float coverage = side * side / (grown * grown);
+  vec2 world = aPoint.xy + aPosition * aPoint.z * (grown / max(side, 1e-6));
   gl_Position = vec4((matrix * vec3(world, 1.0)).xy, 0.0, 1.0);
   vUV = mix(uFrame.xy, uFrame.zw, aPosition * 0.5 + 0.5);
-  vColor = vec4(aColor.rgb * aColor.a, aColor.a) * uColor * uWorldColorAlpha;
+  vColor = vec4(aColor.rgb * aColor.a, aColor.a) * uColor * uWorldColorAlpha * coverage;
 }
 `;
 
@@ -49,6 +59,7 @@ void main() {
 `;
 
 const POINT_WGSL = /* wgsl */ `
+const MIN_POINT_PIXELS: f32 = ${MIN_POINT_PIXELS};
 struct GlobalUniforms {
   uProjectionMatrix: mat3x3<f32>,
   uWorldTransformMatrix: mat3x3<f32>,
@@ -85,11 +96,14 @@ fn mainVertex(
   @location(2) aColor: vec4<f32>,
 ) -> PointOut {
   let matrix = globalUniforms.uProjectionMatrix * globalUniforms.uWorldTransformMatrix * localUniforms.uTransformMatrix;
-  let world = aPoint.xy + aPosition * aPoint.z;
+  let side = aPoint.z * length(matrix[0].xy) * globalUniforms.uResolution.x;
+  let grown = max(side, MIN_POINT_PIXELS);
+  let coverage = side * side / (grown * grown);
+  let world = aPoint.xy + aPosition * aPoint.z * (grown / max(side, 1e-6));
   var out: PointOut;
   out.position = vec4<f32>((matrix * vec3<f32>(world, 1.0)).xy, 0.0, 1.0);
   out.uv = mix(pointUniforms.uFrame.xy, pointUniforms.uFrame.zw, aPosition * 0.5 + 0.5);
-  out.color = vec4<f32>(aColor.rgb * aColor.a, aColor.a) * localUniforms.uColor * globalUniforms.uWorldColorAlpha;
+  out.color = vec4<f32>(aColor.rgb * aColor.a, aColor.a) * localUniforms.uColor * globalUniforms.uWorldColorAlpha * coverage;
   return out;
 }
 

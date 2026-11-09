@@ -7,7 +7,7 @@ import { hasAnyLR2Skin } from '../../family-dispatch.ts';
 import { playerFullscreenElement, toggleFullscreen } from '../../fullscreen.ts';
 import { renderResolutionLabel, renderResolutionSteps, storeRenderResolution } from '../../render-resolution.ts';
 import { ADD_SKIN_ENABLED, BE_MUSIC_SKINS } from '../../services/built-in-skins.ts';
-import { storePlayLayout, storeSkinEffects } from '../../services/settings.ts';
+import { storePlayLayout, storeRenderer, storeSkinEffects } from '../../services/settings.ts';
 import { describeSkinSettingControllers, setStoredSkinSetting, storeSkinSettings } from '../../skin-settings.ts';
 import type { SkinFamilyOverride } from '../../types.ts';
 import { OPTION_FOLDERS, type OptionFolderSpec } from './folders.ts';
@@ -75,6 +75,11 @@ export function buildSkinFolder(
     .addButton({ title: AUTO_DETECT_RESOLUTION_LABEL })
     .on('click', () => void this.detectRenderResolution());
   if (resolutionSteps.length < 2) this.autoDetectResolutionControl.hidden = true;
+  // WebGL 2 by default; WebGPU for the GPUs it suits. The stage picks its renderer once, so a change waits for a reload.
+  selectBinding(skin, this.guiState, 'renderer', 'Renderer (applies on reload)', {
+    'WebGL 2': 'webgl',
+    WebGPU: 'webgpu',
+  }).on('change', ({ value: renderer }) => storeRenderer(renderer));
   // Auto picks the touch layout on phones / tablets; applies from the next play.
   selectBinding(skin, this.guiState, 'playLayout', 'Play layout', {
     Auto: 'auto',

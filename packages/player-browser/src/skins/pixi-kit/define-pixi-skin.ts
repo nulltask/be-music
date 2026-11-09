@@ -234,6 +234,7 @@ class GameplayScreen {
         overlayLayerPool: this.overlayLayerPool,
         runtime,
         layout: frame.layout,
+        settings: frame.settings,
       });
     } finally {
       this.layerPool.end();

@@ -1,6 +1,6 @@
 import { formatSelectBreadcrumb } from './layout.ts';
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
-import { bindGlassSurface, drawGlassSurface } from './glass.ts';
+import { bindGlassSurface, drawGlassSurface, frostedGlassEnabled } from './glass.ts';
 import { createFlock, stepFlock } from './boids.ts';
 import { ChargeCloud } from './charge-cloud.ts';
 import { KICK_REST, stepKick, type KickState } from './kick.ts';
@@ -294,6 +294,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   private cursorChangedAt = Number.NEGATIVE_INFINITY;
   /** The foreground orb: a charge cloud, and the clock of its last simulation step. */
   private readonly chargeCloud = new ChargeCloud();
+  /** Whether this rebuild's panels are frosted (the skin's frosted glass setting). */
+  private frosted = true;
   private lastOrbSeconds: number | undefined;
   /** The low end's kick envelope, which puffs up the fish. */
   private kick: KickState = KICK_REST;
@@ -317,6 +319,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
   public render(input: PixiSelectFrame): boolean {
     this.effects = input.effects;
+    this.frosted = frostedGlassEnabled(input.settings);
     const frame =
       input.effects === 'off'
         ? { ...input, sceneStartedAt: Number.NEGATIVE_INFINITY, cursorChangedAt: Number.NEGATIVE_INFINITY }
@@ -629,7 +632,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   private renderChrome(frame: PixiSelectFrame): boolean {
     const { layer, designWidth, designHeight, entries, focusedChart: chartEntry } = frame;
     const chrome = new Graphics();
-    bindGlassSurface(chrome, this.glass);
+    if (this.frosted) bindGlassSurface(chrome, this.glass);
     chrome.label = 'synesthesia-select/chrome';
     const hue = sceneHue(frame.nowMs / 1000);
     const accent = hsvToHex(hue, 0.6, 1);
@@ -821,7 +824,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   private renderPortraitChrome(frame: PixiSelectFrame): boolean {
     const { layer, designWidth, designHeight, entries, focusedChart: chartEntry } = frame;
     const chrome = new Graphics();
-    bindGlassSurface(chrome, this.glass);
+    if (this.frosted) bindGlassSurface(chrome, this.glass);
     chrome.label = 'synesthesia-select/chrome';
     const accent = hsvToHex(sceneHue(frame.nowMs / 1000), 0.6, 1);
     const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) => {
@@ -1043,7 +1046,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const rowW = listWidth + (active ? 4 : 0);
     const alpha = 1 - intro;
     const row = new Graphics();
-    bindGlassSurface(row, this.glass);
+    if (this.frosted) bindGlassSurface(row, this.glass);
     row.alpha = alpha;
     row.label = `fallback-row[idx=${entryIndex},kind=${entry.kind}${active ? ',active' : ''}]`;
     drawGlassSurface(row, rowX, y, rowW, rowH, 0.96 * alpha);
@@ -1150,7 +1153,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const rowW = active ? listWidth + 8 : listWidth;
     const alpha = 1 - intro;
     const row = new Graphics();
-    bindGlassSurface(row, this.glass);
+    if (this.frosted) bindGlassSurface(row, this.glass);
     row.alpha = alpha;
     row.label = `fallback-row[idx=${entryIndex},kind=${entry.kind}${active ? ',active' : ''}]`;
     drawGlassSurface(row, rowX, y, rowW, rowHeight - 4, 0.96 * alpha);

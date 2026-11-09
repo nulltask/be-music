@@ -206,8 +206,11 @@ const float CAMERA = 4.0;
 const int GRID = 32;
 const float GRID_EXTENT = 1.1;
 const float GRID_SCALE = 1.0 / 64.0;
-// target density (particles per cell), alignment, cohesion, unused
+// target density (particles per cell), alignment, cohesion, seconds since the last step (the dots are drawn carried on
+// along their velocity by it, so the motion stays smooth between steps)
 uniform vec4 uFlock;
+// cos and sin of the camera's yaw (uView.y), then of its pitch (uView.z): worked out once a frame, not per vertex
+uniform vec4 uCamera;
 
 ivec3 gridCell(vec3 p) {
   vec3 g = (p / GRID_EXTENT * 0.5 + 0.5) * float(GRID);
@@ -242,10 +245,10 @@ float bandLevel(int band) {
 }
 
 vec3 toCamera(vec3 p) {
-  float cy = cos(uView.y);
-  float sy = sin(uView.y);
-  float cx = cos(uView.z);
-  float sx = sin(uView.z);
+  float cy = uCamera.x;
+  float sy = uCamera.y;
+  float cx = uCamera.z;
+  float sx = uCamera.w;
   vec3 q = vec3(cy * p.x + sy * p.z, p.y, -sy * p.x + cy * p.z);
   return vec3(q.x, cx * q.y - sx * q.z, sx * q.y + cx * q.z);
 }
@@ -503,7 +506,8 @@ void main() {
   vec4 position = texelFetch(uPositions, cell, 0);
   vec4 velocity = texelFetch(uVelocities, cell, 0);
   float seed = velocity.w;
-  vec3 c = toCamera(position.xyz);
+  vec3 at = position.xyz + velocity.xyz * uFlock.w;
+  vec3 c = toCamera(at);
   float k = perspective(c.z);
   vec2 screen = c.xy * k * uView.x;
 
@@ -512,7 +516,7 @@ void main() {
   bool covered = false;
   for (int index = 0; index < ORBS; index += 1) {
     vec4 orb = uOrbs[index];
-    float gap = max(0.0, distance(position.xyz, orb.xyz) - orb.w);
+    float gap = max(0.0, distance(at, orb.xyz) - orb.w);
     light += uLights[index].x * 0.03 / (gap * gap + 0.03);
     vec3 oc = toCamera(orb.xyz);
     float ok = perspective(oc.z);
@@ -679,11 +683,23 @@ function quad(): Geometry {
   });
 }
 
-/** WebGPU draws points one pixel wide: there each particle is one instance of a quad, sized by the shader. */
+/**
+ * WebGPU draws points one pixel wide: there each particle is a quad sized by the shader, four vertices a particle in one
+ * plain indexed draw (the shader finds the particle and the corner from the vertex index; the attribute only sizes the
+ * vertex range), so the GPU shades each corner once. Not an instanced quad: four-vertex instances leave most of an
+ * integrated GPU's vertex lanes idle.
+ */
 function particleQuads(count: number): Geometry {
-  const geometry = quad();
-  geometry.instanceCount = count;
-  return geometry;
+  const indices = new Uint32Array(count * 6);
+  for (let particle = 0; particle < count; particle += 1) {
+    const corner = particle * 4;
+    indices.set([corner, corner + 1, corner + 2, corner, corner + 2, corner + 3], particle * 6);
+  }
+  return new Geometry({
+    attributes: { aSlot: { buffer: new Float32Array(count * 4), format: 'float32' } },
+    indexBuffer: indices,
+    topology: 'triangle-list',
+  });
 }
 
 function particleDots(count: number): Geometry {
@@ -725,8 +741,28 @@ function stateTexture(side: number): RenderTexture {
 }
 
 /**
+ * About how many simulation steps a cloud takes a second, whatever the display's rate: the three GPU passes of a step
+ * are a large part of a frame on a laptop's integrated GPU, and between steps the particle shader carries every dot on
+ * along its velocity, so the motion stays smooth at 60, 120 or 144 Hz.
+ */
+export const CLOUD_STEP_RATE = 30;
+
+/** Longest a dot is carried on past its last step, so a stalled simulation never flings the cloud apart. */
+const MAX_CARRY_SECONDS = 0.1;
+
+/**
+ * The time step the cloud's simulation takes after `elapsed` seconds without one: 0 (wait) until about a
+ * {@link CLOUD_STEP_RATE} step's worth has passed (a tenth less, so frame timing jitter cannot push a 60 Hz display's
+ * second frame past it), then all of it, capped at 1/30 s so a long gap only resumes the motion. Pure.
+ */
+export function cloudStepSeconds(elapsed: number): number {
+  if (!(elapsed >= 0.9 / CLOUD_STEP_RATE)) return 0;
+  return Math.min(1 / 30, elapsed);
+}
+
+/**
  * One charge cloud. Add {@link view} to the stage and call {@link update} once per frame; the simulation step
- * runs as a GPU pass right before the frame is drawn.
+ * runs as a GPU pass right before the frame is drawn, about {@link CLOUD_STEP_RATE} times a second.
  */
 export class ChargeCloud {
   public readonly view: Container = new Container();
@@ -735,6 +771,8 @@ export class ChargeCloud {
   private readonly velocities: [RenderTexture, RenderTexture];
   private current = 0;
   private initialised = false;
+  /** Seconds that passed since the last simulation step. */
+  private unstepped = 0;
   private lights: OrbLight[] = Array.from({ length: ORBS }, () => DARK_ORB);
   private readonly grid = gridTexture();
   private readonly splat: Mesh<Geometry, Shader>;
@@ -743,7 +781,7 @@ export class ChargeCloud {
   private readonly stepHost = new Container();
   /** GL point sprites, drawn under WebGL. */
   private readonly particles: Mesh<Geometry, Shader>;
-  /** Instanced quads, drawn under WebGPU in place of {@link particles}. */
+  /** Quads, drawn under WebGPU in place of {@link particles}. */
   private readonly particleQuads: Mesh<Geometry, Shader>;
   private readonly orbs: Mesh<Geometry, Shader>[];
 
@@ -770,6 +808,8 @@ export class ChargeCloud {
         value: new Float32Array([((side * side) / (32 * 32 * 32 * 0.12)) * 2.5, 3.0, 2.2, 0]),
         type: 'vec4<f32>' as const,
       },
+      // After uFlock, as in the WGSL struct: the uniform buffer is laid out in this order.
+      uCamera: { value: new Float32Array([1, 0, 1, 0]), type: 'vec4<f32>' as const },
     });
     this.positions = [stateTexture(side), stateTexture(side)];
     this.velocities = [stateTexture(side), stateTexture(side)];
@@ -856,6 +896,13 @@ export class ChargeCloud {
     if (!this.view.visible) return;
     const { drive } = frame;
     const dt = Math.min(1 / 30, Math.max(0, frame.dt));
+    // The simulation steps about CLOUD_STEP_RATE times a second, whatever the display's rate; between steps the dots are
+    // drawn carried on along their velocity.
+    const elapsed = this.unstepped + Math.max(0, frame.dt);
+    const stepDt = cloudStepSeconds(elapsed);
+    this.unstepped = stepDt > 0 ? 0 : elapsed;
+    const flock = (this.uniforms.uniforms as Record<string, Float32Array>).uFlock!;
+    flock[3] = Math.min(this.unstepped, MAX_CARRY_SECONDS);
     const orbs = chargeOrbs(frame.seconds, drive);
     this.lights = orbs.map((orb, index) => stepOrbLight(this.lights[index]!, orb.energy, drive.onset, dt));
     const u = this.uniforms.uniforms as Record<string, Float32Array>;
@@ -868,11 +915,12 @@ export class ChargeCloud {
     for (let band = 0; band < 16; band += 1) {
       u[`uBands${band >> 2}`]![band & 3] = bandLevel(drive.bands, band, 16);
     }
-    u.uSim!.set([dt, frame.seconds % 3600, drive.onset, drive.bass]);
+    u.uSim!.set([stepDt, frame.seconds % 3600, drive.onset, drive.bass]);
     u.uSim2!.set([drive.mid, drive.high, drive.level, this.initialised ? 1 : 0]);
     const yaw = frame.seconds * 0.09;
     const pitch = 0.35 + 0.12 * Math.sin(frame.seconds * 0.13);
     u.uView!.set([frame.scale, yaw, pitch, frame.alpha]);
+    u.uCamera!.set([Math.cos(yaw), Math.sin(yaw), Math.cos(pitch), Math.sin(pitch)]);
     const clip = frame.clip;
     u.uClip!.set(
       clip
@@ -888,9 +936,13 @@ export class ChargeCloud {
       return Math.sin(pitch) * orb.y + Math.cos(pitch) * z;
     };
     const order = orbs.map((orb, index) => ({ index, depth: depth(orb) })).sort((a, b) => b.depth - a.depth);
-    order.forEach(({ index }, slot) => this.view.setChildIndex(this.orbs[index]!, slot));
+    // Moving a child, even to where it already is, makes Pixi rebuild the whole layer's draw list: move only on a change.
+    order.forEach(({ index }, slot) => {
+      const orb = this.orbs[index]!;
+      if (this.view.children[slot] !== orb) this.view.setChildIndex(orb, slot);
+    });
 
-    if (dt > 0 || !this.initialised) {
+    if (stepDt > 0 || !this.initialised) {
       queueGPUPass((renderer) => this.step(renderer));
     }
   }

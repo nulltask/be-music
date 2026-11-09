@@ -545,6 +545,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>Auto-detect resolution</dt>
           <dd>Measures the frame rate at each resolution on the screen showing and keeps the highest that holds it.</dd>
+          <dt>Renderer (applies on reload)</dt>
+          <dd>
+            WebGL 2 (the default) or WebGPU. WebGL 2 keeps up best on most laptops' integrated graphics; the pick takes
+            effect the next time the player loads.
+          </dd>
           <dt>Play layout</dt>
           <dd>Auto, Desktop or Touch (on-screen lanes and buttons).</dd>
           <dt>Toggle fullscreen</dt>
@@ -1202,6 +1207,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>Auto-detect resolution</dt>
           <dd>表示中の画面で解像度ごとにフレームレートを測り、保てるいちばん高い解像度にします。</dd>
+          <dt>Renderer (applies on reload)</dt>
+          <dd>
+            WebGL 2 (既定) か WebGPU。多くのノート PC の内蔵グラフィックスでは WebGL 2
+            がいちばん速く描けます。次に読み込んだときから反映されます。
+          </dd>
           <dt>Play layout</dt>
           <dd>Auto、Desktop、Touch (画面のレーンとボタンで操作)。</dd>
           <dt>Toggle fullscreen</dt>

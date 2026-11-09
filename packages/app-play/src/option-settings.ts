@@ -171,6 +171,7 @@ export interface OptionSettings {
   skinEffects: SkinEffects;
   renderResolution: number;
   playLayout: PlayLayout;
+  renderer: PlayerGUIState['renderer'];
   recordingFormat: string;
   workerCount: number;
   compressorTuning: Record<TunableCompressor, CompressorTuning>;
@@ -192,6 +193,8 @@ type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 const SKIN_FAMILIES: readonly SkinFamilyOverride[] = ['auto', 'default', 'lr2', 'beatoraja'];
 const SKIN_EFFECTS: readonly SkinEffects[] = ['full', 'reduced', 'off'];
 const PLAY_LAYOUTS: readonly PlayLayout[] = ['auto', 'standard', 'touch'];
+const RENDERERS: readonly PlayerGUIState['renderer'][] = ['webgl', 'webgpu'];
+const RENDERER_KEY = 'be-music.renderer';
 const VOLUME_KEY = 'be-music.volumes';
 const BUILT_IN_SKIN_KEY = 'be-music.built-in-skin';
 const SKIN_EFFECTS_KEY = 'be-music.skin-effects';
@@ -404,6 +407,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'hsFix', oneOf(raw.hsFix, PLAY_OPTION_CHOICES.hsFix!));
   assign(settings, 'skinEffects', oneOf(raw.skinEffects, SKIN_EFFECTS));
   assign(settings, 'playLayout', oneOf(raw.playLayout, PLAY_LAYOUTS));
+  assign(settings, 'renderer', oneOf(raw.renderer, RENDERERS));
   assign(settings, 'tempoPitchMode', oneOf(raw.tempoPitchMode, ['pitch', 'keep-pitch'] as const));
   assign(settings, 'tempoStretchAlgorithm', oneOf(raw.tempoStretchAlgorithm, ['wsola', 'signalsmith'] as const));
   assign(settings, 'masterVolume', percentOf(raw.masterVolume));
@@ -658,6 +662,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('skinEffects');
   assignState('renderResolution');
   assignState('playLayout');
+  assignState('renderer');
   assignState('recordingFormat');
 }
 
@@ -789,6 +794,7 @@ export function captureOptionSettings(
     skinEffects: state.skinEffects,
     renderResolution: state.renderResolution,
     playLayout: state.playLayout,
+    renderer: state.renderer,
     recordingFormat: state.recordingFormat,
     workerCount: extras.workerCount,
     compressorTuning: extras.compressorTuning,
@@ -831,6 +837,7 @@ export function writeOptionSettings(document: OptionSettingsDocument, storage: S
     if (settings.renderResolution !== undefined)
       storage.setItem(RENDER_RESOLUTION_STORAGE_KEY, String(settings.renderResolution));
     if (settings.playLayout) storage.setItem(PLAY_LAYOUT_KEY, settings.playLayout);
+    if (settings.renderer) storage.setItem(RENDERER_KEY, settings.renderer);
     if (settings.recordingFormat) storage.setItem(RECORDING_FORMAT_KEY, settings.recordingFormat);
     if (settings.workerCount !== undefined) storage.setItem(WORKER_COUNT_STORAGE_KEY, String(settings.workerCount));
     if (settings.compressorTuning) storage.setItem(COMPRESSOR_TUNING_KEY, JSON.stringify(settings.compressorTuning));

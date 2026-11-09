@@ -83,6 +83,11 @@ export interface PixiSceneHostMountOptions {
    * without either the display's own ratio is used. Change it later with {@link PixiSceneHost.setResolution}.
    */
   resolution?: number;
+  /**
+   * The renderer to ask for; WebGL 2 when not given. `?renderer=` in the URL overrides it. Read once, when the host
+   * mounts.
+   */
+  renderer?: RendererPreference;
 }
 
 /**
@@ -158,15 +163,10 @@ export class PixiSceneHost {
       return;
     }
     this.mounted = true;
-    // Renderer preference. Defaults to WebGPU per the project's perf goals (lower per-frame CPU on dense charts, room
-    // for future compute-shader BGA effects). PixiJS auto-falls-back to WebGL2 when the browser doesn't expose WebGPU,
-    // so this is safe to leave on for old browsers — `app.renderer.type` logged below confirms which path actually came
-    // up.
-    //
-    // The `?renderer=webgl` URL flag forces WebGL2 for A/B testing (regression triage on devices where WebGPU happens
-    // to be slower or buggier). Anything else falls through to the default. `?renderer=webgpu` is accepted as the
-    // explicit form even though it's the default, useful for documenting the intent in deployed URLs.
-    const preference = resolveRendererPreference();
+    // Renderer preference: the player's pick, WebGL 2 by default (see `resolveRendererPreference`); `?renderer=webgl`
+    // or `?renderer=webgpu` in the URL overrides it for A/B testing. PixiJS falls back to WebGL 2 when the browser has
+    // no WebGPU — `app.renderer.type` logged below confirms which path actually came up.
+    const preference = resolveRendererPreference(undefined, options?.renderer);
     // Raise the WebGPU device's texture dimensions to the adapter's maximum (see `webgpu-limits.ts`), on the
     // devices Pixi creates itself so it can still recover the stage from a lost device.
     if (preference === 'webgpu') useMaxLimitsGPU();
@@ -421,23 +421,24 @@ function useMaxLimitsGPU(): void {
 
 let maxLimitsGPUInstalled = false;
 
+/** The renderer the host asks Pixi for: WebGL 2, or WebGPU. */
+export type RendererPreference = 'webgl' | 'webgpu';
+
 /**
- * Reads `?renderer=...` from `window.location.search` and maps it onto a PixiJS `preference` value. Defaults to
- * `'webgpu'`; only the explicit `webgl` form opts out (any other value, missing window object, or unrecognized input
- * falls through to the default). PixiJS auto-falls-back to WebGL2 if WebGPU isn't available, so the default is safe
- * across the entire browser matrix.
+ * The PixiJS `preference` for the stage: `?renderer=webgl` or `?renderer=webgpu` in `window.location.search` when
+ * given (exact values only; anything else is ignored), else `requested` (the player's pick), else WebGL 2. WebGL 2 is
+ * the default because on a laptop's integrated GPU the WebGPU path drew Synesthesia at 1920 × 1080 at about 80 fps
+ * against 135 fps with WebGL 2; WebGPU stays one setting away.
  *
  * Exported for testability — callers should normally let {@link PixiSceneHost.mount} resolve this internally.
  */
-export function resolveRendererPreference(rawSearch?: string): 'webgl' | 'webgpu' {
+export function resolveRendererPreference(rawSearch?: string, requested?: RendererPreference): RendererPreference {
   const search =
     rawSearch ??
     (typeof globalThis !== 'undefined' && typeof globalThis.location !== 'undefined' ? globalThis.location.search : '');
-  if (!search) return 'webgpu';
-  const params = new URLSearchParams(search);
-  const flag = params.get('renderer');
-  if (flag === 'webgl') return 'webgl';
-  return 'webgpu';
+  const flag = search ? new URLSearchParams(search).get('renderer') : null;
+  if (flag === 'webgl' || flag === 'webgpu') return flag;
+  return requested ?? 'webgl';
 }
 
 /** Lowest render resolution `?resolution=` may ask for. */

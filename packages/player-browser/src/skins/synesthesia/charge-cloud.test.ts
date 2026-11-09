@@ -3,6 +3,8 @@ import {
   bandExcess,
   CHARGE_ORB_COUNT,
   chargeOrbs,
+  CLOUD_STEP_RATE,
+  cloudStepSeconds,
   DARK_ORB,
   orbBrightness,
   stepOrbLight,
@@ -10,6 +12,26 @@ import {
 } from './charge-cloud.ts';
 
 const SILENT = { bands: Array.from({ length: 16 }, () => 0), onset: 0 };
+
+describe('cloudStepSeconds', () => {
+  it('waits until about a step of the rate has passed', () => {
+    expect(cloudStepSeconds(0)).toBe(0);
+    expect(cloudStepSeconds(1 / 144)).toBe(0);
+    expect(cloudStepSeconds(4 / 144)).toBe(0);
+    expect(cloudStepSeconds(5 / 144)).toBeCloseTo(1 / 30);
+  });
+
+  it('steps every other frame of a 60 Hz display, however its frames jitter', () => {
+    expect(cloudStepSeconds(2 / 60 - 0.002)).toBeCloseTo(2 / 60 - 0.002);
+    expect(cloudStepSeconds(1 / 60)).toBe(0);
+    expect(CLOUD_STEP_RATE).toBe(30);
+  });
+
+  it('caps a long gap at a thirtieth of a second', () => {
+    expect(cloudStepSeconds(0.5)).toBeCloseTo(1 / 30);
+    expect(cloudStepSeconds(Number.NaN)).toBe(0);
+  });
+});
 
 describe('chargeOrbs', () => {
   it('places every orb with a unit spin axis and a positive radius', () => {

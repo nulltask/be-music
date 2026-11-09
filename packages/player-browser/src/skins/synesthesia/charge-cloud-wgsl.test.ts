@@ -21,9 +21,11 @@ describe('chargeCloudGPUPrograms', () => {
 
   it('names every quad attribute aPosition, so WebGPU binds the right buffer to each quad', () => {
     const { velocity, position, particles, orb, splat } = chargeCloudGPUPrograms();
-    for (const program of [velocity, position, particles, orb]) {
+    for (const program of [velocity, position, orb]) {
       expect(Object.keys(program.attributeData)).toEqual(['aPosition']);
     }
+    // The splat and the particles find their particle from the vertex index; the slot attribute only sizes the draw.
     expect(Object.keys(splat.attributeData)).toEqual(['aSlot']);
+    expect(Object.keys(particles.attributeData)).toEqual(['aSlot']);
   });
 });

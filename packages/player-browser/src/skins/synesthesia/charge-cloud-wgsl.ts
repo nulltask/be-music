@@ -3,8 +3,9 @@ import { extractStructAndGroups, generateGpuLayoutGroups, GpuProgram } from 'pix
 /**
  * The charge cloud's shaders in WGSL, for a player rendering with WebGPU: line for line the GLSL programs in
  * `charge-cloud.ts` (see the comments there for what each step does). Two things differ:
- * - WebGPU draws points one pixel wide, so the particles are drawn as one instanced quad each, sized as the GL point
- *   would be.
+ * - WebGPU draws points one pixel wide, so the particles are drawn as a quad each, sized as the GL point would be: four
+ *   indexed vertices a particle in one plain draw, the shader finding its particle and corner from the vertex index (an
+ *   instanced quad per particle leaves most of an integrated GPU's vertex lanes idle).
  * - WebGPU's framebuffer y runs down where GL's runs up, so the grid splat flips y to land each particle on the texel
  *   `textureLoad` reads back.
  */
@@ -42,6 +43,7 @@ struct CloudUniforms {
   uBands2: vec4<f32>,
   uBands3: vec4<f32>,
   uFlock: vec4<f32>,
+  uCamera: vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> globalUniforms: GlobalUniforms;
@@ -80,10 +82,10 @@ fn bandLevel(band: i32) -> f32 {
 }
 
 fn toCamera(p: vec3<f32>) -> vec3<f32> {
-  let cy = cos(cloud.uView.y);
-  let sy = sin(cloud.uView.y);
-  let cx = cos(cloud.uView.z);
-  let sx = sin(cloud.uView.z);
+  let cy = cloud.uCamera.x;
+  let sy = cloud.uCamera.y;
+  let cx = cloud.uCamera.z;
+  let sx = cloud.uCamera.w;
   let q = vec3<f32>(cy * p.x + sy * p.z, p.y, -sy * p.x + cy * p.z);
   return vec3<f32>(q.x, cx * q.y - sx * q.z, sx * q.y + cx * q.z);
 }
@@ -324,15 +326,22 @@ struct ParticleOut {
   @location(1) alpha: f32,
 }
 
+// A particle's quad corners, which its two triangles index.
+const QUAD_CORNERS = array<vec2<f32>, 4>(
+  vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, -1.0), vec2<f32>(1.0, 1.0), vec2<f32>(-1.0, 1.0),
+);
+
 @vertex
-fn mainVertex(@location(0) aPosition: vec2<f32>, @builtin(instance_index) instance: u32) -> ParticleOut {
-  let id = i32(instance);
+fn mainVertex(@location(0) aSlot: f32, @builtin(vertex_index) vertex: u32) -> ParticleOut {
+  let id = i32(vertex / 4u);
+  let aPosition = QUAD_CORNERS[vertex % 4u] + aSlot * 0.0;
   let side = i32(particleUniforms.uSide);
   let cell = vec2<i32>(id % side, id / side);
   let position = textureLoad(uPositions, cell, 0);
   let velocity = textureLoad(uVelocities, cell, 0);
   let seed = velocity.w;
-  let c = toCamera(position.xyz);
+  let at = position.xyz + velocity.xyz * cloud.uFlock.w;
+  let c = toCamera(at);
   let k = perspective(c.z);
   let screen = c.xy * k * cloud.uView.x;
 
@@ -340,7 +349,7 @@ fn mainVertex(@location(0) aPosition: vec2<f32>, @builtin(instance_index) instan
   var covered = false;
   for (var index = 0; index < ORBS; index += 1) {
     let orb = cloud.uOrbs[index];
-    let gap = max(0.0, distance(position.xyz, orb.xyz) - orb.w);
+    let gap = max(0.0, distance(at, orb.xyz) - orb.w);
     light += cloud.uLights[index].x * 0.03 / (gap * gap + 0.03);
     let oc = toCamera(orb.xyz);
     let ok = perspective(oc.z);

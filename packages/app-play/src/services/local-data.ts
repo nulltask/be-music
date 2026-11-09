@@ -17,6 +17,7 @@ const LOCAL_STORAGE_KEYS: Readonly<Record<string, string>> = {
   'be-music.skin-settings': 'Skin settings',
   'be-music.skin-effects': 'Skin effects',
   'be-music.play-layout': 'Play layout',
+  'be-music.renderer': 'Renderer',
   'be-music.recording-format': 'Recording format',
   'be-music.course-table-urls': 'Difficulty tables whose courses are imported on load',
   'be-music.play-in-silent-mode': 'Play sound with the device in silent mode',

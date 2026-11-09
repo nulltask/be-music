@@ -79,6 +79,8 @@ export interface PlayerGUIState extends PlayTempoSettings {
   renderResolution: number;
   /** Gameplay layout pick: `'auto'` follows the device (touch layout on phones / tablets). Persisted in `localStorage`. */
   playLayout: 'auto' | 'standard' | 'touch';
+  /** Renderer: WebGL 2 (the default) or WebGPU. Persisted in `localStorage`; takes effect on the next load. */
+  renderer: 'webgl' | 'webgpu';
   /**
    * When true, gameplay auto-pauses on tab visibility change / window blur and auto-resumes on focus. False (the
    * default) keeps the play scene running in the background — convenient for capturing recordings while another window

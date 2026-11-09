@@ -182,6 +182,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Skin module URL': 'スキンモジュールの URL',
   'Add from URL': 'URL から追加',
   'Render resolution': '描画解像度',
+  'Renderer (applies on reload)': 'レンダラー (再読み込みで反映)',
   'Auto-detect resolution': '解像度を自動で決める',
   'Play layout': 'プレイ画面のレイアウト',
   'Judged notes': '判定後のノーツ',

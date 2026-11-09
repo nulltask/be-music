@@ -783,7 +783,10 @@ export class PlayerWebApp {
    */
   private mountStage(): Promise<void> {
     this.stageMount ??= (async () => {
-      await this.sceneHost.mount(this.elements.stage, { resolution: this.guiState.renderResolution });
+      await this.sceneHost.mount(this.elements.stage, {
+        resolution: this.guiState.renderResolution,
+        renderer: this.guiState.renderer,
+      });
       this.shell.wireCanvasFullscreen();
       this.shell.wireTouchControls();
       this.sceneHost.app.ticker.add(this.shell.syncGameplayShellState);

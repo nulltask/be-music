@@ -850,8 +850,8 @@ Every family's play screen reads this one main BPM wherever it needs one: the re
 
 ## Renderer and performance controls
 
-- PixiJS defaults to a WebGPU preference and falls back through PixiJS when the browser cannot initialize it.
-- `?renderer=webgl` forces WebGL for renderer comparison.
+- The stage renders with WebGL 2 by default; Options → Skin & display → Renderer switches to WebGPU (stored as `be-music.renderer`, applied on the next load), and PixiJS falls back to WebGL 2 when the browser cannot initialize WebGPU. WebGL 2 is the default because on a laptop's integrated GPU the WebGPU path drew Synesthesia at 1920 × 1080 at about 80 fps against 135 fps with WebGL 2.
+- `?renderer=webgl` or `?renderer=webgpu` overrides the pick for renderer comparison.
 - Loaded skin and BGA textures use nearest sampling to preserve LR2 and beatoraja pixel-art assets.
 - beatoraja source textures are downscaled before upload when a bitmap exceeds the conservative GPU texture-size cap.
 - The gameplay paths preload chart parse, audio decode, and BGA resources before the decide scene hands off to gameplay.
