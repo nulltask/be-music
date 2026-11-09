@@ -1,5 +1,5 @@
 import { drawJudgements } from './judgements.ts';
-import { bindGlassSurface } from './glass.ts';
+import { bindGlassSurface, frostedGlassEnabled, unbindGlassSurface } from './glass.ts';
 import { Graphics, type Container } from 'pixi.js';
 import { resolveGrooveRect, resolvePortraitHUDColumn } from './layout.ts';
 import {
@@ -34,6 +34,7 @@ import {
   cameraBasis,
   hsvToHex,
   mixCamera,
+  mixColor,
   particleRiverPointInto,
   pointCloudPyramid,
   projectPoint,
@@ -221,12 +222,19 @@ function advanceSchools(
  * The idle monitor's charge cloud, one per chrome layer (it outlives the per-frame pools), with the clock of its last
  * simulation step. A smaller cloud than the select screen's: the monitor is small.
  */
-const MONITOR_CLOUDS = new WeakMap<Container, { cloud: ChargeCloud; lastSeconds: number | undefined }>();
+const MONITOR_CLOUDS = new WeakMap<Container, MonitorCloud>();
 
-function monitorCloudFor(layer: Container): { cloud: ChargeCloud; lastSeconds: number | undefined } {
+/** A chrome layer's monitor cloud, the clock of its last simulation step, and whether this frame drew it. */
+interface MonitorCloud {
+  cloud: ChargeCloud;
+  lastSeconds: number | undefined;
+  drawn: boolean;
+}
+
+function monitorCloudFor(layer: Container): MonitorCloud {
   let state = MONITOR_CLOUDS.get(layer);
   if (state === undefined) {
-    state = { cloud: new ChargeCloud(192), lastSeconds: undefined };
+    state = { cloud: new ChargeCloud(192), lastSeconds: undefined, drawn: false };
     MONITOR_CLOUDS.set(layer, state);
   }
   return state;
@@ -263,12 +271,14 @@ export function renderSynesthesiaChrome({
   overlayLayerPool,
   runtime,
   layout,
+  settings,
 }: PixiChromeContext): void {
+  const frosted = frostedGlassEnabled(settings);
   const seconds = (runtime.nowMs ?? 0) / 1000;
-  // The idle monitor shows its cloud only while there is no BGA; it redraws (and re-shows) it below if so. Its clock
+  // The idle monitor shows its cloud only while there is no BGA; a frame that does not draw it hides it below. Its clock
   // carries on across hidden frames: the cloud clamps each step, so a gap just resumes it.
   const monitorCloud = MONITOR_CLOUDS.get(layer);
-  if (monitorCloud) monitorCloud.cloud.view.visible = false;
+  if (monitorCloud) monitorCloud.drawn = false;
   const beatPhase = runtime.beatPhase ?? 0;
   const pulse = (1 - beatPhase) ** 2;
   const hue = sceneHue(seconds, beatPhase);
@@ -374,10 +384,13 @@ export function renderSynesthesiaChrome({
     standby.blendMode = 'add';
     drawBGAFrame(panels, standby, layer, hasBGA, seconds, pulse, hue, camera, drive, layerPool, cabinet ? 0 : 6);
   }
-  const glass = overlayLayerPool.acquireGraphics();
-  glass.label = 'synesthesia-gameplay/glass';
+  if (monitorCloud && !monitorCloud.drawn) monitorCloud.cloud.view.visible = false;
+  // The frosted panels' surface sits under the HUD; with the setting off the panels are plain fills on the HUD itself.
+  const glass = frosted ? overlayLayerPool.acquireGraphics() : undefined;
+  if (glass) glass.label = 'synesthesia-gameplay/glass';
   const front = overlayLayerPool.acquireGraphics();
-  bindGlassSurface(front, glass);
+  if (glass) bindGlassSurface(front, glass);
+  else unbindGlassSurface(front);
   front.label = 'synesthesia-gameplay/header';
   drawProgressLight(front, playfieldLeft, wellTop, layout.playfield.judgementY, runtime.progressRatio, accent);
   if (portrait) {
@@ -518,14 +531,16 @@ function drawGround(graphics: Graphics, hasBGA: boolean, hit: number, hitColor: 
   ];
   // The bands are authored on the 480 px landscape height and stretch to the stage's.
   const stretch = VIEW.height / DESIGN_HEIGHT;
+  // A key press tints the sky above the horizon: mixed into the flat, opaque bands rather than a second full fill.
+  const tint = hit > 0 ? 0.06 * hit : 0;
+  const sky = tint > 0 ? horizon : 0;
   let top = 0;
   for (const [color, until] of bands) {
     const bottom = until * stretch;
-    fillAroundBGA(graphics, 0, top, VIEW.width, bottom - top, color, hasBGA);
+    const split = Math.max(top, Math.min(bottom, sky));
+    if (split > top) fillAroundBGA(graphics, 0, top, VIEW.width, split - top, mixColor(color, hitColor, tint), hasBGA);
+    if (bottom > split) fillAroundBGA(graphics, 0, split, VIEW.width, bottom - split, color, hasBGA);
     top = bottom;
-  }
-  if (hit > 0) {
-    fillAroundBGA(graphics, 0, 0, VIEW.width, horizon, hitColor, hasBGA, 0.06 * hit);
   }
 }
 
@@ -913,9 +928,14 @@ function drawBGAFrame(
   const roam = wanderPoint(seconds * 0.8, 2, { minX: -55, maxX: 55, minY: -125, maxY: -70, minZ: -120, maxZ: 0 });
   const at = projectPoint(viewPoint(roam, view.camera, view.orbit), view.cx, view.cy, view.focal);
   const state = monitorCloudFor(layer);
+  // The cloud sits just under `light` (the slots after it hold `light`'s point layers). Moving a child, even back in
+  // place, makes Pixi rebuild the whole layer's draw list, so it moves only when out of place.
   const host = light.parent!;
-  if (state.cloud.view.parent === host) host.removeChild(state.cloud.view);
-  host.addChildAt(state.cloud.view, host.getChildIndex(light) + 1);
+  const cloudView = state.cloud.view;
+  if (cloudView.parent !== host || host.getChildIndex(cloudView) !== host.getChildIndex(light) - 1) {
+    if (cloudView.parent === host) host.removeChild(cloudView);
+    host.addChildAt(cloudView, host.getChildIndex(light));
+  }
   const scale = at.visible ? 60 * at.scale * (1 + 0.03 * pulse) : 0;
   state.cloud.update({
     x: at.x,
@@ -928,6 +948,7 @@ function drawBGAFrame(
     clip: { x: BGA.x, y: BGA.y, w: BGA.w, h: BGA.h - 22 },
   });
   state.lastSeconds = seconds;
+  state.drawn = true;
   // Lock-on reticle tracking it, while it stays inside the monitor.
   const lock = scale * 0.55 + 5 * pulse;
   if (at.visible && insideBGA(at.x - lock, at.y - lock) && insideBGA(at.x + lock, at.y + lock)) {

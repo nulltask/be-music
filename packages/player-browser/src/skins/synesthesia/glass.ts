@@ -1,5 +1,43 @@
+import type { BeMusicSkinSettingValues, BeMusicSkinToggleSetting } from '@be-music/player-skin-sdk';
 import { BlendModeFilter, type Graphics } from 'pixi.js';
 import { SYN_GLASS } from './style.ts';
+
+/** The parts of `navigator` that tell macOS apart. */
+export interface PlatformHints {
+  readonly userAgentData?: { readonly platform?: string };
+  readonly platform?: string;
+  readonly userAgent?: string;
+  readonly maxTouchPoints?: number;
+}
+
+/**
+ * Whether `hints` (the browser's `navigator`) describe a Mac. An iPad reports itself as a Mac too; its touch points give
+ * it away. Pure.
+ */
+export function isMacOS(hints: PlatformHints | undefined): boolean {
+  if (!hints) return false;
+  const platform = hints.userAgentData?.platform ?? hints.platform ?? hints.userAgent ?? '';
+  if (!/mac/i.test(platform)) return false;
+  return (hints.maxTouchPoints ?? 0) <= 1;
+}
+
+/**
+ * The skin setting that turns the frosted panels on or off. Each frosted surface captures the backdrop under it and
+ * blurs it every frame, a large share of the frame on an integrated GPU at a high resolution; off, the panels are plain
+ * dark fills. On by default on a Mac, whose GPUs keep up with it, and off elsewhere.
+ */
+export const FROSTED_GLASS_SETTING: BeMusicSkinToggleSetting = {
+  kind: 'toggle',
+  id: 'frostedGlass',
+  label: 'Frosted glass',
+  default: isMacOS(globalThis.navigator as PlatformHints | undefined),
+};
+
+/** Whether the player's `settings` turn the frosted panels on, the setting's default when they say nothing. Pure. */
+export function frostedGlassEnabled(settings: BeMusicSkinSettingValues | undefined): boolean {
+  const value = settings?.[FROSTED_GLASS_SETTING.id];
+  return typeof value === 'boolean' ? value : FROSTED_GLASS_SETTING.default;
+}
 
 const surfaces = new WeakMap<Graphics, Graphics>();
 
@@ -49,6 +87,11 @@ export function bindGlassSurface(foreground: Graphics, surface: Graphics): void 
   filter.resolution = 'inherit';
   surface.filters = [filter];
   surface.once('destroyed', () => filter.destroy());
+}
+
+/** Stops routing `foreground`'s panel fills into a surface: they draw as plain fills on it again. */
+export function unbindGlassSurface(foreground: Graphics): void {
+  surfaces.delete(foreground);
 }
 
 /** Routes only panel fills into the blurred surface, leaving every foreground detail sharp. */
