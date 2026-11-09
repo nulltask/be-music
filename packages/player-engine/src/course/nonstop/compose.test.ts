@@ -483,7 +483,7 @@ test('NONSTOP version 2 retains the last declared TOTAL, while version 1 preserv
   };
   const current = build(2),
     legacy = build(1);
-  expect(NONSTOP_STITCH_VERSION).toBe(3);
+  expect(NONSTOP_STITCH_VERSION).toBe(4);
   expect(current.chart.metadata.total).toBe(80);
   expect(legacy.chart.metadata.total).toBeUndefined();
   expect(resolveChart(current.chart).notes.map((note) => [note.seconds, note.endSeconds])).toEqual(

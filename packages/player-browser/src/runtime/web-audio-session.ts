@@ -458,7 +458,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     // Scheduled BGM cues clamp to "now" so a slightly-late polling tick still fires immediately rather than
     // throwing for a past timestamp; player-input keysounds and immediate triggers go through the no-`when` path.
     if (previousSlice) stopSource(previousSlice, startAt);
-    if (usesMonophonicWAVPlayback(chart)) {
+    if (usesMonophonicWAVPlayback(chart, sampleKey)) {
       const previous = activeBySlot.get(sampleKey);
       if (previous) {
         stopSource(previous, startAt);

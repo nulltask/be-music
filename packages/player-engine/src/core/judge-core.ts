@@ -46,7 +46,7 @@ export {
   noteOwesTailMiss,
   toJudgeClock,
 } from './judge-core-score.ts';
-export { resolveLandmineExplosionEvent } from './judge-core-advance.ts';
+export { resolveLandmineExplosionEvent, resolveLandmineSampleKey } from './judge-core-advance.ts';
 export { hasPressCandidate, resolveAnyKeyPressChannels } from './judge-core-press.ts';
 
 /** Builds the initial judge state of a play. */

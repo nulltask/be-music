@@ -186,7 +186,7 @@ export interface ReplayRecorderOptions {
   stageRanks?: ReadonlyArray<{
     seconds: number;
     rank: number;
-    table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank';
+    table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank' | 'bms-exrank-change';
   }>;
   /** LR2 negative-BPM reversal (chart seconds, #134) — recorded so re-simulations freeze judging at the same point. */
   reversalSeconds?: number;

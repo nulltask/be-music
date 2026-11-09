@@ -55,6 +55,11 @@ export interface JudgeCoreConfig {
   omitTraceEffects?: boolean;
   /** `#WAVxx` table, for the mine explosion sample. */
   wavResources: Readonly<Record<string, string>>;
+  /**
+   * The explosion slot by chart time in place of `#WAV00` (`PlayerPlayRuntime.landmineSampleKeys`), in time order: a
+   * mine uses the last cue at or before its own time; a cue without `sampleKey` is silent.
+   */
+  landmineSampleKeys?: ReadonlyArray<{ seconds: number; sampleKey?: string }>;
   /** Object-id radix, for reading mine damage values. */
   idBase: 36 | 62;
   sourceFormat: BeMusicSourceFormat;

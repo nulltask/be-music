@@ -104,4 +104,36 @@ describe('resolveNonstopStageRanks', () => {
       { seconds: 16, rank: 1, table: 'lr2-nonstop' },
     ]);
   });
+
+  test("holds each stage's #EXRANKxx changes from its own switch until the next stage switches", () => {
+    const withChanges = [
+      {
+        ...stages[0]!,
+        exRankChanges: [
+          { seconds: 5, exRank: 50 },
+          // At the next stage's switch: dropped, as it would change the next stage's judging.
+          { seconds: 20, exRank: 60 },
+        ],
+      },
+      // Before the stage's own switch: moved there, after it.
+      { ...stages[1]!, exRankChanges: [{ seconds: 18, exRank: 30 }] },
+    ];
+    expect(resolveNonstopStageRanks(withChanges, placements)).toEqual([
+      { seconds: 5, rank: 50, table: 'bms-exrank-change' },
+      { seconds: 20, rank: 0, table: 'chart' },
+      { seconds: 20, rank: 30, table: 'bms-exrank-change' },
+    ]);
+  });
+
+  test('places #EXRANKxx changes at their own time under lr2', () => {
+    const withChanges = [
+      { ...stages[0]!, exRankChanges: [{ seconds: 19, exRank: 60 }] },
+      { ...stages[1]!, exRankChanges: [{ seconds: 18, exRank: 30 }] },
+    ];
+    expect(resolveNonstopStageRanks(withChanges, placements, { placement: 'lr2' })).toEqual([
+      { seconds: 16, rank: 0, table: 'lr2-nonstop' },
+      { seconds: 18, rank: 30, table: 'bms-exrank-change' },
+      { seconds: 19, rank: 60, table: 'bms-exrank-change' },
+    ]);
+  });
 });

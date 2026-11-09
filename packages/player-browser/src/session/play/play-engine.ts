@@ -781,6 +781,8 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             ],
           }),
       chartTextStages: ctx.options.nonstop?.chartText,
+      // Each stitched NONSTOP stage's mines explode with its own #WAV00.
+      landmineSampleKeys: ctx.options.nonstop?.landmineSampleKeys,
       // A stitched NONSTOP chart's later stages take over the judge rank (a replay restores the recorded changes).
       ...(ctx.options.replay === undefined && ctx.options.nonstop !== undefined
         ? { stageRanks: ctx.options.nonstop.stageRanks }

@@ -1020,7 +1020,7 @@ function resolveRulesetTables(
     const initialStage =
       chart.sourceFormat === 'bmson' ? chart.judgeRank.stageRanks?.find((change) => change.timeUs === 0) : undefined;
     const stagePercent = (rank: number, table: string): number =>
-      table === 'bmson' || table === 'bms-exrank'
+      table === 'bmson' || table === 'bms-exrank' || table === 'bms-exrank-change'
         ? bmsExRankValueToJudgeRankPercent(rank)
         : resolveBMSRankJudgeRankPercent(rank);
     const staticTables = constrain(
@@ -1092,25 +1092,28 @@ function resolveRulesetTables(
     const customize = (tables: RulesetWindowTables): RulesetWindowTables =>
       options.customJudge === undefined ? tables : applyCustomJudgeTables(tables, options.customJudge);
     // Legacy BMS NONSTOP stage ranks apply only to LR2. Mixed bmson courses explicitly carry each stage's units.
+    // Stage-owned `#EXRANKxx` changes (`bms-exrank-change`) stay with LR2, as beatoraja ignores `A0` in a chart alone.
     const stageTables =
       chart.sourceFormat === 'bmson'
-        ? (chart.judgeRank.stageRanks ?? []).map((change) => ({
-            timeUs: change.timeUs,
-            tables: constrain(
-              customize(
-                resolveBeatorajaWindowTables({
-                  ...chart,
-                  sourceFormat: change.table === 'bmson' ? 'bmson' : 'bms',
-                  judgeRank: {
-                    percent: chart.judgeRank.percent,
-                    ...(change.table === 'bmson' || change.table === 'bms-exrank'
-                      ? { sourceExRank: change.rank }
-                      : { sourceRank: change.rank }),
-                  },
-                }),
+        ? (chart.judgeRank.stageRanks ?? [])
+            .filter((change) => change.table !== 'bms-exrank-change')
+            .map((change) => ({
+              timeUs: change.timeUs,
+              tables: constrain(
+                customize(
+                  resolveBeatorajaWindowTables({
+                    ...chart,
+                    sourceFormat: change.table === 'bmson' ? 'bmson' : 'bms',
+                    judgeRank: {
+                      percent: chart.judgeRank.percent,
+                      ...(change.table === 'bmson' || change.table === 'bms-exrank'
+                        ? { sourceExRank: change.rank }
+                        : { sourceRank: change.rank }),
+                    },
+                  }),
+                ),
               ),
-            ),
-          }))
+            }))
         : [];
     const tables =
       stageTables.find((change) => change.timeUs === 0)?.tables ??

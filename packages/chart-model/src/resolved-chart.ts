@@ -138,7 +138,7 @@ export interface ResolvedChart {
    * `#LNOBJ` ends and suppressed `#LNTYPE` halves left out and bmson slices resolved. Mines are not included.
    */
   readonly sampleTriggers: ReadonlyArray<TimedSampleTrigger>;
-  /** BMS dynamic volume changes, in chart order (empty for bmson). */
+  /** BMS dynamic volume changes (97 / 98), in chart order; a bmson chart has none unless stitched from BMS stages. */
   readonly volumeChanges: ReadonlyArray<ResolvedVolumeChange>;
   /** BGA cues (base / layer / layer 2 / POOR), BMS channels and bmson `bga` alike. */
   readonly bga: BGATimelines;
@@ -374,9 +374,7 @@ function resolveVolumeChanges(
   sortedEvents: ReadonlyArray<BeMusicEvent>,
   timing: TimingResolver,
 ): ResolvedVolumeChange[] {
-  if (json.sourceFormat !== 'bms') {
-    return [];
-  }
+  // BMS charts, and NONSTOP charts stitched as bmson from BMS stages, carry 97 / 98 objects; bmson itself has none.
   const changes: ResolvedVolumeChange[] = [];
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);

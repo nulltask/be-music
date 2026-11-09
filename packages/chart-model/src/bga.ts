@@ -24,6 +24,19 @@ export interface BGATimingResolver {
   beatToSeconds: (beat: number) => number;
 }
 
+/**
+ * Whether black pixels of a layer image (`07` / `0A`) are drawn transparent: BMS keys them out, while the bmson spec
+ * draws them black ("Unlike BMS Layer Channel #xxx07"). A slot listed in `resources.bmpSourceFormat` follows its own
+ * format's rule (a BMS stage's image in a NONSTOP chart stitched as bmson is still keyed out).
+ */
+export function keysOutBGALayerBlack(
+  json: Pick<BeMusicJSON, 'sourceFormat'> & { resources?: Pick<BeMusicJSON['resources'], 'bmpSourceFormat'> },
+  bmpKey?: string,
+): boolean {
+  const slotFormat = bmpKey === undefined ? undefined : json.resources?.bmpSourceFormat?.[bmpKey];
+  return (slotFormat ?? json.sourceFormat) !== 'bmson';
+}
+
 const BGA_BASE_CHANNEL = '04';
 const BGA_POOR_CHANNEL = '06';
 const BGA_LAYER_CHANNEL = '07';

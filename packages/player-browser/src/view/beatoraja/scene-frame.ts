@@ -19,6 +19,7 @@ import {
   resolveBeatorajaChartText as resolveBeatorajaChartTextOf,
   type BeatorajaChartTextInput,
 } from '@be-music/skin-beatoraja/scene';
+import { resolveNonstopSongInfoState } from '@be-music/player-engine/course';
 import type { LibraryChart } from '@be-music/player-scene-model';
 import { Container, Graphics, type Texture } from 'pixi.js';
 import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
@@ -27,6 +28,7 @@ import { destroyTextureAndRevokeBlobURL } from '../../media/textures.ts';
 import type { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { PixiSceneHost } from '../../host/scene-host.ts';
 import {
+  loadBeatorajaChartImage,
   loadBeatorajaChartImages,
   resolveBeatorajaChartImage,
   type BeatorajaChartImages,
@@ -217,16 +219,21 @@ export class BeatorajaSkinStage {
 export class BeatorajaViewChartImages {
   private readonly chart: Pick<LibraryChart, 'chart' | 'chartPath'> | undefined;
   private readonly source: BrowserAssetSource | undefined;
+  private readonly nonstop: BeatorajaNonstopBackBMP | undefined;
   private images: BeatorajaChartImages = {};
+  /** Each stitched NONSTOP stage's `#BACKBMP`, when a stage has one (`nonstop`). */
+  private stageBackBMPs: (Texture | undefined)[] | undefined;
   private loading: Promise<void> | undefined;
   private disposed = false;
 
   public constructor(
     chart: Pick<LibraryChart, 'chart' | 'chartPath'> | undefined,
     source: BrowserAssetSource | undefined,
+    nonstop?: BeatorajaNonstopBackBMP,
   ) {
     this.chart = chart;
     this.source = source;
+    this.nonstop = nonstop?.stages.some((stage) => stage.backBMP !== undefined) === true ? nonstop : undefined;
   }
 
   /** Loads the images, the first time it is called; nothing loads without a chart. */
@@ -235,8 +242,15 @@ export class BeatorajaViewChartImages {
     return this.loading;
   }
 
-  /** The image of a synthetic slot, once loaded. */
+  /**
+   * The image of a synthetic slot, once loaded. In a stitched NONSTOP play the back image (-101) is the `#BACKBMP` of
+   * the stage shown, which moves at each stage's window as the song info does; a stage without one hides it.
+   */
   public resolve(syntheticId: number): Texture | undefined {
+    if (syntheticId === -101 && this.nonstop !== undefined) {
+      const { stage } = resolveNonstopSongInfoState(this.nonstop.stages, this.nonstop.currentSeconds(), 0);
+      return this.stageBackBMPs?.[stage];
+    }
     return resolveBeatorajaChartImage(this.images, syntheticId);
   }
 
@@ -245,14 +259,40 @@ export class BeatorajaViewChartImages {
     this.disposed = true;
     destroyChartImages(this.images);
     this.images = {};
+    destroyStageBackBMPs(this.stageBackBMPs);
+    this.stageBackBMPs = undefined;
   }
 
   private async loadOnce(): Promise<void> {
     if (this.chart === undefined) return;
-    const images = await loadBeatorajaChartImages(this.chart, this.source);
-    if (this.disposed) destroyChartImages(images);
-    else this.images = images;
+    const chart = this.chart;
+    const source = this.source;
+    const [images, stageBackBMPs] = await Promise.all([
+      loadBeatorajaChartImages(chart, source),
+      this.nonstop === undefined || source === undefined
+        ? Promise.resolve(undefined)
+        : Promise.all(
+            this.nonstop.stages.map((stage) => loadBeatorajaChartImage(chart.chartPath, stage.backBMP, source)),
+          ),
+    ]);
+    if (this.disposed) {
+      destroyChartImages(images);
+      destroyStageBackBMPs(stageBackBMPs);
+    } else {
+      this.images = images;
+      this.stageBackBMPs = stageBackBMPs;
+    }
   }
+}
+
+/** The stages of a stitched NONSTOP play whose `#BACKBMP` a beatoraja view shows, and the play's stitched time. */
+export interface BeatorajaNonstopBackBMP {
+  readonly stages: ReadonlyArray<{ readonly windowStart: number; readonly backBMP?: string }>;
+  readonly currentSeconds: () => number;
+}
+
+function destroyStageBackBMPs(textures: readonly (Texture | undefined)[] | undefined): void {
+  for (const texture of textures ?? []) if (texture !== undefined) destroyTextureAndRevokeBlobURL(texture, true);
 }
 
 function destroyChartImages(images: BeatorajaChartImages): void {

@@ -469,6 +469,28 @@ describe('selectChartWindowCarryOvers', () => {
     ]);
   });
 
+  test('cuts only the slots the predicate names monophonic', () => {
+    expect(
+      selectChartWindowCarryOvers(triggers, { startSeconds: 2 }, (key) => key === 'AA').map((t) => [
+        t.seconds,
+        t.sampleKey,
+      ]),
+    ).toEqual([
+      [1, 'BB'],
+      [1.5, 'AA'],
+    ]);
+    expect(
+      selectChartWindowCarryOvers(triggers, { startSeconds: 2 }, (key) => key === 'BB').map((t) => [
+        t.seconds,
+        t.sampleKey,
+      ]),
+    ).toEqual([
+      [0, 'AA'],
+      [1, 'BB'],
+      [1.5, 'AA'],
+    ]);
+  });
+
   test('keeps every trigger before the window when samples overlap, but no bmson continuation', () => {
     expect(selectChartWindowCarryOvers(triggers, { startSeconds: 2 }, false).map((t) => t.seconds)).toEqual([
       0, 1, 1.5,

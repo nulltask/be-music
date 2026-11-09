@@ -29,6 +29,10 @@
 
 `resources.wavGain` は WAV スロット ID から有限・非負の線形ゲインへの任意のマップです。省略したスロットは 1 とします。Be-Music JSON の情報であり、BMS や bmson のフィールドではありません。譜面が指定した WAVCMD を丸めずに合成ゲインを保持します。NONSTOP は各ステージの有効な VOLWAV と既存のスロット固有ゲインを掛けて格納し、合成先の全体 VOLWAV は設定しません。clone と JSON パースはマップを独立にコピーし、base-62 の大文字・小文字を保持します。
 
+## スロットごとの元形式
+
+`resources.wavSourceFormat` と `resources.bmpSourceFormat` は、WAV / BMP スロット ID から、`sourceFormat` と異なる規則に従うときのその形式（`bms` または `bmson`）への任意のマップです。省略したスロットは `sourceFormat` に従います。Be-Music JSON の情報です。bmson として結合した NONSTOP の譜面は BMS ステージのスロットを `bms` として持ち、そのキーサウンドは単音のまま（`usesMonophonicWAVPlayback(json, key)`）、そのレイヤー画像は黒を透過したままになります（`keysOutBGALayerBlack(json, key)`）。clone はマップを独立にコピーします。
+
 `collectBmsWAVVolumeMultipliers` は WAVCMD の百分率音量、EXWAV の減衰、スロット固有ゲインを掛け合わせます。合成先の全体 VOLWAV と動的バス音量はバックエンドで別に適用します。browser・Node・オフラインはこの計算を共用します。影響は音声だけで、時刻・判定・フィンガープリントは変えません。
 
 BMS 出力は、合成ゲインを正確に再現できる場合だけ、末尾の整数 WAVCMD 音量へ変換します。丸めは行わず、BMS 制御構文は先に解決する必要があります。bmson には対応するチャンネル別ゲインのフィールドがないため、1 以外のスロット固有ゲインは出力できません。保存検証を省略してもこれらの検査を行います。表現できないゲインは Be-Music JSON で保持してください。1 のみのマップはネイティブ出力を変えません。

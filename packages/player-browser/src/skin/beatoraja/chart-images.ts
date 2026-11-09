@@ -43,33 +43,41 @@ export function resolveBeatorajaChartImage(
  * Decodes a chart's `#STAGEFILE`, `#BACKBMP` and `#BANNER` from `source`, each looked up next to the chart, then at the
  * source's root. Each is best-effort: a missing or malformed image is left out, and nothing loads without a source.
  */
+/**
+ * Decodes one of a chart's images (`#STAGEFILE`, `#BACKBMP`, `#BANNER`) from `source`: next to the chart (a leading
+ * slash dropped), then at the source's root. A missing or malformed image is `undefined`.
+ */
+export async function loadBeatorajaChartImage(
+  chartPath: string,
+  relPath: string | undefined,
+  source: BrowserAssetSource,
+): Promise<Texture | undefined> {
+  if (relPath === undefined || relPath.length === 0) return undefined;
+  const chartDir = chartPath.includes('/') ? chartPath.slice(0, chartPath.lastIndexOf('/')) : '';
+  const normalized = relPath.replace(/^\/+/, '');
+  const candidates = [chartDir.length > 0 ? `${chartDir}/${normalized}` : normalized, normalized];
+  for (const candidate of candidates) {
+    const entry = source.files.get(candidate);
+    if (entry === undefined) continue;
+    const bytes = await loadAssetBytes(entry);
+    if (bytes === undefined) continue;
+    try {
+      return await loadTextureFromBytes(candidate, bytes);
+    } catch (error) {
+      log.info('chart image decode failed', { path: candidate, error });
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 export async function loadBeatorajaChartImages(
   chart: Pick<LibraryChart, 'chart' | 'chartPath'>,
   source: BrowserAssetSource | undefined,
 ): Promise<BeatorajaChartImages> {
   if (source === undefined) return {};
   const meta = chart.chart.metadata;
-  const chartDir = chart.chartPath.includes('/') ? chart.chartPath.slice(0, chart.chartPath.lastIndexOf('/')) : '';
-  const decode = async (relPath: string | undefined): Promise<Texture | undefined> => {
-    if (relPath === undefined || relPath.length === 0) return undefined;
-    // `#STAGEFILE foo.png` lives next to the chart: a leading slash is dropped and the path joined under the chart's
-    // folder, with the bare path as a fallback.
-    const normalized = relPath.replace(/^\/+/, '');
-    const candidates = [chartDir.length > 0 ? `${chartDir}/${normalized}` : normalized, normalized];
-    for (const candidate of candidates) {
-      const entry = source.files.get(candidate);
-      if (entry === undefined) continue;
-      const bytes = await loadAssetBytes(entry);
-      if (bytes === undefined) continue;
-      try {
-        return await loadTextureFromBytes(candidate, bytes);
-      } catch (error) {
-        log.info('chart image decode failed', { path: candidate, error });
-        return undefined;
-      }
-    }
-    return undefined;
-  };
+  const decode = (relPath: string | undefined) => loadBeatorajaChartImage(chart.chartPath, relPath, source);
   const [stageFile, backBMP, banner] = await Promise.all([
     decode(meta.stageFile),
     decode(meta.backBMP),

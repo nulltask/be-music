@@ -509,6 +509,14 @@ describe('chart', () => {
     expect(usesMonophonicWAVPlayback({ sourceFormat: 'json' })).toBe(false);
   });
 
+  test("usesMonophonicWAVPlayback follows a slot's own format when the chart lists one", () => {
+    const stitched = createEmptyJSON('bmson');
+    stitched.resources.wavSourceFormat = { a1: 'bms' };
+    expect(usesMonophonicWAVPlayback(stitched, 'a1')).toBe(true);
+    expect(usesMonophonicWAVPlayback(stitched, 'a2')).toBe(false);
+    expect(usesMonophonicWAVPlayback(stitched)).toBe(false);
+  });
+
   test('classifies normalized fallback inputs after trimming and case normalization', () => {
     expect(isScrollChannel(' sc ')).toBe(true);
     expect(isStopChannel(' 09 ')).toBe(true);

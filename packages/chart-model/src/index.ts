@@ -71,6 +71,7 @@ export {
 export {
   resolvePoorBGAMode,
   type PoorBGAMode,
+  keysOutBGALayerBlack,
   buildBGATimelines,
   buildBmsBGATimeline,
   type BGACue,

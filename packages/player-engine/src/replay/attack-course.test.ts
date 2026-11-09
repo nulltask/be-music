@@ -121,7 +121,7 @@ test('G.ATTACK NONSTOP records and re-simulates one continuous gauge across both
   const replay = parseCourseReplay(
     serializeCourseReplay(buildNonstopCourseReplay(definition, prepared.course, run.replay)),
   );
-  expect(replay.nonstop!.stitch).toBe(3);
+  expect(replay.nonstop!.stitch).toBe(4);
   const native = replay.results!.native!;
   const simulated = simulateCourseReplay(replay, { ruleset: 'lr2' });
   expect(native).toMatchObject({ stagesPlayed: 2, gauge: { type: 'G-ATTACK', cleared: true }, lamp: 'FULL_COMBO' });
