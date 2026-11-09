@@ -482,6 +482,9 @@ function stitchNonstopCourseAs(
     }
 
     for (const stop of chartIndex.timing.stopPoints) {
+      // A negative STOP (LR2's negative `#STOPxx`) only moves later objects earlier, which their stitched times
+      // already carry; it has no pause to write.
+      if (!(stop.seconds > 0)) continue;
       // `beatToSeconds` at a STOP's own beat is its start (the STOP counts from just after it).
       const seconds = stitchedSeconds(index, chartIndex.timing.beatToSeconds(stop.beat));
       if (seconds >= window.start && seconds < window.end) {

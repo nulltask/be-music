@@ -27,6 +27,18 @@ describe('pushHeaderLine', () => {
     expect(json.resources.bpm).toEqual({ '01': 180.5 });
   });
 
+  test('keeps a positive #STOPxx over a later zero or negative one, as LR2 does', () => {
+    const json = createEmptyJSON('bms');
+    pushHeaderLine(json, 'STOP01', 'STOP01', '96', 36);
+    pushHeaderLine(json, 'STOP01', 'STOP01', '-5', 36);
+    pushHeaderLine(json, 'STOP01', 'STOP01', '0', 36);
+    pushHeaderLine(json, 'STOP02', 'STOP02', '-5', 36);
+    pushHeaderLine(json, 'STOP02', 'STOP02', '48', 36);
+    pushHeaderLine(json, 'STOP03', 'STOP03', '-5', 36);
+    pushHeaderLine(json, 'STOP03', 'STOP03', '0', 36);
+    expect(json.resources.stop).toEqual({ '01': 96, '02': 48, '03': 0 });
+  });
+
   test('keeps a base-62 object key in its authored case', () => {
     const json = createEmptyJSON('bms');
     pushHeaderLine(json, 'WAV0A', 'WAV0a', 'snare.wav', 62);

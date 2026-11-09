@@ -199,15 +199,14 @@ describe('fingerprint invariance', () => {
       '#BPM02 150',
       '#00308:01',
       '#00208:02', // BPM change to the BPM in effect
-      '#STOP01 0',
-      '#00209:01', // STOP of length 0
-      '#STP 002.000 0',
+      '#STP 002.000 0', // `#STP` of length 0 (a `#STOPxx 0` is not a no-op: LR2 plays it as -1/192 of a measure)
       '#SCROLL01 1',
       '#002SC:01', // SCROLL change to 1
       '#SPEED01 1',
       '#002SP:01', // SPEED keyframe of 1 alone: the curve stays 1
     );
     expect(playFingerprint(noOps)).toBe(base);
+    expect(playFingerprint(chart('#BPM01 180', '#00308:01', '#STOP01 0', '#00209:01'))).not.toBe(base);
   });
 
   test('keeps the last change of one kind at one time', () => {
@@ -484,6 +483,14 @@ describe('positions are exact (findings A2 – A5)', () => {
     const document = playDocument(chart('#STOP01 96', `#00309:${stop}`, '#00313:000100'));
     expect(document.timeline).toEqual([{ m: '3', p: '333/1000', type: 'stop', v: '2' }]);
     expect(document.notes).toContainEqual({ m: '3', p: '1/3', lane: '13' });
+  });
+
+  test('writes a STOP without a positive #STOPxx as the -1/48 beat LR2 plays', () => {
+    const lr2 = [{ m: '3', p: '0', type: 'stop', v: '-1/48' }];
+    expect(playDocument(chart('#STOP01 -96', '#00309:01')).timeline).toEqual(lr2);
+    expect(playDocument(chart('#STOP01 -5', '#00309:01')).timeline).toEqual(lr2);
+    expect(playDocument(chart('#STOP01 0', '#00309:01')).timeline).toEqual(lr2);
+    expect(playDocument(chart('#00309:01')).timeline).toEqual(lr2);
   });
 
   test('takes long-note ends exactly', () => {
