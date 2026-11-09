@@ -9,6 +9,7 @@ import {
 } from '@be-music/player-skin-sdk';
 import { logger } from '../../logger.ts';
 import { PIXI_HOST_TARGET, rendersOnPixiHost, type PixiHostTarget } from '../../skins/pixi-kit/host-render.ts';
+import { resolveHoldTops } from './hold-top.ts';
 import type {
   BeMusicBGAFrame,
   BeMusicBomb,
@@ -397,6 +398,8 @@ export class BeMusicGameplayBinding {
     const frame = this.frame;
     if (!frame || this.drawnFrame === this.frameNumber) return;
     this.drawnFrame = this.frameNumber;
+    // The lanes were collected before the notes; now both are in, each held lane learns where its note ends.
+    resolveHoldTops(frame.lanes, frame.longNotes);
     if (!this.surface) {
       try {
         this.drawPlayfield?.(frame);

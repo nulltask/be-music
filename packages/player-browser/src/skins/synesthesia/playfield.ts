@@ -20,6 +20,7 @@ import {
   comboTier,
   effectProfile,
   hash01,
+  clampHoldSparkX,
   holdSeed,
   holdSparks,
   resolveLaneRuns,
@@ -415,6 +416,12 @@ export function renderSynesthesiaBombs({ layer, pool, bombs, combo, effects, lan
   }
 }
 
+/**
+ * Width (px) of a hold ember's bright core: its glow sprite is drawn larger, but fades out well inside its square, so
+ * this is the part kept inside the held note.
+ */
+const HOLD_EMBER_CORE = 8;
+
 /** Sparks a held lane gives off at most, at full effects (`holdSparks`' default: one every 45 ms for 520 ms). */
 const HOLD_SPARK_INTERVAL_MS = 45;
 
@@ -445,9 +452,11 @@ function renderSynesthesiaHolds(
     halo.tint = light.glow;
     halo.alpha = 0.65 + 0.25 * Math.sin(ageMs / 90);
     if (amount <= 0) continue;
+    // The embers stay on the held note, under its end and inside its width, so the end stays easy to see.
     const sparks = holdSparks(ageMs, holdSeed(lane.channel, lane.holdStartedAtMs), lane.w, {
       intervalMs: HOLD_SPARK_INTERVAL_MS / amount,
       riseSpeed: 0.22,
+      maxRise: lane.holdTop === undefined ? undefined : lane.bottom - lane.holdTop - HOLD_EMBER_CORE / 2,
     });
     for (const spark of sparks) {
       const ember = pool.acquireSprite();
@@ -457,7 +466,10 @@ function renderSynesthesiaHolds(
       const size = spark.size * 5;
       ember.width = size;
       ember.height = size;
-      ember.position.set(centerX + spark.offsetX, lane.bottom - spark.rise);
+      ember.position.set(
+        clampHoldSparkX(centerX + spark.offsetX, Math.min(size, HOLD_EMBER_CORE), lane.x, lane.w),
+        lane.bottom - spark.rise,
+      );
       // White-hot when born, cooling into the lane's colour as it rises.
       ember.tint = spark.alpha > 0.7 ? 0xffffff : light.glow;
       ember.alpha = spark.alpha;
