@@ -29,6 +29,7 @@ import {
   easeOutBack,
   easeOutCubic,
   resolveResultCourseCard,
+  resolveResultCourseScroll,
   resolveResultLamp,
   resolveResultPlayTag,
   resolveResultTrackRows,
@@ -351,6 +352,7 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
       bottom: trackTop + trackH - (columns > 1 ? 44 : 50) - 8,
       columns,
       accent,
+      elapsedMs: frame.shownMs,
       text,
       label,
     });
@@ -414,9 +416,10 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
 
 /**
  * A course run's card in the track column: the course's name and how far the run went, then every stage chart in order
- * (its number, title, level and artist), between the divider and `bottom`. The stages share the room, and drop the artist
- * line when it gets tight; a stage the run never reached is dimmed. A portrait card closes up its header and lays the
- * stages out in `columns` columns.
+ * (its number, title, level and artist), between the divider and `bottom`, each at its usual height. Stages past
+ * `bottom` are masked off, and the list scrolls up through them and starts over (`resolveResultCourseScroll`), so every
+ * stage is shown in turn; a stage the run never reached is dimmed. A portrait card closes up its header and lays the
+ * stages out in `columns` columns, which scroll together.
  */
 function drawCourseCard(
   course: ResultCourseCard,
@@ -429,6 +432,8 @@ function drawCourseCard(
     bottom: number;
     columns: number;
     accent: number;
+    /** How long the result has shown: the stage list scrolls by it. */
+    elapsedMs: number;
     text: (target: Container, value: string, x: number, y: number, options: SkinTextOptions) => unknown;
     label: (value: string, x: number, y: number, target: Container, fill?: number, maxWidth?: number) => unknown;
   },
@@ -451,8 +456,18 @@ function drawCourseCard(
   const columnGap = 24;
   const columnW = (w - columnGap * (columns - 1)) / columns;
   const perColumn = Math.max(1, Math.ceil(course.stages.length / columns));
-  const pitch = Math.min(40, (area.bottom - rowsTop) / perColumn);
-  const withArtist = pitch >= 30;
+  // Every stage keeps its usual height (a portrait card's a little shorter); the ones past `bottom` scroll into view.
+  const pitch = compact ? 34 : 40;
+  const viewH = Math.max(0, area.bottom - rowsTop);
+  const scroll = resolveResultCourseScroll(perColumn * pitch - viewH, area.elapsedMs);
+  const list = new Container();
+  list.label = 'synesthesia-result/course-stages';
+  list.y = -scroll;
+  const lines = new Graphics();
+  list.addChild(lines);
+  const mask = new Graphics().rect(x - 2, rowsTop, w + 4, viewH).fill(0xffffff);
+  target.addChild(list, mask);
+  list.mask = mask;
   const numberW = 24;
   const levelW = 34;
   course.stages.forEach((stage, index) => {
@@ -462,8 +477,8 @@ function drawCourseCard(
     const row = new Container();
     row.label = `synesthesia-result/course-stage-${stage.stage}`;
     row.alpha = stage.played ? 1 : 0.35;
-    target.addChild(row);
-    const middle = rowY + (withArtist ? 9 : pitch / 2);
+    list.addChild(row);
+    const middle = rowY + 9;
     text(row, String(stage.stage).padStart(2, '0'), rowX, middle, {
       size: 11,
       fill: SYN_EMBER,
@@ -486,7 +501,7 @@ function drawCourseCard(
       anchorY: 0.5,
       maxWidth: levelW - 4,
     });
-    if (withArtist && stage.artist !== undefined) {
+    if (stage.artist !== undefined) {
       text(row, stage.artist, rowX + numberW, rowY + 23, {
         size: 9,
         weight: '300',
@@ -496,7 +511,7 @@ function drawCourseCard(
         maxWidth: columnW - numberW,
       });
     }
-    g.rect(rowX, rowY + pitch - 3, columnW, 1).fill({ color: SYN_DIM, alpha: 0.3 });
+    lines.rect(rowX, rowY + pitch - 3, columnW, 1).fill({ color: SYN_DIM, alpha: 0.3 });
   });
 }
 
