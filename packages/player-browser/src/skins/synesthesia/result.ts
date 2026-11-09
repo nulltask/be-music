@@ -417,9 +417,9 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
 /**
  * A course run's card in the track column: the course's name and how far the run went, then every stage chart in order
  * (its number, title, level and artist), between the divider and `bottom`, each at its usual height. Stages past
- * `bottom` are masked off, and the list scrolls up through them and starts over (`resolveResultCourseScroll`), so every
- * stage is shown in turn; a stage the run never reached is dimmed. A portrait card closes up its header and lays the
- * stages out in `columns` columns, which scroll together.
+ * `bottom` are masked off, and the list scrolls up through them, fades out at the bottom and back in at the top to start
+ * over (`resolveResultCourseScroll`), so every stage is shown in turn; a stage the run never reached is dimmed. A
+ * portrait card closes up its header and lays the stages out in `columns` columns, which scroll together.
  */
 function drawCourseCard(
   course: ResultCourseCard,
@@ -462,7 +462,8 @@ function drawCourseCard(
   const scroll = resolveResultCourseScroll(perColumn * pitch - viewH, area.elapsedMs);
   const list = new Container();
   list.label = 'synesthesia-result/course-stages';
-  list.y = -scroll;
+  list.y = -scroll.offsetPx;
+  list.alpha = scroll.alpha;
   const lines = new Graphics();
   list.addChild(lines);
   const mask = new Graphics().rect(x - 2, rowsTop, w + 4, viewH).fill(0xffffff);
