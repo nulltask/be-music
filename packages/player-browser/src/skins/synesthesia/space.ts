@@ -329,6 +329,19 @@ export function starfieldPoint(
   };
 }
 
+/**
+ * `over` painted at `alpha` (clamped to 0..1) over an opaque `base`, both 0xRRGGBB: what a normal-blended flat fill
+ * leaves on a flat one, so the two can be drawn as one fill. Pure.
+ */
+export function mixColor(base: number, over: number, alpha: number): number {
+  const t = Math.max(0, Math.min(1, alpha));
+  const channel = (shift: number): number => {
+    const from = (base >> shift) & 0xff;
+    return Math.round(from + (((over >> shift) & 0xff) - from) * t);
+  };
+  return (channel(16) << 16) | (channel(8) << 8) | channel(0);
+}
+
 /** HSV (all in 0..1, hue wrapping) to a 0xRRGGBB number. */
 export function hsvToHex(hue: number, saturation: number, value: number): number {
   const h = (((hue % 1) + 1) % 1) * 6;
