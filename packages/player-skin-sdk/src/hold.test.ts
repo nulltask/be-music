@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { LONG_NOTE_CENTRE_LINE_FADE_MS, holdSeed, holdSparks, longNoteCentreLineAlpha } from './hold.ts';
+import {
+  clampHoldSparkX,
+  HOLD_SPARK_CEILING_FADE,
+  LONG_NOTE_CENTRE_LINE_FADE_MS,
+  holdSeed,
+  holdSparks,
+  longNoteCentreLineAlpha,
+} from './hold.ts';
 
 describe('holdSparks', () => {
   test('gives nothing before the hold begins', () => {
@@ -28,6 +35,30 @@ describe('holdSparks', () => {
     expect(newest.alpha).toBeLessThanOrEqual(1);
     expect(oldest.rise).toBeGreaterThan(newest.rise);
     for (const spark of sparks) expect(Math.abs(spark.offsetX)).toBeLessThanOrEqual(16);
+  });
+
+  test('stays under the held note: nothing at or above maxRise, fading just below it', () => {
+    const free = holdSparks(5_000, 3, 40);
+    const maxRise = 40;
+    const capped = holdSparks(5_000, 3, 40, { maxRise });
+    expect(capped.length).toBeGreaterThan(0);
+    expect(capped.length).toBeLessThan(free.length);
+    for (const spark of capped) {
+      expect(spark.rise).toBeLessThan(maxRise);
+      const unfaded = free.find((each) => each.rise === spark.rise)!;
+      expect(spark.alpha).toBeCloseTo(unfaded.alpha * Math.min(1, (maxRise - spark.rise) / HOLD_SPARK_CEILING_FADE));
+    }
+    expect(holdSparks(5_000, 3, 40, { maxRise: 0 })).toEqual([]);
+    expect(holdSparks(5_000, 3, 40, { maxRise: 1e9 })).toEqual(free);
+  });
+});
+
+describe('clampHoldSparkX', () => {
+  test('keeps a spark inside the lane, centred when it is wider than the lane', () => {
+    expect(clampHoldSparkX(120, 10, 100, 40)).toBe(120);
+    expect(clampHoldSparkX(98, 10, 100, 40)).toBe(105);
+    expect(clampHoldSparkX(145, 10, 100, 40)).toBe(135);
+    expect(clampHoldSparkX(90, 50, 100, 40)).toBe(120);
   });
 });
 

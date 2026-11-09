@@ -230,7 +230,12 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
   });
   define('player-skin-sdk.holdSparks', {
     run: () => {
-      skinSdkAPI.holdSparks(5_000, 1234, 40);
+      skinSdkAPI.holdSparks(5_000, 1234, 40, { maxRise: 60 });
+    },
+  });
+  define('player-skin-sdk.clampHoldSparkX', {
+    run: () => {
+      skinSdkAPI.clampHoldSparkX(98, 10, 100, 40);
     },
   });
   define('player-skin-sdk.longNoteCentreLineAlpha', {

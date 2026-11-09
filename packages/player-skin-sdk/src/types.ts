@@ -520,6 +520,12 @@ export interface BeMusicLaneFrame {
   /** True while a long note in this lane is held, and the play-clock ms the hold started. */
   holding?: boolean;
   holdStartedAtMs?: number;
+  /**
+   * While {@link holding}: the y of the held long note's top this frame (its end as it falls, or the lane's `top` while
+   * the end is still above the lane). Hold effects that rise from the judgement line stay under it, so they never cover
+   * the end the player lets go at (see `HoldSparkOptions.maxRise`).
+   */
+  holdTop?: number;
 }
 
 /**

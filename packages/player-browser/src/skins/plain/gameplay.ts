@@ -1,4 +1,5 @@
 import {
+  clampHoldSparkX,
   flashingGreatColor,
   holdSeed,
   holdSparks,
@@ -250,14 +251,20 @@ function drawHolds(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
     ctx.globalAlpha = 0.55 + 0.25 * Math.sin(ageMs / 90);
     ctx.fillRect(lane.x, y - 3, lane.w, 6);
     ctx.fillStyle = '#ffffff';
-    for (const spark of holdSparks(ageMs, holdSeed(lane.channel, lane.holdStartedAtMs), lane.w)) {
+    // The sparks stay on the held note, under its end and inside its width, so the end stays easy to see.
+    const maxRise = lane.holdTop === undefined ? undefined : y - lane.holdTop - PLAIN_SPARK_MAX / 2;
+    for (const spark of holdSparks(ageMs, holdSeed(lane.channel, lane.holdStartedAtMs), lane.w, { maxRise })) {
       ctx.globalAlpha = spark.alpha;
       const size = spark.size * 1.6;
-      ctx.fillRect(centerX + spark.offsetX - size / 2, y - spark.rise - size / 2, size, size);
+      const x = clampHoldSparkX(centerX + spark.offsetX, size, lane.x, lane.w);
+      ctx.fillRect(x - size / 2, y - spark.rise - size / 2, size, size);
     }
     ctx.globalAlpha = 1;
   }
 }
+
+/** Largest spark Plain draws (`holdSparks`' largest, 3.5 px, at 1.6x). */
+const PLAIN_SPARK_MAX = 3.5 * 1.6;
 
 /** The held lane's glow on the judgement line: the key beam's blue, brighter. */
 const HOLD_GLOW = 'rgb(120, 170, 255)';
