@@ -101,6 +101,9 @@ describe('resolveCourseGauge', () => {
     expect(resolveDefaultCourseGaugeSet('9-key')).toBe('9k');
     expect(resolveDefaultCourseGaugeSet('24-key-sp')).toBe('24k');
     expect(resolveDefaultCourseGaugeSet('14-key-dp')).toBe('7k');
+    // A generic keyboard takes the KEYBOARD (24K) set, as its single play does (#1089).
+    expect(resolveDefaultCourseGaugeSet('12 KEY GENERIC')).toBe('24k');
+    expect(resolveDefaultCourseGaugeSet('16 KEY GENERIC')).toBe('24k');
   });
 
   test('the LR2 grade gauge softens damage below 32 % and pins at 0 below 2 %', () => {
