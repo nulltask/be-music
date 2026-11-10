@@ -308,8 +308,9 @@ export interface ReplayPlay {
   /** The 2P player's gauge of a two-player play (`battleMode: 'TWO-PLAYER'`); `results.secondPlayer` is its result. */
   gauge2P?: GaugeType;
   /**
-   * Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'lr2:RANDOM'` / ...). A bare
-   * colliding name (`'RANDOM'`, `'S-RANDOM'`, `'CONVERGE'`) is the played ruleset's own (ADR 0019).
+   * Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'RANDOM'` / `'lr2:S-RANDOM'` /
+   * ...). A bare colliding name (`'S-RANDOM'`, `'CONVERGE'`) is the played ruleset's own (ADR 0019). Older replays may hold
+   * `'lr2:RANDOM'` and the like, which read as `'RANDOM'` (`canonicalOptionValue`).
    */
   randomLane?: { p1?: string; p2?: string };
   dpFlip?: boolean;

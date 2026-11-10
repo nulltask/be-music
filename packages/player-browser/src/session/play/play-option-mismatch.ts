@@ -5,13 +5,19 @@
  * chart, so the host can tell the player which ones to change instead of leaving the play screen black.
  */
 
-import { splitOptionSource } from '@be-music/player-engine/ruleset';
+import { canonicalOptionValue, optionValueSources, splitOptionSource } from '@be-music/player-engine/ruleset';
 import type { PlaySessionOptions } from './play-options.ts';
 
-/** How a source-qualified value reads: `beatoraja:CONVERGE` as `CONVERGE (beatoraja)`, `____:BATTLE` as `BATTLE (????)`. */
+/**
+ * How a source-qualified value reads: `beatoraja:CONVERGE` as `CONVERGE (beatoraja)`, `____:BATTLE` as `BATTLE (????)`,
+ * a value two sources share with both, `lr2:S-RANDOM` as `S-RANDOM (LR2 / ????)`, and a merged one as its current option.
+ */
 function optionLabel(value: string): string {
-  const { source, name } = splitOptionSource(value);
-  return source === undefined ? value : `${name} (${source === 'lr2' ? 'LR2' : source === '____' ? '????' : source})`;
+  const current = canonicalOptionValue(value);
+  const { name } = splitOptionSource(current);
+  const sources = optionValueSources(current);
+  if (sources.length === 0) return name;
+  return `${name} (${sources.map((source) => (source === 'lr2' ? 'LR2' : source === '____' ? '????' : source)).join(' / ')})`;
 }
 
 /** The play options that convert the chart, as the Options dialog labels them. */

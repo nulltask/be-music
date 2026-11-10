@@ -127,9 +127,9 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dt>Random 1P</dt>
           <dd>
             The lane option for the 1P side (the only side in a single play). Every option is offered under every
-            ruleset and runs its source's algorithm, grouped by source with the rules' own first; RANDOM, S-RANDOM and
-            CONVERGE differ per source, so each is listed once per source, for example RANDOM (LR2) and RANDOM
-            (beatoraja).
+            ruleset and runs its source's algorithm, grouped by source with the rules' own first. S-RANDOM and CONVERGE
+            differ per source, so each is listed once per source, for example S-RANDOM (LR2 / ????), which LR2 and ????
+            share, and S-RANDOM (beatoraja). RANDOM is the same in every source and is listed once.
           </dd>
           <dt>Random 2P</dt>
           <dd>The lane option for the 2P side of a double or two-player play, from the same list as Random 1P.</dd>
@@ -813,8 +813,9 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dt>Random 1P</dt>
           <dd>
             1P 側のレーンのオプション (1
-            人プレイではこちらだけ)。どのオプションもどのルールでも選べ、その出典のアルゴリズムで動きます。出典ごとにまとめ、ルール自身の出典を先頭に並べます。RANDOM、S-RANDOM、CONVERGE
-            は出典ごとに中身が違うため、RANDOM (LR2) と RANDOM (beatoraja) のように出典ごとに 1 つずつ並びます。
+            人プレイではこちらだけ)。どのオプションもどのルールでも選べ、その出典のアルゴリズムで動きます。出典ごとにまとめ、ルール自身の出典を先頭に並べます。S-RANDOM
+            と CONVERGE は出典ごとに中身が違うため、LR2 と ???? で共通の S-RANDOM (LR2 / ????) と S-RANDOM (beatoraja)
+            のように出典ごとに 1 つずつ並びます。RANDOM はどの出典でも同じなので 1 つだけです。
           </dd>
           <dt>Random 2P</dt>
           <dd>DP や 2 人プレイでの 2P 側のレーンのオプション。Random 1P と同じ一覧から選びます。</dd>

@@ -366,9 +366,9 @@ describe('resolveLR2SelectState sliders and buttons', () => {
     const state = (random1P: (typeof DEFAULT_PLAY_OPTIONS)['random1P']) =>
       resolveLR2SelectState({ options: { ...DEFAULT_PLAY_OPTIONS, random1P, random2P: random1P } });
     for (const [mode, label, cell] of [
-      ['lr2:RANDOM', 'RANDOM', 2],
-      ['beatoraja:RANDOM', 'RANDOM', 2],
-      ['____:S-RANDOM', 'S-RANDOM', 3],
+      ['RANDOM', 'RANDOM', 2],
+      ['lr2:S-RANDOM', 'S-RANDOM', 3],
+      ['beatoraja:S-RANDOM', 'S-RANDOM', 3],
       ['S-RANDOM', 'S-RANDOM', 3],
       ['beatoraja:CONVERGE', 'CONVERGE', 5],
       ['SCATTER', 'SCATTER', 4],
@@ -382,13 +382,13 @@ describe('resolveLR2SelectState sliders and buttons', () => {
   });
 
   it('steps LR2’s RANDOM buttons through LR2’s own lane options (ADR 0019)', () => {
-    const cycle = ['OFF', 'MIRROR', 'lr2:RANDOM', 'lr2:S-RANDOM', 'SCATTER', 'lr2:CONVERGE'] as const;
+    const cycle = ['OFF', 'MIRROR', 'RANDOM', 'lr2:S-RANDOM', 'SCATTER', 'lr2:CONVERGE'] as const;
     for (const [index, mode] of cycle.entries()) {
       expect(stepLR2LaneOption(mode, 1)).toBe(cycle[(index + 1) % cycle.length]);
       expect(stepLR2LaneOption(mode, -1)).toBe(cycle[(index + cycle.length - 1) % cycle.length]);
     }
-    expect(stepLR2LaneOption('____:S-RANDOM', 1)).toBe('SCATTER');
-    expect(stepLR2LaneOption('S-RANDOM', -1)).toBe('lr2:RANDOM');
+    expect(stepLR2LaneOption('S-RANDOM', -1)).toBe('RANDOM');
+    expect(stepLR2LaneOption('beatoraja:S-RANDOM', 1)).toBe('SCATTER');
     expect(stepLR2LaneOption('beatoraja:CONVERGE', 1)).toBe('OFF');
     expect(stepLR2LaneOption('H-RANDOM', -1)).toBe('OFF');
     expect(stepLR2LaneOption(undefined, 1)).toBe('MIRROR');

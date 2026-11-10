@@ -298,7 +298,7 @@ function drawGraph(
   addHUDText(layer, 'OPTION', footer.x + 10, footer.y + 7, labelStyle(), pool);
   addHUDText(
     layer,
-    // A source-qualified lane option shows its bare name (`lr2:RANDOM` as RANDOM, ADR 0019).
+    // A source-qualified lane option shows its bare name (`lr2:S-RANDOM` as S-RANDOM, ADR 0019).
     (runtime.random1P ?? 'OFF').replace(/^[^:]*:/, ''),
     footer.x + footer.w - 10,
     footer.y + 6,

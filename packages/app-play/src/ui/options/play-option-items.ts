@@ -1,4 +1,9 @@
-import { resolvePracticeGaugeTypes, splitOptionSource, type RulesetId } from '@be-music/player-engine/ruleset';
+import {
+  optionValueSources,
+  resolvePracticeGaugeTypes,
+  splitOptionSource,
+  type RulesetId,
+} from '@be-music/player-engine/ruleset';
 import {
   laneCoversFromPlayOptions,
   resolveRandomModes,
@@ -47,27 +52,42 @@ function sourceOrder(ruleset: RulesetId): RulesetId[] {
   return [ruleset, ...(['lr2', 'beatoraja', '____'] as const).filter((source) => source !== ruleset)];
 }
 
-/** The source a lane option value comes from; `undefined` for OFF and MIRROR, which every source defines alike. */
+/**
+ * The source a lane option value comes from; `undefined` for OFF, MIRROR and RANDOM, which every source defines alike.
+ */
 export function laneOptionSource(mode: RandomMode): RulesetId | undefined {
   return splitOptionSource(mode).source ?? LANE_OPTION_SOURCES[mode];
 }
 
+/** The sources that define a lane option value as it runs: its source, and those sharing it (AC's S-RANDOM is LR2's). */
+function laneOptionSources(mode: RandomMode): readonly RulesetId[] {
+  const shared = optionValueSources(mode);
+  if (shared.length > 0) return shared;
+  const source = laneOptionSource(mode);
+  return source === undefined ? [] : [source];
+}
+
 /**
- * The Options dialog's lane options under `ruleset`, grouped by source (ADR 0019): OFF and MIRROR, then the judge ruleset's
- * own source's options, then the other sources'. Each source-specific option names its source, so `lr2:RANDOM` reads
- * `RANDOM (LR2)` and `beatoraja:RANDOM` reads `RANDOM (beatoraja)`.
+ * The Options dialog's lane options under `ruleset`, grouped by source (ADR 0019): OFF, MIRROR and RANDOM, then the judge
+ * ruleset's own source's options, then the other sources'. Each source-specific option names its sources, so
+ * `lr2:S-RANDOM` reads `S-RANDOM (LR2 / ????)` and `beatoraja:S-RANDOM` reads `S-RANDOM (beatoraja)`; a shared one sits
+ * in the group of the first source in that order.
  */
 export function laneOptionItems(ruleset: RulesetId, duplicatedBattle1P = false): PlayOptionItem<RandomMode>[] {
   const modes = resolveRandomModes(ruleset, duplicatedBattle1P);
+  const order = sourceOrder(ruleset);
   const item = (mode: RandomMode): PlayOptionItem<RandomMode> => {
-    const source = laneOptionSource(mode);
+    const sources = laneOptionSources(mode);
     const name = splitOptionSource(mode).name;
     const text = LANE_OPTION_NAMES[name] ?? name;
-    return { text: source === undefined ? text : `${text} (${SOURCE_LABELS[source]})`, value: mode };
+    const label = sources.map((source) => SOURCE_LABELS[source]).join(' / ');
+    return { text: sources.length === 0 ? text : `${text} (${label})`, value: mode };
   };
+  const group = (mode: RandomMode): RulesetId | undefined =>
+    order.find((source) => laneOptionSources(mode).includes(source));
   return [
-    ...modes.filter((mode) => laneOptionSource(mode) === undefined),
-    ...sourceOrder(ruleset).flatMap((source) => modes.filter((mode) => laneOptionSource(mode) === source)),
+    ...modes.filter((mode) => group(mode) === undefined),
+    ...order.flatMap((source) => modes.filter((mode) => group(mode) === source)),
   ].map(item);
 }
 

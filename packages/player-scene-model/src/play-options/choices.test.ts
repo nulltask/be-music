@@ -167,8 +167,8 @@ test('offers the three confirmed beatoraja launcher algorithms only', () => {
 });
 
 test('R-RANDOM is offered under every ruleset without changing LR2 button indices', () => {
-  // An LR2 button cycles LR2's own RANDOM and S-RANDOM (ADR 0019).
-  expect(RANDOM_CYCLE).toEqual(['OFF', 'MIRROR', 'lr2:RANDOM', 'lr2:S-RANDOM', 'SCATTER', 'lr2:CONVERGE']);
+  // An LR2 button cycles the shared RANDOM and LR2's own S-RANDOM (ADR 0019).
+  expect(RANDOM_CYCLE).toEqual(['OFF', 'MIRROR', 'RANDOM', 'lr2:S-RANDOM', 'SCATTER', 'lr2:CONVERGE']);
   expect(resolveRandomModes('lr2')).toContain('R-RANDOM');
   for (const source of ['beatoraja', '____'] as const) expect(resolveRandomModes(source)).toContain('R-RANDOM');
   expect(resolvePlayOptions({ random1P: 'R-RANDOM', random2P: 'R-RANDOM' })).toMatchObject({
@@ -426,18 +426,26 @@ test('bmson TOTAL mode is opt-in and validates both choices', () => {
   expect(resolvePlayOptionValue('bmsonTotalMode', 'SPEC')).toBeUndefined();
 });
 
-test('RANDOM and S-RANDOM are offered once per source, the judge ruleset own first (ADR 0019)', () => {
-  expect(resolveRandomModes('beatoraja').filter((mode) => mode.endsWith(':RANDOM'))).toEqual([
-    'beatoraja:RANDOM',
-    'lr2:RANDOM',
-    '____:RANDOM',
+test('RANDOM is one option and S-RANDOM is offered once per source, the judge ruleset own first (ADR 0019)', () => {
+  for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+    expect(resolveRandomModes(ruleset)).toContain('RANDOM');
+    expect(resolveRandomModes(ruleset).filter((mode) => mode.endsWith(':RANDOM'))).toEqual([]);
+  }
+  expect(resolveRandomModes('beatoraja').filter((mode) => mode.endsWith(':S-RANDOM'))).toEqual([
+    'beatoraja:S-RANDOM',
+    'lr2:S-RANDOM',
   ]);
+  // AC's S-RANDOM is LR2's.
   expect(resolveRandomModes('____').filter((mode) => mode.endsWith(':S-RANDOM'))).toEqual([
-    '____:S-RANDOM',
     'lr2:S-RANDOM',
     'beatoraja:S-RANDOM',
   ]);
-  expect(resolveRandomModes('lr2')).not.toContain('RANDOM');
+  // Values merged since then still validate and read as the option they were merged into.
+  for (const value of ['lr2:RANDOM', 'beatoraja:RANDOM', '____:RANDOM']) {
+    expect(isRandomModeChoice(value)).toBe(true);
+    expect(resolvePlayOptionValue('random1P', value)).toBe('RANDOM');
+  }
+  expect(resolvePlayOptionValue('random2P', '____:S-RANDOM')).toBe('lr2:S-RANDOM');
   // Bare values from before the qualification still validate; an unknown source does not.
   expect(isRandomModeChoice('S-RANDOM')).toBe(true);
   expect(isRandomModeChoice('pms:RANDOM')).toBe(false);

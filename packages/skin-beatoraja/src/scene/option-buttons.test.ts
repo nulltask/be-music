@@ -72,7 +72,7 @@ describe('beatoraja option buttons', () => {
     const order = [
       'OFF',
       'MIRROR',
-      'beatoraja:RANDOM',
+      'RANDOM',
       'R-RANDOM',
       'beatoraja:S-RANDOM',
       'SPIRAL',
@@ -103,7 +103,7 @@ describe('beatoraja option buttons', () => {
     const order = [
       'OFF',
       'MIRROR',
-      'beatoraja:RANDOM',
+      'RANDOM',
       'R-RANDOM',
       'beatoraja:S-RANDOM',
       'SPIRAL',
@@ -130,8 +130,8 @@ describe('beatoraja option buttons', () => {
       random1P: 'RANDOM_PLAYABLE',
     });
     expect(resolveBeatorajaOptionButton(42, { random1P: 'CONVERGE' }, true)).toEqual({ random1P: 'H-RANDOM' });
-    // Another source's RANDOM keeps the RANDOM slot and steps on to beatoraja's own options (ADR 0019).
-    expect(resolveBeatorajaPlayOptionIndex(42, { random1P: 'lr2:RANDOM' })).toBe(2);
+    // Another source's S-RANDOM keeps the S-RANDOM slot and steps on to beatoraja's own options (ADR 0019).
+    expect(resolveBeatorajaPlayOptionIndex(42, { random1P: 'lr2:S-RANDOM' })).toBe(4);
     expect(resolveBeatorajaOptionButton(42, { random1P: 'lr2:S-RANDOM' }, true)).toEqual({ random1P: 'R-RANDOM' });
     expect(resolveBeatorajaOptionButton(42, { random1P: 'lr2:CONVERGE' }, false, { pms: true })).toEqual({
       random1P: 'RANDOM_PLAYABLE',

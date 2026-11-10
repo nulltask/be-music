@@ -10,6 +10,7 @@ import {
   GAUGE_AUTO_SHIFTS,
   LR2_GAUGE_TYPES,
   PRACTICE_GAUGE_TYPES,
+  canonicalOptionValue,
   clampCustomJudgeRate,
   isGaugeType,
   isQualifiedOptionName,
@@ -84,20 +85,20 @@ export function formatGaugeLabel(id: string | undefined): string | undefined {
 
 /**
  * LR2's own lane options, in its RANDOM button order: cells 0..5 on `#SRC_BUTTON,type=42 / 43` (OpenLR2 `random` 0-5):
- * off / mirror / random / s-random / scatter / converge. An LR2 button steps only these, LR2's own RANDOM, S-RANDOM and
- * CONVERGE (ADR 0019); its label reads the bare name of any value. Every source's choices are in resolveRandomModes.
+ * off / mirror / random / s-random / scatter / converge. An LR2 button steps only these, LR2's own S-RANDOM and CONVERGE
+ * (ADR 0019); its label reads the bare name of any value. Every source's choices are in resolveRandomModes.
  */
 export const RANDOM_CYCLE: readonly RandomMode[] = [
   'OFF',
   'MIRROR',
-  'lr2:RANDOM',
+  'RANDOM',
   'lr2:S-RANDOM',
   'SCATTER',
   'lr2:CONVERGE',
 ];
 
 /** The sources of each colliding lane option, the judge ruleset's own first. */
-function sourcesFirst<Name extends 'RANDOM' | 'S-RANDOM' | 'CONVERGE'>(
+function sourcesFirst<Name extends 'S-RANDOM' | 'CONVERGE'>(
   name: Name,
   sources: readonly RulesetId[],
   ruleset: RulesetId,
@@ -108,18 +109,18 @@ function sourcesFirst<Name extends 'RANDOM' | 'S-RANDOM' | 'CONVERGE'>(
 
 /**
  * The lane options offered under `ruleset`; LR2's sprite cycle stays separate. Every lane option is offered under every
- * ruleset and runs its own source's algorithm (#774). RANDOM, S-RANDOM and CONVERGE name a different algorithm in each
- * source, so they are offered once per source, qualified (`lr2:RANDOM`, `beatoraja:RANDOM`, `____:RANDOM`; CONVERGE is
- * LR2's and beatoraja's), with the judge ruleset's own first (ADR 0019). `duplicatedBattle1P` is the 1P side of a chart
+ * ruleset and runs its own source's algorithm (#774). RANDOM is one option: every source shuffles the keys alike. S-RANDOM
+ * and CONVERGE name a different algorithm in LR2 and beatoraja, so they are offered once per source, qualified
+ * (`lr2:S-RANDOM`, which AC's matches, and `beatoraja:S-RANDOM`), with the judge ruleset's own first (ADR 0019). `duplicatedBattle1P` is the 1P side of a chart
  * copied onto both sides (BATTLE, BATTLE AS, D-BATTLE), which also takes SYNCHRONIZE RANDOM and SYMMETRY RANDOM.
  */
 export function resolveRandomModes(ruleset: RulesetId, duplicatedBattle1P = false): readonly RandomMode[] {
   return [
     'OFF',
     'MIRROR',
-    ...sourcesFirst('RANDOM', ['lr2', 'beatoraja', '____'], ruleset),
+    'RANDOM',
     'R-RANDOM',
-    ...sourcesFirst('S-RANDOM', ['lr2', 'beatoraja', '____'], ruleset),
+    ...sourcesFirst('S-RANDOM', ['lr2', 'beatoraja'], ruleset),
     'SPIRAL',
     'H-RANDOM',
     'ALL-SCR',
@@ -135,13 +136,15 @@ export function resolveRandomModes(ruleset: RulesetId, duplicatedBattle1P = fals
 }
 
 /**
- * Whether `mode` is one of {@link resolveRandomModes}'s choices, or a bare colliding name (RANDOM, S-RANDOM, CONVERGE)
- * that stored settings and replays from before ADR 0019 hold, read as the judge ruleset's own.
+ * Whether `mode` is one of {@link resolveRandomModes}'s choices, a bare colliding name (S-RANDOM, CONVERGE) that stored
+ * settings and replays from before ADR 0019 hold, read as the judge ruleset's own, or a value since merged into one
+ * (`lr2:RANDOM` is RANDOM, `____:S-RANDOM` is `lr2:S-RANDOM`; `canonicalOptionValue` reads it).
  */
 export function isRandomModeChoice(mode: unknown, duplicatedBattle1P = false): mode is RandomMode {
   if (typeof mode !== 'string') return false;
-  if (resolveRandomModes('lr2', duplicatedBattle1P).includes(mode as RandomMode)) return true;
-  const parts = splitOptionSource(mode);
+  const current = canonicalOptionValue(mode);
+  if (resolveRandomModes('lr2', duplicatedBattle1P).includes(current as RandomMode)) return true;
+  const parts = splitOptionSource(current);
   return parts.source === undefined && isQualifiedOptionName(parts.name) && parts.name !== 'BATTLE';
 }
 
@@ -362,9 +365,10 @@ export function resolvePlayOptionValue<K extends keyof PlayOptions>(
   if (!Object.hasOwn(DEFAULT_PLAY_OPTIONS, key)) return undefined;
   if (key === 'randomSeed1P' || key === 'randomSeed2P') return parseLaneRandomSeed(value) as PlayOptions[K] | undefined;
   if (key === 'gauge1P' || key === 'gauge2P') return isGaugeType(value) ? (value as PlayOptions[K]) : undefined;
-  // A bare colliding name from before ADR 0019 stays valid: it is the judge ruleset's own.
+  // A bare colliding name from before ADR 0019 stays valid: it is the judge ruleset's own. A merged value reads as the
+  // option it was merged into.
   if (key === 'random1P' || key === 'random2P')
-    return isRandomModeChoice(value, true) ? (value as PlayOptions[K]) : undefined;
+    return isRandomModeChoice(value, true) ? (canonicalOptionValue(value) as PlayOptions[K]) : undefined;
   if (key === 'battleMode' && value === 'BATTLE') return value as PlayOptions[K];
   // Settings and replays from before the modes store beatoraja's switch as a boolean.
   if (key === 'judgeTimingAutoAdjust' && typeof value === 'boolean')

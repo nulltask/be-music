@@ -1103,12 +1103,12 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   });
   define('player-engine.ruleset.optionValueName', {
     run() {
-      rulesetAPI.optionValueName('lr2:RANDOM');
+      rulesetAPI.optionValueName('lr2:S-RANDOM');
     },
   });
   define('player-engine.ruleset.resolveOptionSource', {
     run() {
-      rulesetAPI.resolveOptionSource('RANDOM', 'beatoraja');
+      rulesetAPI.resolveOptionSource('S-RANDOM', 'beatoraja');
     },
   });
   define('player-engine.ruleset.qualifyOptionValue', {
@@ -1119,6 +1119,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.ruleset.migrateOptionValue', {
     run() {
       rulesetAPI.migrateOptionValue('BATTLE', 'beatoraja');
+    },
+  });
+  define('player-engine.ruleset.canonicalOptionValue', {
+    run() {
+      rulesetAPI.canonicalOptionValue('____:S-RANDOM');
+    },
+  });
+  define('player-engine.ruleset.optionValueSources', {
+    run() {
+      rulesetAPI.optionValueSources('lr2:S-RANDOM');
     },
   });
   define('player-engine.ruleset.isKnownOptionSource', {
