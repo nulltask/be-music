@@ -131,7 +131,7 @@ export interface PlayerPlaySettings {
   battleMode?: BattleMode;
   /** The 2P player's gauge in a two-player play (`battleMode: 'TWO-PLAYER'`); absent plays the 1P gauge. */
   gauge2P?: string;
-  /** LR2 D-BATTLE: the scratch key was held through the decide animation, so scratch objects stay playable. */
+  /** LR2 D-BATTLE: scratch objects stay playable, as LR2's hidden `randSC` command keeps them (buttons 12 + 13 at decide). */
   dBattleScratch?: boolean;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;

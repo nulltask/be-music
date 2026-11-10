@@ -489,7 +489,7 @@ Options ダイアログ の **Play options → Battle** は、どのルールで
 | 2P PLAY (????)     | ????                  | 5 / 7KEY               | 2 人（後述）                            |
 | SP TO DP           | どれでも（LR2）       | 5 / 7 / 9 / 10 / 14KEY | 1 人、変換後の譜面（前述）              |
 
-beatoraja の BATTLE（`doubleoption` 2）と AC の BATTLE は、地雷を含む SP 譜面を 2P 側へ複製します。複製はスクロール・ロングノート・地雷・EXTRA の変換の後、レーンのランダム配置の前に行い、各複製は 2P のチャンネルを持つ別のノートになります。**BATTLE AS**（`doubleoption` 3）はさらに、beatoraja の `AutoplayModifier` と同様に両側のスクラッチのノート（24KEY ではホイール）を背景音にします。LR2 の **D-BATTLE**（`battle` 2）は 1x・3x・5x のセルだけを複製するため、地雷は 1P 側に残ります。また、**D-BATTLE scratch (LR2)** が無効ならスクラッチのノートを背景音にします。このスイッチは、Options ダイアログ にない決定アニメーション中にスクラッチのキーを押し続ける LR2 の操作の代わりで、D-BATTLE を選んだ間だけ表示します。複製した譜面に DP FLIP は適用しません。
+beatoraja の BATTLE（`doubleoption` 2）と AC の BATTLE は、地雷を含む SP 譜面を 2P 側へ複製します。複製はスクロール・ロングノート・地雷・EXTRA の変換の後、レーンのランダム配置の前に行い、各複製は 2P のチャンネルを持つ別のノートになります。**BATTLE AS**（`doubleoption` 3）はさらに、beatoraja の `AutoplayModifier` と同様に両側のスクラッチのノート（24KEY ではホイール）を背景音にします。LR2 の **D-BATTLE**（`battle` 2）は 1x・3x・5x のセルだけを複製するため、地雷は 1P 側に残ります。また、**D-BATTLE scratch (LR2)** が無効ならスクラッチのノートを背景音にします。このスイッチは、皿を残す LR2 の隠しコマンド（`randSC`）の代わりです。LR2 では譜面を決定するときに、片側のボタン 12 と 13（おそらく START と SELECT）を同時に押します（[`Main.cpp` L1235-L1257](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/Main.cpp#L1235-L1257)）。スイッチは D-BATTLE を選んだ間だけ表示します。LR2 の同じコマンドはその側のレーンオプションでも皿を動かしますが、Be-Music にはありません（[#1077](https://github.com/nulltask/be-music/issues/1077)）。複製した譜面に DP FLIP は適用しません。
 
 リプレイには実効的な `play.battleMode`、`battleSourceVariant`、複製したオブジェクト数（`battleChangedObjectCount`）、D-BATTLE では `dBattleScratch` を記録します。リプレイの譜面には両側のノートを保存するため、リプレイでは各複製の配置を個別に復元します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 

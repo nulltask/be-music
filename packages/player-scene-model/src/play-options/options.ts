@@ -145,7 +145,10 @@ export interface PlayOptions {
   sevenToNinePattern: import('@be-music/player-engine/lanes').SevenToNinePattern;
   sevenToNineType: import('@be-music/player-engine/lanes').SevenToNineType;
   battleMode: BattleMode;
-  /** LR2 D-BATTLE: hold the scratch key through the decide animation to keep scratch objects playable. */
+  /**
+   * LR2 D-BATTLE: keep scratch objects playable, as LR2's hidden `randSC` command does (a side's buttons 12 and 13 held
+   * together at decide, OpenLR2 `Main.cpp` L1242-L1247, `LR2f.cpp` L27432-L27438).
+   */
   dBattleScratch: boolean;
   /**
    * That-Which-Must-Not-Be-Named M-RAN per player (two-player play only): MIRROR applied after a RANDOM-type arrangement,
