@@ -222,8 +222,14 @@ function randomizeTimeBasedNotes(
       let useSidePriority = false;
       let useStreak = false;
       let usePlayable = false;
+      const pastThreshold = (lane: string): boolean => Math.trunc(timeMs) - lastNoteTime.get(lane)! > thresholdMs;
+      if (options.ruleset === 'beatoraja' && !scoring.has(source)) {
+        // Upstream places a row's empty, mine-only and hidden-only lanes over the lanes past the threshold first, then
+        // the rest (`primaryLane.addAll(inferiorLane)`, Randomizer L241-L246), so a seed puts them where it does.
+        candidates = [...free.filter(pastThreshold), ...free.filter((lane) => !pastThreshold(lane))];
+      }
       if (options.ruleset === 'beatoraja' && scoring.has(source)) {
-        const eligible = free.filter((lane) => Math.trunc(timeMs) - lastNoteTime.get(lane)! > thresholdMs);
+        const eligible = free.filter(pastThreshold);
         if (eligible.length > 0) {
           candidates = eligible;
           useSidePriority = allScratch?.doublePlay === true;
@@ -242,8 +248,18 @@ function randomizeTimeBasedNotes(
         const allowed = candidates.filter((lane) => playableCombination!.includes(lane));
         if (allowed.length > 0) candidates = allowed;
       }
+      // DP ALL-SCR leans toward the scratch: 1P takes the lowest-numbered lane, 2P the highest (Randomizer L409-L436),
+      // numbered as the source numbers them, keys then scratch; not the candidates' order, which a released LN changes.
       const target = useSidePriority
-        ? candidates[allScratch?.side === '2P' ? candidates.length - 1 : 0]!
+        ? candidates.reduce((best, lane) =>
+            (
+              allScratch?.side === '2P'
+                ? lanes.indexOf(lane) > lanes.indexOf(best)
+                : lanes.indexOf(lane) < lanes.indexOf(best)
+            )
+              ? lane
+              : best,
+          )
         : pickRandom(candidates, options.random);
       if (useStreak) streak.set(target, streak.get(target)! + 1);
       map.set(source, target);
