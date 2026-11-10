@@ -148,6 +148,30 @@ describe('applyRandomMode', () => {
     expect(channelsOf(pms)).toEqual(beatorajaShuffle(resolveLaneOptionChannels('1P', '9'), seededRandom(11)));
   });
 
+  test('LR2 nine-key S-RANDOM and CONVERGE can reach the 2P scratch; the corrected options keep to the nine keys (#1083)', () => {
+    const pms = resolveLaneOptionChannels('1P', '9');
+    // The last draw of ten destinations is the tenth one, outside the playfield.
+    const last = () => 0.99;
+    for (const mode of ['lr2:S-RANDOM', 'S-RANDOM', 'lr2:CONVERGE'] as const) {
+      const notes = notesOn(['11'].concat(mode === 'lr2:CONVERGE' ? [pms[4]!] : []));
+      applyRandomMode(notes, pms, mode, last, { ruleset: 'lr2', playVariant: '9' });
+      expect(channelsOf(notes), mode).toContain('26');
+    }
+    for (const mode of ['S-RANDOM-CORRECTED', 'CONVERGE-CORRECTED'] as const) {
+      const notes = notesOn(['11', pms[4]!]);
+      applyRandomMode(notes, pms, mode, last, { ruleset: 'beatoraja', playVariant: '9' });
+      expect(
+        channelsOf(notes).every((lane) => pms.includes(lane)),
+        mode,
+      ).toBe(true);
+      expect(() => applyRandomMode(notesOn(KEYS_7), KEYS_1P, mode, last, { playVariant: '7' })).toThrow(/nine-key/);
+    }
+    // beatoraja's S-RANDOM never leaves the keys.
+    const beatoraja = notesOn(['11']);
+    applyRandomMode(beatoraja, pms, 'beatoraja:S-RANDOM', last, { playVariant: '9' });
+    expect(pms).toContain(channelsOf(beatoraja)[0]);
+  });
+
   test('beatoraja CONVERGE stays a PMS arrangement under every ruleset', () => {
     expect(() =>
       applyRandomMode(notesOn(KEYS_7), KEYS_1P, 'beatoraja:CONVERGE', seededRandom(1), {

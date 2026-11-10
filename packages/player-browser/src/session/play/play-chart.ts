@@ -994,6 +994,8 @@ export function applyRandomMode(
     throw new RangeError('LR2 SCATTER requires a five-, seven- or nine-key domain.');
   if (mode === 'SCATTER-CORRECTED' && options.playVariant !== '9')
     throw new RangeError('Corrected SCATTER is a nine-key arrangement.');
+  if ((mode === 'S-RANDOM-CORRECTED' || mode === 'CONVERGE-CORRECTED') && options.playVariant !== '9')
+    throw new RangeError(`${mode} is a nine-key arrangement.`);
   if (mode === 'CONVERGE' && source === '____') throw new RangeError('CONVERGE is unavailable for this ruleset.');
   if (mode === 'CONVERGE' && source === 'beatoraja' && options.playVariant !== '9')
     throw new RangeError('beatoraja CONVERGE is a PMS arrangement.');
@@ -1006,6 +1008,8 @@ export function applyRandomMode(
     mode === 'S-RANDOM' ||
     mode === 'SCATTER' ||
     mode === 'SCATTER-CORRECTED' ||
+    mode === 'S-RANDOM-CORRECTED' ||
+    mode === 'CONVERGE-CORRECTED' ||
     mode === 'S-RANDOM-EX' ||
     mode === 'SPIRAL' ||
     mode === 'H-RANDOM' ||
@@ -1069,8 +1073,8 @@ export function applyRandomMode(
                     doublePlay: options.doublePlay,
                     side: options.side,
                   })
-                : mode === 'CONVERGE'
-                  ? source === 'beatoraja'
+                : mode === 'CONVERGE' || mode === 'CONVERGE-CORRECTED'
+                  ? mode === 'CONVERGE' && source === 'beatoraja'
                     ? randomizePMSConvergeNotes(timedNotes, allLanes, {
                         random: rng,
                         thresholdBPM: options.hRandomThresholdBPM,
@@ -1079,6 +1083,8 @@ export function applyRandomMode(
                         target: allLanes[(options.fixedLane ?? 0) - 1] ?? options.scratch ?? allLanes[4]!,
                         scratch: options.scratch,
                         random: rng,
+                        // LR2's nine-key draw reaches the 2P scratch; the corrected option keeps to the nine keys.
+                        ...(mode === 'CONVERGE' && options.playVariant === '9' ? { outside: '26' } : {}),
                       })
                   : mode === 'SPIRAL'
                     ? randomizeSpiralNotes(timedNotes, allLanes, rng)
@@ -1088,9 +1094,13 @@ export function applyRandomMode(
                           thresholdBPM: options.hRandomThresholdBPM,
                         })
                       : randomizeSRandomNotes(timedNotes, allLanes, {
-                          ruleset: source,
+                          ruleset: mode === 'S-RANDOM-CORRECTED' ? 'lr2' : source,
                           random: rng,
                           ...(options.playVariant === '9' ? { mode: 'pms' as const } : {}),
+                          // LR2's nine-key draw reaches the 2P scratch; the corrected option keeps to the nine keys.
+                          ...(mode === 'S-RANDOM' && source !== 'beatoraja' && options.playVariant === '9'
+                            ? { outside: '26' }
+                            : {}),
                         });
     entries.forEach(({ note }, index) => {
       note.channel = channels[index]!;

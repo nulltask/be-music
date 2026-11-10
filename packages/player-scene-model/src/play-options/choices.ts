@@ -121,6 +121,7 @@ export function resolveRandomModes(ruleset: RulesetId, duplicatedBattle1P = fals
     'RANDOM',
     'R-RANDOM',
     ...sourcesFirst('S-RANDOM', ['lr2', 'beatoraja'], ruleset),
+    'S-RANDOM-CORRECTED',
     'SPIRAL',
     'H-RANDOM',
     'ALL-SCR',
@@ -131,6 +132,7 @@ export function resolveRandomModes(ruleset: RulesetId, duplicatedBattle1P = fals
     'SCATTER',
     'SCATTER-CORRECTED',
     ...sourcesFirst('CONVERGE', ['lr2', 'beatoraja'], ruleset),
+    'CONVERGE-CORRECTED',
     ...(duplicatedBattle1P ? (['SYNCHRONIZE-RANDOM', 'SYMMETRY-RANDOM'] as const) : []),
   ];
 }

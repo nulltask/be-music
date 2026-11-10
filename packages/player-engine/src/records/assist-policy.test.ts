@@ -76,6 +76,14 @@ describe('classifyReplayAssists', () => {
     ],
     ['SCATTER', { randomLane: { p1: 'SCATTER' } }, {}, 'SCATTER', 'lr2', 'light'],
     ['SCATTER (9KEY corrected)', { randomLane: { p2: 'SCATTER-CORRECTED' } }, {}, 'SCATTER-CORRECTED', 'lr2', 'light'],
+    [
+      'CONVERGE (9KEY corrected)',
+      { randomLane: { p1: 'CONVERGE-CORRECTED' } },
+      {},
+      'CONVERGE-CORRECTED',
+      'lr2',
+      'light',
+    ],
     ['LR2 CONVERGE', { randomLane: { p1: 'CONVERGE' }, judgeRuleset: 'lr2' }, {}, 'CONVERGE', 'lr2', 'light'],
     [
       'beatoraja CONVERGE',

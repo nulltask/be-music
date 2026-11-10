@@ -223,6 +223,7 @@ export interface PlayOptions {
    * - `CONVERGE` — LR2 selected-lane concentration, or beatoraja PMS streak-based concentration
    * - `SCATTER` — LR2 previous-row avoidance, with active-LN reservations
    * - `SCATTER-CORRECTED` — explicitly corrected 9KEY SCATTER, excluding LR2 beta3's tenth destination
+   * - `S-RANDOM-CORRECTED`, `CONVERGE-CORRECTED` — LR2's 9KEY S-RANDOM and CONVERGE without that tenth destination
    * - `SYNCHRONIZE-RANDOM` — That-Which-Must-Not-Be-Named BATTLE: one RANDOM draw, identical on both sides
    * - `SYMMETRY-RANDOM` — That-Which-Must-Not-Be-Named BATTLE: one RANDOM draw, mirrored on the 2P side
    *
@@ -283,6 +284,8 @@ export type RandomMode =
   | 'CONVERGE'
   | 'SCATTER'
   | 'SCATTER-CORRECTED'
+  | 'S-RANDOM-CORRECTED'
+  | 'CONVERGE-CORRECTED'
   | 'SYNCHRONIZE-RANDOM'
   | 'SYMMETRY-RANDOM';
 

@@ -34,6 +34,8 @@ const LANE_OPTION_SOURCES: Readonly<Record<string, RulesetId>> = {
   S_RANDOM_PLAYABLE: 'beatoraja',
   SCATTER: 'lr2',
   'SCATTER-CORRECTED': 'lr2',
+  'S-RANDOM-CORRECTED': 'lr2',
+  'CONVERGE-CORRECTED': 'lr2',
   'SYNCHRONIZE-RANDOM': '____',
   'SYMMETRY-RANDOM': '____',
 };
@@ -41,6 +43,8 @@ const LANE_OPTION_SOURCES: Readonly<Record<string, RulesetId>> = {
 /** How the Options dialog spells a lane option's name. */
 const LANE_OPTION_NAMES: Readonly<Record<string, string>> = {
   'SCATTER-CORRECTED': 'SCATTER 9KEY corrected',
+  'S-RANDOM-CORRECTED': 'S-RANDOM 9KEY corrected',
+  'CONVERGE-CORRECTED': 'CONVERGE 9KEY corrected',
   RANDOM_PLAYABLE: 'RANDOM PLAYABLE',
   S_RANDOM_PLAYABLE: 'S-RANDOM PLAYABLE',
   'SYNCHRONIZE-RANDOM': 'SYNCHRONIZE RANDOM',

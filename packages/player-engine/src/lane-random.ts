@@ -15,6 +15,12 @@ export interface SRandomOptions {
   random: () => number;
   /** beatoraja's ordinary PMS S-RANDOM uses S_RANDOM_NO_THRESHOLD. */
   mode?: 'pms';
+  /**
+   * LR2's nine-key S-RANDOM: one more destination outside the playfield. LR2 draws `startlane + GetRand(9)`, and the
+   * inclusive `GetRand` reaches raw lane 10, the 2P scratch (OpenLR2 `LR2f.cpp` L27354, L27372). A note placed there
+   * cannot be hit, as SCATTER's does.
+   */
+  outside?: string;
 }
 
 /**
@@ -154,7 +160,8 @@ function randomizeTimeBasedNotes(
     )
       rows.set(note.endTimeMs, []);
   });
-  if (options.ruleset !== 'beatoraja') return randomizeLR2Notes(notes, lanes, rows, channels, options.random);
+  if (options.ruleset !== 'beatoraja')
+    return randomizeLR2Notes(notes, lanes, rows, channels, options.random, options.outside);
   let scratchIndex = 0;
   const changeable = [...lanes];
   const assignable = [...lanes];
@@ -295,11 +302,13 @@ function randomizeLR2Notes(
   rows: ReadonlyMap<number, number[]>,
   channels: string[],
   random: () => number,
+  outside?: string,
 ): string[] {
   const held = new Map<string, { source: string; endMs: number }>();
+  const destinations = outside === undefined ? lanes : [...lanes, outside];
   for (const [timeMs, indices] of [...rows].sort(([left], [right]) => left - right)) {
     for (const [target, hold] of held) if (hold.endMs < timeMs) held.delete(target);
-    const free = lanes.filter((lane) => !held.has(lane));
+    const free = destinations.filter((lane) => !held.has(lane));
     const map = new Map<string, string>();
     const visible = indices
       .filter((index) => notes[index]!.kind !== 'invisible')
@@ -319,7 +328,7 @@ function randomizeLR2Notes(
       if (note.kind !== 'invisible') continue;
       let target = map.get(note.channel) ?? [...held].find(([, hold]) => hold.source === note.channel)?.[0];
       if (target === undefined) {
-        const candidates = free.length > 0 ? free : lanes.filter((lane) => !held.has(lane));
+        const candidates = free.length > 0 ? free : destinations.filter((lane) => !held.has(lane));
         target = candidates.length > 0 ? pickRandom(candidates, random) : note.channel;
         const position = free.indexOf(target);
         if (position >= 0) free.splice(position, 1);

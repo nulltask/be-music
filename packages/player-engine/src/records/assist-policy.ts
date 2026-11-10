@@ -59,8 +59,11 @@ const BEATORAJA_LIGHT_LANE_OPTIONS: ReadonlySet<string> = new Set([
   'S_RANDOM_PLAYABLE',
 ]);
 
-/** LR2's lane options that cap the lamp at EASY and save no score (OpenLR2 `LR2f.cpp` L9334, `random > 3`). */
-const LR2_LIGHT_LANE_OPTIONS: ReadonlySet<string> = new Set(['SCATTER', 'SCATTER-CORRECTED']);
+/**
+ * LR2's lane options that cap the lamp at EASY and save no score (OpenLR2 `LR2f.cpp` L9334, `random > 3`): SCATTER and
+ * the corrected nine-key CONVERGE (LR2's own CONVERGE is classified by its source below).
+ */
+const LR2_LIGHT_LANE_OPTIONS: ReadonlySet<string> = new Set(['SCATTER', 'SCATTER-CORRECTED', 'CONVERGE-CORRECTED']);
 
 /** Whether a selected option took `value` at any point of the play: at the start or in a later change. */
 function optionEverTook(
