@@ -631,6 +631,36 @@ test('a chart copied onto both sides takes the battle arrangements and two-playe
   expect(sides('2')).toEqual(sides('1').map((lane) => mirror[lane]));
 });
 
+test('LR2 two-player BATTLE gives 2P the mines only when both players pick the same lane option (#1086)', () => {
+  const withMines: LibraryChart = {
+    ...sp7,
+    id: 'sp7-mines',
+    chart: parseChart(
+      ['#BPM 120', '#PLAYER 1', '#00011:0101', '#00013:0101', '#001D2:0A00', '#001D5:000A'].join('\n'),
+      'bms',
+    ),
+  };
+  const mines = (options: ConstructorParameters<typeof PlaySession>[0]) =>
+    prepare({ judgeRuleset: 'lr2', battleMode: 'TWO-PLAYER', ...options }, withMines).mineNotes.map(
+      (mine) => mine.channel,
+    );
+  const same = mines({ random1P: 'MIRROR', random2P: 'MIRROR' });
+  expect(same.filter((lane) => lane.startsWith('2'))).toHaveLength(2);
+  // 2P takes 1P's arranged lanes, mines included.
+  expect(
+    same
+      .filter((lane) => lane.startsWith('2'))
+      .map((lane) => lane.slice(1))
+      .sort(),
+  ).toEqual(
+    same
+      .filter((lane) => lane.startsWith('1'))
+      .map((lane) => lane.slice(1))
+      .sort(),
+  );
+  expect(mines({ random1P: 'MIRROR', random2P: 'OFF' }).filter((lane) => lane.startsWith('2'))).toEqual([]);
+});
+
 test('a previous arrangement is reused only under the judge rules it was played with', () => {
   const original = prepare({ judgeRuleset: 'lr2', random1P: 'SPIRAL' }, sp7);
   const replay = createReplayRecorder({

@@ -275,6 +275,12 @@ export function preparePlaybackChart(
     chartNotes?: ChartNotesOption;
     /** The player's own lane keys (`LaneModeOptions.laneKeys`). */
     laneKeys?: LaneKeyOverrides;
+    /**
+     * LR2 two-player BATTLE (`TWO-PLAYER`) with the same lane option on both sides: LR2 copies the arranged 1P lanes to
+     * 2P, mines included (OpenLR2 `LR2f.cpp` L27473-L27492), so 2P gets the mines too. With different options LR2
+     * copies only the note cells at load time (L26244) and 2P gets none.
+     */
+    twoPlayerMines?: boolean;
   } = {},
   auxiliaryPlaybackEndSeconds = 0,
   random?: () => number,
@@ -370,7 +376,7 @@ export function preparePlaybackChart(
         // LR2 copies only 1x/3x/5x cells (D-BATTLE, BATTLE); That-Which-Must-Not-Be-Named gives both players one chart.
         duplicateMines: !(
           battleMode === 'D-BATTLE' ||
-          (battleMode === 'TWO-PLAYER' && options.judgeRuleset !== '____')
+          (battleMode === 'TWO-PLAYER' && options.judgeRuleset !== '____' && options.twoPlayerMines !== true)
         ),
         backgroundScratch: battleMode === 'BATTLE-AS' || (battleMode === 'D-BATTLE' && !dBattleScratch),
         backgroundMineSample: battleMode === 'D-BATTLE',

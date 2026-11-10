@@ -460,6 +460,13 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
           }
         : {}),
       chartNotes,
+      // LR2 copies 1P's arranged lanes to 2P, mines included, when both players pick the same lane option (#1086). A
+      // replay rebuilds its 2P mines only when it recorded them.
+      twoPlayerMines: arrangement
+        ? arrangement.chart.notes.some(
+            (note) => note.type === 'mine' && (note.sourceChannel ?? note.channel).startsWith('2'),
+          )
+        : (lanes.random1P ?? 'OFF') === (lanes.random2P ?? 'OFF'),
     },
     0,
     Math.random,

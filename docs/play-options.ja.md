@@ -497,7 +497,7 @@ beatoraja の BATTLE（`doubleoption` 2）と AC の BATTLE は、地雷を含�
 
 ## 2 人プレイの BATTLE と COUPLE
 
-LR2 と beatoraja のルールでは **Play options → Battle → BATTLE (LR2)**、???? ルールでは **2P PLAY (????)** を選びます。どちらも 2 人プレイ（`TWO-PLAYER`）で、LR2 の BATTLE（`battle` 1）と AC の 2 人プレイに当たります。beatoraja には独自の 2 人プレイがないため、beatoraja ルールでは LR2 の BATTLE で譜面を作り、各プレイヤーを beatoraja の判定幅とゲージで判定します。あわせて表示する **Gauge 2P** で、**Gauge** と同じ選択肢から 2P 側のプレイヤーのゲージを選びます。5KEY・7KEY の譜面では各プレイヤーに譜面の複製を渡します。LR2 は 1x・3x・5x のセルを（beatoraja ルールでも同じ）、AC は地雷を含む譜面全体を複製します。両プレイヤーが同じレーンオプションを選んだ場合、2P 側は 1P 側と同じ配置で遊びます。LR2 と beatoraja のルールの 10KEY・14KEY の譜面は COUPLE になり、各プレイヤーが譜面の片側をそのまま遊びます。コースでは 1 人でプレイします。
+LR2 と beatoraja のルールでは **Play options → Battle → BATTLE (LR2)**、???? ルールでは **2P PLAY (????)** を選びます。どちらも 2 人プレイ（`TWO-PLAYER`）で、LR2 の BATTLE（`battle` 1）と AC の 2 人プレイに当たります。beatoraja には独自の 2 人プレイがないため、beatoraja ルールでは LR2 の BATTLE で譜面を作り、各プレイヤーを beatoraja の判定幅とゲージで判定します。あわせて表示する **Gauge 2P** で、**Gauge** と同じ選択肢から 2P 側のプレイヤーのゲージを選びます。5KEY・7KEY の譜面では各プレイヤーに譜面の複製を渡します。LR2 は 1x・3x・5x のセルを（beatoraja ルールでも同じ）、AC は地雷を含む譜面全体を複製します。両プレイヤーが同じレーンオプションを選んだ場合、2P 側は 1P 側と同じ配置で遊びます。LR2 の作り方ではこのとき 1P 側の地雷も 2P 側へ写します（LR2 は配置後のレーンを地雷ごと写すため、[L27473-L27492](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27473-L27492)）。LR2 と beatoraja のルールの 10KEY・14KEY の譜面は COUPLE になり、各プレイヤーが譜面の片側をそのまま遊びます。コースでは 1 人でプレイします。
 
 各プレイヤーは自分の側とキーで判定し、判定数・コンボ・スコア・TOTAL・ゲージをそれぞれ持ちます。譜面とその時計、音声は共有します。両プレイヤーがノートを終えるか、両方がプレイを終了するゲージで失敗するとプレイを終えます（LR2 は両プレイヤーの失敗で停止します）。リプレイには `play.battleMode: "TWO-PLAYER"` と `play.gauge2P` を記録します。`results.native` が 1P、`results.secondPlayer` が 2P の結果で、空 POOR もそれぞれの値です。2 人プレイの結果は自己ベストに記録せず、Leaderboard にも送信しません。リプレイは保存します。
 
