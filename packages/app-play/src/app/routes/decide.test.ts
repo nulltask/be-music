@@ -175,6 +175,7 @@ async function harness(options: { decideFamily?: Family | null; playFamily?: Fam
     lastPlay: vi.fn<DecideRouteDeps['lastPlay']>(() => undefined),
     recordingDeps: () => recording,
     setRecordingFilenameBase: vi.fn<DecideRouteDeps['setRecordingFilenameBase']>(),
+    showChartDiagnostics: vi.fn(),
     setStatus: vi.fn<DecideRouteDeps['setStatus']>(),
     setPlayStatus: vi.fn<DecideRouteDeps['setPlayStatus']>(),
     lockReplayOptionsForPlay: vi.fn<DecideRouteDeps['lockReplayOptionsForPlay']>(),
@@ -416,7 +417,9 @@ describe('DecideRoute: a course’s decide screen, and none at all', () => {
 describe('DecideRoute: the other families', () => {
   test('the LR2 screen plays no jingle of its own either', async () => {
     const h = await harness({ decideFamily: 'lr2' });
-    await h.route.showDecide(chartEntry('a'));
+    const chart = chartEntry('a');
+    await h.route.showDecide(chart);
+    expect(h.deps.showChartDiagnostics).toHaveBeenCalledWith(RESOLVED.chart, chart.chartPath);
     expect(h.decides[0]!.options.sounds).toEqual({});
     expect(h.deps.setStatus).not.toHaveBeenCalled();
   });

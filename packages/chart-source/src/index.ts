@@ -396,9 +396,32 @@ export interface BeMusicPreservation {
   bmson: BmsonPreservation;
 }
 
+/** A warning about input the chart reader or resolver recovered from. */
+export interface ChartDiagnostic {
+  readonly code:
+    | 'legacy-bmson'
+    | 'unknown-mode-hint'
+    | 'stacked-note-length'
+    | 'missing-reference'
+    | 'unsupported-option'
+    | 'invalid-option';
+  readonly message: string;
+  readonly subject?: string;
+  readonly position:
+    | { readonly kind: 'field'; readonly path: string }
+    | {
+        readonly kind: 'object';
+        readonly measure: number;
+        readonly position: BeMusicPosition;
+        readonly channel: string;
+      };
+}
+
 export interface BeMusicJSON {
   format: typeof BMS_JSON_FORMAT;
   sourceFormat: BeMusicSourceFormat;
+  /** Warnings from reading the original input, when available. */
+  diagnostics?: readonly ChartDiagnostic[];
   metadata: BeMusicMetadata;
   resources: BMSResources;
   measures: BeMusicMeasure[];
@@ -516,6 +539,7 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
   return {
     format: json.format,
     sourceFormat: json.sourceFormat,
+    ...(json.diagnostics === undefined ? {} : { diagnostics: json.diagnostics }),
     metadata: {
       ...json.metadata,
       extras: { ...json.metadata.extras },

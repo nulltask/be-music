@@ -1,3 +1,4 @@
+import { createChartDiagnosticsPanel } from '../ui/chart-diagnostics.ts';
 import { promptRandomMixConditions } from '../ui/random-mix-dialog.ts';
 import { promptRandomMixSave } from '../ui/random-mix-save-dialog.ts';
 import { playerText } from '../player-copy.ts';
@@ -105,6 +106,9 @@ export class PlayerWebApp {
   private readonly fpsOverlay = createFpsOverlay(
     document.querySelector<HTMLElement>('#fps-overlay') ?? document.createElement('div'),
   );
+  private readonly chartDiagnostics = createChartDiagnosticsPanel(
+    document.querySelector<HTMLElement>('#chart-diagnostics') ?? document.createElement('div'),
+  );
   /** Mounting {@link sceneHost} on the page, started as the first scene shows (`mountStage`). */
   private stageMount: Promise<void> | undefined;
   /**
@@ -117,6 +121,7 @@ export class PlayerWebApp {
     host: {
       setScene: async (scene, role) => {
         await this.mountStage();
+        this.chartDiagnostics.show();
         await this.sceneHost.setScene(scene);
         // The quick options belong to choosing a chart and playing it.
         this.optionsDialog?.setQuickOptionsShown(role === 'select' || role === 'play');
@@ -468,6 +473,7 @@ export class PlayerWebApp {
       beatorajaSkinOptions: this.beatorajaSkinOptions,
       playStatusShown: () => this.status.playShown,
       setStatus: (text) => this.status.set(text),
+      showChartDiagnostics: (chart, path) => this.chartDiagnostics.show(chart, path),
       unlockReplayOptions: () => this.unlockReplayOptions(),
       rememberHiSpeed: (value, source) => this.playRoute.rememberHiSpeed(value, source),
       showDecide: (chartEntry, overrides) => this.decideRoute.showDecide(chartEntry, overrides),
@@ -511,6 +517,7 @@ export class PlayerWebApp {
       recordingDeps: () => this.recording.deps(),
       setRecordingFilenameBase: (base) => this.recording.setFilenameBase(base),
       setStatus: (text) => this.status.set(text),
+      showChartDiagnostics: (chart, path) => this.chartDiagnostics.show(chart, path),
       setPlayStatus: (text) => this.status.setPlay(text),
       lockReplayOptionsForPlay: (liveTempo, chartEntry) => this.lockReplayOptionsForPlay(liveTempo, chartEntry),
       showSelect: () => this.showSelect(),

@@ -202,6 +202,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     },
     beatorajaSkinOptions: { refreshBeatorajaSelectSkinOptions: vi.fn(), clear: vi.fn() },
     playStatusShown: vi.fn(() => false),
+    showChartDiagnostics: vi.fn(),
     setStatus: vi.fn<SelectRouteDeps['setStatus']>(),
     unlockReplayOptions: vi.fn<SelectRouteDeps['unlockReplayOptions']>(),
     rememberHiSpeed: vi.fn<SelectRouteDeps['rememberHiSpeed']>(),
@@ -508,6 +509,17 @@ describe('SelectRoute: dropping the screen for another skin system or LR2 theme'
 });
 
 describe('SelectRoute: what the screen tells the app', () => {
+  test('chart warnings follow focus and clear on non-chart entries', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    const { focus } = lastMade(h).options.on;
+    const chart = chartEntry('a');
+    focus?.({ kind: 'chart', chart });
+    expect(h.deps.showChartDiagnostics).toHaveBeenLastCalledWith(chart.chart, chart.chartPath);
+    focus?.(undefined);
+    expect(h.deps.showChartDiagnostics).toHaveBeenLastCalledWith(undefined, undefined);
+  });
+
   test('a chart started goes to its decide screen, with AUTO only from the skin’s AUTO', async () => {
     const h = harness();
     await h.route.showSelect();

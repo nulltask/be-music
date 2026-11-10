@@ -115,8 +115,11 @@ interface MutableNote {
  * long note wins over a tap, and otherwise the first note in event order (lowest object ID; for bmson, the first sound
  * channel) is kept. The others are returned in `shadowedNotes` when their keysound differs from the kept note's.
  */
-export function resolveJudgedNotes(context: ResolvedNoteContext): ResolvedNoteLists {
-  const { notes, shadowed } = resolveMutableJudgedNotes(context);
+export function resolveJudgedNotes(
+  context: ResolvedNoteContext,
+  droppedStackedNotes?: BeMusicEvent[],
+): ResolvedNoteLists {
+  const { notes, shadowed } = resolveMutableJudgedNotes(context, droppedStackedNotes);
   return {
     notes: notes.map((note) => freezeJudgedNote(note, context.idBase, context.json.sourceFormat === 'bmson')),
     shadowedNotes: shadowed.map((note) =>
@@ -136,7 +139,10 @@ export function resolveJudgedNoteEntries(context: ResolvedNoteContext): {
   return resolveMutableJudgedNotes(context);
 }
 
-function resolveMutableJudgedNotes(context: ResolvedNoteContext): { notes: MutableNote[]; shadowed: MutableNote[] } {
+function resolveMutableJudgedNotes(
+  context: ResolvedNoteContext,
+  droppedStackedNotes?: BeMusicEvent[],
+): { notes: MutableNote[]; shadowed: MutableNote[] } {
   const { json, timing, beatResolver } = context;
   const freeZoneActive = context.freeZone ?? variantUsesFreeZone(context.resolvePlayVariant());
   const bmsonResolution = json.sourceFormat === 'bmson' ? Math.max(1, json.bmson.info.resolution || 240) : undefined;
@@ -171,7 +177,7 @@ function resolveMutableJudgedNotes(context: ResolvedNoteContext): { notes: Mutab
   const withLNOBJ = applyLNOBJLongNotes(json, notes, timing, bmsLongNoteMode);
   appendLNTypeLongNotes(context, withLNOBJ, bmsLongNoteMode);
   withLNOBJ.sort(compareNotes);
-  const shadowed = collapseSamePositionNotes(withLNOBJ, json.sourceFormat === 'bmson');
+  const shadowed = collapseSamePositionNotes(withLNOBJ, json.sourceFormat === 'bmson', droppedStackedNotes);
   if (json.sourceFormat === 'bmson') {
     const endSounds = new Map<string, BeMusicEvent>();
     const endKey = (channel: string, beat: number): string => `${channel}:${Math.round(beat * bmsonResolution!)}`;
@@ -326,7 +332,11 @@ function freezeJudgedNote(note: MutableNote, idBase: 36 | 62, allowLongKeys: boo
  * first in sort order wins: beatoraja keeps the later line of a BMS file, but the IR no longer records line order, so
  * the lowest object ID stands in; for bmson this is the first sound channel, which is the note beatoraja judges.
  */
-function collapseSamePositionNotes(notes: MutableNote[], layered: boolean): MutableNote[] {
+function collapseSamePositionNotes(
+  notes: MutableNote[],
+  layered: boolean,
+  droppedStackedNotes?: BeMusicEvent[],
+): MutableNote[] {
   const shadowed: MutableNote[] = [];
   let writeIndex = 0;
   let groupStart = 0;
@@ -361,7 +371,8 @@ function collapseSamePositionNotes(notes: MutableNote[], layered: boolean): Muta
       const events = new Map<string, BeMusicEvent>();
       for (let index = groupStart; index < groupEnd; index += 1) {
         const note = notes[index]!;
-        if (note.endBeat === kept.endBeat && !events.has(note.event.value)) events.set(note.event.value, note.event);
+        if (note.endBeat !== kept.endBeat) droppedStackedNotes?.push(note.event);
+        else if (!events.has(note.event.value)) events.set(note.event.value, note.event);
       }
       kept.soundEvents = [...events.values()];
     }
