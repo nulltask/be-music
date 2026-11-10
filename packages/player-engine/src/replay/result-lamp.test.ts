@@ -54,7 +54,7 @@ describe('resolveRulesetResultLamp', () => {
     ['EX-HARD', 'beatoraja', 'EX_HARD'],
     ['DEATH', 'lr2', 'NORMAL'],
     ['DEATH', 'beatoraja', 'EX_HARD'],
-    ['HAZARD', 'beatoraja', 'EX_HARD'],
+    ['HAZARD', 'beatoraja', 'FULL_COMBO'],
     ['SOMETHING-NEW', 'lr2', 'NORMAL'],
   ] as const)('a cleared %s gauge under %s gives lamp %s', (type, ruleset, lamp) => {
     expect(resolveRulesetResultLamp(result({ type, cleared: true }), ruleset)).toBe(lamp);

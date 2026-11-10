@@ -139,11 +139,22 @@ describe('resolveClearLamp under a ruleset', () => {
     expect(resolveClearLamp({ cleared: true, score: max })).toBe('MAX');
   });
 
+  it('uses HAZARD’s gauge lamp only after failure and full-combo checks under beatoraja', () => {
+    const hazard = { gauge: 'HAZARD', ruleset: 'beatoraja' } as const;
+    const max = score(100, 0, 0);
+    expect(resolveClearLamp({ ...hazard, cleared: false, score: max })).toBe('FAILED');
+    expect(resolveClearLamp({ ...hazard, cleared: true, score: max })).toBe('MAX');
+    expect(resolveClearLamp({ ...hazard, cleared: true, score: score(90, 10, 0) })).toBe('PERFECT');
+    expect(resolveClearLamp({ ...hazard, cleared: true, score: { ...max, fullCombo: false } })).toBe('FULL_COMBO');
+  });
+
   it('a DEATH clear is NORMAL under LR2 only', () => {
     const missed = score(90, 0, 0);
     expect(resolveClearLamp({ cleared: true, score: missed, gauge: 'DEATH', ruleset: 'lr2' })).toBe('NORMAL');
     expect(resolveClearLamp({ cleared: true, score: missed, gauge: 'DEATH', ruleset: 'beatoraja' })).toBe('EX_HARD');
-    expect(resolveClearLamp({ cleared: true, score: missed, gauge: 'HAZARD', ruleset: 'beatoraja' })).toBe('EX_HARD');
+    expect(resolveClearLamp({ cleared: true, score: missed, gauge: 'HAZARD', ruleset: 'beatoraja' })).toBe(
+      'FULL_COMBO',
+    );
     expect(resolveClearLamp({ cleared: true, score: missed, gauge: 'HARD', ruleset: 'lr2' })).toBe('HARD');
   });
 });

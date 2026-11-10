@@ -30,8 +30,7 @@ export const LAMP_STYLES: Readonly<Record<number, { label: string; color: string
   [clearLampRank('FULL_COMBO')]: {
     label: 'FULL COMBO',
     color: '#22d3ee',
-    meaning:
-      'No BAD and no missed POOR (empty POORs do not count). The top lamp under LR2 and That-Which-Must-Not-Be-Named.',
+    meaning: en.lampMeanings[7],
   },
   [clearLampRank('PERFECT')]: {
     label: 'PERFECT',
