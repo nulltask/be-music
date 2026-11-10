@@ -679,6 +679,8 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 
 ゲージ更新後の値は、現在の gauge type の min/max range に clamp します。
 
+Be-Music はゲージを倍精度で計算します。beatoraja はゲージ値を単精度で扱い、LR2 は GROOVE のノート1つあたりの回復量を単精度で計算します。ゲージが閾値に近いと、丸めの違いでクリア判定が変わることがあります。[beatoraja GrooveGauge](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GrooveGauge.java#L176-L240) · [OpenLR2 の回復量の計算](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27658-L27660)
+
 `HARD` / `EASY` の variant は LR2 の値（beatoraja `GaugeProperty` の `HARD_LR2` / `EASY_LR2`）に合わせます。`DEATH` は beatoraja の `HAZARD_LR2` ではなく LR2 本体（OpenLR2 `LR2f.cpp` L27673-L27680、LR2body.exe `ParseBMSFile`）に合わせます。
 
 - `HARD`: 回復 `PGREAT/GREAT +0.1` / `GOOD +0.05`（TOTAL 非依存）、減少 `BAD -6` / `見逃しPOOR -10` / `空POOR -2`。減少には lr2oraja の `MODIFY_DAMAGE`、つまり `#TOTAL` の係数（`TOTAL ≥240` で `×1.0` から `<112` で `×10` まで）とノーツ数の係数（20 ノーツ以下で `×10` から 1000 ノーツ以上で `×1.0` まで）の大きい方を掛け、ゲージが `32%` 未満のときはさらに `×0.6` に緩和します（lr2oraja は比較前にゲージを偶数パーセントへ切り捨てるため、
