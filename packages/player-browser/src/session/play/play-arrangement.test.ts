@@ -458,7 +458,8 @@ test('SP TO DP replay restores source variant and source assists before DP FLIP 
     entry,
   );
   expect(original.chartPlayVariant).toBe('14');
-  expect(original.notes.map((note) => note.channel)).toEqual(expect.arrayContaining(['29', '15', '16']));
+  // LR2 decides DP FLIP on the source key mode, so the doubled SP chart is not flipped (#1084).
+  expect(original.notes.map((note) => note.channel)).toEqual(expect.arrayContaining(['19', '25', '26']));
   const replay = parseReplay(
     serializeReplay(
       createReplayRecorder({
@@ -747,4 +748,25 @@ test('header COUPLE follows branch draws while old replay and explicit OFF keep 
     expect(restored.preparedChart!.battleMode).toBe('OFF');
     expect(restored.secondPlayer).toBeUndefined();
   }
+});
+
+test('DP FLIP follows LR2: SP TO DP never flips, DP-TO-SP flips onto 2P unless corrected (#1084)', () => {
+  const dp: LibraryChart = {
+    ...chart,
+    id: 'dp14',
+    chart: parseChart(
+      ['#BPM 120', '#PLAYER 3', '#00111:01', '#00113:0001', '#00122:01', '#00129:0001'].join('\n'),
+      'bms',
+    ),
+  };
+  const merged = (battleMode: 'SP-TO-DP' | 'SP-TO-DP-CORRECTED', dpFlip: boolean) =>
+    prepare({ judgeRuleset: 'lr2', battleMode, dpFlip }, dp).notes.map((note) => note.channel[0]);
+  // DP-TO-SP merges onto 1P; LR2's DP FLIP then moves every note to the 2P side, where an SP play cannot reach it.
+  expect(merged('SP-TO-DP', false).every((side) => side === '1')).toBe(true);
+  expect(merged('SP-TO-DP', true).every((side) => side === '2')).toBe(true);
+  expect(merged('SP-TO-DP-CORRECTED', true).every((side) => side === '1')).toBe(true);
+  // SP TO DP: the doubled chart is the same with or without DP FLIP.
+  const doubled = (dpFlip: boolean) =>
+    prepare({ judgeRuleset: 'lr2', battleMode: 'SP-TO-DP', dpFlip }, sp7).notes.map((note) => note.channel);
+  expect(doubled(true)).toEqual(doubled(false));
 });

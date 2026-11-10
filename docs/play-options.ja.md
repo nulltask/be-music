@@ -463,6 +463,8 @@ beatoraja ルールでは、Options ダイアログ の **LN MODE (beatoraja)** 
 
 10KEY・14KEY の譜面では同じ選択肢が DP-TO-SP になり、2P 側のノートをすべて 1P 側へ移します。移動先は元のレーンか、ほかのノートから半拍（125 ms 以上）離せる最も近いレーンです。9KEY の譜面では 9-TO-7 になり、小節ごとに 9 レーンを 7 鍵盤に畳みます。どちらも空きレーンのないノートは背景音にし、ロングノートの終点は移動した始点に合わせます。LR2 はコースで SP TO DP を適用せず、24/48KEY のモードもないため、これらのプレイは変化しません。LR2 と同様にプレイのテンポでノートの時刻を読むため、テンポも変換の入力です。
 
+LR2 は DP FLIP を譜面自身の鍵盤数で判定し（[L27318](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27318)）、Be-Music もこれに従います。SP TO DP では複製した譜面を FLIP しません。DP-TO-SP では DP FLIP が 1P 側にまとめたノートをすべて 2P 側へ移し、シングルのレーンからは叩けなくなります。これは LR2 のバグとみられます。**SP TO DP corrected (LR2)**（`SP-TO-DP-CORRECTED`）は DP-TO-SP を FLIP せず、それ以外は SP TO DP と同じです。リプレイには `SP-TO-DP` として記録し、FLIP の有無は譜面のノートに残ります（[#1084](https://github.com/nulltask/be-music/issues/1084)）。
+
 エンジンと描画は変換後の譜面を使います。リプレイには実効的な `play.battleMode`（適用できない譜面では `OFF`）を、`battleSourceVariant`、振り分けに使ったテンポ（`battleTempo`）、考慮した左右の AUTO SCRATCH（`battleAssist1P` / `battleAssist2P`）、変更・除去したオブジェクト数とともに記録します。リプレイの譜面には変換後のノートとレーンモードを保存し、選択した値はオプション一式に残ります。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
 参照元：OpenLR2 の [`SPtoDP`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25553)、[`DPsplit`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L24753)、[`DPtoSP` と `PMStoSP`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25091-L25450)。対応 Issue は [#706](https://github.com/nulltask/be-music/issues/706) です。

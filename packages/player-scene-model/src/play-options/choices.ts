@@ -281,6 +281,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
     'AUTO',
     'COUPLE',
     'SP-TO-DP',
+    'SP-TO-DP-CORRECTED',
     'D-BATTLE',
     'beatoraja:BATTLE',
     '____:BATTLE',

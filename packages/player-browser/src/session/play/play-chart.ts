@@ -506,7 +506,22 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     const battleDuplicated = isDuplicatedBattle(prepared.battleMode ?? 'OFF');
     // A chart that copied itself onto the 2P side (#932) authored both sides, so DP FLIP leaves them too.
     const chartCopied = prepared.chartNotes === 'COPY' || prepared.chartNotes === 'DBLCOPY';
-    if (ctx.options.dpFlip && !battleDuplicated && !chartCopied && ['10', '14', '48'].includes(playVariant)) {
+    // LR2 decides DP FLIP on the source chart's key mode (OpenLR2 `LR2f.cpp` L27318): SP TO DP never flips its doubled
+    // chart, and a DP-TO-SP merge flips every note onto the 2P side, out of reach. The corrected SP TO DP leaves the
+    // merge unflipped (#1084).
+    const flipVariant =
+      prepared.battleMode === 'SP-TO-DP'
+        ? ctx.options.battleMode === 'SP-TO-DP-CORRECTED'
+          ? undefined
+          : prepared.battleSourceVariant
+        : playVariant;
+    const dpFlipped =
+      ctx.options.dpFlip === true &&
+      !battleDuplicated &&
+      !chartCopied &&
+      flipVariant !== undefined &&
+      ['10', '14', '48'].includes(flipVariant);
+    if (dpFlipped) {
       for (const note of ctx.notes) {
         note.channel = flipDPChannel(note.channel);
       }
@@ -578,7 +593,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
                 .map((lane) => lane.channel),
         doublePlay: playVariant === '10' || playVariant === '14' || playVariant === '48',
         side: '1P',
-        flipped: ctx.options.dpFlip && !battleDuplicated && !chartCopied && ['10', '14', '48'].includes(playVariant),
+        flipped: dpFlipped,
         playVariant: playVariant,
       },
       ctx.mineNotes as Array<{ channel: string }>,
@@ -603,7 +618,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
                 .map((lane) => lane.channel),
         doublePlay: playVariant === '10' || playVariant === '14' || playVariant === '48',
         side: '2P',
-        flipped: ctx.options.dpFlip && !battleDuplicated && !chartCopied && ['10', '14', '48'].includes(playVariant),
+        flipped: dpFlipped,
         playVariant: playVariant,
       },
       ctx.mineNotes as Array<{ channel: string }>,

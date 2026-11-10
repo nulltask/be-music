@@ -1,3 +1,4 @@
+import { isSPToDPBattleMode } from '@be-music/player-engine/lanes';
 import { LR2_GAUGE_TYPES, optionValueName, type GaugeType } from '@be-music/player-engine/ruleset';
 import {
   BGA_CYCLE,
@@ -74,6 +75,7 @@ function battleLabel(battle: PlayOptions['battleMode'], keyModeOp: number | unde
       // label is its own BATTLE (ADR 0019).
       return double || nine ? 'DISABLE' : 'BATTLE';
     case 'SP-TO-DP':
+    case 'SP-TO-DP-CORRECTED':
       return double ? 'DP-TO-SP' : nine ? '9-TO-7' : 'SP-TO-DP';
     default:
       return 'OFF';
@@ -88,7 +90,7 @@ function battleLabel(battle: PlayOptions['battleMode'], keyModeOp: number | unde
 export function resolveLR2BattleOps(options: Partial<Pick<PlayOptions, 'keysFilter' | 'battleMode'>>): number[] {
   const doubleFilter = options.keysFilter === 'KEYS_10' || options.keysFilter === 'KEYS_14';
   const battle = options.battleMode === 'TWO-PLAYER' || options.battleMode === 'COUPLE';
-  const doubleBattle = options.battleMode === 'D-BATTLE' || options.battleMode === 'SP-TO-DP';
+  const doubleBattle = options.battleMode === 'D-BATTLE' || isSPToDPBattleMode(options.battleMode);
   const ops: number[] = [];
   if (doubleFilter || doubleBattle) ops.push(LR2_OP.DOUBLE);
   if (battle) ops.push(LR2_OP.BATTLE, LR2_OP.GHOST_BATTLE_OR_BATTLE);

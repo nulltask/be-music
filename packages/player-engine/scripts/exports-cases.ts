@@ -83,6 +83,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       lanesAPI.isOnePlayerBattleMode('beatoraja:BATTLE');
     },
   });
+  define('player-engine.lanes.isSPToDPBattleMode', {
+    run() {
+      lanesAPI.isSPToDPBattleMode('SP-TO-DP-CORRECTED');
+    },
+  });
   define('player-engine.lanes.resolveEffectiveBattleMode', {
     run: () => {
       lanesAPI.resolveEffectiveBattleMode('AUTO', 'lr2', '14', false, 2);

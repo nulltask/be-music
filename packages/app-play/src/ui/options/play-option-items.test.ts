@@ -90,6 +90,7 @@ test('battle modes carry their source and two-player play is offered under every
     'COUPLE (LR2)',
     'D-BATTLE (LR2)',
     'SP TO DP (LR2)',
+    'SP TO DP corrected (LR2)',
     'BATTLE (beatoraja)',
     'BATTLE AS (beatoraja)',
     'BATTLE (????)',

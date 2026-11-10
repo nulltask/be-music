@@ -108,6 +108,7 @@ export function battleModeItems(ruleset: RulesetId): PlayOptionItem<PlayOptions[
       ...(ruleset === 'lr2' ? [{ text: 'COUPLE (LR2)', value: 'COUPLE' as const }] : []),
       { text: 'D-BATTLE (LR2)', value: 'D-BATTLE' },
       { text: 'SP TO DP (LR2)', value: 'SP-TO-DP' },
+      { text: 'SP TO DP corrected (LR2)', value: 'SP-TO-DP-CORRECTED' },
     ],
     beatoraja: [
       { text: 'BATTLE (beatoraja)', value: 'beatoraja:BATTLE' },

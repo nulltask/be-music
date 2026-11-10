@@ -1,5 +1,5 @@
 import { type ChartPlayVariant, resolveChartPlayVariant } from '@be-music/chart-model';
-import { resolveEffectiveBattleMode, type BattleMode } from '@be-music/player-engine/lanes';
+import { isSPToDPBattleMode, resolveEffectiveBattleMode, type BattleMode } from '@be-music/player-engine/lanes';
 import { normalizePath } from '@be-music/shared-utils/core';
 import { extractDxaArchivesAsFlatFiles } from './dxa.ts';
 import { asLoadedBytes, readFilesIntoBytesMap, type LR2SkinFileEntry } from './file-lookup.ts';
@@ -545,6 +545,7 @@ export function pickLR2PlaySkin(
 const BATTLE_PLAY_VARIANTS: Partial<Record<BattleMode, Partial<Record<ChartPlayVariant, ChartPlayVariant>>>> = {
   COUPLE: { '5': '10', '7': '14' },
   'SP-TO-DP': { '5': '10', '7': '14', '9': '7', '10': '5', '14': '7' },
+  'SP-TO-DP-CORRECTED': { '5': '10', '7': '14', '9': '7', '10': '5', '14': '7' },
   'D-BATTLE': { '5': '10', '7': '14' },
   BATTLE: { '5': '10', '7': '14', '24': '48' },
   'BATTLE-AS': { '5': '10', '7': '14', '24': '48' },
@@ -562,7 +563,7 @@ function playSkinOrder(source: ChartPlayVariant, battle: LR2PlaySkinBattle | und
     const battleSkins: readonly LR2PlayVariant[] = source === '7' ? ['7-battle'] : ['5-battle', '7-battle'];
     return [...battleSkins, ...PLAY_SKIN_FALLBACKS[source === '7' ? '14' : '10']];
   }
-  const converted = mode === 'SP-TO-DP' && course ? undefined : BATTLE_PLAY_VARIANTS[mode]?.[source];
+  const converted = isSPToDPBattleMode(mode) && course ? undefined : BATTLE_PLAY_VARIANTS[mode]?.[source];
   return PLAY_SKIN_FALLBACKS[converted ?? source] ?? PLAY_SKIN_FALLBACKS['7'];
 }
 
