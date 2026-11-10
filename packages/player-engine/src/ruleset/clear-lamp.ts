@@ -116,6 +116,7 @@ const GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
   'G-ATTACK': 'HARD',
   'EX-HARD': 'EX_HARD',
   DEATH: 'EX_HARD',
+  'DEATH-CORRECTED': 'EX_HARD',
   HAZARD: 'EX_HARD',
 };
 
@@ -127,7 +128,7 @@ const GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
  */
 function gaugeClearLamp(gauge: string | undefined, ruleset: string | undefined): ClearLamp {
   const id = gauge?.toUpperCase();
-  if (ruleset === 'lr2' && id === 'DEATH') return 'NORMAL';
+  if (ruleset === 'lr2' && (id === 'DEATH' || id === 'DEATH-CORRECTED')) return 'NORMAL';
   return (id !== undefined ? GAUGE_LAMPS[id] : undefined) ?? 'NORMAL';
 }
 

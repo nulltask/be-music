@@ -130,6 +130,18 @@ describe('effective TOTAL', () => {
     expect(beatorajaDefault).toBe(260);
   });
 
+  test('LR2 keeps TOTAL in an int: #TOTAL and the default are truncated, below 1 is the default (#1081)', () => {
+    expect(resolveRuleset(facts({ total: 179.68 }), 'lr2').effectiveTotal).toBe(179);
+    expect(resolveRuleset(facts({ total: 0.5 }), 'lr2').effectiveTotal).toBe(176);
+    // 123 notes: (123 / 5 + 200) × 0.8 = 179.68, kept as 179.
+    expect(resolveLR2DefaultTotal(123)).toBeCloseTo(179.68, 9);
+    expect(
+      resolveRuleset(facts({ notes: { ...createEmptyRulesetNoteCounts(), normal: 123 } }), 'lr2').effectiveTotal,
+    ).toBe(179);
+    // The other rulesets keep the fraction.
+    expect(resolveRuleset(facts({ total: 179.68 }), 'beatoraja').effectiveTotal).toBe(179.68);
+  });
+
   for (const id of ['lr2', 'beatoraja', '____'] as const) {
     describe(id, () => {
       test('BMS #TOTAL is an absolute TOTAL', () => {
@@ -240,7 +252,12 @@ describe('ruleset chart-facts adapters agree', () => {
       const live = resolveRuleset(fromChart, id).effectiveTotal;
       expect(resolveRuleset(fromReplay, id).effectiveTotal).toBe(live);
       // 150 % of the ruleset's default for one note, never an absolute TOTAL 150.
-      const fallback = id === 'beatoraja' ? resolveBeatorajaDefaultTotal(1) : resolveLR2DefaultTotal(1);
+      const fallback =
+        id === 'beatoraja'
+          ? resolveBeatorajaDefaultTotal(1)
+          : id === 'lr2'
+            ? Math.trunc(resolveLR2DefaultTotal(1))
+            : resolveLR2DefaultTotal(1);
       expect(live).toBeCloseTo(fallback * 1.5, 9);
     }
   });
@@ -273,7 +290,7 @@ describe('beatoraja TOTAL counts charge tails', () => {
     expect(resolveRuleset(facts({ notes, sourceFormat: 'bmson', total: 150 }), 'beatoraja').effectiveTotal).toBe(
       resolveBeatorajaDefaultTotal(1000) * 1.5,
     );
-    expect(resolveRuleset(facts({ notes }), 'lr2').effectiveTotal).toBe(resolveLR2DefaultTotal(500));
+    expect(resolveRuleset(facts({ notes }), 'lr2').effectiveTotal).toBe(Math.trunc(resolveLR2DefaultTotal(500)));
   });
 });
 

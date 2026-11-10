@@ -293,7 +293,7 @@ export function buildPlayOptionsFolder(
         .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
     ),
   );
-  // LR2 reads the scratch key held through the decide animation; the Options dialog has no decide animation.
+  // LR2 keeps the scratch through a hidden command at decide (`randSC`, buttons 12 + 13); the dialog has a switch instead.
   this.dBattleScratchController = trackPlayOption(
     lanes
       .addBinding(this.guiState, 'dBattleScratch', { label: 'D-BATTLE scratch (LR2)' })

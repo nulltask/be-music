@@ -458,7 +458,8 @@ test('SP TO DP replay restores source variant and source assists before DP FLIP 
     entry,
   );
   expect(original.chartPlayVariant).toBe('14');
-  expect(original.notes.map((note) => note.channel)).toEqual(expect.arrayContaining(['29', '15', '16']));
+  // LR2 decides DP FLIP on the source key mode, so the doubled SP chart is not flipped (#1084).
+  expect(original.notes.map((note) => note.channel)).toEqual(expect.arrayContaining(['19', '25', '26']));
   const replay = parseReplay(
     serializeReplay(
       createReplayRecorder({
@@ -631,6 +632,36 @@ test('a chart copied onto both sides takes the battle arrangements and two-playe
   expect(sides('2')).toEqual(sides('1').map((lane) => mirror[lane]));
 });
 
+test('LR2 two-player BATTLE gives 2P the mines only when both players pick the same lane option (#1086)', () => {
+  const withMines: LibraryChart = {
+    ...sp7,
+    id: 'sp7-mines',
+    chart: parseChart(
+      ['#BPM 120', '#PLAYER 1', '#00011:0101', '#00013:0101', '#001D2:0A00', '#001D5:000A'].join('\n'),
+      'bms',
+    ),
+  };
+  const mines = (options: ConstructorParameters<typeof PlaySession>[0]) =>
+    prepare({ judgeRuleset: 'lr2', battleMode: 'TWO-PLAYER', ...options }, withMines).mineNotes.map(
+      (mine) => mine.channel,
+    );
+  const same = mines({ random1P: 'MIRROR', random2P: 'MIRROR' });
+  expect(same.filter((lane) => lane.startsWith('2'))).toHaveLength(2);
+  // 2P takes 1P's arranged lanes, mines included.
+  expect(
+    same
+      .filter((lane) => lane.startsWith('2'))
+      .map((lane) => lane.slice(1))
+      .sort(),
+  ).toEqual(
+    same
+      .filter((lane) => lane.startsWith('1'))
+      .map((lane) => lane.slice(1))
+      .sort(),
+  );
+  expect(mines({ random1P: 'MIRROR', random2P: 'OFF' }).filter((lane) => lane.startsWith('2'))).toEqual([]);
+});
+
 test('a previous arrangement is reused only under the judge rules it was played with', () => {
   const original = prepare({ judgeRuleset: 'lr2', random1P: 'SPIRAL' }, sp7);
   const replay = createReplayRecorder({
@@ -717,4 +748,25 @@ test('header COUPLE follows branch draws while old replay and explicit OFF keep 
     expect(restored.preparedChart!.battleMode).toBe('OFF');
     expect(restored.secondPlayer).toBeUndefined();
   }
+});
+
+test('DP FLIP follows LR2: SP TO DP never flips, DP-TO-SP flips onto 2P unless corrected (#1084)', () => {
+  const dp: LibraryChart = {
+    ...chart,
+    id: 'dp14',
+    chart: parseChart(
+      ['#BPM 120', '#PLAYER 3', '#00111:01', '#00113:0001', '#00122:01', '#00129:0001'].join('\n'),
+      'bms',
+    ),
+  };
+  const merged = (battleMode: 'SP-TO-DP' | 'SP-TO-DP-CORRECTED', dpFlip: boolean) =>
+    prepare({ judgeRuleset: 'lr2', battleMode, dpFlip }, dp).notes.map((note) => note.channel[0]);
+  // DP-TO-SP merges onto 1P; LR2's DP FLIP then moves every note to the 2P side, where an SP play cannot reach it.
+  expect(merged('SP-TO-DP', false).every((side) => side === '1')).toBe(true);
+  expect(merged('SP-TO-DP', true).every((side) => side === '2')).toBe(true);
+  expect(merged('SP-TO-DP-CORRECTED', true).every((side) => side === '1')).toBe(true);
+  // SP TO DP: the doubled chart is the same with or without DP FLIP.
+  const doubled = (dpFlip: boolean) =>
+    prepare({ judgeRuleset: 'lr2', battleMode: 'SP-TO-DP', dpFlip }, sp7).notes.map((note) => note.channel);
+  expect(doubled(true)).toEqual(doubled(false));
 });

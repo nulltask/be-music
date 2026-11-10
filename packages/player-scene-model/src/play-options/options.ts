@@ -145,7 +145,10 @@ export interface PlayOptions {
   sevenToNinePattern: import('@be-music/player-engine/lanes').SevenToNinePattern;
   sevenToNineType: import('@be-music/player-engine/lanes').SevenToNineType;
   battleMode: BattleMode;
-  /** LR2 D-BATTLE: hold the scratch key through the decide animation to keep scratch objects playable. */
+  /**
+   * LR2 D-BATTLE: keep scratch objects playable, as LR2's hidden `randSC` command does (a side's buttons 12 and 13 held
+   * together at decide, OpenLR2 `Main.cpp` L1242-L1247, `LR2f.cpp` L27432-L27438).
+   */
   dBattleScratch: boolean;
   /**
    * That-Which-Must-Not-Be-Named M-RAN per player (two-player play only): MIRROR applied after a RANDOM-type arrangement,
@@ -220,6 +223,8 @@ export interface PlayOptions {
    * - `CONVERGE` — LR2 selected-lane concentration, or beatoraja PMS streak-based concentration
    * - `SCATTER` — LR2 previous-row avoidance, with active-LN reservations
    * - `SCATTER-CORRECTED` — explicitly corrected 9KEY SCATTER, excluding LR2 beta3's tenth destination
+   * - `S-RANDOM-CORRECTED` — LR2's 9KEY S-RANDOM without that tenth destination
+   * - `CONVERGE-CORRECTED` — LR2's CONVERGE without the tenth destination and with the 2P target on the key picked
    * - `SYNCHRONIZE-RANDOM` — That-Which-Must-Not-Be-Named BATTLE: one RANDOM draw, identical on both sides
    * - `SYMMETRY-RANDOM` — That-Which-Must-Not-Be-Named BATTLE: one RANDOM draw, mirrored on the 2P side
    *
@@ -280,6 +285,8 @@ export type RandomMode =
   | 'CONVERGE'
   | 'SCATTER'
   | 'SCATTER-CORRECTED'
+  | 'S-RANDOM-CORRECTED'
+  | 'CONVERGE-CORRECTED'
   | 'SYNCHRONIZE-RANDOM'
   | 'SYMMETRY-RANDOM';
 

@@ -25,6 +25,9 @@ describe('resolveCourseGaugeId', () => {
     expect(resolveCourseGaugeId('lr2', 'expert', 'GROOVE')).toBe('COURSE');
     expect(resolveCourseGaugeId('lr2', 'nonstop', 'EASY')).toBe('COURSE-EASY');
     expect(resolveCourseGaugeId('lr2', 'expert', 'HARD')).toBe('COURSE-HARD');
+    // The corrected HAZARD plays the same course gauges as HAZARD: LR2's course check has no 80 border.
+    expect(resolveCourseGaugeId('lr2', 'grade', 'DEATH-CORRECTED')).toBe('GRADE-DEATH');
+    expect(resolveCourseGaugeId('beatoraja', 'grade', 'DEATH-CORRECTED')).toBe('EXHARDCLASS');
   });
 
   test('beatoraja and That-Which-Must-Not-Be-Named map the pick onto the class gauges whatever the course kind', () => {
@@ -101,6 +104,9 @@ describe('resolveCourseGauge', () => {
     expect(resolveDefaultCourseGaugeSet('9-key')).toBe('9k');
     expect(resolveDefaultCourseGaugeSet('24-key-sp')).toBe('24k');
     expect(resolveDefaultCourseGaugeSet('14-key-dp')).toBe('7k');
+    // A generic keyboard takes the KEYBOARD (24K) set, as its single play does (#1089).
+    expect(resolveDefaultCourseGaugeSet('12 KEY GENERIC')).toBe('24k');
+    expect(resolveDefaultCourseGaugeSet('16 KEY GENERIC')).toBe('24k');
   });
 
   test('the LR2 grade gauge softens damage below 32 % and pins at 0 below 2 %', () => {
@@ -162,6 +168,33 @@ describe('resolveRuleset with a course', () => {
     const damage = resolveLR2HardDamageMultiplier(stage.effectiveTotal, 100);
     expect(stage.gauge.id).toBe('GRADE-HARD');
     expect(stage.gauge.values[3]).toBeCloseTo(-6 * damage, 9);
+  });
+
+  test('LR2 holds a GROOVE or EASY pick at 2 % against mines on a course gauge, not other picks (#1082)', () => {
+    for (const [selectedGauge, kind] of [
+      ['GROOVE', 'grade'],
+      ['EASY', 'grade'],
+      ['GROOVE', 'expert'],
+      ['EASY', 'nonstop'],
+    ] as const) {
+      const stage = resolveRuleset(facts(), 'lr2', { selectedGauge, course: { kind, initialGauge: 5 } });
+      const gauge = new RulesetGauge(stage.gauge);
+      gauge.applyRawDelta(-10);
+      expect(gauge.value).toBe(2);
+      expect(gauge.cleared()).toBe(true);
+    }
+    for (const selectedGauge of ['HARD', 'G-ATTACK'] as const) {
+      const stage = resolveRuleset(facts(), 'lr2', { selectedGauge, course: { kind: 'grade', initialGauge: 5 } });
+      const gauge = new RulesetGauge(stage.gauge);
+      gauge.applyRawDelta(-10);
+      expect(gauge.value).toBe(0);
+    }
+    // A judgment still kills the gauge below the death border.
+    const groove = new RulesetGauge(
+      resolveRuleset(facts(), 'lr2', { selectedGauge: 'GROOVE', course: { kind: 'grade', initialGauge: 3 } }).gauge,
+    );
+    groove.applyJudge(4);
+    expect(groove.value).toBe(0);
   });
 
   test('LR2 constrains the #EXRANK timeline tables too', () => {

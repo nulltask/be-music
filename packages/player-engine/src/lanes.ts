@@ -97,6 +97,7 @@ export type { LR2ExtraLevel } from './core/lr2-extra-lanes.ts';
 
 export {
   isOnePlayerBattleMode,
+  isSPToDPBattleMode,
   resolveEffectiveBattleMode,
   type BattleMode,
   type EffectiveBattleMode,

@@ -403,9 +403,9 @@ describe('player', () => {
       tui: false,
     });
 
-    // LR2 `LR2_bmsload.cpp`: `(n / 5 + 200) * 0.8` below 400 notes — one note yields 160.16, not the flat 160 the
-    // engine used to assume. See `resolveLR2DefaultTotal`.
-    expect(summary.gauge?.effectiveTotal).toBeCloseTo(resolveLR2DefaultTotal(1), 9);
+    // LR2 `LR2_bmsload.cpp`: `(n / 5 + 200) * 0.8` below 400 notes — one note yields 160.16, which LR2 keeps in an int
+    // as 160 (#1081). See `resolveLR2DefaultTotal`.
+    expect(summary.gauge?.effectiveTotal).toBe(Math.trunc(resolveLR2DefaultTotal(1)));
     expect(summary.gauge?.current).toBe(100);
     expect(summary.gauge?.cleared).toBe(true);
   });

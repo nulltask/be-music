@@ -29,7 +29,12 @@ export function createPlaceholderGaugeState(
     };
   }
   const survival =
-    type === 'HARD' || type === 'DEATH' || type === 'EX-HARD' || type === 'P-ATTACK' || type === 'G-ATTACK';
+    type === 'HARD' ||
+    type === 'DEATH' ||
+    type === 'DEATH-CORRECTED' ||
+    type === 'EX-HARD' ||
+    type === 'P-ATTACK' ||
+    type === 'G-ATTACK';
   return {
     current: survival ? 100 : 20,
     max: 100,

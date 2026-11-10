@@ -80,7 +80,13 @@ export const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
 
 /** Source display spelling, without changing the recorded gauge identifier. */
 export function formatGaugeLabel(id: string | undefined): string | undefined {
-  return id === 'P-ATTACK' ? 'P.ATTACK' : id === 'G-ATTACK' ? 'G.ATTACK' : id;
+  return id === 'P-ATTACK'
+    ? 'P.ATTACK'
+    : id === 'G-ATTACK'
+      ? 'G.ATTACK'
+      : id === 'DEATH-CORRECTED'
+        ? 'DEATH corrected'
+        : id;
 }
 
 /**
@@ -121,6 +127,7 @@ export function resolveRandomModes(ruleset: RulesetId, duplicatedBattle1P = fals
     'RANDOM',
     'R-RANDOM',
     ...sourcesFirst('S-RANDOM', ['lr2', 'beatoraja'], ruleset),
+    'S-RANDOM-CORRECTED',
     'SPIRAL',
     'H-RANDOM',
     'ALL-SCR',
@@ -131,6 +138,7 @@ export function resolveRandomModes(ruleset: RulesetId, duplicatedBattle1P = fals
     'SCATTER',
     'SCATTER-CORRECTED',
     ...sourcesFirst('CONVERGE', ['lr2', 'beatoraja'], ruleset),
+    'CONVERGE-CORRECTED',
     ...(duplicatedBattle1P ? (['SYNCHRONIZE-RANDOM', 'SYMMETRY-RANDOM'] as const) : []),
   ];
 }
@@ -279,6 +287,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
     'AUTO',
     'COUPLE',
     'SP-TO-DP',
+    'SP-TO-DP-CORRECTED',
     'D-BATTLE',
     'beatoraja:BATTLE',
     '____:BATTLE',

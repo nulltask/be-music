@@ -104,7 +104,8 @@ export class RulesetGauge {
     this.fallback?.applyRawDelta(delta);
     if (this.dead) return;
     if (this.spec.recoveryDisabled === true && delta > 0) delta = 0;
-    this.set(this.value + delta);
+    const floor = this.spec.mineFloor;
+    this.set(delta < 0 && floor !== undefined ? Math.max(floor, this.value + delta) : this.value + delta);
     this.selectFallback();
   }
 
@@ -122,7 +123,7 @@ export class RulesetGauge {
 
   cleared(): boolean {
     if (this.spec.survival) {
-      return !this.failedMidPlay && this.value > 0;
+      return !this.failedMidPlay && this.value > 0 && this.value >= (this.spec.clearBorder ?? 0);
     }
     return this.value >= this.spec.border;
   }

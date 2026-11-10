@@ -276,7 +276,7 @@ export interface ReplayPlay {
   battleAssist2P?: boolean;
   battleChangedObjectCount?: number;
   battleDroppedObjectCount?: number;
-  /** LR2 D-BATTLE: scratch objects stayed playable (scratch key held through the decide animation). */
+  /** LR2 D-BATTLE: scratch objects stayed playable (LR2's hidden `randSC` command, buttons 12 + 13 at decide). */
   dBattleScratch?: boolean;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;

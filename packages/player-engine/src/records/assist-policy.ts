@@ -59,8 +59,11 @@ const BEATORAJA_LIGHT_LANE_OPTIONS: ReadonlySet<string> = new Set([
   'S_RANDOM_PLAYABLE',
 ]);
 
-/** LR2's lane options that cap the lamp at EASY and save no score (OpenLR2 `LR2f.cpp` L9334, `random > 3`). */
-const LR2_LIGHT_LANE_OPTIONS: ReadonlySet<string> = new Set(['SCATTER', 'SCATTER-CORRECTED']);
+/**
+ * LR2's lane options that cap the lamp at EASY and save no score (OpenLR2 `LR2f.cpp` L9334, `random > 3`): SCATTER and
+ * the corrected nine-key CONVERGE (LR2's own CONVERGE is classified by its source below).
+ */
+const LR2_LIGHT_LANE_OPTIONS: ReadonlySet<string> = new Set(['SCATTER', 'SCATTER-CORRECTED', 'CONVERGE-CORRECTED']);
 
 /** Whether a selected option took `value` at any point of the play: at the start or in a later change. */
 function optionEverTook(
@@ -153,9 +156,16 @@ export function classifyReplayAssists(replay: AssistReplay): AssistFinding[] {
 
   // A lane arrangement the chart forced (#844) is nanasigroove's, which has no assist class, and every play of the chart
   // gets it: it is not the player's assist, whatever lane value the host recorded for it.
+  // The 2P lane option arranges nothing on a chart without a 2P side, and beatoraja builds its 2P modifier only for a
+  // two-player mode (`BMSPlayer` L292), so it counts there only. LR2 caps the lamp for a 2P SCATTER or CONVERGE on any
+  // chart (`random > 3`, OpenLR2 `LR2f.cpp` L9334), so LR2's own 2P values always count (#1080).
   if (replay.chart?.chartPlayOptions?.options.random === undefined) {
     add(laneFinding(play.randomLane?.p1, playedRuleset));
-    add(laneFinding(play.randomLane?.p2, playedRuleset));
+    const secondSide = laneFinding(play.randomLane?.p2, playedRuleset);
+    // Without the chart's notes the side is unknown, so the option counts.
+    const notes = replay.chart?.notes;
+    if (secondSide !== undefined && (secondSide.source === 'lr2' || notes === undefined || hasSecondPlayerSide(notes)))
+      add(secondSide);
   }
 
   const battle = play.battleMode === undefined ? undefined : splitOptionSource(play.battleMode);

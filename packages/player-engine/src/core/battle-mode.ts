@@ -7,7 +7,9 @@ import { splitOptionSource, type QualifiedOptionValue } from '../ruleset/option-
  *
  * - `AUTO` — opt into BMS PLAYER 2/4 interpretation; never changes an explicit selection.
  * - `COUPLE` — two players keep authored sides, including an empty second side.
- * - `SP-TO-DP` — LR2 SP TO DP (`battle` 3)
+ * - `SP-TO-DP` — LR2 SP TO DP (`battle` 3). As in LR2, DP FLIP follows the source chart's key mode: it never flips a
+ *   chart SP TO DP doubled, and it moves every note of a chart DP-TO-SP merged onto the 2P side, out of reach
+ * - `SP-TO-DP-CORRECTED` — LR2 SP TO DP with DP FLIP left off a DP-TO-SP merge too; it plays as `SP-TO-DP` otherwise
  * - `D-BATTLE` — LR2 DOUBLE BATTLE (`battle` 2): one player, the SP chart on both sides
  * - `BATTLE` — beatoraja BATTLE (`doubleoption` 2) and That-Which-Must-Not-Be-Named DP BATTLE. The bare value is the judge
  *   ruleset's own; `beatoraja:BATTLE` and `____:BATTLE` keep their source under every ruleset (ADR 0019)
@@ -21,6 +23,7 @@ export type BattleMode =
   | 'COUPLE'
   | 'OFF'
   | 'SP-TO-DP'
+  | 'SP-TO-DP-CORRECTED'
   | 'D-BATTLE'
   | 'BATTLE'
   | QualifiedOptionValue<'BATTLE'>
@@ -32,8 +35,16 @@ export function isOnePlayerBattleMode(mode: string | undefined): boolean {
   return mode !== undefined && splitOptionSource(mode).name === 'BATTLE';
 }
 
-/** A resolved execution mode; AUTO is a source selection, never a recorded arrangement. */
-export type EffectiveBattleMode = Exclude<BattleMode, 'AUTO'>;
+/**
+ * A resolved execution mode; AUTO is a source selection, never a recorded arrangement, and the corrected SP TO DP
+ * builds the same chart as SP TO DP.
+ */
+export type EffectiveBattleMode = Exclude<BattleMode, 'AUTO' | 'SP-TO-DP-CORRECTED'>;
+
+/** Whether `mode` is LR2's SP TO DP, faithful or corrected. */
+export function isSPToDPBattleMode(mode: string | undefined): boolean {
+  return mode === 'SP-TO-DP' || mode === 'SP-TO-DP-CORRECTED';
+}
 
 /** The battle modes that copy one SP chart onto both sides. */
 export function isDuplicatedBattleMode(mode: BattleMode | undefined, sourceVariant?: ChartPlayVariant): boolean {
@@ -56,6 +67,7 @@ export function resolveEffectiveBattleMode(
     if (ruleset !== 'lr2') throw new RangeError('COUPLE is available only for LR2.');
     return !course && ['5', '7', '10', '14'].includes(sourceVariant) ? 'COUPLE' : 'OFF';
   }
+  if (selected === 'SP-TO-DP-CORRECTED') selected = 'SP-TO-DP';
   if (selected === 'OFF' || sourceVariant.startsWith('generic-')) return 'OFF';
   // SP TO DP, D-BATTLE (LR2) and BATTLE AS (beatoraja) build a chart and judge nothing themselves, so every judge ruleset
   // offers them (#774), each with its source's chart support.

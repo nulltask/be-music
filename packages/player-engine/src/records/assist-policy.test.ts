@@ -42,6 +42,16 @@ describe('classifyReplayAssists', () => {
     expect(classOf({ randomLane: { p1: 'SYNCHRONIZE-RANDOM' } })).toBe('none');
   });
 
+  test('a 2P lane option counts only on a chart with a 2P side, except LR2 own (#1080)', () => {
+    // beatoraja builds its 2P modifier only for a two-player mode; an SP chart arranges nothing on 2P.
+    for (const p2 of ['SPIRAL', 'H-RANDOM', 'ALL-SCR', 'RANDOM-EX', 'beatoraja:CONVERGE'])
+      expect(classOf({ randomLane: { p1: 'OFF', p2 } })).toBe('none');
+    expect(classOf({ randomLane: { p1: 'OFF', p2: 'SPIRAL' } }, { notes: [note('11'), note('21')] })).toBe('light');
+    // LR2 caps the lamp for a 2P SCATTER or CONVERGE on any chart (OpenLR2 L9334).
+    expect(classOf({ randomLane: { p1: 'OFF', p2: 'SCATTER' } })).toBe('light');
+    expect(classOf({ randomLane: { p1: 'OFF', p2: 'lr2:CONVERGE' } })).toBe('light');
+  });
+
   // Each option, classified by the rules of the source it comes from.
   test.each<[string, Partial<BeMusicReplay['play']>, Partial<AssistReplay['chart']>, string, string, string]>([
     ['LR2 AUTO SCRATCH', { autoScratch1P: true, judgeRuleset: 'lr2' }, {}, 'auto-scratch', 'lr2', 'light'],
@@ -66,6 +76,14 @@ describe('classifyReplayAssists', () => {
     ],
     ['SCATTER', { randomLane: { p1: 'SCATTER' } }, {}, 'SCATTER', 'lr2', 'light'],
     ['SCATTER (9KEY corrected)', { randomLane: { p2: 'SCATTER-CORRECTED' } }, {}, 'SCATTER-CORRECTED', 'lr2', 'light'],
+    [
+      'CONVERGE (9KEY corrected)',
+      { randomLane: { p1: 'CONVERGE-CORRECTED' } },
+      {},
+      'CONVERGE-CORRECTED',
+      'lr2',
+      'light',
+    ],
     ['LR2 CONVERGE', { randomLane: { p1: 'CONVERGE' }, judgeRuleset: 'lr2' }, {}, 'CONVERGE', 'lr2', 'light'],
     [
       'beatoraja CONVERGE',
@@ -90,7 +108,14 @@ describe('classifyReplayAssists', () => {
     ['H-RANDOM', { randomLane: { p1: 'H-RANDOM' } }, {}, 'H-RANDOM', 'beatoraja', 'light'],
     ['ALL-SCR', { randomLane: { p1: 'ALL-SCR' } }, {}, 'ALL-SCR', 'beatoraja', 'light'],
     ['RANDOM-EX', { randomLane: { p1: 'RANDOM-EX' } }, {}, 'RANDOM-EX', 'beatoraja', 'light'],
-    ['S-RANDOM-EX', { randomLane: { p2: 'S-RANDOM-EX' } }, {}, 'S-RANDOM-EX', 'beatoraja', 'light'],
+    [
+      'S-RANDOM-EX on 2P',
+      { randomLane: { p2: 'S-RANDOM-EX' } },
+      { notes: [note('11'), note('21')] },
+      'S-RANDOM-EX',
+      'beatoraja',
+      'light',
+    ],
     ['RANDOM_PLAYABLE', { randomLane: { p1: 'RANDOM_PLAYABLE' } }, {}, 'RANDOM_PLAYABLE', 'beatoraja', 'light'],
     ['S_RANDOM_PLAYABLE', { randomLane: { p1: 'S_RANDOM_PLAYABLE' } }, {}, 'S_RANDOM_PLAYABLE', 'beatoraja', 'light'],
     ['beatoraja BATTLE', { battleMode: 'BATTLE', judgeRuleset: 'beatoraja' }, {}, 'BATTLE', 'beatoraja', 'light'],

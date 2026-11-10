@@ -39,6 +39,8 @@ export type CourseLaneOption =
   | 'CONVERGE'
   | 'SCATTER'
   | 'SCATTER-CORRECTED'
+  | 'S-RANDOM-CORRECTED'
+  | 'CONVERGE-CORRECTED'
   | 'SYNCHRONIZE-RANDOM'
   | 'SYMMETRY-RANDOM';
 

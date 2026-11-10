@@ -171,7 +171,7 @@
         "max": 100,
         "clearThreshold": 80,
         "initial": 20,
-        "effectiveTotal": 160.96,
+        "effectiveTotal": 160,
         "cleared": true,
         "type": "GROOVE",
         "survival": false,
@@ -200,7 +200,7 @@
       "2200.000 PERFECT combo=6 ch=14 gauge=100"
     ],
     "ui": [
-      "300.000 seek generation=1 seconds=1.6 combo=2 maxCombo=2 exScore=4 gauge=73.653333 judgments=2 last=PERFECT@1.5#2",
+      "300.000 seek generation=1 seconds=1.6 combo=2 maxCombo=2 exScore=4 gauge=73.333333 judgments=2 last=PERFECT@1.5#2",
       "300.000 hold-lane-until-beat 12 beat=4",
       "300.000 long-note-start 12 beat=2 mode=ln",
       "300.000 clear-poor-bga",
@@ -246,7 +246,7 @@
       "Audio backend: characterization",
       "--- Result ---",
       "TOTAL  : 6",
-      "GAUGE  : 100.00 / 100.00 CLEAR (TOTAL 160.96)",
+      "GAUGE  : 100.00 / 100.00 CLEAR (TOTAL 160)",
       "PGREAT : 6",
       "GREAT  : 0",
       "GOOD   : 0",

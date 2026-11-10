@@ -1,3 +1,4 @@
+import { isSPToDPBattleMode } from '@be-music/player-engine/lanes';
 import { LR2_GAUGE_TYPES, optionValueName, type GaugeType } from '@be-music/player-engine/ruleset';
 import {
   BGA_CYCLE,
@@ -74,6 +75,7 @@ function battleLabel(battle: PlayOptions['battleMode'], keyModeOp: number | unde
       // label is its own BATTLE (ADR 0019).
       return double || nine ? 'DISABLE' : 'BATTLE';
     case 'SP-TO-DP':
+    case 'SP-TO-DP-CORRECTED':
       return double ? 'DP-TO-SP' : nine ? '9-TO-7' : 'SP-TO-DP';
     default:
       return 'OFF';
@@ -88,7 +90,7 @@ function battleLabel(battle: PlayOptions['battleMode'], keyModeOp: number | unde
 export function resolveLR2BattleOps(options: Partial<Pick<PlayOptions, 'keysFilter' | 'battleMode'>>): number[] {
   const doubleFilter = options.keysFilter === 'KEYS_10' || options.keysFilter === 'KEYS_14';
   const battle = options.battleMode === 'TWO-PLAYER' || options.battleMode === 'COUPLE';
-  const doubleBattle = options.battleMode === 'D-BATTLE' || options.battleMode === 'SP-TO-DP';
+  const doubleBattle = options.battleMode === 'D-BATTLE' || isSPToDPBattleMode(options.battleMode);
   const ops: number[] = [];
   if (doubleFilter || doubleBattle) ops.push(LR2_OP.DOUBLE);
   if (battle) ops.push(LR2_OP.BATTLE, LR2_OP.GHOST_BATTLE_OR_BATTLE);
@@ -96,9 +98,20 @@ export function resolveLR2BattleOps(options: Partial<Pick<PlayOptions, 'keysFilt
   return ops;
 }
 
-/** Whether a gauge is one of LR2's red (survival) gauges: HARD and DEATH. */
+/** Whether a gauge is one of LR2's red (survival) gauges: HARD and DEATH (corrected or not). */
 export function isLR2RedGauge(gauge: GaugeType): boolean {
-  return gauge === 'HARD' || gauge === 'DEATH' || gauge === 'EX-HARD';
+  return gauge === 'HARD' || gauge === 'DEATH' || gauge === 'DEATH-CORRECTED' || gauge === 'EX-HARD';
+}
+
+/** The LR2 gauge cell a pick draws on: beatoraja's and AC's extra gauges and the corrected HAZARD on their nearest. */
+function lr2GaugeCell(gauge: GaugeType): GaugeType {
+  return gauge === 'EX-HARD'
+    ? 'HARD'
+    : gauge === 'ASSIST-EASY'
+      ? 'EASY'
+      : gauge === 'DEATH-CORRECTED'
+        ? 'DEATH'
+        : gauge;
 }
 
 /** Whether the BGA shows: ON, or AUTOPLAY ONLY while AUTOPLAY is on. */
@@ -335,15 +348,9 @@ export function resolveLR2OptionButton(type: number, options: PlayOptions): numb
     case LR2_BUTTON.RANDOM_2P:
       return laneCell(options.random2P);
     case LR2_BUTTON.GAUGE_1P:
-      return cell(
-        LR2_GAUGE_TYPES,
-        options.gauge1P === 'EX-HARD' ? 'HARD' : options.gauge1P === 'ASSIST-EASY' ? 'EASY' : options.gauge1P,
-      );
+      return cell(LR2_GAUGE_TYPES, lr2GaugeCell(options.gauge1P));
     case LR2_BUTTON.GAUGE_2P:
-      return cell(
-        LR2_GAUGE_TYPES,
-        options.gauge2P === 'EX-HARD' ? 'HARD' : options.gauge2P === 'ASSIST-EASY' ? 'EASY' : options.gauge2P,
-      );
+      return cell(LR2_GAUGE_TYPES, lr2GaugeCell(options.gauge2P));
     default: {
       const difficulty = LR2_DIFFICULTY_FILTER_BUTTONS[type];
       if (difficulty === undefined) return undefined;

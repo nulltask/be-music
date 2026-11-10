@@ -563,7 +563,7 @@ Empty POOR mirrors LR2's phantom-press behaviour:
 - Increment `summary.emptyPoor`, and do NOT touch the note-judgment counters (`perfect` / `great` / `good` / `bad` / `poor`) — no note was consumed. Whether a player's POOR counter displays the two summed is a presentation choice; LR2's does (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch).
 - Do NOT change EX-SCORE or the score.
 - Cut the combo only where the ruleset says to (`comboBreaksOnEmptyPoor`): beatoraja's five-key and PMS rules do, LR2 and That-Which-Must-Not-Be-Named do not.
-- Apply `EMPTY_POOR` to the gauge — the delta lives in the ruleset's gauge table ([`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)). Under `lr2`: GROOVE `-2`, HARD `-2` (subject to the TOTAL multiplier), EASY `-1.6`, DEATH `-10`. Nearly harmless on GROOVE / EASY; meaningful drain on HARD / DEATH.
+- Apply `EMPTY_POOR` to the gauge — the delta lives in the ruleset's gauge table ([`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)). Under `lr2`: GROOVE `-2`, HARD `-2` (subject to the TOTAL multiplier), EASY `-1.6`, DEATH `0`. Nearly harmless on GROOVE / EASY; a drain on HARD.
 - Trigger POOR BGA (`trigger-poor-bga`).
 - Flash the judge display as `POOR` for 0.6 s (`publishJudgeCombo('POOR', combo)`). The LR2 spec separates op 246 (1P empty POOR) / 266 (2P empty POOR) from op 245 / 265 (missed POOR), but both NOWJUDGE indices currently resolve to the same `'poor'` skin slot in this implementation, so the rendered sprite is identical.
 
@@ -651,7 +651,11 @@ split.
   keeps judging to the end of the chart on a dead gauge. The replay records the flag, so re-simulations stop at the
   same judgment; logs from before it existed keep judging to the end.
 - A course stage (`PlayerOptions.course`) runs on the ruleset's course gauge instead, starting from the value the
-  previous stage left. See [Courses and dan certification](./course.md#playing-a-course-stage).
+  previous stage left. See [Courses and dan certification](./course.md#playing-a-course-stage). Under `lr2` a
+  GROOVE or EASY pick still holds mine damage at `2%` on the course gauge, as LR2 does for those picks in a course
+  (OpenLR2 `LR2f.cpp` L2054-L2056); a judgment below `2%` still fails the stage.
+- Under `lr2` TOTAL is an integer, as LR2 keeps it: `#TOTAL` and the default TOTAL are truncated, and a value below
+  `1` takes the default (OpenLR2 `LR2f.cpp` L26299, L27566-L27579).
 - The tables live in [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)
   and are applied through `RulesetGauge`. The shared engine is the authority for final score and summary values;
   browser scenes mirror `summary.gauge`.
@@ -697,6 +701,7 @@ The `HARD` / `EASY` variants follow the LR2 values (beatoraja `GaugeProperty`'s 
   the comparison, so "display 30 %" is internal 32 %).
 - `EASY`: gains are `1.2×` GROOVE, damage is `0.8×` GROOVE (`BAD -3.2` / `POOR -4.8` / `empty POOR -1.6`). The clear threshold stays at `80%`, same as GROOVE.
 - `DEATH`: no recovery (`PGREAT` / `GREAT` / `GOOD` `0`); `BAD` / missed `POOR` are `-100` (instant death); an `empty POOR` costs nothing (`0`). beatoraja's `HAZARD` keeps its own `+0.15` / `+0.06` recovery and `empty POOR -10`.
+- `DEATH` (LR2's HAZARD) also needs `80%` or more at the end of a single chart to clear, as LR2's CheckClear checks it like GROOVE ([L1842-L1862](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1842-L1862)): a mine can leave a surviving run FAILED, and a clear earns NORMAL. `DEATH-CORRECTED` (**DEATH corrected** in the Options dialog) is the same gauge without that border: it clears by surviving. Under beatoraja and ???? rules it reads as their `DEATH`, and a course plays both on the same course gauge ([#1082](https://github.com/nulltask/be-music/issues/1082)).
 - `HARD` / `DEATH` collapse to `0%` (FAILED, no recovery) the moment they drop below `2%`. Raw deltas such as mine damage bypass the guts softening and the TOTAL multiplier.
 
 ## Long Note

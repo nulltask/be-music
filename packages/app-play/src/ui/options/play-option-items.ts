@@ -34,6 +34,8 @@ const LANE_OPTION_SOURCES: Readonly<Record<string, RulesetId>> = {
   S_RANDOM_PLAYABLE: 'beatoraja',
   SCATTER: 'lr2',
   'SCATTER-CORRECTED': 'lr2',
+  'S-RANDOM-CORRECTED': 'lr2',
+  'CONVERGE-CORRECTED': 'lr2',
   'SYNCHRONIZE-RANDOM': '____',
   'SYMMETRY-RANDOM': '____',
 };
@@ -41,6 +43,8 @@ const LANE_OPTION_SOURCES: Readonly<Record<string, RulesetId>> = {
 /** How the Options dialog spells a lane option's name. */
 const LANE_OPTION_NAMES: Readonly<Record<string, string>> = {
   'SCATTER-CORRECTED': 'SCATTER 9KEY corrected',
+  'S-RANDOM-CORRECTED': 'S-RANDOM 9KEY corrected',
+  'CONVERGE-CORRECTED': 'CONVERGE corrected',
   RANDOM_PLAYABLE: 'RANDOM PLAYABLE',
   S_RANDOM_PLAYABLE: 'S-RANDOM PLAYABLE',
   'SYNCHRONIZE-RANDOM': 'SYNCHRONIZE RANDOM',
@@ -104,6 +108,7 @@ export function battleModeItems(ruleset: RulesetId): PlayOptionItem<PlayOptions[
       ...(ruleset === 'lr2' ? [{ text: 'COUPLE (LR2)', value: 'COUPLE' as const }] : []),
       { text: 'D-BATTLE (LR2)', value: 'D-BATTLE' },
       { text: 'SP TO DP (LR2)', value: 'SP-TO-DP' },
+      { text: 'SP TO DP corrected (LR2)', value: 'SP-TO-DP-CORRECTED' },
     ],
     beatoraja: [
       { text: 'BATTLE (beatoraja)', value: 'beatoraja:BATTLE' },

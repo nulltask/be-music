@@ -549,7 +549,7 @@ flowchart TD
 - `summary.emptyPoor` を加算し、ノート判定カウンタ (`perfect`/`great`/`good`/`bad`/`poor`) は **更新しない**。ノートを消費していないため。POOR カウンタに両者の合計を表示するかは提示側の選択で、LR2 は合算します（OpenLR2 `ApplyJudgeNote` が空POOR 分岐でも `playerstat.poor` を加算）。
 - EX-SCORE とスコアは **変化させない**。
 - combo はルールセットが指示する場合のみ切る（`comboBreaksOnEmptyPoor`）。beatoraja の 5 鍵 / PMS のみ切れ、LR2 と 名前を言ってはいけないあのゲームは切れません。
-- ゲージには `EMPTY_POOR` を適用する。デルタはルールセットのゲージ表（[`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)）にあり、`lr2` では GROOVE `-2`、HARD `-2`（TOTAL 補正対象）、EASY `-1.6`、DEATH `-10`。GROOVE / EASY ではほぼ無害だが、HARD / DEATH では実害が出る。
+- ゲージには `EMPTY_POOR` を適用する。デルタはルールセットのゲージ表（[`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)）にあり、`lr2` では GROOVE `-2`、HARD `-2`（TOTAL 補正対象）、EASY `-1.6`、DEATH `0`。GROOVE / EASY ではほぼ無害だが、HARD では実害が出る。
 - **POOR BGA を発火する** (`trigger-poor-bga`)。
 - **judge 表示を `POOR` で 0.6 秒フラッシュ** する (`publishJudgeCombo('POOR', combo)`)。 LR2 spec 上は op 246 (1P 空POOR) / 266 (2P 空POOR) と op 245 / 265 (見逃しPOOR) が分岐するが、本実装では NOWJUDGE index 0 / 1 を同じ `'poor'` skin slot に解決しているため、視覚上は同一の POOR 表示になる。
 
@@ -634,7 +634,11 @@ POOR カウンタに `poor` と `emptyPoor` の合計を表示するかは提示
   なら、尽きたゲージのまま譜面の最後まで判定を続けます。リプレイはこのフラグを記録するので、再シミュレーションも
   同じ判定で止まります。フラグがなかった頃のログは最後まで判定を続けます。
 - コースのステージ（`PlayerOptions.course`）は、ルールセットのコース用ゲージで、前のステージが残した値から始めます。
-  [コースと段位認定](./course.ja.md#コースのステージを遊ぶ) を参照してください。
+  [コースと段位認定](./course.ja.md#コースのステージを遊ぶ) を参照してください。`lr2` で GROOVE か EASY を選んだときは、
+  LR2 がコース中のこの 2 つで行うとおり、コース用ゲージでも地雷のダメージを `2%` で止めます（OpenLR2 `LR2f.cpp`
+  L2054-L2056）。判定で `2%` を下回ったときは、これまでどおりそのステージで失敗します。
+- `lr2` では LR2 と同じく TOTAL を整数として扱います。`#TOTAL` と既定の TOTAL は切り捨て、`1` 未満は既定値にします
+  （OpenLR2 `LR2f.cpp` L26299、L27566-L27579）。
 - テーブルは [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) にあり、
   `RulesetGauge` を通して適用されます。最終スコアと summary の authority は共有エンジンで、
   browser scene は `summary.gauge` をミラーします。
@@ -681,6 +685,7 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
   「表示 30 %」は内部 32 % に相当します）。
 - `EASY`: 増加は GROOVE の `1.2` 倍、減少は `0.8` 倍（`BAD -3.2` / `POOR -4.8` / `空POOR -1.6`）。クリア閾値は GROOVE と同じ `80%` です。
 - `DEATH`: 回復なし（`PGREAT` / `GREAT` / `GOOD` は `0`）、`BAD` / `見逃しPOOR` は `-100`（即死）、`空POOR` は減少なし（`0`）。beatoraja の `HAZARD` は独自の `+0.15` / `+0.06` の回復と `空POOR -10` のままです。
+- `DEATH`（LR2 の HAZARD）は、単曲では最後に `80%` 以上ないとクリアになりません。LR2 の CheckClear が GROOVE と同じように判定するためです（[L1842-L1862](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1842-L1862)）。地雷で生き残ったまま失敗になることがあり、クリアのランプは NORMAL です。`DEATH-CORRECTED`（Options ダイアログでは **DEATH corrected**）はこの境界の無い同じゲージで、生き残ればクリアです。beatoraja と ???? のルールではそれぞれの `DEATH` として読み、コースではどちらも同じコース用ゲージで遊びます（[#1082](https://github.com/nulltask/be-music/issues/1082)）。
 - `HARD` / `DEATH` は `2%` 未満になった時点で `0%` に落ちて FAILED 確定（以後回復しません）。地雷ダメージなどの生デルタは guts・TOTAL 補正の対象外です。
 
 ## ロングノート
