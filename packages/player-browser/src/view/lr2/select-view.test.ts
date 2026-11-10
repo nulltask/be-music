@@ -111,10 +111,8 @@ describe('LR2SelectView buttons', () => {
     };
     expect(step('lr2:S-RANDOM', 42, 1)).toEqual([{ type: 'set-play-option', key: 'random1P', value: 'SCATTER' }]);
     expect(step('OFF', 43, -1)).toEqual([{ type: 'set-play-option', key: 'random2P', value: 'lr2:CONVERGE' }]);
-    // Another source's RANDOM steps from LR2's RANDOM cell; a value LR2 lacks starts over at OFF (ADR 0019).
-    expect(step('beatoraja:RANDOM', 42, 1)).toEqual([
-      { type: 'set-play-option', key: 'random1P', value: 'lr2:S-RANDOM' },
-    ]);
+    // Another source's S-RANDOM steps from LR2's S-RANDOM cell; a value LR2 lacks starts over at OFF (ADR 0019).
+    expect(step('beatoraja:S-RANDOM', 42, 1)).toEqual([{ type: 'set-play-option', key: 'random1P', value: 'SCATTER' }]);
     expect(step('SPIRAL', 42, 1)).toEqual([{ type: 'set-play-option', key: 'random1P', value: 'OFF' }]);
   });
 

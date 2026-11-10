@@ -208,9 +208,11 @@ export interface PlayOptions {
    *
    * - `OFF` — original chart layout
    * - `MIRROR` — reverse the lane order (1↔7, 2↔6, 3↔5)
-   * - `RANDOM` — chart-wide random permutation of the lanes
+   * - `RANDOM` — chart-wide random permutation of the lanes, the same option in every source (beatoraja's draw, with
+   *   LR2's fixed key)
    * - `R-RANDOM` — chart-wide cyclic rotation, optionally reflected, excluding regular and mirror
-   * - `S-RANDOM` — per-chord random assignment (chord shapes are NOT preserved)
+   * - `S-RANDOM` — per-note random assignment (chord shapes are NOT preserved): LR2's and AC's without jack avoidance,
+   *   beatoraja's with it
    * - `H-RANDOM` — beatoraja per-row random assignment with a configurable jack threshold
    * - `SPIRAL` — beatoraja row rotations, frozen during active holds
    * - `RANDOM-EX` — beatoraja chart-wide permutation including scratches/wheels
@@ -221,15 +223,19 @@ export interface PlayOptions {
    * - `SYNCHRONIZE-RANDOM` — That-Which-Must-Not-Be-Named BATTLE: one RANDOM draw, identical on both sides
    * - `SYMMETRY-RANDOM` — That-Which-Must-Not-Be-Named BATTLE: one RANDOM draw, mirrored on the 2P side
    *
-   * RANDOM, S-RANDOM and CONVERGE name a different algorithm in each source, so they carry it (`lr2:RANDOM`,
-   * `beatoraja:S-RANDOM`); a bare one runs the judge ruleset's own (ADR 0019).
+   * S-RANDOM and CONVERGE name a different algorithm in each source, so they carry it (`lr2:S-RANDOM`,
+   * `beatoraja:CONVERGE`); a bare one runs the judge ruleset's own (ADR 0019). Older values `lr2:RANDOM`,
+   * `beatoraja:RANDOM`, `____:RANDOM` and `____:S-RANDOM` read as `RANDOM` and `lr2:S-RANDOM`.
    */
   random1P: RandomMode;
   /** beatoraja H-RANDOM jack threshold in 16th-note BPM units (1..1000, default 120). */
   hRandomThresholdBPM: number;
-  /** LR2 randFix key index: 0 uses the mode default (scratch, or key 5 for PMS). */
   randomSeed1P: string;
   randomSeed2P: string;
+  /**
+   * LR2 randFix key index: after RANDOM, the original key 1 moves to this key (0 = off; 9 KEY ignores it). LR2 CONVERGE
+   * concentrates on it, 0 using the mode default (scratch, or key 5 for PMS).
+   */
   randomFixedLane1P: number;
   randomFixedLane2P: number;
   /** 2P side note arrangement (channels 21..25 + 28 + 29). */
@@ -254,11 +260,11 @@ export type HSFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT' | 'STAR
 export type HiddenSuddenMode = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
 
 /**
- * Lane-option values; resolveRandomModes supplies the choices. A source-qualified RANDOM, S-RANDOM or CONVERGE runs its
- * source's algorithm under every ruleset, and a bare one the judge ruleset's own (ADR 0019).
+ * Lane-option values; resolveRandomModes supplies the choices. A source-qualified S-RANDOM or CONVERGE runs its source's
+ * algorithm under every ruleset, and a bare one the judge ruleset's own (ADR 0019). RANDOM is one option for every source.
  */
 export type RandomMode =
-  | QualifiedOptionValue<'RANDOM' | 'S-RANDOM' | 'CONVERGE'>
+  | QualifiedOptionValue<'S-RANDOM' | 'CONVERGE'>
   | 'OFF'
   | 'MIRROR'
   | 'RANDOM'

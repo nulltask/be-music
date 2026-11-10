@@ -229,7 +229,7 @@ export function registerLR2SkinStateExportsCases(define: DefineBenchmarkCase): v
   define('skin-lr2.state.stepLR2LaneOption', {
     run: () => {
       lr2StateAPI.stepLR2LaneOption('lr2:S-RANDOM', 1);
-      lr2StateAPI.stepLR2LaneOption('beatoraja:RANDOM', -1);
+      lr2StateAPI.stepLR2LaneOption('beatoraja:S-RANDOM', -1);
       lr2StateAPI.stepLR2LaneOption('SPIRAL', 1);
     },
   });

@@ -88,3 +88,13 @@ The registry is `QUALIFIED_OPTION_SOURCES` in `@be-music/player-engine/ruleset`.
   - Two-player play shifts both players' gauges, so a replay of either side re-simulates the same shift.
 
 - **Replays record the policy and the lowest gauge** (`play.gaugeAutoShift`, `play.bottomShiftableGauge`), and the result's `gauge.values` and a course stage's `play.course.carryIn.gauges` key the parallel gauges by the ruleset's own gauge ids; the simulator rebuilds the same ladder, so a replay reproduces the shift deterministically. These readings ship under the development revision `/0`, as the previous amendment explains.
+
+## Amendment: options that sources define alike are one value
+
+A comparison of the lane options across LR2 (OpenLR2), beatoraja and the AC / PC edition found two qualified values that do not change what is played:
+
+- **RANDOM is one option.** LR2, beatoraja and AC all shuffle the keys once for the whole chart and leave the scratch, so every arrangement is equally likely in each. They differ only in how a draw turns into an arrangement, and Be-Music cannot reproduce LR2's random stream anyway. RANDOM is therefore bare and no longer qualified: it draws as beatoraja's `LaneRandomShuffleModifier` does (so a seed gives beatoraja's arrangement), and LR2's fixed key (`randFix`) then moves the original key 1 to the chosen key, outside nine keys, under every ruleset.
+- **AC's S-RANDOM is LR2's.** Both place notes one at a time without avoiding jacks; beatoraja's avoids jacks within 40 ms and stays separate. S-RANDOM is qualified only as `lr2:S-RANDOM` and `beatoraja:S-RANDOM`, and a bare S-RANDOM under AC rules reads as `lr2:S-RANDOM`. The Options dialog labels it **S-RANDOM (LR2 / ????)**.
+- **Older values keep working.** `lr2:RANDOM`, `beatoraja:RANDOM`, `____:RANDOM` and `____:S-RANDOM` read as `RANDOM` and `lr2:S-RANDOM` (`canonicalOptionValue`): saved settings migrate as they are read, and replays, which record the arrangement, are not rewritten. An LR2 RANDOM button steps OFF, MIRROR, RANDOM, `lr2:S-RANDOM`, SCATTER and `lr2:CONVERGE`; a beatoraja button's RANDOM slot is the bare RANDOM.
+
+CONVERGE and BATTLE stay qualified: their sources define them differently. The differences the comparison found that remain are tracked in [#1076](https://github.com/nulltask/be-music/issues/1076) and [#1077](https://github.com/nulltask/be-music/issues/1077).

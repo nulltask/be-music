@@ -944,11 +944,12 @@ export function flipDPChannel(channel: string): string {
  * untouched. Every supported mode uses the complete mode domain, even on sparse charts.
  *
  * - `MIRROR` — deterministic reversal of the full mode key set
- * - `RANDOM` — chart-wide permutation of the full mode key set (Fisher-Yates with the supplied RNG)
+ * - `RANDOM` — chart-wide permutation of the full mode key set, one option for every source (beatoraja's draw, then
+ *   LR2's fixed key)
  * - `S-RANDOM` — source-specific pure randomizer with active-LN reservations and beatoraja jack avoidance
  *
- * RANDOM, S-RANDOM and CONVERGE run their qualified source's algorithm (`lr2:RANDOM`, `beatoraja:CONVERGE`), and a bare
- * one `options.ruleset`'s own (ADR 0019). AC's RANDOM and S-RANDOM are LR2's, provisionally.
+ * S-RANDOM and CONVERGE run their qualified source's algorithm (`lr2:S-RANDOM`, `beatoraja:CONVERGE`), and a bare one
+ * `options.ruleset`'s own (ADR 0019); AC's S-RANDOM is LR2's.
  * - `SCATTER` — LR2 previous-row avoidance with active-LN reservations and source DP scratch masks
 
  */
@@ -1131,31 +1132,23 @@ export function applyRandomMode(
   }
 
   if (mode === 'RANDOM' || mode === 'RANDOM-EX') {
-    // RANDOM-EX is beatoraja's whatever the judge rules: only beatoraja defines a scratch-inclusive shuffle.
-    if (source === 'beatoraja' || mode === 'RANDOM-EX') {
-      const available = [...domainLanes];
-      const map = new Map<string, string>();
-      for (const target of domainLanes) {
-        const source = available.splice(drawLaneRandomIndex(available.length, rng), 1)[0]!;
-        map.set(source, target);
-      }
-      remapAll(map);
-      return;
-    }
-    const perm = shuffleArray([...domainLanes], rng);
-    // LR2 randFix pins the original key-1 axis in five/seven-key modes;
-    // the historical nine-key RANDOM branch ignores it.
-    if (mode === 'RANDOM' && options.playVariant !== '9') {
-      const target = domainLanes[(options.fixedLane ?? 0) - 1];
-      if (target !== undefined) {
-        const index = perm.indexOf(target);
-        [perm[0], perm[index]] = [perm[index]!, perm[0]!];
-      }
-    }
-
+    // LR2, beatoraja and That-Which-Must-Not-Be-Named define RANDOM alike, one chart-wide shuffle of the keys, so every
+    // source draws it as beatoraja 0.8.9's LaneRandomShuffleModifier does: the seed then gives beatoraja's arrangement.
+    // RANDOM-EX is the same draw over the keys and the scratch.
+    const available = [...domainLanes];
     const map = new Map<string, string>();
-    for (let index = 0; index < domainLanes.length; index += 1) {
-      map.set(domainLanes[index]!, perm[index]!);
+    for (const target of domainLanes) {
+      const source = available.splice(drawLaneRandomIndex(available.length, rng), 1)[0]!;
+      map.set(source, target);
+    }
+    // LR2's fixed key (randFix) then moves the original key 1 to the chosen key; LR2's nine-key RANDOM ignores it.
+    const fixed =
+      mode === 'RANDOM' && options.playVariant !== '9' ? domainLanes[(options.fixedLane ?? 0) - 1] : undefined;
+    if (fixed !== undefined) {
+      const first = domainLanes[0]!;
+      const displaced = [...map].find(([, target]) => target === fixed)![0];
+      map.set(displaced, map.get(first)!);
+      map.set(first, fixed);
     }
     remapAll(map);
     return;

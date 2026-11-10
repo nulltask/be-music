@@ -50,9 +50,9 @@ test('manual source seeds reproduce each side independently, including LN channe
 });
 
 test.each([
-  ['lr2', 'lr2:RANDOM', 'lr2:S-RANDOM'],
-  ['____', '____:RANDOM', 'SCATTER'],
-  ['lr2', 'beatoraja:RANDOM', 'SPIRAL'],
+  ['lr2', 'RANDOM', 'lr2:S-RANDOM'],
+  ['____', 'RANDOM', 'SCATTER'],
+  ['lr2', 'beatoraja:S-RANDOM', 'SPIRAL'],
 ] as const)('%s rules seed the %s and %s arrangements too (#933)', (judgeRuleset, random1P, random2P) => {
   const options = { judgeRuleset, random1P, random2P, randomSeed1P: '12345', randomSeed2P: '67890' } as const;
   const random = vi.spyOn(Math, 'random');

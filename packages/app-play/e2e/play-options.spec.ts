@@ -210,7 +210,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`source seeds and previous arrangements work for fresh input on ${skin}`, async ({ player }) => {
     await openWithLibrary(player, { 'be-music.built-in-skin': skin });
     await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
-    await player.setOption(['Play options'], 'Random 1P', 'RANDOM (beatoraja)');
+    await player.setOption(['Play options'], 'Random 1P', 'RANDOM');
     await player.setOption(['Play options'], 'Seed 1P (-1=random)', '9223372036854775807');
     await player.setOption(['Play options'], 'Auto play', true);
     await player.browseTo(SONGS, 'Fixture A');
@@ -1001,8 +1001,8 @@ test('That-Which-Must-Not-Be-Named 2P PLAY with M-RAN mirrors one player of a sh
   await player.dropText('m-ran.bme', `#TITLE ${title}\n#BPM 240\n#00111:01\n#00112:0001\n#00113:000001`);
   await player.setOption(['Play options'], 'Judgment windows', '????');
   await player.setOption(['Play options'], 'Battle', '2P PLAY (????)');
-  await player.setOption(['Play options'], 'Random 1P', 'RANDOM (????)');
-  await player.setOption(['Play options'], 'Random 2P', 'RANDOM (????)');
+  await player.setOption(['Play options'], 'Random 1P', 'RANDOM');
+  await player.setOption(['Play options'], 'Random 2P', 'RANDOM');
   await player.setOption(['Play options'], 'M-RAN 2P', true);
   await player.setOption(['Play options'], 'Auto play', true);
   await player.cursorTo((bar) => bar.title === title, 'M-RAN chart');

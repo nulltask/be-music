@@ -280,20 +280,26 @@ test('persists per-side LR2 CONVERGE targets', () => {
   );
 });
 
-test('migrates bare RANDOM, S-RANDOM, CONVERGE and BATTLE to the stored ruleset source (ADR 0019)', () => {
+test('migrates bare S-RANDOM, CONVERGE and BATTLE to the stored ruleset source (ADR 0019)', () => {
   const read = (settings: Record<string, unknown>) =>
     parseOptionSettingsDocument(JSON.stringify({ version: 0, updatedAt: 1, settings }))?.settings;
   expect(
     read({ judgeRuleset: 'beatoraja', random1P: 'RANDOM', random2P: 'S-RANDOM', battleMode: 'BATTLE' }),
-  ).toMatchObject({ random1P: 'beatoraja:RANDOM', random2P: 'beatoraja:S-RANDOM', battleMode: 'beatoraja:BATTLE' });
+  ).toMatchObject({ random1P: 'RANDOM', random2P: 'beatoraja:S-RANDOM', battleMode: 'beatoraja:BATTLE' });
+  // AC's S-RANDOM is LR2's.
   expect(read({ judgeRuleset: '____', random1P: 'S-RANDOM', battleMode: 'BATTLE' })).toMatchObject({
-    random1P: '____:S-RANDOM',
+    random1P: 'lr2:S-RANDOM',
     battleMode: '____:BATTLE',
   });
   // Without a stored ruleset the document was saved under LR2 rules, the default.
   expect(read({ random1P: 'CONVERGE', random2P: 'RANDOM' })).toMatchObject({
     random1P: 'lr2:CONVERGE',
-    random2P: 'lr2:RANDOM',
+    random2P: 'RANDOM',
+  });
+  // Values since merged read as the option they were merged into.
+  expect(read({ random1P: 'beatoraja:RANDOM', random2P: '____:S-RANDOM' })).toMatchObject({
+    random1P: 'RANDOM',
+    random2P: 'lr2:S-RANDOM',
   });
   // A qualified value is kept, and a source that does not define the name is dropped.
   expect(read({ judgeRuleset: 'lr2', random1P: 'beatoraja:S-RANDOM', random2P: '____:CONVERGE' })).toEqual({

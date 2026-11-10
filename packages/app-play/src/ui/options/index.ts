@@ -706,8 +706,8 @@ export class OptionsDialog {
         : paneOptions({ 'Source default': 'combo' as const });
       this.judgeAlgorithmController.refresh();
     }
-    // Every lane option is offered under every ruleset, grouped by source; RANDOM, S-RANDOM and CONVERGE once per
-    // source (ADR 0019).
+    // Every lane option is offered under every ruleset, grouped by source; S-RANDOM and CONVERGE once per source, and
+    // RANDOM once for all (ADR 0019).
     for (const side of ['1P', '2P'] as const) {
       const items = laneOptionItems(ruleset, side === '1P' && isDuplicatedBattleChoice(this.guiState.battleMode));
       const key = `random${side}` as const;
