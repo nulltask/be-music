@@ -123,7 +123,7 @@ export class RulesetGauge {
 
   cleared(): boolean {
     if (this.spec.survival) {
-      return !this.failedMidPlay && this.value > 0;
+      return !this.failedMidPlay && this.value > 0 && this.value >= (this.spec.clearBorder ?? 0);
     }
     return this.value >= this.spec.border;
   }

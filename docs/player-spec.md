@@ -701,6 +701,7 @@ The `HARD` / `EASY` variants follow the LR2 values (beatoraja `GaugeProperty`'s 
   the comparison, so "display 30 %" is internal 32 %).
 - `EASY`: gains are `1.2×` GROOVE, damage is `0.8×` GROOVE (`BAD -3.2` / `POOR -4.8` / `empty POOR -1.6`). The clear threshold stays at `80%`, same as GROOVE.
 - `DEATH`: no recovery (`PGREAT` / `GREAT` / `GOOD` `0`); `BAD` / missed `POOR` are `-100` (instant death); an `empty POOR` costs nothing (`0`). beatoraja's `HAZARD` keeps its own `+0.15` / `+0.06` recovery and `empty POOR -10`.
+- `DEATH` (LR2's HAZARD) also needs `80%` or more at the end of a single chart to clear, as LR2's CheckClear checks it like GROOVE ([L1842-L1862](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1842-L1862)): a mine can leave a surviving run FAILED, and a clear earns NORMAL. `DEATH-CORRECTED` (**DEATH corrected** in the Options dialog) is the same gauge without that border: it clears by surviving. Under beatoraja and ???? rules it reads as their `DEATH`, and a course plays both on the same course gauge ([#1082](https://github.com/nulltask/be-music/issues/1082)).
 - `HARD` / `DEATH` collapse to `0%` (FAILED, no recovery) the moment they drop below `2%`. Raw deltas such as mine damage bypass the guts softening and the TOTAL multiplier.
 
 ## Long Note

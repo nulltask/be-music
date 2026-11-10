@@ -270,3 +270,30 @@ test('SELECT TO UNDER uses source course class upper bounds and ignores the ordi
   expect(gauge.values!.EXCLASS).toBe(0);
   expect(gauge.values!.EXHARDCLASS).toBeGreaterThan(80);
 });
+
+test('LR2 HAZARD needs HP 80 at the end of a single chart; the corrected HAZARD clears by surviving (#1082)', () => {
+  const chart = {
+    sourceFormat: 'bms' as const,
+    laneMode: '7K',
+    lnMode: 1 as const,
+    judgeRank: { percent: 75 },
+    notes: { normal: 100, long: { 1: 0, 2: 0, 3: 0 } },
+  };
+  const hazard = (selectedGauge: 'DEATH' | 'DEATH-CORRECTED') => {
+    const gauge = new RulesetGauge(resolveRuleset(chart, 'lr2', { selectedGauge }).gauge);
+    // A mine leaves the run alive below 80: LR2's CheckClear then fails it, as it does for GROOVE.
+    gauge.applyRawDelta(-30);
+    return gauge;
+  };
+  expect(hazard('DEATH').value).toBe(70);
+  expect(hazard('DEATH').cleared()).toBe(false);
+  expect(resolveRuleset(chart, 'lr2', { selectedGauge: 'DEATH-CORRECTED' }).gauge.id).toBe('DEATH-CORRECTED');
+  expect(hazard('DEATH-CORRECTED').cleared()).toBe(true);
+  // At 80 or more the faithful one clears too.
+  const full = new RulesetGauge(resolveRuleset(chart, 'lr2', { selectedGauge: 'DEATH' }).gauge);
+  full.applyRawDelta(-20);
+  expect(full.cleared()).toBe(true);
+  // Under the other rulesets the corrected HAZARD is their own DEATH.
+  expect(resolveRuleset(chart, 'beatoraja', { selectedGauge: 'DEATH-CORRECTED' }).gauge.id).toBe('HAZARD');
+  expect(resolveRuleset(chart, '____', { selectedGauge: 'DEATH-CORRECTED' }).gauge.id).toBe('EX-HARD');
+});

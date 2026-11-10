@@ -80,7 +80,13 @@ export const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
 
 /** Source display spelling, without changing the recorded gauge identifier. */
 export function formatGaugeLabel(id: string | undefined): string | undefined {
-  return id === 'P-ATTACK' ? 'P.ATTACK' : id === 'G-ATTACK' ? 'G.ATTACK' : id;
+  return id === 'P-ATTACK'
+    ? 'P.ATTACK'
+    : id === 'G-ATTACK'
+      ? 'G.ATTACK'
+      : id === 'DEATH-CORRECTED'
+        ? 'DEATH corrected'
+        : id;
 }
 
 /**

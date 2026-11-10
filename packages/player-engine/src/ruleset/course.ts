@@ -173,6 +173,7 @@ export function resolveCourseGaugeId(rulesetId: RulesetId, kind: RulesetCourseKi
       case 'HARD':
         return `${prefix}-HARD`;
       case 'DEATH':
+      case 'DEATH-CORRECTED':
         return `${prefix}-DEATH`;
       case 'EASY':
         return kind === 'grade' ? 'GRADE' : 'COURSE-EASY';
@@ -185,6 +186,7 @@ export function resolveCourseGaugeId(rulesetId: RulesetId, kind: RulesetCourseKi
       return 'EXCLASS';
     case 'EX-HARD':
     case 'DEATH':
+    case 'DEATH-CORRECTED':
       return 'EXHARDCLASS';
     default:
       return 'CLASS';

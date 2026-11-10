@@ -141,6 +141,8 @@ export interface GaugeSpec {
   survival: boolean;
   /** LR2 survival gauges: values below this collapse to 0 (death border). */
   death?: number;
+  /** A survival gauge that also needs this value at the end to clear: LR2's HAZARD on a single chart (80). */
+  clearBorder?: number;
   /**
    * LR2: landmine damage stops at this value instead of going lower. LR2 holds HP at 2 when the player picked GROOVE
    * or EASY, in a course too (OpenLR2 `LR2f.cpp` L2054-L2056), where the course gauge itself has no 2 % floor.
@@ -551,10 +553,13 @@ function resolveLR2Gauge(gaugeId: string, total: number, noteCount: number): Gau
       };
     }
     case 'DEATH':
+    case 'DEATH-CORRECTED':
       // LR2's own DEATH table (OpenLR2 LR2f.cpp L27673-L27680; LR2body.exe `ParseBMSFile` case 2 at 0x4b5c2e):
-      // no gain at all, BAD / POOR kill, and an empty POOR costs nothing. beatoraja's HAZARD_LR2 differs.
+      // no gain at all, BAD / POOR kill, and an empty POOR costs nothing. beatoraja's HAZARD_LR2 differs. LR2's
+      // CheckClear also wants HP 80 at the end of a single chart, as for GROOVE (L1842-L1862), so a mine can leave a
+      // surviving run FAILED; the corrected HAZARD clears by surviving (#1082).
       return {
-        id: 'DEATH',
+        id: gaugeId,
         min: 0,
         max: 100,
         initial: 100,
@@ -563,6 +568,7 @@ function resolveLR2Gauge(gaugeId: string, total: number, noteCount: number): Gau
         death: 2,
         values: [0, 0, 0, -100, -100, 0],
         guts: [],
+        ...(gaugeId === 'DEATH' ? { clearBorder: 80 } : {}),
       };
     default:
       return {
@@ -806,7 +812,8 @@ function resolveDefaultGaugeId(rulesetId: RulesetId, playGauge: string): string 
     case 'HARD':
       return 'HARD';
     case 'DEATH':
-      return rulesetId === 'lr2' ? 'DEATH' : rulesetId === 'beatoraja' ? 'HAZARD' : 'EX-HARD';
+    case 'DEATH-CORRECTED':
+      return rulesetId === 'lr2' ? playGauge : rulesetId === 'beatoraja' ? 'HAZARD' : 'EX-HARD';
     default:
       return rulesetId === 'lr2' ? 'GROOVE' : 'NORMAL';
   }
@@ -890,7 +897,10 @@ function resolveGaugeShift(
 ): Pick<RulesetConfig, 'gaugeBank' | 'gaugeFallback'> {
   const { gaugeAutoShift: policy, course } = options;
   if (policy === 'BEST_CLEAR' || policy === 'SELECT_TO_UNDER') {
-    const ladder = resolveGaugeShiftLadder(rulesetId, course?.kind);
+    // The corrected HAZARD takes HAZARD's place on LR2's ladder.
+    const ladder = resolveGaugeShiftLadder(rulesetId, course?.kind).map((id) =>
+      id === 'DEATH' && initialGauge.id === 'DEATH-CORRECTED' ? 'DEATH-CORRECTED' : id,
+    );
     const selected = ladder.indexOf(initialGauge.id);
     if (selected < 0) return {};
     return {

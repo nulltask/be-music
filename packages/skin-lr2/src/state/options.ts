@@ -98,9 +98,20 @@ export function resolveLR2BattleOps(options: Partial<Pick<PlayOptions, 'keysFilt
   return ops;
 }
 
-/** Whether a gauge is one of LR2's red (survival) gauges: HARD and DEATH. */
+/** Whether a gauge is one of LR2's red (survival) gauges: HARD and DEATH (corrected or not). */
 export function isLR2RedGauge(gauge: GaugeType): boolean {
-  return gauge === 'HARD' || gauge === 'DEATH' || gauge === 'EX-HARD';
+  return gauge === 'HARD' || gauge === 'DEATH' || gauge === 'DEATH-CORRECTED' || gauge === 'EX-HARD';
+}
+
+/** The LR2 gauge cell a pick draws on: beatoraja's and AC's extra gauges and the corrected HAZARD on their nearest. */
+function lr2GaugeCell(gauge: GaugeType): GaugeType {
+  return gauge === 'EX-HARD'
+    ? 'HARD'
+    : gauge === 'ASSIST-EASY'
+      ? 'EASY'
+      : gauge === 'DEATH-CORRECTED'
+        ? 'DEATH'
+        : gauge;
 }
 
 /** Whether the BGA shows: ON, or AUTOPLAY ONLY while AUTOPLAY is on. */
@@ -337,15 +348,9 @@ export function resolveLR2OptionButton(type: number, options: PlayOptions): numb
     case LR2_BUTTON.RANDOM_2P:
       return laneCell(options.random2P);
     case LR2_BUTTON.GAUGE_1P:
-      return cell(
-        LR2_GAUGE_TYPES,
-        options.gauge1P === 'EX-HARD' ? 'HARD' : options.gauge1P === 'ASSIST-EASY' ? 'EASY' : options.gauge1P,
-      );
+      return cell(LR2_GAUGE_TYPES, lr2GaugeCell(options.gauge1P));
     case LR2_BUTTON.GAUGE_2P:
-      return cell(
-        LR2_GAUGE_TYPES,
-        options.gauge2P === 'EX-HARD' ? 'HARD' : options.gauge2P === 'ASSIST-EASY' ? 'EASY' : options.gauge2P,
-      );
+      return cell(LR2_GAUGE_TYPES, lr2GaugeCell(options.gauge2P));
     default: {
       const difficulty = LR2_DIFFICULTY_FILTER_BUTTONS[type];
       if (difficulty === undefined) return undefined;

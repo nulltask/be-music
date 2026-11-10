@@ -685,6 +685,7 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
   「表示 30 %」は内部 32 % に相当します）。
 - `EASY`: 増加は GROOVE の `1.2` 倍、減少は `0.8` 倍（`BAD -3.2` / `POOR -4.8` / `空POOR -1.6`）。クリア閾値は GROOVE と同じ `80%` です。
 - `DEATH`: 回復なし（`PGREAT` / `GREAT` / `GOOD` は `0`）、`BAD` / `見逃しPOOR` は `-100`（即死）、`空POOR` は減少なし（`0`）。beatoraja の `HAZARD` は独自の `+0.15` / `+0.06` の回復と `空POOR -10` のままです。
+- `DEATH`（LR2 の HAZARD）は、単曲では最後に `80%` 以上ないとクリアになりません。LR2 の CheckClear が GROOVE と同じように判定するためです（[L1842-L1862](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1842-L1862)）。地雷で生き残ったまま失敗になることがあり、クリアのランプは NORMAL です。`DEATH-CORRECTED`（Options ダイアログでは **DEATH corrected**）はこの境界の無い同じゲージで、生き残ればクリアです。beatoraja と ???? のルールではそれぞれの `DEATH` として読み、コースではどちらも同じコース用ゲージで遊びます（[#1082](https://github.com/nulltask/be-music/issues/1082)）。
 - `HARD` / `DEATH` は `2%` 未満になった時点で `0%` に落ちて FAILED 確定（以後回復しません）。地雷ダメージなどの生デルタは guts・TOTAL 補正の対象外です。
 
 ## ロングノート

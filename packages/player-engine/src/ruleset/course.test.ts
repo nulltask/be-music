@@ -25,6 +25,9 @@ describe('resolveCourseGaugeId', () => {
     expect(resolveCourseGaugeId('lr2', 'expert', 'GROOVE')).toBe('COURSE');
     expect(resolveCourseGaugeId('lr2', 'nonstop', 'EASY')).toBe('COURSE-EASY');
     expect(resolveCourseGaugeId('lr2', 'expert', 'HARD')).toBe('COURSE-HARD');
+    // The corrected HAZARD plays the same course gauges as HAZARD: LR2's course check has no 80 border.
+    expect(resolveCourseGaugeId('lr2', 'grade', 'DEATH-CORRECTED')).toBe('GRADE-DEATH');
+    expect(resolveCourseGaugeId('beatoraja', 'grade', 'DEATH-CORRECTED')).toBe('EXHARDCLASS');
   });
 
   test('beatoraja and That-Which-Must-Not-Be-Named map the pick onto the class gauges whatever the course kind', () => {
