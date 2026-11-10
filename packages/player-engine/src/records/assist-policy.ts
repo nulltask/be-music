@@ -164,7 +164,8 @@ export function classifyReplayAssists(replay: AssistReplay): AssistFinding[] {
     const secondSide = laneFinding(play.randomLane?.p2, playedRuleset);
     // Without the chart's notes the side is unknown, so the option counts.
     const notes = replay.chart?.notes;
-    if (secondSide?.source === 'lr2' || notes === undefined || hasSecondPlayerSide(notes)) add(secondSide);
+    if (secondSide !== undefined && (secondSide.source === 'lr2' || notes === undefined || hasSecondPlayerSide(notes)))
+      add(secondSide);
   }
 
   const battle = play.battleMode === undefined ? undefined : splitOptionSource(play.battleMode);

@@ -145,6 +145,8 @@ function randomizeTimeBasedNotes(
   lanes = [...new Set(lanes)];
   const channels = notes.map((note) => note.channel);
   const domain = new Set(lanes);
+  const laneNumbers =
+    allScratch?.doublePlay === true ? new Map(lanes.map((lane, index) => [lane, index])) : new Map<string, number>();
   const rows = new Map<number, number[]>();
   notes.forEach((note, index) => {
     if (!visitAllRows && !domain.has(note.channel)) return;
@@ -171,19 +173,23 @@ function randomizeTimeBasedNotes(
   for (const [timeMs, indices] of [...rows].sort(([left], [right]) => left - right)) {
     // Upstream restores released lanes at the end of its mutable lane lists.
     // Their order is observable when the same Java seed is reused.
-    const released = [...held]
-      .filter(([, hold]) => hold.endMs < timeMs)
-      .sort(([left], [right]) => lanes.indexOf(left) - lanes.indexOf(right));
-    for (const [source, hold] of released) {
-      held.delete(source);
-      changeable.push(source);
-      assignable.push(hold.target);
+    if (held.size > 0) {
+      const released = [...held]
+        .filter(([, hold]) => hold.endMs < timeMs)
+        .sort(([left], [right]) => lanes.indexOf(left) - lanes.indexOf(right));
+      for (const [source, hold] of released) {
+        held.delete(source);
+        changeable.push(source);
+        assignable.push(hold.target);
+      }
     }
     if (converge)
       for (const lane of lanes) if (Math.trunc(timeMs) - lastNoteTime.get(lane)! > thresholdMs * 2) streak.set(lane, 0);
-    const occupied = new Set([...held.values()].map((hold) => hold.target));
-    const free = assignable.filter((lane) => !occupied.has(lane));
-    const map = new Map([...held].map(([source, hold]) => [source, hold.target]));
+    // Most rows hold no long note: skip building the held-lane sets for them.
+    const occupied = held.size > 0 ? new Set([...held.values()].map((hold) => hold.target)) : undefined;
+    const free = occupied === undefined ? assignable.slice() : assignable.filter((lane) => !occupied.has(lane));
+    const map =
+      held.size > 0 ? new Map([...held].map(([source, hold]) => [source, hold.target])) : new Map<string, string>();
     const scoring = new Set(
       indices
         .filter((index) => domain.has(notes[index]!.channel) && (notes[index]!.kind ?? 'note') === 'note')
@@ -196,7 +202,7 @@ function randomizeTimeBasedNotes(
       const noteCount = scoring.size + held.size + [...held.values()].filter((hold) => hold.endMs === timeMs).length;
       if (noteCount > 2 && noteCount < 7) {
         const combinations = PMS_PLAYABLE_CHORDS.map((chord) => chord.map((index) => lanes[index]!)).filter((chord) =>
-          [...occupied].every((lane) => chord.includes(lane)),
+          [...(occupied ?? [])].every((lane) => chord.includes(lane)),
         );
         if (combinations.length > 0) {
           const candidates = combinations
@@ -224,16 +230,35 @@ function randomizeTimeBasedNotes(
       }
     }
     const ordered = [...sources.filter((lane) => scoring.has(lane)), ...sources.filter((lane) => !scoring.has(lane))];
+    const nowMs = Math.trunc(timeMs);
+    const pastThreshold = (lane: string): boolean => nowMs - lastNoteTime.get(lane)! > thresholdMs;
+    let emptiesOrdered = false;
     for (const source of ordered) {
       let candidates = free;
       let useSidePriority = false;
       let useStreak = false;
       let usePlayable = false;
-      const pastThreshold = (lane: string): boolean => Math.trunc(timeMs) - lastNoteTime.get(lane)! > thresholdMs;
-      if (options.ruleset === 'beatoraja' && !scoring.has(source)) {
+      if (options.ruleset === 'beatoraja' && !scoring.has(source) && !emptiesOrdered) {
         // Upstream places a row's empty, mine-only and hidden-only lanes over the lanes past the threshold first, then
-        // the rest (`primaryLane.addAll(inferiorLane)`, Randomizer L241-L246), so a seed puts them where it does.
-        candidates = [...free.filter(pastThreshold), ...free.filter((lane) => !pastThreshold(lane))];
+        // the rest (`primaryLane.addAll(inferiorLane)`, Randomizer L241-L246), so a seed puts them where it does. The
+        // scoring sources come first, so the free lanes are reordered once, when the first empty source is reached.
+        // Only a lane past the threshold behind one that is not changes the order; most rows need no copy.
+        let seenRecent = false;
+        let reorder = false;
+        for (const lane of free) {
+          if (!pastThreshold(lane)) seenRecent = true;
+          else if (seenRecent) {
+            reorder = true;
+            break;
+          }
+        }
+        if (reorder) {
+          const past = free.filter(pastThreshold);
+          const rest = free.filter((lane) => !pastThreshold(lane));
+          free.length = 0;
+          free.push(...past, ...rest);
+        }
+        emptiesOrdered = true;
       }
       if (options.ruleset === 'beatoraja' && scoring.has(source)) {
         const eligible = free.filter(pastThreshold);
@@ -258,15 +283,7 @@ function randomizeTimeBasedNotes(
       // DP ALL-SCR leans toward the scratch: 1P takes the lowest-numbered lane, 2P the highest (Randomizer L409-L436),
       // numbered as the source numbers them, keys then scratch; not the candidates' order, which a released LN changes.
       const target = useSidePriority
-        ? candidates.reduce((best, lane) =>
-            (
-              allScratch?.side === '2P'
-                ? lanes.indexOf(lane) > lanes.indexOf(best)
-                : lanes.indexOf(lane) < lanes.indexOf(best)
-            )
-              ? lane
-              : best,
-          )
+        ? pickSideLane(candidates, laneNumbers, allScratch?.side === '2P')
         : pickRandom(candidates, options.random);
       if (useStreak) streak.set(target, streak.get(target)! + 1);
       map.set(source, target);
@@ -289,6 +306,14 @@ function randomizeTimeBasedNotes(
     }
   }
   return channels;
+}
+
+/** The lowest-numbered lane (the highest with `highest`), numbered as the source numbers them. */
+function pickSideLane(lanes: readonly string[], numbers: ReadonlyMap<string, number>, highest: boolean): string {
+  let best = lanes[0]!;
+  for (const lane of lanes)
+    if (highest ? numbers.get(lane)! > numbers.get(best)! : numbers.get(lane)! < numbers.get(best)!) best = lane;
+  return best;
 }
 
 function pickRandom<T>(lanes: readonly T[], random: () => number): T {
