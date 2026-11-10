@@ -163,9 +163,14 @@ const en: HelpContent = {
       id: 'gauges',
       t: t,
       children: html`<p>
-        The gauge a play chose, named as each ruleset names it (GROOVE is beatoraja’s NORMAL; DEATH and HAZARD share a
-        lamp with EX-HARD). A failed play shows how far its gauge got.
-      </p>`,
+          The gauge a play chose, named as each ruleset names it. GROOVE is beatoraja’s NORMAL. A failed play shows how
+          far its gauge got.
+        </p>
+        <p>
+          Under LR2 rules, DEATH requires at least 80% at the end of a single chart, while DEATH corrected clears by
+          surviving. Both award the CLEAR lamp for a standard clear. beatoraja’s HAZARD shares the EX HARD CLEAR lamp
+          with EX-HARD.
+        </p>`,
     })}${Section({
       id: 'long-notes',
       t: t,
@@ -325,9 +330,14 @@ const ja: HelpContent = {
       id: 'gauges',
       t: t,
       children: html`<p>
-        プレイで選んだゲージを、ルールごとの呼び名で表示します（GROOVE は beatoraja の NORMAL。DEATH と HAZARD
-        のランプは EX-HARD と同じです）。FAILED のプレイには、ゲージがどこまで残ったかを表示します。
-      </p>`,
+          プレイで選んだゲージを、ルールごとの呼び名で表示します。GROOVE は beatoraja の NORMAL です。FAILED
+          のプレイには、ゲージがどこまで残ったかを表示します。
+        </p>
+        <p>
+          LR2 の単曲プレイでは、DEATH は終了時に 80% 以上でクリアし、DEATH corrected
+          は生き残ればクリアします。どちらも通常クリアのランプは CLEAR です。beatoraja の HAZARD は EX-HARD と同じ EX
+          HARD CLEAR です。
+        </p>`,
     })}${Section({
       id: 'long-notes',
       t: t,

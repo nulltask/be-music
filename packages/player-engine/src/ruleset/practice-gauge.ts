@@ -18,8 +18,16 @@ export const BEATORAJA_PRACTICE_GAUGE_TYPES = [
   'EXHARDCLASS',
 ] as const;
 
-/** LR2's single-play gauges, in the order of its gauge option (GROOVE, HARD, HAZARD, EASY, P.ATTACK, G.ATTACK). */
-export const LR2_PRACTICE_GAUGE_TYPES = ['GROOVE', 'HARD', 'DEATH', 'EASY', 'P-ATTACK', 'G-ATTACK'] as const;
+/** LR2's single-play gauges in source order, followed by the corrected HAZARD. */
+export const LR2_PRACTICE_GAUGE_TYPES = [
+  'GROOVE',
+  'HARD',
+  'DEATH',
+  'EASY',
+  'P-ATTACK',
+  'G-ATTACK',
+  'DEATH-CORRECTED',
+] as const;
 
 /** That-Which-Must-Not-Be-Named's single-play gauges, gentlest first. */
 const ____PRACTICE_GAUGE_TYPES = ['ASSISTED-EASY', 'EASY', 'NORMAL', 'HARD', 'EX-HARD'] as const;

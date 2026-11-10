@@ -708,10 +708,12 @@ export class LR2SelectView implements SelectView {
       }
       case 'cycle-option':
         if (action.option === 'gauge1P' || action.option === 'gauge2P') {
+          const gauge = this.frame?.playOptions[action.option] ?? 'GROOVE';
+          // The corrected gauge shares the skin's HAZARD cell, so the button steps from that cell.
           emit({
             type: 'set-play-option',
             key: action.option,
-            value: nextChoice(LR2_GAUGE_TYPES, this.frame?.playOptions[action.option] ?? 'GROOVE'),
+            value: nextChoice(LR2_GAUGE_TYPES, gauge === 'DEATH-CORRECTED' ? 'DEATH' : gauge),
           });
           return;
         }

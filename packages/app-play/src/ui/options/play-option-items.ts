@@ -5,6 +5,7 @@ import {
   type RulesetId,
 } from '@be-music/player-engine/ruleset';
 import {
+  formatGaugeLabel,
   laneCoversFromPlayOptions,
   resolveRandomModes,
   type LaneCoverState,
@@ -133,8 +134,6 @@ const PRACTICE_GAUGE_NAMES: Readonly<Partial<Record<PracticeGaugeType, string>>>
   CLASS: 'GRADE',
   EXCLASS: 'EX GRADE',
   EXHARDCLASS: 'EXHARD GRADE',
-  'P-ATTACK': 'P.ATTACK',
-  'G-ATTACK': 'G.ATTACK',
 };
 
 /**
@@ -143,7 +142,10 @@ const PRACTICE_GAUGE_NAMES: Readonly<Partial<Record<PracticeGaugeType, string>>>
  */
 export function practiceGaugeItems(ruleset: RulesetId): PlayOptionItem<PracticeGaugeType>[] {
   return resolvePracticeGaugeTypes(ruleset).map((value) => ({
-    text: ruleset === 'lr2' && value === 'DEATH' ? 'HAZARD' : (PRACTICE_GAUGE_NAMES[value] ?? value),
+    text:
+      ruleset === 'lr2' && value === 'DEATH'
+        ? 'HAZARD'
+        : (PRACTICE_GAUGE_NAMES[value] ?? formatGaugeLabel(value) ?? value),
     value,
   }));
 }

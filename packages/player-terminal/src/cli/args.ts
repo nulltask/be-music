@@ -89,7 +89,7 @@ export function parseArgs(rawArgs: string[]): CLIArgs {
 }
 
 /** The gauge types, in the order the CLI lists them. */
-const CLI_GAUGES: readonly GaugeType[] = ['GROOVE', 'EASY', 'HARD', 'DEATH'];
+const CLI_GAUGES: readonly GaugeType[] = ['GROOVE', 'EASY', 'HARD', 'DEATH', 'DEATH-CORRECTED'];
 
 function parseCLIRuleset(rawValue: string): RulesetId {
   const value = rawValue.trim().toLowerCase();
@@ -461,7 +461,7 @@ export function printUsage(): void {
       '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
       '  --bmson-total-mode <mode>  bmson TOTAL 0: beatoraja (default) | spec (no recovery)',
       '  --ruleset <name>       Compat ruleset: lr2 (default) | beatoraja | ____',
-      '  --gauge <name>         Gauge: GROOVE (default) | EASY | HARD | DEATH',
+      `  --gauge <name>         Gauge: GROOVE (default) | ${CLI_GAUGES.slice(1).join(' | ')}`,
       '  --no-end-on-failure    Keep playing after a survival gauge empties (default: the play ends there)',
       '  --debug-judge-window <ms> Override BAD window for debugging',
     ].join('\n') + '\n',

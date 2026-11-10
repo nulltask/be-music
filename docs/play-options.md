@@ -272,7 +272,7 @@ PRACTICE is beatoraja's mode, and the judge rules read its settings ([#933](http
 
 | Setting        | beatoraja                                                                          | LR2                                                                                                | AC (`????`)                                   |
 | -------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| GAUGE TYPE     | ASSIST EASY, EASY, NORMAL, HARD, EX-HARD, HAZARD, GRADE, EX GRADE and EXHARD GRADE | GROOVE, HARD, HAZARD, EASY, P.ATTACK and G.ATTACK                                                  | ASSISTED EASY, EASY, NORMAL, HARD and EX-HARD |
+| GAUGE TYPE     | ASSIST EASY, EASY, NORMAL, HARD, EX-HARD, HAZARD, GRADE, EX GRADE and EXHARD GRADE | GROOVE, HARD, HAZARD, EASY, P.ATTACK, G.ATTACK and DEATH corrected                                 | ASSISTED EASY, EASY, NORMAL, HARD and EX-HARD |
 | GAUGE CATEGORY | **Play mode** or a beatoraja category                                              | Hidden (one gauge table)                                                                           | Hidden (one gauge table)                      |
 | JUDGERANK      | beatoraja's judgerank (`NORMAL` rule, rank 2 = 75)                                 | A judgerank percent on LR2's `#RANK` table: 25, 50, 75 and 100 are `#RANK` 0–3 (VERY HARD to EASY) | Hidden: the windows are fixed                 |
 | TOTAL          | Scaled by the notes left in the range for NORMAL and gentler gauges                | Used as is; 0 keeps the whole chart's TOTAL                                                        | Hidden: the gauges do not use TOTAL           |
@@ -424,6 +424,10 @@ The diagram is LR2's single-play ladder, the order BEST CLEAR shifts down. AC ha
 Replays record `play.gaugeAutoShift` and `play.bottomShiftableGauge`; NONE also records `play.endOnFailure`, while the other policies keep judging to the end. The result's `gauge.type` names the gauge the play ended on; under BEST CLEAR and SELECT TO UNDER, `gauge.values` keeps every parallel gauge's raw value, and a course stage's `play.course.carryIn.gauges` keeps the course gauges it inherited. In a two-player play both players' gauges shift, each on its own gauge. beatoraja skins' gauge auto-shift (78) and bottom shiftable gauge (341) buttons cycle the choices in source order. The Native skin's play settings panel shows the policy, the lowest gauge and the effective gauge. No input assist is inferred from a policy; how a shifted clear is ranked is the Leaderboard's decision.
 
 Sources: beatoraja 0.8.9 [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java#L641-L674), [`GrooveGauge`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GrooveGauge.java) and [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java). Tracked in [#729](https://github.com/nulltask/be-music/issues/729), [#730](https://github.com/nulltask/be-music/issues/730), [#731](https://github.com/nulltask/be-music/issues/731) and [#732](https://github.com/nulltask/be-music/issues/732).
+
+## DEATH corrected
+
+With LR2 rules, choose **DEATH corrected** in the Options dialog for regular play or PRACTICE, or pass `--gauge DEATH-CORRECTED` to the terminal player. The LR2 skin shows that choice on its HAZARD cell, and the gauge button advances from there to EASY.
 
 ## P.ATTACK / G.ATTACK
 

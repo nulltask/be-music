@@ -11,7 +11,15 @@ import {
 
 test('PRACTICE lists the judge ruleset’s own gauges', () => {
   expect(resolvePracticeGaugeTypes('beatoraja')).toBe(BEATORAJA_PRACTICE_GAUGE_TYPES);
-  expect(resolvePracticeGaugeTypes('lr2')).toEqual(['GROOVE', 'HARD', 'DEATH', 'EASY', 'P-ATTACK', 'G-ATTACK']);
+  expect(resolvePracticeGaugeTypes('lr2')).toEqual([
+    'GROOVE',
+    'HARD',
+    'DEATH',
+    'EASY',
+    'P-ATTACK',
+    'G-ATTACK',
+    'DEATH-CORRECTED',
+  ]);
   expect(resolvePracticeGaugeTypes('lr2')).toBe(LR2_PRACTICE_GAUGE_TYPES);
   expect(resolvePracticeGaugeTypes('____')).toEqual(['ASSISTED-EASY', 'EASY', 'NORMAL', 'HARD', 'EX-HARD']);
 });
