@@ -153,9 +153,15 @@ export function classifyReplayAssists(replay: AssistReplay): AssistFinding[] {
 
   // A lane arrangement the chart forced (#844) is nanasigroove's, which has no assist class, and every play of the chart
   // gets it: it is not the player's assist, whatever lane value the host recorded for it.
+  // The 2P lane option arranges nothing on a chart without a 2P side, and beatoraja builds its 2P modifier only for a
+  // two-player mode (`BMSPlayer` L292), so it counts there only. LR2 caps the lamp for a 2P SCATTER or CONVERGE on any
+  // chart (`random > 3`, OpenLR2 `LR2f.cpp` L9334), so LR2's own 2P values always count (#1080).
   if (replay.chart?.chartPlayOptions?.options.random === undefined) {
     add(laneFinding(play.randomLane?.p1, playedRuleset));
-    add(laneFinding(play.randomLane?.p2, playedRuleset));
+    const secondSide = laneFinding(play.randomLane?.p2, playedRuleset);
+    // Without the chart's notes the side is unknown, so the option counts.
+    const notes = replay.chart?.notes;
+    if (secondSide?.source === 'lr2' || notes === undefined || hasSecondPlayerSide(notes)) add(secondSide);
   }
 
   const battle = play.battleMode === undefined ? undefined : splitOptionSource(play.battleMode);
