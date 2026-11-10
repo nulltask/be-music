@@ -1,3 +1,4 @@
+import type { BeMusicJSON } from '@be-music/chart-source';
 // The select route: the select screen (`createSelectScene`), whichever family draws it. The scene router keeps it across
 // a decide screen, a play and its result; on a return it shows again with the latest theme's skin and sounds, the
 // library and the cursor where it was, and it is made afresh when another family takes it over. A chart started on it
@@ -96,6 +97,7 @@ export interface SelectRouteDeps {
   /** Whether the status line describes a play or result, which the select screen replaces with the library's. */
   readonly playStatusShown: () => boolean;
   readonly setStatus: (text: string) => void;
+  readonly showChartDiagnostics: (chart?: BeMusicJSON, chartPath?: string) => void;
   /** Re-enables the options a play latched. */
   readonly unlockReplayOptions: () => void;
   /** Remembers a hi-speed set on the screen for the next play, and mirrors it onto the Options dialog. */
@@ -154,6 +156,7 @@ export class SelectRoute {
   private readonly beatorajaSkinOptions: SelectRouteDeps['beatorajaSkinOptions'];
   private readonly playStatusShown: SelectRouteDeps['playStatusShown'];
   private readonly setStatus: SelectRouteDeps['setStatus'];
+  private readonly showChartDiagnostics: SelectRouteDeps['showChartDiagnostics'];
   private readonly unlockReplayOptions: SelectRouteDeps['unlockReplayOptions'];
   private readonly rememberHiSpeed: SelectRouteDeps['rememberHiSpeed'];
   private readonly showDecide: SelectRouteDeps['showDecide'];
@@ -189,6 +192,7 @@ export class SelectRoute {
     this.beatorajaSkinOptions = deps.beatorajaSkinOptions;
     this.playStatusShown = deps.playStatusShown;
     this.setStatus = deps.setStatus;
+    this.showChartDiagnostics = deps.showChartDiagnostics;
     this.unlockReplayOptions = deps.unlockReplayOptions;
     this.rememberHiSpeed = deps.rememberHiSpeed;
     this.showDecide = deps.showDecide;
@@ -300,6 +304,7 @@ export class SelectRoute {
           if (kit.family !== 'beatoraja') this.replaySlotsPanel.showSelect(entry);
           // "Ghost status" says whether a play of the bar would show the picked ghost.
           const chart = entry?.kind === 'chart' ? entry : undefined;
+          this.showChartDiagnostics(chart?.chart.chart, chart?.chart.chartPath);
           const playFamily = pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'gameplay', chart?.chart);
           const target = chart !== undefined ? this.replaySlots.targetOf(chart) : undefined;
           // No bar, or a folder: nothing to say.

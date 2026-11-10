@@ -31,6 +31,7 @@ export const PLAYER_APP_TEMPLATE = html`
   <div class="shell empty">
     <div id="player-service-header" class="player-service-header"></div>
     <main id="main" class="player-main">
+      <div id="chart-diagnostics" class="chart-diagnostics"></div>
       <div id="auxiliary-panels" class="auxiliary-panels"></div>
       <!-- The quick options panel, at the bottom right on the select and play screens. \`ui/options/quick-options.ts\`. -->
       <div id="quick-options" class="quick-options-dock" hidden></div>

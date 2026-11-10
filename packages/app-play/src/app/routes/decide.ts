@@ -1,3 +1,4 @@
+import type { BeMusicJSON } from '@be-music/chart-source';
 // The decide route: the decide screen (`createDecideScene`), whichever family draws it, between a start on the select
 // screen and its play. A chart's play is made and loads off stage behind the screen (the scene router's `prepare`), and
 // takes the stage once the screen is done: that play and no other, or one made again with the screen's draws when its
@@ -98,6 +99,7 @@ export interface DecideRouteDeps {
   /** Names the next saved recording after the chart. */
   readonly setRecordingFilenameBase: (base: string) => void;
   readonly setStatus: (text: string) => void;
+  readonly showChartDiagnostics: (chart?: BeMusicJSON, chartPath?: string) => void;
   /** Shows a status about the play, which the select screen replaces when it comes back. */
   readonly setPlayStatus: (text: string) => void;
   /** Latches the options a play takes for it, and disables their controls. */
@@ -136,6 +138,7 @@ export class DecideRoute {
   private readonly recordingDeps: DecideRouteDeps['recordingDeps'];
   private readonly setRecordingFilenameBase: DecideRouteDeps['setRecordingFilenameBase'];
   private readonly setStatus: DecideRouteDeps['setStatus'];
+  private readonly showChartDiagnostics: DecideRouteDeps['showChartDiagnostics'];
   private readonly setPlayStatus: DecideRouteDeps['setPlayStatus'];
   private readonly lockReplayOptionsForPlay: DecideRouteDeps['lockReplayOptionsForPlay'];
   private readonly showSelect: DecideRouteDeps['showSelect'];
@@ -164,6 +167,7 @@ export class DecideRoute {
     this.recordingDeps = deps.recordingDeps;
     this.setRecordingFilenameBase = deps.setRecordingFilenameBase;
     this.setStatus = deps.setStatus;
+    this.showChartDiagnostics = deps.showChartDiagnostics;
     this.setPlayStatus = deps.setPlayStatus;
     this.lockReplayOptionsForPlay = deps.lockReplayOptionsForPlay;
     this.showSelect = deps.showSelect;
@@ -310,7 +314,10 @@ export class DecideRoute {
       preload = { options, play: this.preloadGameplay(chartEntry, options, token) };
     }
     const shown = await this.router.show(decide, { role: 'decide', token });
-    if (shown) then?.shown?.();
+    if (shown) {
+      this.showChartDiagnostics(decide.resolved.chart, chartEntry.chartPath);
+      then?.shown?.();
+    }
     if (shown && kit.family === 'beatoraja') this.setStatus(`Decide (beatoraja): ${chartEntry.title}`);
   }
 

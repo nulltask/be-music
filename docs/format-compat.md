@@ -352,6 +352,12 @@ The spec's `bga` (L765-806) has `bga_header`, `bga_events`, `layer_events` and `
 - Images: both read `back_image`, `eyecatch_image`, `banner_image` and `preview_music`. Be-Music maps them to `#BACKBMP`, `#STAGEFILE` (when none is set) and `#BANNER` equivalents, and additionally preserves `title_image` for the browser pre-play screen, with text fallback for missing assets.
 - Text: beatoraja appends `chart_name` to the subtitle as `[name]` and joins `subartists` with commas [V]; Be-Music keeps both as structured fields ([bmson spec](./bmson-spec.md#fields-read-by-implementation-parser)).
 
+### Chart load warnings
+
+Be-Music reports nonfatal chart load warnings on the browser's Music Select and decide screens and on the terminal player's standard error stream. The warnings cover legacy bmson conversion, unknown or malformed bmson mode hints, stacked bmson notes dropped for a length mismatch, undefined chart references and rejected chart options. References in a BMS chart with control flow are checked after the branch is chosen.
+
+Tools can read parser warnings from `BeMusicJSON.diagnostics` and the combined list from `resolveChart(chart).diagnostics`. Each warning provides a code, a message and a field path or measure, fraction and channel. Diagnostics have no effect on judging, playback or fingerprints.
+
 ## 4. Converting between BMS and bmson
 
 Be-Music's [`@be-music/chart-writer`](../packages/chart-writer/src/index.ts) writes both formats from one IR. The two formats disagree on units, so several values do not carry over as they are. The table states what the chart-writer does today; [bmson spec — Converting between BMS and bmson](./bmson-spec.md#converting-between-bms-and-bmson) has the details.

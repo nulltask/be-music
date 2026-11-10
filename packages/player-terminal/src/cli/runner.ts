@@ -1,3 +1,4 @@
+import { resolveChart } from '@be-music/chart-model';
 import { isCLIEntryPoint } from '@be-music/shared-utils/cli';
 import { stat } from 'node:fs/promises';
 import { dirname, extname, relative } from 'node:path';
@@ -711,6 +712,16 @@ async function playChartOnce(chartPath: string, args: CLIArgs): Promise<PlayedCh
     // Resolve `#RANDOM` / `#SWITCH` once here, so the preview render and the play below use the same branches and
     // the engine never draws on its own. A restart draws again (LR2 / beatoraja re-roll each play).
     playChart = resolvePlayChart(json);
+    for (const { message, position } of resolveChart(playChart.chart, {
+      chartPath,
+      inferBmsLNTypeWhenMissing: args.inferBmsLNTypeWhenMissing,
+    }).diagnostics) {
+      const location =
+        position.kind === 'field'
+          ? position.path
+          : `#${String(position.measure).padStart(3, '0')}${position.channel} ${position.position.join('/')}`;
+      process.stderr.write(`${chartPath}: ${location}: ${message}\n`);
+    }
 
     if (args.renderAudioPath) {
       reportPlayLoadingProgress?.({

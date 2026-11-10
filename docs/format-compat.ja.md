@@ -352,6 +352,12 @@ Be-Music も beatoraja と同じく読みます。`mine_channels` は `damage` �
 - 画像：どちらも `back_image`、`eyecatch_image`、`banner_image`、`preview_music` を読む。Be-Music はそれぞれ `#BACKBMP`、`#STAGEFILE`（未設定のとき）、`#BANNER` に相当する欄へ入れ、さらに Browser の演奏前画面用に `title_image` を保持する。画像がない場合はテキスト表示へ戻る。
 - テキスト：beatoraja は `chart_name` を `[name]` としてサブタイトルに付け加え、`subartists` をカンマでつなぐ [V]。Be-Music はどちらも構造を保ったまま持つ（[bmson 実装仕様](./bmson-spec.ja.md#実装が読み込むフィールド-parser)）。
 
+### 譜面読み込み時の警告
+
+Be-Music は、ブラウザの選曲・決定画面とターミナルプレイヤーの標準エラー出力に、読み込みを継続できる場合の警告を表示します。対象は旧形式の bmson の変換、未対応または無効な bmson のモード指定、長さの違いで除外された bmson の重複ノート、定義されていない譜面内の参照先、適用できなかった譜面オプションです。制御構文を含む BMS の参照先は、分岐を確定してから確認します。
+
+ツールでは `BeMusicJSON.diagnostics` からパーサーの警告を、`resolveChart(chart).diagnostics` から読み込みと解決の両方の警告を取得できます。各警告にはコード、メッセージ、フィールドのパスまたは小節・小節内の位置・チャンネルが含まれます。警告は判定、再生、フィンガープリントに影響しません。
+
 ## 4. BMS と bmson の相互変換
 
 Be-Music の [`@be-music/chart-writer`](../packages/chart-writer/src/index.ts) は 1 つの IR から両方のフォーマットを書き出します。2 つのフォーマットは単位が食い違うため、そのままでは引き継げない値がいくつかあります。下の表は現在の chart-writer の挙動です。詳細は [bmson 実装仕様 — BMS と bmson の相互変換](./bmson-spec.ja.md#bms-と-bmson-の相互変換) にあります。

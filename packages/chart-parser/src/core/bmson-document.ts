@@ -1,9 +1,11 @@
+import { resolveBmsonModeHintLayout } from '@be-music/chart-model';
 import { readBmsonExtraFields } from './bmson-extra-fields.ts';
 import {
   createEmptyJSON,
   type BmsonMineChannelEntry,
   type BeMusicEvent,
   type BeMusicJSON,
+  type ChartDiagnostic,
 } from '@be-music/chart-source';
 import { countDistinctValues, createBmsonValueKeyTable, encodeBmsonKey, resolveBmsonKeyBase } from './bmson-keys.ts';
 import { normalizeBmsonNoteLength, sortAndNormalizeEvents } from './event-utils.ts';
@@ -29,12 +31,33 @@ import { convertLegacyBmsonDocument, isLegacyBmsonDocument } from './bmson-legac
 
 export function parseBmsonDocument(source: BmsonDocument): BeMusicJSON {
   // Pre-1.0 charts are read as Bemuse reads them; the result is an ordinary 1.0.0 document.
-  const document = isLegacyBmsonDocument(source) ? convertLegacyBmsonDocument(source) : source;
+  const legacy = isLegacyBmsonDocument(source);
+  const document = legacy ? convertLegacyBmsonDocument(source) : source;
   const version = requireSupportedBmsonVersion(document);
   const json = createEmptyJSON('bmson');
   Object.assign(json.bmson, readBmsonExtraFields(document, 'root'));
 
   const info = document.info ?? {};
+  const diagnostics: ChartDiagnostic[] = [];
+  if (legacy) {
+    diagnostics.push({
+      code: 'legacy-bmson',
+      message: 'Converted legacy bmson v0.21 input.',
+      position: { kind: 'field', path: '$' },
+    });
+  }
+  const rawHint: unknown = info.mode_hint;
+  const hint = typeof rawHint === 'string' ? rawHint.trim() : rawHint;
+  if (hint !== undefined && hint !== '' && (typeof hint !== 'string' || !resolveBmsonModeHintLayout(hint))) {
+    const subject = typeof hint === 'string' ? JSON.stringify(hint) : undefined;
+    diagnostics.push({
+      code: 'unknown-mode-hint',
+      message: subject === undefined ? 'Invalid bmson mode hint.' : `Unsupported bmson mode hint ${subject}.`,
+      ...(subject === undefined ? {} : { subject }),
+      position: { kind: 'field', path: 'info.mode_hint' },
+    });
+  }
+  if (diagnostics.length > 0) json.diagnostics = diagnostics;
   json.bmson.version = version;
 
   const resolution = resolveBmsonResolution(document);
