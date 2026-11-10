@@ -69,6 +69,7 @@ describe('designed entries', () => {
       'inputSourceKey',
       'isOnePlayerBattleMode',
       'isPlayableInputChannel',
+      'isSPToDPBattleMode',
       'isSameInputSource',
       'isScratch',
       'isScratchSpin',
