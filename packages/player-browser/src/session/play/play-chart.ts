@@ -330,7 +330,9 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   );
   if (
     ctx.options.replay === undefined &&
-    laneSources.some(({ source, name }) => name === 'CONVERGE' && source === 'lr2') &&
+    laneSources.some(
+      ({ source, name }) => (name === 'CONVERGE' && source === 'lr2') || name === 'CONVERGE-CORRECTED',
+    ) &&
     !['5', '7', '9', '10', '14'].includes(playVariant)
   )
     throw new RangeError('LR2 CONVERGE supports 5/7/9/10/14 KEY charts.');
@@ -994,7 +996,7 @@ export function applyRandomMode(
     throw new RangeError('LR2 SCATTER requires a five-, seven- or nine-key domain.');
   if (mode === 'SCATTER-CORRECTED' && options.playVariant !== '9')
     throw new RangeError('Corrected SCATTER is a nine-key arrangement.');
-  if ((mode === 'S-RANDOM-CORRECTED' || mode === 'CONVERGE-CORRECTED') && options.playVariant !== '9')
+  if (mode === 'S-RANDOM-CORRECTED' && options.playVariant !== '9')
     throw new RangeError(`${mode} is a nine-key arrangement.`);
   if (mode === 'CONVERGE' && source === '____') throw new RangeError('CONVERGE is unavailable for this ruleset.');
   if (mode === 'CONVERGE' && source === 'beatoraja' && options.playVariant !== '9')
@@ -1080,9 +1082,13 @@ export function applyRandomMode(
                         thresholdBPM: options.hRandomThresholdBPM,
                       })
                     : randomizeLR2ConvergeNotes(timedNotes, allLanes, {
-                        target: allLanes[(options.fixedLane ?? 0) - 1] ?? options.scratch ?? allLanes[4]!,
+                        target:
+                          mode === 'CONVERGE' && options.side === '2P'
+                            ? resolveLR2SecondSideConvergeTarget(allLanes, options.fixedLane ?? 0)
+                            : (allLanes[(options.fixedLane ?? 0) - 1] ?? options.scratch ?? allLanes[4]!),
                         scratch: options.scratch,
                         random: rng,
+                        targetOutside: mode === 'CONVERGE' && options.side === '2P',
                         // LR2's nine-key draw reaches the 2P scratch; the corrected option keeps to the nine keys.
                         ...(mode === 'CONVERGE' && options.playVariant === '9' ? { outside: '26' } : {}),
                       })
@@ -1170,6 +1176,18 @@ export function applyRandomMode(
     remapAll(map);
     return;
   }
+}
+
+/**
+ * LR2's 2P CONVERGE target. LR2 adds the 2P start lane to the fixed key (`randFix[1] + startlane`, OpenLR2 `LR2f.cpp`
+ * L27374-L27380), one more than 1P's `randFix[0]`, so key `n` lands one lane to the right: 0 (the default) is key 1
+ * rather than the scratch, and the last key points past the keys, where nothing can hit the note. A fixed key past the
+ * mode's range is reset to 0, as LR2 does (L27325-L27331). Past the keys is the next LR2 lane: `28` on 10KEY, and on
+ * 14KEY, which has no channel for it, `2A`, which no 10 / 14KEY layout has.
+ */
+function resolveLR2SecondSideConvergeTarget(keys: readonly string[], fixedLane: number): string {
+  const index = fixedLane > keys.length ? 0 : fixedLane;
+  return keys[index] ?? (keys.length === 5 ? '28' : '2A');
 }
 
 const LONG_NOTE_MODE_VALUES = { LN: 1, CN: 2, HCN: 3 } as const;

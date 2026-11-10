@@ -18,11 +18,13 @@ export function randomizeLR2ConvergeNotes(
      * (inclusive `GetRand(9)`, OpenLR2 `LR2f.cpp` L27354, L27372), as SCATTER's does.
      */
     outside?: string;
+    /** LR2's 2P target may point one lane past the keys, where nothing can hit the note. */
+    targetOutside?: boolean;
   },
 ): string[] {
   const channels = notes.map((note) => note.channel);
   const domain = new Set(lanes);
-  if (!domain.has(options.target) && options.target !== options.scratch)
+  if (!domain.has(options.target) && options.target !== options.scratch && options.targetOutside !== true)
     throw new RangeError('CONVERGE target must be a key or scratch of this side.');
   const held = new Map<string, { source: string; endMs: number }>();
   const rows = new Map<number, number[]>();
