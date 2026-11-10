@@ -164,6 +164,33 @@ describe('resolveRuleset with a course', () => {
     expect(stage.gauge.values[3]).toBeCloseTo(-6 * damage, 9);
   });
 
+  test('LR2 holds a GROOVE or EASY pick at 2 % against mines on a course gauge, not other picks (#1082)', () => {
+    for (const [selectedGauge, kind] of [
+      ['GROOVE', 'grade'],
+      ['EASY', 'grade'],
+      ['GROOVE', 'expert'],
+      ['EASY', 'nonstop'],
+    ] as const) {
+      const stage = resolveRuleset(facts(), 'lr2', { selectedGauge, course: { kind, initialGauge: 5 } });
+      const gauge = new RulesetGauge(stage.gauge);
+      gauge.applyRawDelta(-10);
+      expect(gauge.value).toBe(2);
+      expect(gauge.cleared()).toBe(true);
+    }
+    for (const selectedGauge of ['HARD', 'G-ATTACK'] as const) {
+      const stage = resolveRuleset(facts(), 'lr2', { selectedGauge, course: { kind: 'grade', initialGauge: 5 } });
+      const gauge = new RulesetGauge(stage.gauge);
+      gauge.applyRawDelta(-10);
+      expect(gauge.value).toBe(0);
+    }
+    // A judgment still kills the gauge below the death border.
+    const groove = new RulesetGauge(
+      resolveRuleset(facts(), 'lr2', { selectedGauge: 'GROOVE', course: { kind: 'grade', initialGauge: 3 } }).gauge,
+    );
+    groove.applyJudge(4);
+    expect(groove.value).toBe(0);
+  });
+
   test('LR2 constrains the #EXRANK timeline tables too', () => {
     const chart = facts();
     chart.judgeRank.timeline = [{ timeUs: 1_000_000, exRankValue: 25 }];

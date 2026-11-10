@@ -141,6 +141,11 @@ export interface GaugeSpec {
   survival: boolean;
   /** LR2 survival gauges: values below this collapse to 0 (death border). */
   death?: number;
+  /**
+   * LR2: landmine damage stops at this value instead of going lower. LR2 holds HP at 2 when the player picked GROOVE
+   * or EASY, in a course too (OpenLR2 `LR2f.cpp` L2054-L2056), where the course gauge itself has no 2 % floor.
+   */
+  mineFloor?: number;
   /** Per-judge deltas in percent, `[PG, GR, GD, BD, missPOOR, emptyPOOR]`, AFTER TOTAL modifiers. */
   values: readonly [number, number, number, number, number, number];
   /** Low-gauge damage reduction steps (first match wins). */
@@ -908,14 +913,21 @@ function resolveGaugeShift(
  * recovery on final gauge tables separately, without changing this damage-scaling value.
  */
 function resolveEffectiveTotal(rulesetId: RulesetId, chart: RulesetChartFacts, baseNoteCount: number): number {
-  const fallback = resolveDefaultTotal(rulesetId, baseNoteCount, chart.laneMode);
+  // LR2 keeps TOTAL in an int: `#TOTAL` through `atol`, the default assigned to it, and a value below 1 replaced by the
+  // default (OpenLR2 `LR2f.cpp` L25824, L26299, L27566-L27579).
+  const lr2 = rulesetId === 'lr2';
+  const fallback = lr2
+    ? Math.trunc(resolveDefaultTotal(rulesetId, baseNoteCount, chart.laneMode))
+    : resolveDefaultTotal(rulesetId, baseNoteCount, chart.laneMode);
   const raw = chart.total;
   if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) {
     return fallback;
   }
-  return (chart.totalUnit ?? (chart.sourceFormat === 'bmson' ? 'percent' : 'absolute')) === 'percent'
-    ? (raw / 100) * fallback
-    : raw;
+  if ((chart.totalUnit ?? (chart.sourceFormat === 'bmson' ? 'percent' : 'absolute')) === 'percent')
+    return (raw / 100) * fallback;
+  if (!lr2) return raw;
+  const truncated = Math.trunc(raw);
+  return truncated < 1 ? fallback : truncated;
 }
 
 /**
@@ -987,14 +999,18 @@ function resolveRulesetTables(
     applyCourseJudgeConstraint(applyChartJudgeModifiers(tables, options.chartJudge), course?.judge);
   // A course gauge starts from the value its own id carried in (auto-shift carries every ladder gauge's), else from the
   // value the played gauge carried.
-  const courseGaugeOf = (id: string, total: number, stage: RulesetCourseOptions): GaugeSpec =>
-    resolveCourseGauge(
+  // LR2 keeps a GROOVE or EASY pick's mine damage at 2 % on its course gauge too (#1082).
+  const courseMineFloor = rulesetId === 'lr2' && ['GROOVE', 'EASY'].includes(selectedGauge) ? 2 : undefined;
+  const courseGaugeOf = (id: string, total: number, stage: RulesetCourseOptions): GaugeSpec => {
+    const spec = resolveCourseGauge(
       rulesetId,
       id,
       { ...stage, initialGauge: stage.initialGauges?.[id] ?? stage.initialGauge },
       chart.laneMode,
       resolveLR2HardDamageMultiplier(total, baseNotes),
     );
+    return courseMineFloor === undefined ? spec : { ...spec, mineFloor: courseMineFloor };
+  };
   const courseGauge = (total: number): GaugeSpec | undefined =>
     course === undefined ? undefined : courseGaugeOf(gaugeId, total, course);
   // Gauge auto-shift's parallel gauges; `singleGaugeOf` builds a single-play gauge of the ruleset by id.
