@@ -2,4 +2,4 @@
 '@be-music/player-engine': patch
 ---
 
-Speed up beatoraja S-RANDOM on rows with empty, mine-only or hidden-note lanes by ordering their destinations once per row while preserving seeded arrangements.
+Speed up beatoraja S-RANDOM by reusing the unheld lane lists and ordering empty, mine-only and hidden-note destinations once per row while preserving seeded arrangements.

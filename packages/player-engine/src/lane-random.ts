@@ -184,24 +184,24 @@ function randomizeTimeBasedNotes(
     }
     if (converge)
       for (const lane of lanes) if (Math.trunc(timeMs) - lastNoteTime.get(lane)! > thresholdMs * 2) streak.set(lane, 0);
-    // Most rows hold no long note: skip building the held-lane sets for them.
-    const occupied = held.size > 0 ? new Set([...held.values()].map((hold) => hold.target)) : undefined;
-    const free = occupied === undefined ? assignable.slice() : assignable.filter((lane) => !occupied.has(lane));
-    const map =
-      held.size > 0 ? new Map([...held].map(([source, hold]) => [source, hold.target])) : new Map<string, string>();
-    const scoring = new Set(
-      indices
-        .filter((index) => domain.has(notes[index]!.channel) && (notes[index]!.kind ?? 'note') === 'note')
-        .map((index) => notes[index]!.channel),
-    );
+    // The mutable source and destination lists already exclude lanes reserved by active holds.
+    const free = assignable.slice();
+    const map = new Map<string, string>();
+    for (const [source, hold] of held) map.set(source, hold.target);
+    const scoring = new Set<string>();
+    for (const index of indices) {
+      const note = notes[index]!;
+      if (domain.has(note.channel) && (note.kind ?? 'note') === 'note') scoring.add(note.channel);
+    }
     let playableCombination: readonly string[] | undefined;
     if (playable) {
       // getNoteExistLane includes LN tails; source noteCount additionally counts
       // every active hold, so tails contribute twice on their exact timeline.
       const noteCount = scoring.size + held.size + [...held.values()].filter((hold) => hold.endMs === timeMs).length;
       if (noteCount > 2 && noteCount < 7) {
+        const occupied = [...held.values()].map((hold) => hold.target);
         const combinations = PMS_PLAYABLE_CHORDS.map((chord) => chord.map((index) => lanes[index]!)).filter((chord) =>
-          [...(occupied ?? [])].every((lane) => chord.includes(lane)),
+          occupied.every((lane) => chord.includes(lane)),
         );
         if (combinations.length > 0) {
           const candidates = combinations
@@ -216,7 +216,7 @@ function randomizeTimeBasedNotes(
       }
     }
     // Upstream assigns scoring sources first, then the row's empty/mine/hidden sources.
-    const sources = changeable.filter((lane) => !held.has(lane));
+    const sources = allScratch ? changeable.slice() : changeable;
     if (allScratch) {
       const scratch = allScratch.scratchLanes[scratchIndex]!;
       const source = sources.find((lane) => scoring.has(lane));
