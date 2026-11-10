@@ -503,6 +503,25 @@ describe('beatoraja candidate order (#1087)', () => {
     expect(channels).toEqual(['a', 'b', 'c']);
   });
 
+  test('successive empty-source draws keep past and recent lanes in their relative order', () => {
+    const draws = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.5, 0.5, 0, 0];
+    const channels = randomizeSRandomNotes(
+      [
+        { channel: 'a', timeMs: 0 },
+        { channel: 'b', timeMs: 5 },
+        { channel: 'a', timeMs: 10 },
+        { channel: 'b', timeMs: 10, kind: 'mine' },
+        { channel: 'c', timeMs: 10, kind: 'invisible' },
+        { channel: 'd', timeMs: 10, kind: 'invisible' },
+        { channel: 'e', timeMs: 10, kind: 'mine' },
+      ],
+      ['a', 'b', 'c', 'd', 'e'],
+      { ruleset: 'beatoraja', random: () => draws.shift()! },
+    );
+    expect(channels).toEqual(['a', 'b', 'c', 'a', 'e', 'd', 'b']);
+    expect(draws).toEqual([]);
+  });
+
   test('DP ALL-SCR takes the lowest-numbered lane on 1P even after a released long note reorders the lanes', () => {
     const channels = randomizeAllScratchNotes(
       [

@@ -228,50 +228,56 @@ function randomizeTimeBasedNotes(
         scratchIndex = (scratchIndex + 1) % allScratch.scratchLanes.length;
       }
     }
-    const ordered = [...sources.filter((lane) => scoring.has(lane)), ...sources.filter((lane) => !scoring.has(lane))];
     const nowMs = Math.trunc(timeMs);
     const pastThreshold = (lane: string): boolean => nowMs - lastNoteTime.get(lane)! > thresholdMs;
-    // Whether a free lane is within the threshold when the empty sources are reached; until then, unknown. Empty
-    // sources come after every scoring one, so the free lanes only shrink from there and the answer holds for the row.
-    let recentFree: boolean | undefined;
-    for (const source of ordered) {
-      let candidates = free;
-      let useSidePriority = false;
-      let useStreak = false;
-      let usePlayable = false;
-      if (options.ruleset === 'beatoraja' && scoring.has(source)) {
-        const eligible = free.filter(pastThreshold);
-        if (eligible.length > 0) {
-          candidates = eligible;
-          useSidePriority = allScratch?.doublePlay === true;
-          useStreak = converge;
-          usePlayable = playableCombination !== undefined;
-        } else {
-          const oldest = Math.min(...free.map((lane) => lastNoteTime.get(lane)!));
-          candidates = free.filter((lane) => lastNoteTime.get(lane) === oldest);
+    for (const source of sources) {
+      if (!scoring.has(source)) continue;
+      let candidates = free.filter(pastThreshold);
+      const hasPast = candidates.length > 0;
+      if (!hasPast) {
+        const oldest = Math.min(...free.map((lane) => lastNoteTime.get(lane)!));
+        candidates = free.filter((lane) => lastNoteTime.get(lane) === oldest);
+      } else {
+        if (converge) {
+          const longest = Math.max(...candidates.map((lane) => streak.get(lane)!));
+          candidates = candidates.filter((lane) => streak.get(lane) === longest);
+        }
+        if (playableCombination !== undefined) {
+          const allowed = candidates.filter((lane) => playableCombination.includes(lane));
+          if (allowed.length > 0) candidates = allowed;
         }
       }
-      if (useStreak) {
-        const longest = Math.max(...candidates.map((lane) => streak.get(lane)!));
-        candidates = candidates.filter((lane) => streak.get(lane) === longest);
-      }
-      if (usePlayable) {
-        const allowed = candidates.filter((lane) => playableCombination!.includes(lane));
-        if (allowed.length > 0) candidates = allowed;
-      }
-      // DP ALL-SCR leans toward the scratch: 1P takes the lowest-numbered lane, 2P the highest (Randomizer L409-L436),
-      // numbered as the source numbers them, keys then scratch; not the candidates' order, which a released LN changes.
-      // Upstream places a row's empty, mine-only and hidden-only lanes over the lanes past the threshold first, then the
-      // rest (`primaryLane.addAll(inferiorLane)`, Randomizer L241-L246), so a seed puts them where it does.
-      const target = useSidePriority
-        ? pickSideLane(candidates, laneNumbers!, allScratch?.side === '2P')
-        : options.ruleset === 'beatoraja' && !scoring.has(source) && (recentFree ??= !free.every(pastThreshold))
-          ? pickPastFirst(free, pastThreshold, options.random)
+      // DP ALL-SCR leans toward the scratch by lane number, regardless of how a released LN reordered the lanes.
+      const target =
+        allScratch?.doublePlay === true && hasPast
+          ? pickSideLane(candidates, laneNumbers!, allScratch.side === '2P')
           : pickRandom(candidates, options.random);
-      if (useStreak) streak.set(target, streak.get(target)! + 1);
+      if (converge && hasPast) streak.set(target, streak.get(target)! + 1);
       map.set(source, target);
       free.splice(free.indexOf(target), 1);
-      if (options.ruleset === 'beatoraja' && scoring.has(source)) lastNoteTime.set(target, Math.trunc(timeMs));
+      lastNoteTime.set(target, nowMs);
+    }
+
+    // Upstream appends recent destinations after the past-threshold ones for empty, mine and hidden sources.
+    // Empty sources don't update jack times, and removing a draw preserves the order, so partition just once per row.
+    const emptySources = sources.filter((lane) => !scoring.has(lane));
+    if (emptySources.length > 0) {
+      const firstRecent = free.findIndex((lane) => !pastThreshold(lane));
+      if (firstRecent !== -1) {
+        const recent = [free[firstRecent]!];
+        let pastEnd = firstRecent;
+        for (let index = firstRecent + 1; index < free.length; index++) {
+          const lane = free[index]!;
+          if (pastThreshold(lane)) free[pastEnd++] = lane;
+          else recent.push(lane);
+        }
+        free.length = pastEnd;
+        free.push(...recent);
+      }
+      for (const source of emptySources) {
+        const index = drawLaneRandomIndex(free.length, options.random);
+        map.set(source, free.splice(index, 1)[0]!);
+      }
     }
     for (const index of indices) {
       const note = notes[index]!;
@@ -289,20 +295,6 @@ function randomizeTimeBasedNotes(
     }
   }
   return channels;
-}
-
-/**
- * Draws one of `lanes` as if they were ordered with the lanes `isPast` accepts first, both groups in their own order,
- * without building that order.
- */
-function pickPastFirst(lanes: readonly string[], isPast: (lane: string) => boolean, random: () => number): string {
-  let pastCount = 0;
-  for (const lane of lanes) if (isPast(lane)) pastCount++;
-  let index = drawLaneRandomIndex(lanes.length, random);
-  const wantPast = index < pastCount;
-  if (!wantPast) index -= pastCount;
-  for (const lane of lanes) if (isPast(lane) === wantPast && index-- === 0) return lane;
-  throw new RangeError('Lane draw out of range.');
 }
 
 /** The lowest-numbered lane (the highest with `highest`), numbered as the source numbers them. */
