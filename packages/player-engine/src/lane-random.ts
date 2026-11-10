@@ -145,8 +145,7 @@ function randomizeTimeBasedNotes(
   lanes = [...new Set(lanes)];
   const channels = notes.map((note) => note.channel);
   const domain = new Set(lanes);
-  const laneNumbers =
-    allScratch?.doublePlay === true ? new Map(lanes.map((lane, index) => [lane, index])) : new Map<string, number>();
+  const laneNumbers = allScratch?.doublePlay === true ? new Map(lanes.map((lane, index) => [lane, index])) : undefined;
   const rows = new Map<number, number[]>();
   notes.forEach((note, index) => {
     if (!visitAllRows && !domain.has(note.channel)) return;
@@ -232,34 +231,14 @@ function randomizeTimeBasedNotes(
     const ordered = [...sources.filter((lane) => scoring.has(lane)), ...sources.filter((lane) => !scoring.has(lane))];
     const nowMs = Math.trunc(timeMs);
     const pastThreshold = (lane: string): boolean => nowMs - lastNoteTime.get(lane)! > thresholdMs;
-    let emptiesOrdered = false;
+    // Whether a free lane is within the threshold when the empty sources are reached; until then, unknown. Empty
+    // sources come after every scoring one, so the free lanes only shrink from there and the answer holds for the row.
+    let recentFree: boolean | undefined;
     for (const source of ordered) {
       let candidates = free;
       let useSidePriority = false;
       let useStreak = false;
       let usePlayable = false;
-      if (options.ruleset === 'beatoraja' && !scoring.has(source) && !emptiesOrdered) {
-        // Upstream places a row's empty, mine-only and hidden-only lanes over the lanes past the threshold first, then
-        // the rest (`primaryLane.addAll(inferiorLane)`, Randomizer L241-L246), so a seed puts them where it does. The
-        // scoring sources come first, so the free lanes are reordered once, when the first empty source is reached.
-        // Only a lane past the threshold behind one that is not changes the order; most rows need no copy.
-        let seenRecent = false;
-        let reorder = false;
-        for (const lane of free) {
-          if (!pastThreshold(lane)) seenRecent = true;
-          else if (seenRecent) {
-            reorder = true;
-            break;
-          }
-        }
-        if (reorder) {
-          const past = free.filter(pastThreshold);
-          const rest = free.filter((lane) => !pastThreshold(lane));
-          free.length = 0;
-          free.push(...past, ...rest);
-        }
-        emptiesOrdered = true;
-      }
       if (options.ruleset === 'beatoraja' && scoring.has(source)) {
         const eligible = free.filter(pastThreshold);
         if (eligible.length > 0) {
@@ -282,9 +261,13 @@ function randomizeTimeBasedNotes(
       }
       // DP ALL-SCR leans toward the scratch: 1P takes the lowest-numbered lane, 2P the highest (Randomizer L409-L436),
       // numbered as the source numbers them, keys then scratch; not the candidates' order, which a released LN changes.
+      // Upstream places a row's empty, mine-only and hidden-only lanes over the lanes past the threshold first, then the
+      // rest (`primaryLane.addAll(inferiorLane)`, Randomizer L241-L246), so a seed puts them where it does.
       const target = useSidePriority
-        ? pickSideLane(candidates, laneNumbers, allScratch?.side === '2P')
-        : pickRandom(candidates, options.random);
+        ? pickSideLane(candidates, laneNumbers!, allScratch?.side === '2P')
+        : options.ruleset === 'beatoraja' && !scoring.has(source) && (recentFree ??= !free.every(pastThreshold))
+          ? pickPastFirst(free, pastThreshold, options.random)
+          : pickRandom(candidates, options.random);
       if (useStreak) streak.set(target, streak.get(target)! + 1);
       map.set(source, target);
       free.splice(free.indexOf(target), 1);
@@ -306,6 +289,20 @@ function randomizeTimeBasedNotes(
     }
   }
   return channels;
+}
+
+/**
+ * Draws one of `lanes` as if they were ordered with the lanes `isPast` accepts first, both groups in their own order,
+ * without building that order.
+ */
+function pickPastFirst(lanes: readonly string[], isPast: (lane: string) => boolean, random: () => number): string {
+  let pastCount = 0;
+  for (const lane of lanes) if (isPast(lane)) pastCount++;
+  let index = drawLaneRandomIndex(lanes.length, random);
+  const wantPast = index < pastCount;
+  if (!wantPast) index -= pastCount;
+  for (const lane of lanes) if (isPast(lane) === wantPast && index-- === 0) return lane;
+  throw new RangeError('Lane draw out of range.');
 }
 
 /** The lowest-numbered lane (the highest with `highest`), numbered as the source numbers them. */
