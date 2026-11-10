@@ -6,7 +6,7 @@ import { onPlayerLangChange, playerLang } from '../player-copy.ts';
 const japanese: Record<ChartDiagnostic['code'], string> = {
   'legacy-bmson': '旧形式の bmson v0.21 を変換しました。',
   'unknown-mode-hint': '未対応または無効な bmson のモード指定です。',
-  'stacked-note-length': '長さの異なる重複ノーツとそのキー音を除外しました。',
+  'stacked-note-length': '長さの異なる重複ノートとそのキー音を除外しました。',
   'missing-reference': '譜面内の参照先が定義されていません。',
   'unsupported-option': '未対応の譜面オプションです。',
   'invalid-option': '無効な譜面オプションです。',
