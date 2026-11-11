@@ -101,6 +101,18 @@ describe('LR2SelectView buttons', () => {
     expect(step('BEATORAJA', 1)).toEqual([{ type: 'set-play-option', key: 'judgeTimingAutoAdjust', value: 'OFF' }]);
   });
 
+  it('steps both gauge buttons (40 / 41) from the corrected gauge’s HAZARD cell to EASY', () => {
+    const { view, intents } = createView({
+      playOptions: { gauge1P: 'DEATH-CORRECTED', gauge2P: 'DEATH-CORRECTED' } as SelectFrame['playOptions'],
+    });
+    view.dispatchButtonClick({ type: 40 }, 1);
+    view.dispatchButtonClick({ type: 41 }, 1);
+    expect(intents).toEqual([
+      { type: 'set-play-option', key: 'gauge1P', value: 'EASY' },
+      { type: 'set-play-option', key: 'gauge2P', value: 'EASY' },
+    ]);
+  });
+
   it('steps the RANDOM buttons (42 / 43) through LR2’s own lane options only, by the half clicked', () => {
     const step = (random1P: string, type: number, direction: 1 | -1) => {
       const { view, intents } = createView({

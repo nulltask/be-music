@@ -113,6 +113,7 @@ describe('player cli', () => {
     expect(parseArgs(['chart.bms', '--ruleset', 'beatoraja']).judgeRuleset).toBe('beatoraja');
     expect(parseArgs(['chart.bms', '--ruleset', '____']).judgeRuleset).toBe('____');
     expect(parseArgs(['chart.bms', '--gauge', 'hard']).gauge).toBe('HARD');
+    expect(parseArgs(['chart.bms', '--gauge', 'death-corrected']).gauge).toBe('DEATH-CORRECTED');
 
     expect(parseArgs(['chart.bms']).endOnFailure).toBeUndefined();
     expect(parseArgs(['chart.bms', '--no-end-on-failure']).endOnFailure).toBe(false);

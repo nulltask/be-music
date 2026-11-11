@@ -272,7 +272,7 @@ PRACTICE は beatoraja のモードで、設定は判定ルールが読みます
 
 | 設定           | beatoraja                                                                       | LR2                                                                                        | AC（`????`）                               |
 | -------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------ |
-| GAUGE TYPE     | ASSIST EASY・EASY・NORMAL・HARD・EX-HARD・HAZARD・GRADE・EX GRADE・EXHARD GRADE | GROOVE・HARD・HAZARD・EASY・P.ATTACK・G.ATTACK                                             | ASSISTED EASY・EASY・NORMAL・HARD・EX-HARD |
+| GAUGE TYPE     | ASSIST EASY・EASY・NORMAL・HARD・EX-HARD・HAZARD・GRADE・EX GRADE・EXHARD GRADE | GROOVE・HARD・HAZARD・EASY・P.ATTACK・G.ATTACK・DEATH corrected                            | ASSISTED EASY・EASY・NORMAL・HARD・EX-HARD |
 | GAUGE CATEGORY | **Play mode** または beatoraja のカテゴリー                                     | 隠す（ゲージの表が 1 つ）                                                                  | 隠す（ゲージの表が 1 つ）                  |
 | JUDGERANK      | beatoraja の judgerank（`NORMAL` ルールで rank 2 = 75）                         | LR2 の `#RANK` の表での judgerank（%）。25・50・75・100 が `#RANK` 0〜3（VERY HARD〜EASY） | 隠す（判定幅が固定）                       |
 | TOTAL          | NORMAL 以下のゲージでは範囲内に残ったノーツ数で換算                             | そのまま使う。0 なら譜面全体の TOTAL                                                       | 隠す（ゲージが TOTAL を使わない）          |
@@ -425,11 +425,15 @@ flowchart LR
 
 参照元：beatoraja 0.8.9 の [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java#L641-L674)、[`GrooveGauge`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GrooveGauge.java)、[`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java)。対応 Issue は [#729](https://github.com/nulltask/be-music/issues/729)、[#730](https://github.com/nulltask/be-music/issues/730)、[#731](https://github.com/nulltask/be-music/issues/731)、[#732](https://github.com/nulltask/be-music/issues/732) です。
 
+## DEATH corrected
+
+LR2 ルールでは、通常プレイと PRACTICE の **DEATH corrected** を Options ダイアログで選択できます。ターミナルプレイヤーでは `--gauge DEATH-CORRECTED` を指定します。LR2 スキンでは HAZARD の画像を表示し、そこからゲージボタンを押すと EASY に進みます。
+
 ## P.ATTACK / G.ATTACK
 
 LR2 ルールでは、Options ダイアログ の **Gauge** に GROOVE・HARD・DEATH・EASY に続いて **P.ATTACK** と **G.ATTACK** も表示します。LR2 beta3 のゲージオプションの順です。どちらも満タンから始まるサバイバルゲージで、LR2 の死亡境界 2 を使います。P.ATTACK（PERFECT ATTACK）は PGREAT で 0.1 回復し、GREAT で 1 減少し、GOOD 以下で失敗します。G.ATTACK（GOOD ATTACK）は GOOD で 0.1 回復し、GREAT で 1、BAD で 6 減少し、PGREAT と POOR では HARD の譜面依存のダメージ係数の 10 倍、空 POOR では 2 倍を減らします。どちらも残量 32 未満では BAD・POOR・空 POOR のダメージを LR2 の HARD と同様に 60 % にします。クリアすると HARD ランプです。beatoraja と AC のルールにこれらのゲージはなく、直接指定した場合はエラーにします。これらのルールへ切り替えると GROOVE に戻します。
 
-LR2 スキンのゲージボタンは 6 セルを巡回し、P.ATTACK と G.ATTACK はセル 4 と 5 です。ゲージの表示は P.ATTACK と G.ATTACK と綴り、リプレイには `play.gauge: "P-ATTACK"` または `"G-ATTACK"` と同じ名前の結果ゲージを記録します。LR2 の GRADE コースでは、LR2 と同様にコース開始時に P.ATTACK を維持し、G.ATTACK は EASY と同じく GROOVE に戻します。戻したプレイのランプは NORMAL です。EXPERT と NONSTOP のコースは両方のゲージを維持し、どちらの攻撃ゲージでもコースをクリアすると HARD ランプです。LR2 のコースクリアには LR2 のコースクリア判定に従い、すべてのノートの判定も必要で、最終ゲージがちょうど 2 の場合はフルコンボのときだけクリアです。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
+LR2 スキンのゲージボタンは 6 セルを巡回し、P.ATTACK と G.ATTACK はセル 4 と 5 です。通常プレイと PRACTICE の **DEATH corrected** は Options ダイアログで選択できます。ターミナルプレイヤーでは `--gauge DEATH-CORRECTED` を指定します。LR2 スキンでは HAZARD の画像を表示し、そこからゲージボタンを押すと EASY に進みます。ゲージの表示は P.ATTACK と G.ATTACK と綴り、リプレイには `play.gauge: "P-ATTACK"` または `"G-ATTACK"` と同じ名前の結果ゲージを記録します。LR2 の GRADE コースでは、LR2 と同様にコース開始時に P.ATTACK を維持し、G.ATTACK は EASY と同じく GROOVE に戻します。戻したプレイのランプは NORMAL です。EXPERT と NONSTOP のコースは両方のゲージを維持し、どちらの攻撃ゲージでもコースをクリアすると HARD ランプです。LR2 のコースクリアには LR2 のコースクリア判定に従い、すべてのノートの判定も必要で、最終ゲージがちょうど 2 の場合はフルコンボのときだけクリアです。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
 参照元：OpenLR2 の[ゲージテーブル](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27654-L27800)と[ダメージ軽減](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1954-L1960)。対応 Issue は [#727](https://github.com/nulltask/be-music/issues/727)、[#728](https://github.com/nulltask/be-music/issues/728)、[#408](https://github.com/nulltask/be-music/issues/408) です。
 

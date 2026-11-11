@@ -17,8 +17,10 @@ test('PRACTICE lists the judge ruleset’s own gauges, named as it names them (#
     'EASY',
     'P.ATTACK',
     'G.ATTACK',
+    'DEATH corrected',
   ]);
   expect(practiceGaugeItems('lr2')[2]).toEqual({ text: 'HAZARD', value: 'DEATH' });
+  expect(practiceGaugeItems('lr2').at(-1)).toEqual({ text: 'DEATH corrected', value: 'DEATH-CORRECTED' });
   expect(practiceGaugeItems('beatoraja').map((item) => item.text)).toEqual([
     'ASSIST EASY',
     'EASY',

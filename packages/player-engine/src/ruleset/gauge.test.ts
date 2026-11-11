@@ -289,6 +289,18 @@ test('LR2 HAZARD needs HP 80 at the end of a single chart; the corrected HAZARD 
   expect(hazard('DEATH').cleared()).toBe(false);
   expect(resolveRuleset(chart, 'lr2', { selectedGauge: 'DEATH-CORRECTED' }).gauge.id).toBe('DEATH-CORRECTED');
   expect(hazard('DEATH-CORRECTED').cleared()).toBe(true);
+  for (const [id, cleared] of [
+    ['DEATH', false],
+    ['DEATH-CORRECTED', true],
+  ] as const) {
+    const practice = resolveRuleset(chart, 'lr2', {
+      practice: { sourceNotes: chart.notes, gauge: id, startGauge: 70 },
+    });
+    const gauge = new RulesetGauge(practice.gauge);
+    expect(gauge.spec.id).toBe(id);
+    expect(gauge.value).toBe(70);
+    expect(gauge.cleared()).toBe(cleared);
+  }
   // At 80 or more the faithful one clears too.
   const full = new RulesetGauge(resolveRuleset(chart, 'lr2', { selectedGauge: 'DEATH' }).gauge);
   full.applyRawDelta(-20);
