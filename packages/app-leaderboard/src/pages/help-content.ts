@@ -168,8 +168,8 @@ const en: HelpContent = {
         </p>
         <p>
           Under LR2 rules, DEATH requires at least 80% at the end of a single chart, while DEATH corrected clears by
-          surviving. Both award the CLEAR lamp for a standard clear. beatoraja’s HAZARD shares the EX HARD CLEAR lamp
-          with EX-HARD.
+          surviving. Both award the CLEAR lamp for a standard clear. Under beatoraja rules, HAZARD awards FULL COMBO
+          when the gauge determines the lamp.
         </p>`,
     })}${Section({
       id: 'long-notes',
@@ -335,8 +335,8 @@ const ja: HelpContent = {
         </p>
         <p>
           LR2 の単曲プレイでは、DEATH は終了時に 80% 以上でクリアし、DEATH corrected
-          は生き残ればクリアします。どちらも通常クリアのランプは CLEAR です。beatoraja の HAZARD は EX-HARD と同じ EX
-          HARD CLEAR です。
+          は生き残ればクリアします。どちらも通常クリアのランプは CLEAR です。beatoraja
+          ルールでゲージからランプを決める場合、HAZARD は FULL COMBO になります。
         </p>`,
     })}${Section({
       id: 'long-notes',

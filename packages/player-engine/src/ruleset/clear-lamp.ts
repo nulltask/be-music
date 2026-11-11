@@ -101,7 +101,7 @@ export function topClearLamp(ruleset: string | undefined): ClearLamp {
 /**
  * The lamp a cleared single play earns from its gauge, by the gauge ids the rulesets use (`GROOVE` / `EASY` / `HARD` /
  * `DEATH` under LR2, `ASSIST-EASY` / `EASY` / `NORMAL` / `HARD` / `EX-HARD` / `HAZARD` under beatoraja,
- * `ASSISTED-EASY` … under That-Which-Must-Not-Be-Named). DEATH and HAZARD clear on the strictest lamp below the full-combo ones.
+ * `ASSISTED-EASY` … under That-Which-Must-Not-Be-Named). Ruleset-specific exceptions are below.
  */
 const GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
   // beatoraja 0.8.9 `ClearType`: the ASSIST EASY gauge (gauge type 0) clears on LightAssistEasy.
@@ -124,11 +124,12 @@ const GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
  * The lamp a cleared single play earns from its gauge (a ruleset gauge id, any case), before the full-combo lamps:
  * `NORMAL` for a gauge the table does not know. LR2 awards HARD only for its HARD-family gauges and NORMAL for every
  * other one but EASY, so a DEATH clear is NORMAL there (OpenLR2 `LR2f.cpp` L2593-L2600, LR2body.exe CheckClear
- * @0x405da0); beatoraja and That-Which-Must-Not-Be-Named keep EX HARD for theirs.
+ * @0x405da0). beatoraja maps HAZARD (gauge type 5) to FULL COMBO in `ClearType`.
  */
 function gaugeClearLamp(gauge: string | undefined, ruleset: string | undefined): ClearLamp {
   const id = gauge?.toUpperCase();
   if (ruleset === 'lr2' && (id === 'DEATH' || id === 'DEATH-CORRECTED')) return 'NORMAL';
+  if (ruleset === 'beatoraja' && id === 'HAZARD') return 'FULL_COMBO';
   return (id !== undefined ? GAUGE_LAMPS[id] : undefined) ?? 'NORMAL';
 }
 
@@ -204,7 +205,7 @@ export function isFullCombo(score: {
 
 /** What the clear lamp of a single play is read from. */
 export interface PlayClearLampFacts {
-  /** The judge ruleset the play ran under (`lr2`, `beatoraja`, `____`); any other value or none uses beatoraja's lamps. */
+  /** The judge ruleset the play ran under (`lr2`, `beatoraja`, `____`); an unknown or missing value uses the shared defaults. */
   ruleset?: string;
   /** The ruleset's verdict on the gauge the play ended on. */
   cleared: boolean;
