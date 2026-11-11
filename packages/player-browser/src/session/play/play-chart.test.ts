@@ -148,6 +148,17 @@ describe('applyRandomMode', () => {
     expect(channelsOf(pms)).toEqual(beatorajaShuffle(resolveLaneOptionChannels('1P', '9'), seededRandom(11)));
   });
 
+  test.each(['10', '14'] as const)('RANDOM ignores Fixed key 2P on %s KEY under every ruleset', (playVariant) => {
+    const lanes = resolveLaneOptionChannels('2P', playVariant);
+    const drawn = beatorajaShuffle(lanes, seededRandom(11));
+    const fixedLane = lanes.indexOf(drawn[0]!) === 0 ? 2 : 1;
+    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+      const notes = notesOn(lanes);
+      applyRandomMode(notes, lanes, 'RANDOM', seededRandom(11), { ruleset, side: '2P', fixedLane, playVariant });
+      expect(channelsOf(notes)).toEqual(drawn);
+    }
+  });
+
   test('LR2 nine-key S-RANDOM and CONVERGE can reach the 2P scratch; the corrected options keep to the nine keys (#1083)', () => {
     const pms = resolveLaneOptionChannels('1P', '9');
     // The last draw of ten destinations is the tenth one, outside the playfield.
