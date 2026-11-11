@@ -93,7 +93,7 @@ flowchart LR
 
 LR2（OpenLR2）・beatoraja・AC / PC 版のレーンオプションを比べた結果、プレイする内容が変わらない修飾付きの値が 2 つありました。
 
-- **RANDOM は 1 つのオプションにします。** LR2・beatoraja・AC はいずれも譜面全体で鍵盤を 1 回並べ替え、皿は動かしません。どれもすべての配置が同じ確率で出ます。違うのは乱数を配置に変える手順だけで、LR2 の乱数列は Be-Music では再現できません。そこで RANDOM は修飾を付けない値にし、beatoraja の `LaneRandomShuffleModifier` と同じ手順で引き（シードから beatoraja と同じ配置になります）、そのあと LR2 の固定鍵盤（`randFix`）が元の 1 鍵を選んだ鍵盤へ移します。9 鍵では使いません。どのルールセットでも同じです。
+- **RANDOM は 1 つのオプションにします。** LR2・beatoraja・AC はいずれも譜面全体で鍵盤を 1 回並べ替え、皿は動かしません。どれもすべての配置が同じ確率で出ます。違うのは乱数を配置に変える手順だけで、LR2 の乱数列は Be-Music では再現できません。そこで RANDOM は修飾を付けない値にし、beatoraja の `LaneRandomShuffleModifier` と同じ手順で引き（シードから beatoraja と同じ配置になります）、そのあと LR2 の固定鍵盤（`randFix`）が 1P の元の 1 鍵を選んだ鍵盤へ移します。9 鍵では使いません。どのルールセットでも、RANDOM は LR2 と同じく Fixed key 2P を無視します。[#1093](https://github.com/nulltask/be-music/issues/1093)
 - **AC の S-RANDOM は LR2 のものと同じです。** どちらもノートを 1 つずつ置き、縦連を避けません。40ms 以内の縦連を避ける beatoraja のものは別に残します。S-RANDOM の修飾は `lr2:S-RANDOM` と `beatoraja:S-RANDOM` だけになり、AC のルールでの修飾なしの S-RANDOM は `lr2:S-RANDOM` と読みます。Options ダイアログでは **S-RANDOM (LR2 / ????)** と表示します。
 - **以前の値もそのまま使えます。** `lr2:RANDOM`・`beatoraja:RANDOM`・`____:RANDOM`・`____:S-RANDOM` は `RANDOM` と `lr2:S-RANDOM` と読みます（`canonicalOptionValue`）。保存済みの設定は読み込むときに移行し、配置を記録しているリプレイは書き換えません。LR2 の RANDOM ボタンは OFF・MIRROR・RANDOM・`lr2:S-RANDOM`・SCATTER・`lr2:CONVERGE` の順に切り替え、beatoraja のボタンの RANDOM の枠は修飾なしの RANDOM です。
 

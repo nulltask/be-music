@@ -1179,9 +1179,11 @@ export function applyRandomMode(
       const source = available.splice(drawLaneRandomIndex(available.length, rng), 1)[0]!;
       map.set(source, target);
     }
-    // LR2's fixed key (randFix) then moves the original key 1 to the chosen key; LR2's nine-key RANDOM ignores it.
+    // LR2 applies randFix to 1P RANDOM outside nine-key play.
     const fixed =
-      mode === 'RANDOM' && options.playVariant !== '9' ? domainLanes[(options.fixedLane ?? 0) - 1] : undefined;
+      mode === 'RANDOM' && options.side !== '2P' && options.playVariant !== '9'
+        ? domainLanes[(options.fixedLane ?? 0) - 1]
+        : undefined;
     if (fixed !== undefined) {
       const first = domainLanes[0]!;
       const displaced = [...map].find(([, target]) => target === fixed)![0];

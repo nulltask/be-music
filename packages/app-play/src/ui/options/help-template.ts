@@ -138,7 +138,10 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dt>Fixed key 1P (LR2; 0=default)</dt>
           <dd>The 1P lane LR2 CONVERGE gathers notes on. 0 picks the mode default.</dd>
           <dt>Fixed key 2P (LR2; 0=default)</dt>
-          <dd>The 2P lane LR2 CONVERGE gathers notes on. 0 picks the mode default.</dd>
+          <dd>
+            The 2P target for LR2 CONVERGE and CONVERGE corrected. 0 picks the mode default. RANDOM ignores this
+            setting.
+          </dd>
           <dt>Seed 1P (-1=random)</dt>
           <dd>
             Fixes the seed of the 1P lane random under every ruleset, so the same arrangement comes back; -1 draws a new
@@ -824,7 +827,10 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dt>Fixed key 1P (LR2; 0=default)</dt>
           <dd>LR2 の CONVERGE で 1P 側のノーツを集めるレーン。0 はモードの既定。</dd>
           <dt>Fixed key 2P (LR2; 0=default)</dt>
-          <dd>LR2 の CONVERGE で 2P 側のノーツを集めるレーン。0 はモードの既定。</dd>
+          <dd>
+            LR2 の CONVERGE と CONVERGE corrected で 2P 側のノートを集めるレーン。0 はモードの既定。RANDOM
+            では使いません。
+          </dd>
           <dt>Seed 1P (-1=random)</dt>
           <dd>
             どのルールでも使う 1P 側のレーンのランダムのシード。固定すると同じ配置になります。-1
