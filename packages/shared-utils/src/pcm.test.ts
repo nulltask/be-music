@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { floatToInt16, writeStereoPCM16BE, writeStereoPCM16LE } from './index.ts';
+import { writeStereoPCM16BE, writeStereoPCM16LE } from './index.ts';
 
 function expectBufferUnchanged(buffer: Buffer, fill = 0x7f): void {
   expect(buffer.equals(Buffer.alloc(buffer.length, fill))).toBe(true);
@@ -10,36 +10,36 @@ describe('pcm utilities', () => {
     const buffer = Buffer.allocUnsafe(8);
     writeStereoPCM16LE(buffer, 0, new Float32Array([1, -1]), new Float32Array([-0.5, 0.5]));
 
-    expect(buffer.readInt16LE(0)).toBe(floatToInt16(1));
-    expect(buffer.readInt16LE(2)).toBe(floatToInt16(-0.5));
-    expect(buffer.readInt16LE(4)).toBe(floatToInt16(-1));
-    expect(buffer.readInt16LE(6)).toBe(floatToInt16(0.5));
+    expect(buffer.readInt16LE(0)).toBe(32767);
+    expect(buffer.readInt16LE(2)).toBe(-16384);
+    expect(buffer.readInt16LE(4)).toBe(-32768);
+    expect(buffer.readInt16LE(6)).toBe(16384);
   });
 
   test('writeStereoPCM16BE: writes interleaved big-endian samples', () => {
     const buffer = Buffer.allocUnsafe(8);
     writeStereoPCM16BE(buffer, 0, new Float32Array([1, -1]), new Float32Array([-0.5, 0.5]));
 
-    expect(buffer.readInt16BE(0)).toBe(floatToInt16(1));
-    expect(buffer.readInt16BE(2)).toBe(floatToInt16(-0.5));
-    expect(buffer.readInt16BE(4)).toBe(floatToInt16(-1));
-    expect(buffer.readInt16BE(6)).toBe(floatToInt16(0.5));
+    expect(buffer.readInt16BE(0)).toBe(32767);
+    expect(buffer.readInt16BE(2)).toBe(-16384);
+    expect(buffer.readInt16BE(4)).toBe(-32768);
+    expect(buffer.readInt16BE(6)).toBe(16384);
   });
 
   test('writeStereoPCM16LE: uses the fallback writer for odd byte offsets', () => {
     const buffer = Buffer.alloc(6);
     writeStereoPCM16LE(buffer, 1, new Float32Array([0.5]), new Float32Array([-0.5]));
 
-    expect(buffer.readInt16LE(1)).toBe(floatToInt16(0.5));
-    expect(buffer.readInt16LE(3)).toBe(floatToInt16(-0.5));
+    expect(buffer.readInt16LE(1)).toBe(16384);
+    expect(buffer.readInt16LE(3)).toBe(-16384);
   });
 
   test('writeStereoPCM16BE: uses the fallback writer for odd byte offsets', () => {
     const buffer = Buffer.alloc(6);
     writeStereoPCM16BE(buffer, 1, new Float32Array([0.5]), new Float32Array([-0.5]));
 
-    expect(buffer.readInt16BE(1)).toBe(floatToInt16(0.5));
-    expect(buffer.readInt16BE(3)).toBe(floatToInt16(-0.5));
+    expect(buffer.readInt16BE(1)).toBe(16384);
+    expect(buffer.readInt16BE(3)).toBe(-16384);
   });
 
   test('writeStereoPCM16LE: clamps source ranges and destination capacity', () => {
@@ -53,8 +53,8 @@ describe('pcm utilities', () => {
       Number.POSITIVE_INFINITY,
     );
 
-    expect(buffer.readInt16LE(0)).toBe(floatToInt16(0.25));
-    expect(buffer.readInt16LE(2)).toBe(floatToInt16(-0.25));
+    expect(buffer.readInt16LE(0)).toBe(8192);
+    expect(buffer.readInt16LE(2)).toBe(-8192);
   });
 
   test('writeStereoPCM16 helpers: skip writes when no frames can be written', () => {
