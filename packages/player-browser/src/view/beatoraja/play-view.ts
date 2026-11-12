@@ -4,6 +4,7 @@ import type { BGAOpacityTimelines } from '@be-music/chart-model';
 import { collectBPMGuideEvents } from '../../chart/bpm-guide.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
+import { resolveHiddenNoteChannels } from '../shared/playfield/hidden-note-channels.ts';
 import { resolveConstantVisibility, resolveWhiteNumber, resolveLaneCover } from '@be-music/player-scene-model';
 /**
  * The beatoraja family's play screen: a beatoraja play skin (`play_<variant>`) drawn by `BeatorajaPlaySkinView` with the
@@ -134,6 +135,8 @@ function resolveSkinConfigOps(
 
 /** What the beatoraja play view reads of the running play: the play session's members of these names. */
 export interface BeatorajaPlayRuntime {
+  /** The scratch lanes AUTO SCRATCH plays; empty when it is off. */
+  readonly autoScratchChannels: ReadonlySet<string>;
   readonly chart: LibraryChart | undefined;
   /** The chart as the play plays it (its `#RANDOM` branches drawn), before DP FLIP. */
   readonly resolvedChart: BeMusicJSON | undefined;
@@ -555,6 +558,7 @@ export class BeatorajaPlayView implements PlayView {
       ...(play.bgaCamera !== undefined ? { camera: play.bgaCamera } : {}),
       bpmGuide: frame.playOptions.bpmGuide,
       judgeTimingMs: frame.playOptions.judgeTimingMs,
+      hiddenNoteChannels: resolveHiddenNoteChannels(frame.playOptions.autoScratchNotes, play.autoScratchChannels),
       constant: resolveConstantVisibility({
         enabled: frame.playOptions.visualConstant,
         durationMs: frame.playOptions.noteDurationMs,

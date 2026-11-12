@@ -252,6 +252,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  autoScratchNotes: PlayOptions['autoScratchNotes'];
   judgeTimingAutoAdjust: PlayOptions['judgeTimingAutoAdjust'];
   judgeAlgorithm: PlayOptions['judgeAlgorithm'];
   longNoteModifier: PlayOptions['longNoteModifier'];

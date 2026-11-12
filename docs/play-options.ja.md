@@ -101,6 +101,14 @@ Options ダイアログ の **Display area info** で **OFF**（既定）、**ON
 
 Options ダイアログ の **Auto scratch 1P / 2P** は、各側のスクラッチノートを独立して自動化します。反対側はロングスクラッチを含めて手動のままです。[#708](https://github.com/nulltask/be-music/issues/708) の左右別 AUTO SCRATCH に従います。リプレイは選択した設定一式と実効的な左右のスイッチを保持します。全体のスイッチだけを持つ旧リプレイでは両側に適用します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
+## オートスクラッチのノーツ表示
+
+Options ダイアログの View タブにある **Auto scratch notes (AC)** は **Show**（既定）か **Hide** です。Hide では、AUTO SCRATCH が演奏しているスクラッチレーンのノーツ、ロングノートとその本体を描画しません。スクラッチの演奏、発音、カウントはそのままで、キービームとボムも描画します。設定は両サイド共通で、AUTO SCRATCH がオフのサイドと完全な AUTO プレイには影響しません。プレイ中にも反映し、すべてのスキン系統で働きます。判定も AUTO SCRATCH のアシスト区分も変わりません。
+
+AC 34 の詳細オプションには「オートスクラッチ表示」があり、「オートスクラッチ時のノートを表示するかどうかを変更」とあります。レーンのビームや爆発も隠すかどうかはページに記載がないため、Be-Music では残します。
+
+出典: AC 34 [詳細オプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。[#1137](https://github.com/nulltask/be-music/issues/1137) で追跡しています。
+
 ## ANY KEY
 
 Options ダイアログ の Play options の一番上で **Judgment windows → ????** を選び、**Play options → ANY KEY (PC)** をオンにします。既定はオフで、ほかの判定ルールでは表示しません。PC 版のアシストで、PC 版のページは名前を挙げるだけなので、Be-Music は次のように読みます（[#751](https://github.com/nulltask/be-music/issues/751)）。

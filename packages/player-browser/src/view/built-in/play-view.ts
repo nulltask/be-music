@@ -228,6 +228,7 @@ export class BuiltInPlayView
   public draw(frame: PlayFrame): void {
     this.play = frame.playfield;
     this.playFrame = frame;
+    this.playOptions = frame.playOptions;
     this.options.judgeTimingMs = frame.playOptions.judgeTimingMs;
     this.options.judgeTimingAutoAdjust = frame.playOptions.judgeTimingAutoAdjust;
     this.options.visualConstant = frame.playOptions.visualConstant;

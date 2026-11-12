@@ -30,6 +30,7 @@ import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import { renderDefaultNote } from './default-playfield.ts';
 import type { PlayfieldLaneRect } from '../../types.ts';
 import type { PlayfieldContext, RuntimeNote } from './context.ts';
+import { resolveHiddenNoteChannels } from './hidden-note-channels.ts';
 import { renderLongNote } from './long-notes.ts';
 import { renderMeasureLines } from './measure-lines.ts';
 import { renderMineNote } from './mines.ts';
@@ -169,6 +170,8 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     cursor?.note ??
     findFirstIndexAtOrAfter(ctx.play.notes, currentBeat - ctx.play.maxLongNoteBeatSpan, (note) => note.beat);
   const hideJudgedNotes = ctx.options.judgedNoteDisplay === 'HIDE';
+  // AC 34's オートスクラッチ表示: the scratch notes AUTO SCRATCH plays are not drawn; they still play and count (#1137).
+  const hiddenChannels = resolveHiddenNoteChannels(ctx.playOptions?.autoScratchNotes, ctx.play.autoScratchChannels);
   for (let noteIndex = firstNoteIndex; noteIndex < ctx.play.notes.length; noteIndex += 1) {
     const note = ctx.play.notes[noteIndex]!;
     if (isPastDrawWindow(drawWindow, note.beat)) {
@@ -182,7 +185,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
       continue;
     }
     const lane = ctx.play.laneX.get(note.channel);
-    if (!lane) {
+    if (!lane || hiddenChannels?.has(note.channel)) {
       continue;
     }
     const headVisual = chartVisual?.(

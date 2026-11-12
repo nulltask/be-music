@@ -101,6 +101,14 @@ Source: AC 34 [BPM-change options](https://p.eagate.573.jp/game/2dx/34/howto/new
 
 The Options dialog's **Auto scratch 1P / 2P** switches independently automate each side's scratch notes. The other side remains manual, including long scratch notes. This follows the per-side AUTO SCRATCH setting tracked in [#708](https://github.com/nulltask/be-music/issues/708). Replays retain the effective side switches as well as the selected option snapshot; old replays with only the combined switch apply it to both sides. Its record policy is in [Assist and record policy](#assist-and-record-policy).
 
+## Auto scratch notes
+
+**Auto scratch notes (AC)** in the Options dialog's View tab is **Show** (the default) or **Hide**. Hide draws no note, long note or long-note body on a scratch lane AUTO SCRATCH is playing; the scratch still plays, sounds and counts, and its key beam and bomb are still drawn. The one setting covers both sides and has no effect on a side whose AUTO SCRATCH is off, or in a full AUTO play. It applies live, on every skin family, and changes neither judgment nor the AUTO SCRATCH assist class.
+
+AC 34's detail options list オートスクラッチ表示, which "changes whether the notes are shown during auto scratch"; the page does not say whether the lane's beam and explosion are hidden too, so Be-Music keeps them.
+
+Source: AC 34 [detail options](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html). Tracked in [#1137](https://github.com/nulltask/be-music/issues/1137).
+
 ## ANY KEY
 
 With **Judgment windows → ????** at the top of the Options dialog's Play options, turn on **Play options → ANY KEY (PC)**; it is off by default and hidden under the other judge rules. It is the PC edition's assist, which that edition's page names without describing, so Be-Music reads it this way ([#751](https://github.com/nulltask/be-music/issues/751)):

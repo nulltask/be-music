@@ -40,6 +40,8 @@ export interface PlayOptions {
    * change until the change (blue when the tempo rises, red when it falls).
    */
   bpmChangeWarning: boolean;
+  /** AC 34 オートスクラッチ表示: whether the scratch notes AUTO SCRATCH plays are drawn. Display only. */
+  autoScratchNotes: 'SHOW' | 'HIDE';
   /**
    * The automatic judge-timing adjustment of a manual play: beatoraja 0.8.9's calibration on PG/GR/GD, or LR2's ON /
    * SILENT (`autojudge` 1 / 2: a 1 ms step per ten hits; SILENT also loads no keysounds, BGM or BGA and hides the judge

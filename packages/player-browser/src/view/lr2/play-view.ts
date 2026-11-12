@@ -284,6 +284,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
 
   public draw(frame: PlayFrame): void {
     this.play = frame.playfield;
+    this.playOptions = frame.playOptions;
     this.options.judgeTimingMs = frame.playOptions.judgeTimingMs;
     this.options.judgeTimingAutoAdjust = frame.playOptions.judgeTimingAutoAdjust;
     for (const event of frame.events) this.handleEvent(event);

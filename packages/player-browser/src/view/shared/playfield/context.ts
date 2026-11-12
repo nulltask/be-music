@@ -171,6 +171,8 @@ export interface PlayfieldRuntime {
   displayBPM(seconds: number): number | undefined;
   isIntroPlaying(): boolean;
   isAutoplayedChannel(channel: string): boolean;
+  /** The scratch lanes AUTO SCRATCH plays (empty when it is off, and under a full AUTO play's own switch). */
+  readonly autoScratchChannels: ReadonlySet<string>;
   resolveLaneCovers(): readonly BeMusicLaneCover[];
   resolveLongNoteMode(note: RuntimeNote): BeMusicLongNote['mode'];
   resolveChartDurationSeconds(): number;
@@ -200,6 +202,8 @@ export interface PlayChrome {
 
 /** The view's members the playfield passes use (a play view's members of these names), with the running play as `play`. */
 export interface PlayfieldContext extends LaneGeometryContext {
+  /** The frame's play options, for the options that only change what the playfield draws. */
+  playOptions?: import('@be-music/player-scene-model').PlayOptions;
   readonly drawsLift?: boolean;
   bpmGuideCache?: {
     timing: import('@be-music/chart-model').TimingResolver;

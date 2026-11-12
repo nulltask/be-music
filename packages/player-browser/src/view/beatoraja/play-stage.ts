@@ -238,6 +238,8 @@ export class BeatorajaPlayStage {
       judgeTimingMs?: number;
       /** Visual CONSTANT: notes, mines, bar lines and BPM guide lines show only near their time. */
       constant?: ConstantVisibility;
+      /** Lanes whose notes are not drawn (AUTO SCRATCH with its notes hidden). */
+      hiddenNoteChannels?: ReadonlySet<string>;
       /** The camera to show in the BGA frame in place of the chart's BGA. */
       camera?: BGACameraFeed;
     } = {},
@@ -263,6 +265,7 @@ export class BeatorajaPlayStage {
       (channel) => lanes.isLaneLNHeld(channel),
       playback.showInvisibleNotes,
       playback.constant,
+      playback.hiddenNoteChannels,
     );
     // The markers scroll with the notes' per-beat distance (`rxhs / 4 * hispeed`, `LaneRenderer.java:271-276`) on the
     // lane the active dst block resolves; skin-canvas defaults when no lane matched.

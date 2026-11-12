@@ -25,6 +25,8 @@ export class PlayLayers {
   host: PixiSceneHost | undefined;
   /** The running play the layers draw. */
   play: PlayfieldRuntime;
+  /** The frame's play options, set by the view at each draw (`PlayfieldContext.playOptions`). */
+  playOptions: import('@be-music/player-scene-model').PlayOptions | undefined;
   /**
    * Top-level Container the scene host attaches to its `app.stage` while gameplay is active. All visible nodes
    * (`viewportBackground` + `designRoot`) live as children of this root, so the host can attach / detach the whole
