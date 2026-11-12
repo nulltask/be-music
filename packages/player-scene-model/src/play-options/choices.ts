@@ -284,7 +284,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   judgeAlgorithm: ['combo', 'duration', 'lowest'],
   longNoteModifier: ['OFF', 'LEGACY', 'REMOVE', 'ADD_LN', 'ADD_CN', 'ADD_HCN', 'ADD_ALL'],
   mineModifier: ['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'],
-  scrollModifier: ['OFF', 'REMOVE', 'ADD'],
+  scrollModifier: ['OFF', 'REMOVE', 'ADD', 'SOFTLANDING-1', 'SOFTLANDING-2'],
   gaugeAutoShift: GAUGE_AUTO_SHIFTS,
   bmsonTotalMode: ['beatoraja', 'spec'],
   bottomShiftableGauge: ['ASSIST-EASY', 'EASY', 'GROOVE'],

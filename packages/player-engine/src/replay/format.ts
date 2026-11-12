@@ -9,7 +9,7 @@ import type { EffectiveBattleMode } from '../core/battle-mode.ts';
 import { getPlayModeLayouts, type ChartPlayVariant } from '@be-music/chart-model';
 import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
 import type { ScrollTimelinePoint } from '@be-music/chart-model';
-import type { ScrollModifier } from '../core/scroll-modifier.ts';
+import { isSoftLanding, type ScrollModifier } from '../core/scroll-modifier.ts';
 import type { LongNoteModifier } from '../core/long-note-modifier.ts';
 import type { MineModifier } from '../core/mine-modifier.ts';
 import {
@@ -909,8 +909,14 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     parsed.customJudge = judge;
   }
   if (play.scrollModifier !== undefined) {
-    if (play.scrollModifier !== 'OFF' && play.scrollModifier !== 'REMOVE' && play.scrollModifier !== 'ADD')
-      throw new ReplayParseError('play.scrollModifier: expected OFF, REMOVE or ADD');
+    if (
+      play.scrollModifier !== 'OFF' &&
+      play.scrollModifier !== 'REMOVE' &&
+      play.scrollModifier !== 'ADD' &&
+      play.scrollModifier !== 'SOFTLANDING-1' &&
+      play.scrollModifier !== 'SOFTLANDING-2'
+    )
+      throw new ReplayParseError('play.scrollModifier: expected OFF, REMOVE, ADD, SOFTLANDING-1 or SOFTLANDING-2');
     parsed.scrollModifier = play.scrollModifier;
   }
   if (play.scrollSection !== undefined) {
@@ -942,7 +948,12 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     (parsed.scrollSection === undefined || parsed.scrollRate === undefined || !parsed.scrollModifierTimeline?.length)
   )
     throw new ReplayParseError('play.scrollModifier: ADD requires section, rate and an effective timeline');
-  if (parsed.scrollModifier === 'ADD' && parsed.scrollModifierTimeline?.[0]?.beat !== 0)
+  if (isSoftLanding(parsed.scrollModifier) && !parsed.scrollModifierTimeline?.length)
+    throw new ReplayParseError('play.scrollModifier: SOFTLANDING requires an effective timeline');
+  if (
+    (parsed.scrollModifier === 'ADD' || isSoftLanding(parsed.scrollModifier)) &&
+    parsed.scrollModifierTimeline?.[0]?.beat !== 0
+  )
     throw new ReplayParseError('play.scrollModifierTimeline: expected initial beat zero');
   if (play.scrollModifierChanged !== undefined) {
     if (typeof play.scrollModifierChanged !== 'boolean')

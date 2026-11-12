@@ -1,3 +1,4 @@
+import { isSoftLanding } from './scroll-modifier.ts';
 import { BmsonBGAController } from './bmson-bga.ts';
 import { resolveChartGaugeType } from '../ruleset/chart-gauge.ts';
 import { resolveChartJudgeOption } from '../ruleset/chart-judge.ts';
@@ -478,6 +479,10 @@ export async function createPlaySession(
                           scrollRate: playbackChart.scrollRate,
                           scrollModifierTimeline: playbackChart.scrollModifierTimeline,
                         }
+                      : {}),
+                    // SOFTLANDING's drawn factors, which a replay plays back instead of drawing again.
+                    ...(isSoftLanding(options.scrollModifier)
+                      ? { scrollModifierTimeline: playbackChart.scrollModifierTimeline }
                       : {}),
                   }
                 : {}),

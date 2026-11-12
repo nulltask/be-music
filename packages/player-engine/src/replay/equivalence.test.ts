@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vite-plus/test';
 import { resolveChart } from '@be-music/chart-model';
 import { manualPlay, preparePlaybackChart } from '../index.ts';
 import { runRecordedPlay } from '../test-support/recorded-play.ts';
+import { classifyReplayAssists } from '../records/assist-policy.ts';
 import { recordPlayFromSummary } from '../records/best-record.ts';
 import { resolveRulesetResultMissCount } from './result-lamp.ts';
 import { resolveRulesetConfig, simulateReplay } from './simulate.ts';
@@ -1472,4 +1473,27 @@ test("LR2's GAMBOL narrows the windows of the play, and the replay re-simulates 
   expect(level2.replay.play.lr2Gambol).toBe(2);
   expect(level2.replay.results!.native!.judge).toMatchObject({ great: 0, bad: 1 });
   expect(simulateReplay(level2.replay, { ruleset: 'lr2' }).judge).toEqual(level2.replay.results!.native!.judge);
+});
+
+test("LR2's SOFTLANDING records its drawn scroll and leaves the judgments as they were", async () => {
+  const json = chart([
+    { measure: 1, channel: '11', position: [0, 1], value: '01' },
+    { measure: 2, channel: '12', position: [1, 2], value: '01' },
+  ]);
+  const inputs = [down(0, 1_000_000, '11'), up(1, 1_050_000, '11'), down(2, 2_500_000, '12'), up(3, 2_550_000, '12')];
+  const plain = await runRecordedPlay(json, inputs, 'lr2');
+  for (const scrollModifier of ['SOFTLANDING-1', 'SOFTLANDING-2'] as const) {
+    const run = await runRecordedPlay(json, inputs, 'lr2', { scrollModifier });
+    expect(run.replay.play.scrollModifier).toBe(scrollModifier);
+    const timeline = run.replay.play.scrollModifierTimeline!;
+    expect(timeline[0]?.beat).toBe(0);
+    expect(timeline.every((point) => point.speed >= 0.5 && point.speed <= 2)).toBe(true);
+    // LEVEL 2 also draws at the note in the middle of measure 2.
+    expect(timeline.some((point) => point.beat === 10)).toBe(scrollModifier === 'SOFTLANDING-2');
+    // Only the scroll moves: the same inputs judge the same.
+    expect(run.replay.results!.native!.judge).toEqual(plain.replay.results!.native!.judge);
+    expect(simulateReplay(run.replay, { ruleset: 'lr2' }).judge).toEqual(run.replay.results!.native!.judge);
+    // LR2 saves the play as a normal one.
+    expect(classifyReplayAssists(run.replay)).toEqual([]);
+  }
 });

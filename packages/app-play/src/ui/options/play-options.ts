@@ -204,10 +204,12 @@ export function buildPlayOptionsFolder(
       this.setPlayOptions({ bottomShiftableGauge: value }),
     ),
   );
-  this.scrollModifierController = selectBinding(notes, this.guiState, 'scrollModifier', 'Scroll (beatoraja)', {
+  this.scrollModifierController = selectBinding(notes, this.guiState, 'scrollModifier', 'Scroll', {
     OFF: 'OFF',
-    REMOVE: 'REMOVE',
-    ADD: 'ADD',
+    'REMOVE (beatoraja)': 'REMOVE',
+    'ADD (beatoraja)': 'ADD',
+    'SOFTLANDING LEVEL 1 (LR2)': 'SOFTLANDING-1',
+    'SOFTLANDING LEVEL 2 (LR2)': 'SOFTLANDING-2',
   });
   trackPlayOption(
     this.scrollModifierController.on('change', ({ value }) => {

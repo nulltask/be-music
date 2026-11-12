@@ -444,11 +444,33 @@ Options ダイアログ はどのルールでも **Seed 1P / Seed 2P (-1=random)
 
 ## スクロールの REMOVE と ADD
 
-どのルールでも、Options ダイアログ の **Scroll (beatoraja)** で **OFF**（既定）、**REMOVE**、**ADD** を選びます。どちらも beatoraja 0.8.9 の `ScrollSpeedModifier` に従い、譜面の描画だけを変えます。判定時刻と音声は譜面のとおりです。REMOVE は各オブジェクトの時刻を維持したまま、BPM 変化・STOP・SCROLL 変化をなくし、最初の BPM と SCROLL で譜面を描画するため、ノートは一定の速度で流れます。ADD を選ぶと **Scroll section lines**（1〜1024、既定 4）と **Scroll rate**（0〜1、既定 0.5）を表示します。最初の小節線を 1 本目として N 本ごとの小節線で、SCROLL を最初の SCROLL の ±rate の範囲のランダムな値にし、譜面自身の SCROLL の値を置き換えます。
+どのルールでも、Options ダイアログ の **Scroll** で **OFF**（既定）、**REMOVE (beatoraja)**、**ADD (beatoraja)**、LR2 の [SOFTLANDING](#softlanding) を選びます。REMOVE と ADD は beatoraja 0.8.9 の `ScrollSpeedModifier` に従い、譜面の描画だけを変えます。判定時刻と音声は譜面のとおりです。REMOVE は各オブジェクトの時刻を維持したまま、BPM 変化・STOP・SCROLL 変化をなくし、最初の BPM と SCROLL で譜面を描画するため、ノートは一定の速度で流れます。ADD を選ぶと **Scroll section lines**（1〜1024、既定 4）と **Scroll rate**（0〜1、既定 0.5）を表示します。最初の小節線を 1 本目として N 本ごとの小節線で、SCROLL を最初の SCROLL の ±rate の範囲のランダムな値にし、譜面自身の SCROLL の値を置き換えます。
 
 リプレイには `play.scrollModifier` と、譜面が実際に変化したかを示す `play.scrollModifierChanged` を記録します。beatoraja は除去する変化があった場合だけ REMOVE をアシスト扱いにし、ADD ではアシストのフラグを立てません。ADD では `play.scrollSection`、`play.scrollRate` と実効的な `play.scrollModifierTimeline` も記録し、リプレイを開く際は再抽選せずにこれを使います。beatoraja スキンのスクロールモードボタン（352）は OFF・REMOVE・ADD を巡回します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
 参照元：beatoraja 0.8.9 の [`ScrollSpeedModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/ScrollSpeedModifier.java)。対応 Issue は [#739](https://github.com/nulltask/be-music/issues/739)、[#740](https://github.com/nulltask/be-music/issues/740) です。
+
+## SOFTLANDING
+
+どのルールでも、Options ダイアログの **Scroll** で **SOFTLANDING LEVEL 1 (LR2)** と **SOFTLANDING LEVEL 2 (LR2)** を選べます。LR2 の隠しマニアパネルにあるスクロールのオプション（「BPMに変化を与えるオプション」）です。スクロール速度だけをランダムに変え、ノーツの時刻、音声、判定は譜面のとおりです。
+
+- **LEVEL 1** は小節の頭ごとに新しい係数を抽選します（「小節ごとにBPMが変化します」）。
+- **LEVEL 2** はノーツと地雷ごとにも抽選します（「常にBPMが変化し続けます」）。
+- **係数**は `(100 + r) / 100` か `100 / (100 + r)` で、どちらになるかは半々です。`r` は 0 から 100 の整数なので、係数は 0.5 倍から 2 倍の間になります。
+
+LR2 は小節の長さと現在の BPM の両方に係数を掛け（[L26591-L26610](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26591-L26610)、[L26680-L26700](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26680-L26700)）、その後の BPM 変化にもその時点の係数を掛けます。小節の時間は変わらず、ノーツの間隔とスクロールだけがその倍率で広く速くなります。これは SCROLL の値と同じなので、Be-Music は係数をプレイのスクロールのタイムラインとして書き込みます。各点は譜面の最初の SCROLL に係数を掛けた値で、スクロール ADD と同じく譜面自身の SCROLL を置き換えます。OpenLR2 の LEVEL 2 の行は `nowBPM = scrollSpeed * meaLength` ですが、LR2 beta3 は LEVEL 1 や BPM 変化と同じく譜面の現在の BPM に係数を掛けます。Be-Music は LR2 に従います。
+
+LR2 との違いは次のとおりで、いずれも小さなものです。
+
+- LR2 は小節線を描くかどうかにかかわらず、すべての小節に小節長オブジェクトを置きます。Be-Music は譜面の最後のオブジェクトまでの各小節の頭で抽選します。
+- 同じ拍では係数を 1 回だけ抽選します。LR2 はそこにあるオブジェクトごとに抽選します（LR2 でも最後の抽選が有効になります）。
+- ロングノートの終点では抽選しません [I]。OpenLR2 はレーンオブジェクト 10〜28 で抽選しますが、その時点で LR2 がロングノートの終点をどの番号にしているかは確認していません。
+- LR2 は係数を掛けた BPM を最小・最大 BPM に含め、HS-FIX の MAX / MIN がそれを読みます。Be-Music の HS-FIX と BPM 表示は譜面自身の BPM のままです。
+- 抽選には seed がありません。スクロール ADD と同じです。
+
+リプレイには `play.scrollModifier`（`SOFTLANDING-1` か `SOFTLANDING-2`）、`play.scrollModifierChanged`、抽選した `play.scrollModifierTimeline` を記録し、リプレイを開く際は再抽選せずにそのタイムラインを再生します。LR2 は SOFTLANDING のプレイを通常のプレイとして保存する（[スコア保存条件](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L67-L79)に含まれない）ため、アシストなしです。beatoraja スキンのスクロールモードボタン（352）は、beatoraja 自身の OFF・REMOVE・ADD を巡回するままです。プレイ中は選択をロックします。
+
+出典: OpenLR2 [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26591-L26610)。[#1116](https://github.com/nulltask/be-music/issues/1116) で追跡しています。
 
 ## ゲージオートシフト
 

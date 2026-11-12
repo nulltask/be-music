@@ -16,7 +16,13 @@ import { convertLR2ExtraChart } from './lr2-extra-chart.ts';
 import type { LR2ExtraLevel } from './lr2-extra-lanes.ts';
 import { addExtraNotes, clampExtraNoteDepth } from './extra-note-modifier.ts';
 import { prepareMineModifier, type MineModifier } from './mine-modifier.ts';
-import { addScrollChanges, removeScrollChanges, type ScrollModifier } from './scroll-modifier.ts';
+import {
+  addScrollChanges,
+  addSoftLanding,
+  isSoftLanding,
+  removeScrollChanges,
+  type ScrollModifier,
+} from './scroll-modifier.ts';
 import { addLongNotes, clampLongNoteRate, removeLongNoteTails, type LongNoteModifier } from './long-note-modifier.ts';
 import { throwIfAborted } from '@be-music/shared-utils/core';
 import { buildChartTextTimeline, resolveChart, type ResolvedChart } from '@be-music/chart-model';
@@ -329,8 +335,15 @@ export function preparePlaybackChart(
           random,
         })
       : undefined;
+  const softLanding = isSoftLanding(options.scrollModifier)
+    ? addSoftLanding(resolved, {
+        level: options.scrollModifier === 'SOFTLANDING-1' ? 1 : 2,
+        timeline: options.scrollModifierTimeline,
+        random,
+      })
+    : undefined;
   const scrollResult =
-    scrollAddition ?? (options.scrollModifier === 'REMOVE' ? removeScrollChanges(resolved) : undefined);
+    scrollAddition ?? softLanding ?? (options.scrollModifier === 'REMOVE' ? removeScrollChanges(resolved) : undefined);
   resolved = scrollResult?.chart ?? resolved;
   let playVariant = resolved.playVariant;
   const notes = resolved.notes.map(toTimedPlayableNote);
@@ -492,6 +505,7 @@ export function preparePlaybackChart(
           scrollModifierTimeline: scrollAddition.timeline,
         }
       : {}),
+    ...(softLanding ? { scrollModifierTimeline: softLanding.timeline } : {}),
     ...(options.scrollModifier !== undefined
       ? { scrollModifierApplied: options.scrollModifier, scrollModifierChanged: scrollResult?.changed ?? false }
       : {}),

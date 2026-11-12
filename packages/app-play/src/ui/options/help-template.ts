@@ -174,10 +174,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
             The lowest gauge BEST CLEAR and SELECT TO UNDER may shift down to. LR2 has no ASSIST EASY, so its lowest is
             EASY.
           </dd>
-          <dt>Scroll (beatoraja)</dt>
+          <dt>Scroll</dt>
           <dd>
-            REMOVE draws the chart without its BPM and scroll changes; ADD adds random scroll changes. Judgment is
-            unchanged.
+            REMOVE (beatoraja) draws the chart without its BPM and scroll changes; ADD (beatoraja) adds random scroll
+            changes. SOFTLANDING (LR2) changes the scroll speed at random between a half and double: LEVEL 1 at each
+            measure, LEVEL 2 at each note as well. Judgment is unchanged.
           </dd>
           <dt>Scroll section lines</dt>
           <dd>
@@ -878,10 +879,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
             BEST CLEAR と SELECT TO UNDER で下げてよい一番下のゲージ。LR2 には ASSIST EASY がないので、一番下は EASY
             です。
           </dd>
-          <dt>Scroll (beatoraja)</dt>
+          <dt>Scroll</dt>
           <dd>
-            REMOVE は BPM やスクロールの変化をなくして描き、ADD
-            はランダムなスクロールの変化を加えます。判定は変わりません。
+            REMOVE (beatoraja) は BPM やスクロールの変化をなくして描き、ADD (beatoraja)
+            はランダムなスクロールの変化を加えます。SOFTLANDING (LR2) はスクロール速度を 0.5〜2
+            倍の範囲でランダムに変えます。LEVEL 1 は小節ごと、LEVEL 2 はノーツごとにも変わります。判定は変わりません。
           </dd>
           <dt>Scroll section lines</dt>
           <dd>

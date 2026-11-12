@@ -444,11 +444,33 @@ Source: beatoraja 0.8.9 [`LongNoteModifier`](https://github.com/exch-bms2/beator
 
 ## Scroll REMOVE and ADD
 
-Under any ruleset, choose **Scroll (beatoraja)** in the Options dialog: **OFF** (default), **REMOVE** or **ADD**. Both follow beatoraja 0.8.9's `ScrollSpeedModifier` and change only how the chart is drawn; judgment times and audio stay as written. REMOVE keeps every object's time but draws the chart at its initial BPM and SCROLL, without BPM changes, STOPs or SCROLL changes, so notes approach at a constant speed. ADD shows **Scroll section lines** (1–1024, default 4) and **Scroll rate** (0–1, default 0.5): counting the first bar line as one, every Nth bar line sets SCROLL to a random value within ±rate of the initial SCROLL, replacing the chart's own SCROLL values.
+Under any ruleset, choose **Scroll** in the Options dialog: **OFF** (default), **REMOVE (beatoraja)**, **ADD (beatoraja)** or LR2's [SOFTLANDING](#softlanding). REMOVE and ADD follow beatoraja 0.8.9's `ScrollSpeedModifier` and change only how the chart is drawn; judgment times and audio stay as written. REMOVE keeps every object's time but draws the chart at its initial BPM and SCROLL, without BPM changes, STOPs or SCROLL changes, so notes approach at a constant speed. ADD shows **Scroll section lines** (1–1024, default 4) and **Scroll rate** (0–1, default 0.5): counting the first bar line as one, every Nth bar line sets SCROLL to a random value within ±rate of the initial SCROLL, replacing the chart's own SCROLL values.
 
 Replays record `play.scrollModifier` and `play.scrollModifierChanged`, whether the chart actually changed: beatoraja assists REMOVE only when there was something to remove, and ADD sets no assist flag. ADD also records `play.scrollSection`, `play.scrollRate` and the effective `play.scrollModifierTimeline`, which a reopened replay uses instead of drawing again. beatoraja skins' scroll mode button (352) cycles OFF, REMOVE and ADD. Its record policy is in [Assist and record policy](#assist-and-record-policy).
 
 Source: beatoraja 0.8.9 [`ScrollSpeedModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/ScrollSpeedModifier.java). Tracked in [#739](https://github.com/nulltask/be-music/issues/739) and [#740](https://github.com/nulltask/be-music/issues/740).
+
+## SOFTLANDING
+
+Under any ruleset, the Options dialog's **Scroll** selector also offers **SOFTLANDING LEVEL 1 (LR2)** and **SOFTLANDING LEVEL 2 (LR2)**, the scroll option of LR2's hidden mania panel ("BPMに変化を与えるオプション"). It changes the scroll speed at random and nothing else: note times, audio and judgment stay as written.
+
+- **LEVEL 1** draws a new factor at the start of every measure ("小節ごとにBPMが変化します").
+- **LEVEL 2** also draws one at every note and mine ("常にBPMが変化し続けます").
+- **The factor** is `(100 + r) / 100` or `100 / (100 + r)`, each half the time, with `r` a whole number from 0 to 100: between a half and double.
+
+LR2 multiplies both the measure's length and the current BPM by the factor ([L26591-L26610](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26591-L26610), [L26680-L26700](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26680-L26700)), and later BPM changes by the factor in force, so a measure lasts exactly as long as before while its notes are spaced and scroll that much wider and faster. That is a SCROLL value, so Be-Music writes the factors as the play's scroll timeline, each point the chart's initial SCROLL times the factor, replacing the chart's own SCROLL values as scroll ADD does. OpenLR2's LEVEL 2 line reads `nowBPM = scrollSpeed * meaLength`; LR2 beta3 multiplies the chart's current BPM there, as on the LEVEL 1 and BPM-change paths, and Be-Music follows LR2.
+
+Differences from LR2, each narrow:
+
+- LR2 gives every measure a measure-length object, drawn bar line or not; Be-Music draws at each measure's start through the chart's last object.
+- One factor is drawn per beat, where LR2 draws once per object on it (the last draw wins there too).
+- A long note's end is not a redraw point [I]: OpenLR2 redraws at lane objects 10–28, and how LR2 numbers a long note's end at that point was not read.
+- LR2 folds the scaled BPM into its minimum and maximum BPM, which HS-FIX MAX / MIN read. Be-Music's HS-FIX and BPM readouts keep the chart's own BPM.
+- The draws are unseeded, like scroll ADD's.
+
+Replays record `play.scrollModifier` (`SOFTLANDING-1` or `SOFTLANDING-2`), `play.scrollModifierChanged` and the drawn `play.scrollModifierTimeline`, which a reopened replay plays back instead of drawing again. LR2 saves a SOFTLANDING play as a normal play (it is not in its [score-save condition](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L67-L79)), so it is unassisted. beatoraja skins' scroll mode button (352) keeps cycling beatoraja's own OFF, REMOVE and ADD. The selector is locked during play.
+
+Source: OpenLR2 [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26591-L26610). Tracked in [#1116](https://github.com/nulltask/be-music/issues/1116).
 
 ## Gauge auto-shift
 

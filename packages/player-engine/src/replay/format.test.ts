@@ -834,6 +834,24 @@ test('scroll modifier selection and actual-change fact round trip independently'
   );
 });
 
+test('SOFTLANDING round-trips its level and drawn factors, and needs its timeline', () => {
+  for (const scrollModifier of ['SOFTLANDING-1', 'SOFTLANDING-2'] as const) {
+    const replay = makeReplay();
+    const scrollModifierTimeline = [
+      { beat: 0, speed: 1.5 },
+      { beat: 4, speed: 0.5 },
+    ];
+    Object.assign(replay.play, { scrollModifier, scrollModifierChanged: true, scrollModifierTimeline });
+    expect(parseReplay(serializeReplay(replay)).play).toMatchObject({ scrollModifier, scrollModifierTimeline });
+    const missing = JSON.parse(serializeReplay(replay));
+    delete missing.play.scrollModifierTimeline;
+    expect(() => parseReplay(missing)).toThrow(/SOFTLANDING requires/);
+    const late = JSON.parse(serializeReplay(replay));
+    late.play.scrollModifierTimeline[0].beat = 1;
+    expect(() => parseReplay(late)).toThrow(/initial beat zero/);
+  }
+});
+
 test('scroll ADD preserves its parameters and effective curve, rejecting incomplete or malformed replay data', () => {
   const replay = makeReplay();
   Object.assign(replay.play, {
