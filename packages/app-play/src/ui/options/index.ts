@@ -2,6 +2,7 @@
 // a play puts on them. Each folder is built in a module of its own (`play-options.ts`, `tempo.ts`, …) with the dialog as
 // `this`; the tabs, the folder titles and the remembered open states are `folders.ts`'. The dialog reaches the app only
 // through `OptionsDialogDeps`, which the app (`app/app.ts`) builds.
+import { pickLiveDisplayPlayOptions } from '@be-music/player-scene-model';
 import type { BeatorajaSkinConfig, BeatorajaSkinHeader } from '@be-music/skin-beatoraja';
 import type { LR2DiscoveredTheme } from '@be-music/skin-lr2';
 import type { TunableCompressor } from '@be-music/player-browser/audio';
@@ -396,6 +397,9 @@ export class OptionsDialog {
   /** A play option set from the menu ({@link OptionsDialogDeps.setPlayOptions}). */
   public setPlayOptions(changes: Partial<PlayOptions>): void {
     this.deps.setPlayOptions(changes);
+    // A running play follows its display options at once; the rest it read when it started.
+    const live = pickLiveDisplayPlayOptions(changes);
+    if (live !== undefined) this.gameplayView?.controller.dispatch({ type: 'display-options', values: live });
   }
   /** The header gear follows the Options dialog: open, closed with its close button, Escape or a backdrop click. */
   private reportExpanded: ((open: boolean) => void) | undefined;
