@@ -403,6 +403,10 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>How long a note takes to fade in at the edge of the range Visual CONSTANT shows. Changes live.</dd>
           <dt>Judged notes</dt>
           <dd>Whether a judged note keeps scrolling until its time (as in LR2) or disappears.</dd>
+          <dt>Lane brightness (AC)</dt>
+          <dd>How bright the lanes are, in percent. Notes, bar lines and covers keep their own. Changes live.</dd>
+          <dt>Judgment display (AC)</dt>
+          <dd>OFF draws no judgment or combo on the play screen. Changes live.</dd>
           <dt>Show judge area (beatoraja)</dt>
           <dd>
             Draws the judgment windows as coloured bands above the judge line: blue for PGREAT, then green, yellow,

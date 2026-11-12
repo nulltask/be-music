@@ -166,6 +166,8 @@ export interface BeatorajaPlayBridgeFrame {
   readonly visualConstant?: boolean;
   /** The play's automatic judge timing mode: LR2's SILENT (`'LR2-SILENT'`) hides the skin's judgment display. */
   readonly judgeTimingAutoAdjust?: string;
+  /** The player's judgment display switch is OFF: the skin's judgment display goes, as under LR2's SILENT. */
+  readonly hideJudgeDisplay?: boolean;
   readonly exiting?: boolean;
   readonly scoreTargets?: PlayFrame['scoreTargets'];
   /** The host's clock, in ms, for the frame rate; the play clock without it. */
@@ -452,7 +454,10 @@ export class BeatorajaPlayBridge {
     this.activeOps.delete(BEATORAJA_OP.CONSTANT);
     for (const op of resolveBeatorajaConstantOps(frame.visualConstant)) this.activeOps.add(op);
     this.activeOps.delete(BEATORAJA_OP.JUDGE_DISPLAY_HIDDEN);
-    for (const op of resolveBeatorajaJudgeDisplayOps(frame.judgeTimingAutoAdjust, this.chartPlayfield.hideJudge))
+    for (const op of resolveBeatorajaJudgeDisplayOps(
+      frame.judgeTimingAutoAdjust,
+      this.chartPlayfield.hideJudge || frame.hideJudgeDisplay === true,
+    ))
       this.activeOps.add(op);
     this.judgeWindows = frame.judgeWindows;
     return this.renderContextAt(frame.nowMs);

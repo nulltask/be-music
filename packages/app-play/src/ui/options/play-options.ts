@@ -663,6 +663,14 @@ function buildNoteDisplayRows(this: OptionsDialog, effects: OptionContainer): vo
     this.guiState.judgedNoteDisplay = value;
     this.gameplayView?.setJudgedNoteDisplay(value);
   });
+  // AC 34's detail options. Live: the views read both at each frame.
+  effects
+    .addBinding(this.guiState, 'laneBrightness', { label: 'Lane brightness (AC)', min: 0, max: 100, step: 10 })
+    .on('change', ({ value }) => this.setPlayOptions({ laneBrightness: value }));
+  selectBinding(effects, this.guiState, 'judgeDisplay', 'Judgment display (AC)', {
+    'Skin default': 'SKIN',
+    OFF: 'OFF',
+  }).on('change', ({ value }) => this.setPlayOptions({ judgeDisplay: value }));
   // beatoraja's judge area and mark processed note. Live: the playfield reads both at each frame.
   effects
     .addBinding(this.guiState, 'showJudgeArea', { label: 'Show judge area (beatoraja)' })

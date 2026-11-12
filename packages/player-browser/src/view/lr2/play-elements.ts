@@ -66,6 +66,8 @@ export interface LR2PlayElementsContext {
   readonly play: PlayfieldRuntime;
   /** The play's automatic judge timing: LR2's SILENT draws no NOWJUDGE / NOWCOMBO. */
   readonly options: { readonly judgeTimingAutoAdjust?: JudgeTimingAutoAdjust };
+  /** The frame's play options: `judgeDisplay` OFF draws no NOWJUDGE / NOWCOMBO either. */
+  readonly playOptions?: Pick<import('@be-music/player-scene-model').PlayOptions, 'judgeDisplay'> | undefined;
   /** The skin's images by path, and the chart's `#STAGEFILE` / `#BACKBMP` / `#BANNER` under LR2's special paths. */
   readonly textures: ReadonlyMap<string, Texture>;
   readonly timers: LR2PlayTimers;
@@ -329,10 +331,12 @@ export function drawLR2PlaySkin(ctx: LR2PlayElementsContext, width: number, heig
   ctx.text.endFrame(ctx.skinLayer);
 }
 
-/** LR2's SILENT automatic judge timing and a chart's HIDJUDGE (#931) draw no judgment or combo. */
-function hidesLR2Judge(ctx: Pick<LR2PlayElementsContext, 'options' | 'play'>): boolean {
+/** LR2's SILENT automatic judge timing, a chart's HIDJUDGE (#931) and the player's own switch draw no judgment or combo. */
+function hidesLR2Judge(ctx: Pick<LR2PlayElementsContext, 'options' | 'play' | 'playOptions'>): boolean {
   return (
-    ctx.options.judgeTimingAutoAdjust === 'LR2-SILENT' || ctx.play.engineFrame?.chartOptions?.crazyJudge === 'HIDJUDGE'
+    ctx.options.judgeTimingAutoAdjust === 'LR2-SILENT' ||
+    ctx.play.engineFrame?.chartOptions?.crazyJudge === 'HIDJUDGE' ||
+    ctx.playOptions?.judgeDisplay === 'OFF'
   );
 }
 

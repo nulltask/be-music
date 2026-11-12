@@ -10,6 +10,7 @@ import {
   LR2_SCREEN_HEIGHT,
 } from '../shared/playfield/lr2-mania-visual.ts';
 import { resolveHiddenNoteChannels } from '../shared/playfield/hidden-note-channels.ts';
+import { resolveLaneDim } from '../shared/playfield/lane-brightness.ts';
 import { resolveConstantVisibility, resolveWhiteNumber, resolveLaneCover } from '@be-music/player-scene-model';
 /**
  * The beatoraja family's play screen: a beatoraja play skin (`play_<variant>`) drawn by `BeatorajaPlaySkinView` with the
@@ -529,6 +530,7 @@ export class BeatorajaPlayView implements PlayView {
       judgeTimingMs: frame.playOptions.judgeTimingMs,
       visualConstant: frame.playOptions.visualConstant,
       judgeTimingAutoAdjust: frame.playOptions.judgeTimingAutoAdjust,
+      hideJudgeDisplay: frame.playOptions.judgeDisplay === 'OFF',
       chartPlayfield: resolveChartPlayfieldVisual(
         play.engineFrame?.chartOptions,
         play.engineFrame?.currentSeconds ?? frame.seconds,
@@ -566,6 +568,7 @@ export class BeatorajaPlayView implements PlayView {
       hiddenNoteChannels: resolveHiddenNoteChannels(frame.playOptions.autoScratchNotes, play.autoScratchChannels),
       ...(frame.playOptions.showJudgeArea && play.judgeWindows !== undefined ? { judgeArea: play.judgeWindows } : {}),
       markProcessedNotes: frame.playOptions.markProcessedNotes,
+      laneDim: resolveLaneDim(frame.playOptions.laneBrightness),
       constant: resolveConstantVisibility({
         enabled: frame.playOptions.visualConstant,
         durationMs: frame.playOptions.noteDurationMs,

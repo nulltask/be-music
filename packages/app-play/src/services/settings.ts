@@ -287,6 +287,8 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     dpFlip: false,
     bpmGuide: false,
     bpmChangeWarning: false,
+    judgeDisplay: 'SKIN',
+    laneBrightness: 100,
     scoreTarget: 'RATE_AAA',
     markProcessedNotes: false,
     showJudgeArea: false,

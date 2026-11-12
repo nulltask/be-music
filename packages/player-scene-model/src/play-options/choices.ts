@@ -175,6 +175,8 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   constantFadeMs: 100,
   bpmGuide: false,
   bpmChangeWarning: false,
+  judgeDisplay: 'SKIN',
+  laneBrightness: 100,
   scoreTarget: 'RATE_AAA',
   markProcessedNotes: false,
   showJudgeArea: false,
@@ -274,6 +276,9 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
 /** LR2's mania options run from OFF (0) to 100 in steps of 10. */
 const LR2_MANIA_LEVELS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100] as const;
 
+/** The lane brightness steps, in percent: 100 leaves the lanes as the skin draws them. */
+const LANE_BRIGHTNESS_LEVELS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100] as const;
+
 export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   autoPlay: BOOLEAN_CYCLE,
   bga: BGA_CYCLE,
@@ -301,6 +306,8 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   fixedDisplayArea: BOOLEAN_CYCLE,
   bpmGuide: BOOLEAN_CYCLE,
   bpmChangeWarning: BOOLEAN_CYCLE,
+  judgeDisplay: ['SKIN', 'OFF'],
+  laneBrightness: LANE_BRIGHTNESS_LEVELS,
   scoreTarget: SCORE_TARGET_IDS,
   markProcessedNotes: BOOLEAN_CYCLE,
   showJudgeArea: BOOLEAN_CYCLE,

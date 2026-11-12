@@ -168,6 +168,20 @@ Options ダイアログの Replay / ghost フォルダにある **Target (beator
 
 出典: beatoraja [`TargetProperty`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/TargetProperty.java#L87-L158) と [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayerConfig.java#L72-L76)。[#1132](https://github.com/nulltask/be-music/issues/1132) で追跡しています。
 
+## レーンの明るさと判定文字の表示
+
+Options ダイアログの View タブの Effects に、AC 34 の詳細オプションが 2 つあります。どちらも、どのルールセットとスキン系統でもプレイ中に反映し、判定と記録は変わりません。
+
+**Lane brightness (AC)**（レーンの明るさ調整、「レーンの明るさを調整します」）は **0** から **100** まで 10 刻みの割合です。既定の **100** では、レーンはスキンが描くとおりです。Be-Music は各レーンに黒い層を重ねます。層はレーンの背景と、その上を流れるものの間に入るので、ノーツ、小節線、判定範囲、カバーの明るさは変わりません。公式ページには範囲や刻みの記載がないため、目盛りは Be-Music 独自のものです。
+
+**Judgment display (AC)** は **Skin default** か **OFF** です。OFF では、LR2 の SILENT や譜面の HIDJUDGE と同じく、プレイ画面に判定文字とコンボを描きません。判定数とスコアは変わりません。AC 34 の「判定文字の表示位置」は判定文字の位置も変えられます（「判定文字の表示有無と表示する位置を変更」）が、ページに位置の選択肢は載っていません。Be-Music は表示の有無だけを提供し、位置はスキンのままです。
+
+出典: AC 34 [詳細オプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。[#1136](https://github.com/nulltask/be-music/issues/1136) と [#1135](https://github.com/nulltask/be-music/issues/1135) で追跡しています。
+
+## プレイ中に反映する表示オプション
+
+プレイはオプションを開始時に読みます。描画だけを変えるオプションはプレイ中にも追従し、Options ダイアログで変えると次のフレームから反映します。対象は、オートスクラッチのノーツ表示、レーンの明るさ、判定文字の表示、判定範囲、処理済みノーツ、スコアターゲット、LR2 マニアの描画オプション（ACCELERATION から SIDEJUMP まで）です。一覧は `@be-music/player-scene-model` の `LIVE_DISPLAY_PLAY_OPTION_KEYS` にあります。変更は、プレイ中に反映するほかのオプション（ハイスピード、カバー、LIFT、判定タイミング）と同じく、譜面時刻とともにリプレイの `play.optionChanges` に記録します。それ以外のオプションは、LR2 の譜面生成と GAMBOL を含めて、プレイ開始時のままです。
+
 ## ANY KEY
 
 Options ダイアログ の Play options の一番上で **Judgment windows → ????** を選び、**Play options → ANY KEY (PC)** をオンにします。既定はオフで、ほかの判定ルールでは表示しません。PC 版のアシストで、PC 版のページは名前を挙げるだけなので、Be-Music は次のように読みます（[#751](https://github.com/nulltask/be-music/issues/751)）。

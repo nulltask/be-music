@@ -375,6 +375,10 @@ export const OPTIONS_HELP_JA = html`
         <dd>Visual CONSTANT で、表示範囲の境目でノーツがフェードインする時間。プレイ中にも変えられます。</dd>
         <dt>Judged notes</dt>
         <dd>判定したノーツを本来の時刻まで流す (LR2 と同じ) か、消すか。</dd>
+        <dt>Lane brightness (AC)</dt>
+        <dd>レーンの明るさ (%)。ノーツ、小節線、カバーの明るさは変わりません。プレイ中にも変えられます。</dd>
+        <dt>Judgment display (AC)</dt>
+        <dd>OFF にすると、プレイ画面に判定文字とコンボを表示しません。プレイ中にも切り替えられます。</dd>
         <dt>Show judge area (beatoraja)</dt>
         <dd>
           判定ラインの上に、判定の幅を色付きの帯で表示します。PGREAT が青で、外側へ緑、黄、橙、赤の順です。

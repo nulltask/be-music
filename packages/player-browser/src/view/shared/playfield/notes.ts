@@ -32,6 +32,7 @@ import { renderDefaultNote } from './default-playfield.ts';
 import type { PlayfieldLaneRect } from '../../types.ts';
 import type { PlayfieldContext, RuntimeNote } from './context.ts';
 import { resolveHiddenNoteChannels } from './hidden-note-channels.ts';
+import { resolveLaneDim } from './lane-brightness.ts';
 import { resolveProcessedNoteAlpha } from './processed-note.ts';
 import {
   LR2_SCREEN_HEIGHT,
@@ -49,6 +50,16 @@ import { hasChartNoteVisual, placeChartNoteVisual, type ChartNoteScreenVisual } 
 export function renderNotes(ctx: PlayfieldContext, seconds: number, height: number): void {
   const overscan = ctx.noteOverscan;
   ctx.noteLayerPool.begin();
+  // AC 34's lane brightness: a black layer over each lane, under everything that scrolls on it.
+  const laneDim = resolveLaneDim(ctx.playOptions?.laneBrightness);
+  if (laneDim > 0) {
+    for (const lane of ctx.play.laneX.values()) {
+      ctx.noteLayerPool
+        .acquireGraphics()
+        .rect(lane.x, lane.top, lane.w, lane.bottom - lane.top)
+        .fill({ color: 0x000000, alpha: laneDim });
+    }
+  }
   if (ctx.play.isIntroPlaying()) {
     // Intro period — the theme is sliding its frame chrome in. Notes and measure lines stay off-screen until the
     // playhead is live. The `noteLayerPool.end()` below hides every pooled child that the (skipped) draw passes
