@@ -72,6 +72,9 @@ export const CONTROL_ACTION_IDS = [
   'select.sort',
   'select.keys-filter',
   'select.ln-mode',
+  'select.battle',
+  'select.m-ran-1p',
+  'select.m-ran-2p',
   'select.search',
   'select.reload',
   'select.copy-md5',
@@ -252,6 +255,24 @@ export const CONTROL_ACTIONS: readonly ControlActionDefinition[] = [
     label: 'LN mode',
     defaults: { beatoraja: [code('Digit3')] },
     bare: true,
+  },
+  // That-Which-Must-Not-Be-Named AC 34 sets BATTLE with numpad 7 and M-RAN with numpad 6 on its option screen; here they
+  // are select-screen keys of their own. Each player has a numpad there; here the 2P M-RAN takes Shift + numpad 6.
+  { id: 'select.battle', screen: 'select', label: 'BATTLE (????)', defaults: both([code('Numpad7')]), bare: true },
+  {
+    id: 'select.m-ran-1p',
+    screen: 'select',
+    label: 'M-RAN 1P',
+    defaults: both([code('Numpad6')]),
+    bare: true,
+    bareShift: true,
+  },
+  {
+    id: 'select.m-ran-2p',
+    screen: 'select',
+    label: 'M-RAN 2P',
+    defaults: both([code('Numpad6')]),
+    modifiers: { ctrl: false, shift: true },
   },
   { id: 'select.search', screen: 'select', label: 'Search', defaults: both([code('Digit0')]), bare: true },
   {

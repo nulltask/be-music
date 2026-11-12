@@ -149,6 +149,21 @@ describe('PlaySceneSession', () => {
     expect(resolveFixedScoreTargets(empty, 'MAX', 0)).toBe(empty);
   });
 
+  test('a running play follows its display options at once, and no other option', () => {
+    const { session } = createSceneSession();
+    expect(session.frame(0).playOptions.judgeDisplay).toBe('SKIN');
+    session.dispatch({ type: 'display-options', values: { judgeDisplay: 'OFF', laneBrightness: 30, lr2Tornado: 50 } });
+    expect(session.frame(1).playOptions).toMatchObject({ judgeDisplay: 'OFF', laneBrightness: 30, lr2Tornado: 50 });
+    // What shapes the chart or the judgment stays as the play started, even when it is handed over.
+    session.dispatch({ type: 'display-options', values: { random1P: 'MIRROR', lr2Gambol: 2, showJudgeArea: true } });
+    const options = session.frame(2).playOptions;
+    expect(options.showJudgeArea).toBe(true);
+    expect(options.random1P).toBe(DEFAULT_PLAY_OPTIONS.random1P);
+    expect(options.lr2Gambol).toBe(0);
+    // The options the play started with are not written to.
+    expect(DEFAULT_PLAY_OPTIONS.judgeDisplay).toBe('SKIN');
+  });
+
   test('reports the load progress while the play loads', () => {
     const { play, session } = createSceneSession();
     play.assetsLoading = true;

@@ -73,6 +73,10 @@ export type SelectKeyAction =
   | { readonly type: 'list'; readonly option: 'sort' | 'keysFilter' }
   /** Step the LN mode (beatoraja's 3). */
   | { readonly type: 'ln-mode' }
+  /** Switch AC's one-player BATTLE on or off (AC 34's numpad 7). */
+  | { readonly type: 'battle' }
+  /** Switch a player's M-RAN on or off (AC 34's numpad 6). */
+  | { readonly type: 'm-ran'; readonly side: '1P' | '2P' }
   /** Open the search field. */
   | { readonly type: 'search' }
   /** LR2's key 4: back out on a tap, open the chart's ranking when held (`SelectSessionEvents.ranking`). */
@@ -230,6 +234,9 @@ export function resolveSelectKeyAction(
   if (is('select.sort')) return { type: 'list', option: 'sort' };
   if (is('select.keys-filter')) return { type: 'list', option: 'keysFilter' };
   if (is('select.ln-mode')) return { type: 'ln-mode' };
+  if (is('select.battle')) return { type: 'battle' };
+  if (is('select.m-ran-1p')) return { type: 'm-ran', side: '1P' };
+  if (is('select.m-ran-2p')) return { type: 'm-ran', side: '2P' };
   if (is('select.search')) return { type: 'search' };
   if (is('select.reload')) return { type: 'reload' };
   if (is('select.copy-md5')) return { type: 'copy-hash', hash: 'md5' };

@@ -1,6 +1,6 @@
 import { resolveConstantVisibility } from '@be-music/player-scene-model';
 import { diffReplayOptions, resolveReplayOptionsAt, type ReplayOptionState } from '@be-music/player-engine/replay';
-import { resolvePlayOptions, resolveScoreTarget } from '@be-music/player-scene-model';
+import { pickLiveDisplayPlayOptions, resolvePlayOptions, resolveScoreTarget } from '@be-music/player-scene-model';
 /**
  * The play session as a scene session (`SceneSession`, `session/session-scene.ts`): what `createPlayScene` hands its
  * `SessionScene` so the scene's ticker reads a {@link PlayFrame} off the play every frame and the view's intents reach
@@ -54,12 +54,15 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
   private readonly facts: PlaySceneFacts;
   private recordedOptions: ReplayOptionState | undefined;
   private pending: PlayViewEvent[] = [];
+  /** The play options the frames carry: the ones the play started with, and its display options as changed since. */
+  private playOptions: PlayOptions;
   private enteredAtMs = 0;
   private failureSoundPlayed = false;
 
   public constructor(play: PlaySession, facts: PlaySceneFacts) {
     this.play = play;
     this.facts = facts;
+    this.playOptions = facts.playOptions;
   }
 
   /** A moment the play raised for its view (the session's theme `moment`), queued for the next frame. */
@@ -116,6 +119,12 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       case 'cover':
         changePlayView(play, intent.command);
         return;
+      case 'display-options': {
+        // Only the display options: what shapes the chart, the judgment or the record stays as the play started.
+        const live = pickLiveDisplayPlayOptions(intent.values);
+        if (live !== undefined) this.playOptions = { ...this.playOptions, ...live };
+        return;
+      }
       case 'pause':
         play.requestTogglePause();
         return;
@@ -167,7 +176,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
     if (!play.disposed) drainSharedEngineSignals(play);
     const seconds = play.currentSeconds();
     const replay = play.options.replay;
-    let playOptions = this.facts.playOptions;
+    let playOptions = this.playOptions;
     if (replay?.play.options !== undefined || replay?.play.optionChanges !== undefined) {
       const recorded = resolveReplayOptionsAt(
         replay.play.options,

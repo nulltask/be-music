@@ -168,6 +168,20 @@ Not offered: beatoraja's `RATE_<n>` percentages, its `RIVAL_*` targets and its `
 
 Source: beatoraja [`TargetProperty`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/TargetProperty.java#L87-L158) and [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayerConfig.java#L72-L76). Tracked in [#1132](https://github.com/nulltask/be-music/issues/1132).
 
+## Lane brightness and judgment display
+
+Two of AC 34's detail options sit in the Options dialog's View tab, under Effects. Both apply live, under every ruleset and on every skin family, and change neither judgment nor records.
+
+**Lane brightness (AC)** (レーンの明るさ調整, "adjusts the brightness of the lanes") is a percentage from **0** to **100** in steps of 10; **100**, the default, leaves the lanes as the skin draws them. Be-Music puts a black layer over each lane, between the lane's background and what scrolls on it, so the notes, the bar lines, the judge area and the covers keep their own brightness. The official page gives no range or steps, so the scale is Be-Music's.
+
+**Judgment display (AC)** is **Skin default** or **OFF**. OFF draws no judgment and no combo on the play screen, as LR2's SILENT and a chart's HIDJUDGE already do; the counts and the score are unchanged. AC 34's 判定文字の表示位置 also moves the judgment ("change whether the judgment text is shown and where"), but the page lists no positions; Be-Music offers the on / off part only, and a skin keeps its own placement.
+
+Source: AC 34 [detail options](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html). Tracked in [#1136](https://github.com/nulltask/be-music/issues/1136) and [#1135](https://github.com/nulltask/be-music/issues/1135).
+
+## Live display options
+
+A play reads its options when it starts. The ones that only change what is drawn are also followed during the play: changing one in the Options dialog takes effect on the next frame. They are the auto scratch note display, lane brightness, judgment display, the judge area, mark processed notes, the score target and LR2's mania drawing options (ACCELERATION to SIDEJUMP); `LIVE_DISPLAY_PLAY_OPTION_KEYS` in `@be-music/player-scene-model` lists them. A change is recorded in the replay's `play.optionChanges` at its chart time, like the other options a play takes live (hi-speed, covers, LIFT, judge timing). Every other option, including LR2's chart generators and GAMBOL, stays as the play started.
+
 ## ANY KEY
 
 With **Judgment windows → ????** at the top of the Options dialog's Play options, turn on **Play options → ANY KEY (PC)**; it is off by default and hidden under the other judge rules. It is the PC edition's assist, which that edition's page names without describing, so Be-Music reads it this way ([#751](https://github.com/nulltask/be-music/issues/751)):
@@ -458,6 +472,14 @@ Choose a two-player play in **Play options → Battle**: **BATTLE (LR2)**, offer
 Replays record the switches in `play.options.mRan1P` / `mRan2P` with every note's final lane, so a replay does not mirror again. Its record policy is in [Assist and record policy](#assist-and-record-policy).
 
 Source: AC 34 [play options](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html). Tracked in [#724](https://github.com/nulltask/be-music/issues/724).
+
+## BATTLE and M-RAN keys
+
+On the select screen, numpad **7** switches **BATTLE (????)** on and off, numpad **6** switches **M-RAN 1P**, and Shift + numpad **6** switches **M-RAN 2P**, on both key maps. They are operations of the key table (**BATTLE (????)**, **M-RAN 1P**, **M-RAN 2P** in the Keys tab), so they can be moved. The BATTLE key selects AC's one-player BATTLE from any other Battle choice and returns to OFF from it; each takes effect where its option does (BATTLE on a 7KEY chart, M-RAN in a two-player play).
+
+AC 34 sets BATTLE with numpad 7 in double play and M-RAN with numpad 6 in two-player play, on its option screen; there each player has a numpad, so one key serves both players. On AC's select screen itself numpad 6 switches the clear-rate display and numpad 9 the chart details ([numpad page](https://p.eagate.573.jp/game/2dx/34/howto/play/tenkey.html)); Be-Music has neither display, and binds no retired command to numpad 9.
+
+Sources: AC 34 [play options](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html) and [numpad](https://p.eagate.573.jp/game/2dx/34/howto/play/tenkey.html). Tracked in [#1138](https://github.com/nulltask/be-music/issues/1138).
 
 ## Mine REMOVE and ADD
 

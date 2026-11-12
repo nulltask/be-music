@@ -244,6 +244,8 @@ export class BeatorajaPlayStage {
       hiddenNoteChannels?: ReadonlySet<string>;
       /** beatoraja's mark processed note. */
       markProcessedNotes?: boolean;
+      /** AC 34's lane brightness as the opacity of the black layer over the lanes. */
+      laneDim?: number;
       /** beatoraja's judge area: the windows to draw as bands above the judge line, while the option is on. */
       judgeArea?: Pick<import('@be-music/player-skin-sdk').BeMusicJudgeWindows, 'note' | 'scratch'>;
       /** The camera to show in the BGA frame in place of the chart's BGA. */
@@ -257,7 +259,7 @@ export class BeatorajaPlayStage {
     view.update(context);
     this.guideLayer.visible =
       clock !== undefined &&
-      (playback.bpmGuide === true || playback.judgeArea !== undefined) &&
+      (playback.bpmGuide === true || playback.judgeArea !== undefined || (playback.laneDim ?? 0) > 0) &&
       playback.started !== false;
     if (clock === undefined) return;
     const activeOps = context.activeOps;
@@ -335,18 +337,33 @@ export class BeatorajaPlayStage {
           },
         ];
       });
+      // The guide layer sits under the notes: the lane dim and the judge area draw there, behind what scrolls.
+      const laneDim = playback.laneDim ?? 0;
+      const laneAreas =
+        playback.judgeArea !== undefined || laneDim > 0
+          ? [...new Set(clock.notes.map((note) => note.channel))].flatMap((channel) =>
+              this.noteLayer.getDisplayAreaLanes(activeOps, [channel]).map((lane) => ({
+                x: lane.x,
+                w: lane.w,
+                top: lane.top,
+                bottom: lane.bottom,
+                scratch: isScratch(channel),
+              })),
+            )
+          : [];
+      // AC 34's lane brightness: a black layer over each lane.
+      if (laneDim > 0) {
+        for (const lane of laneAreas) {
+          this.guidePool
+            .acquireGraphics()
+            .rect(lane.x, lane.top, lane.w, lane.bottom - lane.top)
+            .fill({ color: 0x000000, alpha: laneDim });
+        }
+      }
       if (playback.judgeArea !== undefined) {
         const beatAt = layout.beatAtSeconds;
         renderJudgeArea({
-          lanes: [...new Set(clock.notes.map((note) => note.channel))].flatMap((channel) =>
-            this.noteLayer.getDisplayAreaLanes(activeOps, [channel]).map((lane) => ({
-              x: lane.x,
-              w: lane.w,
-              top: lane.top,
-              bottom: lane.bottom,
-              scratch: isScratch(channel),
-            })),
-          ),
+          lanes: laneAreas,
           note: playback.judgeArea.note,
           scratch: playback.judgeArea.scratch,
           distanceAt: (ms) =>

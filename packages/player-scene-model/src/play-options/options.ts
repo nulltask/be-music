@@ -40,6 +40,10 @@ export interface PlayOptions {
    * change until the change (blue when the tempo rises, red when it falls).
    */
   bpmChangeWarning: boolean;
+  /** AC 34 判定文字の表示位置, its on / off part: OFF draws no judgment or combo on any play screen. Display only. */
+  judgeDisplay: 'SKIN' | 'OFF';
+  /** AC 34 レーンの明るさ調整: the lanes' brightness in percent, 100 as the skin draws them and 0 black. Notes, bar lines and covers keep theirs. Display only. */
+  laneBrightness: number;
   /** The score graph's fixed target (beatoraja's TargetProperty): a rank border, MAX or the next rank above the best record. A ghost's pacemaker takes its place while one runs. */
   scoreTarget: import('./score-target.ts').ScoreTargetId;
   /** beatoraja's mark processed note: a tap note judged before its time is drawn as processed until it goes. Display only. */

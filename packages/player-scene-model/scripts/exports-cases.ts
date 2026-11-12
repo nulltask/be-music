@@ -293,6 +293,11 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.resolveScoreTarget('RANK_NEXT', { totalNotes: 1234, bestEXScore: 2000 });
     },
   });
+  define('player-scene-model.pickLiveDisplayPlayOptions', {
+    run: () => {
+      sceneModelAPI.pickLiveDisplayPlayOptions({ laneBrightness: 40, judgeDisplay: 'OFF', gauge1P: 'HARD' });
+    },
+  });
   define('player-scene-model.resolvePlayOptionValue', {
     run: () => {
       sceneModelAPI.resolvePlayOptionValue('random1P', 'MIRROR');

@@ -182,7 +182,10 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   const judgeSides: SkinlessGameplayJudgeState[] = [];
   // A chart's HIDJUDGE (#931) hides the judgment display as LR2's SILENT does.
   const hidesJudge =
-    ctx.options.judgeTimingAutoAdjust === 'LR2-SILENT' || ctx.play.engineFrame?.chartOptions?.crazyJudge === 'HIDJUDGE';
+    ctx.options.judgeTimingAutoAdjust === 'LR2-SILENT' ||
+    ctx.play.engineFrame?.chartOptions?.crazyJudge === 'HIDJUDGE' ||
+    // The player's own switch (AC 34's 判定文字の表示位置, OFF).
+    ctx.playFrame?.playOptions.judgeDisplay === 'OFF';
   for (const side of ['1P', '2P'] as const) {
     if (side === '2P' && !usesPlayer2) {
       continue;
