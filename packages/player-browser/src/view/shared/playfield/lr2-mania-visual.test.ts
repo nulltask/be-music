@@ -112,6 +112,16 @@ test('CHAR triples the distance of every n-th note by lane and index', () => {
   expect(placeLR2ManiaNote(visual({ char: 50 }), note({ lane: 2, index: 9 })).distance).toBeCloseTo(200);
 });
 
+test('HEARTBEAT pulses the size, twice as much in width as in height', () => {
+  // Lane 0, index 0 at a quarter of the 500 ms period: sin = 1.
+  const beat = placeLR2ManiaNote(visual({ heartbeat: 30 }), note({ lane: 0, nowMs: 125 }));
+  expect(beat.widthDelta).toBeCloseTo(60);
+  expect(beat.heightDelta).toBeCloseTo(30);
+  expect(beat.distance).toBeCloseTo(200);
+  const shrunk = placeLR2ManiaNote(visual({ heartbeat: 30 }), note({ lane: 0, nowMs: 375 }));
+  expect(shrunk.widthDelta).toBeCloseTo(-60);
+});
+
 test('indexes notes and mines per lane in time order', () => {
   const notes = [
     { channel: '11', seconds: 1 },

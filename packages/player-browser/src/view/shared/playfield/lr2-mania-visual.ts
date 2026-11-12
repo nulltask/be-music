@@ -18,6 +18,7 @@ export interface LR2ManiaVisual {
   readonly tornado: number;
   readonly superLoop: number;
   readonly char: number;
+  readonly heartbeat: number;
 }
 
 /** The mania drawing options of `options`, or `undefined` when none is on (the playfield then skips the pass). */
@@ -29,6 +30,7 @@ export function resolveLR2ManiaVisual(options: Partial<PlayOptions> | undefined)
     tornado: options.lr2Tornado ?? 0,
     superLoop: options.lr2SuperLoop ?? 0,
     char: options.lr2Char ?? 0,
+    heartbeat: options.lr2Heartbeat ?? 0,
   };
   const on =
     visual.acceleration !== 'OFF' ||
@@ -36,6 +38,7 @@ export function resolveLR2ManiaVisual(options: Partial<PlayOptions> | undefined)
     visual.tornado > 0 ||
     visual.superLoop > 0 ||
     visual.char > 0 ||
+    visual.heartbeat > 0 ||
     false;
   return on ? visual : undefined;
 }
@@ -107,6 +110,11 @@ export function placeLR2ManiaNote(visual: LR2ManiaVisual, input: LR2ManiaNoteInp
   // A note past the line stays on it before the effects below move it.
   y = Math.min(0, y);
   tailY = Math.min(0, tailY);
+  if (visual.heartbeat > 0) {
+    const beat = Math.sin(wave((index + lane * 2) * 50 + now, 500));
+    widthDelta += beat * visual.heartbeat * 2;
+    heightDelta += beat * visual.heartbeat;
+  }
   if (visual.tornado > 0) {
     x = (visual.tornado * y * -0.5 * Math.sin((lane / 10 + (now % 1000) / 1000) * TAU)) / 100;
   }

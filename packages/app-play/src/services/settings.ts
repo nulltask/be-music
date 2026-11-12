@@ -287,6 +287,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     dpFlip: false,
     bpmGuide: false,
     bpmChangeWarning: false,
+    lr2Heartbeat: 0,
     lr2Char: 0,
     lr2SuperLoop: 0,
     lr2Tornado: 0,

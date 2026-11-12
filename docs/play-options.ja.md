@@ -120,6 +120,7 @@ Options ダイアログの View タブには、Effects の下に **LR2 mania opt
 | **TORNADO (LR2)**      | 各ノーツが、レーンと周期 1000 ms の位相による正弦波で横にずれます。ずれは判定ラインからの距離に比例します。                                                                                                                                                                           | [L2293-L2295](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2293-L2295) |
 | **SUPERLOOP (LR2)**    | 各ノーツが判定ライン上の着地点を中心に回転します。周期は `(120 − 値) × 50` ms です。                                                                                                                                                                                                  | [L2296-L2306](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2296-L2306) |
 | **CHAR (LR2)**         | `レーン + ノーツ番号` で数えて `(100 − 値) × 2 / 10 + 2` 個ごとのノーツを 3 倍の距離に描くので、3 倍の速さで落ちてきます。                                                                                                                                                            | [L2328-L2331](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2328-L2331) |
+| **HEARTBEAT (LR2)**    | 各ノーツが中心を基準に周期 500 ms の正弦波で伸び縮みします。幅は値の 2 倍、高さは値のぶんだけ変わります。                                                                                                                                                                             | [L2289-L2292](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2289-L2292) |
 
 - **単位。** LR2 の式は 640×480 のピクセルで計算します。Be-Music はステージの高さ ÷ 480 で拡大縮小するので、どの解像度のスキンでも同じ強さに見えます。レーン上の位置 `p` は、判定ラインからの距離を、ステージ上端から判定ラインまでの距離で割った値で、LR2 と同じ測り方です。
 - **適用順。** 複数を同時に使うと LR2 の順で重なります。ACCELERATION が最初で、HEARTBEAT、TORNADO、SUPERLOOP、SINCURVE、SPIRAL、SIDEJUMP、WAVE、CHAR の順です。
@@ -127,7 +128,7 @@ Options ダイアログの View タブには、Effects の下に **LR2 mania opt
 - **スキン系統。** 共有プレイフィールドに描画する内蔵スキンと LR2 スキンで描画します。beatoraja スキンは独自のレンダラーでノーツを描くため、ノーツ単位のオプションは適用しません。DOM に描画する内蔵スキンも同様です。EARTHQUAKE は beatoraja スキンを含むすべての系統でキャンバスを動かします。スキンが DOM に描画する部分は動きません。
 - **記録。** LR2 はこれらのオプションを使ったプレイを通常のプレイとして保存します（[スコア保存条件](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L67-L79)に含まれません）。Be-Music でもアシストなしです。リプレイはオプションのスナップショットに値を保持します。
 
-出典: OpenLR2 [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2155-L2331)。[#1115](https://github.com/nulltask/be-music/issues/1115), [#1117](https://github.com/nulltask/be-music/issues/1117), [#1119](https://github.com/nulltask/be-music/issues/1119), [#1120](https://github.com/nulltask/be-music/issues/1120), [#1121](https://github.com/nulltask/be-music/issues/1121) で追跡しています。
+出典: OpenLR2 [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2155-L2331)。[#1115](https://github.com/nulltask/be-music/issues/1115), [#1117](https://github.com/nulltask/be-music/issues/1117), [#1119](https://github.com/nulltask/be-music/issues/1119), [#1120](https://github.com/nulltask/be-music/issues/1120), [#1121](https://github.com/nulltask/be-music/issues/1121), [#1122](https://github.com/nulltask/be-music/issues/1122) で追跡しています。
 
 ## ANY KEY
 
