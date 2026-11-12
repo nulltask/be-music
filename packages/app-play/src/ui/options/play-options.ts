@@ -278,6 +278,12 @@ export function buildPlayOptionsFolder(
       this.setPlayOptions({ autoScratch2P: value });
     }),
   );
+  // beatoraja's GUIDE SE: the sound set's sound for each judgment. Read as the play starts, when the sounds are decoded.
+  trackPlayOption(
+    assist.addBinding(this.guiState, 'guideSE', { label: 'GUIDE SE (beatoraja)' }).on('change', ({ value }) => {
+      this.setPlayOptions({ guideSE: value });
+    }),
+  );
   // The PC edition's ANY KEY (#751), offered with the `____` judge rules (`refreshRulesetChoices`); saves no record.
   this.anyKeyController = trackPlayOption(assist.addBinding(this.guiState, 'anyKey', { label: 'ANY KEY (PC)' }));
   this.longNoteModifierController = selectBinding(notes, this.guiState, 'longNoteModifier', 'Long notes', {

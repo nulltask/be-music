@@ -294,6 +294,26 @@ beatoraja のリプレイは実効アルゴリズムを `play.judgeAlgorithm` �
 
 参照元：AC 34 の[スピードオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option_speed.html)。対応 Issue は [#734](https://github.com/nulltask/be-music/issues/734) と [#735](https://github.com/nulltask/be-music/issues/735) です。
 
+## GUIDE SE
+
+Play タブの Assist ページにある **GUIDE SE (beatoraja)** は、beatoraja の `isGuideSE` と同じく、判定ごとにサウンドセットの音を鳴らします。どのルールでも使え、プレイの開始時に読みます。beatoraja がアシストのフラグを立てないのと同じく、アシスト区分は付きません。設定は保存され、プレイはリプレイのオプションのスナップショットに記録します。
+
+| 音             | 判定                                              |
+| -------------- | ------------------------------------------------- |
+| `guide-pg.wav` | PGREAT                                            |
+| `guide-gr.wav` | GREAT                                             |
+| `guide-gd.wav` | GOOD                                              |
+| `guide-bd.wav` | BAD                                               |
+| `guide-pr.wav` | POOR（見逃したノーツ）                            |
+| `guide-ms.wav` | 空 POOR（ノーツの近くで、ノーツを消費しない打鍵） |
+
+- **音の出どころ。** beatoraja テーマのサウンドセットにある 6 つのファイルです。`sound/` フォルダ、次に `defaultsound/` を、`.wav` か `.ogg` で探します（[`SystemSoundManager` L148-L153](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/SystemSoundManager.java#L148-L153)）[V]。セットにないファイルは鳴りません。beatoraja も見つかったファイルだけを登録します（[`BMSPlayer` L398-L410](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L398-L410)）。LR2 のサウンドセットにはガイド音がなく、Be-Music にも同梱していないため、LR2 スキンや内蔵スキンでのプレイは、beatoraja テーマが有効でない限り無音です。
+- **鳴るタイミング。** すべての判定で、エンジンが判定した時点で鳴らします。判定と同時に鳴り、1 フレーム遅れることはありません。AUTO プレイは各ノーツで PGREAT の音を鳴らし、リプレイはプレイしたとおりに鳴ります。beatoraja の `JudgeManager` がモードに関係なく判定ごとに鳴らすためです（[L694](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L694)）[V]。地雷と、届く範囲にノーツがない打鍵は判定を出さないので、beatoraja と同じく鳴りません。
+- **音量。** キーバスに流すので、**Key sound (%)** とマスター音量に従います。beatoraja がガイド音をキー音と並べて登録するのに合わせています [I]。
+- **再現していない点。** beatoraja は、見逃したチャージノートの始点と終点で POOR の音を 2 回鳴らします。Be-Music のエンジンは終点の見逃しを判定の通知なしで処理するため、1 回だけ鳴ります。LR2 の SILENT（自動判定タイミング）は音を読み込まないので、ガイド音も鳴りません。
+
+[#1128](https://github.com/nulltask/be-music/issues/1128) で追跡しています。
+
 ## BPM GUIDE
 
 Options ダイアログ の **BPM GUIDE (beatoraja)** をオンにします。既定はオフです。オンにすると、beatoraja 0.8.9 の `LaneRenderer` と同様に、この先のテンポ変化をレーン上に表示します。実際に BPM が変わる位置には緑の `BPM<n>`（現在と同じ BPM の指定は省略）、正の STOP の位置には黄色の `STOP <n>ms` を表示し、どちらも整数に切り捨てます。ラベルは STOP や負のスクロールを含めてノートと同じようにスクロールし、判定線を過ぎると消えます。

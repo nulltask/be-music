@@ -4,7 +4,7 @@
  */
 
 import { BGACameraFeed } from '../media/bga-camera.ts';
-import type { ResolvedPlayChart } from '@be-music/player-engine';
+import type { GuideSound, ResolvedPlayChart } from '@be-music/player-engine';
 import type { BeMusicReplay, ReplayCourseStage } from '@be-music/player-engine/replay';
 import type { RulesetId } from '@be-music/player-engine/ruleset';
 import {
@@ -16,7 +16,9 @@ import {
   type PlayOptions,
   type PlayResult,
   type PracticeRange,
+  type GuideSoundSlot,
   type RankingScoreTarget,
+  type SystemSound,
   type SystemSoundSet,
 } from '@be-music/player-scene-model';
 import type { Texture } from 'pixi.js';
@@ -668,6 +670,8 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       ...settings,
       ...(kit.family === 'built-in' && LIFT_SKINS.has(kit.skin.id) ? { coverKeys: true } : {}),
       controlScheme: resolveControlScheme(kit.family, settings.builtInControlScheme),
+      // beatoraja's GUIDE SE: the sound set's judgment sounds, when the player turned them on.
+      ...(playOptions.guideSE ? { guideSounds: resolveGuideSounds(options.sounds) } : {}),
       judgeTimingAutoAdjust: playOptions.judgeTimingAutoAdjust,
       ...(playOptions.lr2Gambol !== 0 && (settings.judgeRuleset ?? 'lr2') === 'lr2'
         ? { lr2Gambol: playOptions.lr2Gambol }
@@ -830,4 +834,24 @@ function resolvePracticeSessionOptions(
     extraNoteDepth: 0,
     lr2ExtraMode: false,
   };
+}
+
+/** beatoraja's name for each guide sound slot, in its judge order. */
+const GUIDE_SOUND_NAMES: readonly (readonly [GuideSound, GuideSoundSlot])[] = [
+  ['PG', 'guidePG'],
+  ['GR', 'guideGR'],
+  ['GD', 'guideGD'],
+  ['BD', 'guideBD'],
+  ['PR', 'guidePR'],
+  ['MS', 'guideMS'],
+];
+
+/** The guide sound of each judgment a sound set has: its `guidePG` to `guideMS` slots, by beatoraja's judge names. */
+export function resolveGuideSounds(sounds: SystemSoundSet | undefined): Partial<Record<GuideSound, SystemSound>> {
+  const found: Partial<Record<GuideSound, SystemSound>> = {};
+  for (const [name, slot] of GUIDE_SOUND_NAMES) {
+    const sound = sounds?.[slot];
+    if (sound !== undefined) found[name] = sound;
+  }
+  return found;
 }

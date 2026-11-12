@@ -294,6 +294,26 @@ Replays store `play.options.classicHiSpeed` or `play.options.normalHiSpeedLevel`
 
 Source: AC 34 [speed options](https://p.eagate.573.jp/game/2dx/34/howto/play/option_speed.html). Tracked in [#734](https://github.com/nulltask/be-music/issues/734) and [#735](https://github.com/nulltask/be-music/issues/735).
 
+## GUIDE SE
+
+**GUIDE SE (beatoraja)** on the Play tab's Assist page plays the sound set's sound for each judgment, as beatoraja's `isGuideSE` does. It is offered under every ruleset, is read as a play starts, and sets no assist class, as beatoraja sets no assist flag for it. The switch is saved, and a play records it in its replay's option snapshot.
+
+| Sound          | Judgment                                              |
+| -------------- | ----------------------------------------------------- |
+| `guide-pg.wav` | PGREAT                                                |
+| `guide-gr.wav` | GREAT                                                 |
+| `guide-gd.wav` | GOOD                                                  |
+| `guide-bd.wav` | BAD                                                   |
+| `guide-pr.wav` | POOR: a note that passed unhit                        |
+| `guide-ms.wav` | Empty POOR: a press near a note that does not take it |
+
+- **Where the sounds come from.** The six files of a beatoraja theme's sound set, in its `sound/` folder and then `defaultsound/`, as `.wav` or `.ogg` ([`SystemSoundManager` L148-L153](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/SystemSoundManager.java#L148-L153)) [V]. A file the set lacks plays nothing, as beatoraja registers only the files it finds ([`BMSPlayer` L398-L410](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L398-L410)). An LR2 sound set has no guide sounds and Be-Music ships none, so a play on an LR2 or a built-in skin is silent unless a beatoraja theme is the active one.
+- **When they play.** At every judgment, from the engine as it judges, so a sound starts with the judgment and not a frame later. AUTO play plays PGREAT's for each note and a replay plays as the play did, since beatoraja's `JudgeManager` plays the sound for every judgment whatever the mode ([L694](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L694)) [V]. A mine and a press with no note in reach judge nothing and play nothing, as in beatoraja.
+- **Volume.** The sounds go to the key bus, so they follow **Key sound (%)** and the master volume, like the keysounds beatoraja registers them beside [I].
+- **Not carried over.** beatoraja plays two POOR sounds for a missed charge note's start and end; Be-Music's engine charges its tail miss without a judgment cue, so one plays. LR2's SILENT automatic judge timing loads no sounds, these included.
+
+Tracked in [#1128](https://github.com/nulltask/be-music/issues/1128).
+
 ## BPM GUIDE
 
 Turn on **BPM GUIDE (beatoraja)** in the Options dialog; it is off by default. Upcoming tempo changes then appear on the lanes as beatoraja 0.8.9's `LaneRenderer` draws them: a green `BPM<n>` label at each actual BPM change, skipping declarations that repeat the current BPM, and a yellow `STOP <n>ms` label at each positive STOP, both truncated to integers. Labels follow the notes' scroll, including STOPs and negative scroll, and leave once they pass the judge line.

@@ -40,6 +40,8 @@ export interface PlayOptions {
    * change until the change (blue when the tempo rises, red when it falls).
    */
   bpmChangeWarning: boolean;
+  /** beatoraja's GUIDE SE: the sound set's sound for each judgment plays at the judgment. Read as the play starts. */
+  guideSE: boolean;
   /** Whether the built-in skins show the judgment counts during a play. */
   judgeCounts: boolean;
   /** Whether the judge detail shows the keys' and the scratch's timing apart. */

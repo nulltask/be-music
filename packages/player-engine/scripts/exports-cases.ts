@@ -46,6 +46,12 @@ const SEEK_REBUILD_CHART = parseChart(
 const SEEK_REBUILD_SECONDS = 64 * 1.6;
 
 export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
+  define('player-engine.resolveGuideSound', {
+    run: () => {
+      playerAPI.resolveGuideSound('GREAT');
+      playerAPI.resolveGuideSound('POOR', 'empty');
+    },
+  });
   define('player-engine.resolveChartRulesetFacts', {
     run: (fixtures) => {
       playerAPI.resolveChartRulesetFacts(fixtures.sampleBmsJSON);

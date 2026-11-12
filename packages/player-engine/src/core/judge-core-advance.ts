@@ -1087,6 +1087,6 @@ function chargeRemainingNotes(
   }
   emit({ kind: 'poor-trace', action: 'trigger', seconds: totalSeconds });
   setCombo(state, totalSeconds, 0, 'remaining-notes', emit, 'POOR');
-  emit({ kind: 'judge-combo', judge: 'POOR', combo: state.combo });
+  emit({ kind: 'judge-combo', judge: 'POOR', combo: state.combo, poor: 'remaining' });
   emit({ kind: 'frame', seconds: totalSeconds });
 }

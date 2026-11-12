@@ -159,6 +159,12 @@ export interface AudioService {
   resume(): void;
   /** Decodes encoded audio on the system context, once per `bytes`; `undefined` when it cannot be decoded. */
   decode(bytes: Uint8Array): Promise<AudioBuffer | undefined>;
+  /**
+   * Decodes a system sound (its bytes, or its file in the theme set with `setTheme`) on the system context, once per
+   * sound; `undefined` when the theme has no such file or it cannot be decoded. A buffer plays in any context, so a
+   * play uses it in its own graph (the guide sounds).
+   */
+  decodeSound(sound: SystemSound): Promise<AudioBuffer | undefined>;
   /** Sets the theme cues, slot references and skin sounds read from. */
   setTheme(theme: AudioTheme | undefined): void;
   /**
@@ -596,6 +602,13 @@ export function createAudioService(options: AudioServiceOptions = {}): AudioServ
     decode(bytes) {
       const graph = ensureSystem();
       return graph === undefined ? Promise.resolve(undefined) : decodeBytes(graph.context, bytes);
+    },
+    decodeSound(sound) {
+      const graph = ensureSystem();
+      const resolved = resolveSound(sound);
+      return graph === undefined || resolved === undefined
+        ? Promise.resolve(undefined)
+        : resolved.decode(graph.context);
     },
     setTheme(next) {
       theme = next ?? {};

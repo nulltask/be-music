@@ -144,6 +144,11 @@ export const OPTIONS_HELP_JA = html`
         <dd>1P 側のスクラッチを自動で処理します。</dd>
         <dt>Auto scratch 2P</dt>
         <dd>2P 側のスクラッチを自動で処理します。</dd>
+        <dt>GUIDE SE (beatoraja)</dt>
+        <dd>
+          判定ごとに音を鳴らします。beatoraja テーマのサウンドセットの音 (guide-pg.wav から guide-ms.wav)
+          を使い、セットにないときは鳴りません。キー音の音量に従い、プレイの開始時に読みます。
+        </dd>
         <dt>Long notes</dt>
         <dd>
           LEGACY NOTE はチャージノートを通常ノーツに、LN REMOVE はすべてのロングノートを始点だけにし、ADD LN / CN / HCN

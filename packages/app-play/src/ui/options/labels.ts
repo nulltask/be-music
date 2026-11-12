@@ -106,6 +106,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Lane cover': 'レーンカバー',
   'Cover height': 'カバーの高さ',
   'BPM GUIDE (beatoraja)': 'BPM GUIDE (beatoraja)',
+  'GUIDE SE (beatoraja)': 'GUIDE SE (beatoraja)',
   'BPM change warning (AC)': 'BPM 変化の警告 (AC)',
   'Auto scratch notes (AC)': 'オートスクラッチのノーツ (AC)',
   'Lane brightness (AC)': 'レーンの明るさ (AC)',

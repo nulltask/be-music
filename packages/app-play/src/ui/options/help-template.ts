@@ -154,6 +154,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Plays the 1P side's scratch notes for you.</dd>
           <dt>Auto scratch 2P</dt>
           <dd>Plays the 2P side's scratch notes for you.</dd>
+          <dt>GUIDE SE (beatoraja)</dt>
+          <dd>
+            Plays a sound for each judgment, from the sound set of a beatoraja theme (guide-pg.wav to guide-ms.wav). A
+            set without them plays nothing. It follows the key sound volume and is read as the play starts.
+          </dd>
           <dt>Long notes</dt>
           <dd>
             LEGACY NOTE turns charge notes into normal notes, LN REMOVE turns every long note into its head, and ADD LN

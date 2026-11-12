@@ -777,3 +777,42 @@ test('maps extended bmson resource keys and source slices into keep-pitch FIT bu
   expect(trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(0, 1, 0.5 + SAMPLE_SLICE_FADE_SECONDS);
   await session.dispose();
 });
+
+describe('createWebAudioSession: guide sounds', () => {
+  const baseContext = () => {
+    const mocks = createMocks();
+    return {
+      mocks,
+      context: {
+        audioContext: mocks.audioContext,
+        audioBus: mocks.audioBus,
+        chart: makeChartWithSamples(),
+        decodedSamples: new Map<string, AudioBuffer>(),
+        wavCmdVolumeMultipliers: new Map<string, number>(),
+        playbackRate: 1,
+      },
+    };
+  };
+
+  test('plays a judgment’s guide sound on the key bus, at once', () => {
+    const { mocks, context } = baseContext();
+    const great = makeMockAudioBuffer(0.2);
+    const session = createWebAudioSession({ ...context, guideSounds: new Map([['GR', great]]) });
+    session.playGuideSound!('GR');
+    expect(mocks.trackedBufferSources).toHaveLength(1);
+    const played = mocks.trackedBufferSources[0]!;
+    expect(played.buffer).toBe(great);
+    expect(played.connectedTo).toBe(mocks.keyMixer);
+    expect(played.node.start).toHaveBeenCalledOnce();
+    // The same sound overlaps itself, and one the sound set lacks plays nothing.
+    session.playGuideSound!('GR');
+    session.playGuideSound!('PG');
+    expect(mocks.trackedBufferSources).toHaveLength(2);
+  });
+
+  test('a session without guide sounds has no playGuideSound, so the engine plays none', () => {
+    const { context } = baseContext();
+    expect(createWebAudioSession(context).playGuideSound).toBeUndefined();
+    expect(createWebAudioSession({ ...context, guideSounds: new Map() }).playGuideSound).toBeUndefined();
+  });
+});

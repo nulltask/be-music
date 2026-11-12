@@ -4,7 +4,7 @@ import type { BattleMode, LaneKeyOverrides, LR2ExtraLevel } from '@be-music/play
  * draws it. `createPlayScene` takes them as its `settings`, `course`, `replay`, `preResolved`, `audio` and `on`.
  */
 
-import type { CourseView, PlayResult, HSFix, RandomMode } from '@be-music/player-scene-model';
+import type { CourseView, PlayResult, HSFix, RandomMode, SystemSound } from '@be-music/player-scene-model';
 import type { GameplayLayoutMode } from '@be-music/player-skin-sdk';
 import type { NonstopStitchMap } from '@be-music/player-engine/course';
 import type {
@@ -15,7 +15,7 @@ import type {
 } from '@be-music/player-engine/replay';
 import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
 import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
-import type { ResolvedPlayChart } from '@be-music/player-engine';
+import type { GuideSound, ResolvedPlayChart } from '@be-music/player-engine';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { ControlKeyOverrides, ControlScheme } from '../controls/control-buttons.ts';
@@ -430,6 +430,11 @@ export interface PlaySessionOptions {
    * makes them itself.
    */
   audio?: AudioService;
+  /**
+   * beatoraja's GUIDE SE: the sound set's sound for each judgment, when the player turned it on. Each is decoded
+   * through {@link audio} as the play loads and played on the key bus at its judgment; one the set lacks is left out.
+   */
+  guideSounds?: Partial<Record<GuideSound, SystemSound>>;
 }
 
 export interface PlayDisposeOptions {

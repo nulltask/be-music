@@ -135,6 +135,7 @@ describe('captureOptionSettings', () => {
       dpFlip: true,
       bpmGuide: true,
       bpmChangeWarning: true,
+      guideSE: true,
       judgeCounts: false,
       judgeDetailSplit: true,
       judgeDetail: 'MS',
