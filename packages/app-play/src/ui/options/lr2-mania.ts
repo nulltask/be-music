@@ -29,4 +29,5 @@ const LEVEL_ROWS = [
   ['lr2SinCurve', 'SINCURVE (LR2)'],
   ['lr2Wave', 'WAVE (LR2)'],
   ['lr2SpiralEffect', 'SPIRAL effect (LR2)'],
+  ['lr2SideJump', 'SIDEJUMP (LR2)'],
 ] as const;

@@ -40,6 +40,8 @@ export interface PlayOptions {
    * change until the change (blue when the tempo rises, red when it falls).
    */
   bpmChangeWarning: boolean;
+  /** LR2 mania option SIDEJUMP (0 = OFF, 10–100): hops each note sideways on a 500 ms period, alternate notes in opposite directions. Drawing only. */
+  lr2SideJump: number;
   /** LR2 mania option SPIRAL (0 = OFF, 10–100): circles each note about its own path every 300 ms, alternate notes in opposite directions. It is LR2's note effect, not beatoraja's SPIRAL lane option. Drawing only. */
   lr2SpiralEffect: number;
   /** LR2 mania option WAVE (0 = OFF, 10–100): shifts each note along the lane by a 1000 ms sine per lane, growing with the square of its distance. Drawing only. */

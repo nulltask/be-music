@@ -182,6 +182,17 @@ test('SPIRAL effect circles alternate notes in opposite directions', () => {
   expect(odd.distance).toBeCloseTo(200 + 20);
 });
 
+test('SIDEJUMP hops alternate notes sideways in opposite directions', () => {
+  // Lane 0, index 0 at a quarter of the 500 ms period: all of the reach is sideways.
+  const side = placeLR2ManiaNote(visual({ sideJump: 40 }), note({ lane: 0, index: 0, nowMs: 125 }));
+  expect(side.xOffset).toBeCloseTo(20);
+  expect(side.distance).toBeCloseTo(200);
+  // At the start of the period the note is lifted by the reach instead, whichever way it hops.
+  const lifted = placeLR2ManiaNote(visual({ sideJump: 40 }), note({ lane: 0, index: 0, nowMs: 0 }));
+  expect(lifted.xOffset).toBeCloseTo(0);
+  expect(lifted.distance).toBeCloseTo(220);
+});
+
 test('indexes notes and mines per lane in time order', () => {
   const notes = [
     { channel: '11', seconds: 1 },

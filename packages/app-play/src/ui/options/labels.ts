@@ -119,6 +119,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'SINCURVE (LR2)': 'SINCURVE (LR2)',
   'WAVE (LR2)': 'WAVE (LR2)',
   'SPIRAL effect (LR2)': 'SPIRAL effect (LR2)',
+  'SIDEJUMP (LR2)': 'SIDEJUMP (LR2)',
   'LIFT 1P (beatoraja)': 'LIFT 1P (beatoraja)',
   'LIFT height 1P': 'LIFT の高さ 1P',
   'LIFT 2P (beatoraja)': 'LIFT 2P (beatoraja)',

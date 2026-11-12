@@ -23,6 +23,7 @@ export interface LR2ManiaVisual {
   readonly sinCurve: number;
   readonly wave: number;
   readonly spiral: number;
+  readonly sideJump: number;
 }
 
 /** The mania drawing options of `options`, or `undefined` when none is on (the playfield then skips the pass). */
@@ -39,6 +40,7 @@ export function resolveLR2ManiaVisual(options: Partial<PlayOptions> | undefined)
     sinCurve: options.lr2SinCurve ?? 0,
     wave: options.lr2Wave ?? 0,
     spiral: options.lr2SpiralEffect ?? 0,
+    sideJump: options.lr2SideJump ?? 0,
   };
   const on =
     visual.acceleration !== 'OFF' ||
@@ -51,6 +53,7 @@ export function resolveLR2ManiaVisual(options: Partial<PlayOptions> | undefined)
     visual.sinCurve > 0 ||
     visual.wave > 0 ||
     visual.spiral > 0 ||
+    visual.sideJump > 0 ||
     false;
   return on ? visual : undefined;
 }
@@ -157,6 +160,13 @@ export function placeLR2ManiaNote(visual: LR2ManiaVisual, input: LR2ManiaNoteInp
     x += Math.sin(angle) * reach;
     y += Math.cos(angle) * reach;
     tailY += Math.cos(angle) * reach;
+  }
+  if (visual.sideJump > 0) {
+    const reach = (index % 2 === 0 ? 1 : -1) * pos * visual.sideJump;
+    const angle = wave(lane * 50 + index * 77 + now, 500);
+    x += Math.sin(angle) * reach;
+    y -= Math.abs(Math.cos(angle) * reach);
+    tailY -= Math.abs(Math.cos(angle) * reach);
   }
   if (visual.wave > 0) {
     const swing = Math.sin(wave(lane * 100 + now, 1000));
