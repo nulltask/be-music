@@ -268,6 +268,7 @@ export class OptionsDialog {
   public lr2ExtraLevelController: OptionBinding<PlayOptions['lr2ExtraLevel']> | undefined;
   public extraNoteDepthController: PaneBinding | undefined;
   public customJudgeController: PaneBinding | undefined;
+  public lr2GambolController: PaneBinding | undefined;
   /** PRACTICE toggle first, then its settings. */
   public practiceControllers: PaneBinding[] = [];
   /** PRACTICE's GAUGE TYPE: the judge ruleset's own gauges. */
@@ -671,6 +672,12 @@ export class OptionsDialog {
       this.setPlayOptions({ customJudge: false });
     }
     if (this.customJudgeController) this.customJudgeController.hidden = !beatoraja;
+    // GAMBOL is part of LR2's judge rules.
+    if (ruleset !== 'lr2' && this.guiState.lr2Gambol !== 0) {
+      this.guiState.lr2Gambol = 0;
+      this.setPlayOptions({ lr2Gambol: 0 });
+    }
+    if (this.lr2GambolController) this.lr2GambolController.hidden = ruleset !== 'lr2';
     // The rates belong to beatoraja's rules; under them they stay in place, disabled while CUSTOM JUDGE is off.
     for (const controller of this.customJudgeRateControllers) {
       controller.hidden = !beatoraja;

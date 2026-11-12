@@ -177,6 +177,8 @@ export interface PlaySessionOptions {
   coverKeys?: boolean;
   /** beatoraja's note-selection algorithm. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  /** LR2's mania option GAMBOL (LR2 rules only): 1 or 2; 0 or absent is off. */
+  lr2Gambol?: 0 | 1 | 2;
   /** beatoraja CUSTOM JUDGE rates; absent while the option is off. */
   customJudge?: import('@be-music/player-engine/ruleset').BeatorajaCustomJudge;
   longNoteModifier?: import('@be-music/player-scene-model').PlayOptions['longNoteModifier'];

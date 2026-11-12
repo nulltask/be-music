@@ -23,7 +23,7 @@ flowchart LR
   q -->|"S-RANDOM"| rules["判定ルール自身のもの"]
 ```
 
-それ以外はルールに従います。判定ルール（判定幅・ゲージ・判定対象ノートの選び方・ロングノートの種類・地雷の発動・スコア）はルールそのものです。LN MODE、CUSTOM JUDGE、ゲージの種類、判定アルゴリズムもルールに従います。[PRACTICE](#practice) と[ゲージオートシフト](#ゲージオートシフト)はどのルールでも使え、そのルールで読みます。PRACTICE はそのルールのゲージを並べ、自動切り替えはそのルールのゲージの並びに沿って切り替えます（[#933](https://github.com/nulltask/be-music/issues/933)）。参照元が混ざったプレイを記録でどう扱うかは[アシストと記録の方針](#アシストと記録の方針)で説明します。[#774](https://github.com/nulltask/be-music/issues/774) で管理しています。
+それ以外はルールに従います。判定ルール（判定幅・ゲージ・判定対象ノートの選び方・ロングノートの種類・地雷の発動・スコア）はルールそのものです。LN MODE、CUSTOM JUDGE、LR2 の [GAMBOL](#gambol)、ゲージの種類、判定アルゴリズムもルールに従います。[PRACTICE](#practice) と[ゲージオートシフト](#ゲージオートシフト)はどのルールでも使え、そのルールで読みます。PRACTICE はそのルールのゲージを並べ、自動切り替えはそのルールのゲージの並びに沿って切り替えます（[#933](https://github.com/nulltask/be-music/issues/933)）。参照元が混ざったプレイを記録でどう扱うかは[アシストと記録の方針](#アシストと記録の方針)で説明します。[#774](https://github.com/nulltask/be-music/issues/774) で管理しています。
 
 ## アシストと記録の方針
 
@@ -281,6 +281,21 @@ beatoraja ルールでは Options ダイアログ の **CUSTOM JUDGE (beatoraja)
 ほかのルールではスイッチを表示せず、エンジンもエラーにします。リプレイには倍率を `play.customJudge`（オフの間は省略）とオプションの値一式に記録し、リプレイのシミュレーションでも適用します。beatoraja はいずれかの倍率が 100 % を超えるとプレイを ASSIST とします。Be-Music も同じく ASSIST として扱います（[アシストと記録の方針](#アシストと記録の方針)）。
 
 参照元：beatoraja 0.8.9 の [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java)、[`JudgeManager`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/JudgeManager.java)、[`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java)。対応 Issue は [#744](https://github.com/nulltask/be-music/issues/744) です。
+
+## GAMBOL
+
+LR2 のルールでは、Options ダイアログの Play options で **GAMBOL (LR2)** を選べます。**OFF**（既定）、**LEVEL 1**、**LEVEL 2** のいずれかです。LR2 の隠しマニアパネルにある判定オプション（「判定を厳しくするオプション」）で、譜面の `#RANK` にかかわらず、プレイ全体の判定幅を固定します。
+
+| レベル  | PGREAT | GREAT  | GOOD   | NONSTOP コースの 2 ステージ目以降 |
+| ------- | ------ | ------ | ------ | --------------------------------- |
+| LEVEL 1 | ±8 ms  | ±24 ms | ±40 ms | ±12 / ±24 / ±60 ms                |
+| LEVEL 2 | ±8 ms  | ±12 ms | ±12 ms | ±12 / ±12 / ±12 ms                |
+
+LEVEL 1 は VERY HARD です。BAD は ±200 ms のままで、コースの判定制約は引き続き適用します。LR2 はこの判定幅を譜面自身の判定幅のあとに設定します。譜面を開くとき（[L27612-L27625](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27612-L27625)）と、NONSTOP のランクオブジェクトごと（[L12863-L12876](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12863-L12876)）で、後者では NONSTOP 用テーブルの VERY HARD を読みます。Be-Music はどちらにも従います。LR2 には `#EXRANKxx` がないため、GAMBOL のプレイではその変更を無視し、判定幅は固定のままです。PRACTICE の JUDGERANK も同様に置き換えます。
+
+GAMBOL は LR2 の判定ルールの一部です。ほかのルールセットでは選択肢を隠し、切り替えるとオフになり、エンジンも拒否します。リプレイにはレベルを `play.lr2Gambol` として記録し（オフのときは記録しません）、LR2 のルールでのリプレイシミュレーションに適用します。ほかのルールセットで再判定するときは、そのルールセット自身の判定幅を使います。LR2 は GAMBOL のプレイを通常のプレイとして保存する（[スコア保存条件](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L67-L79)に含まれない）ため、アシストなしで、譜面の記録を共有します。プレイ中は選択をロックします。
+
+出典: OpenLR2 [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27612-L27625)。[#1114](https://github.com/nulltask/be-music/issues/1114) で追跡しています。
 
 ## PRACTICE
 

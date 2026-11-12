@@ -663,6 +663,9 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       ...(kit.family === 'built-in' && LIFT_SKINS.has(kit.skin.id) ? { coverKeys: true } : {}),
       controlScheme: resolveControlScheme(kit.family, settings.builtInControlScheme),
       judgeTimingAutoAdjust: playOptions.judgeTimingAutoAdjust,
+      ...(playOptions.lr2Gambol !== 0 && (settings.judgeRuleset ?? 'lr2') === 'lr2'
+        ? { lr2Gambol: playOptions.lr2Gambol }
+        : {}),
       ...(playOptions.customJudge && settings.judgeRuleset === 'beatoraja'
         ? {
             customJudge: {

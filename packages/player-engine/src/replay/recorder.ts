@@ -74,6 +74,7 @@ export interface ReplayRecorderPlaySettings {
   mode: 'manual' | 'auto';
   autoScratch: boolean;
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  lr2Gambol?: 1 | 2;
   customJudge?: BeatorajaCustomJudge;
   longNoteModifier?: LongNoteModifier;
   longNoteRate?: number;
@@ -361,6 +362,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (tempoChanges.length > 0) play.tempoChanges = tempoChanges.map((change) => ({ ...change }));
       if (options.play.view !== undefined) play.view = structuredClone(options.play.view);
       if (options.play.judgeAlgorithm !== undefined) play.judgeAlgorithm = options.play.judgeAlgorithm;
+      if (options.play.lr2Gambol !== undefined) play.lr2Gambol = options.play.lr2Gambol;
       if (options.play.customJudge !== undefined) play.customJudge = { ...options.play.customJudge };
       if (options.play.scrollModifier !== undefined) play.scrollModifier = options.play.scrollModifier;
       if (options.play.scrollSection !== undefined) play.scrollSection = options.play.scrollSection;

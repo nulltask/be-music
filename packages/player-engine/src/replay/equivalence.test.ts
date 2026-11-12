@@ -1456,3 +1456,20 @@ test('SURVIVAL TO GROOVE leaves a failed course class gauge selected while conti
   const replay = parseReplay(serializeReplay(run.replay));
   expect(simulateReplay(replay, { ruleset: 'beatoraja' }).gauge).toEqual(replay.results!.native!.gauge);
 });
+
+test("LR2's GAMBOL narrows the windows of the play, and the replay re-simulates with it", async () => {
+  // One note at 1 s, hit 20 ms late: a GREAT under NORMAL (PGREAT 18 ms, GREAT 40 ms).
+  const json = chart([{ measure: 1, channel: '11', position: [0, 1], value: '01' }]);
+  const inputs = [down(0, 1_020_000, '11'), up(1, 1_100_000, '11')];
+  const plain = await runRecordedPlay(json, inputs, 'lr2');
+  expect(plain.replay.play.lr2Gambol).toBeUndefined();
+  expect(plain.replay.results!.native!.judge).toMatchObject({ great: 1 });
+  // LEVEL 1 keeps it a GREAT (24 ms); LEVEL 2 leaves only BAD past 12 ms.
+  const level1 = await runRecordedPlay(json, inputs, 'lr2', { lr2Gambol: 1 });
+  expect(level1.replay.play.lr2Gambol).toBe(1);
+  expect(level1.replay.results!.native!.judge).toMatchObject({ great: 1 });
+  const level2 = await runRecordedPlay(json, inputs, 'lr2', { lr2Gambol: 2 });
+  expect(level2.replay.play.lr2Gambol).toBe(2);
+  expect(level2.replay.results!.native!.judge).toMatchObject({ great: 0, bad: 1 });
+  expect(simulateReplay(level2.replay, { ruleset: 'lr2' }).judge).toEqual(level2.replay.results!.native!.judge);
+});

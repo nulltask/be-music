@@ -261,6 +261,8 @@ export interface ReplayPlay {
   autoScratch: boolean;
   /** Effective manual assist per side; older replays fall back to autoScratch for both. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  /** LR2's mania option GAMBOL, LEVEL 1 or 2: the play's fixed judge windows under LR2 rules. Absent while it was off. */
+  lr2Gambol?: 1 | 2;
   /** beatoraja CUSTOM JUDGE rates in percent; absent while the option was off. */
   customJudge?: BeatorajaCustomJudge;
   longNoteModifier?: LongNoteModifier;
@@ -884,6 +886,10 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   if (play.controlInputs !== undefined) {
     const inputs = parseControlInputs(play.controlInputs);
     if (inputs.length > 0) parsed.controlInputs = inputs;
+  }
+  if (play.lr2Gambol !== undefined) {
+    if (play.lr2Gambol !== 1 && play.lr2Gambol !== 2) throw new ReplayParseError('play.lr2Gambol: expected 1 or 2');
+    parsed.lr2Gambol = play.lr2Gambol;
   }
   if (play.judgeAlgorithm !== undefined) {
     if (!['combo', 'duration', 'lowest'].includes(play.judgeAlgorithm as string)) {

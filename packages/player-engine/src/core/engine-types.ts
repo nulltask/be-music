@@ -104,6 +104,8 @@ export interface PlayerPlaySettings {
   autoScratch?: boolean;
   /** beatoraja's note-selection algorithm; other source rulesets retain their own fixed selection. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  /** LR2's mania option GAMBOL (LR2 rules only): 1 or 2 fixes the judge windows; 0 or absent is off. Recorded into the replay. */
+  lr2Gambol?: 0 | 1 | 2;
   /** beatoraja CUSTOM JUDGE rates; absent while the option is off. Recorded into the replay. */
   customJudge?: import('../ruleset/custom-judge.ts').BeatorajaCustomJudge;
   /**

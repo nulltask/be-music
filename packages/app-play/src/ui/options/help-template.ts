@@ -252,6 +252,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
             <em class="help-menu-when">Shown with beatoraja rules.</em> How a chart that leaves its long-note type open
             plays: LN, CN or HCN.
           </dd>
+          <dt>GAMBOL (LR2)</dt>
+          <dd>
+            <em class="help-menu-when">Shown with LR2 rules.</em> LR2's hidden option that narrows the judgment windows:
+            LEVEL 1 fixes them at VERY HARD, LEVEL 2 also narrows GREAT and GOOD to 12 ms. The play is recorded as a
+            normal one.
+          </dd>
           <dt>CUSTOM JUDGE (beatoraja)</dt>
           <dd>
             <em class="help-menu-when">Shown with beatoraja rules.</em> Scales the judgment windows with the rates
@@ -942,6 +948,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>
             <em class="help-menu-when">beatoraja のルールのときに表示。</em> ロングノートの種類を決めていない譜面を
             LN、CN、HCN のどれで遊ぶか。
+          </dd>
+          <dt>GAMBOL (LR2)</dt>
+          <dd>
+            <em class="help-menu-when">LR2 のルールのときに表示。</em> 判定の幅を狭める LR2 の隠しオプションです。LEVEL
+            1 は VERY HARD に固定し、LEVEL 2 はさらに GREAT と GOOD を 12 ms にします。プレイは通常どおり記録します。
           </dd>
           <dt>CUSTOM JUDGE (beatoraja)</dt>
           <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> 下の倍率で判定の幅を変えます。</dd>

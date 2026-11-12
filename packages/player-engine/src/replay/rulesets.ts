@@ -63,6 +63,8 @@ export function resolveRulesetConfig(
     ...(rulesetId === 'beatoraja' && replay.play.judgeAlgorithm !== undefined
       ? { judgeAlgorithm: replay.play.judgeAlgorithm }
       : {}),
+    // GAMBOL is LR2's own; another ruleset re-judges the inputs with its own windows.
+    ...(rulesetId === 'lr2' && replay.play.lr2Gambol !== undefined ? { lr2Gambol: replay.play.lr2Gambol } : {}),
     ...(rulesetId === 'beatoraja' && replay.play.customJudge !== undefined
       ? { customJudge: replay.play.customJudge }
       : {}),

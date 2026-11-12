@@ -109,6 +109,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'BPM change warning (AC)': 'BPM 変化の警告 (AC)',
   'Auto scratch notes (AC)': 'オートスクラッチのノーツ (AC)',
   'LR2 mania options': 'LR2 マニアオプション',
+  'GAMBOL (LR2)': 'GAMBOL (LR2)',
   'ACCELERATION (LR2)': 'ACCELERATION (LR2)',
   'EARTHQUAKE (LR2)': 'EARTHQUAKE (LR2)',
   'TORNADO (LR2)': 'TORNADO (LR2)',

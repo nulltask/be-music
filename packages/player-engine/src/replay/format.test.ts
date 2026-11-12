@@ -643,6 +643,18 @@ test('round-trips confirmed beatoraja algorithms and rejects the internal Score 
   expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
 });
 
+test("round-trips LR2's GAMBOL level and rejects anything else", () => {
+  for (const lr2Gambol of [1, 2] as const) {
+    const replay = makeReplay();
+    replay.play.lr2Gambol = lr2Gambol;
+    expect(parseReplay(serializeReplay(replay)).play.lr2Gambol).toBe(lr2Gambol);
+  }
+  expect(parseReplay(serializeReplay(makeReplay())).play.lr2Gambol).toBeUndefined();
+  const invalid = JSON.parse(serializeReplay(makeReplay()));
+  invalid.play.lr2Gambol = 3;
+  expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
+});
+
 test('round-trips resolved BPM extrema and rejects invalid ranges', () => {
   const replay = makeReplay();
   replay.chart.bpmRange = { min: 120, max: 240 };

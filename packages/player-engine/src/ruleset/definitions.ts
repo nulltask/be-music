@@ -15,7 +15,9 @@ import {
   bmsExRankValueToJudgeRankPercent,
   resolveBMSJudgeWindowsMsForPercent,
   resolveBMSRankJudgeRankPercent,
+  resolveLR2GambolWindowsMs,
   resolveLR2NonstopRankWindowsMs,
+  type LR2GambolLevel,
   type JudgeWindowsMs,
 } from '../core/judge-window.ts';
 import {
@@ -241,6 +243,8 @@ export interface ResolveRulesetOptions {
   judgeAlgorithm?: BeatorajaJudgeAlgorithm;
   /** beatoraja CUSTOM JUDGE window and long-note margin rates; absent while the option is off. */
   customJudge?: BeatorajaCustomJudge;
+  /** LR2's mania option GAMBOL (LR2 rules only): fixes the judge windows for the play; absent while it is off. */
+  lr2Gambol?: LR2GambolLevel;
   /** PRACTICE (beatoraja's `PracticeProperty`, under every ruleset): replaces the gauge, TOTAL and judgerank of the play. */
   practice?: PracticeRules;
   /**
@@ -1001,6 +1005,8 @@ function resolveRulesetTables(
   const overrideBadMs = options.judgeWindowOverrideMs;
   if (options.customJudge !== undefined && rulesetId !== 'beatoraja')
     throw new RangeError('CUSTOM JUDGE is available only for beatoraja.');
+  const gambol = options.lr2Gambol;
+  if (gambol !== undefined && rulesetId !== 'lr2') throw new RangeError('GAMBOL is available only for LR2.');
   const { practice } = options;
   if (practice !== undefined && course !== undefined) throw new RangeError('PRACTICE plays a single chart.');
   if (practice !== undefined && !isPracticeGaugeType(practice.gauge, rulesetId))
@@ -1049,26 +1055,38 @@ function resolveRulesetTables(
       table === 'bmson' || table === 'bms-exrank' || table === 'bms-exrank-change'
         ? bmsExRankValueToJudgeRankPercent(rank)
         : resolveBMSRankJudgeRankPercent(rank);
-    const staticTables = constrain(
-      resolveLR2WindowTables(
-        practiceRank ??
-          (initialStage !== undefined ? stagePercent(initialStage.rank, initialStage.table) : chart.judgeRank.percent),
-        overrideBadMs,
-      ),
-    );
+    // GAMBOL fixes the windows whatever the chart's rank: LR2 sets them after the rank's own, as the chart opens and at
+    // each NONSTOP rank object. LR2 has no `#EXRANKxx`, so a fixed window ignores those changes too.
+    const gambolTables = (table: 'opening' | 'nonstop'): RulesetWindowTables =>
+      constrain(lr2WindowTables(resolveLR2GambolWindowsMs(gambol!, table, overrideBadMs)));
+    const staticTables =
+      gambol !== undefined
+        ? gambolTables('opening')
+        : constrain(
+            resolveLR2WindowTables(
+              practiceRank ??
+                (initialStage !== undefined
+                  ? stagePercent(initialStage.rank, initialStage.table)
+                  : chart.judgeRank.percent),
+              overrideBadMs,
+            ),
+          );
     const timelineTables = [
-      ...timeline.map((change) => ({
+      ...(gambol !== undefined ? [] : timeline).map((change) => ({
         timeUs: change.timeUs,
         tables: constrain(resolveLR2WindowTables(bmsExRankValueToJudgeRankPercent(change.exRankValue), overrideBadMs)),
       })),
       // A stitched NONSTOP chart's later stages (`RulesetStageRank`); stable after the `#EXRANKxx` changes on a tie.
       ...(practiceRank !== undefined ? [] : (chart.judgeRank.stageRanks ?? [])).map((change) => ({
         timeUs: change.timeUs,
-        tables: constrain(
-          change.table === 'lr2-nonstop'
-            ? lr2WindowTables(resolveLR2NonstopRankWindowsMs(change.rank, overrideBadMs))
-            : resolveLR2WindowTables(stagePercent(change.rank, change.table), overrideBadMs),
-        ),
+        tables:
+          gambol !== undefined
+            ? gambolTables(change.table === 'lr2-nonstop' ? 'nonstop' : 'opening')
+            : constrain(
+                change.table === 'lr2-nonstop'
+                  ? lr2WindowTables(resolveLR2NonstopRankWindowsMs(change.rank, overrideBadMs))
+                  : resolveLR2WindowTables(stagePercent(change.rank, change.table), overrideBadMs),
+              ),
       })),
     ].sort((left, right) => left.timeUs - right.timeUs);
     const initialGauge = practice

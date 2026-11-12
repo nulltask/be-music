@@ -23,7 +23,7 @@ flowchart LR
   q -->|"S-RANDOM"| rules["The judge ruleset's own"]
 ```
 
-The rest stays with the ruleset. Judge rules are what the ruleset is: windows, gauges, note selection, long-note style, mine trigger and score. LN MODE, CUSTOM JUDGE, the gauge types and the judgment algorithm also remain ruleset-bound. [PRACTICE](#practice) and [gauge auto-shift](#gauge-auto-shift) are offered under every ruleset and read under it: PRACTICE lists the ruleset's own gauges, and auto-shift shifts along the ruleset's own gauge ladder ([#933](https://github.com/nulltask/be-music/issues/933)). How records treat a play that mixes sources is described in [Assist and record policy](#assist-and-record-policy). Tracked in [#774](https://github.com/nulltask/be-music/issues/774).
+The rest stays with the ruleset. Judge rules are what the ruleset is: windows, gauges, note selection, long-note style, mine trigger and score. LN MODE, CUSTOM JUDGE, LR2's [GAMBOL](#gambol), the gauge types and the judgment algorithm also remain ruleset-bound. [PRACTICE](#practice) and [gauge auto-shift](#gauge-auto-shift) are offered under every ruleset and read under it: PRACTICE lists the ruleset's own gauges, and auto-shift shifts along the ruleset's own gauge ladder ([#933](https://github.com/nulltask/be-music/issues/933)). How records treat a play that mixes sources is described in [Assist and record policy](#assist-and-record-policy). Tracked in [#774](https://github.com/nulltask/be-music/issues/774).
 
 ## Assist and record policy
 
@@ -281,6 +281,21 @@ With beatoraja rules, turn on **CUSTOM JUDGE (beatoraja)** in the Options dialog
 Other rulesets hide the switch and the engine rejects it. Replays store the rates as `play.customJudge` (absent while the option is off) and in the option snapshot, and replay simulation applies them. beatoraja marks a play ASSIST when any rate exceeds 100 %, and so does Be-Music ([Assist and record policy](#assist-and-record-policy)).
 
 Sources: beatoraja 0.8.9 [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java), [`JudgeManager`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/JudgeManager.java) and [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java). Tracked in [#744](https://github.com/nulltask/be-music/issues/744).
+
+## GAMBOL
+
+With LR2 rules, choose **GAMBOL (LR2)** in the Options dialog's Play options: **OFF** (the default), **LEVEL 1** or **LEVEL 2**. It is the judgment option of LR2's hidden mania panel ("判定を厳しくするオプション"), and fixes the judge windows for the whole play, whatever the chart's `#RANK`:
+
+| Level   | PGREAT | GREAT  | GOOD   | In a NONSTOP course, from the second stage on |
+| ------- | ------ | ------ | ------ | --------------------------------------------- |
+| LEVEL 1 | ±8 ms  | ±24 ms | ±40 ms | ±12 / ±24 / ±60 ms                            |
+| LEVEL 2 | ±8 ms  | ±12 ms | ±12 ms | ±12 / ±12 / ±12 ms                            |
+
+LEVEL 1 is VERY HARD. BAD stays ±200 ms, and a course's judge constraint still applies. LR2 sets these windows after the chart's own, once as the chart opens ([L27612-L27625](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27612-L27625)) and again at each NONSTOP rank object ([L12863-L12876](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12863-L12876)), where it reads the NONSTOP table's own VERY HARD; Be-Music follows both. LR2 has no `#EXRANKxx`, so a play with GAMBOL ignores those changes: the windows stay fixed. PRACTICE's JUDGERANK is replaced likewise.
+
+GAMBOL is part of LR2's judge rules: other rulesets hide the selector, changing to one turns it off, and the engine rejects it. Replays store the level as `play.lr2Gambol` (absent while it is off), and replay simulation under LR2 rules applies it; another ruleset re-judges the inputs with its own windows. LR2 saves a GAMBOL play as a normal play (it is not in its [score-save condition](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L67-L79)), so it is unassisted and shares the chart's records. The selector is locked during play.
+
+Source: OpenLR2 [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27612-L27625). Tracked in [#1114](https://github.com/nulltask/be-music/issues/1114).
 
 ## PRACTICE
 

@@ -135,6 +135,7 @@ describe('captureOptionSettings', () => {
       dpFlip: true,
       bpmGuide: true,
       bpmChangeWarning: true,
+      lr2Gambol: 2,
       lr2SideJump: 40,
       lr2SpiralEffect: 40,
       lr2Wave: 40,

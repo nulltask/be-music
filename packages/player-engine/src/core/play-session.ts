@@ -392,6 +392,7 @@ export async function createPlaySession(
       ...(options.judgeAlgorithm !== undefined ? { judgeAlgorithm: options.judgeAlgorithm } : {}),
       bmsonTotalMode: options.bmsonTotalMode,
       ...(options.customJudge !== undefined ? { customJudge: options.customJudge } : {}),
+      ...(options.lr2Gambol === 1 || options.lr2Gambol === 2 ? { lr2Gambol: options.lr2Gambol } : {}),
       ...(options.practice !== undefined
         ? {
             practice: {
@@ -453,6 +454,7 @@ export async function createPlaySession(
               judgeAlgorithm: ruleset.rulesetId === 'beatoraja' ? (options.judgeAlgorithm ?? 'combo') : undefined,
               ...(options.bmsonTotalMode !== undefined ? { bmsonTotalMode: options.bmsonTotalMode } : {}),
               ...(options.customJudge !== undefined ? { customJudge: { ...options.customJudge } } : {}),
+              ...(options.lr2Gambol === 1 || options.lr2Gambol === 2 ? { lr2Gambol: options.lr2Gambol } : {}),
               longNoteModifier: options.longNoteModifier,
               ...(options.autoScratch1P !== undefined || options.autoScratch2P !== undefined
                 ? {
