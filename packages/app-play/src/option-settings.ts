@@ -102,6 +102,7 @@ export interface OptionSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  scoreTarget: PlayerGUIState['scoreTarget'];
   markProcessedNotes: PlayerGUIState['markProcessedNotes'];
   showJudgeArea: PlayerGUIState['showJudgeArea'];
   lr2AddMines: PlayerGUIState['lr2AddMines'];
@@ -322,6 +323,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
   assign(settings, 'bpmChangeWarning', booleanOf(raw.bpmChangeWarning));
+  assign(settings, 'scoreTarget', resolvePlayOptionValue('scoreTarget', raw.scoreTarget));
   assign(settings, 'markProcessedNotes', resolvePlayOptionValue('markProcessedNotes', raw.markProcessedNotes));
   assign(settings, 'showJudgeArea', resolvePlayOptionValue('showJudgeArea', raw.showJudgeArea));
   assign(settings, 'lr2AddMines', resolvePlayOptionValue('lr2AddMines', raw.lr2AddMines));
@@ -618,6 +620,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('dpFlip');
   assignState('bpmGuide');
   assignState('bpmChangeWarning');
+  assignState('scoreTarget');
   assignState('markProcessedNotes');
   assignState('showJudgeArea');
   assignState('lr2AddMines');
@@ -769,6 +772,7 @@ export function captureOptionSettings(
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    scoreTarget: state.scoreTarget,
     markProcessedNotes: state.markProcessedNotes,
     showJudgeArea: state.showJudgeArea,
     lr2AddMines: state.lr2AddMines,

@@ -369,6 +369,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>When on, a replay shows the recorded SUDDEN+ and HIDDEN+ covers as they moved; when off, your own.</dd>
           <dt>LIFT</dt>
           <dd>When on, a replay raises the judge line as the recorded LIFT did; when off, by your own.</dd>
+          <dt>Target (beatoraja)</dt>
+          <dd>
+            The score the pacemaker aims at: a rank border from A- to MAX-, MAX, or NEXT RANK, the first rank your best
+            score has not reached. A ghost shown as the pacemaker takes its place. Changes live.
+          </dd>
           <dt>Ghost</dt>
           <dd>
             Shows a recorded play with yours: your best, a replay slot, the Leaderboard's top run or a replay file. OFF
@@ -1075,6 +1080,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>オンならリプレイは録画時の SUDDEN+ / HIDDEN+ の動きを見せ、オフなら自分のカバーで見せます。</dd>
           <dt>LIFT</dt>
           <dd>オンならリプレイは録画時の LIFT で判定ラインを上げ、オフなら自分の LIFT で上げます。</dd>
+          <dt>Target (beatoraja)</dt>
+          <dd>
+            ペースメーカーが目指すスコアです。A- から MAX- までのランク境界、MAX、NEXT RANK
+            (自己ベストがまだ届いていない最初のランク) から選びます。ゴーストをペースメーカーとして
+            表示しているときはゴーストが優先されます。プレイ中にも切り替えられます。
+          </dd>
           <dt>Ghost</dt>
           <dd>
             記録されたプレイを自分のプレイと一緒に見せます。自己ベスト、リプレイスロット、Leaderboard の 1

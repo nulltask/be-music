@@ -287,6 +287,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     dpFlip: false,
     bpmGuide: false,
     bpmChangeWarning: false,
+    scoreTarget: 'RATE_AAA',
     markProcessedNotes: false,
     showJudgeArea: false,
     lr2AddMines: 0,

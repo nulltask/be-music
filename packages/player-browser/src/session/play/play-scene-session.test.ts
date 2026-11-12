@@ -2,7 +2,12 @@ import { createEmptyJSON } from '@be-music/chart-source';
 import { createPlayerInputSignalBus, type PlayerInputCommand } from '@be-music/player-engine/signals';
 import { DEFAULT_PLAY_OPTIONS, type LibraryChart } from '@be-music/player-scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
-import { PlaySceneSession, resolveFrameScoreTargets, resolvePlayStage } from './play-scene-session.ts';
+import {
+  PlaySceneSession,
+  resolveFixedScoreTargets,
+  resolveFrameScoreTargets,
+  resolvePlayStage,
+} from './play-scene-session.ts';
 import { PlaySession } from './play-session.ts';
 
 const CHART: LibraryChart = {
@@ -123,6 +128,25 @@ describe('PlaySceneSession', () => {
         play0(),
       ),
     ).toEqual({ targetEXScore: 4, targetPaceEXScore: 2, targetLabel: 'X' });
+  });
+
+  test('resolveFixedScoreTargets names the picked target unless the host names one', () => {
+    // 1000 notes: AAA is 1778, and the next rank above a best of 1800 is AAA+ at 1852.
+    expect(resolveFixedScoreTargets({ bestEXScore: 1800 }, 'RATE_AAA', 1000)).toEqual({
+      bestEXScore: 1800,
+      targetEXScore: 1778,
+      targetLabel: 'RANK AAA',
+    });
+    expect(resolveFixedScoreTargets({ bestEXScore: 1800 }, 'RANK_NEXT', 1000)).toMatchObject({
+      targetEXScore: 1852,
+      targetLabel: 'NEXT RANK',
+    });
+    expect(resolveFixedScoreTargets(undefined, 'MAX', 1000)).toEqual({ targetEXScore: 2000, targetLabel: 'MAX' });
+    // A host's own target stays, and a chart without notes has none.
+    const host = { targetEXScore: 5, targetLabel: 'HOST' };
+    expect(resolveFixedScoreTargets(host, 'MAX', 1000)).toBe(host);
+    const empty = { bestEXScore: 0 };
+    expect(resolveFixedScoreTargets(empty, 'MAX', 0)).toBe(empty);
   });
 
   test('reports the load progress while the play loads', () => {

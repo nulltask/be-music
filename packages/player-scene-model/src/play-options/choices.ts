@@ -1,3 +1,4 @@
+import { SCORE_TARGET_IDS } from './score-target.ts';
 import { clampExtraNoteDepth, isOnePlayerBattleMode } from '@be-music/player-engine/lanes';
 import { clampScrollSection, clampScrollRate } from '@be-music/player-engine/lanes';
 import { clampFloatingHiSpeed } from './floating-hi-speed.ts';
@@ -174,6 +175,7 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   constantFadeMs: 100,
   bpmGuide: false,
   bpmChangeWarning: false,
+  scoreTarget: 'RATE_AAA',
   markProcessedNotes: false,
   showJudgeArea: false,
   lr2AddMines: 0,
@@ -299,6 +301,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   fixedDisplayArea: BOOLEAN_CYCLE,
   bpmGuide: BOOLEAN_CYCLE,
   bpmChangeWarning: BOOLEAN_CYCLE,
+  scoreTarget: SCORE_TARGET_IDS,
   markProcessedNotes: BOOLEAN_CYCLE,
   showJudgeArea: BOOLEAN_CYCLE,
   lr2AddMines: LR2_MANIA_LEVELS,

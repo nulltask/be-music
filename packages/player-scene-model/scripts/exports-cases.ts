@@ -287,6 +287,12 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.clampShutter(0.30000000000000004);
     },
   });
+  define('player-scene-model.resolveScoreTarget', {
+    run: () => {
+      sceneModelAPI.resolveScoreTarget('RATE_AAA', { totalNotes: 1234 });
+      sceneModelAPI.resolveScoreTarget('RANK_NEXT', { totalNotes: 1234, bestEXScore: 2000 });
+    },
+  });
   define('player-scene-model.resolvePlayOptionValue', {
     run: () => {
       sceneModelAPI.resolvePlayOptionValue('random1P', 'MIRROR');

@@ -147,6 +147,27 @@ Two beatoraja display settings sit in the Options dialog's View tab, under Effec
 
 Sources: beatoraja [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L738-L776) (`JudgeAreaOverlay`, and the [processed image](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L538-L550)) and [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayerConfig.java#L150-L152). Tracked in [#1129](https://github.com/nulltask/be-music/issues/1129) and [#1130](https://github.com/nulltask/be-music/issues/1130).
 
+## Score target
+
+**Target (beatoraja)** in the Options dialog's Replay / ghost folder picks the score the pacemaker aims at, from beatoraja 0.8.9's `TargetProperty`: **RANK A-** to **RANK MAX-**, **MAX**, or **NEXT RANK**. The default is **RANK AAA**, the line the score graph paced against before the setting existed. It applies live, under every ruleset.
+
+| Target               | EX score                                                                                        |
+| -------------------- | ----------------------------------------------------------------------------------------------- |
+| RANK A-, A, A+       | 17, 18 and 19 twenty-sevenths of the maximum                                                    |
+| RANK AA-, AA, AA+    | 20, 21 and 22 twenty-sevenths                                                                   |
+| RANK AAA-, AAA, AAA+ | 23, 24 and 25 twenty-sevenths                                                                   |
+| RANK MAX-            | 26 twenty-sevenths                                                                              |
+| MAX                  | The maximum, twice the note count                                                               |
+| NEXT RANK            | The first border from 15/27 up that the best EX score has not reached; MAX once it is past MAX- |
+
+A border is rounded up to a whole score. beatoraja computes it in single precision (`ceil(notes × 2 × rate / 100)` with `rate = 100 × n / 27`), and Be-Music keeps that rounding, so a border that falls exactly on a whole score can come out one higher, as in beatoraja.
+
+The target reaches every skin family through the play's score targets: the built-in score graph's PACEMAKER bar and box, and a beatoraja skin's target numbers (121–123) and rank timers. It paces evenly over the chart, the target's share of the notes judged so far. A ghost shown as the pacemaker takes its place for that play, since it paces as it was played. The setting is saved with the play options; it changes neither judgment nor records.
+
+Not offered: beatoraja's `RATE_<n>` percentages, its `RIVAL_*` targets and its `IR_*` targets. The last two need a rival's or a ranking's score for the chart, which the Leaderboard does not hand the play today.
+
+Source: beatoraja [`TargetProperty`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/TargetProperty.java#L87-L158) and [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayerConfig.java#L72-L76). Tracked in [#1132](https://github.com/nulltask/be-music/issues/1132).
+
 ## ANY KEY
 
 With **Judgment windows → ????** at the top of the Options dialog's Play options, turn on **Play options → ANY KEY (PC)**; it is off by default and hidden under the other judge rules. It is the PC edition's assist, which that edition's page names without describing, so Be-Music reads it this way ([#751](https://github.com/nulltask/be-music/issues/751)):

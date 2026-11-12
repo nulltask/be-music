@@ -147,6 +147,27 @@ Options ダイアログの View タブの Effects に、beatoraja の表示設�
 
 出典: beatoraja [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L738-L776)（`JudgeAreaOverlay` と[処理済み画像](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L538-L550)）、[`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayerConfig.java#L150-L152)。[#1129](https://github.com/nulltask/be-music/issues/1129) と [#1130](https://github.com/nulltask/be-music/issues/1130) で追跡しています。
 
+## スコアターゲット
+
+Options ダイアログの Replay / ghost フォルダにある **Target (beatoraja)** で、ペースメーカーが目指すスコアを選びます。beatoraja 0.8.9 の `TargetProperty` に基づく **RANK A-** から **RANK MAX-**、**MAX**、**NEXT RANK** です。既定は **RANK AAA** で、この設定ができる前からスコアグラフが基準にしていたラインです。どのルールでもプレイ中に反映します。
+
+| ターゲット           | EX スコア                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------ |
+| RANK A-、A、A+       | 最大値の 27 分の 17、18、19                                                                      |
+| RANK AA-、AA、AA+    | 27 分の 20、21、22                                                                               |
+| RANK AAA-、AAA、AAA+ | 27 分の 23、24、25                                                                               |
+| RANK MAX-            | 27 分の 26                                                                                       |
+| MAX                  | 最大値（ノーツ数の 2 倍）                                                                        |
+| NEXT RANK            | 27 分の 15 から上で、自己ベストの EX スコアがまだ届いていない最初の境界。MAX- を超えていれば MAX |
+
+境界は整数に切り上げます。beatoraja は単精度で計算する（`rate = 100 × n / 27` として `ceil(ノーツ数 × 2 × rate / 100)`）ため、Be-Music も同じ丸めにしています。境界がちょうど整数になる譜面では、beatoraja と同じく 1 大きくなることがあります。
+
+ターゲットはプレイのスコア目標としてすべてのスキン系統に渡ります。内蔵スキンのスコアグラフの PACEMAKER のバーと枠、beatoraja スキンのターゲットの数値（121〜123）とランクのタイマーです。ペースは譜面全体で均等で、これまでに判定したノーツの割合ぶんのスコアになります。ゴーストをペースメーカーとして表示しているプレイでは、ゴーストが優先されます。ゴーストは実際に演奏されたとおりのペースで進むためです。設定はプレイオプションと一緒に保存し、判定と記録は変わりません。
+
+提供していないもの: beatoraja の `RATE_<n>`（任意の割合）、`RIVAL_*`、`IR_*` です。後の 2 つは、その譜面でのライバルやランキングのスコアが必要で、現在の Leaderboard はそれをプレイに渡していません。
+
+出典: beatoraja [`TargetProperty`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/TargetProperty.java#L87-L158) と [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayerConfig.java#L72-L76)。[#1132](https://github.com/nulltask/be-music/issues/1132) で追跡しています。
+
 ## ANY KEY
 
 Options ダイアログ の Play options の一番上で **Judgment windows → ????** を選び、**Play options → ANY KEY (PC)** をオンにします。既定はオフで、ほかの判定ルールでは表示しません。PC 版のアシストで、PC 版のページは名前を挙げるだけなので、Be-Music は次のように読みます（[#751](https://github.com/nulltask/be-music/issues/751)）。
