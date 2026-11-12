@@ -14,6 +14,7 @@
 //      the per-lane sprite, image[] entry missing, or texture decode failed). Keeps something visible
 //      so a partial-asset theme still plays — better than silent blanks.
 
+import { PROCESSED_NOTE_ALPHA } from '../../shared/playfield/processed-note.ts';
 import { createGenericLaneRects } from './generic-lane-rects.ts';
 import { Container, Graphics, Sprite, type Texture, TilingSprite } from 'pixi.js';
 import { resolveConstantAlpha, type ConstantVisibility } from '@be-music/player-scene-model';
@@ -267,6 +268,8 @@ export class BeatorajaNoteLayer {
   private readonly scrollMapper?: ScrollDistanceMapperLike;
   private readonly timelineBeats?: ArrayLike<number>;
   private readonly autoplay: boolean;
+  /** Set at each update: whether a judged tap note is drawn as processed. */
+  private markProcessedNotes = false;
   private readonly reversal?: TempoReversalPoint;
   /** Notes gone under LR2's rules, so the mirrored scroll past a negative-BPM reversal does not redraw them. */
   private readonly goneDrawObjects = new GoneDrawObjects();
@@ -354,7 +357,10 @@ export class BeatorajaNoteLayer {
     constant?: ConstantVisibility,
     /** Lanes whose notes are not drawn: the scratch lanes AUTO SCRATCH plays while their notes are hidden (#1137). */
     hiddenChannels?: ReadonlySet<string>,
+    /** beatoraja's mark processed note: a judged tap note takes the skin's processed image, or is dimmed (#1130). */
+    markProcessedNotes = false,
   ): void {
+    this.markProcessedNotes = markProcessedNotes;
     this.invisibleLayer.clear();
     this.invisibleLayer.visible = false;
     const rects = this.resolveLaneRects(activeOps);
@@ -748,8 +754,13 @@ export class BeatorajaNoteLayer {
     /** STAR's colour and SPIN's rotation (#931); a mine keeps its own colour. */
     style?: { readonly tint?: number; readonly rotation: number },
   ): { g: number; s: number } {
+    // A processed note takes the skin's processed image; a skin without one keeps the note, dimmed.
+    const processed = this.markProcessedNotes && !note.mine && note.judged === true;
+    const processedId = processed ? this.noteSection.processed[lane] : undefined;
+    const processedSprite = processedId !== undefined ? this.resolveLaneSprite(processedId) : undefined;
+    if (processed && processedSprite === undefined) alpha *= PROCESSED_NOTE_ALPHA;
     const imageId = note.mine ? this.noteSection.mine[lane] : this.noteSection.note[lane];
-    const cropped = this.resolveLaneSprite(imageId);
+    const cropped = processedSprite ?? this.resolveLaneSprite(imageId);
     if (cropped !== undefined) {
       const sprite = this.acquireSprite(usedS);
       sprite.texture = cropped.sprite.texture;

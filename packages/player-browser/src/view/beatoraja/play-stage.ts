@@ -1,3 +1,5 @@
+import { isScratch } from '@be-music/player-engine/lanes';
+import { renderJudgeArea } from '../shared/judge-area.ts';
 import type { KeyBoundBGAFrame, BmsonBGAFrame } from '@be-music/player-engine/display';
 import type { BGACameraFeed } from '../../media/bga-camera.ts';
 import type { BGAOpacityTimelines, ChartOptionProgram } from '@be-music/chart-model';
@@ -240,6 +242,10 @@ export class BeatorajaPlayStage {
       constant?: ConstantVisibility;
       /** Lanes whose notes are not drawn (AUTO SCRATCH with its notes hidden). */
       hiddenNoteChannels?: ReadonlySet<string>;
+      /** beatoraja's mark processed note. */
+      markProcessedNotes?: boolean;
+      /** beatoraja's judge area: the windows to draw as bands above the judge line, while the option is on. */
+      judgeArea?: Pick<import('@be-music/player-skin-sdk').BeMusicJudgeWindows, 'note' | 'scratch'>;
       /** The camera to show in the BGA frame in place of the chart's BGA. */
       camera?: BGACameraFeed;
     } = {},
@@ -249,7 +255,10 @@ export class BeatorajaPlayStage {
     if (authored) lanes.setLaneHeight?.(authored.bottomY - authored.topY);
     this.noteLayer.setLift(lanes.laneCover ? resolveLaneCover(lanes.laneCover).lift : 0);
     view.update(context);
-    this.guideLayer.visible = clock !== undefined && playback.bpmGuide === true && playback.started !== false;
+    this.guideLayer.visible =
+      clock !== undefined &&
+      (playback.bpmGuide === true || playback.judgeArea !== undefined) &&
+      playback.started !== false;
     if (clock === undefined) return;
     const activeOps = context.activeOps;
     const displaySeconds = resolveNoteDisplaySeconds(clock.currentSeconds, playback.judgeTimingMs ?? 0);
@@ -266,6 +275,7 @@ export class BeatorajaPlayStage {
       playback.showInvisibleNotes,
       playback.constant,
       playback.hiddenNoteChannels,
+      playback.markProcessedNotes === true,
     );
     // The markers scroll with the notes' per-beat distance (`rxhs / 4 * hispeed`, `LaneRenderer.java:271-276`) on the
     // lane the active dst block resolves; skin-canvas defaults when no lane matched.
@@ -325,8 +335,27 @@ export class BeatorajaPlayStage {
           },
         ];
       });
+      if (playback.judgeArea !== undefined) {
+        const beatAt = layout.beatAtSeconds;
+        renderJudgeArea({
+          lanes: [...new Set(clock.notes.map((note) => note.channel))].flatMap((channel) =>
+            this.noteLayer.getDisplayAreaLanes(activeOps, [channel]).map((lane) => ({
+              x: lane.x,
+              w: lane.w,
+              top: lane.top,
+              bottom: lane.bottom,
+              scratch: isScratch(channel),
+            })),
+          ),
+          note: playback.judgeArea.note,
+          scratch: playback.judgeArea.scratch,
+          distanceAt: (ms) =>
+            beatAt === undefined ? 0 : placement.distance(beatAt(noteClock.currentSeconds + ms / 1000)) * pixelsPerBeat,
+          pool: this.guidePool,
+        });
+      }
       renderBPMGuide({
-        enabled: true,
+        enabled: playback.bpmGuide === true,
         events: layout.guideEvents ?? [],
         window: placement.window,
         distance: placement.distance,

@@ -460,6 +460,16 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>How long a note takes to fade in at the edge of the range Visual CONSTANT shows. Changes live.</dd>
           <dt>Judged notes</dt>
           <dd>Whether a judged note keeps scrolling until its time (as in LR2) or disappears.</dd>
+          <dt>Show judge area (beatoraja)</dt>
+          <dd>
+            Draws the judgment windows as coloured bands above the judge line: blue for PGREAT, then green, yellow,
+            orange and red. A note inside a band would get that judgment if pressed now. Changes live.
+          </dd>
+          <dt>Mark processed notes (beatoraja)</dt>
+          <dd>
+            Draws a note that was already judged with the skin's processed-note image, or dimmed where a skin has none,
+            until it goes. Changes live.
+          </dd>
           <dt>Auto scratch notes (AC)</dt>
           <dd>Whether the scratch notes AUTO SCRATCH plays are drawn. Changes live; the notes still play and count.</dd>
           <dt>LR2 mania options</dt>
@@ -1151,6 +1161,16 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Visual CONSTANT で、表示範囲の境目でノーツがフェードインする時間。プレイ中にも変えられます。</dd>
           <dt>Judged notes</dt>
           <dd>判定したノーツを本来の時刻まで流す (LR2 と同じ) か、消すか。</dd>
+          <dt>Show judge area (beatoraja)</dt>
+          <dd>
+            判定ラインの上に、判定の幅を色付きの帯で表示します。PGREAT が青で、外側へ緑、黄、橙、赤の順です。
+            帯の中にあるノーツは、いま押せばその判定になります。プレイ中にも切り替えられます。
+          </dd>
+          <dt>Mark processed notes (beatoraja)</dt>
+          <dd>
+            判定済みのノーツを、消えるまでスキンの処理済みノーツ画像で表示します。画像のないスキンでは薄く表示します。
+            プレイ中にも切り替えられます。
+          </dd>
           <dt>Auto scratch notes (AC)</dt>
           <dd>
             AUTO SCRATCH が演奏するスクラッチのノーツを表示するか。プレイ中にも切り替えられ、演奏と記録は変わりません。

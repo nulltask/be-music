@@ -663,6 +663,13 @@ function buildNoteDisplayRows(this: OptionsDialog, effects: OptionContainer): vo
     this.guiState.judgedNoteDisplay = value;
     this.gameplayView?.setJudgedNoteDisplay(value);
   });
+  // beatoraja's judge area and mark processed note. Live: the playfield reads both at each frame.
+  effects
+    .addBinding(this.guiState, 'showJudgeArea', { label: 'Show judge area (beatoraja)' })
+    .on('change', ({ value }) => this.setPlayOptions({ showJudgeArea: value }));
+  effects
+    .addBinding(this.guiState, 'markProcessedNotes', { label: 'Mark processed notes (beatoraja)' })
+    .on('change', ({ value }) => this.setPlayOptions({ markProcessedNotes: value }));
   // AC 34's オートスクラッチ表示. Live: the playfield reads the option at each frame.
   selectBinding(effects, this.guiState, 'autoScratchNotes', 'Auto scratch notes (AC)', {
     Show: 'SHOW',

@@ -108,6 +108,8 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'BPM GUIDE (beatoraja)': 'BPM GUIDE (beatoraja)',
   'BPM change warning (AC)': 'BPM 変化の警告 (AC)',
   'Auto scratch notes (AC)': 'オートスクラッチのノーツ (AC)',
+  'Show judge area (beatoraja)': '判定範囲を表示 (beatoraja)',
+  'Mark processed notes (beatoraja)': '処理済みノーツをマーク (beatoraja)',
   'LR2 mania options': 'LR2 マニアオプション',
   'GAMBOL (LR2)': 'GAMBOL (LR2)',
   'ADD NOTES (LR2)': 'ADD NOTES (LR2)',

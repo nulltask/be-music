@@ -137,6 +137,16 @@ Options ダイアログの View タブには、Effects の下に **LR2 mania opt
 
 出典: OpenLR2 [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2155-L2331)。[#1115](https://github.com/nulltask/be-music/issues/1115), [#1117](https://github.com/nulltask/be-music/issues/1117), [#1119](https://github.com/nulltask/be-music/issues/1119), [#1120](https://github.com/nulltask/be-music/issues/1120), [#1121](https://github.com/nulltask/be-music/issues/1121), [#1122](https://github.com/nulltask/be-music/issues/1122), [#1118](https://github.com/nulltask/be-music/issues/1118), [#1123](https://github.com/nulltask/be-music/issues/1123), [#1124](https://github.com/nulltask/be-music/issues/1124), [#1125](https://github.com/nulltask/be-music/issues/1125), [#1126](https://github.com/nulltask/be-music/issues/1126) で追跡しています。
 
+## 判定範囲と処理済みノーツ
+
+Options ダイアログの View タブの Effects に、beatoraja の表示設定が 2 つあります。どちらも既定はオフで、どのルールセットとスキン系統でもプレイ中に反映し、判定と記録は変わりません。
+
+**Show judge area (beatoraja)**（`PlayerConfig.showjudgearea`）は、各レーンの判定ラインの上に判定の幅を半透明の帯で描きます。PGREAT が青、GREAT が緑、GOOD が黄、BAD が橙、見逃しの幅が赤で、不透明度は beatoraja と同じ `0x20` です。帯は内側の判定が終わる位置から始まり、高さはその幅が現在のスクロールで占める長さです。ハイスピードや BPM に合わせて伸び縮みし、帯の中にあるノーツはいま押せばその判定になります。判定幅はプレイの実効値（`#RANK`、CUSTOM JUDGE、LR2 の GAMBOL を含む）で、スクラッチレーンはスクラッチ用の幅を使い、早押し側の幅を描きます。見逃しの幅がないルールセットでは赤の帯はなく、内側と同じ幅の判定には帯がありません。beatoraja は次のタイムラインのスクロール速度で帯を拡大縮小します。Be-Music はその時間だけ先にあるノーツの描画位置に帯の端を置くので、テンポが一定なら同じ結果になります。
+
+**Mark processed notes (beatoraja)**（`PlayerConfig.markprocessednote`）は、本来の時刻より前に判定された単発ノーツを、消えるまで別の見た目で描きます。処理済みノーツの画像（`note.processed`）を持つ beatoraja スキンでは、beatoraja と同じくその画像を使います。画像のない beatoraja スキンと、内蔵・LR2 のプレイフィールドでは、ノーツを不透明度 35 % で描きます。beatoraja 自体はその場合に何も描きません。ロングノートと地雷は変わりません。**Judged notes** を非表示にしていると、判定済みのノーツは消えているのでマークするものがありません。
+
+出典: beatoraja [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L738-L776)（`JudgeAreaOverlay` と[処理済み画像](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L538-L550)）、[`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayerConfig.java#L150-L152)。[#1129](https://github.com/nulltask/be-music/issues/1129) と [#1130](https://github.com/nulltask/be-music/issues/1130) で追跡しています。
+
 ## ANY KEY
 
 Options ダイアログ の Play options の一番上で **Judgment windows → ????** を選び、**Play options → ANY KEY (PC)** をオンにします。既定はオフで、ほかの判定ルールでは表示しません。PC 版のアシストで、PC 版のページは名前を挙げるだけなので、Be-Music は次のように読みます（[#751](https://github.com/nulltask/be-music/issues/751)）。

@@ -135,6 +135,8 @@ describe('captureOptionSettings', () => {
       dpFlip: true,
       bpmGuide: true,
       bpmChangeWarning: true,
+      markProcessedNotes: true,
+      showJudgeArea: true,
       lr2AddMines: 40,
       lr2AddLongNotes: 40,
       lr2Loudness: 40,
