@@ -53,6 +53,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
             The rules every play follows: LR2, beatoraja or ????. It decides the windows, gauges, options offered, and
             which best records the select screen shows.
           </dd>
+          <dt>Record kept</dt>
+          <dd>
+            What a play with the options picked keeps: its score, lamp and play count, or the lamp and play count only
+            when an assisted option is on, or nothing. It names the options that cause it and the Leaderboard board. An
+            option that assists only a chart it changes is worded as conditional.
+          </dd>
           <dt>Auto play</dt>
           <dd>Plays the chart automatically. An AUTO play saves no record.</dd>
           <dt>Gauge</dt>
@@ -310,8 +316,13 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dt>Target (beatoraja)</dt>
           <dd>
             The score the pacemaker aims at: a rank border from A- to MAX-, MAX, or NEXT RANK, the first rank your best
-            score has not reached. A ghost shown as the pacemaker takes its place. Changes live.
+            score has not reached. The IR targets read the chart's Leaderboard ranking: IR NEXT is that many places
+            above you, IR RANK that place, and IR RANK TOP that share of the players down. They appear a moment into the
+            play, and not on a chart without a ranking. SCORE RATE is the rate below. A ghost shown as the pacemaker
+            takes its place. Changes live.
           </dd>
+          <dt>Target score rate (%)</dt>
+          <dd>The share of the maximum score the SCORE RATE target aims at. Changes live.</dd>
           <dt>Ghost</dt>
           <dd>
             Shows a recorded play with yours: your best, a replay slot, the Leaderboard's top run or a replay file. OFF
@@ -407,6 +418,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>How bright the lanes are, in percent. Notes, bar lines and covers keep their own. Changes live.</dd>
           <dt>Judgment display (AC)</dt>
           <dd>OFF draws no judgment or combo on the play screen. Changes live.</dd>
+          <dt>Judgment position (built-in skins, %)</dt>
+          <dd>
+            Moves the built-in skins' judgment and combo up (-) or down (+) the lanes, in percent of their height. They
+            stay inside the lanes. LR2 and beatoraja skins keep their own placement. Changes live.
+          </dd>
           <dt>Show judge area (beatoraja)</dt>
           <dd>
             Draws the judgment windows as coloured bands above the judge line: blue for PGREAT, then green, yellow,

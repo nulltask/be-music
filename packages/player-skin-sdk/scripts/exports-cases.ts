@@ -316,6 +316,11 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.isSupportedBeMusicSkinAPIVersion(skinSdkAPI.BE_MUSIC_SKIN_API_VERSION);
     },
   });
+  define('player-skin-sdk.resolveJudgeWordY', {
+    run: () => {
+      skinSdkAPI.resolveJudgeWordY(236, { top: 40, judgementY: 440, judgeOffsetY: 60 });
+    },
+  });
   define('player-skin-sdk.judgeDisplayWord', {
     run: () => {
       skinSdkAPI.judgeDisplayWord('PERFECT');
@@ -527,6 +532,11 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
   define('player-skin-sdk.resolveCabinetLayout', {
     run: () => {
       skinSdkAPI.resolveCabinetLayout(cabinetLayout);
+    },
+  });
+  define('player-skin-sdk.formatPacemakerLabel', {
+    run: () => {
+      skinSdkAPI.formatPacemakerLabel('SCORE RATE 90%');
     },
   });
   define('player-skin-sdk.resolveScorePace', {

@@ -356,6 +356,17 @@ function aaaLine(max: number): number {
   return Math.ceil((max * 8) / 9);
 }
 
+/** The longest pacemaker name the score graph's box holds after the word PACEMAKER, in characters. */
+export const PACEMAKER_NAME_LIMIT = 9;
+
+/**
+ * The score graph's pacemaker box: `PACEMAKER RANK AAA`. A longer name (a score rate, a ranking place, a replay's)
+ * stands alone, so the box shows the whole of it.
+ */
+export function formatPacemakerLabel(name: string): string {
+  return name.length > PACEMAKER_NAME_LIMIT ? name : `PACEMAKER ${name}`;
+}
+
 /**
  * The score graph's figures for a gameplay `runtime`: the player's EX score, the pacemaker's ({@link
  * BeMusicGameplayRuntime.targetEXScore}, else the AAA line) and the best record's ({@link

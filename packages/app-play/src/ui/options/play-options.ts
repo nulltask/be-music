@@ -60,7 +60,7 @@ export function buildPlayOptionsFolder(
   );
   // What the options picked do to a play's record, from the resolver a finished play's record goes through.
   this.recordConsequenceController = folder.addBinding(this.recordConsequence, 'text', {
-    label: 'Record with these options',
+    label: 'Record kept',
     readonly: true,
   });
   // `lanes` is the Arrangement page and `notes` the Modifiers page.

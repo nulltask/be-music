@@ -85,6 +85,7 @@ import {
   impulse,
   LOADING_WORD,
   loadingDots,
+  resolveJudgeWordY,
   type BeMusicGameplayLayout,
   type BeMusicGameplayRuntime,
   type BeMusicLaneKind,
@@ -410,7 +411,7 @@ export function renderSynesthesiaChrome({
     drawJudgeTally(front, overlayLayer, runtime, STAGE_SIDE_COLUMN.x, overlayLayerPool);
     drawHeader(front, overlayLayer, runtime, layout, accent, pulse, overlayLayerPool);
   }
-  const judgeY = resolveJudgeWordY(layout);
+  const judgeY = resolveSkinJudgeWordY(layout);
   if (runtime.loading) {
     drawLoading(
       overlayLayer,
@@ -438,10 +439,10 @@ export function renderSynesthesiaChrome({
  * Where the judgement word sits: at its fixed height on the landscape stage, and a little over halfway down the lanes on
  * a portrait one.
  */
-function resolveJudgeWordY(layout: BeMusicGameplayLayout): number {
-  const { top, judgementY, judgeOffsetY = 0 } = layout.playfield;
-  if (layout.orientation !== 'portrait') return 236 + judgeOffsetY;
-  return Math.round(top + (judgementY - top) * 0.58) + judgeOffsetY;
+function resolveSkinJudgeWordY(layout: BeMusicGameplayLayout): number {
+  const { top, judgementY } = layout.playfield;
+  const skinY = layout.orientation !== 'portrait' ? 236 : Math.round(top + (judgementY - top) * 0.58);
+  return resolveJudgeWordY(skinY, layout.playfield);
 }
 
 /** NOW LOADING on the lanes: wide-tracked light breathing in the accent glow, dots ticking beneath. */
