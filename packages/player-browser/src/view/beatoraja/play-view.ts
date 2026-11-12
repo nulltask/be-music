@@ -618,6 +618,7 @@ export class BeatorajaPlayView implements PlayView {
       stage: { width: stage.width, height: stage.height },
       screen: host.app.screen,
       opacity: stage.canvas.alpha,
+      resolution: host.app.renderer.resolution,
     });
     this.fadeIndicator();
   }

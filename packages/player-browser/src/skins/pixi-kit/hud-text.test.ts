@@ -1,6 +1,12 @@
-import { Container, TextStyle } from 'pixi.js';
-import { describe, expect, it, test } from 'vite-plus/test';
-import { addHUDText, quantizeTextEffectAlpha, quantizeTextEffectColor, rememberStyle } from './hud-text.ts';
+import { CanvasTextMetrics, Container, TextStyle } from 'pixi.js';
+import { describe, expect, it, test, vi } from 'vite-plus/test';
+import {
+  addHUDText,
+  measureHUDNumber,
+  quantizeTextEffectAlpha,
+  quantizeTextEffectColor,
+  rememberStyle,
+} from './hud-text.ts';
 
 describe('rememberStyle', () => {
   it('caches styles and forgets the oldest once full', () => {
@@ -41,5 +47,25 @@ describe('text effect quantization', () => {
       dropShadow: { color: 0xfe7b1f, alpha: 0.81, blur: 6, distance: 0 },
     });
     expect(b.style).toBe(a.style);
+  });
+});
+
+describe('measureHUDNumber', () => {
+  test('measures the tabular run addHUDNumber lays out: every digit as wide as the widest', () => {
+    // Node has no canvas to measure with: a face whose 1 is narrow, its other digits 12 wide and the rest 6.
+    const advance = (char: string): number => (char === '1' ? 7 : char >= '0' && char <= '9' ? 12 : 6);
+    const measure = vi
+      .spyOn(CanvasTextMetrics, 'measureText')
+      .mockImplementation((text) => ({ width: advance(text) }) as CanvasTextMetrics);
+    try {
+      const opts = { size: 20, fontFamily: 'monospace' };
+      // Six digits in the widest digit's cell, two spaces and the arrow.
+      expect(measureHUDNumber('99 » 1000', opts)).toBe(12 * 6 + 6 * 3);
+      // The same digit count is the same width, whichever digits they are.
+      expect(measureHUDNumber('111 » 111', opts)).toBe(measureHUDNumber('888 » 888', opts));
+      expect(measureHUDNumber('', opts)).toBe(0);
+    } finally {
+      measure.mockRestore();
+    }
   });
 });

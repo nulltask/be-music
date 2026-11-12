@@ -1,6 +1,7 @@
 import { ChartTextOverlay } from '../shared/chart-text.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
+import { resolveBuiltInBPMChangeWarningStyle } from './bpm-change-warning-style.ts';
 import {
   resolveLR2Earthquake,
   resolveLR2ManiaVisual,
@@ -287,6 +288,8 @@ export class BuiltInPlayView
       stage: this.playfieldSkin.stage,
       screen: this.app.screen,
       opacity: this.designRoot.alpha,
+      style: resolveBuiltInBPMChangeWarningStyle(this.kit.skin.id),
+      resolution: this.app.renderer.resolution,
     });
     this.skinBindingInstance?.flush();
     this.dom?.setOpacity(this.designRoot.alpha);
