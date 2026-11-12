@@ -5,12 +5,16 @@
  */
 import type { PlayOptions } from '@be-music/player-scene-model';
 
+/** LR2's screen height, the unit its mania drawing options are written in. */
+export const LR2_SCREEN_HEIGHT = 480;
+
 const TAU = Math.PI * 2;
 const HALF_PI = Math.PI / 2;
 
 /** The mania drawing options that are on. */
 export interface LR2ManiaVisual {
   readonly acceleration: PlayOptions['lr2Acceleration'];
+  readonly earthquake: number;
 }
 
 /** The mania drawing options of `options`, or `undefined` when none is on (the playfield then skips the pass). */
@@ -18,8 +22,9 @@ export function resolveLR2ManiaVisual(options: Partial<PlayOptions> | undefined)
   if (options === undefined) return undefined;
   const visual: LR2ManiaVisual = {
     acceleration: options.lr2Acceleration ?? 'OFF',
+    earthquake: options.lr2Earthquake ?? 0,
   };
-  const on = visual.acceleration !== 'OFF' || false;
+  const on = visual.acceleration !== 'OFF' || visual.earthquake > 0 || false;
   return on ? visual : undefined;
 }
 
@@ -96,6 +101,24 @@ export function placeLR2ManiaNote(visual: LR2ManiaVisual, input: LR2ManiaNoteInp
     xOffset: x * unit,
     widthDelta: widthDelta * unit,
     heightDelta: heightDelta * unit,
+  };
+}
+
+/** A shake of the drawing, in stage pixels. */
+export interface LR2ManiaShake {
+  readonly x: number;
+  readonly y: number;
+}
+
+const STILL: LR2ManiaShake = { x: 0, y: 0 };
+
+/** EARTHQUAKE: the offset of the whole play screen at `nowMs` of the play clock. */
+export function resolveLR2Earthquake(visual: LR2ManiaVisual | undefined, nowMs: number, unit: number): LR2ManiaShake {
+  if (visual === undefined || visual.earthquake <= 0) return STILL;
+  const now = Math.floor(nowMs);
+  return {
+    x: Math.sin(wave(now, 1000)) * visual.earthquake * unit,
+    y: Math.sin(wave(now, 1234)) * visual.earthquake * 0.75 * unit,
   };
 }
 

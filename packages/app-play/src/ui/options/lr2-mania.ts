@@ -11,4 +11,12 @@ export function buildLR2ManiaRows(this: OptionsDialog, effects: OptionContainer)
   selectBinding(mania, this.guiState, 'lr2Acceleration', 'ACCELERATION (LR2)', [
     ...PLAY_OPTION_CHOICES.lr2Acceleration!,
   ]).on('change', ({ value }) => this.setPlayOptions({ lr2Acceleration: value }));
+  for (const [key, label] of LEVEL_ROWS) {
+    mania
+      .addBinding(this.guiState, key, { label, min: 0, max: 100, step: 10 })
+      .on('change', ({ value }) => this.setPlayOptions({ [key]: value }));
+  }
 }
+
+/** The options LR2 sets from OFF (0) to 100 in steps of 10, in its panel's order. */
+const LEVEL_ROWS = [['lr2Earthquake', 'EARTHQUAKE (LR2)']] as const;

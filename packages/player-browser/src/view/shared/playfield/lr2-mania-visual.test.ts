@@ -1,6 +1,7 @@
 import { expect, test } from 'vite-plus/test';
 import {
   placeLR2ManiaNote,
+  resolveLR2Earthquake,
   resolveLR2ManiaNoteIndexes,
   resolveLR2ManiaVisual,
   type LR2ManiaNoteInput,
@@ -68,6 +69,14 @@ test('works in LR2 pixels whatever the stage size', () => {
     note({ distance: 400, lineY: 800, unit: 2 }),
   );
   expect(large.distance).toBeCloseTo(small.distance * 2);
+});
+
+test('EARTHQUAKE sways the screen on 1000 ms and 1234 ms sines', () => {
+  expect(resolveLR2Earthquake(undefined, 250, 1)).toEqual({ x: 0, y: 0 });
+  expect(resolveLR2Earthquake(visual({ earthquake: 0 }), 250, 1)).toEqual({ x: 0, y: 0 });
+  const quake = resolveLR2Earthquake(visual({ earthquake: 40 }), 250, 2);
+  expect(quake.x).toBeCloseTo(40 * 2);
+  expect(quake.y).toBeCloseTo(Math.sin((250 / 1234) * Math.PI * 2) * 40 * 0.75 * 2);
 });
 
 test('indexes notes and mines per lane in time order', () => {

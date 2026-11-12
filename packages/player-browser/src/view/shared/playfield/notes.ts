@@ -32,6 +32,7 @@ import type { PlayfieldLaneRect } from '../../types.ts';
 import type { PlayfieldContext, RuntimeNote } from './context.ts';
 import { resolveHiddenNoteChannels } from './hidden-note-channels.ts';
 import {
+  LR2_SCREEN_HEIGHT,
   placeLR2ManiaNote,
   resolveLR2ManiaNoteIndexes,
   resolveLR2ManiaVisual,
@@ -376,9 +377,6 @@ function applyChartLaneVisual(
   const w = lane.w * visual.scale;
   return { ...lane, x: lane.x + (lane.w - w) / 2 + visual.xOffset, w };
 }
-
-/** LR2's screen height, the unit its mania drawing options are written in. */
-const LR2_SCREEN_HEIGHT = 480;
 
 /** A long note's end as scrolled and placed by the chart's own options, before the mania options. */
 function scrolledLongNoteEndY(

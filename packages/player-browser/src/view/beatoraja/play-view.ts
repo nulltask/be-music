@@ -4,6 +4,11 @@ import type { BGAOpacityTimelines } from '@be-music/chart-model';
 import { collectBPMGuideEvents } from '../../chart/bpm-guide.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
+import {
+  resolveLR2Earthquake,
+  resolveLR2ManiaVisual,
+  LR2_SCREEN_HEIGHT,
+} from '../shared/playfield/lr2-mania-visual.ts';
 import { resolveHiddenNoteChannels } from '../shared/playfield/hidden-note-channels.ts';
 import { resolveConstantVisibility, resolveWhiteNumber, resolveLaneCover } from '@be-music/player-scene-model';
 /**
@@ -592,6 +597,13 @@ export class BeatorajaPlayView implements PlayView {
     );
     this.chartText.attachCanvas(stage.canvas);
     this.chartText.show(frame.chartText ?? '', stage, host.app.screen, stage.canvas.alpha);
+    // LR2's EARTHQUAKE sways the whole play screen.
+    const quake = resolveLR2Earthquake(
+      resolveLR2ManiaVisual(frame.playOptions),
+      play.playClock(),
+      host.app.screen.height / LR2_SCREEN_HEIGHT,
+    );
+    this.root.position.set(quake.x, quake.y);
     this.bpmChangeWarning.attachCanvas(stage.canvas);
     this.bpmChangeWarning.show({
       enabled: frame.playOptions.bpmChangeWarning,

@@ -135,6 +135,7 @@ describe('captureOptionSettings', () => {
       dpFlip: true,
       bpmGuide: true,
       bpmChangeWarning: true,
+      lr2Earthquake: 40,
       lr2Acceleration: 'RANDOM',
       autoScratchNotes: 'HIDE',
       judgeTimingMs: 0,

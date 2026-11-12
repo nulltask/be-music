@@ -252,6 +252,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  lr2Earthquake: PlayOptions['lr2Earthquake'];
   lr2Acceleration: PlayOptions['lr2Acceleration'];
   autoScratchNotes: PlayOptions['autoScratchNotes'];
   judgeTimingAutoAdjust: PlayOptions['judgeTimingAutoAdjust'];
