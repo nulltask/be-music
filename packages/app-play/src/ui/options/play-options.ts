@@ -58,7 +58,9 @@ export function buildPlayOptionsFolder(
   const [judge, lanes, notes, assist, practice, replay] = folder.addTab({
     pages: PLAY_OPTION_PAGES.map((title) => ({ title })),
   }).pages;
-  const [hiSpeed, covers, effects] = viewFolder.addTab({ pages: VIEW_OPTION_PAGES.map((title) => ({ title })) }).pages;
+  const viewTabs = viewFolder.addTab({ pages: VIEW_OPTION_PAGES.map((title) => ({ title })) });
+  this.viewTabs = viewTabs;
+  const [hiSpeed, covers, effects] = viewTabs.pages;
   if (!judge || !lanes || !notes || !assist || !practice || !replay || !hiSpeed || !covers || !effects)
     return { practice: folder, replay: folder };
   const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);

@@ -348,6 +348,8 @@ export class SelectRoute {
         reload: () => {
           void this.library.reloadCharts();
         },
+        // LR2's F2: the Options dialog on its LR2 mania options section, where LR2 prints its own panel.
+        maniaOptions: () => this.optionsDialog.openLR2ManiaOptions(),
         // LR2's key 4 held: the chart's ranking on the Leaderboard (LR2's IR).
         ranking: (chart) => {
           window.open(chartRankingURL(chart, location.hostname), '_blank', 'noopener');

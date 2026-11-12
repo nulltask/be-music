@@ -77,6 +77,7 @@ export const CONTROL_ACTION_IDS = [
   'select.m-ran-2p',
   'select.search',
   'select.reload',
+  'select.mania-options',
   'select.copy-md5',
   'select.copy-sha256',
   'select.autoplay-folder',
@@ -281,6 +282,9 @@ export const CONTROL_ACTIONS: readonly ControlActionDefinition[] = [
     label: 'Reload folders',
     defaults: { lr2: [code('F8')], beatoraja: [code('F2')] },
   },
+  // LR2 shows its mania options panel while F2 is held on the select screen. beatoraja's F2 reloads the folders, so the
+  // action is unbound there.
+  { id: 'select.mania-options', screen: 'select', label: 'LR2 mania options', defaults: { lr2: [code('F2')] } },
   {
     id: 'select.copy-md5',
     screen: 'select',

@@ -8,6 +8,7 @@ import type { OptionsDialog } from './index.ts';
 /** Adds the LR2 mania options section to the View folder's Effects page. */
 export function buildLR2ManiaRows(this: OptionsDialog, effects: OptionContainer): void {
   const mania = effects.addFolder({ title: 'LR2 mania options' });
+  this.lr2ManiaFolder = mania;
   selectBinding(mania, this.guiState, 'lr2Acceleration', 'ACCELERATION (LR2)', [
     ...PLAY_OPTION_CHOICES.lr2Acceleration!,
   ]).on('change', ({ value }) => this.setPlayOptions({ lr2Acceleration: value }));
