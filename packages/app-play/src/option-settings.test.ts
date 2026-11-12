@@ -135,6 +135,7 @@ describe('captureOptionSettings', () => {
       dpFlip: true,
       bpmGuide: true,
       bpmChangeWarning: true,
+      judgePosition: 15,
       judgeDisplay: 'OFF',
       laneBrightness: 40,
       scoreTarget: 'MAX',

@@ -252,6 +252,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  judgePosition: PlayOptions['judgePosition'];
   judgeDisplay: PlayOptions['judgeDisplay'];
   laneBrightness: PlayOptions['laneBrightness'];
   scoreTarget: PlayOptions['scoreTarget'];

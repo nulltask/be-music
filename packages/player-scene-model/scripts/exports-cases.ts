@@ -282,6 +282,11 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.clampHiSpeed(1.3000000000000003);
     },
   });
+  define('player-scene-model.clampJudgePosition', {
+    run: () => {
+      sceneModelAPI.clampJudgePosition(-17.6);
+    },
+  });
   define('player-scene-model.clampShutter', {
     run: () => {
       sceneModelAPI.clampShutter(0.30000000000000004);

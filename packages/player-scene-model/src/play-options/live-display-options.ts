@@ -9,6 +9,7 @@ import type { PlayOptions } from './options.ts';
 export const LIVE_DISPLAY_PLAY_OPTION_KEYS: readonly (keyof PlayOptions)[] = [
   'autoScratchNotes',
   'judgeDisplay',
+  'judgePosition',
   'laneBrightness',
   'lr2Acceleration',
   'lr2Char',

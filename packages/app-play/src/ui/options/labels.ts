@@ -109,6 +109,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'BPM change warning (AC)': 'BPM 変化の警告 (AC)',
   'Auto scratch notes (AC)': 'オートスクラッチのノーツ (AC)',
   'Lane brightness (AC)': 'レーンの明るさ (AC)',
+  'Judgment position (built-in skins, %)': '判定文字の位置 (内蔵スキン、%)',
   'Judgment display (AC)': '判定文字の表示 (AC)',
   'Show judge area (beatoraja)': '判定範囲を表示 (beatoraja)',
   'Mark processed notes (beatoraja)': '処理済みノーツをマーク (beatoraja)',

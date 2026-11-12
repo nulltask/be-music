@@ -11,6 +11,7 @@ import {
   HISPEED_MAX,
   HISPEED_MIN,
   HISPEED_STEP,
+  JUDGE_POSITION_LIMIT,
   KEYS_FILTER_CYCLE,
   PLAY_OPTION_CHOICES,
   SORT_CYCLE,
@@ -669,6 +670,15 @@ function buildNoteDisplayRows(this: OptionsDialog, effects: OptionContainer): vo
   effects
     .addBinding(this.guiState, 'laneBrightness', { label: 'Lane brightness (AC)', min: 0, max: 100, step: 10 })
     .on('change', ({ value }) => this.setPlayOptions({ laneBrightness: value }));
+  // The built-in skins' judgment and combo, moved up (-) or down (+) the lanes. LR2 and beatoraja skins place their own.
+  effects
+    .addBinding(this.guiState, 'judgePosition', {
+      label: 'Judgment position (built-in skins, %)',
+      min: -JUDGE_POSITION_LIMIT,
+      max: JUDGE_POSITION_LIMIT,
+      step: 5,
+    })
+    .on('change', ({ value }) => this.setPlayOptions({ judgePosition: value }));
   selectBinding(effects, this.guiState, 'judgeDisplay', 'Judgment display (AC)', {
     'Skin default': 'SKIN',
     OFF: 'OFF',

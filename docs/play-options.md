@@ -176,13 +176,15 @@ Two of AC 34's detail options sit in the Options dialog's View tab, under Effect
 
 **Lane brightness (AC)** (レーンの明るさ調整, "adjusts the brightness of the lanes") is a percentage from **0** to **100** in steps of 10; **100**, the default, leaves the lanes as the skin draws them. Be-Music puts a black layer over each lane, between the lane's background and what scrolls on it, so the notes, the bar lines, the judge area and the covers keep their own brightness. The official page gives no range or steps, so the scale is Be-Music's.
 
-**Judgment display (AC)** is **Skin default** or **OFF**. OFF draws no judgment and no combo on the play screen, as LR2's SILENT and a chart's HIDJUDGE already do; the counts and the score are unchanged. AC 34's 判定文字の表示位置 also moves the judgment ("change whether the judgment text is shown and where"), but the page lists no positions; Be-Music offers the on / off part only, and a skin keeps its own placement.
+**Judgment display (AC)** is **Skin default** or **OFF**. OFF draws no judgment and no combo on the play screen, as LR2's SILENT and a chart's HIDJUDGE already do; the counts and the score are unchanged. AC 34's 判定文字の表示位置 also moves the judgment ("change whether the judgment text is shown and where"), but the page lists no positions [C].
+
+**Judgment position (built-in skins, %)** moves the built-in skins' judgment and combo down the lanes by a percentage of their height, from **-30** (up) to **30** (down) in steps of 5; **0**, the default, is where the skin puts them. The value carries no AC name, since AC's positions are not known. The BPM change warning moves by the same share, so it stays as clear of the judgment as the skin placed it. LR2 and beatoraja skins keep their own placement and offsets (a beatoraja skin's judge offset, an LR2 skin's own options). Display only: no record changes.
 
 Source: AC 34 [detail options](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html). Tracked in [#1136](https://github.com/nulltask/be-music/issues/1136) and [#1135](https://github.com/nulltask/be-music/issues/1135).
 
 ## Live display options
 
-A play reads its options when it starts. The ones that only change what is drawn are also followed during the play: changing one in the Options dialog takes effect on the next frame. They are the auto scratch note display, lane brightness, judgment display, the judge area, mark processed notes, the score target and LR2's mania drawing options (ACCELERATION to SIDEJUMP); `LIVE_DISPLAY_PLAY_OPTION_KEYS` in `@be-music/player-scene-model` lists them. A change is recorded in the replay's `play.optionChanges` at its chart time, like the other options a play takes live (hi-speed, covers, LIFT, judge timing). Every other option, including LR2's chart generators and GAMBOL, stays as the play started.
+A play reads its options when it starts. The ones that only change what is drawn are also followed during the play: changing one in the Options dialog takes effect on the next frame. They are the auto scratch note display, lane brightness, judgment display and position, the judge area, mark processed notes, the score target and LR2's mania drawing options (ACCELERATION to SIDEJUMP); `LIVE_DISPLAY_PLAY_OPTION_KEYS` in `@be-music/player-scene-model` lists them. A change is recorded in the replay's `play.optionChanges` at its chart time, like the other options a play takes live (hi-speed, covers, LIFT, judge timing). Every other option, including LR2's chart generators and GAMBOL, stays as the play started.
 
 ## ANY KEY
 

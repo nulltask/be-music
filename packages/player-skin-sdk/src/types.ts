@@ -258,6 +258,11 @@ export interface BeMusicGameplayLayout {
     /** Top of the lanes, and the judgement line notes land on. */
     top: number;
     judgementY: number;
+    /**
+     * How far down (negative: up) the player moved the judgment and combo from where the skin puts them, in stage
+     * pixels. Absent means 0. A skin adds it to its own judgment position.
+     */
+    judgeOffsetY?: number;
     /** Horizontal extent of each play side present (`2P` only in double play). */
     sides: Partial<
       Record<BeMusicSide, { left: number; right: number; /** Actual line after per-side LIFT. */ judgementY?: number }>

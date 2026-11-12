@@ -98,8 +98,13 @@ export function formatBPMChangeWarning(warning: Pick<BPMChangeWarning, 'from' | 
  * One placement per side: centred on the side's lanes, with text sized to a twentieth of the lanes' width. The
  * introduction shows the box just above the judgment and combo (about 62 % down AC's lanes); skins put their judgment
  * anywhere from 40 % to 65 % down, so the box sits half-way down the lanes, which clears it on the built-in skins.
+ * `judgePosition` is the judgment position option, in percent of the lanes' height: the box moves with the judgment it
+ * moves, which keeps the two as far apart as the skin placed them.
  */
-export function resolveBPMChangeWarningPlacements(lanes: readonly DisplayAreaLane[]): BPMChangeWarningPlacement[] {
+export function resolveBPMChangeWarningPlacements(
+  lanes: readonly DisplayAreaLane[],
+  judgePosition = 0,
+): BPMChangeWarningPlacement[] {
   const result: BPMChangeWarningPlacement[] = [];
   for (const side of ['1P', '2P'] as const) {
     const own = lanes.filter((lane) => lane.side === side && lane.w > 0 && lane.bottom > lane.top);
@@ -111,7 +116,7 @@ export function resolveBPMChangeWarningPlacements(lanes: readonly DisplayAreaLan
     result.push({
       side,
       x: (left + right) / 2,
-      y: top + (bottom - top) * 0.5,
+      y: top + (bottom - top) * (0.5 + judgePosition / 100),
       size: Math.max(10, Math.min(28, (right - left) / 20)),
     });
   }
@@ -140,6 +145,8 @@ export class BPMChangeWarningOverlay {
     stage: { width: number; height: number };
     screen: { width: number; height: number };
     opacity?: number;
+    /** The judgment position option, when the skin's judgment follows it. */
+    judgePosition?: number;
   }): void {
     let warning: BPMChangeWarning | undefined;
     if (input.enabled && input.timing) {
@@ -147,7 +154,7 @@ export class BPMChangeWarningOverlay {
         this.changes = { timing: input.timing, changes: collectBPMChanges(input.timing) };
       warning = resolveBPMChangeWarning(this.changes.changes, input.seconds);
     }
-    this.update(warning, input.lanes, input.stage, input.screen, input.opacity);
+    this.update(warning, input.lanes, input.stage, input.screen, input.opacity, input.judgePosition);
   }
 
   attachCanvas(parent: Container): void {
@@ -175,8 +182,9 @@ export class BPMChangeWarningOverlay {
     stage: { width: number; height: number },
     screen: { width: number; height: number },
     opacity = 1,
+    judgePosition = 0,
   ): void {
-    const placements = warning === undefined ? [] : resolveBPMChangeWarningPlacements(lanes);
+    const placements = warning === undefined ? [] : resolveBPMChangeWarningPlacements(lanes, judgePosition);
     const text = warning === undefined ? '' : formatBPMChangeWarning(warning);
     if (this.canvas?.parent) {
       this.updateCanvas(warning, text, placements);

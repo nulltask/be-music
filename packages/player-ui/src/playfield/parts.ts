@@ -59,7 +59,8 @@ export function resolvePlayfieldParts(
     const y = side?.judgementY ?? playfield.judgementY;
     return y === playfield.judgementY ? run : { ...run, y };
   });
-  const judgmentY = playfield.judgementY - JUDGMENT_OFFSET;
+  const judgeOffsetY = playfield.judgeOffsetY ?? 0;
+  const judgmentY = playfield.judgementY - JUDGMENT_OFFSET + judgeOffsetY;
   const words: BeMusicJudgmentWord[] = [];
   for (const side of frame.runtime.judgeSides ?? []) {
     if (!side.judge) continue;
@@ -69,7 +70,7 @@ export function resolvePlayfieldParts(
       x: bounds ? (bounds.left + bounds.right) / 2 : playfield.centerX,
       text: judgeDisplayWord(side.judge),
       ...(bounds?.judgementY !== undefined && bounds.judgementY !== playfield.judgementY
-        ? { y: bounds.judgementY - JUDGMENT_OFFSET }
+        ? { y: bounds.judgementY - JUDGMENT_OFFSET + judgeOffsetY }
         : {}),
       color: judgmentColor(side.judge, frame.nowMs),
       ...(keepsCombo(side.judge) && combo > 0 ? { combo } : {}),
@@ -85,7 +86,7 @@ export function resolvePlayfieldParts(
     else
       words.push({
         x,
-        y: (bounds.judgementY ?? playfield.judgementY) - JUDGMENT_OFFSET,
+        y: (bounds.judgementY ?? playfield.judgementY) - JUDGMENT_OFFSET + judgeOffsetY,
         text: '',
         color: JUDGMENT_COLOR,
         mode,
@@ -125,7 +126,7 @@ export function resolvePlayfieldParts(
     judgmentDisplay: {
       rect: rect(
         left,
-        minLineY - JUDGMENT_OFFSET - JUDGMENT_ASCENT - 28,
+        minLineY - JUDGMENT_OFFSET - JUDGMENT_ASCENT - 28 + judgeOffsetY,
         width,
         maxLineY - minLineY + JUDGMENT_ASCENT + COMBO_OFFSET + COMBO_DESCENT + 28,
       ),

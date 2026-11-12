@@ -80,4 +80,9 @@ describe('AC 34 BPM-change warning', () => {
     ]);
     expect(resolveBPMChangeWarningPlacements([])).toEqual([]);
   });
+
+  test('moves with the judgment position, by the same share of the lanes', () => {
+    expect(resolveBPMChangeWarningPlacements(lanes, -30).map((placement) => placement.y)).toEqual([80, 200]);
+    expect(resolveBPMChangeWarningPlacements(lanes, 10).map((placement) => placement.y)).toEqual([240, 400]);
+  });
 });

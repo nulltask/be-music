@@ -280,6 +280,7 @@ export class BuiltInPlayView
     this.root.position.set(quake.x, quake.y);
     this.bpmChangeWarning.show({
       enabled: frame.playOptions.bpmChangeWarning,
+      judgePosition: frame.playOptions.judgePosition,
       timing: this.play.timingResolver,
       seconds: frame.seconds,
       lanes: overlayLanes,

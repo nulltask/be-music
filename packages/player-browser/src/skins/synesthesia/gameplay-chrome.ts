@@ -439,9 +439,9 @@ export function renderSynesthesiaChrome({
  * a portrait one.
  */
 function resolveJudgeWordY(layout: BeMusicGameplayLayout): number {
-  if (layout.orientation !== 'portrait') return 236;
-  const { top, judgementY } = layout.playfield;
-  return Math.round(top + (judgementY - top) * 0.58);
+  const { top, judgementY, judgeOffsetY = 0 } = layout.playfield;
+  if (layout.orientation !== 'portrait') return 236 + judgeOffsetY;
+  return Math.round(top + (judgementY - top) * 0.58) + judgeOffsetY;
 }
 
 /** NOW LOADING on the lanes: wide-tracked light breathing in the accent glow, dots ticking beneath. */
