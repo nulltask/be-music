@@ -140,7 +140,10 @@ export function isCourseHiSpeedLocked(constraints: readonly CourseConstraint[]):
 }
 
 /** The player's picks a course may override for a stage: the lane options and what LR2 resets on a GRADE course. */
-export interface CourseStagePlaySettings extends CourseLaneOptions, LR2GradeResetSettings {}
+export interface CourseStagePlaySettings extends CourseLaneOptions, LR2GradeResetSettings {
+  lr2RandomScratch1P?: boolean;
+  lr2RandomScratch2P?: boolean;
+}
 
 /**
  * The settings a stage plays with in place of the player's picks: the lane options the course allows
@@ -152,8 +155,17 @@ export function resolveCourseStagePlaySettings<T extends CourseStagePlaySettings
   definition: Pick<CourseDefinition, 'kind' | 'source' | 'constraints'>,
   picked: T,
 ): T {
+  const allowScratchRandom = !definition.constraints.some(
+    (constraint) => constraint === 'grade' || constraint === 'grade_mirror' || constraint === 'grade_random',
+  );
   return resolveLR2GradeCoursePlaySettings(definition, {
     ...picked,
+    ...(picked.lr2RandomScratch1P === undefined
+      ? {}
+      : { lr2RandomScratch1P: allowScratchRandom && picked.lr2RandomScratch1P }),
+    ...(picked.lr2RandomScratch2P === undefined
+      ? {}
+      : { lr2RandomScratch2P: allowScratchRandom && picked.lr2RandomScratch2P }),
     ...resolveCourseLaneOptions(definition.constraints, picked),
   });
 }

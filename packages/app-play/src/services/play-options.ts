@@ -19,6 +19,8 @@ export type GUIPlayOptions = Pick<
   | 'randomSeed2P'
   | 'randomFixedLane1P'
   | 'randomFixedLane2P'
+  | 'lr2RandomScratch1P'
+  | 'lr2RandomScratch2P'
   | 'random1P'
   | 'random2P'
   | 'dpFlip'
@@ -98,6 +100,8 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     randomSeed2P: state.randomSeed2P,
     randomFixedLane1P: state.randomFixedLane1P,
     randomFixedLane2P: state.randomFixedLane2P,
+    lr2RandomScratch1P: state.lr2RandomScratch1P,
+    lr2RandomScratch2P: state.lr2RandomScratch2P,
     random2P: state.random2P,
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
@@ -186,6 +190,8 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.randomSeed2P = options.randomSeed2P;
   state.randomFixedLane1P = options.randomFixedLane1P;
   state.randomFixedLane2P = options.randomFixedLane2P;
+  state.lr2RandomScratch1P = options.lr2RandomScratch1P;
+  state.lr2RandomScratch2P = options.lr2RandomScratch2P;
   state.random2P = options.random2P;
   state.dpFlip = options.dpFlip;
   state.bpmGuide = options.bpmGuide;
@@ -336,6 +342,8 @@ const ARRANGEMENT_OPTIONS = [
   'randomSeed2P',
   'randomFixedLane1P',
   'randomFixedLane2P',
+  'lr2RandomScratch1P',
+  'lr2RandomScratch2P',
   'dpFlip',
   'hRandomThresholdBPM',
   'longNoteModifier',

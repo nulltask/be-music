@@ -115,6 +115,14 @@ export function buildPlayOptionsFolder(
       .on('change', ({ value }) => this.setPlayOptions({ hRandomThresholdBPM: value })),
   );
   for (const side of ['1P', '2P'] as const) {
+    const key = `lr2RandomScratch${side}` as const;
+    trackPlayOption(
+      lanes
+        .addBinding(this.guiState, key, { label: `Include scratch ${side} (LR2)` })
+        .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
+    );
+  }
+  for (const side of ['1P', '2P'] as const) {
     const key = `randomFixedLane${side}` as const;
     trackPlayOption(
       lanes

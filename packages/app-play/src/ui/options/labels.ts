@@ -70,6 +70,8 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Random 1P': 'ランダム 1P',
   'Random 2P': 'ランダム 2P',
   'H-RANDOM threshold BPM (beatoraja)': 'H-RANDOM のしきい値 BPM (beatoraja)',
+  'Include scratch 1P (LR2)': 'スクラッチを含める 1P (LR2)',
+  'Include scratch 2P (LR2)': 'スクラッチを含める 2P (LR2)',
   'Fixed key 1P (LR2; 0=default)': '固定キー 1P (LR2、0=既定)',
   'Fixed key 2P (LR2; 0=default)': '固定キー 2P (LR2、0=既定)',
   'Seed 1P (-1=random)': 'シード 1P (-1=ランダム)',

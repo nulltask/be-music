@@ -237,6 +237,8 @@ export interface PlaySessionOptions {
   randomSeed2P?: string;
   randomFixedLane1P?: number;
   randomFixedLane2P?: number;
+  lr2RandomScratch1P?: boolean;
+  lr2RandomScratch2P?: boolean;
   random1P?: RandomMode;
   /** 2P side note arrangement (`#SRC_BUTTON,type=43`). */
   random2P?: RandomMode;

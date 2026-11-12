@@ -700,6 +700,8 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       randomSeed2P: playOptions.randomSeed2P,
       randomFixedLane1P: playOptions.randomFixedLane1P,
       randomFixedLane2P: playOptions.randomFixedLane2P,
+      lr2RandomScratch1P: playOptions.lr2RandomScratch1P,
+      lr2RandomScratch2P: playOptions.lr2RandomScratch2P,
       classicHiSpeed: playOptions.classicHiSpeed,
       floatingHiSpeed: playOptions.floatingHiSpeed,
       fixedDisplayArea: playOptions.fixedDisplayArea,

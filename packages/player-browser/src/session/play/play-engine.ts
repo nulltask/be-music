@@ -129,6 +129,8 @@ export interface PlayEngineContext
       | 'randomSeed2P'
       | 'randomFixedLane1P'
       | 'randomFixedLane2P'
+      | 'lr2RandomScratch1P'
+      | 'lr2RandomScratch2P'
       | 'hRandomThresholdBPM'
       | 'random1P'
       | 'random2P'
@@ -448,6 +450,8 @@ export function resolveReplayRecording(
     | 'randomSeed2P'
     | 'randomFixedLane1P'
     | 'randomFixedLane2P'
+    | 'lr2RandomScratch1P'
+    | 'lr2RandomScratch2P'
     | 'hRandomThresholdBPM'
     | 'random1P'
     | 'random2P'
@@ -538,6 +542,8 @@ export function resolveReplayRecording(
     randomSeed2P: effectiveRandomSeeds?.p2 ?? options.randomSeed2P,
     randomFixedLane1P: options.randomFixedLane1P,
     randomFixedLane2P: options.randomFixedLane2P,
+    lr2RandomScratch1P: options.lr2RandomScratch1P,
+    lr2RandomScratch2P: options.lr2RandomScratch2P,
     hRandomThresholdBPM:
       options.hRandomThresholdBPM === undefined ? undefined : clampHRandomThresholdBPM(options.hRandomThresholdBPM),
     random2P: options.random2P,
@@ -691,7 +697,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
         ? (ctx.options.replay.play.dBattleScratch ?? false)
         : ctx.options.fixedArrangement
           ? (ctx.options.fixedArrangement.play.dBattleScratch ?? false)
-          : ctx.options.dBattleScratch,
+          : (ctx.preparedChart?.dBattleScratch ?? ctx.options.dBattleScratch),
       lr2ExtraMode: ctx.options.replay
         ? (ctx.options.replay.play.lr2ExtraMode ?? false)
         : ctx.options.fixedArrangement
