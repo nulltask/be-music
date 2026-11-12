@@ -1,3 +1,4 @@
+import { randomizeLR2DoubleNotes, type LR2DoubleRandomOptions } from './lane-lr2-double.ts';
 import type { SRandomNote } from './lane-random.ts';
 
 /**
@@ -20,12 +21,19 @@ export function randomizeLR2ConvergeNotes(
     outside?: string;
     /** LR2's 2P target may point one lane past the keys, where nothing can hit the note. */
     targetOutside?: boolean;
+    lr2Double?: LR2DoubleRandomOptions;
   },
 ): string[] {
   const channels = notes.map((note) => note.channel);
   const domain = new Set(lanes);
   if (!domain.has(options.target) && options.target !== options.scratch && options.targetOutside !== true)
     throw new RangeError('CONVERGE target must be a key or scratch of this side.');
+  if (options.lr2Double !== undefined)
+    return randomizeLR2DoubleNotes(notes, lanes, {
+      ...options.lr2Double,
+      random: options.random,
+      target: options.target,
+    });
   const held = new Map<string, { source: string; endMs: number }>();
   const rows = new Map<number, number[]>();
   notes.forEach((note, index) => {

@@ -1,3 +1,4 @@
+import { randomizeLR2DoubleNotes, type LR2DoubleRandomOptions } from './lane-lr2-double.ts';
 import { drawLaneRandomIndex } from './lane-random-source.ts';
 import type { RulesetId } from './ruleset/definitions.ts';
 
@@ -6,6 +7,13 @@ export interface SRandomNote {
   channel: string;
   timeMs: number;
   endTimeMs?: number;
+  beat?: number;
+  endBeat?: number;
+  /** Unmodified channel after DP FLIP, before either side's randomization. */
+  sourceChannel?: string;
+  /** LR2 sorts explicit long-note heads with their original channel code. */
+  lr2OpOffset?: number;
+  lr2SyntheticTail?: true;
   /** Mines and hidden notes do not update beatoraja's jack timing; LR2 treats mines as placed events. */
   kind?: 'note' | 'mine' | 'invisible';
 }
@@ -15,6 +23,7 @@ export interface SRandomOptions {
   random: () => number;
   /** beatoraja's ordinary PMS S-RANDOM uses S_RANDOM_NO_THRESHOLD. */
   mode?: 'pms';
+  lr2Double?: LR2DoubleRandomOptions;
   /**
    * LR2's nine-key S-RANDOM: one more destination outside the playfield. LR2 draws `startlane + GetRand(9)`, and the
    * inclusive `GetRand` reaches raw lane 10, the 2P scratch (OpenLR2 `LR2f.cpp` L27354, L27372). A note placed there
@@ -34,6 +43,8 @@ export function randomizeSRandomNotes(
   lanes: readonly string[],
   options: SRandomOptions,
 ): string[] {
+  if (options.ruleset === 'lr2' && options.lr2Double !== undefined)
+    return randomizeLR2DoubleNotes(notes, lanes, { ...options.lr2Double, random: options.random });
   const pms = options.ruleset === 'beatoraja' && options.mode === 'pms';
   return randomizeTimeBasedNotes(notes, lanes, options, pms ? 0 : 40, options.ruleset === 'beatoraja');
 }
