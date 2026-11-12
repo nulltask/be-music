@@ -204,10 +204,12 @@ export function buildPlayOptionsFolder(
       this.setPlayOptions({ bottomShiftableGauge: value }),
     ),
   );
-  this.scrollModifierController = selectBinding(notes, this.guiState, 'scrollModifier', 'Scroll (beatoraja)', {
+  this.scrollModifierController = selectBinding(notes, this.guiState, 'scrollModifier', 'Scroll', {
     OFF: 'OFF',
-    REMOVE: 'REMOVE',
-    ADD: 'ADD',
+    'REMOVE (beatoraja)': 'REMOVE',
+    'ADD (beatoraja)': 'ADD',
+    'SOFTLANDING LEVEL 1 (LR2)': 'SOFTLANDING-1',
+    'SOFTLANDING LEVEL 2 (LR2)': 'SOFTLANDING-2',
   });
   trackPlayOption(
     this.scrollModifierController.on('change', ({ value }) => {
@@ -321,6 +323,14 @@ export function buildPlayOptionsFolder(
   });
   trackPlayOption(
     this.longNoteModeController.on('change', ({ value }) => this.setPlayOptions({ longNoteMode: value })),
+  );
+  // LR2's mania option GAMBOL: part of LR2's judge rules, so it is offered under them only.
+  this.lr2GambolController = trackPlayOption(
+    selectBinding(judge, this.guiState, 'lr2Gambol', 'GAMBOL (LR2)', {
+      OFF: 0,
+      'LEVEL 1': 1,
+      'LEVEL 2': 2,
+    }).on('change', ({ value }) => this.setPlayOptions({ lr2Gambol: value })),
   );
   this.customJudgeController = trackPlayOption(
     judge.addBinding(this.guiState, 'customJudge', { label: 'CUSTOM JUDGE (beatoraja)' }).on('change', ({ value }) => {

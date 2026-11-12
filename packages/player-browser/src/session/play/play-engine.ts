@@ -91,6 +91,7 @@ export interface PlayEngineContext
       | 'allowSeek'
       | 'judgeAlgorithm'
       | 'customJudge'
+      | 'lr2Gambol'
       | 'longNoteModifier'
       | 'longNoteRate'
       | 'sevenToNinePattern'
@@ -674,6 +675,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
         ? (ctx.options.replay.play.bmsonTotalMode ?? 'beatoraja')
         : ctx.options.bmsonTotalMode,
       customJudge: ctx.options.replay ? ctx.options.replay.play.customJudge : ctx.options.customJudge,
+      lr2Gambol: ctx.options.replay ? ctx.options.replay.play.lr2Gambol : ctx.options.lr2Gambol,
       judgeTimingAutoAdjust: ctx.options.replay === undefined ? (ctx.options.judgeTimingAutoAdjust ?? 'OFF') : 'OFF',
       judgeTimingMs: ctx.options.judgeTimingMs,
       battleMode: ctx.options.replay

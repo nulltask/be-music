@@ -9,7 +9,7 @@ import type { EffectiveBattleMode } from '../core/battle-mode.ts';
 import { getPlayModeLayouts, type ChartPlayVariant } from '@be-music/chart-model';
 import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
 import type { ScrollTimelinePoint } from '@be-music/chart-model';
-import type { ScrollModifier } from '../core/scroll-modifier.ts';
+import { isSoftLanding, type ScrollModifier } from '../core/scroll-modifier.ts';
 import type { LongNoteModifier } from '../core/long-note-modifier.ts';
 import type { MineModifier } from '../core/mine-modifier.ts';
 import {
@@ -261,6 +261,8 @@ export interface ReplayPlay {
   autoScratch: boolean;
   /** Effective manual assist per side; older replays fall back to autoScratch for both. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  /** LR2's mania option GAMBOL, LEVEL 1 or 2: the play's fixed judge windows under LR2 rules. Absent while it was off. */
+  lr2Gambol?: 1 | 2;
   /** beatoraja CUSTOM JUDGE rates in percent; absent while the option was off. */
   customJudge?: BeatorajaCustomJudge;
   longNoteModifier?: LongNoteModifier;
@@ -885,6 +887,10 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     const inputs = parseControlInputs(play.controlInputs);
     if (inputs.length > 0) parsed.controlInputs = inputs;
   }
+  if (play.lr2Gambol !== undefined) {
+    if (play.lr2Gambol !== 1 && play.lr2Gambol !== 2) throw new ReplayParseError('play.lr2Gambol: expected 1 or 2');
+    parsed.lr2Gambol = play.lr2Gambol;
+  }
   if (play.judgeAlgorithm !== undefined) {
     if (!['combo', 'duration', 'lowest'].includes(play.judgeAlgorithm as string)) {
       throw new ReplayParseError('play.judgeAlgorithm: expected combo, duration or lowest');
@@ -903,8 +909,14 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     parsed.customJudge = judge;
   }
   if (play.scrollModifier !== undefined) {
-    if (play.scrollModifier !== 'OFF' && play.scrollModifier !== 'REMOVE' && play.scrollModifier !== 'ADD')
-      throw new ReplayParseError('play.scrollModifier: expected OFF, REMOVE or ADD');
+    if (
+      play.scrollModifier !== 'OFF' &&
+      play.scrollModifier !== 'REMOVE' &&
+      play.scrollModifier !== 'ADD' &&
+      play.scrollModifier !== 'SOFTLANDING-1' &&
+      play.scrollModifier !== 'SOFTLANDING-2'
+    )
+      throw new ReplayParseError('play.scrollModifier: expected OFF, REMOVE, ADD, SOFTLANDING-1 or SOFTLANDING-2');
     parsed.scrollModifier = play.scrollModifier;
   }
   if (play.scrollSection !== undefined) {
@@ -936,7 +948,12 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     (parsed.scrollSection === undefined || parsed.scrollRate === undefined || !parsed.scrollModifierTimeline?.length)
   )
     throw new ReplayParseError('play.scrollModifier: ADD requires section, rate and an effective timeline');
-  if (parsed.scrollModifier === 'ADD' && parsed.scrollModifierTimeline?.[0]?.beat !== 0)
+  if (isSoftLanding(parsed.scrollModifier) && !parsed.scrollModifierTimeline?.length)
+    throw new ReplayParseError('play.scrollModifier: SOFTLANDING requires an effective timeline');
+  if (
+    (parsed.scrollModifier === 'ADD' || isSoftLanding(parsed.scrollModifier)) &&
+    parsed.scrollModifierTimeline?.[0]?.beat !== 0
+  )
     throw new ReplayParseError('play.scrollModifierTimeline: expected initial beat zero');
   if (play.scrollModifierChanged !== undefined) {
     if (typeof play.scrollModifierChanged !== 'boolean')

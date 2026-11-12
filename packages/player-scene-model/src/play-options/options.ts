@@ -40,6 +40,8 @@ export interface PlayOptions {
    * change until the change (blue when the tempo rises, red when it falls).
    */
   bpmChangeWarning: boolean;
+  /** LR2 mania option GAMBOL (LR2 rules only): 0 is OFF; 1 fixes the judge windows at VERY HARD; 2 also narrows GREAT and GOOD to 12 ms. Recorded as `play.lr2Gambol`. */
+  lr2Gambol: 0 | 1 | 2;
   /** LR2 mania option SIDEJUMP (0 = OFF, 10–100): hops each note sideways on a 500 ms period, alternate notes in opposite directions. Drawing only. */
   lr2SideJump: number;
   /** LR2 mania option SPIRAL (0 = OFF, 10–100): circles each note about its own path every 300 ms, alternate notes in opposite directions. It is LR2's note effect, not beatoraja's SPIRAL lane option. Drawing only. */

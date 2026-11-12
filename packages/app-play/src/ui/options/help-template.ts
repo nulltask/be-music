@@ -174,10 +174,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
             The lowest gauge BEST CLEAR and SELECT TO UNDER may shift down to. LR2 has no ASSIST EASY, so its lowest is
             EASY.
           </dd>
-          <dt>Scroll (beatoraja)</dt>
+          <dt>Scroll</dt>
           <dd>
-            REMOVE draws the chart without its BPM and scroll changes; ADD adds random scroll changes. Judgment is
-            unchanged.
+            REMOVE (beatoraja) draws the chart without its BPM and scroll changes; ADD (beatoraja) adds random scroll
+            changes. SOFTLANDING (LR2) changes the scroll speed at random between a half and double: LEVEL 1 at each
+            measure, LEVEL 2 at each note as well. Judgment is unchanged.
           </dd>
           <dt>Scroll section lines</dt>
           <dd>
@@ -251,6 +252,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>
             <em class="help-menu-when">Shown with beatoraja rules.</em> How a chart that leaves its long-note type open
             plays: LN, CN or HCN.
+          </dd>
+          <dt>GAMBOL (LR2)</dt>
+          <dd>
+            <em class="help-menu-when">Shown with LR2 rules.</em> LR2's hidden option that narrows the judgment windows:
+            LEVEL 1 fixes them at VERY HARD, LEVEL 2 also narrows GREAT and GOOD to 12 ms. The play is recorded as a
+            normal one.
           </dd>
           <dt>CUSTOM JUDGE (beatoraja)</dt>
           <dd>
@@ -872,10 +879,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
             BEST CLEAR と SELECT TO UNDER で下げてよい一番下のゲージ。LR2 には ASSIST EASY がないので、一番下は EASY
             です。
           </dd>
-          <dt>Scroll (beatoraja)</dt>
+          <dt>Scroll</dt>
           <dd>
-            REMOVE は BPM やスクロールの変化をなくして描き、ADD
-            はランダムなスクロールの変化を加えます。判定は変わりません。
+            REMOVE (beatoraja) は BPM やスクロールの変化をなくして描き、ADD (beatoraja)
+            はランダムなスクロールの変化を加えます。SOFTLANDING (LR2) はスクロール速度を 0.5〜2
+            倍の範囲でランダムに変えます。LEVEL 1 は小節ごと、LEVEL 2 はノーツごとにも変わります。判定は変わりません。
           </dd>
           <dt>Scroll section lines</dt>
           <dd>
@@ -942,6 +950,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>
             <em class="help-menu-when">beatoraja のルールのときに表示。</em> ロングノートの種類を決めていない譜面を
             LN、CN、HCN のどれで遊ぶか。
+          </dd>
+          <dt>GAMBOL (LR2)</dt>
+          <dd>
+            <em class="help-menu-when">LR2 のルールのときに表示。</em> 判定の幅を狭める LR2 の隠しオプションです。LEVEL
+            1 は VERY HARD に固定し、LEVEL 2 はさらに GREAT と GOOD を 12 ms にします。プレイは通常どおり記録します。
           </dd>
           <dt>CUSTOM JUDGE (beatoraja)</dt>
           <dd><em class="help-menu-when">beatoraja のルールのときに表示。</em> 下の倍率で判定の幅を変えます。</dd>

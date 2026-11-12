@@ -252,6 +252,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  lr2Gambol: PlayOptions['lr2Gambol'];
   lr2SideJump: PlayOptions['lr2SideJump'];
   lr2SpiralEffect: PlayOptions['lr2SpiralEffect'];
   lr2Wave: PlayOptions['lr2Wave'];

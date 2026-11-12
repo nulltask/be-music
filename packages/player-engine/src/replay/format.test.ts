@@ -643,6 +643,18 @@ test('round-trips confirmed beatoraja algorithms and rejects the internal Score 
   expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
 });
 
+test("round-trips LR2's GAMBOL level and rejects anything else", () => {
+  for (const lr2Gambol of [1, 2] as const) {
+    const replay = makeReplay();
+    replay.play.lr2Gambol = lr2Gambol;
+    expect(parseReplay(serializeReplay(replay)).play.lr2Gambol).toBe(lr2Gambol);
+  }
+  expect(parseReplay(serializeReplay(makeReplay())).play.lr2Gambol).toBeUndefined();
+  const invalid = JSON.parse(serializeReplay(makeReplay()));
+  invalid.play.lr2Gambol = 3;
+  expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
+});
+
 test('round-trips resolved BPM extrema and rejects invalid ranges', () => {
   const replay = makeReplay();
   replay.chart.bpmRange = { min: 120, max: 240 };
@@ -820,6 +832,24 @@ test('scroll modifier selection and actual-change fact round trip independently'
   expect(() => parseReplay({ ...replay, play: { ...replay.play, scrollModifierChanged: 1 } })).toThrow(
     /scrollModifierChanged/,
   );
+});
+
+test('SOFTLANDING round-trips its level and drawn factors, and needs its timeline', () => {
+  for (const scrollModifier of ['SOFTLANDING-1', 'SOFTLANDING-2'] as const) {
+    const replay = makeReplay();
+    const scrollModifierTimeline = [
+      { beat: 0, speed: 1.5 },
+      { beat: 4, speed: 0.5 },
+    ];
+    Object.assign(replay.play, { scrollModifier, scrollModifierChanged: true, scrollModifierTimeline });
+    expect(parseReplay(serializeReplay(replay)).play).toMatchObject({ scrollModifier, scrollModifierTimeline });
+    const missing = JSON.parse(serializeReplay(replay));
+    delete missing.play.scrollModifierTimeline;
+    expect(() => parseReplay(missing)).toThrow(/SOFTLANDING requires/);
+    const late = JSON.parse(serializeReplay(replay));
+    late.play.scrollModifierTimeline[0].beat = 1;
+    expect(() => parseReplay(late)).toThrow(/initial beat zero/);
+  }
 });
 
 test('scroll ADD preserves its parameters and effective curve, rejecting incomplete or malformed replay data', () => {

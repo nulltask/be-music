@@ -91,6 +91,31 @@ describe('ruleset/facts', () => {
     const beatoraja = resolveRuleset(chart, 'beatoraja');
     expect(beatoraja.windowsAt(6_000_000)).toEqual(beatoraja.windows);
   });
+
+  test("LR2's GAMBOL fixes the windows whatever the chart's rank, and only LR2 has it", () => {
+    // An EASY chart whose `#EXRANKxx` widens the windows at 5 s and whose second NONSTOP stage starts at 10 s.
+    const chart = facts({
+      judgeRank: {
+        percent: 100,
+        sourceRank: 3,
+        timeline: [{ timeUs: 5_000_000, exRankValue: 200 }],
+        stageRanks: [{ timeUs: 10_000_000, rank: 3, table: 'lr2-nonstop' }],
+      },
+    });
+    const windowsOf = (level: 1 | 2, timeUs: number) =>
+      resolveRuleset(chart, 'lr2', { lr2Gambol: level })
+        .windowsAt(timeUs)
+        .note.judges.slice(0, 3)
+        .map(([, late]) => late / 1000);
+    // LEVEL 1 is VERY HARD, LEVEL 2 narrows GREAT and GOOD to 12 ms; the EXRANK change does not move them.
+    expect(windowsOf(1, 0)).toEqual([8, 24, 40]);
+    expect(windowsOf(1, 6_000_000)).toEqual([8, 24, 40]);
+    expect(windowsOf(2, 0)).toEqual([8, 12, 12]);
+    // From the NONSTOP rank object on, LR2 reads the NONSTOP table's own values.
+    expect(windowsOf(1, 10_000_000)).toEqual([12, 24, 60]);
+    expect(windowsOf(2, 10_000_000)).toEqual([12, 12, 12]);
+    expect(() => resolveRuleset(chart, 'beatoraja', { lr2Gambol: 1 })).toThrow('GAMBOL is available only for LR2.');
+  });
 });
 
 describe('ruleset/beatoraja bmson judge_rank default', () => {

@@ -395,6 +395,11 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // the visualization on mid-song without a chart restart; the per-frame render loop is gated on
   // `showInvisibleNotes`. The audio horizon is left at 0: the engine recomputes its own from realtime triggers.
   if (
+    (arrangement?.play.scrollModifier === 'SOFTLANDING-1' || arrangement?.play.scrollModifier === 'SOFTLANDING-2') &&
+    arrangement.play.scrollModifierTimeline === undefined
+  )
+    throw new RangeError('A recorded SOFTLANDING requires its effective timeline.');
+  if (
     arrangement?.play.scrollModifier === 'ADD' &&
     (arrangement.play.scrollModifierTimeline === undefined ||
       arrangement.play.scrollSection === undefined ||
