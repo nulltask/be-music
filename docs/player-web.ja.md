@@ -209,7 +209,7 @@ flowchart TD
 プレイヤーはインストールできる Web アプリです。Chrome と Edge（デスクトップと Android）はインストールを提案し、iOS / iPadOS Safari の「ホーム画面に追加」ではアイコンと名前が付きます。インストールすると専用のウィンドウで開き、一度オンラインで開いたあとはネットワークなしでも起動します。譜面とテーマはドロップしたファイルから読むので、オフラインで起動してもいつもどおりプレイできます。ネットワークが要るもの（サインイン、Leaderboard、`?music=` / `?skin=` のリンク、BMS Search）はオフラインでは使えません。
 
 - **マニフェスト:** `public/manifest.webmanifest`。プレイヤーのページから、iOS 向けの `apple-touch-icon` と `apple-mobile-web-app-*` のタグと一緒にリンクします。アプリ名は "Be-Music Play"（短い名前は "Be-Music"）です。インストールしたウィンドウでどの環境かわかるように、プレビューの Worker はページとマニフェストを "Be-Music Play (Preview)"、dev サーバーは "Be-Music Play (Development)" として配信します（`packages/worker-play/src/app-title.ts`）。背景色はプレイヤーの背景色です。表示は `standalone` で、`display_override` を読むブラウザ（Chromium。Android ではシステムバーも隠れます）では `fullscreen` です。`orientation` は `any` で、縦に持ったスマートフォンには今までどおり回転のお願いが出ます。埋め込みページはマニフェストをリンクしません。
-- **アイコン:** Leaderboard と同じプレイフィールドの絵（`public/favicon.svg`）を、`pnpm --filter @be-music/app-play run build:icons` が `public/icons/` に書き出します。iOS 用の 180 px、マニフェスト用の 192 / 512 px と、同じ絵をセーフゾーンに収めた `scripts/icons/maskable.svg` から作る 192 / 512 px の maskable 版です。
+- **アイコン:** タブとマニフェストはプレイフィールドの SVG（`public/favicon.svg`）を使います。`pnpm --filter @be-music/app-play run build:icons` を実行すると、セーフゾーンに収めた maskable SVG、フォールバック用の 192 / 512 px PNG、iOS 用の 180 px アイコンを `public/icons/` に生成します。
 - **Service Worker:** `src/service-worker/service-worker.ts` を `/sw.js` としてスコープ `/` で配信します。ビルドはこれを入口の一つとして束ね、precache のマニフェストを書き込みます（`scripts/service-worker-plugin.ts`）。ルールは純粋なモジュール `src/service-worker/routes.ts` です。登録するのは本番ビルドだけで、ページの読み込みが終わってから登録します（`src/service-worker/register.ts`）。開発サーバーとテスト用フック（`?e2e=1`）の実行では登録しません。
 
 Service Worker がリクエストをどう扱うか:
