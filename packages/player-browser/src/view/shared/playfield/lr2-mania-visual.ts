@@ -19,6 +19,7 @@ export interface LR2ManiaVisual {
   readonly superLoop: number;
   readonly char: number;
   readonly heartbeat: number;
+  readonly nabeatsu: number;
 }
 
 /** The mania drawing options of `options`, or `undefined` when none is on (the playfield then skips the pass). */
@@ -31,6 +32,7 @@ export function resolveLR2ManiaVisual(options: Partial<PlayOptions> | undefined)
     superLoop: options.lr2SuperLoop ?? 0,
     char: options.lr2Char ?? 0,
     heartbeat: options.lr2Heartbeat ?? 0,
+    nabeatsu: options.lr2Nabeatsu ?? 0,
   };
   const on =
     visual.acceleration !== 'OFF' ||
@@ -39,6 +41,7 @@ export function resolveLR2ManiaVisual(options: Partial<PlayOptions> | undefined)
     visual.superLoop > 0 ||
     visual.char > 0 ||
     visual.heartbeat > 0 ||
+    visual.nabeatsu > 0 ||
     false;
   return on ? visual : undefined;
 }
@@ -59,6 +62,8 @@ export interface LR2ManiaNoteInput {
   readonly nowMs: number;
   /** Stage pixels per LR2 pixel (the stage's height over 480). */
   readonly unit: number;
+  /** NABEATSU's sway this frame, which the caller has already moved the note layer by. */
+  readonly sway?: LR2ManiaShake;
 }
 
 /** Where and how large the options draw the note. Lengths are stage pixels. */
@@ -110,6 +115,13 @@ export function placeLR2ManiaNote(visual: LR2ManiaVisual, input: LR2ManiaNoteInp
   // A note past the line stays on it before the effects below move it.
   y = Math.min(0, y);
   tailY = Math.min(0, tailY);
+  // NABEATSU's sway joins the note here, before the effects below turn or stretch it, as in LR2. The note layer is
+  // already moved by it, so it is taken back out at the end.
+  const swayX = (input.sway?.x ?? 0) / unit;
+  const swayY = (input.sway?.y ?? 0) / unit;
+  x = swayX;
+  y += swayY;
+  tailY += swayY;
   if (visual.heartbeat > 0) {
     const beat = Math.sin(wave((index + lane * 2) * 50 + now, 500));
     widthDelta += beat * visual.heartbeat * 2;
@@ -131,6 +143,9 @@ export function placeLR2ManiaNote(visual: LR2ManiaVisual, input: LR2ManiaNoteInp
     y *= 3;
     tailY *= 3;
   }
+  x -= swayX;
+  y -= swayY;
+  tailY -= swayY;
   return {
     distance: -y * unit,
     tailDistance: input.tailDistance === undefined ? undefined : -tailY * unit,
@@ -155,6 +170,27 @@ export function resolveLR2Earthquake(visual: LR2ManiaVisual | undefined, nowMs: 
   return {
     x: Math.sin(wave(now, 1000)) * visual.earthquake * unit,
     y: Math.sin(wave(now, 1234)) * visual.earthquake * 0.75 * unit,
+  };
+}
+
+/**
+ * NABEATSU: the offset of the notes and bar lines at `nowMs` of the play clock. They sway only while the clock's
+ * second (within the minute) is a multiple of 3; from 50 up, also during seconds 30–39 and seconds ending in 3. The
+ * first second of the play never sways.
+ */
+export function resolveLR2Nabeatsu(visual: LR2ManiaVisual | undefined, nowMs: number, unit: number): LR2ManiaShake {
+  if (visual === undefined || visual.nabeatsu <= 0) return STILL;
+  const now = Math.floor(nowMs);
+  const seconds = Math.trunc(now / 1000);
+  const second = seconds % 60;
+  let sways = second % 3 === 0;
+  if (visual.nabeatsu >= 50 && ((second >= 30 && second < 40) || second % 10 === 3)) sways = true;
+  if (seconds === 0 || !sways) return STILL;
+  const periodX = Math.trunc(Math.sin(wave(now, 12345)) * 200 + 1000);
+  const periodY = Math.trunc(Math.sin(wave(now, 10000)) * 300 + 1234);
+  return {
+    x: Math.sin(wave(now, periodX)) * visual.nabeatsu * unit,
+    y: Math.sin(wave(now, periodY)) * visual.nabeatsu * 0.75 * unit,
   };
 }
 

@@ -4,6 +4,7 @@ import {
   resolveLR2Earthquake,
   resolveLR2ManiaNoteIndexes,
   resolveLR2ManiaVisual,
+  resolveLR2Nabeatsu,
   type LR2ManiaNoteInput,
   type LR2ManiaVisual,
 } from './lr2-mania-visual.ts';
@@ -120,6 +121,39 @@ test('HEARTBEAT pulses the size, twice as much in width as in height', () => {
   expect(beat.distance).toBeCloseTo(200);
   const shrunk = placeLR2ManiaNote(visual({ heartbeat: 30 }), note({ lane: 0, nowMs: 375 }));
   expect(shrunk.widthDelta).toBeCloseTo(-60);
+});
+
+test('NABEATSU sways only in the seconds that are multiples of 3, and never in the first second', () => {
+  const low = visual({ nabeatsu: 40 });
+  expect(resolveLR2Nabeatsu(undefined, 3200, 1)).toEqual({ x: 0, y: 0 });
+  expect(resolveLR2Nabeatsu(low, 200, 1)).toEqual({ x: 0, y: 0 });
+  expect(resolveLR2Nabeatsu(low, 4200, 1)).toEqual({ x: 0, y: 0 });
+  expect(resolveLR2Nabeatsu(low, 13200, 1)).toEqual({ x: 0, y: 0 });
+  const swaying = resolveLR2Nabeatsu(low, 3200, 1);
+  expect(swaying.x).not.toBe(0);
+  expect(Math.abs(swaying.x)).toBeLessThanOrEqual(40);
+  expect(Math.abs(swaying.y)).toBeLessThanOrEqual(30);
+});
+
+test('NABEATSU from 50 up also sways in seconds 30–39 and seconds ending in 3', () => {
+  const high = visual({ nabeatsu: 50 });
+  expect(resolveLR2Nabeatsu(high, 13200, 1).x).not.toBe(0);
+  expect(resolveLR2Nabeatsu(high, 31200, 1).x).not.toBe(0);
+  expect(resolveLR2Nabeatsu(high, 14200, 1)).toEqual({ x: 0, y: 0 });
+});
+
+test('NABEATSU sways a note with the note layer, and the later effects act on the swayed note', () => {
+  const sway = { x: 12, y: 30 };
+  // The layer carries the sway, so a note that nothing else moves keeps its place in it.
+  const plain = placeLR2ManiaNote(visual({ nabeatsu: 40 }), note({ sway }));
+  expect(plain.distance).toBeCloseTo(200);
+  expect(plain.xOffset).toBeCloseTo(0);
+  // CHAR triples the swayed offset: (-200 + 30) × 3, less the layer's 30.
+  const tripled = placeLR2ManiaNote(visual({ nabeatsu: 40, char: 100 }), note({ lane: 1, index: 1, sway }));
+  expect(tripled.distance).toBeCloseTo(540);
+  // TORNADO sets the sideways place outright, dropping the sway.
+  const tornado = placeLR2ManiaNote(visual({ nabeatsu: 40, tornado: 100 }), note({ lane: 0, nowMs: 0, sway }));
+  expect(tornado.xOffset).toBeCloseTo(-12);
 });
 
 test('indexes notes and mines per lane in time order', () => {

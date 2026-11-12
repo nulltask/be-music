@@ -229,6 +229,8 @@ export interface PlayfieldContext extends LaneGeometryContext {
   readonly shutterLayer: Graphics;
   readonly overlay: Text;
   readonly noteLayerPool: ChildPool;
+  /** The layer the notes and bar lines draw in; LR2's NABEATSU sways it. */
+  readonly noteLayer: { readonly position: { set(x: number, y: number): void } };
   readonly bombLayerPool: ChildPool;
   readonly textLayerPool: ChildPool;
   readonly skinBinding: BeMusicGameplayBinding | undefined;

@@ -40,6 +40,8 @@ export interface PlayOptions {
    * change until the change (blue when the tempo rises, red when it falls).
    */
   bpmChangeWarning: boolean;
+  /** LR2 mania option NABEATSU (0 = OFF, 10–100): sways the notes and bar lines while the play clock's second is a multiple of 3 (from 50 up, also seconds 30–39 and seconds ending in 3). Drawing only. */
+  lr2Nabeatsu: number;
   /** LR2 mania option HEARTBEAT (0 = OFF, 10–100): pulses each note's size on a 500 ms sine, twice as much in width as in height. Drawing only. */
   lr2Heartbeat: number;
   /** LR2 mania option CHAR (0 = OFF, 10–100): draws every n-th note at three times its distance, so it falls three times as fast. Drawing only. */

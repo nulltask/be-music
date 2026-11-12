@@ -24,6 +24,7 @@ export type GUIPlayOptions = Pick<
   | 'dpFlip'
   | 'bpmGuide'
   | 'bpmChangeWarning'
+  | 'lr2Nabeatsu'
   | 'lr2Heartbeat'
   | 'lr2Char'
   | 'lr2SuperLoop'
@@ -109,6 +110,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    lr2Nabeatsu: state.lr2Nabeatsu,
     lr2Heartbeat: state.lr2Heartbeat,
     lr2Char: state.lr2Char,
     lr2SuperLoop: state.lr2SuperLoop,
@@ -204,6 +206,7 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.dpFlip = options.dpFlip;
   state.bpmGuide = options.bpmGuide;
   state.bpmChangeWarning = options.bpmChangeWarning;
+  state.lr2Nabeatsu = options.lr2Nabeatsu;
   state.lr2Heartbeat = options.lr2Heartbeat;
   state.lr2Char = options.lr2Char;
   state.lr2SuperLoop = options.lr2SuperLoop;

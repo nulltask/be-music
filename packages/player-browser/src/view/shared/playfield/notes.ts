@@ -36,6 +36,7 @@ import {
   placeLR2ManiaNote,
   resolveLR2ManiaNoteIndexes,
   resolveLR2ManiaVisual,
+  resolveLR2Nabeatsu,
   type LR2ManiaNotePlacement,
 } from './lr2-mania-visual.ts';
 import { renderLongNote } from './long-notes.ts';
@@ -184,6 +185,9 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
   const maniaIndexes = mania !== undefined ? resolveLR2ManiaNoteIndexes(ctx.play.notes, ctx.play.mineNotes) : undefined;
   const maniaUnit = ctx.playfieldSkin.stage.height / LR2_SCREEN_HEIGHT;
   const maniaNowMs = ctx.play.playClock();
+  // NABEATSU sways the notes and the bar lines together: the layer moves, and each note is told so.
+  const sway = resolveLR2Nabeatsu(mania, maniaNowMs, maniaUnit);
+  ctx.noteLayer.position.set(sway.x, sway.y);
   const placeMania =
     mania === undefined
       ? undefined
@@ -196,6 +200,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
             index: maniaIndexes?.get(object) ?? 0,
             nowMs: maniaNowMs,
             unit: maniaUnit,
+            sway,
           });
   for (let noteIndex = firstNoteIndex; noteIndex < ctx.play.notes.length; noteIndex += 1) {
     const note = ctx.play.notes[noteIndex]!;

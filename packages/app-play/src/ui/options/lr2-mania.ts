@@ -25,4 +25,5 @@ const LEVEL_ROWS = [
   ['lr2SuperLoop', 'SUPERLOOP (LR2)'],
   ['lr2Char', 'CHAR (LR2)'],
   ['lr2Heartbeat', 'HEARTBEAT (LR2)'],
+  ['lr2Nabeatsu', 'NABEATSU (LR2)'],
 ] as const;
