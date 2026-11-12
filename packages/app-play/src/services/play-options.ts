@@ -24,6 +24,7 @@ export type GUIPlayOptions = Pick<
   | 'dpFlip'
   | 'bpmGuide'
   | 'bpmChangeWarning'
+  | 'lr2Tornado'
   | 'lr2Earthquake'
   | 'lr2Acceleration'
   | 'autoScratchNotes'
@@ -105,6 +106,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    lr2Tornado: state.lr2Tornado,
     lr2Earthquake: state.lr2Earthquake,
     lr2Acceleration: state.lr2Acceleration,
     autoScratchNotes: state.autoScratchNotes,
@@ -196,6 +198,7 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.dpFlip = options.dpFlip;
   state.bpmGuide = options.bpmGuide;
   state.bpmChangeWarning = options.bpmChangeWarning;
+  state.lr2Tornado = options.lr2Tornado;
   state.lr2Earthquake = options.lr2Earthquake;
   state.lr2Acceleration = options.lr2Acceleration;
   state.autoScratchNotes = options.autoScratchNotes;

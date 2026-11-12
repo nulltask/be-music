@@ -19,4 +19,7 @@ export function buildLR2ManiaRows(this: OptionsDialog, effects: OptionContainer)
 }
 
 /** The options LR2 sets from OFF (0) to 100 in steps of 10, in its panel's order. */
-const LEVEL_ROWS = [['lr2Earthquake', 'EARTHQUAKE (LR2)']] as const;
+const LEVEL_ROWS = [
+  ['lr2Earthquake', 'EARTHQUAKE (LR2)'],
+  ['lr2Tornado', 'TORNADO (LR2)'],
+] as const;

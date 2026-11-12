@@ -450,9 +450,9 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Whether the scratch notes AUTO SCRATCH plays are drawn. Changes live; the notes still play and count.</dd>
           <dt>LR2 mania options</dt>
           <dd>
-            LR2's hidden panel options that only change how notes are drawn: ACCELERATION, EARTHQUAKE. ACCELERATION
-            picks a mode; an option with a slider is off at 0 and strongest at 100. They change live and leave judgment
-            and records as they are; beatoraja skins do not draw the per-note ones.
+            LR2's hidden panel options that only change how notes are drawn: ACCELERATION, EARTHQUAKE, TORNADO.
+            ACCELERATION picks a mode; an option with a slider is off at 0 and strongest at 100. They change live and
+            leave judgment and records as they are; beatoraja skins do not draw the per-note ones.
           </dd>
           <dt>Show invisible notes</dt>
           <dd>Shows hidden keysound objects. Changes live; judgment is unchanged.</dd>
@@ -1129,8 +1129,8 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>LR2 mania options</dt>
           <dd>
-            LR2 の隠しパネルにある、ノーツの描画だけを変えるオプションです: ACCELERATION, EARTHQUAKE。 ACCELERATION
-            はモードを選び、スライダーのものは 0 でオフ、100 で最も強くなります。プレイ中にも
+            LR2 の隠しパネルにある、ノーツの描画だけを変えるオプションです: ACCELERATION, EARTHQUAKE, TORNADO。
+            ACCELERATION はモードを選び、スライダーのものは 0 でオフ、100 で最も強くなります。プレイ中にも
             切り替えられ、判定と記録は変わりません。ノーツ単位の演出は beatoraja スキンでは描画しません。
           </dd>
           <dt>Show invisible notes</dt>

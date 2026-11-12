@@ -40,6 +40,8 @@ export interface PlayOptions {
    * change until the change (blue when the tempo rises, red when it falls).
    */
   bpmChangeWarning: boolean;
+  /** LR2 mania option TORNADO (0 = OFF, 10–100): shifts each note sideways by a sine of its lane and time, in proportion to its distance from the judge line. Drawing only. */
+  lr2Tornado: number;
   /** LR2 mania option EARTHQUAKE (0 = OFF, 10–100): sways the whole play screen on 1000 ms and 1234 ms sines. Drawing only. */
   lr2Earthquake: number;
   /** LR2 mania option ACCELERATION: remaps each note's place along the lane (drawing only). RANDOM picks ACCELERATION or DECELERATION per note; it is not the lane option. */

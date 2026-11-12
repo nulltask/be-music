@@ -79,6 +79,17 @@ test('EARTHQUAKE sways the screen on 1000 ms and 1234 ms sines', () => {
   expect(quake.y).toBeCloseTo(Math.sin((250 / 1234) * Math.PI * 2) * 40 * 0.75 * 2);
 });
 
+test('TORNADO shifts a note sideways in proportion to its distance', () => {
+  const tornado = visual({ tornado: 100 });
+  // Lane 0 at a quarter of the period: sin = 1.
+  const near = placeLR2ManiaNote(tornado, note({ lane: 0, nowMs: 250, distance: 100 }));
+  const far = placeLR2ManiaNote(tornado, note({ lane: 0, nowMs: 250, distance: 200 }));
+  expect(near.xOffset).toBeCloseTo(50);
+  expect(far.xOffset).toBeCloseTo(100);
+  expect(far.distance).toBeCloseTo(200);
+  expect(placeLR2ManiaNote(tornado, note({ lane: 0, nowMs: 0 })).xOffset).toBeCloseTo(0);
+});
+
 test('indexes notes and mines per lane in time order', () => {
   const notes = [
     { channel: '11', seconds: 1 },
