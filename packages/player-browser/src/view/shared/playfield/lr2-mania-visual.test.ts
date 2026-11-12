@@ -101,6 +101,17 @@ test('SUPERLOOP turns a note about its landing point and carries a long note wit
   expect(whole.xOffset).toBeCloseTo(0);
 });
 
+test('CHAR triples the distance of every n-th note by lane and index', () => {
+  // 100: every 2nd; 50: every 12th.
+  expect(placeLR2ManiaNote(visual({ char: 100 }), note({ lane: 1, index: 1, tailDistance: 250 }))).toMatchObject({
+    distance: 600,
+    tailDistance: 750,
+  });
+  expect(placeLR2ManiaNote(visual({ char: 100 }), note({ lane: 1, index: 0 })).distance).toBeCloseTo(200);
+  expect(placeLR2ManiaNote(visual({ char: 50 }), note({ lane: 2, index: 10 })).distance).toBeCloseTo(600);
+  expect(placeLR2ManiaNote(visual({ char: 50 }), note({ lane: 2, index: 9 })).distance).toBeCloseTo(200);
+});
+
 test('indexes notes and mines per lane in time order', () => {
   const notes = [
     { channel: '11', seconds: 1 },

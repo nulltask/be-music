@@ -23,4 +23,5 @@ const LEVEL_ROWS = [
   ['lr2Earthquake', 'EARTHQUAKE (LR2)'],
   ['lr2Tornado', 'TORNADO (LR2)'],
   ['lr2SuperLoop', 'SUPERLOOP (LR2)'],
+  ['lr2Char', 'CHAR (LR2)'],
 ] as const;

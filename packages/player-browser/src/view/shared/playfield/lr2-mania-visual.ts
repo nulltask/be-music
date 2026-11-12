@@ -17,6 +17,7 @@ export interface LR2ManiaVisual {
   readonly earthquake: number;
   readonly tornado: number;
   readonly superLoop: number;
+  readonly char: number;
 }
 
 /** The mania drawing options of `options`, or `undefined` when none is on (the playfield then skips the pass). */
@@ -27,9 +28,15 @@ export function resolveLR2ManiaVisual(options: Partial<PlayOptions> | undefined)
     earthquake: options.lr2Earthquake ?? 0,
     tornado: options.lr2Tornado ?? 0,
     superLoop: options.lr2SuperLoop ?? 0,
+    char: options.lr2Char ?? 0,
   };
   const on =
-    visual.acceleration !== 'OFF' || visual.earthquake > 0 || visual.tornado > 0 || visual.superLoop > 0 || false;
+    visual.acceleration !== 'OFF' ||
+    visual.earthquake > 0 ||
+    visual.tornado > 0 ||
+    visual.superLoop > 0 ||
+    visual.char > 0 ||
+    false;
   return on ? visual : undefined;
 }
 
@@ -111,6 +118,10 @@ export function placeLR2ManiaNote(visual: LR2ManiaVisual, input: LR2ManiaNoteInp
     tailY = turnedY + tailY - y;
     y = turnedY;
     x = turnedX;
+  }
+  if (visual.char > 0 && (lane + index) % (Math.trunc(((100 - visual.char) * 2) / 10) + 2) === 0) {
+    y *= 3;
+    tailY *= 3;
   }
   return {
     distance: -y * unit,

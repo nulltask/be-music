@@ -252,6 +252,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  lr2Char: PlayOptions['lr2Char'];
   lr2SuperLoop: PlayOptions['lr2SuperLoop'];
   lr2Tornado: PlayOptions['lr2Tornado'];
   lr2Earthquake: PlayOptions['lr2Earthquake'];
