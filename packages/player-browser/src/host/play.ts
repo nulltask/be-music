@@ -269,6 +269,7 @@ function createPlayView(
       ...(settings.dpFlip !== undefined ? { dpFlip: settings.dpFlip } : {}),
       ...(course?.view !== undefined ? { course: course.view } : {}),
       ...(settings.nonstop !== undefined ? { nonstop: settings.nonstop } : {}),
+      chartOptionProgram: options.replay ? options.replay.chart.chartOptions : settings.nonstop?.chartOptions,
       ...(source !== undefined ? { source } : {}),
       // The skin's Lua sounds play through the audio service, owned by the scene's session (not the play, which owns its
       // audio graph: a play that ended keeps ringing out after the scene leaves).

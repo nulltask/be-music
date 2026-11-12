@@ -82,6 +82,7 @@ export function paintBGA(ctx: BeMusicPlayfieldPaintContext, data: BeMusicBGAData
         rect,
         frame.stacks !== undefined && (track === 'base' || (track === 'poor' && !stack.poorOverlays)),
         stack.origins?.[track],
+        stack.bgaMode,
       );
     };
     if (stack.poorActive && !stack.poorOverlays) draw('poor');
@@ -102,7 +103,15 @@ export function placeBGAImage(
   isVideo: boolean,
   rect: BeMusicRect,
   origin?: { x: number; y: number },
+  bgaMode?: 0 | 1 | 2,
 ): BeMusicRect {
+  if (bgaMode === 0) return { ...rect };
+  if (bgaMode !== undefined && width > 0 && height > 0) {
+    const scale = bgaMode === 2 ? 0.8 : 1;
+    const w = (width * scale * rect.w) / BGA_CANVAS_SIZE;
+    const h = (height * scale * rect.h) / BGA_CANVAS_SIZE;
+    return { x: rect.x + (rect.w - w) / 2, y: rect.y, w, h };
+  }
   if (isVideo || !(width > 0) || !(height > 0) || Math.max(width, height) > BGA_CANVAS_SIZE) return { ...rect };
   const scaleX = rect.w / BGA_CANVAS_SIZE;
   const scaleY = rect.h / BGA_CANVAS_SIZE;
@@ -120,11 +129,21 @@ function drawBGAImage(
   rect: BeMusicRect,
   fillCanvas = false,
   origin?: { x: number; y: number },
+  bgaMode?: 0 | 1 | 2,
 ): void {
   const { width, height, isVideo } = imageSize(image);
-  const placed = placeBGAImage(width, height, isVideo, rect, origin);
+  const placed = placeBGAImage(width, height, isVideo, rect, origin, bgaMode);
   if (fillCanvas && (placed.w < rect.w || placed.h < rect.h)) ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  if (bgaMode === undefined) {
+    ctx.drawImage(image, placed.x, placed.y, placed.w, placed.h);
+    return;
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.x, rect.y, rect.w, rect.h);
+  ctx.clip();
   ctx.drawImage(image, placed.x, placed.y, placed.w, placed.h);
+  ctx.restore();
 }
 
 function imageSize(image: CanvasImageSource): { width: number; height: number; isVideo: boolean } {

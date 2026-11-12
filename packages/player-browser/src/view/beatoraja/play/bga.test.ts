@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from 'vite-plus/test';
 import type { BeatorajaSkin } from '@be-music/skin-beatoraja';
 import { BeatorajaBGALayer } from './bga.ts';
 
-function fakeTexture(): Texture {
-  return new Texture({ source: new TextureSource({ resource: new Uint8Array(4), width: 1, height: 1 }) });
+function fakeTexture(width = 1, height = 1): Texture {
+  return new Texture({ source: new TextureSource({ resource: new Uint8Array(width * height * 4), width, height }) });
 }
 
 function skin(): BeatorajaSkin {
@@ -608,6 +608,23 @@ it.each(['layer', 'poor'] as const)('scales independent bmson %s movie playheads
   });
   expect(video.currentTime).toBe(1);
   expect(video.playbackRate).toBe(3);
+  layer.dispose();
+  texture.destroy(true);
+});
+
+it('draws HDX source dimensions against the beatoraja destination and clips overflow', () => {
+  const texture = fakeTexture(512, 128);
+  const layer = new BeatorajaBGALayer({
+    skin: skin(),
+    textures: new Map([['wide', texture]]),
+    cues: { base: [{ seconds: 0, bmpKey: 'wide' }], layer: [], poor: [] },
+  });
+  const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
+  layer.update(0, context, false, { bgaMode: 1 });
+  const sprite = layer.container.children.find((child) => child.label === 'bga/base') as Sprite;
+  expect(sprite.mask).toBe(layer.container.children.find((child) => child.label === 'bga/clip'));
+  layer.update(0, context, false, { bgaMode: 0 });
+  expect(sprite.mask).toBeUndefined();
   layer.dispose();
   texture.destroy(true);
 });

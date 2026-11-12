@@ -201,6 +201,7 @@ export interface BeatorajaPlayViewOptions {
   /** The course the play is a stage of, with the stage being played. */
   readonly course?: CourseView;
   /** The stages of a stitched NONSTOP chart (`PlaySessionOptions.nonstop`), whose BGA cross-fades at each seam. */
+  readonly chartOptionProgram?: import('@be-music/chart-model').ChartOptionProgram;
   readonly nonstop?: { readonly stages: readonly (NonstopBGAStage & { readonly backBMP?: string })[] };
   /** Where the chart's files are, for its `#STAGEFILE`, `#BACKBMP` and `#BANNER`. */
   readonly source?: BrowserAssetSource;
@@ -467,6 +468,7 @@ export class BeatorajaPlayView implements PlayView {
       videos: new Map([...play.bgaVideos].map(([key, { video }]) => [key, video] as const)),
       cues: play.bgaTimeline,
       poorBGAMode: play.poorBGAMode,
+      chartOptionProgram: this.options.chartOptionProgram,
       ...(nonstop !== undefined && play.nonstopBGATimelines !== undefined
         ? { nonstop: { stages: nonstop.stages, timelines: play.nonstopBGATimelines } }
         : {}),

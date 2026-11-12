@@ -504,3 +504,10 @@ it('applies bmson sequence frames only to the owning NONSTOP stack during a cros
     expect(plane === 'layer' ? stacks[1]!.layerCue : stacks[1]!.poorCue).toEqual({ bmpKey: 'sequence', seconds: 20.5 });
   }
 });
+
+it('HDX BGAMODE places a cropped or oversized image relative to the viewport', () => {
+  const rect = { x: 100, y: 20, w: 256, h: 128 };
+  expect(resolveBGAImageRect(64, 64, rect, { x: 1, y: 2 }, 0)).toEqual(rect);
+  expect(resolveBGAImageRect(512, 300, rect, undefined, 1)).toEqual({ x: -28, y: 20, w: 512, h: 150 });
+  expect(resolveBGAImageRect(160, 80, rect, { x: 1, y: 2 }, 2)).toEqual({ x: 164, y: 20, w: 128, h: 32 });
+});
