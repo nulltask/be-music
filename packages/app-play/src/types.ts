@@ -252,6 +252,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  lr2Wave: PlayOptions['lr2Wave'];
   lr2SinCurve: PlayOptions['lr2SinCurve'];
   lr2Nabeatsu: PlayOptions['lr2Nabeatsu'];
   lr2Heartbeat: PlayOptions['lr2Heartbeat'];

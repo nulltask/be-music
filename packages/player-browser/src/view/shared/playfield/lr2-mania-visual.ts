@@ -21,6 +21,7 @@ export interface LR2ManiaVisual {
   readonly heartbeat: number;
   readonly nabeatsu: number;
   readonly sinCurve: number;
+  readonly wave: number;
 }
 
 /** The mania drawing options of `options`, or `undefined` when none is on (the playfield then skips the pass). */
@@ -35,6 +36,7 @@ export function resolveLR2ManiaVisual(options: Partial<PlayOptions> | undefined)
     heartbeat: options.lr2Heartbeat ?? 0,
     nabeatsu: options.lr2Nabeatsu ?? 0,
     sinCurve: options.lr2SinCurve ?? 0,
+    wave: options.lr2Wave ?? 0,
   };
   const on =
     visual.acceleration !== 'OFF' ||
@@ -45,6 +47,7 @@ export function resolveLR2ManiaVisual(options: Partial<PlayOptions> | undefined)
     visual.heartbeat > 0 ||
     visual.nabeatsu > 0 ||
     visual.sinCurve > 0 ||
+    visual.wave > 0 ||
     false;
   return on ? visual : undefined;
 }
@@ -144,6 +147,11 @@ export function placeLR2ManiaNote(visual: LR2ManiaVisual, input: LR2ManiaNoteInp
   }
   if (visual.sinCurve > 0) {
     x += Math.sin(Math.trunc(visual.sinCurve / 10) * Math.PI * pos) * visual.sinCurve;
+  }
+  if (visual.wave > 0) {
+    const swing = Math.sin(wave(lane * 100 + now, 1000));
+    y += visual.wave * pos * pos * swing;
+    tailY += visual.wave * tailPos * tailPos * swing;
   }
   if (visual.char > 0 && (lane + index) % (Math.trunc(((100 - visual.char) * 2) / 10) + 2) === 0) {
     y *= 3;

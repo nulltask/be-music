@@ -163,6 +163,14 @@ test('SINCURVE shifts a note sideways by a sine of its place along the lane', ()
   expect(placeLR2ManiaNote(visual({ sinCurve: 20 }), note({ distance: 300 })).xOffset).toBeCloseTo(-20);
 });
 
+test('WAVE shifts a note along the lane, growing with the square of its distance', () => {
+  // Lane 0 at a quarter of the 1000 ms period: sin = 1, so the note is drawn nearer the line.
+  const half = placeLR2ManiaNote(visual({ wave: 40 }), note({ lane: 0, nowMs: 250, tailDistance: 400 }));
+  expect(half.distance).toBeCloseTo(200 - 40 * 0.25);
+  expect(half.tailDistance).toBeCloseTo(400 - 40);
+  expect(placeLR2ManiaNote(visual({ wave: 40 }), note({ lane: 0, nowMs: 250, distance: 0 })).distance).toBeCloseTo(0);
+});
+
 test('indexes notes and mines per lane in time order', () => {
   const notes = [
     { channel: '11', seconds: 1 },
