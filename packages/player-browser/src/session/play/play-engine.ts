@@ -62,7 +62,7 @@ import { logger } from '../../logger.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import type { BeMusicJudgmentKind } from '../../skin/be-music/types.ts';
 import { beginExitSequence, resolvePlayEnding, type PlayEndingContext } from './play-ending.ts';
-import type { PlayPresentation } from './play-presentation.ts';
+import { advanceJudgeSideTimings, type PlayPresentation } from './play-presentation.ts';
 import { resolveSeekWaiters, settleSeekWaiters } from './play-seek.ts';
 import { applyPlayEvent } from './play-state.ts';
 import { resolveLaneInputTokens } from './play-cover-keys.ts';
@@ -365,11 +365,13 @@ function publishJudge(
   // the moment that side last hit a note — rather than mirroring the global running combo on both sides.
   // A course stage also snapshots the course combo, which an LR2 skin shows there during an expert or grade course.
   const { combo, courseCombo } = ctx.playState;
+  const timings = advanceJudgeSideTimings(ctx.judgeSideState[side].timings, judge, channel, state.deltaMs, until);
   ctx.judgeSideState[side] = {
     judge,
     until,
     combo,
     ...(courseCombo !== undefined ? { courseCombo: courseCombo.combo } : {}),
+    ...(timings !== undefined ? { timings } : {}),
   };
   // POOR / BAD judgements briefly swap the base BGA for the chart's POOR BGA. We trigger the same window for `BAD`
   // because the LR2 spec doesn't distinguish the two for the BGA channel.

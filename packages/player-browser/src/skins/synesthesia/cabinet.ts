@@ -511,6 +511,8 @@ function drawJudge(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): void
   const { graphics, layer, pool } = draw;
   frame(draw, rect);
   addHUDText(layer, runtime.secondPlayer ? '1P JUDGE' : 'JUDGE', rect.x + 10, rect.y + 6, labelStyle(), pool);
+  // The player turned the judgment counts off: the panel keeps its frame and its name.
+  if (runtime.hidesJudgeCounts) return;
   const counts = [
     ['PG', runtime.perfect],
     ['GR', runtime.great],

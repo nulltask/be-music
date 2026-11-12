@@ -312,8 +312,26 @@ function drawJudgement(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFram
     const combo = side.combo ?? 0;
     const keepsCombo = side.judge === 'PERFECT' || side.judge === 'GREAT' || side.judge === 'GOOD';
     if (keepsCombo && combo > 0) text(ctx, String(combo), x, sideY + 24, { size: 16, align: 'center' });
+    // The judge detail above the word: FAST / SLOW or the offset, the keys' and the scratch's side by side when apart.
+    const details = side.details ?? [];
+    const detailY = sideY - (resolveLanePlayLabel(runtime, side.side) ? 44 : 22);
+    details.forEach((detail, index) => {
+      const spread = details.length > 1 ? (index - (details.length - 1) / 2) * JUDGE_DETAIL_SPREAD : 0;
+      text(
+        ctx,
+        detail.lane === undefined ? detail.text : `${JUDGE_DETAIL_LANES[detail.lane]} ${detail.text}`,
+        x + spread,
+        detailY,
+        { size: 10, weight: 700, color: JUDGE_DETAIL_COLORS[detail.tone], align: 'center' },
+      );
+    });
   }
 }
+
+/** The judge detail's colours, and the names the keys' and the scratch's lead with when they are shown apart. */
+const JUDGE_DETAIL_COLORS = { fast: ACCENT, slow: DANGER, just: TEXT } as const;
+const JUDGE_DETAIL_LANES = { keys: 'KEY', scratch: 'SCR' } as const;
+const JUDGE_DETAIL_SPREAD = 84;
 
 function judgeColor(judge: string): string {
   if (judge === 'GOOD') return ACCENT;
@@ -378,6 +396,8 @@ function drawHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, wid
 
   // Judgement counts down the right edge, beside the BGA; a two-player play adds the 2P player's counts beside them.
   const columnX = width - MARGIN - 80;
+  // The player turned the judgment counts off.
+  if (runtime.hidesJudgeCounts) return;
   judgeCounts(runtime).forEach(([label, count], index) => {
     const y = COLUMN_TOP + index * 22;
     text(ctx, label, columnX, y, { size: 11, color: MUTED, weight: 700 });
@@ -495,8 +515,8 @@ function drawPortraitHUD(
     text(ctx, value, box.x, box.y + 20, { size: 22, weight: 700, maxWidth: box.w - 8, nowMs });
   });
 
-  // Judgement counts in one row: label over count.
-  judgeCounts(runtime).forEach(([label, count], index) => {
+  // Judgement counts in one row: label over count. None when the player turned them off.
+  (runtime.hidesJudgeCounts ? [] : judgeCounts(runtime)).forEach(([label, count], index) => {
     const box = counts[index]!;
     text(ctx, label, box.x, box.y, { size: 14, color: MUTED, weight: 700 });
     text(ctx, String(count ?? 0), box.x, box.y + 16, { size: 18, maxWidth: box.w - 6 });

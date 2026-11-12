@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import {
   FLASHING_GREAT_STEP_MS,
   flashingGreatColor,
+  formatJudgeDetail,
   isFlashingGreat,
   judgeDisplayWord,
   resolveJudgeWordY,
@@ -64,5 +65,26 @@ describe('resolveJudgeWordY', () => {
   it('never moves a word the skin already places past a margin against the offset', () => {
     expect(resolveJudgeWordY(400, playfield(20))).toBe(400);
     expect(resolveJudgeWordY(60, playfield(-20))).toBe(60);
+  });
+});
+
+describe('formatJudgeDetail', () => {
+  it('words FAST / SLOW for an early or a late press, and nothing for a PGREAT or a press on time', () => {
+    expect(formatJudgeDetail('FAST_SLOW', 'GREAT', -12)).toEqual({ text: 'FAST', tone: 'fast' });
+    expect(formatJudgeDetail('FAST_SLOW', 'BAD', 80)).toEqual({ text: 'SLOW', tone: 'slow' });
+    expect(formatJudgeDetail('FAST_SLOW', 'PERFECT', -3)).toBeUndefined();
+    expect(formatJudgeDetail('FAST_SLOW', 'GREAT', 0)).toBeUndefined();
+  });
+
+  it('shows the offset in milliseconds with its sign, for every judgment', () => {
+    expect(formatJudgeDetail('MS', 'GREAT', -12.4)).toEqual({ text: '-12 ms', tone: 'fast' });
+    expect(formatJudgeDetail('MS', 'PERFECT', 6.6)).toEqual({ text: '+7 ms', tone: 'slow' });
+    expect(formatJudgeDetail('MS', 'PERFECT', 0.3)).toEqual({ text: '±0 ms', tone: 'just' });
+    expect(formatJudgeDetail('MS', 'PERFECT', -0.3)).toEqual({ text: '±0 ms', tone: 'just' });
+  });
+
+  it('has nothing for an offset that is not finite', () => {
+    expect(formatJudgeDetail('MS', 'GREAT', Number.NaN)).toBeUndefined();
+    expect(formatJudgeDetail('FAST_SLOW', 'GREAT', Number.POSITIVE_INFINITY)).toBeUndefined();
   });
 });

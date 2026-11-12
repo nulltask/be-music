@@ -105,7 +105,7 @@ describe('resolvePlayfieldParts', () => {
     expect(parts.laneCovers.rect).toEqual(parts.lanes.rect);
     expect(parts.judgeLine.rect).toEqual({ x: 20, y: 464, w: 320, h: 2 });
     expect(parts.bombs.rect).toEqual({ x: 20, y: 438, w: 320, h: 52 });
-    expect(parts.judgmentDisplay.rect).toEqual({ x: 20, y: 324, w: 320, h: 80 });
+    expect(parts.judgmentDisplay.rect).toEqual({ x: 20, y: 308, w: 320, h: 96 });
   });
 
   it('draws the judge line once per lane run', () => {

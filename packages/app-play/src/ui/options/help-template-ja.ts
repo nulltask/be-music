@@ -391,6 +391,18 @@ export const OPTIONS_HELP_JA = html`
         <dd>レーンの明るさ (%)。ノーツ、小節線、カバーの明るさは変わりません。プレイ中にも変えられます。</dd>
         <dt>Judgment display (AC)</dt>
         <dd>OFF にすると、プレイ画面に判定文字とコンボを表示しません。プレイ中にも切り替えられます。</dd>
+        <dt>Judge detail (built-in skins)</dt>
+        <dd>
+          内蔵スキンで、判定文字の上にそのタイミングを表示します。FAST / SLOW か、ミリ秒のずれ (早いと負、遅いと正)
+          です。プレイ中にも切り替えられます。
+        </dd>
+        <dt>Judge detail: keys and scratch apart</dt>
+        <dd>スクラッチと鍵盤の最後のタイミングを横に並べて表示します。片方の判定でもう片方が消えません。</dd>
+        <dt>Judgment counts (built-in skins)</dt>
+        <dd>
+          オフにすると、プレイ中に判定数、FAST / SLOW
+          の数、タイミングのメーターを描きません。プレイ中にも切り替えられます。
+        </dd>
         <dt>Judgment position (built-in skins, %)</dt>
         <dd>
           内蔵スキンの判定文字とコンボを、レーンの高さに対する割合 (%) で上 (-) または下 (+) に動かします。

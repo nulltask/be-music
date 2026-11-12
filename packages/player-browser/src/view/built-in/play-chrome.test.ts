@@ -5,6 +5,7 @@ import {
   renderBuiltInChrome,
   resolveLaneGeometry,
   resolveBeMusicLayout,
+  resolveJudgeDetails,
   resolveJudgeOffsetY,
   collectBGATargets,
   type LaneGeometryContext,
@@ -207,4 +208,31 @@ test('the judgment position is a share of the lanes’ height, down for a positi
   expect(resolveJudgeOffsetY(0, 40, 440)).toBe(0);
   expect(resolveJudgeOffsetY(25, 40, 440)).toBe(100);
   expect(resolveJudgeOffsetY(-30, 40, 440)).toBe(-120);
+});
+
+test('the judge detail follows the option: off, the plate’s own timing, or the keys’ and the scratch’s apart', () => {
+  const timings = {
+    last: { judge: 'GREAT' as const, deltaMs: -12, until: 10 },
+    keys: { judge: 'GREAT' as const, deltaMs: -12, until: 10 },
+    scratch: { judge: 'GOOD' as const, deltaMs: 30, until: 9.8 },
+  };
+  expect(resolveJudgeDetails({ judgeDetail: 'OFF', judgeDetailSplit: false }, timings, 9.5)).toEqual([]);
+  expect(resolveJudgeDetails(undefined, timings, 9.5)).toEqual([]);
+  expect(resolveJudgeDetails({ judgeDetail: 'FAST_SLOW', judgeDetailSplit: false }, timings, 9.5)).toEqual([
+    { text: 'FAST', tone: 'fast' },
+  ]);
+  expect(resolveJudgeDetails({ judgeDetail: 'MS', judgeDetailSplit: false }, timings, 9.5)).toEqual([
+    { text: '-12 ms', tone: 'fast' },
+  ]);
+  // Apart: the scratch's first, then the keys', each while it still shows.
+  expect(resolveJudgeDetails({ judgeDetail: 'FAST_SLOW', judgeDetailSplit: true }, timings, 9.5)).toEqual([
+    { text: 'SLOW', tone: 'slow', lane: 'scratch' },
+    { text: 'FAST', tone: 'fast', lane: 'keys' },
+  ]);
+  expect(resolveJudgeDetails({ judgeDetail: 'FAST_SLOW', judgeDetailSplit: true }, timings, 9.9)).toEqual([
+    { text: 'FAST', tone: 'fast', lane: 'keys' },
+  ]);
+  // An untimed judgment on the plate (a miss) shows no detail of its own.
+  expect(resolveJudgeDetails({ judgeDetail: 'MS', judgeDetailSplit: false }, { keys: timings.keys }, 9.5)).toEqual([]);
+  expect(resolveJudgeDetails({ judgeDetail: 'MS', judgeDetailSplit: false }, undefined, 9.5)).toEqual([]);
 });

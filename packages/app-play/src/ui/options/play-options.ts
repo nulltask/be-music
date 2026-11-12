@@ -678,6 +678,19 @@ function buildNoteDisplayRows(this: OptionsDialog, effects: OptionContainer): vo
   effects
     .addBinding(this.guiState, 'laneBrightness', { label: 'Lane brightness (AC)', min: 0, max: 100, step: 10 })
     .on('change', ({ value }) => this.setPlayOptions({ laneBrightness: value }));
+  // The built-in skins' judge detail and judgment counts. AC 34 lists the timing display, its keys / scratch split and
+  // the realtime judgment counts; a beatoraja skin has the first and the last as its own options.
+  selectBinding(effects, this.guiState, 'judgeDetail', 'Judge detail (built-in skins)', {
+    OFF: 'OFF',
+    'FAST / SLOW': 'FAST_SLOW',
+    '±ms': 'MS',
+  }).on('change', ({ value }) => this.setPlayOptions({ judgeDetail: value }));
+  effects
+    .addBinding(this.guiState, 'judgeDetailSplit', { label: 'Judge detail: keys and scratch apart' })
+    .on('change', ({ value }) => this.setPlayOptions({ judgeDetailSplit: value }));
+  effects
+    .addBinding(this.guiState, 'judgeCounts', { label: 'Judgment counts (built-in skins)' })
+    .on('change', ({ value }) => this.setPlayOptions({ judgeCounts: value }));
   // The built-in skins' judgment and combo, moved up (-) or down (+) the lanes. LR2 and beatoraja skins place their own.
   effects
     .addBinding(this.guiState, 'judgePosition', {

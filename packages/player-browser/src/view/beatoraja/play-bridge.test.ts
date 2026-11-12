@@ -913,22 +913,22 @@ describe('BeatorajaPlayBridge — JUDGE_1P_OFFSET_MS (ref 525)', () => {
     expect(bridge.resolveNumberValue(525)).toBe(0);
   });
 
-  it('returns the signed deltaMs of the most recent timing sample', () => {
+  it('returns the most recent timing sample with beatoraja’s sign: positive when early', () => {
     const harness = createHarness();
     harness.judge({ judge: 'PERFECT', combo: 1, channel: '11', deltaMs: -8 });
-    expect(harness.bridge.resolveNumberValue(525)).toBe(-8);
+    expect(harness.bridge.resolveNumberValue(525)).toBe(8);
     harness.judge({ judge: 'GREAT', combo: 2, channel: '11', deltaMs: 22 });
-    expect(harness.bridge.resolveNumberValue(525)).toBe(22);
+    expect(harness.bridge.resolveNumberValue(525)).toBe(-22);
     harness.judge({ judge: 'GOOD', combo: 3, channel: '11', deltaMs: -45 });
-    expect(harness.bridge.resolveNumberValue(525)).toBe(-45);
+    expect(harness.bridge.resolveNumberValue(525)).toBe(45);
   });
 
   it('truncates fractional ms toward zero so the digit display picks an integer cleanly', () => {
     const harness = createHarness();
     harness.judge({ judge: 'PERFECT', combo: 1, channel: '11', deltaMs: -3.7 });
-    expect(harness.bridge.resolveNumberValue(525)).toBe(-3);
+    expect(harness.bridge.resolveNumberValue(525)).toBe(3);
     harness.judge({ judge: 'GREAT', combo: 2, channel: '11', deltaMs: 19.4 });
-    expect(harness.bridge.resolveNumberValue(525)).toBe(19);
+    expect(harness.bridge.resolveNumberValue(525)).toBe(-19);
   });
 });
 

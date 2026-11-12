@@ -208,9 +208,28 @@ Two of AC 34's detail options sit in the Options dialog's View tab, under Effect
 
 Source: AC 34 [detail options](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html). Tracked in [#1136](https://github.com/nulltask/be-music/issues/1136) and [#1135](https://github.com/nulltask/be-music/issues/1135).
 
+## Judge detail and judgment counts
+
+Three settings on the View tab's Effects page show a judgment's timing on the built-in skins. All apply live and change no record.
+
+- **Judge detail (built-in skins)**: **OFF** (the default), **FAST / SLOW** or **±ms**. It is drawn above the judgment, in the colours the judge panel counts FAST and SLOW in.
+  - **FAST / SLOW** words an early press FAST and a late one SLOW. A PGREAT and a press on the note's time show nothing.
+  - **±ms** shows the offset rounded to a millisecond for every timed judgment, a PGREAT included: negative when early, positive when late, the sign of the EARLY–LATE meter and of the timing graph.
+  - A judgment without a timing (a missed note, an AUTO hit, a mine) shows no detail.
+- **Judge detail: keys and scratch apart**: the detail shows the scratch's last timing and the keys' side by side (`SCR` and `KEY`), each for as long as its own judgment would show, so a scratch judgment does not replace the keys' reading.
+- **Judgment counts (built-in skins)**: off draws no count of PGREAT to POOR, no FAST / SLOW count and no EARLY–LATE meter during the play. The judge panel keeps its frame. The result screen is unchanged.
+
+Sources and what they leave open:
+
+- AC 34's detail options list 判定タイミング表示位置 (whether the timing is shown, and where), 判定タイミング分割表示 (keys and scratch shown apart) and 判定の数リアルタイム表示 (the counts during play) on its [options page](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html) [V]. The page lists no choices, positions or pictures, so the placement and the wording here are Be-Music's own [C].
+- beatoraja has the first and the last as options of its stock play skin, not of the player: **Judge Detail** (Off, EARLY/LATE, +-ms) and **Judge Count** (Off, On). A beatoraja skin keeps its own, and an LR2 skin has neither.
+- A beatoraja skin's judge timing number (525) now has beatoraja's sign, positive when early: `JudgeManager` keeps the note's time minus the press's ([L690](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L690), [L719-L721](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L719-L721)) [V]. It read with the opposite sign before.
+
+The FAST and SLOW counts are unchanged: GREAT and GOOD only, under every ruleset. Tracked in [#1134](https://github.com/nulltask/be-music/issues/1134).
+
 ## Live display options
 
-A play reads its options when it starts. The ones that only change what is drawn are also followed during the play: changing one in the Options dialog takes effect on the next frame. They are the auto scratch note display, lane brightness, judgment display and position, the judge area, mark processed notes, the score target and its rate, and LR2's mania drawing options (ACCELERATION to SIDEJUMP); `LIVE_DISPLAY_PLAY_OPTION_KEYS` in `@be-music/player-scene-model` lists them. A change is recorded in the replay's `play.optionChanges` at its chart time, like the other options a play takes live (hi-speed, covers, LIFT, judge timing). Every other option, including LR2's chart generators and GAMBOL, stays as the play started.
+A play reads its options when it starts. The ones that only change what is drawn are also followed during the play: changing one in the Options dialog takes effect on the next frame. They are the auto scratch note display, lane brightness, judgment display and position, the judge detail and the judgment counts, the judge area, mark processed notes, the score target and its rate, and LR2's mania drawing options (ACCELERATION to SIDEJUMP); `LIVE_DISPLAY_PLAY_OPTION_KEYS` in `@be-music/player-scene-model` lists them. A change is recorded in the replay's `play.optionChanges` at its chart time, like the other options a play takes live (hi-speed, covers, LIFT, judge timing). Every other option, including LR2's chart generators and GAMBOL, stays as the play started.
 
 ## ANY KEY
 

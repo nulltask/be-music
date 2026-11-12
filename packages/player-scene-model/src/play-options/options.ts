@@ -40,6 +40,12 @@ export interface PlayOptions {
    * change until the change (blue when the tempo rises, red when it falls).
    */
   bpmChangeWarning: boolean;
+  /** Whether the built-in skins show the judgment counts during a play. */
+  judgeCounts: boolean;
+  /** Whether the judge detail shows the keys' and the scratch's timing apart. */
+  judgeDetailSplit: boolean;
+  /** What the built-in skins show of a judgment's timing beside it: nothing, FAST or SLOW, or the offset in milliseconds. */
+  judgeDetail: 'OFF' | 'FAST_SLOW' | 'MS';
   /** The score rate the SCORE RATE target paces towards, in percent. */
   scoreTargetRate: number;
   /** The built-in skins' judgment and combo moved down the lanes by this percentage of their height (negative is up). */

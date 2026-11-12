@@ -1,3 +1,4 @@
+import type { PlayJudgeSideState } from './play-presentation.ts';
 import { collectLR2SortObjects } from './lr2-sort-objects.ts';
 import {
   buildChartOptionTimeline,
@@ -78,7 +79,6 @@ import {
   resolveOptionSource,
   type GaugeType,
   type RulesetId,
-  type JudgmentKind,
   type ScoreSummary,
 } from '@be-music/player-engine/ruleset';
 import { collectChartVolumeMultipliers } from '../../chart/play-audio.ts';
@@ -237,7 +237,7 @@ export interface PlayChartContext {
   readonly laneReleasedAt: Map<string, number>;
   lastJudge: string;
   lastJudgeUntil: number;
-  judgeSideState: Record<'1P' | '2P', { judge: JudgmentKind | ''; until: number; combo: number; courseCombo?: number }>;
+  judgeSideState: Record<'1P' | '2P', PlayJudgeSideState>;
   gaugeState: PlayerGaugeSummary;
   fastCount: number;
   slowCount: number;

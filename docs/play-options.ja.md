@@ -208,9 +208,28 @@ Options ダイアログの View タブの Effects に、AC 34 の詳細オプシ
 
 出典: AC 34 [詳細オプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。[#1136](https://github.com/nulltask/be-music/issues/1136) と [#1135](https://github.com/nulltask/be-music/issues/1135) で追跡しています。
 
+## 判定の詳細と判定数の表示
+
+View タブの Effects ページにある 3 つの設定で、内蔵スキンに判定のタイミングを表示します。どれもプレイ中に反映し、記録は変わりません。
+
+- **Judge detail (built-in skins)**: **OFF**（既定）、**FAST / SLOW**、**±ms** のいずれかです。判定文字の上に、判定パネルが FAST と SLOW を数えるときの色で描きます。
+  - **FAST / SLOW** は、早い打鍵を FAST、遅い打鍵を SLOW と表示します。PGREAT と、ノーツの時刻ちょうどの打鍵には何も表示しません。
+  - **±ms** は、タイミングのある判定すべて（PGREAT を含む）について、ずれをミリ秒に丸めて表示します。早いと負、遅いと正で、EARLY–LATE のメーターやタイミンググラフと同じ符号です。
+  - タイミングのない判定（見逃し、AUTO の打鍵、地雷）には表示しません。
+- **Judge detail: keys and scratch apart**: スクラッチの最後のタイミングと鍵盤の最後のタイミングを、`SCR` と `KEY` として横に並べて表示します。それぞれ自分の判定が表示されている間だけ出るので、スクラッチの判定で鍵盤の表示が消えません。
+- **Judgment counts (built-in skins)**: オフにすると、プレイ中に PGREAT から POOR までの判定数、FAST / SLOW の数、EARLY–LATE のメーターを描きません。判定パネルの枠は残ります。リザルト画面は変わりません。
+
+出典と、出典からはわからない点:
+
+- AC 34 の詳細オプションには「判定タイミング表示位置」（表示の有無と位置）、「判定タイミング分割表示」（鍵盤とスクラッチで分割）、「判定の数リアルタイム表示」（プレー中の判定の数）があります（[オプションのページ](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)）[V]。ページには選択肢、位置、画像が載っていないため、ここでの配置と文言は Be-Music 独自のものです [C]。
+- beatoraja では、最初と最後の 2 つはプレイヤーの設定ではなく標準のプレイスキンのオプションです。**Judge Detail**（Off、EARLY/LATE、+-ms）と **Judge Count**（Off、On）です。beatoraja スキンは自分のオプションのままで、LR2 スキンにはどちらもありません。
+- beatoraja スキンの判定タイミングの数値（525）を、beatoraja と同じ符号（早いと正）にしました。`JudgeManager` はノーツの時刻から打鍵の時刻を引いた値を持ちます（[L690](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L690)、[L719-L721](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L719-L721)）[V]。これまでは逆の符号で表示していました。
+
+FAST と SLOW の数え方は変わりません。どのルールでも GREAT と GOOD だけを数えます。[#1134](https://github.com/nulltask/be-music/issues/1134) で追跡しています。
+
 ## プレイ中に反映する表示オプション
 
-プレイはオプションを開始時に読みます。描画だけを変えるオプションはプレイ中にも追従し、Options ダイアログで変えると次のフレームから反映します。対象は、オートスクラッチのノーツ表示、レーンの明るさ、判定文字の表示と位置、判定範囲、処理済みノーツ、スコアターゲットとその割合、LR2 マニアの描画オプション（ACCELERATION から SIDEJUMP まで）です。一覧は `@be-music/player-scene-model` の `LIVE_DISPLAY_PLAY_OPTION_KEYS` にあります。変更は、プレイ中に反映するほかのオプション（ハイスピード、カバー、LIFT、判定タイミング）と同じく、譜面時刻とともにリプレイの `play.optionChanges` に記録します。それ以外のオプションは、LR2 の譜面生成と GAMBOL を含めて、プレイ開始時のままです。
+プレイはオプションを開始時に読みます。描画だけを変えるオプションはプレイ中にも追従し、Options ダイアログで変えると次のフレームから反映します。対象は、オートスクラッチのノーツ表示、レーンの明るさ、判定文字の表示と位置、判定の詳細と判定数の表示、判定範囲、処理済みノーツ、スコアターゲットとその割合、LR2 マニアの描画オプション（ACCELERATION から SIDEJUMP まで）です。一覧は `@be-music/player-scene-model` の `LIVE_DISPLAY_PLAY_OPTION_KEYS` にあります。変更は、プレイ中に反映するほかのオプション（ハイスピード、カバー、LIFT、判定タイミング）と同じく、譜面時刻とともにリプレイの `play.optionChanges` に記録します。それ以外のオプションは、LR2 の譜面生成と GAMBOL を含めて、プレイ開始時のままです。
 
 ## ANY KEY
 

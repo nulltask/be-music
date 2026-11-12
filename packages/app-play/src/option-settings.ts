@@ -102,6 +102,9 @@ export interface OptionSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  judgeCounts: PlayerGUIState['judgeCounts'];
+  judgeDetailSplit: PlayerGUIState['judgeDetailSplit'];
+  judgeDetail: PlayerGUIState['judgeDetail'];
   scoreTargetRate: PlayerGUIState['scoreTargetRate'];
   judgePosition: PlayerGUIState['judgePosition'];
   judgeDisplay: PlayerGUIState['judgeDisplay'];
@@ -327,6 +330,9 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
   assign(settings, 'bpmChangeWarning', booleanOf(raw.bpmChangeWarning));
+  assign(settings, 'judgeCounts', resolvePlayOptionValue('judgeCounts', raw.judgeCounts));
+  assign(settings, 'judgeDetailSplit', resolvePlayOptionValue('judgeDetailSplit', raw.judgeDetailSplit));
+  assign(settings, 'judgeDetail', resolvePlayOptionValue('judgeDetail', raw.judgeDetail));
   assign(settings, 'scoreTargetRate', resolvePlayOptionValue('scoreTargetRate', raw.scoreTargetRate));
   assign(settings, 'judgePosition', resolvePlayOptionValue('judgePosition', raw.judgePosition));
   assign(settings, 'judgeDisplay', resolvePlayOptionValue('judgeDisplay', raw.judgeDisplay));
@@ -628,6 +634,9 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('dpFlip');
   assignState('bpmGuide');
   assignState('bpmChangeWarning');
+  assignState('judgeCounts');
+  assignState('judgeDetailSplit');
+  assignState('judgeDetail');
   assignState('scoreTargetRate');
   assignState('judgePosition');
   assignState('judgeDisplay');
@@ -784,6 +793,9 @@ export function captureOptionSettings(
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    judgeCounts: state.judgeCounts,
+    judgeDetailSplit: state.judgeDetailSplit,
+    judgeDetail: state.judgeDetail,
     scoreTargetRate: state.scoreTargetRate,
     judgePosition: state.judgePosition,
     judgeDisplay: state.judgeDisplay,

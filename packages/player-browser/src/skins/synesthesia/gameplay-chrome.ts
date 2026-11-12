@@ -408,7 +408,7 @@ export function renderSynesthesiaChrome({
     drawChartPlate(front, overlayLayer, runtime, accent, overlayLayerPool);
     drawScorePanel(front, overlayLayer, runtime, accent, overlayLayerPool);
     // The judge tally owns the side column on the right edge.
-    drawJudgeTally(front, overlayLayer, runtime, STAGE_SIDE_COLUMN.x, overlayLayerPool);
+    if (!runtime.hidesJudgeCounts) drawJudgeTally(front, overlayLayer, runtime, STAGE_SIDE_COLUMN.x, overlayLayerPool);
     drawHeader(front, overlayLayer, runtime, layout, accent, pulse, overlayLayerPool);
   }
   const judgeY = resolveSkinJudgeWordY(layout);
@@ -1432,6 +1432,8 @@ function drawPortraitHUD(
     ['MAX', SYN_MIST, runtime.maxCombo],
   ];
   const cellW = (tally.w - 12) / 4;
+  // The player turned the judgment counts off: the tally keeps its frame.
+  if (runtime.hidesJudgeCounts) return;
   cells.forEach(([label, color, count], index) => {
     const x = tally.x + 6 + (index % 4) * cellW;
     const y = tally.y + 6 + Math.floor(index / 4) * 28;

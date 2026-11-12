@@ -12,6 +12,18 @@ export function sameJudgmentDisplay(
 
 function sameWord(a: BeMusicJudgmentWord, b: BeMusicJudgmentWord): boolean {
   return (
-    a.text === b.text && a.color === b.color && a.x === b.x && a.y === b.y && a.mode === b.mode && a.combo === b.combo
+    a.text === b.text &&
+    a.color === b.color &&
+    a.x === b.x &&
+    a.y === b.y &&
+    a.mode === b.mode &&
+    a.combo === b.combo &&
+    sameDetails(a.details, b.details)
   );
+}
+
+function sameDetails(a: BeMusicJudgmentWord['details'], b: BeMusicJudgmentWord['details']): boolean {
+  if (a === b) return true;
+  if (a === undefined || b === undefined || a.length !== b.length) return false;
+  return a.every((detail, index) => detail.text === b[index]!.text && detail.color === b[index]!.color);
 }
