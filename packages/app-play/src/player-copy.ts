@@ -141,6 +141,23 @@ const en = {
     signInFirst: 'Sign in first.',
     somethingWrong: (error: string) => `Something went wrong (${error}).`,
   },
+  record: {
+    full: 'Record: score, lamp and play count are saved · Leaderboard: main board',
+    assisted: (assistClass: string, lamp: string, options: string) =>
+      `${assistClass} (${options}): ${lamp} and play count only, no score · Leaderboard: assisted board`,
+    notSaved: (options: string) => `Not saved (${options}): no record · Leaderboard: stored, not ranked`,
+    conditional: (options: string, consequence: string) => `— on a chart ${options} changes: ${consequence}`,
+    autoPlay: 'AUTO PLAY: no record, and nothing is sent to the Leaderboard',
+    twoPlayer: 'Two-player BATTLE: the replay is kept, the record and the ranking are not',
+    bmsonTotal: 'bmson TOTAL 0 without recovery: no record · Leaderboard: stored, not ranked',
+    lampKept: 'lamp',
+    lampCap: (lamp: string) => `lamp up to ${lamp}`,
+    lampReplace: (lamp: string) => `${lamp} lamp`,
+    separateLamp: (slot: string) => ` (kept apart as ${slot})`,
+    classes: { light: 'LIGHT ASSIST', assist: 'ASSIST' },
+    slots: { 'd-battle': 'D-BATTLE', 'sp-to-dp': 'SP TO DP', extra: 'EXTRA MODE' },
+    board: { main: 'main board', assisted: 'assisted board' },
+  },
   replay: {
     invalid: (message: string) => `Replay: invalid replay (${message})`,
     notLoaded: (title: string) => `Replay: chart not loaded (${title})`,
@@ -192,6 +209,7 @@ const en = {
       'bmson-total': 'bmson TOTAL 0 used no recovery',
       tempo: 'a play at another tempo is practice',
       'course-stage': 'a course stage ranks with its course',
+      'no-save': 'an option that saves no record was on',
       unreleased: 'a made course is ranked only once flagged for IR, and a random course never is',
     },
     skipped: {
@@ -505,6 +523,23 @@ const ja: typeof en = {
     signInFirst: '先にログインしてください。',
     somethingWrong: (error) => `問題が発生しました（${error}）。`,
   },
+  record: {
+    full: '記録: スコア、ランプ、プレイ回数を保存します · Leaderboard: メインボード',
+    assisted: (assistClass, lamp, options) =>
+      `${assistClass}（${options}）: ${lamp}とプレイ回数のみ、スコアは保存しません · Leaderboard: アシストボード`,
+    notSaved: (options) => `保存しません（${options}）: 記録なし · Leaderboard: 保存のみ、ランキング外`,
+    conditional: (options, consequence) => `— ${options} が譜面を変える場合: ${consequence}`,
+    autoPlay: 'オートプレイ: 記録なし、Leaderboard にも送りません',
+    twoPlayer: '2 人プレイの BATTLE: リプレイは残り、記録とランキングは残りません',
+    bmsonTotal: 'bmson の TOTAL 0 で回復なし: 記録なし · Leaderboard: 保存のみ、ランキング外',
+    lampKept: 'ランプ',
+    lampCap: (lamp) => `ランプ（${lamp} まで）`,
+    lampReplace: (lamp) => `${lamp} ランプ`,
+    separateLamp: (slot) => `（${slot} として別に保存）`,
+    classes: { light: 'LIGHT ASSIST', assist: 'ASSIST' },
+    slots: { 'd-battle': 'D-BATTLE', 'sp-to-dp': 'SP TO DP', extra: 'EXTRA MODE' },
+    board: { main: 'メインボード', assisted: 'アシストボード' },
+  },
   replay: {
     invalid: (message) => `リプレイ: 不正なリプレイです（${message}）`,
     notLoaded: (title) => `リプレイ: 譜面が読み込まれていません（${title}）`,
@@ -554,6 +589,7 @@ const ja: typeof en = {
       'bmson-total': 'bmson の TOTAL 0 で回復なし',
       tempo: '別のテンポでのプレイは練習です',
       'course-stage': 'コースの 1 ステージはコースといっしょに順位が付きます',
+      'no-save': '記録を保存しないオプションを使いました',
       unreleased: '自作コースは IR に登録するまで、ランダムコースは常にランキングに入りません',
     },
     skipped: {

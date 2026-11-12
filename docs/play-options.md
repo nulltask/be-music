@@ -83,6 +83,18 @@ Unassisted: MIRROR, RANDOM, S-RANDOM, R-RANDOM, SYNCHRONIZE / SYMMETRY RANDOM, M
 
 **Clear lamps.** LIGHT ASSIST EASY is its own lamp, between ASSIST EASY and EASY ([#603](https://github.com/nulltask/be-music/issues/603)). beatoraja's ASSIST EASY gauge clears on it, as beatoraja's `ClearType` maps gauge 0 to LightAssistEasy. AC's ASSISTED EASY gauge keeps ASSIST EASY. Stored lamp ranks are append-only: ranks 0 to 9 keep their lamps, LIGHT ASSIST EASY is 10, and ordering uses the lamp order (`compareClearLamps`, `compareClearLampRanks`), not the stored number. beatoraja skins light op 1101 for it, op 1100 for ASSIST EASY, and read clear index 3 for it and 2 for ASSIST EASY; LR2 skins fold both into EASY.
 
+### What the options will do, before a play
+
+The policy is also read before a play, from the options picked (`resolvePlannedRecordPolicy` in `@be-music/player-engine/records`). It builds the facts a replay would record and runs them through the same classifier and resolver, so the line before a play and the record after it cannot disagree.
+
+Some findings depend on the chart: BPM GUIDE on a chart whose BPM changes, a REMOVE or LEGACY modifier on a chart it changes, EXTRA NOTE and 7 TO 9 on a chart they apply to, and the 2P side's AUTO SCRATCH or beatoraja lane option on a chart with a 2P side. The chart is not prepared yet, so the plan is classified twice, once as if none of these arises and once as if all do, and a finding only in the second is worded as conditional ("on a chart BPM GUIDE changes: …").
+
+- **Options dialog.** The Play tab's **Record with these options** row, under the judgment windows, states the line and follows every change.
+- **Select screen.** When an option changed on the select screen changes the line, the status line shows it, under every skin family. LR2 and beatoraja skins keep their own lamps and panels.
+- **Result screen.** The status line states what the play did to its record, from the replay's policy: `Result: <title> — <line>`. A two-player BATTLE, a PRACTICE play, an AUTO play and a bmson chart with TOTAL 0 and no recovery each say why they keep no record. The Leaderboard's line that follows names the board a ranked play is on (main or assisted), and a stored play says why it is not ranked.
+
+The line names the assist class, the options that cause it, the lamp under the judge ruleset (up to EASY under LR2, LIGHT ASSIST EASY or ASSIST EASY under beatoraja, ASSIST EASY under `____`), and the Leaderboard board. It describes a single play of the chart; a course's own limits are not applied. Tracked in [#1140](https://github.com/nulltask/be-music/issues/1140).
+
 ## START BPM HS-FIX
 
 Choose **HS-FIX → STARTBPM** in the Options dialog. The default remains **OFF**. START anchors the chosen hi-speed to the chart header's starting BPM, separately from MAX, MIN and MAIN. When `#BASEBPM` supplies the reference speed, the multiplier is `reference BPM / starting BPM`; a tempo event at beat zero does not replace the header's starting BPM. Subsequent BPM changes still change the scroll rate. This is an ordinary visual speed option and preserves existing score, assist and course eligibility.

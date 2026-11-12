@@ -164,6 +164,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Target score rate (%)': 'ターゲットのスコアレート (%)',
   'Ghost mode': 'ゴーストの表示',
   'Ghost status': 'ゴーストの状態',
+  'Record with these options': 'このオプションでの記録',
   'Ghost replay file…': 'ゴーストのリプレイファイル…',
   // Key config
   ...Object.fromEntries([

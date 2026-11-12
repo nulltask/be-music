@@ -29,6 +29,7 @@ import { wireAccountDialogs } from './account-dialogs.ts';
 import { defaultStorage } from './player-storage.ts';
 import { leaderboardLink } from './service-links.ts';
 import type { BeMusicCourseReplay } from '@be-music/player-engine/replay';
+import { resolveReplayRecordPolicy } from '@be-music/player-engine/records';
 import {
   describeCourseLeaderboardResult,
   describeLeaderboardResult,
@@ -265,7 +266,9 @@ export class LeaderboardPanel {
     const playedRuleset = replay.play.judgeRuleset ?? 'lr2';
     void submitToLeaderboard(prepared.submission, { client: describeSubmittingClient(this.host.recorder) })
       .then((result) => {
-        this.host.setStatus(describeLeaderboardResult(result, playedRuleset));
+        this.host.setStatus(
+          describeLeaderboardResult(result, playedRuleset, resolveReplayRecordPolicy(replay).leaderboard),
+        );
         // Refresh the account row; the submission may have changed what it shows.
         void this.refreshAccount();
       })

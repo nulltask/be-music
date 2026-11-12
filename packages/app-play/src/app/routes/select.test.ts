@@ -197,6 +197,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     search: { openFromPointer: vi.fn() },
     optionsDialog: {
       refreshPlayOptionControllers: vi.fn(),
+      refreshRecordConsequence: vi.fn(() => 'record'),
       scheduleFirstRunResolutionDetect: vi.fn(),
       setGhostAvailability: vi.fn(),
     },
@@ -566,6 +567,15 @@ describe('SelectRoute: what the screen tells the app', () => {
 
     edit({ hiSpeed: 3.5 });
     expect(h.deps.rememberHiSpeed).toHaveBeenCalledWith(3.5, 'select');
+
+    // The status line says what the options do to the record when that changes, and not otherwise.
+    expect(h.deps.setStatus).not.toHaveBeenCalledWith('record');
+    vi.mocked(h.deps.optionsDialog.refreshRecordConsequence).mockReturnValue('LIGHT ASSIST');
+    edit({ autoScratch1P: true });
+    expect(h.deps.setStatus).toHaveBeenLastCalledWith('LIGHT ASSIST');
+    const calls = vi.mocked(h.deps.setStatus).mock.calls.length;
+    edit({ hiSpeed: 4 });
+    expect(vi.mocked(h.deps.setStatus).mock.calls.length).toBe(calls);
   });
 
   test('Escape at the root asks first, and staying keeps the screen', async () => {

@@ -158,6 +158,8 @@ export class SelectRoute {
   private readonly setStatus: SelectRouteDeps['setStatus'];
   private readonly showChartDiagnostics: SelectRouteDeps['showChartDiagnostics'];
   private readonly unlockReplayOptions: SelectRouteDeps['unlockReplayOptions'];
+  /** The record consequence last read from the options, so the status line says it only when it changes. */
+  private recordConsequenceShown: string | undefined;
   private readonly rememberHiSpeed: SelectRouteDeps['rememberHiSpeed'];
   private readonly showDecide: SelectRouteDeps['showDecide'];
   private readonly preloadOnLaunch: SelectRouteDeps['preloadOnLaunch'];
@@ -269,6 +271,7 @@ export class SelectRoute {
     // The screen starts from the play options in force (two-way sync: the screen's own edits come back through
     // `on.playOptions` below; the Options dialog's edits push through `setPlayOptions`).
     const playOptions = this.playOptions.current;
+    this.recordConsequenceShown = this.optionsDialog.refreshRecordConsequence();
     // The select session plays through the audio service; its decide jingle plays out through the decide screen into
     // the play.
     const scene = createSelectScene(kit, {
@@ -328,6 +331,12 @@ export class SelectRoute {
           copyPlayOptionsToGUI(options, this.guiState);
           if (options.hiSpeed !== this.guiState.hiSpeed) this.rememberHiSpeed(options.hiSpeed, 'select');
           this.optionsDialog.refreshPlayOptionControllers();
+          // An option that changes what a play keeps of its record says so on the status line, before the play.
+          const record = this.optionsDialog.refreshRecordConsequence();
+          if (record !== this.recordConsequenceShown) {
+            this.setStatus(record);
+            this.recordConsequenceShown = record;
+          }
         },
         search: () => this.search.openFromPointer(),
         // An LR2 skin's course name (text 170) and delete button (233): the panel names the course or confirms first.

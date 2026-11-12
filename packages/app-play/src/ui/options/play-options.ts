@@ -58,6 +58,11 @@ export function buildPlayOptionsFolder(
       this.deps.refreshSelectRecords();
     }),
   );
+  // What the options picked do to a play's record, from the resolver a finished play's record goes through.
+  this.recordConsequenceController = folder.addBinding(this.recordConsequence, 'text', {
+    label: 'Record with these options',
+    readonly: true,
+  });
   // `lanes` is the Arrangement page and `notes` the Modifiers page.
   const [judge, lanes, notes, assist, practice, replay] = folder.addTab({
     pages: PLAY_OPTION_PAGES.map((title) => ({ title })),

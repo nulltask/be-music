@@ -410,3 +410,28 @@ describe('fetchLeaderboardRankingPage', () => {
     expect(await fetchLeaderboardRankingPage('bmfp0:chart', 'lr2', 0, 100, { fetch: offline })).toBeUndefined();
   });
 });
+
+describe('describeLeaderboardResult board', () => {
+  const result = {
+    ruleset: 'lr2' as const,
+    rank: 3,
+    players: 10,
+    exScore: 1500,
+    improved: { exScore: false, lamp: false, missCount: false },
+  };
+
+  test('names the board a ranked play is on, and not for a stored or a failed one', () => {
+    const accepted = { status: 'accepted' as const, scoreId: 's', results: [result] as never };
+    const plain = describeLeaderboardResult(accepted, 'lr2');
+    expect(describeLeaderboardResult(accepted, 'lr2', 'main')).toBe(`${plain} · main board`);
+    expect(describeLeaderboardResult(accepted, 'lr2', 'assisted')).toBe(`${plain} · assisted board`);
+    expect(describeLeaderboardResult(accepted, 'lr2', 'unranked')).toBe(plain);
+    const stored = { ...accepted, unranked: 'no-save' };
+    expect(describeLeaderboardResult(stored, 'lr2', 'assisted')).toBe(
+      'Leaderboard: stored, not ranked (an option that saves no record was on)',
+    );
+    expect(describeLeaderboardResult({ status: 'failed', httpStatus: 500, error: 'x' }, 'lr2', 'main')).toBe(
+      'Leaderboard: not submitted (x)',
+    );
+  });
+});

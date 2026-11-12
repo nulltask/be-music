@@ -83,6 +83,7 @@ import { buildKeyConfigFolder } from './keys.ts';
 import { relabelOptions } from './labels.ts';
 import { buildTempoFolder } from './tempo.ts';
 import { onPlayerLangChange, playerLang } from '../../player-copy.ts';
+import { describeRecordConsequence } from '../../services/record-consequence.ts';
 import { releaseFocusOnClose } from '../dialog-focus.ts';
 /**
  * What the Options dialog needs from the app: the settings and stores its controllers change, readers of what the app has
@@ -446,6 +447,8 @@ export class OptionsDialog {
         help.attach();
         relabelOptions(gui, playerLang());
       }
+      // The select screen's keys change options too, so the row is read again as the dialog opens.
+      if (event.expanded) this.refreshRecordConsequence();
       this.reportExpanded?.(event.expanded);
     });
     // Closed, the keys go back to the play: left on the gear, Enter (meant to start the chart) would open it again.
@@ -499,6 +502,7 @@ export class OptionsDialog {
     this.refreshCompressorStageVisibility();
     gui.on('change', () => {
       this.scheduleSettingsSave();
+      this.refreshRecordConsequence();
       // The quick options panel reads the same values.
       this.quickOptionsPanel?.refresh();
     });
@@ -509,7 +513,11 @@ export class OptionsDialog {
     help.attach();
     // The labels in the player's language, and again when it changes (Help's language switch, the header's menu).
     relabelOptions(gui, playerLang());
-    onPlayerLangChange(() => relabelOptions(gui, playerLang()));
+    onPlayerLangChange(() => {
+      relabelOptions(gui, playerLang());
+      this.refreshRecordConsequence();
+    });
+    this.refreshRecordConsequence();
   }
   /**
    * Writes every Options dialog setting locally immediately; remote publishing is debounced for slider changes.
@@ -539,6 +547,15 @@ export class OptionsDialog {
   public setGhostAvailability(facts: GhostBarFacts | undefined): void {
     this.ghostBar = facts;
     this.refreshGhostAvailability();
+  }
+  /** The "Record" row: what the options picked do to a play's record, before it is played. */
+  public recordConsequenceController: PaneBinding | undefined;
+  public readonly recordConsequence = { text: '-' };
+  /** Rewrites the "Record" row from the settings as they stand, and returns its line. */
+  public refreshRecordConsequence(): string {
+    this.recordConsequence.text = describeRecordConsequence(this.guiState);
+    this.recordConsequenceController?.refresh();
+    return this.recordConsequence.text;
   }
   /** Repaints "Ghost", "Ghost mode" and "Ghost status": disabled during a play and on a course bar. */
   public refreshGhostAvailability(): void {

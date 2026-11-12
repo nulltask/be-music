@@ -369,9 +369,16 @@ export function describeCourseLeaderboardResult(result: CourseLeaderboardSubmitR
  * One status-line summary of a submission, for the ruleset the play was judged under: rank, players, EX score, and
  * which personal bests it improved.
  */
-export function describeLeaderboardResult(result: LeaderboardSubmitResult, playedRuleset: string): string {
+export function describeLeaderboardResult(
+  result: LeaderboardSubmitResult,
+  playedRuleset: string,
+  board?: 'main' | 'assisted' | 'unranked',
+): string {
   if (result.status === 'failed') return playerText().lb.notSubmitted(result.error);
-  return describeRankedResult(result, playedRuleset, false);
+  const line = describeRankedResult(result, playedRuleset, false);
+  // A ranked play names the board it is ranked on; a stored one already says it is not ranked.
+  if (result.unranked !== undefined || board === undefined || board === 'unranked') return line;
+  return `${line} · ${playerText().record.board[board]}`;
 }
 
 function describeRankedResult(

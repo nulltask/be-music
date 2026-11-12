@@ -83,6 +83,18 @@ flowchart LR
 
 **クリアランプ。** LIGHT ASSIST EASY は ASSIST EASY と EASY の間にある独立したランプです（[#603](https://github.com/nulltask/be-music/issues/603)）。beatoraja の `ClearType` がゲージ 0 を LightAssistEasy に対応させているとおり、beatoraja の ASSIST EASY ゲージでのクリアはこのランプになります。AC の ASSISTED EASY ゲージは ASSIST EASY のままです。保存するランプの番号は追加専用で、0〜9 はそれぞれのランプのまま、LIGHT ASSIST EASY は 10 です。順序は保存した番号ではなくランプの順序（`compareClearLamps`、`compareClearLampRanks`）で比べます。beatoraja のスキンはこのランプで op 1101、ASSIST EASY で op 1100 を点け、クリアのインデックスはこのランプで 3、ASSIST EASY で 2 を読みます。LR2 のスキンはどちらも EASY にまとめます。
 
+### プレイ前にわかる記録への影響
+
+この方針は、選んだオプションからプレイ前にも読みます（`@be-music/player-engine/records` の `resolvePlannedRecordPolicy`）。リプレイが記録するはずの内容を組み立てて、同じ分類と同じ解決の処理に通すので、プレイ前の表示とプレイ後の記録が食い違うことはありません。
+
+譜面によって変わる判定もあります。BPM が変わる譜面での BPM GUIDE、譜面を実際に変えた場合の REMOVE や LEGACY の変更、適用される譜面での EXTRA NOTE と 7 TO 9、2P 側がある譜面での 2P 側の AUTO SCRATCH や beatoraja のレーンオプションです。この時点では譜面を準備していないため、どれも起きない場合とすべて起きる場合の 2 通りで分類し、後者にだけ出る判定は条件付きの文として表示します（「BPM GUIDE が譜面を変える場合: …」）。
+
+- **Options ダイアログ。** Play タブの判定幅の下にある **Record with these options** の行に表示し、変更のたびに更新します。
+- **選曲画面。** 選曲画面で変えたオプションによって表示が変わったときに、ステータス行に表示します。どのスキン系統でも同じです。LR2 と beatoraja のスキンは、それぞれのランプとパネルのままです。
+- **リザルト画面。** リプレイの方針から、そのプレイが記録に何をしたかをステータス行に表示します（`Result: <タイトル> — <表示>`）。2 人プレイの BATTLE、PRACTICE、AUTO、回復なしの bmson（TOTAL 0）は、記録を残さない理由を表示します。続いて出る Leaderboard の行は、順位が付いたプレイのボード（メインかアシスト）を示し、保存のみのプレイはランキング外の理由を示します。
+
+表示するのは、アシスト区分、その原因のオプション、判定ルールでのランプ（LR2 は EASY まで、beatoraja は LIGHT ASSIST EASY か ASSIST EASY、`____` は ASSIST EASY）、Leaderboard のボードです。対象はその譜面の単曲プレイで、コース固有の制限は反映しません。[#1140](https://github.com/nulltask/be-music/issues/1140) で追跡しています。
+
 ## START BPM HS-FIX
 
 Options ダイアログ で **HS-FIX → STARTBPM** を選択します。既定は **OFF** のままです。START は MAX・MIN・MAIN とは別に、譜面のヘッダーにある開始 BPM をハイスピードの基準にします。`#BASEBPM` で基準速度を指定している場合の倍率は `基準 BPM / 開始 BPM` です。拍 0 の BPM 変更でヘッダーの開始 BPM を置き換えません。その後の BPM 変更ではスクロール速度も変化します。通常の表示速度オプションとして扱い、スコア・アシスト・コースの記録条件は変更しません。
