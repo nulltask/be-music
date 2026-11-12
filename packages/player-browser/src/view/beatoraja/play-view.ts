@@ -564,6 +564,8 @@ export class BeatorajaPlayView implements PlayView {
       bpmGuide: frame.playOptions.bpmGuide,
       judgeTimingMs: frame.playOptions.judgeTimingMs,
       hiddenNoteChannels: resolveHiddenNoteChannels(frame.playOptions.autoScratchNotes, play.autoScratchChannels),
+      ...(frame.playOptions.showJudgeArea && play.judgeWindows !== undefined ? { judgeArea: play.judgeWindows } : {}),
+      markProcessedNotes: frame.playOptions.markProcessedNotes,
       constant: resolveConstantVisibility({
         enabled: frame.playOptions.visualConstant,
         durationMs: frame.playOptions.noteDurationMs,

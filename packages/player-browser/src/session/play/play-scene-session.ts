@@ -1,6 +1,6 @@
 import { resolveConstantVisibility } from '@be-music/player-scene-model';
 import { diffReplayOptions, resolveReplayOptionsAt, type ReplayOptionState } from '@be-music/player-engine/replay';
-import { resolvePlayOptions } from '@be-music/player-scene-model';
+import { resolvePlayOptions, resolveScoreTarget } from '@be-music/player-scene-model';
 /**
  * The play session as a scene session (`SceneSession`, `session/session-scene.ts`): what `createPlayScene` hands its
  * `SessionScene` so the scene's ticker reads a {@link PlayFrame} off the play every frame and the view's intents reach
@@ -141,6 +141,26 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
    * Advances the play to now — the engine's UI signals drained into the play state, the replay's view recorded or
    * replayed, the score readout eased — and returns what the view draws.
    */
+  /** The host's score targets with the fixed target, kept while the target, the note count and the host's object stay. */
+  private fixedScoreTargets:
+    | {
+        id: PlayOptions['scoreTarget'];
+        totalNotes: number;
+        host: PlayFrame['scoreTargets'];
+        resolved: PlayFrame['scoreTargets'];
+      }
+    | undefined;
+
+  private resolveHostScoreTargets(id: PlayOptions['scoreTarget'], totalNotes: number): PlayFrame['scoreTargets'] {
+    const host = this.facts.scoreTargets;
+    const kept = this.fixedScoreTargets;
+    if (kept !== undefined && kept.id === id && kept.totalNotes === totalNotes && kept.host === host)
+      return kept.resolved;
+    const resolved = resolveFixedScoreTargets(host, id, totalNotes);
+    this.fixedScoreTargets = { id, totalNotes, host, resolved };
+    return resolved;
+  }
+
   public frame(nowMs: number): PlayFrame {
     const play = this.play;
     // A paused play drains too: a seek moves it while it stays paused.
@@ -204,7 +224,11 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
     const running = ghost !== undefined && (shows || !ghost.drawsOnPlayfield) ? ghost : undefined;
     running?.update(seconds, play.playClock());
     const playfield = running !== undefined && shows ? running.present(play) : play;
-    const scoreTargets = resolveFrameScoreTargets(this.facts.scoreTargets, running, play.score);
+    const scoreTargets = resolveFrameScoreTargets(
+      this.resolveHostScoreTargets(playOptions.scoreTarget, play.score.total),
+      running,
+      play.score,
+    );
     return {
       clock: { nowMs, enteredAtMs: this.enteredAtMs },
       chart: play.chart ?? this.facts.chart,
@@ -235,6 +259,23 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       playfield,
     };
   }
+}
+
+/**
+ * The host's score targets with the fixed target the player picked (`PlayOptions.scoreTarget`) when the host names
+ * none: a rank border, MAX or the next rank, for the play's note count.
+ */
+export function resolveFixedScoreTargets(
+  host: PlayFrame['scoreTargets'],
+  scoreTarget: PlayOptions['scoreTarget'],
+  totalNotes: number,
+): PlayFrame['scoreTargets'] {
+  if (host?.targetEXScore !== undefined) return host;
+  const target = resolveScoreTarget(scoreTarget, {
+    totalNotes,
+    ...(host?.bestEXScore !== undefined ? { bestEXScore: host.bestEXScore } : {}),
+  });
+  return target === undefined ? host : { ...host, targetEXScore: target.exScore, targetLabel: target.label };
 }
 
 /**

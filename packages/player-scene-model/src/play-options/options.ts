@@ -40,6 +40,12 @@ export interface PlayOptions {
    * change until the change (blue when the tempo rises, red when it falls).
    */
   bpmChangeWarning: boolean;
+  /** The score graph's fixed target (beatoraja's TargetProperty): a rank border, MAX or the next rank above the best record. A ghost's pacemaker takes its place while one runs. */
+  scoreTarget: import('./score-target.ts').ScoreTargetId;
+  /** beatoraja's mark processed note: a tap note judged before its time is drawn as processed until it goes. Display only. */
+  markProcessedNotes: boolean;
+  /** beatoraja's judge area display: the judge windows as coloured bands above the judge line. Display only. */
+  showJudgeArea: boolean;
   /** LR2 mania chart option (0 = OFF, 10–100) ADD MINES: a mine may be put half-way across a gap of a key lane. */
   lr2AddMines: number;
   /** LR2 mania chart option (0 = OFF, 10–100) ADD LONGNOTES: a key note may be held half-way to the next object of its lane. */

@@ -102,6 +102,9 @@ export interface OptionSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  scoreTarget: PlayerGUIState['scoreTarget'];
+  markProcessedNotes: PlayerGUIState['markProcessedNotes'];
+  showJudgeArea: PlayerGUIState['showJudgeArea'];
   lr2AddMines: PlayerGUIState['lr2AddMines'];
   lr2AddLongNotes: PlayerGUIState['lr2AddLongNotes'];
   lr2Loudness: PlayerGUIState['lr2Loudness'];
@@ -320,6 +323,9 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
   assign(settings, 'bpmChangeWarning', booleanOf(raw.bpmChangeWarning));
+  assign(settings, 'scoreTarget', resolvePlayOptionValue('scoreTarget', raw.scoreTarget));
+  assign(settings, 'markProcessedNotes', resolvePlayOptionValue('markProcessedNotes', raw.markProcessedNotes));
+  assign(settings, 'showJudgeArea', resolvePlayOptionValue('showJudgeArea', raw.showJudgeArea));
   assign(settings, 'lr2AddMines', resolvePlayOptionValue('lr2AddMines', raw.lr2AddMines));
   assign(settings, 'lr2AddLongNotes', resolvePlayOptionValue('lr2AddLongNotes', raw.lr2AddLongNotes));
   assign(settings, 'lr2Loudness', resolvePlayOptionValue('lr2Loudness', raw.lr2Loudness));
@@ -614,6 +620,9 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('dpFlip');
   assignState('bpmGuide');
   assignState('bpmChangeWarning');
+  assignState('scoreTarget');
+  assignState('markProcessedNotes');
+  assignState('showJudgeArea');
   assignState('lr2AddMines');
   assignState('lr2AddLongNotes');
   assignState('lr2Loudness');
@@ -763,6 +772,9 @@ export function captureOptionSettings(
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    scoreTarget: state.scoreTarget,
+    markProcessedNotes: state.markProcessedNotes,
+    showJudgeArea: state.showJudgeArea,
     lr2AddMines: state.lr2AddMines,
     lr2AddLongNotes: state.lr2AddLongNotes,
     lr2Loudness: state.lr2Loudness,

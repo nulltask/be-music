@@ -137,6 +137,37 @@ The Options dialog's View tab has an **LR2 mania options** section under Effects
 
 Source: OpenLR2 [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2155-L2331). Tracked in [#1115](https://github.com/nulltask/be-music/issues/1115), [#1117](https://github.com/nulltask/be-music/issues/1117), [#1119](https://github.com/nulltask/be-music/issues/1119), [#1120](https://github.com/nulltask/be-music/issues/1120), [#1121](https://github.com/nulltask/be-music/issues/1121), [#1122](https://github.com/nulltask/be-music/issues/1122), [#1118](https://github.com/nulltask/be-music/issues/1118), [#1123](https://github.com/nulltask/be-music/issues/1123), [#1124](https://github.com/nulltask/be-music/issues/1124), [#1125](https://github.com/nulltask/be-music/issues/1125), [#1126](https://github.com/nulltask/be-music/issues/1126).
 
+## Judge area and processed notes
+
+Two beatoraja display settings sit in the Options dialog's View tab, under Effects. Both are off by default, apply live under every ruleset and on every skin family, and change neither judgment nor records.
+
+**Show judge area (beatoraja)** (`PlayerConfig.showjudgearea`) draws the judge windows above the judge line of each lane as translucent bands: PGREAT in blue, then GREAT in green, GOOD in yellow, BAD in orange and the miss window in red, each at beatoraja's alpha of `0x20`. A band starts where the judgment inside it ends and is as tall as its window is long at the current scroll, so it shrinks and grows with the hi-speed and the BPM; a note inside a band would get that judgment if pressed now. The windows are the play's effective ones (`#RANK`, CUSTOM JUDGE and LR2's GAMBOL included), the scratch lane with its own, and the reach is the early side. A ruleset without a miss window has no red band, and a window no wider than the one inside it has no band. beatoraja scales the bands by the scroll rate of the next timeline; Be-Music places each edge where a note that far ahead is drawn, which is the same under a constant tempo.
+
+**Mark processed notes (beatoraja)** (`PlayerConfig.markprocessednote`) draws a tap note that was judged before its time differently until it goes. A beatoraja skin that defines processed-note images (`note.processed`) draws those, as beatoraja does. A beatoraja skin without them, and the built-in and LR2 playfields, draw the note at 35 % opacity instead; beatoraja itself draws nothing there. Long notes and mines are unchanged. With **Judged notes** set to hide, a judged note is gone and there is nothing to mark.
+
+Sources: beatoraja [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L738-L776) (`JudgeAreaOverlay`, and the [processed image](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L538-L550)) and [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayerConfig.java#L150-L152). Tracked in [#1129](https://github.com/nulltask/be-music/issues/1129) and [#1130](https://github.com/nulltask/be-music/issues/1130).
+
+## Score target
+
+**Target (beatoraja)** in the Options dialog's Replay / ghost folder picks the score the pacemaker aims at, from beatoraja 0.8.9's `TargetProperty`: **RANK A-** to **RANK MAX-**, **MAX**, or **NEXT RANK**. The default is **RANK AAA**, the line the score graph paced against before the setting existed. It applies live, under every ruleset.
+
+| Target               | EX score                                                                                        |
+| -------------------- | ----------------------------------------------------------------------------------------------- |
+| RANK A-, A, A+       | 17, 18 and 19 twenty-sevenths of the maximum                                                    |
+| RANK AA-, AA, AA+    | 20, 21 and 22 twenty-sevenths                                                                   |
+| RANK AAA-, AAA, AAA+ | 23, 24 and 25 twenty-sevenths                                                                   |
+| RANK MAX-            | 26 twenty-sevenths                                                                              |
+| MAX                  | The maximum, twice the note count                                                               |
+| NEXT RANK            | The first border from 15/27 up that the best EX score has not reached; MAX once it is past MAX- |
+
+A border is rounded up to a whole score. beatoraja computes it in single precision (`ceil(notes × 2 × rate / 100)` with `rate = 100 × n / 27`), and Be-Music keeps that rounding, so a border that falls exactly on a whole score can come out one higher, as in beatoraja.
+
+The target reaches every skin family through the play's score targets: the built-in score graph's PACEMAKER bar and box, and a beatoraja skin's target numbers (121–123) and rank timers. It paces evenly over the chart, the target's share of the notes judged so far. A ghost shown as the pacemaker takes its place for that play, since it paces as it was played. The setting is saved with the play options; it changes neither judgment nor records.
+
+Not offered: beatoraja's `RATE_<n>` percentages, its `RIVAL_*` targets and its `IR_*` targets. The last two need a rival's or a ranking's score for the chart, which the Leaderboard does not hand the play today.
+
+Source: beatoraja [`TargetProperty`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/TargetProperty.java#L87-L158) and [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayerConfig.java#L72-L76). Tracked in [#1132](https://github.com/nulltask/be-music/issues/1132).
+
 ## ANY KEY
 
 With **Judgment windows → ????** at the top of the Options dialog's Play options, turn on **Play options → ANY KEY (PC)**; it is off by default and hidden under the other judge rules. It is the PC edition's assist, which that edition's page names without describing, so Be-Music reads it this way ([#751](https://github.com/nulltask/be-music/issues/751)):

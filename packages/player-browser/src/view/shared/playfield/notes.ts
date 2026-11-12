@@ -25,12 +25,14 @@ import {
   resolveReversedDrawClock,
 } from '../../../chart/note-draw-window.ts';
 import { PIXELS_PER_BEAT } from '../../../stage/design.ts';
-import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
+import { isScratch, resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
+import { renderJudgeArea } from '../judge-area.ts';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import { renderDefaultNote } from './default-playfield.ts';
 import type { PlayfieldLaneRect } from '../../types.ts';
 import type { PlayfieldContext, RuntimeNote } from './context.ts';
 import { resolveHiddenNoteChannels } from './hidden-note-channels.ts';
+import { resolveProcessedNoteAlpha } from './processed-note.ts';
 import {
   LR2_SCREEN_HEIGHT,
   placeLR2ManiaNote,
@@ -110,6 +112,22 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
   const beatDistance = ctx.play.scrollMapper
     ? (toBeat: number): number => ctx.play.scrollMapper!.distanceBetween(currentBeat, toBeat)
     : (toBeat: number): number => toBeat - currentBeat;
+  // beatoraja's judge area: under the notes, so they stay readable.
+  if (ctx.playOptions?.showJudgeArea === true && ctx.play.judgeWindows !== undefined) {
+    const scrollScales = new Map<object, number>();
+    renderJudgeArea({
+      lanes: Array.from(ctx.play.laneX, ([channel, lane]) => {
+        const area = { x: lane.x, w: lane.w, top: lane.top, bottom: lane.bottom, scratch: isScratch(channel) };
+        scrollScales.set(area, lane.scrollScale ?? 1);
+        return area;
+      }),
+      note: ctx.play.judgeWindows.note,
+      scratch: ctx.play.judgeWindows.scratch,
+      distanceAt: (ms, lane) =>
+        beatDistance(ctx.play.currentBeat(displaySeconds + ms / 1000)) * pixelsPerBeat * (scrollScales.get(lane) ?? 1),
+      pool: ctx.noteLayerPool,
+    });
+  }
   if (ctx.options.bpmGuide && ctx.play.timingResolver) {
     const timing = ctx.play.timingResolver;
     if (ctx.bpmGuideCache?.timing !== timing) ctx.bpmGuideCache = { timing, events: collectBPMGuideEvents(timing) };
@@ -292,6 +310,8 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     }
     const noteLane = applyManiaLane(applyChartLaneVisual(lane, headVisual), maniaPlacement);
     const size = maniaSize(maniaPlacement);
+    // beatoraja's mark processed note: a note judged before its time is drawn dimmed until it goes (#1130).
+    const tapAlpha = noteAlpha * resolveProcessedNoteAlpha(ctx.playOptions?.markProcessedNotes, note.judged);
     const style = chartNoteStyle(headVisual);
     // CLONE afterimages go first, so the note draws over them.
     if (headVisual !== undefined && headVisual.clones.length > 0) {
@@ -304,10 +324,10 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
         );
       }
     }
-    if (noteAlpha === 1) renderSingleNote(ctx, laneIndex, note.channel, noteLane, y, 1, headVisual?.scale, style, size);
+    if (tapAlpha === 1) renderSingleNote(ctx, laneIndex, note.channel, noteLane, y, 1, headVisual?.scale, style, size);
     else
-      ctx.noteLayerPool.withAlpha(noteAlpha, () =>
-        renderSingleNote(ctx, laneIndex, note.channel, noteLane, y, noteAlpha, headVisual?.scale, style, size),
+      ctx.noteLayerPool.withAlpha(tapAlpha, () =>
+        renderSingleNote(ctx, laneIndex, note.channel, noteLane, y, tapAlpha, headVisual?.scale, style, size),
       );
   }
   // Landmine notes — same scroll math, separate sprite. Drawn after regular notes so a mine sitting at the same beat

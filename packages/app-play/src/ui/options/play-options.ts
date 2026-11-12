@@ -663,6 +663,13 @@ function buildNoteDisplayRows(this: OptionsDialog, effects: OptionContainer): vo
     this.guiState.judgedNoteDisplay = value;
     this.gameplayView?.setJudgedNoteDisplay(value);
   });
+  // beatoraja's judge area and mark processed note. Live: the playfield reads both at each frame.
+  effects
+    .addBinding(this.guiState, 'showJudgeArea', { label: 'Show judge area (beatoraja)' })
+    .on('change', ({ value }) => this.setPlayOptions({ showJudgeArea: value }));
+  effects
+    .addBinding(this.guiState, 'markProcessedNotes', { label: 'Mark processed notes (beatoraja)' })
+    .on('change', ({ value }) => this.setPlayOptions({ markProcessedNotes: value }));
   // AC 34's オートスクラッチ表示. Live: the playfield reads the option at each frame.
   selectBinding(effects, this.guiState, 'autoScratchNotes', 'Auto scratch notes (AC)', {
     Show: 'SHOW',
@@ -693,6 +700,21 @@ export function buildReplayViewFolder(this: OptionsDialog, folder: OptionContain
   }
   // The ghost with the play (`services/ghost.ts`): which replay it plays and how it shows. Disabled during a play like
   // the other options, and on a course bar; "Ghost status" says whether the bar under the cursor would show it.
+  // The score graph's fixed target, in beatoraja's names. It paces a play that runs no ghost; live.
+  selectBinding(folder, this.guiState, 'scoreTarget', 'Target (beatoraja)', {
+    'RANK A-': 'RATE_A-',
+    'RANK A': 'RATE_A',
+    'RANK A+': 'RATE_A+',
+    'RANK AA-': 'RATE_AA-',
+    'RANK AA': 'RATE_AA',
+    'RANK AA+': 'RATE_AA+',
+    'RANK AAA-': 'RATE_AAA-',
+    'RANK AAA': 'RATE_AAA',
+    'RANK AAA+': 'RATE_AAA+',
+    'RANK MAX-': 'RATE_MAX-',
+    MAX: 'MAX',
+    'NEXT RANK': 'RANK_NEXT',
+  }).on('change', ({ value }) => this.setPlayOptions({ scoreTarget: value }));
   const refresh = () => this.refreshGhostAvailability();
   this.ghostController = selectBinding(folder, this.guiState, 'ghost', 'Ghost', {
     OFF: 'OFF',

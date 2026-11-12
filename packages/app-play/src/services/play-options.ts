@@ -24,6 +24,9 @@ export type GUIPlayOptions = Pick<
   | 'dpFlip'
   | 'bpmGuide'
   | 'bpmChangeWarning'
+  | 'scoreTarget'
+  | 'markProcessedNotes'
+  | 'showJudgeArea'
   | 'lr2AddMines'
   | 'lr2AddLongNotes'
   | 'lr2Loudness'
@@ -119,6 +122,9 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    scoreTarget: state.scoreTarget,
+    markProcessedNotes: state.markProcessedNotes,
+    showJudgeArea: state.showJudgeArea,
     lr2AddMines: state.lr2AddMines,
     lr2AddLongNotes: state.lr2AddLongNotes,
     lr2Loudness: state.lr2Loudness,
@@ -224,6 +230,9 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.dpFlip = options.dpFlip;
   state.bpmGuide = options.bpmGuide;
   state.bpmChangeWarning = options.bpmChangeWarning;
+  state.scoreTarget = options.scoreTarget;
+  state.markProcessedNotes = options.markProcessedNotes;
+  state.showJudgeArea = options.showJudgeArea;
   state.lr2AddMines = options.lr2AddMines;
   state.lr2AddLongNotes = options.lr2AddLongNotes;
   state.lr2Loudness = options.lr2Loudness;
