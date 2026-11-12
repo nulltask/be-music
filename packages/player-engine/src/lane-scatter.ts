@@ -1,3 +1,4 @@
+import { randomizeLR2DoubleNotes, type LR2DoubleRandomOptions } from './lane-lr2-double.ts';
 import { drawLaneRandomIndex } from './lane-random-source.ts';
 import type { SRandomNote } from './lane-random.ts';
 
@@ -18,10 +19,13 @@ export function randomizeLR2ScatterNotes(
     doublePlay?: boolean;
     flipped?: boolean;
     correctedNineKey?: boolean;
+    lr2Scratch?: LR2DoubleRandomOptions;
   },
 ): string[] {
   if (![5, 7, 9].includes(lanes.length) || new Set(lanes).size !== lanes.length)
     throw new RangeError('LR2 SCATTER requires a complete five-, seven- or nine-key domain.');
+  if (options.lr2Scratch !== undefined)
+    return randomizeLR2DoubleNotes(notes, lanes, { ...options.lr2Scratch, random: options.random, scatter: true });
   const nineKey = lanes.length === 9;
   // The original inclusive GetRand(9) reaches raw lane 10 (2P scratch), outside the PMS playfield.
   const outside = nineKey && !options.correctedNineKey ? '26' : undefined;

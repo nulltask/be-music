@@ -862,3 +862,59 @@ test('10 KEY LR2 S-RANDOM still permits a far draw with a scratch on a bar line'
   });
   expect(channelsOf(notes)).toEqual(['16', '15']);
 });
+
+test.each(['MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER', 'CONVERGE'] as const)(
+  'LR2 %s includes the scratch independently for 1P',
+  (mode) => {
+    const notes = notesOn(['16', '11', '26', '21'], 1);
+    const draws = mode === 'RANDOM' ? [0.99] : mode === 'CONVERGE' ? [0, 0, 0.99] : [0, 0.99];
+    applyRandomMode(notes, resolveLaneOptionChannels('1P', '7'), mode, () => draws.shift() ?? 0, {
+      side: '1P',
+      playVariant: '7',
+      scratch: '16',
+      lr2RandomScratch: true,
+    });
+    if (mode === 'MIRROR' || mode === 'RANDOM') expect(notes[0]?.channel).toBe('19');
+    else expect(channelsOf(notes).slice(0, 2).sort()).toEqual(['16', '19']);
+    expect(channelsOf(notes).slice(2)).toEqual(['26', '21']);
+  },
+);
+
+test('LR2 scratch-inclusive RANDOM fixes the source key that lands on scratch', () => {
+  const notes = notesOn(['16', '11', '12', '15']);
+  const draws = [0.99];
+  applyRandomMode(notes, resolveLaneOptionChannels('1P', '5'), 'RANDOM', () => draws.shift() ?? 0, {
+    side: '1P',
+    playVariant: '5',
+    scratch: '16',
+    lr2RandomScratch: true,
+    fixedLane: 2,
+  });
+  expect(channelsOf(notes)).toEqual(['15', '11', '16', '12']);
+});
+
+test('LR2 scratch-inclusive CONVERGE offsets the 2P target from scratch', () => {
+  const notes = notesOn(['21']);
+  applyRandomMode(notes, resolveLaneOptionChannels('2P', '14'), 'lr2:CONVERGE', () => 0.99, {
+    side: '2P',
+    playVariant: '14',
+    scratch: '26',
+    lr2RandomScratch: true,
+    fixedLane: 2,
+  });
+  expect(channelsOf(notes)).toEqual(['22']);
+});
+
+test('scratch inclusion leaves PMS MIRROR and beatoraja S-RANDOM on their key domains', () => {
+  const pms = resolveLaneOptionChannels('1P', '9');
+  const notes = notesOn(pms);
+  applyRandomMode(notes, pms, 'MIRROR', () => 0, { playVariant: '9', scratch: '16', lr2RandomScratch: true });
+  expect(channelsOf(notes)).toEqual([...pms].reverse());
+  const sp = notesOn(['16', '11']);
+  applyRandomMode(sp, KEYS_1P, 'beatoraja:S-RANDOM', () => 0, {
+    playVariant: '7',
+    scratch: '16',
+    lr2RandomScratch: true,
+  });
+  expect(channelsOf(sp)).toEqual(['16', '11']);
+});

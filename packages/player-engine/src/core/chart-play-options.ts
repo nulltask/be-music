@@ -7,6 +7,8 @@ export interface ChartPlaySelection {
   random2P?: string;
   randomFixedLane1P?: number;
   randomFixedLane2P?: number;
+  lr2RandomScratch1P?: boolean;
+  lr2RandomScratch2P?: boolean;
   mRan1P?: boolean;
   mRan2P?: boolean;
   mineModifier?: MineModifier;
@@ -61,6 +63,8 @@ export function applyChartPlayOptions<T extends ChartPlaySelection>(
   writable.random2P = perSide;
   delete writable.randomFixedLane1P;
   delete writable.randomFixedLane2P;
+  delete writable.lr2RandomScratch1P;
+  delete writable.lr2RandomScratch2P;
   writable.mRan1P = false;
   writable.mRan2P = false;
   return { selection: next, ...(crossSide ? { crossSide: { scratch } } : {}) };

@@ -86,6 +86,8 @@ export interface OptionSettings {
   randomSeed2P: string;
   randomFixedLane1P: number;
   randomFixedLane2P: number;
+  lr2RandomScratch1P: boolean;
+  lr2RandomScratch2P: boolean;
   random2P: RandomMode;
   dpFlip: boolean;
   classicHiSpeed: boolean;
@@ -391,7 +393,14 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'judgeRuleset', isRulesetId(raw.judgeRuleset) ? raw.judgeRuleset : undefined);
   assign(settings, 'gauge', isGaugeType(raw.gauge) ? raw.gauge : undefined);
   assign(settings, 'hRandomThresholdBPM', resolvePlayOptionValue('hRandomThresholdBPM', raw.hRandomThresholdBPM));
-  for (const key of ['randomFixedLane1P', 'randomFixedLane2P', 'randomSeed1P', 'randomSeed2P'] as const)
+  for (const key of [
+    'randomFixedLane1P',
+    'randomFixedLane2P',
+    'randomSeed1P',
+    'randomSeed2P',
+    'lr2RandomScratch1P',
+    'lr2RandomScratch2P',
+  ] as const)
     assign(settings, key, resolvePlayOptionValue(key, raw[key]));
   assign(settings, 'random1P', migrateStoredOption('random1P', raw.random1P, storedRuleset));
   assign(settings, 'random2P', migrateStoredOption('random2P', raw.random2P, storedRuleset));
@@ -576,6 +585,8 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('randomSeed2P');
   assignState('randomFixedLane1P');
   assignState('randomFixedLane2P');
+  assignState('lr2RandomScratch1P');
+  assignState('lr2RandomScratch2P');
   assignState('random2P');
   assignState('dpFlip');
   assignState('bpmGuide');
@@ -708,6 +719,8 @@ export function captureOptionSettings(
     randomSeed2P: state.randomSeed2P,
     randomFixedLane1P: state.randomFixedLane1P,
     randomFixedLane2P: state.randomFixedLane2P,
+    lr2RandomScratch1P: state.lr2RandomScratch1P,
+    lr2RandomScratch2P: state.lr2RandomScratch2P,
     random2P: state.random2P,
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
