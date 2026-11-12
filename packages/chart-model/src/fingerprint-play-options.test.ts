@@ -65,3 +65,17 @@ test.each([
   expect(expanded).toEqual(expected);
   expect(expected.size).toBeGreaterThan(1);
 });
+
+test.each([
+  [1, 1.2],
+  [2, 1.5],
+  [3, 2],
+])('CRA-RHS%s sets the chart and play fingerprints’ base speed', (id, baseSpeed) => {
+  const notes = '#BPM 120\n#00111:01\n';
+  const plain = parseBMS(notes);
+  const spedUp = parseBMS(`#OPTION 774:CRA-RHS${id}\n#OPTION 774:CRAZY_OFF\n${notes}`);
+  expect(createChartFingerprintDocument(spedUp, OPTIONS).playOptions).toEqual({ baseSpeed });
+  expect(createPlayFingerprintDocument(spedUp, OPTIONS).playOptions).toEqual({ baseSpeed });
+  expect(computeChartFingerprint(spedUp, OPTIONS)).not.toBe(computeChartFingerprint(plain, OPTIONS));
+  expect(computePlayFingerprint(spedUp, OPTIONS)).not.toBe(computePlayFingerprint(plain, OPTIONS));
+});

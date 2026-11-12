@@ -108,6 +108,7 @@ export interface PlaySession {
   /** Chart seconds the play lasts: its last note or sound, or the UI runtime's own end. */
   readonly totalSeconds: number;
   readonly speed: number;
+  readonly chartBaseSpeed: number;
   /** HIGH-SPEED at the start of the play. */
   readonly highSpeed: number;
   /** The play tempo over the play clock: `speed` at the start, re-anchored by every tempo change. */
@@ -197,8 +198,7 @@ export async function createPlaySession(
   const scratchSides = resolveAutoScratchSides(options);
   const autoScratch = mode === 'manual' && (scratchSides.autoScratch1P || scratchSides.autoScratch2P);
   const anyKey = mode === 'manual' && options.anyKey === true;
-  const speed = options.speed ?? 1;
-  const tempoClock = createTempoClock(speed);
+  const playerSpeed = options.speed ?? 1;
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const replay = options.replayInputs !== undefined;
@@ -213,6 +213,9 @@ export async function createPlaySession(
           { playVariant: resolvedChart.playVariant, course: options.course !== undefined },
         );
   const chartPlayOptions = chartPlay.program;
+  const chartBaseSpeed = chartPlayOptions.options.baseSpeed ?? 1;
+  const speed = playerSpeed * chartBaseSpeed;
+  const tempoClock = createTempoClock(speed);
   // Without a host-prepared chart (the terminal) the engine applies the chart's ADDMINE and arrangement itself, in place
   // of the player's options, as the browser host does (#932). A replay's recorded notes already hold them.
   const preparesChartPlayOptions = options.preparedChart === undefined && !replay;
@@ -545,7 +548,7 @@ export async function createPlaySession(
               gauge: selectedGauge,
               // The tempo a live play ran at (its inputs are in chart time either way). A replay's `speed` only sets how
               // fast it is re-driven, so it records none.
-              ...(speed !== 1 && !replay ? { tempo: speed } : {}),
+              ...(playerSpeed !== 1 && !replay ? { tempo: playerSpeed } : {}),
             },
           });
         })()
@@ -795,6 +798,7 @@ export async function createPlaySession(
     summary,
     totalSeconds,
     speed,
+    chartBaseSpeed,
     highSpeed,
     tempoClock,
     leadInMs,

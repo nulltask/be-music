@@ -579,7 +579,7 @@ function syncBGAVideo(
     }
     return;
   }
-  handle.video.playbackRate = ctx.play.tempo * playbackRate;
+  handle.video.playbackRate = (ctx.play.playbackTempo ?? ctx.play.tempo) * playbackRate;
   if (previous !== undefined && previous.key === key && previous.cueSeconds === (cue?.seconds ?? 0)) {
     // Same cue still active: the video plays forward on its own and the Pixi VideoSource pulls fresh frames each tick;
     // one that drifted from the chart is set back in step.

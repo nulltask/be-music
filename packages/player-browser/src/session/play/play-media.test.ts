@@ -68,3 +68,12 @@ test('LR2 SILENT releases the samples kept for another chart', async () => {
   await prepareAudio(context({ judgeTimingAutoAdjust: 'LR2-SILENT' }, chartSamples));
   expect(chartSamples.size).toBe(0);
 });
+
+test('keep-pitch decodes at the effective chart and player rate', async () => {
+  const media = { ...context({ tempoPitchMode: 'keep-pitch' }), tempo: 1.25, playbackTempo: 2.5 };
+  await prepareAudio(media);
+  expect(vi.mocked(loadPlaySamples).mock.calls[0]?.[0]).toMatchObject({
+    tempo: 2.5,
+    tempoPitchMode: 'keep-pitch',
+  });
+});

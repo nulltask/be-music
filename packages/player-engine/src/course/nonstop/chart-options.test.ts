@@ -105,3 +105,13 @@ test('a stage chart forcing RANDOM or gameplay CRAZY is diagnosed: one stitched 
     { code: 'unsupported-option', declaration: '774:CRAZY_HELLJUDGE', stage: 1, seconds: 4 },
   ]);
 });
+
+test('NONSTOP diagnoses a stage’s BASE-SPEED without changing the stitched chart clock', () => {
+  const source = parseBMS('#BPM 120\n#OPTION 774:CRA-RHS3\n#00111:01');
+  const result = stitchNonstopCourse([{ chart: source }], { connections: [] });
+  if (!result.ok) throw new Error(result.reason);
+  expect(result.map.stages[0]?.placement.rate).toBe(1);
+  expect(result.map.chartOptionDiagnostics).toMatchObject([
+    { code: 'unsupported-option', declaration: '774:CRA-RHS3', stage: 0 },
+  ]);
+});

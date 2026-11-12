@@ -14,7 +14,7 @@ test('initial declarations combine in order; invalid or unsupported declarations
     cues: [],
   });
   expect(result.program.initial).toEqual({ hiSpeed: 0.77 });
-  expect(result.diagnostics.map((value) => value.code)).toEqual(['unsupported-option', 'invalid-parameter']);
+  expect(result.diagnostics.map((value) => value.code)).toEqual(['invalid-parameter']);
 });
 test('legacy HSP values are initial-only and the native minimum clamps the old 0.2 alias', () => {
   const result = compileChartOptions({
@@ -66,7 +66,7 @@ test('missing references and unrepresentable cue time are diagnosed without chan
 });
 // The documented support boundary (docs/research/chart-authored-options.md): every other family is diagnosed and has
 // no effect, initially or on A6, so a program never carries an operation the engine cannot reproduce.
-test.each(['774:CRA-RHS1', '774:RND-MIRROR', '774:GTP-HARD', 'charatbeatHDX:BGAMODE 1'])(
+test.each(['774:RND-MIRROR', '774:GTP-HARD', 'charatbeatHDX:BGAMODE 1'])(
   'diagnoses %s without changing the effective program',
   (declaration) => {
     const result = compileChartOptions({
@@ -159,4 +159,17 @@ test('version 3 executes M-SUDDEN and the skin-level CRAZY options; CRAZY_OFF cl
   });
   expect(resolveChartOptionsAt(program, 1_000_000).crazyJudge).toBe('HIDJUDGE');
   expect(resolveChartOptionsAt(program, 2_000_000)).toEqual({ hidden: 'M-SUDDEN' });
+});
+
+test('legacy BASE-SPEED is a play option only in the initial declaration', () => {
+  const declaration = '774:CRA-RHS3';
+  expect(
+    compileChartOptions({
+      initial: [declaration],
+      cues: [{ seconds: 2, key: '01', declaration }],
+    }),
+  ).toMatchObject({
+    program: { initial: {}, cues: [] },
+    diagnostics: [{ code: 'initial-only-alias', declaration }],
+  });
 });

@@ -924,10 +924,15 @@ export class PlaySession extends PlaySessionState {
       if (seconds !== undefined) return seconds;
     }
     if (context !== undefined && this.audioContextStartTime > 0) {
-      return (context.currentTime - this.audioContextStartTime) * this.tempo;
+      return (context.currentTime - this.audioContextStartTime) * this.playbackTempo;
     }
     const nowMs = this.paused ? this.pauseTime : performance.now();
-    return ((nowMs - this.startTime - this.pauseTotal) / 1000) * this.tempo;
+    return ((nowMs - this.startTime - this.pauseTotal) / 1000) * this.playbackTempo;
+  }
+
+  /** The physical rate, including the chart's authored standard speed. */
+  get playbackTempo(): number {
+    return this.tempo * (this.chartPlay?.program?.options.baseSpeed ?? 1);
   }
 
   /** The play tempo in force: the one the play started at, or the last change. */

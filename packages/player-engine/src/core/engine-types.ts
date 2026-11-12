@@ -167,6 +167,7 @@ export interface PlayerPlaySettings {
    * flow and no draws is rejected with a `TypeError`.
    */
   randomDraws?: RandomDraws;
+  /** Player tempo multiplier relative to the chart's standard playback rate. */
   speed?: number;
   inferBmsLNTypeWhenMissing?: boolean;
   /**
@@ -316,9 +317,8 @@ export interface PlayerPlayRuntime {
   onHighSpeedChange?: (highSpeed: number) => void;
   /**
    * Called when the play tempo changes during the play (a `{ kind: 'tempo' }` input command, or a replay following
-   * {@link PlayerPlayRecording.replayTempoChanges}), with the new tempo and the chart second it took effect at. Chart time
-   * stays continuous across the change and runs at the new tempo from then on; a host with its own clock follows it
-   * from that chart second.
+   * {@link PlayerPlayRecording.replayTempoChanges}), with the new player multiplier and the chart second it took
+   * effect at. Chart time stays continuous across the change. The clock frames carry the effective playback rate.
    */
   onTempoChange?: (change: PlayerTempoChange) => void;
   onResolvedChart?: (json: BeMusicJSON) => void;

@@ -50,6 +50,7 @@ export interface PlayViewSettingsContext extends PlayStateContext {
   currentBeat?(seconds: number): number;
   readonly disposed: boolean;
   tempo: number;
+  readonly playbackTempo?: number;
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string }>;
   readonly laneX: Map<string, PlayfieldLaneRect>;
   readonly chartBPMRange: PlayTempoRange | undefined;
@@ -137,7 +138,7 @@ export function followTempoChange(ctx: PlayViewSettingsContext, change: PlayerTe
   ctx.tempo = change.tempo;
   setVideoPlaybackTempo(
     [...ctx.bgaVideos.values()].map((handle) => handle.video),
-    change.tempo,
+    ctx.playbackTempo ?? change.tempo,
   );
   ctx.options.onTempoChange?.(change.tempo);
 }

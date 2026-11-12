@@ -128,6 +128,8 @@ test('chart gameplay programs keep only known options', () => {
 });
 test.each([
   { version: 2, options: {} },
+  { version: 2, options: { baseSpeed: 1.3 } },
+  { version: 1, options: { baseSpeed: 2 } },
   { version: 1 },
   { version: 1, options: {}, extra: 1 },
   { version: 1, options: { random: 'S-RANDOM' } },
@@ -137,4 +139,9 @@ test.each([
   { version: 1, options: { notes: 'OFF' } },
 ])('rejects malformed chart gameplay programs: %j', (value) => {
   expect(() => parseChartPlayOptionProgram(value)).toThrow();
+});
+
+test.each([1.2, 1.5, 2])('accepts chart BASE-SPEED %s in version 2', (baseSpeed) => {
+  const program = { version: 2, options: { baseSpeed } };
+  expect(parseChartPlayOptionProgram(program)).toEqual(program);
 });
