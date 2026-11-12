@@ -171,6 +171,17 @@ test('WAVE shifts a note along the lane, growing with the square of its distance
   expect(placeLR2ManiaNote(visual({ wave: 40 }), note({ lane: 0, nowMs: 250, distance: 0 })).distance).toBeCloseTo(0);
 });
 
+test('SPIRAL effect circles alternate notes in opposite directions', () => {
+  // Lane 0, index 0 at a quarter of the 300 ms period: all of the reach is sideways.
+  const even = placeLR2ManiaNote(visual({ spiral: 40 }), note({ lane: 0, index: 0, nowMs: 75 }));
+  expect(even.xOffset).toBeCloseTo(20);
+  expect(even.distance).toBeCloseTo(200);
+  // Index 1 is 210 ms further on, so at 90 ms it starts a period: all of the reach is along the lane.
+  const odd = placeLR2ManiaNote(visual({ spiral: 40 }), note({ lane: 0, index: 1, nowMs: 90 }));
+  expect(odd.xOffset).toBeCloseTo(0);
+  expect(odd.distance).toBeCloseTo(200 + 20);
+});
+
 test('indexes notes and mines per lane in time order', () => {
   const notes = [
     { channel: '11', seconds: 1 },

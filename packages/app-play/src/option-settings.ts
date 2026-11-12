@@ -102,6 +102,7 @@ export interface OptionSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  lr2SpiralEffect: PlayerGUIState['lr2SpiralEffect'];
   lr2Wave: PlayerGUIState['lr2Wave'];
   lr2SinCurve: PlayerGUIState['lr2SinCurve'];
   lr2Nabeatsu: PlayerGUIState['lr2Nabeatsu'];
@@ -313,6 +314,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
   assign(settings, 'bpmChangeWarning', booleanOf(raw.bpmChangeWarning));
+  assign(settings, 'lr2SpiralEffect', resolvePlayOptionValue('lr2SpiralEffect', raw.lr2SpiralEffect));
   assign(settings, 'lr2Wave', resolvePlayOptionValue('lr2Wave', raw.lr2Wave));
   assign(settings, 'lr2SinCurve', resolvePlayOptionValue('lr2SinCurve', raw.lr2SinCurve));
   assign(settings, 'lr2Nabeatsu', resolvePlayOptionValue('lr2Nabeatsu', raw.lr2Nabeatsu));
@@ -600,6 +602,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('dpFlip');
   assignState('bpmGuide');
   assignState('bpmChangeWarning');
+  assignState('lr2SpiralEffect');
   assignState('lr2Wave');
   assignState('lr2SinCurve');
   assignState('lr2Nabeatsu');
@@ -742,6 +745,7 @@ export function captureOptionSettings(
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    lr2SpiralEffect: state.lr2SpiralEffect,
     lr2Wave: state.lr2Wave,
     lr2SinCurve: state.lr2SinCurve,
     lr2Nabeatsu: state.lr2Nabeatsu,

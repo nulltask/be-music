@@ -24,6 +24,7 @@ export type GUIPlayOptions = Pick<
   | 'dpFlip'
   | 'bpmGuide'
   | 'bpmChangeWarning'
+  | 'lr2SpiralEffect'
   | 'lr2Wave'
   | 'lr2SinCurve'
   | 'lr2Nabeatsu'
@@ -112,6 +113,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    lr2SpiralEffect: state.lr2SpiralEffect,
     lr2Wave: state.lr2Wave,
     lr2SinCurve: state.lr2SinCurve,
     lr2Nabeatsu: state.lr2Nabeatsu,
@@ -210,6 +212,7 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.dpFlip = options.dpFlip;
   state.bpmGuide = options.bpmGuide;
   state.bpmChangeWarning = options.bpmChangeWarning;
+  state.lr2SpiralEffect = options.lr2SpiralEffect;
   state.lr2Wave = options.lr2Wave;
   state.lr2SinCurve = options.lr2SinCurve;
   state.lr2Nabeatsu = options.lr2Nabeatsu;

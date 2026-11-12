@@ -451,9 +451,9 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dt>LR2 mania options</dt>
           <dd>
             LR2's hidden panel options that only change how notes are drawn: ACCELERATION, EARTHQUAKE, TORNADO,
-            SUPERLOOP, CHAR, HEARTBEAT, NABEATSU, SINCURVE, WAVE. ACCELERATION picks a mode; an option with a slider is
-            off at 0 and strongest at 100. They change live and leave judgment and records as they are; beatoraja skins
-            do not draw the per-note ones.
+            SUPERLOOP, CHAR, HEARTBEAT, NABEATSU, SINCURVE, WAVE, SPIRAL effect. ACCELERATION picks a mode; an option
+            with a slider is off at 0 and strongest at 100. They change live and leave judgment and records as they are;
+            beatoraja skins do not draw the per-note ones.
           </dd>
           <dt>Show invisible notes</dt>
           <dd>Shows hidden keysound objects. Changes live; judgment is unchanged.</dd>
@@ -1131,9 +1131,9 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dt>LR2 mania options</dt>
           <dd>
             LR2 の隠しパネルにある、ノーツの描画だけを変えるオプションです: ACCELERATION, EARTHQUAKE, TORNADO,
-            SUPERLOOP, CHAR, HEARTBEAT, NABEATSU, SINCURVE, WAVE。 ACCELERATION はモードを選び、スライダーのものは 0
-            でオフ、100 で最も強くなります。プレイ中にも 切り替えられ、判定と記録は変わりません。ノーツ単位の演出は
-            beatoraja スキンでは描画しません。
+            SUPERLOOP, CHAR, HEARTBEAT, NABEATSU, SINCURVE, WAVE, SPIRAL effect。 ACCELERATION
+            はモードを選び、スライダーのものは 0 でオフ、100 で最も強くなります。プレイ中にも
+            切り替えられ、判定と記録は変わりません。ノーツ単位の演出は beatoraja スキンでは描画しません。
           </dd>
           <dt>Show invisible notes</dt>
           <dd>不可視オブジェクトを表示します。プレイ中にも切り替えられ、判定は変わりません。</dd>
