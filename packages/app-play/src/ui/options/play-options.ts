@@ -13,7 +13,10 @@ import {
   HISPEED_STEP,
   JUDGE_POSITION_LIMIT,
   KEYS_FILTER_CYCLE,
+  parseRankingScoreTarget,
   PLAY_OPTION_CHOICES,
+  resolveScoreTarget,
+  SCORE_TARGET_IDS,
   SORT_CYCLE,
   type PlayOptions,
 } from '@be-music/player-scene-model';
@@ -721,20 +724,17 @@ export function buildReplayViewFolder(this: OptionsDialog, folder: OptionContain
   // The ghost with the play (`services/ghost.ts`): which replay it plays and how it shows. Disabled during a play like
   // the other options, and on a course bar; "Ghost status" says whether the bar under the cursor would show it.
   // The score graph's fixed target, in beatoraja's names. It paces a play that runs no ghost; live.
-  selectBinding(folder, this.guiState, 'scoreTarget', 'Target (beatoraja)', {
-    'RANK A-': 'RATE_A-',
-    'RANK A': 'RATE_A',
-    'RANK A+': 'RATE_A+',
-    'RANK AA-': 'RATE_AA-',
-    'RANK AA': 'RATE_AA',
-    'RANK AA+': 'RATE_AA+',
-    'RANK AAA-': 'RATE_AAA-',
-    'RANK AAA': 'RATE_AAA',
-    'RANK AAA+': 'RATE_AAA+',
-    'RANK MAX-': 'RATE_MAX-',
-    MAX: 'MAX',
-    'NEXT RANK': 'RANK_NEXT',
-  }).on('change', ({ value }) => this.setPlayOptions({ scoreTarget: value }));
+  selectBinding(
+    folder,
+    this.guiState,
+    'scoreTarget',
+    'Target (beatoraja)',
+    Object.fromEntries(SCORE_TARGET_IDS.map((id) => [scoreTargetLabel(id), id])),
+  ).on('change', ({ value }) => this.setPlayOptions({ scoreTarget: value }));
+  // The rate the SCORE RATE target paces towards (beatoraja's `RATE_<n>`); live.
+  folder
+    .addBinding(this.guiState, 'scoreTargetRate', { label: 'Target score rate (%)', min: 0, max: 100, step: 0.5 })
+    .on('change', ({ value }) => this.setPlayOptions({ scoreTargetRate: value }));
   const refresh = () => this.refreshGhostAvailability();
   this.ghostController = selectBinding(folder, this.guiState, 'ghost', 'Ghost', {
     OFF: 'OFF',
@@ -821,4 +821,10 @@ export function hiSpeedControl(
 /** A value on the grid of `step`, as a slider of that step shows it. */
 export function onGrid(step: number): (value: number) => number {
   return (value) => Math.round(Math.round(value / step) * step * 1000) / 1000;
+}
+
+/** A score target's name in the dialog: beatoraja's own, with SCORE RATE's rate left to its slider. */
+export function scoreTargetLabel(id: PlayOptions['scoreTarget']): string {
+  if (id === 'SCORE_RATE') return 'SCORE RATE';
+  return parseRankingScoreTarget(id)?.label ?? resolveScoreTarget(id, { totalNotes: 1 })?.label ?? id;
 }

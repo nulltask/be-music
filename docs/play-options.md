@@ -151,7 +151,7 @@ Sources: beatoraja [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/
 
 ## Score target
 
-**Target (beatoraja)** in the Options dialog's Replay / ghost folder picks the score the pacemaker aims at, from beatoraja 0.8.9's `TargetProperty`: **RANK A-** to **RANK MAX-**, **MAX**, or **NEXT RANK**. The default is **RANK AAA**, the line the score graph paced against before the setting existed. It applies live, under every ruleset.
+**Target (beatoraja)** in the Options dialog's Replay / ghost folder picks the score the pacemaker aims at, from beatoraja 0.8.9's `TargetProperty`: **RANK A-** to **RANK MAX-**, **MAX**, **NEXT RANK**, the ranking targets (**IR NEXT**, **IR RANK**, **IR RANK TOP**) or **SCORE RATE**. The default is **RANK AAA**, the line the score graph paced against before the setting existed. It applies live, under every ruleset.
 
 | Target               | EX score                                                                                        |
 | -------------------- | ----------------------------------------------------------------------------------------------- |
@@ -161,12 +161,26 @@ Sources: beatoraja [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/
 | RANK MAX-            | 26 twenty-sevenths                                                                              |
 | MAX                  | The maximum, twice the note count                                                               |
 | NEXT RANK            | The first border from 15/27 up that the best EX score has not reached; MAX once it is past MAX- |
+| IR NEXT nRANK        | The score n places above the player on the chart's ranking (n: 1 to 5, 10)                      |
+| IR RANK n            | The score at place n of the ranking, or its last place when it is shorter (n: 1, 5, 10 to 50)   |
+| IR RANK TOP n%       | The score that share of the players down the ranking (n: 5 to 50 in fives)                      |
+| SCORE RATE           | **Target score rate (%)** of the maximum, 0 to 100 (default 90)                                 |
 
 A border is rounded up to a whole score. beatoraja computes it in single precision (`ceil(notes × 2 × rate / 100)` with `rate = 100 × n / 27`), and Be-Music keeps that rounding, so a border that falls exactly on a whole score can come out one higher, as in beatoraja.
 
-The target reaches every skin family through the play's score targets: the built-in score graph's PACEMAKER bar and box, and a beatoraja skin's target numbers (121–123) and rank timers. It paces evenly over the chart, the target's share of the notes judged so far. A ghost shown as the pacemaker takes its place for that play, since it paces as it was played. The setting is saved with the play options; it changes neither judgment nor records.
+The target reaches every skin family through the play's score targets: the built-in score graph's PACEMAKER bar and box, a beatoraja skin's target numbers (121–123) and rank timers, and an LR2 skin's target score and difference (numbers 151 and 153) and target bar graphs (14 and 15). It paces evenly over the chart, the target's share of the notes judged so far. A ghost shown as the pacemaker takes its place for that play, since it paces as it was played. The setting is saved with the play options; it changes neither judgment nor records.
 
-Not offered: beatoraja's `RATE_<n>` percentages, its `RIVAL_*` targets and its `IR_*` targets. The last two need a rival's or a ranking's score for the chart, which the Leaderboard does not hand the play today.
+**SCORE RATE** is beatoraja's `RATE_<n>` target, which its default list does not offer but its `TargetProperty` accepts for any rate from 0 to 100 ([L142-L151](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/TargetProperty.java#L142-L151)) [V]. Be-Music keeps the rate in its own setting, **Target score rate (%)**, on a 0.1 grid, and rounds the score as beatoraja does. AC 34 also offers a chosen percentage as a target [C]; its rounding is not known, so the option carries beatoraja's name.
+
+The ranking targets read the chart's Leaderboard ranking under the ruleset the play is judged by, where beatoraja reads its IR ranking ([`InternetRankingTargetProperty`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/TargetProperty.java#L327-L475)) [V]:
+
+- **IR RANK n** is place `min(players, n)`.
+- **IR RANK TOP n%** is the place `players × n / 100` down, truncated.
+- **IR NEXT nRANK** finds the first place whose EX score is the player's best record or lower, and goes n places up from it, stopping at the top. When every place is above the best record (a chart not played yet, for one), beatoraja picks the top place, and so does Be-Music.
+
+The ranking is read as the play starts, so the target appears a moment into the play, as in beatoraja. Until then, and on a chart with no ranking (nobody ranked, a chart the Leaderboard cannot key, no network), the play shows no target: the built-in score graph paces against RANK AAA, and a skin's target numbers stay at 0. The ranking is the one the Leaderboard's page shows by default: unassisted plays, without anonymous players. The target's name is beatoraja's target name; beatoraja shows the ranked player's name instead.
+
+Not offered: beatoraja's `RIVAL_*` targets. They need a rival's score on the chart, and the Leaderboard has no rivals yet.
 
 Source: beatoraja [`TargetProperty`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/TargetProperty.java#L87-L158) and [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayerConfig.java#L72-L76). Tracked in [#1132](https://github.com/nulltask/be-music/issues/1132).
 
@@ -184,7 +198,7 @@ Source: AC 34 [detail options](https://p.eagate.573.jp/game/2dx/34/howto/play/op
 
 ## Live display options
 
-A play reads its options when it starts. The ones that only change what is drawn are also followed during the play: changing one in the Options dialog takes effect on the next frame. They are the auto scratch note display, lane brightness, judgment display and position, the judge area, mark processed notes, the score target and LR2's mania drawing options (ACCELERATION to SIDEJUMP); `LIVE_DISPLAY_PLAY_OPTION_KEYS` in `@be-music/player-scene-model` lists them. A change is recorded in the replay's `play.optionChanges` at its chart time, like the other options a play takes live (hi-speed, covers, LIFT, judge timing). Every other option, including LR2's chart generators and GAMBOL, stays as the play started.
+A play reads its options when it starts. The ones that only change what is drawn are also followed during the play: changing one in the Options dialog takes effect on the next frame. They are the auto scratch note display, lane brightness, judgment display and position, the judge area, mark processed notes, the score target and its rate, and LR2's mania drawing options (ACCELERATION to SIDEJUMP); `LIVE_DISPLAY_PLAY_OPTION_KEYS` in `@be-music/player-scene-model` lists them. A change is recorded in the replay's `play.optionChanges` at its chart time, like the other options a play takes live (hi-speed, covers, LIFT, judge timing). Every other option, including LR2's chart generators and GAMBOL, stays as the play started.
 
 ## ANY KEY
 

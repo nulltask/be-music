@@ -8,6 +8,7 @@ import {
   describeLeaderboardResult,
   describeSkippedCourseSubmission,
   describeSkippedSubmission,
+  fetchLeaderboardRankingPage,
   fetchLeaderboardTopReplay,
   prepareCourseLeaderboardSubmission,
   prepareLeaderboardSubmission,
@@ -381,5 +382,31 @@ describe('course submissions', () => {
     expect(describeSkippedCourseSubmission('not-a-course-run')).toMatch(/one run/);
     expect(describeSkippedCourseSubmission('missing-fingerprint')).toMatch(/no fingerprint/);
     expect(describeSkippedCourseSubmission('fingerprint-mismatch')).toMatch(/does not match/);
+  });
+});
+
+describe('fetchLeaderboardRankingPage', () => {
+  test('reads a stretch of the ranking’s EX scores and its player count', async () => {
+    const urls: string[] = [];
+    const fetchImpl = (async (input: string) => {
+      urls.push(input);
+      return Response.json({ entries: [{ exScore: 1900 }, { exScore: 1800 }], players: 42, offset: 100, limit: 2 });
+    }) as typeof fetch;
+    expect(await fetchLeaderboardRankingPage('bmfp0:chart', 'beatoraja', 100, 2, { fetch: fetchImpl })).toEqual({
+      exScores: [1900, 1800],
+      players: 42,
+    });
+    expect(urls).toEqual(['/api/v0/charts/bmfp0%3Achart/leaderboard?ruleset=beatoraja&offset=100&limit=2']);
+  });
+
+  test('has none when the ranking cannot be read', async () => {
+    const failing = (async () => new Response('', { status: 500 })) as typeof fetch;
+    expect(await fetchLeaderboardRankingPage('bmfp0:chart', 'lr2', 0, 100, { fetch: failing })).toBeUndefined();
+    const malformed = (async () => Response.json({ entries: [{}], players: 1 })) as typeof fetch;
+    expect(await fetchLeaderboardRankingPage('bmfp0:chart', 'lr2', 0, 100, { fetch: malformed })).toBeUndefined();
+    const offline = (async () => {
+      throw new TypeError('offline');
+    }) as typeof fetch;
+    expect(await fetchLeaderboardRankingPage('bmfp0:chart', 'lr2', 0, 100, { fetch: offline })).toBeUndefined();
   });
 });

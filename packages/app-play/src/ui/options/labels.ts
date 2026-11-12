@@ -161,6 +161,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   LIFT: 'LIFT',
   Ghost: 'ゴースト',
   'Target (beatoraja)': 'ターゲット (beatoraja)',
+  'Target score rate (%)': 'ターゲットのスコアレート (%)',
   'Ghost mode': 'ゴーストの表示',
   'Ghost status': 'ゴーストの状態',
   'Ghost replay file…': 'ゴーストのリプレイファイル…',

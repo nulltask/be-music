@@ -102,6 +102,7 @@ export interface OptionSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  scoreTargetRate: PlayerGUIState['scoreTargetRate'];
   judgePosition: PlayerGUIState['judgePosition'];
   judgeDisplay: PlayerGUIState['judgeDisplay'];
   laneBrightness: PlayerGUIState['laneBrightness'];
@@ -326,6 +327,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
   assign(settings, 'bpmChangeWarning', booleanOf(raw.bpmChangeWarning));
+  assign(settings, 'scoreTargetRate', resolvePlayOptionValue('scoreTargetRate', raw.scoreTargetRate));
   assign(settings, 'judgePosition', resolvePlayOptionValue('judgePosition', raw.judgePosition));
   assign(settings, 'judgeDisplay', resolvePlayOptionValue('judgeDisplay', raw.judgeDisplay));
   assign(settings, 'laneBrightness', resolvePlayOptionValue('laneBrightness', raw.laneBrightness));
@@ -626,6 +628,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('dpFlip');
   assignState('bpmGuide');
   assignState('bpmChangeWarning');
+  assignState('scoreTargetRate');
   assignState('judgePosition');
   assignState('judgeDisplay');
   assignState('laneBrightness');
@@ -781,6 +784,7 @@ export function captureOptionSettings(
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    scoreTargetRate: state.scoreTargetRate,
     judgePosition: state.judgePosition,
     judgeDisplay: state.judgeDisplay,
     laneBrightness: state.laneBrightness,

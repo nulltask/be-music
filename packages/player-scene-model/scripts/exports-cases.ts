@@ -298,6 +298,21 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.resolveScoreTarget('RANK_NEXT', { totalNotes: 1234, bestEXScore: 2000 });
     },
   });
+  define('player-scene-model.clampScoreTargetRate', {
+    run: () => {
+      sceneModelAPI.clampScoreTargetRate(85.54);
+    },
+  });
+  define('player-scene-model.parseRankingScoreTarget', {
+    run: () => {
+      sceneModelAPI.parseRankingScoreTarget('IR_RANKRATE_25');
+    },
+  });
+  define('player-scene-model.resolveRankingTargetIndex', {
+    run: () => {
+      sceneModelAPI.resolveRankingTargetIndex({ kind: 'NEXT', value: 3 }, 1234, 600);
+    },
+  });
   define('player-scene-model.pickLiveDisplayPlayOptions', {
     run: () => {
       sceneModelAPI.pickLiveDisplayPlayOptions({ laneBrightness: 40, judgeDisplay: 'OFF', gauge1P: 'HARD' });

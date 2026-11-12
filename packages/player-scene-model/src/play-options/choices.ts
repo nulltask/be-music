@@ -1,4 +1,4 @@
-import { SCORE_TARGET_IDS } from './score-target.ts';
+import { clampScoreTargetRate, DEFAULT_SCORE_TARGET_RATE, SCORE_TARGET_IDS } from './score-target.ts';
 import { clampExtraNoteDepth, isOnePlayerBattleMode } from '@be-music/player-engine/lanes';
 import { clampScrollSection, clampScrollRate } from '@be-music/player-engine/lanes';
 import { clampFloatingHiSpeed } from './floating-hi-speed.ts';
@@ -175,6 +175,7 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   constantFadeMs: 100,
   bpmGuide: false,
   bpmChangeWarning: false,
+  scoreTargetRate: DEFAULT_SCORE_TARGET_RATE,
   judgePosition: 0,
   judgeDisplay: 'SKIN',
   laneBrightness: 100,
@@ -397,6 +398,7 @@ export function clampJudgePosition(value: number): number {
 const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: number) => number } = {
   hRandomThresholdBPM: clampHRandomThresholdBPM,
   judgePosition: clampJudgePosition,
+  scoreTargetRate: clampScoreTargetRate,
   longNoteRate: clampLongNoteRate,
   practiceStartGauge: (value) => clamp(Math.trunc(value), 1, 120),
   practiceJudgeRank: (value) => (value <= 0 ? 0 : clamp(Math.trunc(value), 1, 400)),

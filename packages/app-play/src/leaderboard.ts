@@ -1,5 +1,6 @@
 import type { LibraryChart } from '@be-music/player-scene-model';
 import { leaderboardLink } from './service-links.ts';
+import type { RankingPage } from './services/ranking-target.ts';
 import { playerText } from './player-copy.ts';
 import {
   computeChartFingerprint,
@@ -169,6 +170,36 @@ export async function fetchLeaderboardTopReplay(
   if (!replay.ok) return undefined;
   // The browser undoes the `content-encoding: gzip` the replay is served with.
   return parseReplay(await replay.text());
+}
+
+/**
+ * Reads a stretch of a chart's Leaderboard ranking under `ruleset` (unassisted plays): the EX scores from `offset`,
+ * best first, and the ranking's player count (`GET /api/v0/charts/:chartFingerprint/leaderboard`). `undefined` when
+ * the ranking cannot be read. No session is needed.
+ */
+export async function fetchLeaderboardRankingPage(
+  chartFingerprint: string,
+  ruleset: RulesetId,
+  offset: number,
+  limit: number,
+  options: Pick<LeaderboardClientOptions, 'fetch'> = {},
+): Promise<RankingPage | undefined> {
+  const doFetch = options.fetch ?? fetch.bind(globalThis);
+  const query = new URLSearchParams({ ruleset, offset: String(offset), limit: String(limit) });
+  const response = await doFetch(`/api/v0/charts/${encodeURIComponent(chartFingerprint)}/leaderboard?${query}`, {
+    credentials: 'same-origin',
+  }).catch(() => undefined);
+  if (response === undefined || !response.ok) return undefined;
+  const body = (await response.json().catch(() => undefined)) as
+    | { entries?: { exScore?: unknown }[]; players?: unknown }
+    | undefined;
+  if (!Array.isArray(body?.entries) || typeof body.players !== 'number') return undefined;
+  const exScores: number[] = [];
+  for (const entry of body.entries) {
+    if (typeof entry.exScore !== 'number') return undefined;
+    exScores.push(entry.exScore);
+  }
+  return { exScores, players: body.players };
 }
 
 /**

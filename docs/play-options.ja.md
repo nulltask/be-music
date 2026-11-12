@@ -151,7 +151,7 @@ Options ダイアログの View タブの Effects に、beatoraja の表示設�
 
 ## スコアターゲット
 
-Options ダイアログの Replay / ghost フォルダにある **Target (beatoraja)** で、ペースメーカーが目指すスコアを選びます。beatoraja 0.8.9 の `TargetProperty` に基づく **RANK A-** から **RANK MAX-**、**MAX**、**NEXT RANK** です。既定は **RANK AAA** で、この設定ができる前からスコアグラフが基準にしていたラインです。どのルールでもプレイ中に反映します。
+Options ダイアログの Replay / ghost フォルダにある **Target (beatoraja)** で、ペースメーカーが目指すスコアを選びます。beatoraja 0.8.9 の `TargetProperty` に基づく **RANK A-** から **RANK MAX-**、**MAX**、**NEXT RANK**、ランキングのターゲット（**IR NEXT**、**IR RANK**、**IR RANK TOP**）、**SCORE RATE** です。既定は **RANK AAA** で、この設定ができる前からスコアグラフが基準にしていたラインです。どのルールでもプレイ中に反映します。
 
 | ターゲット           | EX スコア                                                                                        |
 | -------------------- | ------------------------------------------------------------------------------------------------ |
@@ -161,12 +161,26 @@ Options ダイアログの Replay / ghost フォルダにある **Target (beator
 | RANK MAX-            | 27 分の 26                                                                                       |
 | MAX                  | 最大値（ノーツ数の 2 倍）                                                                        |
 | NEXT RANK            | 27 分の 15 から上で、自己ベストの EX スコアがまだ届いていない最初の境界。MAX- を超えていれば MAX |
+| IR NEXT nRANK        | その譜面のランキングで、プレイヤーの n 位上のスコア（n: 1〜5、10）                               |
+| IR RANK n            | ランキングの n 位のスコア。人数が足りなければ最下位（n: 1、5、10〜50）                           |
+| IR RANK TOP n%       | ランキングの上位 n% の位置のスコア（n: 5〜50 を 5 刻み）                                         |
+| SCORE RATE           | 最大値の **Target score rate (%)**（0〜100、既定 90）                                            |
 
 境界は整数に切り上げます。beatoraja は単精度で計算する（`rate = 100 × n / 27` として `ceil(ノーツ数 × 2 × rate / 100)`）ため、Be-Music も同じ丸めにしています。境界がちょうど整数になる譜面では、beatoraja と同じく 1 大きくなることがあります。
 
-ターゲットはプレイのスコア目標としてすべてのスキン系統に渡ります。内蔵スキンのスコアグラフの PACEMAKER のバーと枠、beatoraja スキンのターゲットの数値（121〜123）とランクのタイマーです。ペースは譜面全体で均等で、これまでに判定したノーツの割合ぶんのスコアになります。ゴーストをペースメーカーとして表示しているプレイでは、ゴーストが優先されます。ゴーストは実際に演奏されたとおりのペースで進むためです。設定はプレイオプションと一緒に保存し、判定と記録は変わりません。
+ターゲットはプレイのスコア目標としてすべてのスキン系統に渡ります。内蔵スキンのスコアグラフの PACEMAKER のバーと枠、beatoraja スキンのターゲットの数値（121〜123）とランクのタイマー、LR2 スキンのターゲットのスコアと差（数値 151 と 153）およびターゲットのバーグラフ（14 と 15）です。ペースは譜面全体で均等で、これまでに判定したノーツの割合ぶんのスコアになります。ゴーストをペースメーカーとして表示しているプレイでは、ゴーストが優先されます。ゴーストは実際に演奏されたとおりのペースで進むためです。設定はプレイオプションと一緒に保存し、判定と記録は変わりません。
 
-提供していないもの: beatoraja の `RATE_<n>`（任意の割合）、`RIVAL_*`、`IR_*` です。後の 2 つは、その譜面でのライバルやランキングのスコアが必要で、現在の Leaderboard はそれをプレイに渡していません。
+**SCORE RATE** は beatoraja の `RATE_<n>` です。beatoraja の既定の一覧にはありませんが、`TargetProperty` は 0 から 100 の任意の割合を受け付けます（[L142-L151](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/TargetProperty.java#L142-L151)）[V]。Be-Music は割合を独自の設定 **Target score rate (%)** に 0.1 刻みで持ち、スコアは beatoraja と同じ丸めで求めます。AC 34 にも任意の割合のターゲットがあります [C] が、丸め方がわからないため、オプションには beatoraja の名前を付けています。
+
+ランキングのターゲットは、プレイを判定するルールでの、その譜面の Leaderboard ランキングを読みます。beatoraja が IR のランキングを読む箇所です（[`InternetRankingTargetProperty`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/TargetProperty.java#L327-L475)）[V]。
+
+- **IR RANK n** は `min(人数, n)` 位です。
+- **IR RANK TOP n%** は、上から `人数 × n / 100`（切り捨て）だけ下がった位置です。
+- **IR NEXT nRANK** は、EX スコアが自己ベスト以下になる最初の位置を探し、そこから n 位上がります。1 位より上には行きません。すべての位置が自己ベストより上のとき（未プレイの譜面など）、beatoraja は 1 位を選ぶため、Be-Music も同じにしています。
+
+ランキングはプレイの開始時に読むので、beatoraja と同じく、ターゲットはプレイが始まって少ししてから表示されます。それまでの間と、ランキングがない譜面（ランクインした人がいない、Leaderboard がキーにできない譜面、通信できない）では、ターゲットを表示しません。内蔵スキンのスコアグラフは RANK AAA を基準に進み、スキンのターゲットの数値は 0 のままです。ランキングは Leaderboard のページが既定で表示するもので、アシストなしのプレイが対象です。匿名プレイヤーは含みません。ターゲットの名前は beatoraja のターゲット名です。beatoraja はランキング上のプレイヤー名を表示します。
+
+提供していないもの: beatoraja の `RIVAL_*` です。その譜面でのライバルのスコアが必要ですが、Leaderboard にはまだライバルがありません。
 
 出典: beatoraja [`TargetProperty`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/TargetProperty.java#L87-L158) と [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayerConfig.java#L72-L76)。[#1132](https://github.com/nulltask/be-music/issues/1132) で追跡しています。
 
@@ -184,7 +198,7 @@ Options ダイアログの View タブの Effects に、AC 34 の詳細オプシ
 
 ## プレイ中に反映する表示オプション
 
-プレイはオプションを開始時に読みます。描画だけを変えるオプションはプレイ中にも追従し、Options ダイアログで変えると次のフレームから反映します。対象は、オートスクラッチのノーツ表示、レーンの明るさ、判定文字の表示と位置、判定範囲、処理済みノーツ、スコアターゲット、LR2 マニアの描画オプション（ACCELERATION から SIDEJUMP まで）です。一覧は `@be-music/player-scene-model` の `LIVE_DISPLAY_PLAY_OPTION_KEYS` にあります。変更は、プレイ中に反映するほかのオプション（ハイスピード、カバー、LIFT、判定タイミング）と同じく、譜面時刻とともにリプレイの `play.optionChanges` に記録します。それ以外のオプションは、LR2 の譜面生成と GAMBOL を含めて、プレイ開始時のままです。
+プレイはオプションを開始時に読みます。描画だけを変えるオプションはプレイ中にも追従し、Options ダイアログで変えると次のフレームから反映します。対象は、オートスクラッチのノーツ表示、レーンの明るさ、判定文字の表示と位置、判定範囲、処理済みノーツ、スコアターゲットとその割合、LR2 マニアの描画オプション（ACCELERATION から SIDEJUMP まで）です。一覧は `@be-music/player-scene-model` の `LIVE_DISPLAY_PLAY_OPTION_KEYS` にあります。変更は、プレイ中に反映するほかのオプション（ハイスピード、カバー、LIFT、判定タイミング）と同じく、譜面時刻とともにリプレイの `play.optionChanges` に記録します。それ以外のオプションは、LR2 の譜面生成と GAMBOL を含めて、プレイ開始時のままです。
 
 ## ANY KEY
 

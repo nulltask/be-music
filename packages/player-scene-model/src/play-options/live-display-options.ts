@@ -24,6 +24,7 @@ export const LIVE_DISPLAY_PLAY_OPTION_KEYS: readonly (keyof PlayOptions)[] = [
   'lr2Wave',
   'markProcessedNotes',
   'scoreTarget',
+  'scoreTargetRate',
   'showJudgeArea',
 ];
 

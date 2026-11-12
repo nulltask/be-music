@@ -4,6 +4,7 @@
 // seeds them: never rename one.
 
 import { parseCompressorMode, type CompressorMode } from '@be-music/player-browser/audio';
+import { DEFAULT_SCORE_TARGET_RATE } from '@be-music/player-scene-model';
 import { readStoredHiSpeed } from '../hi-speed-storage.ts';
 import { readStoredPlayTempoSettings } from '../play-tempo-settings.ts';
 import { parseRecordingFormatKey, recordingFormatKey } from '../recording-format-choice.ts';
@@ -287,6 +288,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     dpFlip: false,
     bpmGuide: false,
     bpmChangeWarning: false,
+    scoreTargetRate: DEFAULT_SCORE_TARGET_RATE,
     judgePosition: 0,
     judgeDisplay: 'SKIN',
     laneBrightness: 100,

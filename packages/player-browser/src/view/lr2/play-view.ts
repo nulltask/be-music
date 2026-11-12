@@ -2,6 +2,7 @@ import { isFreeZoneChannel } from '@be-music/chart-model';
 import { ChartTextOverlay } from '../shared/chart-text.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
+import { resolveLinearTargetPace } from '../shared/target-pace.ts';
 import {
   resolveLR2Earthquake,
   resolveLR2ManiaVisual,
@@ -509,12 +510,18 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     const seconds = play.currentSeconds();
     const bpm = play.displayBPM(seconds);
     const second = play.secondPlayer;
-    // A replay ghost paced as the target (its EX score now and over the chart): numbers 151 / 153, bar graphs 14 / 15.
+    // The target (its EX score now and over the chart): numbers 151 / 153, bar graphs 14 / 15. A replay ghost paces as
+    // it was played; a fixed target (a rank border, a score rate, a ranking place) advances with the notes judged.
     const targets = frame?.scoreTargets;
     const target =
       targets?.targetPaceEXScore !== undefined
         ? { exScore: targets.targetPaceEXScore, finalEXScore: targets.targetEXScore ?? targets.targetPaceEXScore }
-        : undefined;
+        : targets?.targetEXScore !== undefined
+          ? {
+              exScore: resolveLinearTargetPace(targets.targetEXScore, play.score),
+              finalEXScore: targets.targetEXScore,
+            }
+          : undefined;
     this.lr2State = resolveLR2PlayState(setup, {
       play: frame?.state ?? play.playState,
       score: play.score,
