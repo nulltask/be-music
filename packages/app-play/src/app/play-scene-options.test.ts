@@ -100,6 +100,7 @@ const PLAY_OPTIONS: PlayOptions = {
   hsFix: 'AVERAGE',
   laneCover: true,
   bga: 'OFF',
+  lr2RandomScratch1P: true,
 };
 
 const HASHES = { sha256: 'f'.repeat(64), md5: 'e'.repeat(32) } as ChartFileHashes;
@@ -131,6 +132,10 @@ describe('resolvePlaySceneOptions: a single play', () => {
     expect(tempo).toBe(0.9);
     expect(course).toBeUndefined();
     expect(settings).toEqual({
+      actionKeys: undefined,
+      anyKey: undefined,
+      builtInControlScheme: undefined,
+      controlKeys: undefined,
       autoPlay: false,
       autoPauseOnBlur: false,
       laneKeys: {},
@@ -169,6 +174,8 @@ describe('resolvePlaySceneOptions: a single play', () => {
       noteDurationMs: 500,
       randomFixedLane1P: 0,
       randomFixedLane2P: 0,
+      lr2RandomScratch1P: true,
+      lr2RandomScratch2P: false,
       randomSeed1P: '-1',
       randomSeed2P: '-1',
       scrollModifier: 'OFF',

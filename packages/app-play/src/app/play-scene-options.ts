@@ -102,6 +102,8 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
   const picked = {
     random1P: guiState.random1P,
     random2P: guiState.random2P,
+    lr2RandomScratch1P: playOptions.lr2RandomScratch1P,
+    lr2RandomScratch2P: playOptions.lr2RandomScratch2P,
     dpFlip: guiState.dpFlip,
     gauge: guiState.gauge,
     hiddenSudden1P: playOptions.hiddenSudden1P,
@@ -154,6 +156,8 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     randomSeed2P: playOptions.randomSeed2P,
     randomFixedLane1P: playOptions.randomFixedLane1P,
     randomFixedLane2P: playOptions.randomFixedLane2P,
+    lr2RandomScratch1P: lanes.lr2RandomScratch1P,
+    lr2RandomScratch2P: lanes.lr2RandomScratch2P,
     judgeAlgorithm: replay?.play.judgeAlgorithm ?? playOptions.judgeAlgorithm,
     longNoteModifier: playOptions.longNoteModifier,
     mineModifier: playOptions.mineModifier,

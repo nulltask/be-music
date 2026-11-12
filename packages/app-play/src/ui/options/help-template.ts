@@ -79,6 +79,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>The lane option for the 2P side of a double or two-player play, from the same list as Random 1P.</dd>
           <dt>H-RANDOM threshold BPM (beatoraja)</dt>
           <dd>The BPM whose 16th note counts as a too-fast repeat for H-RANDOM, ALL-SCR and the 7-to-9 scratch.</dd>
+          <dt>Include scratch 1P / 2P (LR2)</dt>
+          <dd>
+            Adds the scratch to that side's MIRROR, RANDOM, LR2 S-RANDOM, SCATTER or LR2 CONVERGE on 5, 7, 10 and 14
+            KEY.
+          </dd>
           <dt>Fixed key 1P (LR2; 0=default)</dt>
           <dd>The 1P lane LR2 CONVERGE gathers notes on. 0 picks the mode default.</dd>
           <dt>Fixed key 2P (LR2; 0=default)</dt>

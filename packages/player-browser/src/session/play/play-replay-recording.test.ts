@@ -47,6 +47,21 @@ describe('resolveReplayRecording', () => {
     },
   );
 
+  test('records LR2 scratch inclusion for each side alongside the selected arrangement', () => {
+    const recording = resolveReplayRecording(
+      {
+        random1P: 'MIRROR',
+        random2P: 'RANDOM',
+        lr2RandomScratch1P: true,
+        lr2RandomScratch2P: false,
+      },
+      undefined,
+      VIEW,
+    );
+    expect(recording.randomLane).toEqual({ p1: 'MIRROR', p2: 'RANDOM' });
+    expect(recording.options).toMatchObject({ lr2RandomScratch1P: true, lr2RandomScratch2P: false });
+  });
+
   test('records the lane options a play runs with, the beatoraja play included', () => {
     const recording = resolveReplayRecording({ random1P: 'OFF', random2P: 'OFF' }, undefined, VIEW);
     expect(recording.randomLane).toEqual({ p1: 'OFF', p2: 'OFF' });

@@ -299,6 +299,8 @@ export interface PlayOptions {
    */
   randomFixedLane1P: number;
   randomFixedLane2P: number;
+  lr2RandomScratch1P: boolean;
+  lr2RandomScratch2P: boolean;
   /** 2P side note arrangement (channels 21..25 + 28 + 29). */
   random2P: RandomMode;
   /**
