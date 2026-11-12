@@ -47,6 +47,7 @@ flowchart LR
 | HS-FIX CONSTANT                                                                              | LR2       | `light`   | すべての譜面                                                         | OpenLR2 L9334（`hsfix == 4`）                             |
 | SCATTER、SCATTER（9KEY 修正版）、CONVERGE（LR2）                                             | LR2       | `light`   |                                                                      | OpenLR2 L9334（`random > 3`）                             |
 | D-BATTLE、SP TO DP、LR2 EXTRA MODE                                                           | LR2       | `light`   | LR2 のルールでは別のランプ                                           | OpenLR2 L9250-L9332（`clear_db`、`clear_sd`、`clear_ex`） |
+| ADD LONGNOTES、ADD MINES（LR2）                                                              | LR2       | `light`   | 確率が 0 より大きい                                                  | OpenLR2 L67-L79（`m_addlong`、`m_addmine`）               |
 | SPIRAL、H-RANDOM、ALL-SCR、RANDOM-EX、S-RANDOM-EX、PMS の RANDOM / S-RANDOM、CONVERGE（PMS） | beatoraja | `light`   |                                                                      | beatoraja 0.8.9 `Random`、レーンとノートの入れ替え        |
 | BATTLE、BATTLE AS                                                                            | beatoraja | `light`   | `beatoraja:BATTLE`、または beatoraja のルールでの参照元のない BATTLE | `BMSPlayer` L252                                          |
 | 7 TO 9                                                                                       | beatoraja | `light`   | 変換した                                                             | `ModeModifier`                                            |
@@ -61,6 +62,7 @@ flowchart LR
 | BATTLE                                                                                       | AC 34     | `no-save` | `____:BATTLE`、または `____` のルールでの参照元のない BATTLE         | AC 34 のプレイオプション「スコアデータは保存されません」  |
 | PRACTICE                                                                                     | beatoraja | `no-save` | どのルールでも                                                       | beatoraja の PRACTICE は何も保存しない                    |
 | ANY KEY                                                                                      | PC        | `no-save` | すべてのルール                                                       | PC 版：ANY KEY のプレイは NO PLAY                         |
+| ADD NOTES、LOUDNESS（LR2）                                                                   | LR2       | `no-save` | 確率が 0 より大きい。どのルールでも同じ                              | OpenLR2 L27073-L27080（`isNosave`）                       |
 
 アシストにならないもの: MIRROR、RANDOM、S-RANDOM、R-RANDOM、SYNCHRONIZE / SYMMETRY RANDOM、M-RAN、DP FLIP、カバーと LIFT、ハイスピードのオプション、表示の CONSTANT（beatoraja の `enableConstant` は描画の設定）、地雷の ADD、スクロールの ADD、ADD LN、判定アルゴリズム、ゲージ（ASSIST EASY と ASSISTED EASY はゲージのランプで、アシストではありません）、ゲージの自動切り替え。PC 版の NO PLAY になるオプション（KEY ASSIST、ANY KEY、PC 版自身の H-RANDOM と BATTLE）は PC 版の規則で、ほかの参照元には当てはめません。ここでの H-RANDOM は beatoraja のアルゴリズムなので、beatoraja のものとして区分します。PC 版を参照元とするオプションは `____` のルールで `no-save` になります。Be-Music が提供するのは ANY KEY です（[ANY KEY](#any-key)）。
 
@@ -529,6 +531,31 @@ LR2 スキンのゲージボタンは 6 セルを巡回し、P.ATTACK と G.ATTA
 リプレイには `play.lr2ExtraMode`、`play.lr2ExtraLevel`、`play.lr2ExtraEffectiveLevel`、`play.lr2ExtraConvertedObjectCount`、`play.lr2ExtraTempo` を記録し、実効譜面のノートに変換後のノートを含めます。LR2 のプレイスキンには op 52 の代わりに op 53（EXTRA MODE オン）を渡します。LR2 自身のスコア保存条件は EXTRA のプレイを除外します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
 参照元：OpenLR2 が再構成した [`MakeExtraChart`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L24799-L25088)、[レベルの説明](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1391-L1404)、[スコア保存条件](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L68-L79)。対応 Issue は [#720](https://github.com/nulltask/be-music/issues/720) です。
+
+## LR2 マニアの譜面オプション
+
+どのルールでも、Options ダイアログの Play options で、LR2 の隠しマニアパネルにある譜面生成 4 種を選べます。**ADD NOTES (LR2)**、**LOUDNESS (LR2)**、**ADD LONGNOTES (LR2)**、**ADD MINES (LR2)** です。それぞれ LR2 と同じく **0**（オフ、既定）か **10** から **100** まで 10 刻みの確率で、併用できます。対象は LR2 が読み込める 5・7・9・10・14 KEY の譜面で、コースと PRACTICE では働きません（LR2 はコースで適用しません）。プレイ中は変更できません。
+
+| オプション        | 動作                                                                                                                                                                                                                                                  | 成立条件               | LR2                                                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **ADD NOTES**     | サイドにノーツか地雷がある時刻ごとに、そのオブジェクトの数だけ試行します。成立した試行は、そのサイドでその時刻に何もないレーン（スクラッチを含む）から均等に 1 つ選んでノーツを置きます。                                                             | `GetRand(100) <= 確率` | [L26744-L26819](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26744-L26819) |
+| **LOUDNESS**      | 同じ時刻ごとに、サイドにつき 1 回抽選します。成立すると、そのサイドの空きレーンすべて（スクラッチを含む）にノーツを置きます。                                                                                                                         | `GetRand(100) <= 確率` | [L26822-L26867](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26822-L26867) |
+| **ADD LONGNOTES** | 鍵盤レーンごとに、最後以外のオブジェクトにつき 1 回抽選します。成立すると、そのノーツをレーンの次のオブジェクトとの中間まで伸ばします。すでにそれより長いロングノートはそのままです。100 のときは、レーンの最後のノーツも譜面の終わりまで伸ばします。 | `GetRand(100) < 確率`  | [L27813-L27832](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27813-L27832) |
+| **ADD MINES**     | 鍵盤レーンごとに、最後以外のオブジェクトにつき 1 回抽選します。成立し、次のオブジェクトとの間隔が 200 ms を超えていれば、その中間に地雷を置きます。                                                                                                   | `GetRand(100) < 確率`  | [L27835-L27869](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27835-L27869) |
+
+`GetRand(100)` は 0 から 100 の整数です。ADD NOTES と LOUDNESS は 100 で必ず成立し、ADD LONGNOTES と ADD MINES は 100 でも 101 回に 100 回の成立です。
+
+- **ロングノート。** ADD NOTES と LOUDNESS は、最初に譜面のすべてのロングノートを始点だけに戻します。LR2 が追加の前に各オブジェクトの終点を始点に揃えるためです。
+- **追加したノーツ**には LR2 のキー音 1294、つまり `#WAV` の `ZY` が付きます。その定義がある譜面でだけ音が鳴ります。追加した地雷は値が 4 で、音はありません。
+- **ADD MINES とロングノート。** 間隔はそのオブジェクト自身の時刻から測りますが、次のオブジェクトがロングノートのときは、LR2 はこのオブジェクトのロングノート終点から測ります。ロングノートでないオブジェクトの終点は LR2 では −1 ms なので、地雷は次のロングノートの時刻の半分の位置に置かれます。レーンのどこであってもそうなります。Be-Music はこの挙動を残します。ロングノートの次が通常ノーツのときは始点から測るので、地雷がそのロングノートの上に置かれることがあります。ADD LONGNOTES を併用すると、中間まで伸ばしたノーツの終点ちょうどに地雷が置かれます。
+- **スクラッチ。** ADD NOTES と LOUDNESS はスクラッチレーンにも追加します。ADD LONGNOTES と ADD MINES はスクラッチレーンには触れません。
+- **適用順。** LR2 は ADD NOTES と LOUDNESS をレーンオプションの前に、ADD LONGNOTES と ADD MINES を配置後のレーンに対して実行します。Be-Music は 4 つともレーンオプションの前に実行し、追加したものはレーンオプションがレーンごと動かします。MIRROR や RANDOM などレーン単位で動かすオプションでは結果は同じです。S-RANDOM などノーツ単位のオプションでは、LR2 はシャッフル後のレーンに対して伸ばしたり地雷を置いたりします [I]。
+- **9 KEY。** LR2 のレーン 0（スクラッチ）は 9 KEY 譜面のレーンではありません。LR2 がそこに追加するかどうかは確認していないため、Be-Music は 9 つの鍵盤にだけ追加します [I]。
+- **抽選。** 4 つとも 1 つの seed から抽選します。seed はプレイごとに 16,777,216 未満で決め、レーンオプションと同じく `java.util.Random` で抽選します。Be-Music の中で譜面を再現するためのもので、LR2 自身の抽選を再現するものではありません。
+
+リプレイには `play.lr2Mania` を記録します。4 つの確率、`seed`、そして各生成が行った数を示す `changes`（追加したノーツ、全押しにした同時押し、伸ばしたノーツ、追加した地雷）です。リプレイの譜面には生成したノーツと地雷が入り、リプレイを開く際は確率と seed から譜面を作り直します。作り直した結果の数が記録と違うときは失敗します。LR2 は 4 つのどれを使ってもスコアを保存せず（[`CheckScoreSaveConditon`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L67-L79)）、ADD NOTES と LOUDNESS はさらに保存しないフラグを立てます（[L27073-L27080](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27073-L27080)）。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
+
+出典: OpenLR2 [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26744-L26867)。[#1110](https://github.com/nulltask/be-music/issues/1110)、[#1111](https://github.com/nulltask/be-music/issues/1111)、[#1112](https://github.com/nulltask/be-music/issues/1112)、[#1113](https://github.com/nulltask/be-music/issues/1113) で追跡しています。
 
 ## LN MODE
 

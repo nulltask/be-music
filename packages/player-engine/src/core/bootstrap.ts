@@ -1,3 +1,17 @@
+import {
+  addLR2LongNotes,
+  addLR2Mines,
+  addLR2Notes,
+  applyLR2Loudness,
+  clampLR2ManiaRate,
+  createLR2ManiaLocator,
+  hasLR2ManiaChart,
+  resolveLR2ManiaEndSeconds,
+  resolveLR2ManiaSides,
+  type LR2ManiaChartChanges,
+  type LR2ManiaChartRates,
+} from './lr2-mania-chart.ts';
+import { createBeatorajaLaneRandom, type LaneRandomSource } from '../lane-random-source.ts';
 import { getPlayModeLayouts, type ChartNotesOption } from '@be-music/chart-model';
 import {
   chartNotesCopies,
@@ -104,6 +118,8 @@ export interface PreparedPlaybackChartData {
   /** The chart's NOTES conversion that took effect (#932), and the objects it added. */
   chartNotes?: ChartNotesOption;
   chartNotesChangedObjectCount?: number;
+  /** LR2's mania chart generators as applied: the rates, the seed they drew from and what each changed. */
+  lr2Mania?: PreparedLR2Mania;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
   lr2ExtraEffectiveLevel?: LR2ExtraLevel;
@@ -261,6 +277,7 @@ export function preparePlaybackChart(
     | 'autoScratch2P'
     | 'lr2ExtraMode'
     | 'lr2ExtraLevel'
+    | 'lr2Mania'
     | 'course'
     | 'speed'
     | 'extraNoteDepth'
@@ -347,6 +364,20 @@ export function preparePlaybackChart(
   resolved = scrollResult?.chart ?? resolved;
   let playVariant = resolved.playVariant;
   const notes = resolved.notes.map(toTimedPlayableNote);
+  // LR2's mania chart generators (#1110-#1113), outside courses and PRACTICE as LR2 skips them in a course. One seeded
+  // source feeds all four, so the recorded seed rebuilds the chart.
+  const maniaRates = options.lr2Mania;
+  const maniaSides =
+    hasLR2ManiaChart(maniaRates) && options.course === undefined && options.practice === undefined
+      ? resolveLR2ManiaSides(resolved, options.laneModeExtension)
+      : [];
+  const mania = maniaSides.length > 0 ? startLR2Mania(maniaRates!, random) : undefined;
+  if (mania !== undefined) {
+    if (mania.rates.addNotes > 0)
+      mania.changes.addNotes = addLR2Notes(notes, resolved.mines, maniaSides, mania.rates.addNotes, mania.random);
+    if (mania.rates.loudness > 0)
+      mania.changes.loudness = applyLR2Loudness(notes, resolved.mines, maniaSides, mania.rates.loudness, mania.random);
+  }
   const longMode = options.longNoteModifier ?? 'OFF';
   const longChanges =
     longMode === 'ADD_LN' || longMode === 'ADD_CN' || longMode === 'ADD_HCN' || longMode === 'ADD_ALL'
@@ -366,6 +397,27 @@ export function preparePlaybackChart(
     placements: options.mineModifierPlacements,
   });
   const landmineNotes = mineResult.mines;
+  if (mania !== undefined) {
+    if (mania.rates.addLongNotes > 0)
+      mania.changes.addLongNotes = addLR2LongNotes(
+        notes,
+        landmineNotes,
+        maniaSides,
+        mania.rates.addLongNotes,
+        mania.random,
+        resolveLR2ManiaEndSeconds(resolved, notes),
+        (seconds) => createLR2ManiaLocator(resolved)(seconds).beat,
+      );
+    if (mania.rates.addMines > 0)
+      mania.changes.addMines = addLR2Mines(
+        notes,
+        landmineNotes,
+        maniaSides,
+        mania.rates.addMines,
+        mania.random,
+        createLR2ManiaLocator(resolved),
+      );
+  }
   const extraResult = addExtraNotes(resolved, notes, landmineNotes, {
     depth: options.extraNoteDepth,
     scratch: options.extraNoteScratch,
@@ -459,6 +511,7 @@ export function preparePlaybackChart(
           practiceChangedObjectCount: practice.changedObjectCount,
         }
       : {}),
+    ...(mania !== undefined ? { lr2Mania: { ...mania.rates, seed: mania.seed, changes: mania.changes } } : {}),
     ...(options.lr2ExtraMode !== undefined
       ? {
           lr2ExtraMode,
@@ -662,4 +715,36 @@ function resolveActiveFreeZoneChannels(
 
 function isActiveFreeZoneChannel(channel: string, activeFreeZoneChannels: ReadonlySet<string>): boolean {
   return activeFreeZoneChannels.has(normalizeChannel(channel));
+}
+
+/** LR2's mania chart generators as a prepared chart applied them. */
+export interface PreparedLR2Mania extends Required<LR2ManiaChartRates> {
+  /** The seed every draw came from; with the rates it rebuilds the chart. */
+  seed: string;
+  changes: LR2ManiaChartChanges;
+}
+
+/** The generators' clamped rates and their one seeded source: the recorded seed, or a fresh one drawn from `random`. */
+function startLR2Mania(
+  rates: LR2ManiaChartRates & { seed?: string },
+  random: (() => number) | undefined,
+): { rates: Required<LR2ManiaChartRates>; seed: string; random: LaneRandomSource; changes: LR2ManiaChartChanges } {
+  let seed = rates.seed;
+  if (seed === undefined) {
+    const draw = random?.();
+    if (draw === undefined || !Number.isFinite(draw) || draw < 0 || draw >= 1)
+      throw new RangeError("LR2's mania chart options require supplied randomness in [0, 1) or a recorded seed.");
+    seed = String(Math.floor(draw * 16_777_216));
+  }
+  return {
+    rates: {
+      addNotes: clampLR2ManiaRate(rates.addNotes),
+      loudness: clampLR2ManiaRate(rates.loudness),
+      addLongNotes: clampLR2ManiaRate(rates.addLongNotes),
+      addMines: clampLR2ManiaRate(rates.addMines),
+    },
+    seed,
+    random: createBeatorajaLaneRandom(seed),
+    changes: { addNotes: 0, loudness: 0, addLongNotes: 0, addMines: 0 },
+  };
 }

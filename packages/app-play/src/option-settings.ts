@@ -102,6 +102,10 @@ export interface OptionSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  lr2AddMines: PlayerGUIState['lr2AddMines'];
+  lr2AddLongNotes: PlayerGUIState['lr2AddLongNotes'];
+  lr2Loudness: PlayerGUIState['lr2Loudness'];
+  lr2AddNotes: PlayerGUIState['lr2AddNotes'];
   lr2Gambol: PlayerGUIState['lr2Gambol'];
   lr2SideJump: PlayerGUIState['lr2SideJump'];
   lr2SpiralEffect: PlayerGUIState['lr2SpiralEffect'];
@@ -316,6 +320,10 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
   assign(settings, 'bpmChangeWarning', booleanOf(raw.bpmChangeWarning));
+  assign(settings, 'lr2AddMines', resolvePlayOptionValue('lr2AddMines', raw.lr2AddMines));
+  assign(settings, 'lr2AddLongNotes', resolvePlayOptionValue('lr2AddLongNotes', raw.lr2AddLongNotes));
+  assign(settings, 'lr2Loudness', resolvePlayOptionValue('lr2Loudness', raw.lr2Loudness));
+  assign(settings, 'lr2AddNotes', resolvePlayOptionValue('lr2AddNotes', raw.lr2AddNotes));
   assign(settings, 'lr2Gambol', resolvePlayOptionValue('lr2Gambol', raw.lr2Gambol));
   assign(settings, 'lr2SideJump', resolvePlayOptionValue('lr2SideJump', raw.lr2SideJump));
   assign(settings, 'lr2SpiralEffect', resolvePlayOptionValue('lr2SpiralEffect', raw.lr2SpiralEffect));
@@ -606,6 +614,10 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('dpFlip');
   assignState('bpmGuide');
   assignState('bpmChangeWarning');
+  assignState('lr2AddMines');
+  assignState('lr2AddLongNotes');
+  assignState('lr2Loudness');
+  assignState('lr2AddNotes');
   assignState('lr2Gambol');
   assignState('lr2SideJump');
   assignState('lr2SpiralEffect');
@@ -751,6 +763,10 @@ export function captureOptionSettings(
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    lr2AddMines: state.lr2AddMines,
+    lr2AddLongNotes: state.lr2AddLongNotes,
+    lr2Loudness: state.lr2Loudness,
+    lr2AddNotes: state.lr2AddNotes,
     lr2Gambol: state.lr2Gambol,
     lr2SideJump: state.lr2SideJump,
     lr2SpiralEffect: state.lr2SpiralEffect,

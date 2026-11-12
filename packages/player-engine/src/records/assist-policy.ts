@@ -191,6 +191,15 @@ export function classifyReplayAssists(replay: AssistReplay): AssistFinding[] {
     default:
       break;
   }
+  // LR2's mania chart generators. ADD NOTES and LOUDNESS set LR2's `isNosave`; ADD LONGNOTES and ADD MINES only fail its
+  // score-save condition (OpenLR2 `LR2f.cpp` L67-L79, L27073-L27080), like SCATTER.
+  const mania = play.lr2Mania;
+  if (mania !== undefined) {
+    if (mania.addNotes > 0) add({ option: 'lr2-add-notes', source: 'lr2', assistClass: 'no-save' });
+    if (mania.loudness > 0) add({ option: 'lr2-loudness', source: 'lr2', assistClass: 'no-save' });
+    if (mania.addLongNotes > 0) add({ option: 'lr2-add-longnotes', source: 'lr2', assistClass: 'light' });
+    if (mania.addMines > 0) add({ option: 'lr2-add-mines', source: 'lr2', assistClass: 'light' });
+  }
   if (play.lr2ExtraMode === true)
     add({ option: 'lr2-extra-mode', source: 'lr2', assistClass: 'light', lr2Slot: 'extra' });
   if ((play.extraNoteChangeCount ?? 0) > 0) add({ option: 'extra-notes', source: 'beatoraja', assistClass: 'assist' });

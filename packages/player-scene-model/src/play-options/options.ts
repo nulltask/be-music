@@ -40,6 +40,14 @@ export interface PlayOptions {
    * change until the change (blue when the tempo rises, red when it falls).
    */
   bpmChangeWarning: boolean;
+  /** LR2 mania chart option (0 = OFF, 10–100) ADD MINES: a mine may be put half-way across a gap of a key lane. */
+  lr2AddMines: number;
+  /** LR2 mania chart option (0 = OFF, 10–100) ADD LONGNOTES: a key note may be held half-way to the next object of its lane. */
+  lr2AddLongNotes: number;
+  /** LR2 mania chart option (0 = OFF, 10–100) LOUDNESS: each chord may be filled across the whole side. Turns long notes into their heads; no score is saved. */
+  lr2Loudness: number;
+  /** LR2 mania chart option (0 = OFF, 10–100) ADD NOTES: at each chord, each note may add a note on an empty lane. Turns long notes into their heads; no score is saved. */
+  lr2AddNotes: number;
   /** LR2 mania option GAMBOL (LR2 rules only): 0 is OFF; 1 fixes the judge windows at VERY HARD; 2 also narrows GREAT and GOOD to 12 ms. Recorded as `play.lr2Gambol`. */
   lr2Gambol: 0 | 1 | 2;
   /** LR2 mania option SIDEJUMP (0 = OFF, 10–100): hops each note sideways on a 500 ms period, alternate notes in opposite directions. Drawing only. */

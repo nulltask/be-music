@@ -204,6 +204,20 @@ export function buildPlayOptionsFolder(
       this.setPlayOptions({ bottomShiftableGauge: value }),
     ),
   );
+  // LR2's mania chart generators: 0 is off, 10–100 the rate, as LR2's panel steps them. They build the chart before the
+  // play, so they are locked during one.
+  for (const [key, label] of [
+    ['lr2AddNotes', 'ADD NOTES (LR2)'],
+    ['lr2Loudness', 'LOUDNESS (LR2)'],
+    ['lr2AddLongNotes', 'ADD LONGNOTES (LR2)'],
+    ['lr2AddMines', 'ADD MINES (LR2)'],
+  ] as const) {
+    trackPlayOption(
+      notes
+        .addBinding(this.guiState, key, { label, min: 0, max: 100, step: 10 })
+        .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
+    );
+  }
   this.scrollModifierController = selectBinding(notes, this.guiState, 'scrollModifier', 'Scroll', {
     OFF: 'OFF',
     'REMOVE (beatoraja)': 'REMOVE',

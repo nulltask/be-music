@@ -137,6 +137,11 @@ export interface PlayerPlaySettings {
   dBattleScratch?: boolean;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
+  /**
+   * LR2's mania chart generators (ADD NOTES, LOUDNESS, ADD LONGNOTES, ADD MINES): each rate is 0 (off) or 10–100. `seed`
+   * is the seed a replay recorded; without one the play draws a fresh seed. Not applied in a course or in PRACTICE.
+   */
+  lr2Mania?: import('./lr2-mania-chart.ts').LR2ManiaChartRates & { seed?: string };
   mineModifier?: MineModifier;
   /** Independently assist the source play side; explicit values override autoScratch for that side. */
   autoScratch1P?: boolean;

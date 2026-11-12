@@ -92,6 +92,7 @@ export interface ReplayRecorderPlaySettings {
   dBattleScratch?: boolean;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
+  lr2Mania?: import('./format.ts').ReplayLR2Mania;
   lr2ExtraEffectiveLevel?: LR2ExtraLevel;
   lr2ExtraConvertedObjectCount?: number;
   lr2ExtraTempo?: number;
@@ -397,6 +398,8 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
         'lr2ExtraTempo',
       ] as const)
         if (options.play[field] !== undefined) Object.assign(play, { [field]: options.play[field] });
+      if (options.play.lr2Mania !== undefined)
+        play.lr2Mania = { ...options.play.lr2Mania, changes: { ...options.play.lr2Mania.changes } };
       if (options.play.extraNoteDepth !== undefined) play.extraNoteDepth = options.play.extraNoteDepth;
       if (options.play.extraNoteScratch !== undefined) play.extraNoteScratch = options.play.extraNoteScratch;
       if (options.play.extraNoteChangeCount !== undefined)

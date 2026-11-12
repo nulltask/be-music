@@ -695,6 +695,12 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       longNoteMode: playOptions.longNoteMode,
       lr2ExtraMode: playOptions.lr2ExtraMode,
       lr2ExtraLevel: playOptions.lr2ExtraLevel,
+      lr2Mania: {
+        addNotes: playOptions.lr2AddNotes,
+        loudness: playOptions.lr2Loudness,
+        addLongNotes: playOptions.lr2AddLongNotes,
+        addMines: playOptions.lr2AddMines,
+      },
       extraNoteDepth: playOptions.extraNoteDepth,
       extraNoteScratch: playOptions.extraNoteScratch,
       gaugeAutoShift: playOptions.gaugeAutoShift,

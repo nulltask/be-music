@@ -834,6 +834,31 @@ test('scroll modifier selection and actual-change fact round trip independently'
   );
 });
 
+test("LR2's mania chart generators round-trip and reject malformed records", () => {
+  const lr2Mania = {
+    addNotes: 30,
+    loudness: 0,
+    addLongNotes: 100,
+    addMines: 10,
+    seed: '16777215',
+    changes: { addNotes: 4, loudness: 0, addLongNotes: 9, addMines: 1 },
+  };
+  const replay = makeReplay();
+  replay.play.lr2Mania = lr2Mania;
+  expect(parseReplay(serializeReplay(replay)).play.lr2Mania).toEqual(lr2Mania);
+  const broken = (change: (mania: Record<string, unknown>) => void) => {
+    const raw = JSON.parse(serializeReplay(replay));
+    change(raw.play.lr2Mania);
+    return () => parseReplay(raw);
+  };
+  expect(broken((mania) => (mania.addNotes = 110))).toThrow(/0\.\.100/);
+  expect(broken((mania) => (mania.seed = -1))).toThrow(/seed/);
+  expect(broken((mania) => delete mania.changes)).toThrow(ReplayParseError);
+  expect(broken((mania) => Object.assign(mania, { addNotes: 0, loudness: 0, addLongNotes: 0, addMines: 0 }))).toThrow(
+    /at least one/,
+  );
+});
+
 test('SOFTLANDING round-trips its level and drawn factors, and needs its timeline', () => {
   for (const scrollModifier of ['SOFTLANDING-1', 'SOFTLANDING-2'] as const) {
     const replay = makeReplay();
