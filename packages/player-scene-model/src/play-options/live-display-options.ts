@@ -6,7 +6,7 @@ import { resolvePlayOptionValue } from './choices.ts';
 import type { PlayOptions } from './options.ts';
 
 /** The display-only play options a running play follows live. */
-export const LIVE_DISPLAY_PLAY_OPTION_KEYS = [
+export const LIVE_DISPLAY_PLAY_OPTION_KEYS: readonly (keyof PlayOptions)[] = [
   'autoScratchNotes',
   'judgeDisplay',
   'laneBrightness',
@@ -24,7 +24,7 @@ export const LIVE_DISPLAY_PLAY_OPTION_KEYS = [
   'markProcessedNotes',
   'scoreTarget',
   'showJudgeArea',
-] as const satisfies readonly (keyof PlayOptions)[];
+];
 
 const LIVE_KEYS: ReadonlySet<string> = new Set(LIVE_DISPLAY_PLAY_OPTION_KEYS);
 
