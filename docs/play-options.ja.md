@@ -52,7 +52,7 @@ flowchart LR
 | 7 TO 9                                                                                       | beatoraja | `light`   | 変換した                                                             | `ModeModifier`                                            |
 | BPM GUIDE                                                                                    | beatoraja | `light`   | 譜面の BPM が変わる                                                  | `BMSPlayer` L201-L205                                     |
 | 地雷の REMOVE、スクロールの REMOVE                                                           | beatoraja | `light`   | 実際に取り除いた                                                     | `MineNoteModifier`、`ScrollSpeedModifier`                 |
-| LEGACY NOTE（A-SCR & LEGACY NOTE を含む）                                                    | AC 34     | `light`   |                                                                      | AC 34 のアシストオプション                                |
+| LEGACY NOTE（A-SCR & LEGACY NOTE を含む）                                                    | AC 34     | `light`   | CN か BSS を実際に変換した                                           | AC 34 のアシストオプション                                |
 | LN REMOVE                                                                                    | beatoraja | `assist`  | ロングノートを取り除いた                                             | `LongNoteModifier` L27-L37                                |
 | ADD CN、ADD HCN、ADD ALL                                                                     | beatoraja | `assist`  | CN か HCN を追加した                                                 | `LongNoteModifier` L41-L69                                |
 | EXTRA ノート変換                                                                             | beatoraja | `assist`  | ノートを変換した                                                     | `ExtraNoteModifier`                                       |
@@ -114,9 +114,9 @@ Options ダイアログ の Play options の一番上で **Judgment windows → 
 
 ## LEGACY NOTE と LN REMOVE
 
-Options ダイアログ の **Long notes** は **OFF** が既定です。**LEGACY NOTE (AC 34)** はチャージノートとバックスピンスクラッチを始点だけにし、通常の LN は維持します。HCN はこの AC オプションの対象外として維持します。**LN REMOVE (beatoraja)** は、beatoraja 0.8.9 の REMOVE を除去率最大で適用した場合と同様に、スクラッチを含むすべての LN・CN・HCN を始点だけにします。始点のキー音と時刻を保持し、終点の判定と音声を除去します。該当するノートがない譜面は変化しません。
+Options ダイアログ の **Long notes** は **OFF** が既定です。**LEGACY NOTE (AC 34)** はチャージノートとバックスピンスクラッチを始点だけにし、通常の LN は維持します。HCN はこの AC オプションの対象外として維持します。**LN REMOVE (beatoraja)** は、beatoraja 0.8.9 の REMOVE を除去率最大で適用した場合と同様に、スクラッチを含むすべての LN・CN・HCN を始点だけにします。始点のキー音と時刻を保持し、終点の判定と音声を除去します。該当するノートがない譜面は変化しません。LEGACY NOTE がアシスト扱いになるのは実際に変換した譜面だけです。チャージノートのない譜面は通常のランプになります（RemyWiki の IIDX Glossary が AC について記録 [C]。公式ページはランプに触れていません。[#1139](https://github.com/nulltask/be-music/issues/1139)）。
 
-エンジンと描画は変換後のノートを共有します。リプレイには変換方式と変換後の始点だけのノートを記録し、元の譜面のフィンガープリントは読み込んだ譜面を識別する値として維持します。リプレイを開く際は記録された変換を適用してからレーン配置を復元します。参照元でもプレイ前に譜面を変換する設定のため、プレイ中の選択はロックします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
+エンジンと描画は変換後のノートを共有します。リプレイには変換方式と変換後の始点だけのノートを記録し、元の譜面のフィンガープリントは読み込んだ譜面を識別する値として維持します。変換したノート数も `play.longNoteModifierChangeCount` に記録します。この値を持たない以前の LEGACY NOTE のリプレイは、変換したものとして扱います。リプレイを開く際は記録された変換を適用してからレーン配置を復元します。参照元でもプレイ前に譜面を変換する設定のため、プレイ中の選択はロックします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
 参照元：AC 34 の[アシストオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)、beatoraja 0.8.9 の [`LongNoteModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/LongNoteModifier.java)。対応 Issue は [#710](https://github.com/nulltask/be-music/issues/710) です。
 

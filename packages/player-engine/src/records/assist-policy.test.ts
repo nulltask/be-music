@@ -160,6 +160,14 @@ describe('classifyReplayAssists', () => {
     ],
     ['LEGACY NOTE', { longNoteModifier: 'LEGACY' }, {}, 'long-note:LEGACY', '____', 'light'],
     [
+      'LEGACY NOTE that converted charge notes',
+      { longNoteModifier: 'LEGACY', longNoteModifierChangeCount: 3 },
+      {},
+      'long-note:LEGACY',
+      '____',
+      'light',
+    ],
+    [
       'LN REMOVE that removed notes',
       { longNoteModifier: 'REMOVE', longNoteModifierChangeCount: 2 },
       {},
@@ -235,6 +243,8 @@ describe('classifyReplayAssists', () => {
     expect(classOf({ mineModifier: 'REMOVE', mineModifierChangeCount: 0 })).toBe('none');
     expect(classOf({ scrollModifier: 'REMOVE', scrollModifierChanged: false })).toBe('none');
     expect(classOf({ longNoteModifier: 'REMOVE', longNoteModifierChangeCount: 0 })).toBe('none');
+    // LEGACY NOTE on a chart without charge notes.
+    expect(classOf({ longNoteModifier: 'LEGACY', longNoteModifierChangeCount: 0 })).toBe('none');
     // Additions that set no assist flag in beatoraja: mines, scroll changes, plain LN.
     expect(classOf({ mineModifier: 'ADD_RANDOM', mineModifierChangeCount: 9 })).toBe('none');
     expect(classOf({ scrollModifier: 'ADD', scrollModifierChanged: true })).toBe('none');
