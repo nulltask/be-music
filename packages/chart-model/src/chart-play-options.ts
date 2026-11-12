@@ -34,18 +34,20 @@ export interface ChartPlayOptions {
   addMine?: true;
   /** The note conversion the chart forces, replacing the player's battle conversion when it copies the chart (#932). */
   notes?: ChartNotesOption;
+  /** Legacy CRA-RHS sets the chart’s standard playback rate. */
+  baseSpeed?: 1.2 | 1.5 | 2;
 }
 
 /**
  * The recorded form: versioned, so a later profile never reinterprets an older replay. `notes` joined version 1 without a
- * bump: no earlier recorder wrote it, and an earlier strict parser rejects it.
+ * bump. Version 2 records the chart’s BASE-SPEED while keeping the player tempo relative to it.
  */
 export interface ChartPlayOptionProgram {
-  version: 1;
+  version: 1 | 2;
   options: ChartPlayOptions;
 }
 
-export const CHART_PLAY_OPTION_PROGRAM_VERSION = 1;
+export const CHART_PLAY_OPTION_PROGRAM_VERSION = 2;
 
 type Patch = (options: ChartPlayOptions) => ChartPlayOptions;
 
@@ -61,6 +63,11 @@ function without<K extends keyof ChartPlayOptions>(options: ChartPlayOptions, ..
  * note conversion (`CRAZY_OFF` does not, as in nanasigroove).
  */
 export function parseChartPlayOption(declaration: string): Patch | undefined {
+  const baseSpeed = /^774:CRA-RHS([123])$/.exec(declaration);
+  if (baseSpeed !== null) {
+    const rate = ([1.2, 1.5, 2] as const)[Number(baseSpeed[1]) - 1]!;
+    return (options) => ({ ...options, baseSpeed: rate });
+  }
   const random = /^774:RANDOM_(.+)$/.exec(declaration)?.[1];
   if (random !== undefined) {
     if (random === 'OFF') return (options) => without(options, 'random');
@@ -108,7 +115,7 @@ export function compileChartPlayOptions(timeline: Pick<ChartOptionTimeline, 'ini
     const patch = parseChartPlayOption(resolveChartLegacyOptionAlias(declaration) ?? declaration);
     if (patch !== undefined) options = patch(options);
   }
-  return { version: CHART_PLAY_OPTION_PROGRAM_VERSION, options };
+  return { version: options.baseSpeed === undefined ? 1 : CHART_PLAY_OPTION_PROGRAM_VERSION, options };
 }
 
 /** True when `program` forces anything. */

@@ -117,7 +117,8 @@ A manual play that seeks is practice (`PlayResult.practice`). Its first seek dis
   their own page still opens and says why (`score.unranked`). A **course stage** sent on its own is one
   (`course-stage`): a stage starts from the state the previous one left, so it is not a single-chart play; it is ranked
   as part of its course run instead (section 6.1). So is a **play at another tempo** (`tempo`: `play.tempo` other than
-  1, the web player's tempo slider): it is practice, as beatoraja's frequency trainer does not save its scores.
+  1 at any point): it is practice, as beatoraja's frequency trainer does not save its scores. The multiplier is relative
+  to the chart's [BASE-SPEED](./adr/0041-chart-authored-base-speed.md).
   **Failed plays** (the gauge
   emptied) are stored and count as plays. So are **plays given up with ESC** (`play.aborted`): a play quit mid-way is
   ranked as a failed play under every ruleset, whatever its gauge stood at, as LR2 and beatoraja save one.

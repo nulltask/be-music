@@ -57,6 +57,7 @@ export interface PlayMediaContext {
   readonly resolvedChart: BeMusicJSON | undefined;
   readonly disposed: boolean;
   readonly tempo: number;
+  readonly playbackTempo?: number;
   audioContext: AudioContext | undefined;
   audioBus: AudioBusHandle | undefined;
   audioAnalyzer: AudioAnalyzer | undefined;
@@ -165,7 +166,7 @@ export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
       source: ctx.source,
       chartPath: ctx.chart.chartPath,
       samples: ctx.decodedSamples,
-      tempo: ctx.tempo,
+      tempo: ctx.playbackTempo ?? ctx.tempo,
       tempoPitchMode: pitchMode,
       tempoStretchAlgorithm: ctx.options.tempoStretchAlgorithm ?? 'signalsmith',
       ...(ctx.options.nonstop !== undefined ? { nonstop: ctx.options.nonstop } : {}),
@@ -176,7 +177,7 @@ export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
     }));
   // bmson slices index into the stretched samples (a bmson chart has no NONSTOP stages: one rate).
   if (stretched && ctx.bmsonSlicePlayback !== undefined) {
-    ctx.bmsonSlicePlayback = stretchSlicePlayback(ctx.bmsonSlicePlayback, ctx.tempo);
+    ctx.bmsonSlicePlayback = stretchSlicePlayback(ctx.bmsonSlicePlayback, ctx.playbackTempo ?? ctx.tempo);
   }
   // Build the WebAudioSession now that the sample cache is populated. The session captures the maps by reference
   // (the underlying entries can still grow if asset loading races onto a later tick), and owns every sample
@@ -204,8 +205,8 @@ export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
 }
 
 /** Every sample's playback rate: the play tempo when it moves the pitch, 1 when the samples were stretched to it. */
-export function samplePlaybackRate(ctx: Pick<PlayMediaContext, 'options' | 'tempo'>): number {
-  return resolveSamplePlaybackRate(ctx.options.tempoPitchMode ?? 'pitch', ctx.tempo);
+export function samplePlaybackRate(ctx: Pick<PlayMediaContext, 'options' | 'tempo' | 'playbackTempo'>): number {
+  return resolveSamplePlaybackRate(ctx.options.tempoPitchMode ?? 'pitch', ctx.playbackTempo ?? ctx.tempo);
 }
 
 /**
@@ -241,7 +242,7 @@ export async function prepareBGA(ctx: PlayMediaContext): Promise<void> {
       maxLongEdgePx: ctx.options.bgaTranscodeMaxLongEdgePx,
       useWebCodecs: ctx.options.bgaTranscodeUseWebCodecs,
     },
-    tempo: ctx.tempo,
+    tempo: ctx.playbackTempo ?? ctx.tempo,
     isCancelled: () => ctx.disposed,
   });
   if (ctx.disposed) return;
@@ -304,7 +305,7 @@ export function disposePlayAudio(ctx: PlayMediaTeardownContext, options: PlayDis
             bmsonSlicePlayback: ctx.bmsonSlicePlayback,
             currentSeconds: ctx.currentSeconds(),
           }),
-          ctx.tempo,
+          ctx.playbackTempo ?? ctx.tempo,
         )
       : 0;
   const webAudioSession = ctx.webAudioSession;

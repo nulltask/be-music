@@ -209,7 +209,7 @@ export interface RecordPlayKind {
   /** Effective no-recovery policy, not merely selecting spec mode for an ordinary chart. */
   recoveryDisabled?: boolean;
   replay: boolean;
-  /** The play's tempo (`play.tempo`): another tempo than 1 is practice. */
+  /** The player multiplier (`play.tempo`) relative to the chart's rate. A multiplier other than 1 is practice. */
   tempo: number;
   /**
    * A course stage played without its chart's NOTES COPY (#932), which a course leaves out to keep its key mode: the

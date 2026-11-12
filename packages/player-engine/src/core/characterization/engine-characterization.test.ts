@@ -478,3 +478,35 @@ describe('engine characterization: play scenarios', () => {
     await expectSnapshot('scenarios/terminal-input', { manual, replay });
   });
 });
+
+test('chart BASE-SPEED drives the clock and audio while recording only player tempo changes', async () => {
+  const chart = basicChart();
+  chart.bms.options = ['774:CRA-RHS3'];
+  let audioSpeed: number | undefined;
+  const standard = await observePlay({
+    chart,
+    driver: 'manual',
+    script: scriptForNotes(chart, { offsetsMs: [0], timeScale: 2 }),
+    options: {
+      createAudioSession: async ({ options }) => {
+        audioSpeed = options.speed;
+        return undefined;
+      },
+    },
+  });
+  expect(standard.outcome).toBe('completed');
+  expect(standard.summary?.perfect).toBe(resolveChart(chart).notes.length);
+  expect(audioSpeed).toBe(2);
+  expect(standard.replay?.chart.chartPlayOptions).toEqual({ version: 2, options: { baseSpeed: 2 } });
+  expect(standard.replay?.play).not.toHaveProperty('tempo');
+
+  const adjusted = await observePlay({
+    chart,
+    driver: 'manual',
+    script: [command(100, { kind: 'tempo', tempo: 0.5 })],
+    options: { speed: 1.25 },
+  });
+  expect(adjusted.outcome).toBe('completed');
+  expect(adjusted.replay?.play.tempo).toBe(1.25);
+  expect(adjusted.replay?.play.tempoChanges).toEqual([{ timeUs: 250_000, tempo: 0.5 }]);
+});

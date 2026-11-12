@@ -632,7 +632,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       ...(ctx.nonstopMixer !== undefined ? { stageMixer: ctx.nonstopMixer } : {}),
       playbackRate: samplePlaybackRate(ctx),
       playbackRateFollowsTempo: supportsLiveTempoChange(ctx.options.tempoPitchMode ?? 'pitch'),
-      tempo: ctx.tempo,
+      tempo: ctx.playbackTempo ?? ctx.tempo,
       // A looping PRACTICE play fades in and crossfades back to its start each time round (#949).
       ...(!ctx.options.replay && ctx.options.practiceRange !== undefined
         ? { seekCrossfadeSeconds: PRACTICE_LOOP_CROSSFADE_SECONDS }

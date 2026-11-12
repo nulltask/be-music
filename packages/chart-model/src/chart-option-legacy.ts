@@ -6,8 +6,8 @@
  *
  * The judgment and note aliases (`CRA-HARD1/2`, `CRA-ULTHARD`, `CRA-2JUDGE`, `CRA-HYPER` → `NOTES_DOUBLE`,
  * `CRA-CPDOUBLE` → `NOTES_COPY`) feed `compileChartPlayOptions`. The catalog lists `CRA-2JUDGE` as `CRAZY_HELLJUDGE`
- * like `CRA-ULTHARD`; Be-Music follows it. Not listed, and so still diagnosed `unsupported-option`: `CRA-RHS1/2/3` (a
- * playback-rate change, which Be-Music keeps apart from display options). The legacy `HSP-*` values are the display
+ * like `CRA-ULTHARD`; Be-Music follows it. `CRA-RHS1/2/3` have no modern alias and compile directly into a playback rate.
+ * The legacy `HSP-*` values are the display
  * compiler's own; the other legacy families (`RND-*`, `GTP-*`, `GLV-*`) are not mapped.
  */
 const LEGACY_OPTION_ALIASES: ReadonlyMap<string, string> = new Map(

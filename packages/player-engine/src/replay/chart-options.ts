@@ -93,12 +93,13 @@ export function shiftChartOptionProgram(
   return { version: program.version, initial: startUs === 0 ? seed : {}, cues };
 }
 
-/** Parse a recorded chart gameplay program (#844) strictly: version 1, known fields and values only. */
+/** Parse a recorded chart gameplay program strictly. Version 2 carries the authored base speed. */
 export function parseChartPlayOptionProgram(raw: unknown): ChartPlayOptionProgram {
   const program = expectRecord(raw, 'chart.chartPlayOptions');
   if (Object.keys(program).some((key) => key !== 'version' && key !== 'options'))
     throw new ReplayParseError('chart.chartPlayOptions: unknown program field');
-  if (program.version !== 1) throw new ReplayParseError('chart.chartPlayOptions.version: expected 1');
+  const { version } = program;
+  if (version !== 1 && version !== 2) throw new ReplayParseError('chart.chartPlayOptions.version: expected 1 or 2');
   const options = expectRecord(program.options, 'chart.chartPlayOptions.options');
   const parsed: ChartPlayOptions = {};
   for (const [key, value] of Object.entries(options)) {
@@ -108,9 +109,13 @@ export function parseChartPlayOptionProgram(raw: unknown): ChartPlayOptionProgra
       parsed.judge = value as ChartPlayOptions['judge'];
     else if (key === 'hellJudge' && value === true) parsed.hellJudge = true;
     else if (key === 'addMine' && value === true) parsed.addMine = true;
+    else if (key === 'baseSpeed' && version === 2 && (value === 1.2 || value === 1.5 || value === 2))
+      parsed.baseSpeed = value;
     else if (key === 'notes' && (CHART_NOTES_OPTIONS as readonly unknown[]).includes(value))
       parsed.notes = value as ChartPlayOptions['notes'];
     else throw new ReplayParseError(`chart.chartPlayOptions.options.${key}: unsupported value`);
   }
-  return { version: 1, options: parsed };
+  if (version === 2 && parsed.baseSpeed === undefined)
+    throw new ReplayParseError('chart.chartPlayOptions.options.baseSpeed: required in version 2');
+  return { version, options: parsed };
 }

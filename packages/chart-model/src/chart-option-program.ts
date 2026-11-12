@@ -82,7 +82,7 @@ type StateChange = (state: ChartOptionState) => ChartOptionState;
 function compileDeclaration(source: string, timed: boolean): StateChange | ChartOptionDiagnostic['code'] {
   // Legacy HID-* / CRA-* IDs are initial-only, like the legacy HSP values: A6 disregards old IDs.
   const legacy = resolveChartLegacyOptionAlias(source);
-  if (legacy !== undefined && timed) return 'initial-only-alias';
+  if (timed && (legacy !== undefined || /^774:CRA-RHS[123]$/.test(source))) return 'initial-only-alias';
   const declaration = legacy ?? source;
   if (/^charatbeatHDX:BGAMODE(?:\s|$)/.test(declaration)) {
     const mode = /^charatbeatHDX:BGAMODE\s+([012])$/.exec(declaration)?.[1];

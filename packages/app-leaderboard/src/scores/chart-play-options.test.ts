@@ -11,7 +11,8 @@ const document = (...options: string[]) =>
   );
 const replay = (options: ChartPlayOptions | undefined, course?: 'grade' | 'nonstop') =>
   ({
-    chart: options === undefined ? {} : { chartPlayOptions: { version: 1, options } },
+    chart:
+      options === undefined ? {} : { chartPlayOptions: { version: options.baseSpeed === undefined ? 1 : 2, options } },
     play: course === undefined ? {} : { course: { kind: course } },
   }) as unknown as Pick<BeMusicReplay, 'chart' | 'play'>;
 
@@ -44,4 +45,16 @@ describe('checkChartPlayOptions (#932)', () => {
     expect(checkChartPlayOptions(replay(undefined, 'nonstop'), undefined)).toEqual({ ok: true });
     expect(checkChartPlayOptions(replay({ random: 'MIRROR' }, 'nonstop'), undefined).ok).toBe(false);
   });
+});
+
+it('checks the replay’s authored BASE-SPEED against the chart and preserves NONSTOP policy', () => {
+  const chart = document('774:CRA-RHS3');
+  expect(checkChartPlayOptions(replay({ baseSpeed: 2 }), chart)).toEqual({ ok: true });
+  expect(checkChartPlayOptions(replay(undefined), chart)).toEqual({ ok: false, reason: 'chart-play-options-mismatch' });
+  expect(checkChartPlayOptions(replay({ baseSpeed: 1.5 }), chart)).toEqual({
+    ok: false,
+    reason: 'chart-play-options-mismatch',
+  });
+  expect(checkChartPlayOptions(replay({ baseSpeed: 2 }, 'grade'), chart)).toEqual({ ok: true });
+  expect(checkChartPlayOptions(replay(undefined, 'nonstop'), chart)).toEqual({ ok: true });
 });

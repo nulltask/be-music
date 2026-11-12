@@ -75,6 +75,7 @@ export interface PlayfieldRuntime {
   readonly laneTimelineBeats: Float64Array;
   readonly scrollHiSpeed: HiSpeedTransition;
   readonly tempo: number;
+  readonly playbackTempo?: number;
   readonly playState: PlayState;
   readonly score: ScoreSummary;
   /** The 2P player of a two-player play (LR2 BATTLE): its scores, play state and the engine's gauge for it. */

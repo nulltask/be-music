@@ -122,3 +122,12 @@ test('only an affected no-recovery play is stored unranked; fingerprints remain 
     checkReplayEligibility(replay({ bmsonTotalMode: 'spec' }, { ...chart, totalUnit: 'absolute' })),
   ).not.toHaveProperty('unranked');
 });
+
+test('chart BASE-SPEED ranks at its standard speed and player tempo changes count as practice', () => {
+  const chart = { chartPlayOptions: { version: 2 as const, options: { baseSpeed: 2 as const } } };
+  expect(checkReplayEligibility(replay({}, chart))).not.toHaveProperty('unranked');
+  expect(checkReplayEligibility(replay({ tempo: 0.5 }, chart))).toMatchObject({ unranked: 'tempo' });
+  expect(checkReplayEligibility(replay({ tempoChanges: [{ timeUs: 1000, tempo: 1.1 }] }, chart))).toMatchObject({
+    unranked: 'tempo',
+  });
+});

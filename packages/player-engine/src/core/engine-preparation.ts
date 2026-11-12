@@ -265,7 +265,7 @@ export async function initializePlaybackRuntimeResources(params: {
   const audioInitialization = createTrackedPromise(
     createAudioSessionIfEnabled(
       params.resolvedChart,
-      params.options,
+      (params.options.speed ?? 1) === params.speed ? params.options : { ...params.options, speed: params.speed },
       params.audioMode,
       progressReporter.reportAudioProgress,
     ).then((audioSession) => {

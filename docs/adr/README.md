@@ -69,3 +69,5 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [0039: Run Accounts in the Dashboard Worker on the Dashboard host](./0039-accounts-in-dashboard.md)
 
 - [0040: Key scratch holds by a recorded input source](./0040-replay-input-sources.md)
+
+- [Treat chart-authored BASE-SPEED as the standard rate](./0041-chart-authored-base-speed.md)
