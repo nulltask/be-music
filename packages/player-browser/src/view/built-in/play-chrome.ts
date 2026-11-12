@@ -299,10 +299,24 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   };
 }
 
+/**
+ * The judgment position option in stage pixels: `position` percent of the lanes' height, from their top to the judge
+ * line. Positive is down the lanes.
+ */
+export function resolveJudgeOffsetY(position: number, top: number, judgementY: number): number {
+  return Math.round(((judgementY - top) * position) / 100);
+}
+
 /** Keep the base layout/BGA fixed and publish each side's actual line for the skin's chrome. */
 function withLiftLines(ctx: BeMusicLayoutContext, layout: BeMusicGameplayLayout): BeMusicGameplayLayout {
   const bga = resolveVideoBGA(ctx, layout.bga, resolveLaneGeometry(ctx));
   if (bga !== layout.bga) layout = { ...layout, bga };
+  const judgeOffsetY = resolveJudgeOffsetY(
+    ctx.playFrame?.playOptions.judgePosition ?? 0,
+    layout.playfield.top,
+    layout.playfield.judgementY,
+  );
+  if (judgeOffsetY !== 0) layout = { ...layout, playfield: { ...layout.playfield, judgeOffsetY } };
   if (!ctx.drawsLift) return layout;
   const sides = { ...layout.playfield.sides };
   for (const cover of ctx.play.resolveLaneCovers()) {
@@ -322,6 +336,8 @@ export interface BGATargetsContext extends LaneGeometryContext {
 /** What the Be-Music chrome's layout is worked out from, and its cache: a play view's members of these names. */
 export interface BeMusicLayoutContext extends LaneGeometryContext {
   readonly drawsLift?: boolean;
+  /** The frame being drawn, for its judgment position. */
+  readonly playFrame?: PlayChromeContext['playFrame'];
   beMusicLayout:
     | {
         twoPlayer: boolean;

@@ -18,6 +18,7 @@ import {
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 import {
   OptionFolder,
+  type OptionTabs,
   type OptionBinding,
   type OptionButton,
   type OptionContainer,
@@ -62,7 +63,7 @@ import {
 } from './compressor.ts';
 import { buildCourseFolder } from './course.ts';
 import { buildDeveloperFolder } from './developer.ts';
-import { OPTION_FOLDERS, OPTIONS_TABS, type OptionFolderSpec } from './folders.ts';
+import { OPTION_FOLDERS, OPTIONS_TABS, VIEW_OPTION_PAGES, type OptionFolderSpec } from './folders.ts';
 import { buildLibraryFolder } from './library.ts';
 import { PlayLock } from './play-lock.ts';
 import {
@@ -82,6 +83,7 @@ import { buildKeyConfigFolder } from './keys.ts';
 import { relabelOptions } from './labels.ts';
 import { buildTempoFolder } from './tempo.ts';
 import { onPlayerLangChange, playerLang } from '../../player-copy.ts';
+import { describeRecordConsequence } from '../../services/record-consequence.ts';
 import { releaseFocusOnClose } from '../dialog-focus.ts';
 /**
  * What the Options dialog needs from the app: the settings and stores its controllers change, readers of what the app has
@@ -411,6 +413,18 @@ export class OptionsDialog {
   public toggle(): void {
     if (this.gui !== undefined) this.gui.expanded = !this.gui.expanded;
   }
+  /** The dialog's tabs, the View folder's pages and the LR2 mania options section on its Effects page. */
+  public topTabs: OptionTabs | undefined;
+  public viewTabs: OptionTabs | undefined;
+  public lr2ManiaFolder: OptionFolder | undefined;
+  /** Opens the Options dialog on the LR2 mania options: the View tab's Effects page, scrolled to the section. */
+  public openLR2ManiaOptions(): void {
+    if (this.gui === undefined) return;
+    this.gui.expanded = true;
+    this.topTabs?.select(OPTIONS_TABS.indexOf('View'));
+    this.viewTabs?.select(VIEW_OPTION_PAGES.indexOf('Effects'));
+    this.lr2ManiaFolder?.element.scrollIntoView({ block: 'start' });
+  }
   /**
    * Builds the Options dialog (`#options-modal`) and wires every controller to the gameplay / scene state. Centralizing
    * this in one method lets us bind handles to specific controllers (`recordController`, `compressorStageFolder`)
@@ -433,6 +447,8 @@ export class OptionsDialog {
         help.attach();
         relabelOptions(gui, playerLang());
       }
+      // The select screen's keys change options too, so the row is read again as the dialog opens.
+      if (event.expanded) this.refreshRecordConsequence();
       this.reportExpanded?.(event.expanded);
     });
     // Closed, the keys go back to the play: left on the gear, Enter (meant to start the chart) would open it again.
@@ -451,6 +467,7 @@ export class OptionsDialog {
     const addFolder = (parent: Pick<OptionContainer, 'addFolder'>, folder: OptionFolderSpec): OptionFolder =>
       parent.addFolder({ title: folder.title });
     const tabs = gui.addTab({ pages: OPTIONS_TABS.map((title) => ({ title })) });
+    this.topTabs = tabs;
     const [play, view, keys, skin, audio, cameraTab, library, leaderboard, advanced] = tabs.pages;
     if (!play || !view || !keys || !skin || !audio || !cameraTab || !library || !leaderboard || !advanced) return;
     // Tabs in the order a session uses them: how to play and what the lanes show, the keys, how it looks and sounds,
@@ -485,6 +502,7 @@ export class OptionsDialog {
     this.refreshCompressorStageVisibility();
     gui.on('change', () => {
       this.scheduleSettingsSave();
+      this.refreshRecordConsequence();
       // The quick options panel reads the same values.
       this.quickOptionsPanel?.refresh();
     });
@@ -495,7 +513,11 @@ export class OptionsDialog {
     help.attach();
     // The labels in the player's language, and again when it changes (Help's language switch, the header's menu).
     relabelOptions(gui, playerLang());
-    onPlayerLangChange(() => relabelOptions(gui, playerLang()));
+    onPlayerLangChange(() => {
+      relabelOptions(gui, playerLang());
+      this.refreshRecordConsequence();
+    });
+    this.refreshRecordConsequence();
   }
   /**
    * Writes every Options dialog setting locally immediately; remote publishing is debounced for slider changes.
@@ -525,6 +547,15 @@ export class OptionsDialog {
   public setGhostAvailability(facts: GhostBarFacts | undefined): void {
     this.ghostBar = facts;
     this.refreshGhostAvailability();
+  }
+  /** The "Record" row: what the options picked do to a play's record, before it is played. */
+  public recordConsequenceController: PaneBinding | undefined;
+  public readonly recordConsequence = { text: '-' };
+  /** Rewrites the "Record" row from the settings as they stand, and returns its line. */
+  public refreshRecordConsequence(): string {
+    this.recordConsequence.text = describeRecordConsequence(this.guiState);
+    this.recordConsequenceController?.refresh();
+    return this.recordConsequence.text;
   }
   /** Repaints "Ghost", "Ghost mode" and "Ghost status": disabled during a play and on a course bar. */
   public refreshGhostAvailability(): void {

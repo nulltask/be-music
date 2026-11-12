@@ -123,6 +123,8 @@ export interface SelectSessionEvents {
   exitMenu?(): void;
   /** The player asked to read the library's folders again (LR2's F8, beatoraja's F2). Without it the key does nothing. */
   reload?(): void;
+  /** LR2's F2: the host shows the LR2 mania options. Absent when the host has no place for them. */
+  maniaOptions?(): void;
   /** The player held LR2's key 4 on a chart: show its ranking (LR2's IR). */
   ranking?(chart: LibraryChart): void;
   /**
@@ -525,6 +527,10 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       case 'reload':
         if (this.options.on.reload === undefined) return false;
         this.options.on.reload();
+        return true;
+      case 'mania-options':
+        if (this.options.on.maniaOptions === undefined) return false;
+        this.options.on.maniaOptions();
         return true;
       case 'favorite':
         this.applyBrowse({ type: 'favorite', list: action.list }, atMs);

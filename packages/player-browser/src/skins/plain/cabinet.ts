@@ -3,6 +3,7 @@ import {
   resolveCabinetLayout,
   resolveScratchAngle,
   resolveDifficultyName,
+  formatPacemakerLabel,
   resolveScorePace,
   resolveSongInfoLayers,
   resolveStageLabel,
@@ -273,7 +274,7 @@ function drawGraph(
   const boxY = footer.y + footer.h - 8 - 26;
   ctx.strokeStyle = LINE;
   ctx.strokeRect(footer.x + 8.5, boxY + 0.5, footer.w - 17, 26);
-  text(ctx, `PACEMAKER ${pace.target.label}`, footer.x + footer.w / 2, boxY + 13, {
+  text(ctx, formatPacemakerLabel(pace.target.label), footer.x + footer.w / 2, boxY + 13, {
     size: 11,
     weight: 700,
     align: 'center',

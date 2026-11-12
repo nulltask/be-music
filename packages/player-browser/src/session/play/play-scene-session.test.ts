@@ -147,6 +147,43 @@ describe('PlaySceneSession', () => {
     expect(resolveFixedScoreTargets(host, 'MAX', 1000)).toBe(host);
     const empty = { bestEXScore: 0 };
     expect(resolveFixedScoreTargets(empty, 'MAX', 0)).toBe(empty);
+    // A score rate takes its rate; a ranking target shows once its score is known.
+    expect(resolveFixedScoreTargets(undefined, 'SCORE_RATE', 1000, { rate: 85.5 })).toEqual({
+      targetEXScore: 1710,
+      targetLabel: 'SCORE RATE 85.5%',
+    });
+    expect(resolveFixedScoreTargets(empty, 'IR_RANK_1', 1000)).toBe(empty);
+    expect(resolveFixedScoreTargets(empty, 'IR_RANK_1', 1000, { rankingEXScore: 1987 })).toEqual({
+      bestEXScore: 0,
+      targetEXScore: 1987,
+      targetLabel: 'IR RANK 1',
+    });
+  });
+
+  test('a ranking target asks the host once and shows from when its score arrives', async () => {
+    const play = new PlaySession();
+    play.score.total = 1000;
+    const rankingTarget = vi.fn(async () => 1987);
+    const session = new PlaySceneSession(play, {
+      chart: CHART,
+      playOptions: { ...DEFAULT_PLAY_OPTIONS, scoreTarget: 'IR_RANK_5' },
+      rankingTarget,
+    });
+    expect(session.frame(10).scoreTargets).toBeUndefined();
+    expect(rankingTarget).toHaveBeenCalledWith({ kind: 'RANK', value: 5, label: 'IR RANK 5' });
+    await Promise.resolve();
+    expect(session.frame(20).scoreTargets).toEqual({ targetEXScore: 1987, targetLabel: 'IR RANK 5' });
+    session.frame(30);
+    expect(rankingTarget).toHaveBeenCalledTimes(1);
+    // A ranking with no score for it, or no host to ask, leaves the target out.
+    const none = new PlaySceneSession(play, {
+      chart: CHART,
+      playOptions: { ...DEFAULT_PLAY_OPTIONS, scoreTarget: 'IR_NEXT_1' },
+      rankingTarget: async () => undefined,
+    });
+    none.frame(10);
+    await Promise.resolve();
+    expect(none.frame(20).scoreTargets).toBeUndefined();
   });
 
   test('a running play follows its display options at once, and no other option', () => {

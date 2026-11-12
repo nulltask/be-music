@@ -11,8 +11,12 @@ import {
   HISPEED_MAX,
   HISPEED_MIN,
   HISPEED_STEP,
+  JUDGE_POSITION_LIMIT,
   KEYS_FILTER_CYCLE,
+  parseRankingScoreTarget,
   PLAY_OPTION_CHOICES,
+  resolveScoreTarget,
+  SCORE_TARGET_IDS,
   SORT_CYCLE,
   type PlayOptions,
 } from '@be-music/player-scene-model';
@@ -54,11 +58,18 @@ export function buildPlayOptionsFolder(
       this.deps.refreshSelectRecords();
     }),
   );
+  // What the options picked do to a play's record, from the resolver a finished play's record goes through.
+  this.recordConsequenceController = folder.addBinding(this.recordConsequence, 'text', {
+    label: 'Record kept',
+    readonly: true,
+  });
   // `lanes` is the Arrangement page and `notes` the Modifiers page.
   const [judge, lanes, notes, assist, practice, replay] = folder.addTab({
     pages: PLAY_OPTION_PAGES.map((title) => ({ title })),
   }).pages;
-  const [hiSpeed, covers, effects] = viewFolder.addTab({ pages: VIEW_OPTION_PAGES.map((title) => ({ title })) }).pages;
+  const viewTabs = viewFolder.addTab({ pages: VIEW_OPTION_PAGES.map((title) => ({ title })) });
+  this.viewTabs = viewTabs;
+  const [hiSpeed, covers, effects] = viewTabs.pages;
   if (!judge || !lanes || !notes || !assist || !practice || !replay || !hiSpeed || !covers || !effects)
     return { practice: folder, replay: folder };
   const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);
@@ -667,6 +678,15 @@ function buildNoteDisplayRows(this: OptionsDialog, effects: OptionContainer): vo
   effects
     .addBinding(this.guiState, 'laneBrightness', { label: 'Lane brightness (AC)', min: 0, max: 100, step: 10 })
     .on('change', ({ value }) => this.setPlayOptions({ laneBrightness: value }));
+  // The built-in skins' judgment and combo, moved up (-) or down (+) the lanes. LR2 and beatoraja skins place their own.
+  effects
+    .addBinding(this.guiState, 'judgePosition', {
+      label: 'Judgment position (built-in skins, %)',
+      min: -JUDGE_POSITION_LIMIT,
+      max: JUDGE_POSITION_LIMIT,
+      step: 5,
+    })
+    .on('change', ({ value }) => this.setPlayOptions({ judgePosition: value }));
   selectBinding(effects, this.guiState, 'judgeDisplay', 'Judgment display (AC)', {
     'Skin default': 'SKIN',
     OFF: 'OFF',
@@ -709,20 +729,17 @@ export function buildReplayViewFolder(this: OptionsDialog, folder: OptionContain
   // The ghost with the play (`services/ghost.ts`): which replay it plays and how it shows. Disabled during a play like
   // the other options, and on a course bar; "Ghost status" says whether the bar under the cursor would show it.
   // The score graph's fixed target, in beatoraja's names. It paces a play that runs no ghost; live.
-  selectBinding(folder, this.guiState, 'scoreTarget', 'Target (beatoraja)', {
-    'RANK A-': 'RATE_A-',
-    'RANK A': 'RATE_A',
-    'RANK A+': 'RATE_A+',
-    'RANK AA-': 'RATE_AA-',
-    'RANK AA': 'RATE_AA',
-    'RANK AA+': 'RATE_AA+',
-    'RANK AAA-': 'RATE_AAA-',
-    'RANK AAA': 'RATE_AAA',
-    'RANK AAA+': 'RATE_AAA+',
-    'RANK MAX-': 'RATE_MAX-',
-    MAX: 'MAX',
-    'NEXT RANK': 'RANK_NEXT',
-  }).on('change', ({ value }) => this.setPlayOptions({ scoreTarget: value }));
+  selectBinding(
+    folder,
+    this.guiState,
+    'scoreTarget',
+    'Target (beatoraja)',
+    Object.fromEntries(SCORE_TARGET_IDS.map((id) => [scoreTargetLabel(id), id])),
+  ).on('change', ({ value }) => this.setPlayOptions({ scoreTarget: value }));
+  // The rate the SCORE RATE target paces towards (beatoraja's `RATE_<n>`); live.
+  folder
+    .addBinding(this.guiState, 'scoreTargetRate', { label: 'Target score rate (%)', min: 0, max: 100, step: 0.5 })
+    .on('change', ({ value }) => this.setPlayOptions({ scoreTargetRate: value }));
   const refresh = () => this.refreshGhostAvailability();
   this.ghostController = selectBinding(folder, this.guiState, 'ghost', 'Ghost', {
     OFF: 'OFF',
@@ -809,4 +826,10 @@ export function hiSpeedControl(
 /** A value on the grid of `step`, as a slider of that step shows it. */
 export function onGrid(step: number): (value: number) => number {
   return (value) => Math.round(Math.round(value / step) * step * 1000) / 1000;
+}
+
+/** A score target's name in the dialog: beatoraja's own, with SCORE RATE's rate left to its slider. */
+export function scoreTargetLabel(id: PlayOptions['scoreTarget']): string {
+  if (id === 'SCORE_RATE') return 'SCORE RATE';
+  return parseRankingScoreTarget(id)?.label ?? resolveScoreTarget(id, { totalNotes: 1 })?.label ?? id;
 }

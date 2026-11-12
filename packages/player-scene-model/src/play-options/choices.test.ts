@@ -6,6 +6,7 @@ import {
   formatGaugeLabel,
   RANDOM_CYCLE,
   clampHiSpeed,
+  clampJudgePosition,
   clampShutter,
   cyclePlayOptionValue,
   DEFAULT_PLAY_OPTIONS,
@@ -129,6 +130,18 @@ describe('clampHiSpeed / clampShutter', () => {
     expect(clampShutter(0.30000000000000004)).toBe(0.3);
     expect(clampShutter(2)).toBe(1);
     expect(clampShutter(Number.NaN)).toBe(SHUTTER_DEFAULT);
+  });
+});
+
+describe('clampJudgePosition', () => {
+  test('keeps a whole percentage within the limit either way', () => {
+    expect(clampJudgePosition(12.4)).toBe(12);
+    expect(clampJudgePosition(-45)).toBe(-30);
+    expect(clampJudgePosition(99)).toBe(30);
+    expect(clampJudgePosition(Number.NaN)).toBe(0);
+    expect(resolvePlayOptionValue('judgePosition', -17.6)).toBe(-18);
+    expect(resolvePlayOptionValue('judgePosition', 'low')).toBeUndefined();
+    expect(DEFAULT_PLAY_OPTIONS.judgePosition).toBe(0);
   });
 });
 

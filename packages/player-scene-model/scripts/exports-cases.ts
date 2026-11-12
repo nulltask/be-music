@@ -282,6 +282,11 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.clampHiSpeed(1.3000000000000003);
     },
   });
+  define('player-scene-model.clampJudgePosition', {
+    run: () => {
+      sceneModelAPI.clampJudgePosition(-17.6);
+    },
+  });
   define('player-scene-model.clampShutter', {
     run: () => {
       sceneModelAPI.clampShutter(0.30000000000000004);
@@ -291,6 +296,21 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
     run: () => {
       sceneModelAPI.resolveScoreTarget('RATE_AAA', { totalNotes: 1234 });
       sceneModelAPI.resolveScoreTarget('RANK_NEXT', { totalNotes: 1234, bestEXScore: 2000 });
+    },
+  });
+  define('player-scene-model.clampScoreTargetRate', {
+    run: () => {
+      sceneModelAPI.clampScoreTargetRate(85.54);
+    },
+  });
+  define('player-scene-model.parseRankingScoreTarget', {
+    run: () => {
+      sceneModelAPI.parseRankingScoreTarget('IR_RANKRATE_25');
+    },
+  });
+  define('player-scene-model.resolveRankingTargetIndex', {
+    run: () => {
+      sceneModelAPI.resolveRankingTargetIndex({ kind: 'NEXT', value: 3 }, 1234, 600);
     },
   });
   define('player-scene-model.pickLiveDisplayPlayOptions', {

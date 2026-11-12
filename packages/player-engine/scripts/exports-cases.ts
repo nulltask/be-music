@@ -1051,6 +1051,22 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       recordsAPI.resolveReplayRecordPolicy(benchAssistedReplay);
     },
   });
+  const benchPlannedPlay = {
+    judgeRuleset: 'beatoraja' as const,
+    randomLane: { p1: 'H-RANDOM' },
+    autoScratch1P: true,
+    options: { bpmGuide: true },
+  };
+  define('player-engine.records.classifyPlannedAssists', {
+    run: () => {
+      recordsAPI.classifyPlannedAssists(benchPlannedPlay);
+    },
+  });
+  define('player-engine.records.resolvePlannedRecordPolicy', {
+    run: () => {
+      recordsAPI.resolvePlannedRecordPolicy(benchPlannedPlay);
+    },
+  });
   define('player-engine.records.applyRecordPolicyLamp', {
     run: () => {
       recordsAPI.applyRecordPolicyLamp('HARD', benchRecordPolicy);

@@ -1,6 +1,12 @@
 import { resolveConstantVisibility } from '@be-music/player-scene-model';
 import { diffReplayOptions, resolveReplayOptionsAt, type ReplayOptionState } from '@be-music/player-engine/replay';
-import { pickLiveDisplayPlayOptions, resolvePlayOptions, resolveScoreTarget } from '@be-music/player-scene-model';
+import {
+  parseRankingScoreTarget,
+  pickLiveDisplayPlayOptions,
+  resolvePlayOptions,
+  resolveScoreTarget,
+  type RankingScoreTarget,
+} from '@be-music/player-scene-model';
 /**
  * The play session as a scene session (`SceneSession`, `session/session-scene.ts`): what `createPlayScene` hands its
  * `SessionScene` so the scene's ticker reads a {@link PlayFrame} off the play every frame and the view's intents reach
@@ -33,6 +39,11 @@ export interface PlaySceneFacts {
   readonly course?: CourseView;
   readonly playOptions: PlayOptions;
   readonly scoreTargets?: PlayFrame['scoreTargets'];
+  /**
+   * The EX score at a ranking target's place on the chart's ranking, or `undefined` when the chart has no ranking (or
+   * no host fetches one). Asked once per target the play shows; the target is drawn from when it settles.
+   */
+  readonly rankingTarget?: (target: RankingScoreTarget) => Promise<number | undefined>;
   readonly playerName?: string;
   readonly audio?: Pick<AudioService, 'stopOwned' | 'playCue'>;
   readonly sounds?: SystemSoundSet;
@@ -154,19 +165,49 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
   private fixedScoreTargets:
     | {
         id: PlayOptions['scoreTarget'];
+        rate: number;
+        rankingEXScore: number | undefined;
         totalNotes: number;
         host: PlayFrame['scoreTargets'];
         resolved: PlayFrame['scoreTargets'];
       }
     | undefined;
 
-  private resolveHostScoreTargets(id: PlayOptions['scoreTarget'], totalNotes: number): PlayFrame['scoreTargets'] {
+  /** The ranking targets asked for so far, each with its score once the host's ranking gave one. */
+  private readonly rankingScores = new Map<PlayOptions['scoreTarget'], number | undefined>();
+
+  /** The score at a ranking target's place, asking the host the first time the play shows that target. */
+  private rankingEXScore(id: PlayOptions['scoreTarget']): number | undefined {
+    if (this.rankingScores.has(id)) return this.rankingScores.get(id);
+    const target = parseRankingScoreTarget(id);
+    if (target === undefined) return undefined;
+    this.rankingScores.set(id, undefined);
+    void this.facts.rankingTarget?.(target).then(
+      (score) => {
+        if (score !== undefined) this.rankingScores.set(id, score);
+      },
+      () => undefined,
+    );
+    return undefined;
+  }
+
+  private resolveHostScoreTargets(options: PlayOptions, totalNotes: number): PlayFrame['scoreTargets'] {
     const host = this.facts.scoreTargets;
+    const id = options.scoreTarget;
+    const rate = options.scoreTargetRate;
+    const rankingEXScore = this.rankingEXScore(id);
     const kept = this.fixedScoreTargets;
-    if (kept !== undefined && kept.id === id && kept.totalNotes === totalNotes && kept.host === host)
+    if (
+      kept !== undefined &&
+      kept.id === id &&
+      kept.rate === rate &&
+      kept.rankingEXScore === rankingEXScore &&
+      kept.totalNotes === totalNotes &&
+      kept.host === host
+    )
       return kept.resolved;
-    const resolved = resolveFixedScoreTargets(host, id, totalNotes);
-    this.fixedScoreTargets = { id, totalNotes, host, resolved };
+    const resolved = resolveFixedScoreTargets(host, id, totalNotes, { rate, rankingEXScore });
+    this.fixedScoreTargets = { id, rate, rankingEXScore, totalNotes, host, resolved };
     return resolved;
   }
 
@@ -234,7 +275,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
     running?.update(seconds, play.playClock());
     const playfield = running !== undefined && shows ? running.present(play) : play;
     const scoreTargets = resolveFrameScoreTargets(
-      this.resolveHostScoreTargets(playOptions.scoreTarget, play.score.total),
+      this.resolveHostScoreTargets(playOptions, play.score.total),
       running,
       play.score,
     );
@@ -271,17 +312,21 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
 }
 
 /**
- * The host's score targets with the fixed target the player picked (`PlayOptions.scoreTarget`) when the host names
- * none: a rank border, MAX or the next rank, for the play's note count.
+ * The host's score targets with the target the player picked (`PlayOptions.scoreTarget`) when the host names none: a
+ * rank border, MAX, the next rank or a score rate (`rate`, in percent) for the play's note count, or a ranking
+ * target once its score is known (`rankingEXScore`).
  */
 export function resolveFixedScoreTargets(
   host: PlayFrame['scoreTargets'],
   scoreTarget: PlayOptions['scoreTarget'],
   totalNotes: number,
+  extra: { readonly rate?: number; readonly rankingEXScore?: number | undefined } = {},
 ): PlayFrame['scoreTargets'] {
   if (host?.targetEXScore !== undefined) return host;
   const target = resolveScoreTarget(scoreTarget, {
     totalNotes,
+    ...(extra.rate !== undefined ? { rate: extra.rate } : {}),
+    ...(extra.rankingEXScore !== undefined ? { rankingEXScore: extra.rankingEXScore } : {}),
     ...(host?.bestEXScore !== undefined ? { bestEXScore: host.bestEXScore } : {}),
   });
   return target === undefined ? host : { ...host, targetEXScore: target.exScore, targetLabel: target.label };

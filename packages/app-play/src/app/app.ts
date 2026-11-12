@@ -23,7 +23,7 @@ import { resolveChartSource } from '@be-music/player-browser/collection';
 import { logger } from '@be-music/player-browser';
 import { BeatorajaSkinOptionsPanel, type BeatorajaSkinOptionsPanelDeps } from '../ui/beatoraja-skin-options.ts';
 import { LeaderboardPanel } from '../leaderboard-ui.ts';
-import { fetchLeaderboardTopReplay } from '../leaderboard.ts';
+import { fetchLeaderboardRankingPage, fetchLeaderboardTopReplay } from '../leaderboard.ts';
 import { GhostReplayFile } from '../services/ghost.ts';
 import { playerFullscreenElement, toggleFullscreen } from '../fullscreen.ts';
 import { bindPlayerHeader, runPlayerHeaderAction, setPlayerHeaderSettingsOpen } from '../player-header.ts';
@@ -580,6 +580,9 @@ export class PlayerWebApp {
         fetchLeaderboardTopReplay: (chartFingerprint) =>
           fetchLeaderboardTopReplay(chartFingerprint, this.guiState.judgeRuleset),
       },
+      // The ranking under the ruleset the play is judged by, as the ghost's top run is.
+      fetchRankingPage: (chartFingerprint, offset, limit) =>
+        fetchLeaderboardRankingPage(chartFingerprint, this.guiState.judgeRuleset, offset, limit),
       optionsDialog: this.optionsDialog,
       compressorMode: this.compressorMode,
       deviceProfile,

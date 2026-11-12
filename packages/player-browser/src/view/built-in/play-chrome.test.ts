@@ -5,6 +5,7 @@ import {
   renderBuiltInChrome,
   resolveLaneGeometry,
   resolveBeMusicLayout,
+  resolveJudgeOffsetY,
   collectBGATargets,
   type LaneGeometryContext,
   type BeMusicLayoutContext,
@@ -200,4 +201,10 @@ test("shows a NONSTOP stage's song, crossfading from the previous stage's as its
     chartArtist: 'Course artist',
     chartGenre: 'Mix',
   });
+});
+
+test('the judgment position is a share of the lanes’ height, down for a positive value', () => {
+  expect(resolveJudgeOffsetY(0, 40, 440)).toBe(0);
+  expect(resolveJudgeOffsetY(25, 40, 440)).toBe(100);
+  expect(resolveJudgeOffsetY(-30, 40, 440)).toBe(-120);
 });

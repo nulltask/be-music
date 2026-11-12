@@ -3,6 +3,7 @@ import {
   flashingGreatColor,
   isFlashingGreat,
   judgeDisplayWord,
+  resolveJudgeWordY,
   resolveLanePlayLabel,
   resolveLaneRuns,
   type BeMusicGameplayFrame,
@@ -59,7 +60,11 @@ export function resolvePlayfieldParts(
     const y = side?.judgementY ?? playfield.judgementY;
     return y === playfield.judgementY ? run : { ...run, y };
   });
-  const judgmentY = playfield.judgementY - JUDGMENT_OFFSET;
+  // The word's baseline under a judge line at `lineY`, moved by the player's judgment position and kept in the lanes.
+  const wordY = (lineY: number): number =>
+    resolveJudgeWordY(lineY - JUDGMENT_OFFSET, { ...playfield, judgementY: lineY });
+  const judgmentY = wordY(playfield.judgementY);
+  const judgeOffsetY = judgmentY - (playfield.judgementY - JUDGMENT_OFFSET);
   const words: BeMusicJudgmentWord[] = [];
   for (const side of frame.runtime.judgeSides ?? []) {
     if (!side.judge) continue;
@@ -69,7 +74,7 @@ export function resolvePlayfieldParts(
       x: bounds ? (bounds.left + bounds.right) / 2 : playfield.centerX,
       text: judgeDisplayWord(side.judge),
       ...(bounds?.judgementY !== undefined && bounds.judgementY !== playfield.judgementY
-        ? { y: bounds.judgementY - JUDGMENT_OFFSET }
+        ? { y: wordY(bounds.judgementY) }
         : {}),
       color: judgmentColor(side.judge, frame.nowMs),
       ...(keepsCombo(side.judge) && combo > 0 ? { combo } : {}),
@@ -85,7 +90,7 @@ export function resolvePlayfieldParts(
     else
       words.push({
         x,
-        y: (bounds.judgementY ?? playfield.judgementY) - JUDGMENT_OFFSET,
+        y: wordY(bounds.judgementY ?? playfield.judgementY),
         text: '',
         color: JUDGMENT_COLOR,
         mode,
@@ -125,7 +130,7 @@ export function resolvePlayfieldParts(
     judgmentDisplay: {
       rect: rect(
         left,
-        minLineY - JUDGMENT_OFFSET - JUDGMENT_ASCENT - 28,
+        minLineY - JUDGMENT_OFFSET - JUDGMENT_ASCENT - 28 + judgeOffsetY,
         width,
         maxLineY - minLineY + JUDGMENT_ASCENT + COMBO_OFFSET + COMBO_DESCENT + 28,
       ),

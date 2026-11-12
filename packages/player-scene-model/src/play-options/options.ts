@@ -40,6 +40,10 @@ export interface PlayOptions {
    * change until the change (blue when the tempo rises, red when it falls).
    */
   bpmChangeWarning: boolean;
+  /** The score rate the SCORE RATE target paces towards, in percent. */
+  scoreTargetRate: number;
+  /** The built-in skins' judgment and combo moved down the lanes by this percentage of their height (negative is up). */
+  judgePosition: number;
   /** AC 34 判定文字の表示位置, its on / off part: OFF draws no judgment or combo on any play screen. Display only. */
   judgeDisplay: 'SKIN' | 'OFF';
   /** AC 34 レーンの明るさ調整: the lanes' brightness in percent, 100 as the skin draws them and 0 black. Notes, bar lines and covers keep theirs. Display only. */

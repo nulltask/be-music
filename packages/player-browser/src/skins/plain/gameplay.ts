@@ -5,6 +5,7 @@ import {
   holdSparks,
   isFlashingGreat,
   judgeDisplayWord,
+  resolveJudgeWordY,
   resolveLanePlayLabel,
   loadingDots,
   resolveLaneRuns,
@@ -282,8 +283,9 @@ function drawBombs(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
 }
 
 /** The latest judgement and combo over each play side, centred on `y` — or NOW LOADING while the chart loads. */
-function drawJudgement(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, y: number): void {
+function drawJudgement(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, skinY: number): void {
   const { runtime, layout, nowMs } = frame;
+  const y = resolveJudgeWordY(skinY, layout.playfield);
   if (runtime.loading) {
     text(ctx, `NOW LOADING${loadingDots(nowMs)}`, layout.playfield.left + 12, y, { size: 13, color: MUTED });
     return;

@@ -50,6 +50,7 @@ import {
   type ReplaySlotStore,
 } from '../../services/replay-slots.ts';
 import { ResultReplaySlots } from '../../services/replay-slot-service.ts';
+import { describeResultRecord } from '../../services/record-consequence.ts';
 import type { ReplaySlotsPanel } from '../../replay-slots-panel.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
@@ -531,7 +532,9 @@ export class ResultRoute {
     });
     // A newer navigation that took the stage first keeps its own status; the play is still kept, saved and ranked.
     if (shown) {
-      this.setPlayStatus(`Result: ${data.chart.title}`);
+      // What the play did to its record, from the policy the record went through; the Leaderboard's line follows it.
+      const record = run === 'single' ? describeResultRecord(data, kept !== undefined) : undefined;
+      this.setPlayStatus(`Result: ${data.chart.title}${record !== undefined ? ` — ${record}` : ''}`);
       // The built-in, Native and LR2 skins have no replay-slot UI: the card stands in for one.
       if (replaySlots !== undefined) this.replaySlots.panel.showResult(replaySlots);
     }

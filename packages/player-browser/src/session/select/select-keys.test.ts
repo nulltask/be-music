@@ -114,6 +114,14 @@ describe('resolveSelectKeyAction', () => {
   });
 });
 
+describe('resolveSelectKeyAction on F2', () => {
+  it('opens LR2’s mania options on the LR2 key map and reloads the folders on beatoraja’s', () => {
+    const f2 = down('F2');
+    expect(resolveSelectKeyAction(f2, LIST, 'lr2')).toEqual({ type: 'mania-options' });
+    expect(resolveSelectKeyAction(f2, LIST, 'beatoraja')).toEqual({ type: 'reload' });
+  });
+});
+
 describe('resolveSelectKeyAction on the player’s control buttons', () => {
   const OPEN: SelectKeyState = { panel: 1, readTextOpen: false };
 

@@ -36,7 +36,8 @@ async function playWithLiveChanges(player: Player): Promise<BeMusicReplay> {
   await player.waitFor((current) => (current.play?.hiSpeed ?? 0) > hiSpeed, 'the hi-speed to rise');
   await player.key('Pause');
   state = await player.waitForResult(0);
-  expect(state.status).toBe('Result: Fixture A');
+  // The result's status line also says what the play did to its record: an AUTO play keeps none.
+  expect(state.status).toBe('Result: Fixture A — AUTO PLAY: no record, and nothing is sent to the Leaderboard');
   const replay = await player.lastReplay();
   if (replay === undefined) throw new Error('the play recorded no log');
   return replay;

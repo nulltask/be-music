@@ -1,4 +1,4 @@
-import { SCORE_TARGET_IDS } from './score-target.ts';
+import { clampScoreTargetRate, DEFAULT_SCORE_TARGET_RATE, SCORE_TARGET_IDS } from './score-target.ts';
 import { clampExtraNoteDepth, isOnePlayerBattleMode } from '@be-music/player-engine/lanes';
 import { clampScrollSection, clampScrollRate } from '@be-music/player-engine/lanes';
 import { clampFloatingHiSpeed } from './floating-hi-speed.ts';
@@ -175,6 +175,8 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   constantFadeMs: 100,
   bpmGuide: false,
   bpmChangeWarning: false,
+  scoreTargetRate: DEFAULT_SCORE_TARGET_RATE,
+  judgePosition: 0,
   judgeDisplay: 'SKIN',
   laneBrightness: 100,
   scoreTarget: 'RATE_AAA',
@@ -383,9 +385,20 @@ export function clampShutter(value: number): number {
   return clamp(snapped, 0, 1);
 }
 
+/** How far the judgment position goes either way, in percent of the lanes' height. */
+export const JUDGE_POSITION_LIMIT = 30;
+
+/** A judgment position as a whole percentage within ±{@link JUDGE_POSITION_LIMIT}; 0 for a value that is not finite. */
+export function clampJudgePosition(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return clamp(Math.round(value), -JUDGE_POSITION_LIMIT, JUDGE_POSITION_LIMIT);
+}
+
 /** Numeric play options, each with the clamp applied to a value set for it. */
 const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: number) => number } = {
   hRandomThresholdBPM: clampHRandomThresholdBPM,
+  judgePosition: clampJudgePosition,
+  scoreTargetRate: clampScoreTargetRate,
   longNoteRate: clampLongNoteRate,
   practiceStartGauge: (value) => clamp(Math.trunc(value), 1, 120),
   practiceJudgeRank: (value) => (value <= 0 ? 0 : clamp(Math.trunc(value), 1, 400)),

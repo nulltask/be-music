@@ -83,6 +83,18 @@ flowchart LR
 
 **クリアランプ。** LIGHT ASSIST EASY は ASSIST EASY と EASY の間にある独立したランプです（[#603](https://github.com/nulltask/be-music/issues/603)）。beatoraja の `ClearType` がゲージ 0 を LightAssistEasy に対応させているとおり、beatoraja の ASSIST EASY ゲージでのクリアはこのランプになります。AC の ASSISTED EASY ゲージは ASSIST EASY のままです。保存するランプの番号は追加専用で、0〜9 はそれぞれのランプのまま、LIGHT ASSIST EASY は 10 です。順序は保存した番号ではなくランプの順序（`compareClearLamps`、`compareClearLampRanks`）で比べます。beatoraja のスキンはこのランプで op 1101、ASSIST EASY で op 1100 を点け、クリアのインデックスはこのランプで 3、ASSIST EASY で 2 を読みます。LR2 のスキンはどちらも EASY にまとめます。
 
+### プレイ前にわかる記録への影響
+
+この方針は、選んだオプションからプレイ前にも読みます（`@be-music/player-engine/records` の `resolvePlannedRecordPolicy`）。リプレイが記録するはずの内容を組み立てて、同じ分類と同じ解決の処理に通すので、プレイ前の表示とプレイ後の記録が食い違うことはありません。
+
+譜面によって変わる判定もあります。BPM が変わる譜面での BPM GUIDE、譜面を実際に変えた場合の REMOVE や LEGACY の変更、適用される譜面での EXTRA NOTE と 7 TO 9、2P 側がある譜面での 2P 側の AUTO SCRATCH や beatoraja のレーンオプションです。この時点では譜面を準備していないため、どれも起きない場合とすべて起きる場合の 2 通りで分類し、後者にだけ出る判定は条件付きの文として表示します（「BPM GUIDE が譜面を変える場合: …」）。
+
+- **Options ダイアログ。** Play タブの判定幅の下にある **Record kept** の行に表示し、変更のたびに更新します。
+- **選曲画面。** 選曲画面で変えたオプションによって表示が変わったときに、ステータス行に表示します。どのスキン系統でも同じです。LR2 と beatoraja のスキンは、それぞれのランプとパネルのままです。
+- **リザルト画面。** リプレイの方針から、そのプレイが記録に何をしたかをステータス行に表示します（`Result: <タイトル> — <表示>`）。2 人プレイの BATTLE、PRACTICE、AUTO、回復なしの bmson（TOTAL 0）は、記録を残さない理由を表示します。続いて出る Leaderboard の行は、順位が付いたプレイのボード（メインかアシスト）を示し、保存のみのプレイはランキング外の理由を示します。
+
+表示するのは、アシスト区分、その原因のオプション、判定ルールでのランプ（LR2 は EASY まで、beatoraja は LIGHT ASSIST EASY か ASSIST EASY、`____` は ASSIST EASY）、Leaderboard のボードです。対象はその譜面の単曲プレイで、コース固有の制限は反映しません。[#1140](https://github.com/nulltask/be-music/issues/1140) で追跡しています。
+
 ## START BPM HS-FIX
 
 Options ダイアログ で **HS-FIX → STARTBPM** を選択します。既定は **OFF** のままです。START は MAX・MIN・MAIN とは別に、譜面のヘッダーにある開始 BPM をハイスピードの基準にします。`#BASEBPM` で基準速度を指定している場合の倍率は `基準 BPM / 開始 BPM` です。拍 0 の BPM 変更でヘッダーの開始 BPM を置き換えません。その後の BPM 変更ではスクロール速度も変化します。通常の表示速度オプションとして扱い、スコア・アシスト・コースの記録条件は変更しません。
@@ -114,6 +126,8 @@ AC 34 の詳細オプションには「オートスクラッチ表示」があ�
 ## LR2 マニアオプション
 
 Options ダイアログの View タブには、Effects の下に **LR2 mania options** があり、どのルールセットでも選べます。LR2 の隠しマニアパネル（[`LR2f.cpp` L1054-L1470](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1054-L1470)）のうち、プレイフィールドの描画だけを変えるオプションです。ACCELERATION はモードを選び、それ以外は LR2 と同じく **0**（OFF、既定）から **100** まで 10 刻みです。ノーツの時刻、レーン、入力、音声、判定は変わらず、プレイ中にも反映します。
+
+選曲画面では、LR2 のキーマップの **F2**（`select.mania-options`）でダイアログをこのセクションに開きます。LR2 は F2 を押している間だけパネルを表示し（[`Main.cpp` L1766-L1769](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/Main.cpp#L1766-L1769)）、パネルは文字で描くためスキンに画像がありません。Be-Music では押したときにダイアログを開きます。beatoraja のキーマップでは F2 がフォルダの再読み込みなので、この操作は未割り当てです。Keys でキーを割り当てられます。LR2 の譜面生成（ADD NOTES から ADD MINES）、GAMBOL、SOFTLANDING は、それぞれが属するオプションとともに Play タブにあります。[#1127](https://github.com/nulltask/be-music/issues/1127) で追跡しています。
 
 | オプション              | 描画                                                                                                                                                                                                                                                                                  | LR2                                                                                                                 |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -149,7 +163,7 @@ Options ダイアログの View タブの Effects に、beatoraja の表示設�
 
 ## スコアターゲット
 
-Options ダイアログの Replay / ghost フォルダにある **Target (beatoraja)** で、ペースメーカーが目指すスコアを選びます。beatoraja 0.8.9 の `TargetProperty` に基づく **RANK A-** から **RANK MAX-**、**MAX**、**NEXT RANK** です。既定は **RANK AAA** で、この設定ができる前からスコアグラフが基準にしていたラインです。どのルールでもプレイ中に反映します。
+Options ダイアログの Replay / ghost フォルダにある **Target (beatoraja)** で、ペースメーカーが目指すスコアを選びます。beatoraja 0.8.9 の `TargetProperty` に基づく **RANK A-** から **RANK MAX-**、**MAX**、**NEXT RANK**、ランキングのターゲット（**IR NEXT**、**IR RANK**、**IR RANK TOP**）、**SCORE RATE** です。既定は **RANK AAA** で、この設定ができる前からスコアグラフが基準にしていたラインです。どのルールでもプレイ中に反映します。
 
 | ターゲット           | EX スコア                                                                                        |
 | -------------------- | ------------------------------------------------------------------------------------------------ |
@@ -159,12 +173,26 @@ Options ダイアログの Replay / ghost フォルダにある **Target (beator
 | RANK MAX-            | 27 分の 26                                                                                       |
 | MAX                  | 最大値（ノーツ数の 2 倍）                                                                        |
 | NEXT RANK            | 27 分の 15 から上で、自己ベストの EX スコアがまだ届いていない最初の境界。MAX- を超えていれば MAX |
+| IR NEXT nRANK        | その譜面のランキングで、プレイヤーの n 位上のスコア（n: 1〜5、10）                               |
+| IR RANK n            | ランキングの n 位のスコア。人数が足りなければ最下位（n: 1、5、10〜50）                           |
+| IR RANK TOP n%       | ランキングの上位 n% の位置のスコア（n: 5〜50 を 5 刻み）                                         |
+| SCORE RATE           | 最大値の **Target score rate (%)**（0〜100、既定 90）                                            |
 
 境界は整数に切り上げます。beatoraja は単精度で計算する（`rate = 100 × n / 27` として `ceil(ノーツ数 × 2 × rate / 100)`）ため、Be-Music も同じ丸めにしています。境界がちょうど整数になる譜面では、beatoraja と同じく 1 大きくなることがあります。
 
-ターゲットはプレイのスコア目標としてすべてのスキン系統に渡ります。内蔵スキンのスコアグラフの PACEMAKER のバーと枠、beatoraja スキンのターゲットの数値（121〜123）とランクのタイマーです。ペースは譜面全体で均等で、これまでに判定したノーツの割合ぶんのスコアになります。ゴーストをペースメーカーとして表示しているプレイでは、ゴーストが優先されます。ゴーストは実際に演奏されたとおりのペースで進むためです。設定はプレイオプションと一緒に保存し、判定と記録は変わりません。
+ターゲットはプレイのスコア目標としてすべてのスキン系統に渡ります。内蔵スキンのスコアグラフの PACEMAKER のバーと枠（SCORE RATE 90% のように 9 文字を超える名前は、PACEMAKER を付けずに枠に表示します）、beatoraja スキンのターゲットの数値（121〜123）とランクのタイマー、LR2 スキンのターゲットのスコアと差（数値 151 と 153）およびターゲットのバーグラフ（14 と 15）です。ペースは譜面全体で均等で、これまでに判定したノーツの割合ぶんのスコアになります。ゴーストをペースメーカーとして表示しているプレイでは、ゴーストが優先されます。ゴーストは実際に演奏されたとおりのペースで進むためです。設定はプレイオプションと一緒に保存し、判定と記録は変わりません。
 
-提供していないもの: beatoraja の `RATE_<n>`（任意の割合）、`RIVAL_*`、`IR_*` です。後の 2 つは、その譜面でのライバルやランキングのスコアが必要で、現在の Leaderboard はそれをプレイに渡していません。
+**SCORE RATE** は beatoraja の `RATE_<n>` です。beatoraja の既定の一覧にはありませんが、`TargetProperty` は 0 から 100 の任意の割合を受け付けます（[L142-L151](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/TargetProperty.java#L142-L151)）[V]。Be-Music は割合を独自の設定 **Target score rate (%)** に 0.1 刻みで持ち、スコアは beatoraja と同じ丸めで求めます。AC 34 にも任意の割合のターゲットがあります [C] が、丸め方がわからないため、オプションには beatoraja の名前を付けています。
+
+ランキングのターゲットは、プレイを判定するルールでの、その譜面の Leaderboard ランキングを読みます。beatoraja が IR のランキングを読む箇所です（[`InternetRankingTargetProperty`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/TargetProperty.java#L327-L475)）[V]。
+
+- **IR RANK n** は `min(人数, n)` 位です。
+- **IR RANK TOP n%** は、上から `人数 × n / 100`（切り捨て）だけ下がった位置です。
+- **IR NEXT nRANK** は、EX スコアが自己ベスト以下になる最初の位置を探し、そこから n 位上がります。1 位より上には行きません。すべての位置が自己ベストより上のとき（未プレイの譜面など）、beatoraja は 1 位を選ぶため、Be-Music も同じにしています。
+
+ランキングはプレイの開始時に読むので、beatoraja と同じく、ターゲットはプレイが始まって少ししてから表示されます。それまでの間と、ランキングがない譜面（ランクインした人がいない、Leaderboard がキーにできない譜面、通信できない）では、ターゲットを表示しません。内蔵スキンのスコアグラフは RANK AAA を基準に進み、スキンのターゲットの数値は 0 のままです。ランキングは Leaderboard のページが既定で表示するもので、アシストなしのプレイが対象です。匿名プレイヤーは含みません。ターゲットの名前は beatoraja のターゲット名です。beatoraja はランキング上のプレイヤー名を表示します。
+
+提供していないもの: beatoraja の `RIVAL_*` です。その譜面でのライバルのスコアが必要ですが、Leaderboard にはまだライバルがありません。
 
 出典: beatoraja [`TargetProperty`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/TargetProperty.java#L87-L158) と [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayerConfig.java#L72-L76)。[#1132](https://github.com/nulltask/be-music/issues/1132) で追跡しています。
 
@@ -174,13 +202,15 @@ Options ダイアログの View タブの Effects に、AC 34 の詳細オプシ
 
 **Lane brightness (AC)**（レーンの明るさ調整、「レーンの明るさを調整します」）は **0** から **100** まで 10 刻みの割合です。既定の **100** では、レーンはスキンが描くとおりです。Be-Music は各レーンに黒い層を重ねます。層はレーンの背景と、その上を流れるものの間に入るので、ノーツ、小節線、判定範囲、カバーの明るさは変わりません。公式ページには範囲や刻みの記載がないため、目盛りは Be-Music 独自のものです。
 
-**Judgment display (AC)** は **Skin default** か **OFF** です。OFF では、LR2 の SILENT や譜面の HIDJUDGE と同じく、プレイ画面に判定文字とコンボを描きません。判定数とスコアは変わりません。AC 34 の「判定文字の表示位置」は判定文字の位置も変えられます（「判定文字の表示有無と表示する位置を変更」）が、ページに位置の選択肢は載っていません。Be-Music は表示の有無だけを提供し、位置はスキンのままです。
+**Judgment display (AC)** は **Skin default** か **OFF** です。OFF では、LR2 の SILENT や譜面の HIDJUDGE と同じく、プレイ画面に判定文字とコンボを描きません。判定数とスコアは変わりません。AC 34 の「判定文字の表示位置」は判定文字の位置も変えられます（「判定文字の表示有無と表示する位置を変更」）が、ページに位置の選択肢は載っていません [C]。
+
+**Judgment position (built-in skins, %)** は、内蔵スキンの判定文字とコンボを、レーンの高さに対する割合で下へ動かします。**-30**（上）から **30**（下）まで 5 刻みで、既定の **0** はスキンが置く位置です。判定文字はレーンの外には出ません。レーンの上端から 40 px 下、判定ラインから 56 px 上で止まります（`@be-music/player-skin-sdk` の `resolveJudgeWordY`）。もともと低い位置に置くスキンでは動く量が小さくなります。AC の位置がわからないため、値に AC の名前は付けていません。BPM 変化の予告も同じ割合で動くので、判定文字との間隔はスキンが置いたときのままです。LR2 と beatoraja のスキンは、それぞれの配置とオフセット（beatoraja スキンの判定オフセット、LR2 スキンの独自オプション）のままです。表示だけの変更で、記録は変わりません。
 
 出典: AC 34 [詳細オプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。[#1136](https://github.com/nulltask/be-music/issues/1136) と [#1135](https://github.com/nulltask/be-music/issues/1135) で追跡しています。
 
 ## プレイ中に反映する表示オプション
 
-プレイはオプションを開始時に読みます。描画だけを変えるオプションはプレイ中にも追従し、Options ダイアログで変えると次のフレームから反映します。対象は、オートスクラッチのノーツ表示、レーンの明るさ、判定文字の表示、判定範囲、処理済みノーツ、スコアターゲット、LR2 マニアの描画オプション（ACCELERATION から SIDEJUMP まで）です。一覧は `@be-music/player-scene-model` の `LIVE_DISPLAY_PLAY_OPTION_KEYS` にあります。変更は、プレイ中に反映するほかのオプション（ハイスピード、カバー、LIFT、判定タイミング）と同じく、譜面時刻とともにリプレイの `play.optionChanges` に記録します。それ以外のオプションは、LR2 の譜面生成と GAMBOL を含めて、プレイ開始時のままです。
+プレイはオプションを開始時に読みます。描画だけを変えるオプションはプレイ中にも追従し、Options ダイアログで変えると次のフレームから反映します。対象は、オートスクラッチのノーツ表示、レーンの明るさ、判定文字の表示と位置、判定範囲、処理済みノーツ、スコアターゲットとその割合、LR2 マニアの描画オプション（ACCELERATION から SIDEJUMP まで）です。一覧は `@be-music/player-scene-model` の `LIVE_DISPLAY_PLAY_OPTION_KEYS` にあります。変更は、プレイ中に反映するほかのオプション（ハイスピード、カバー、LIFT、判定タイミング）と同じく、譜面時刻とともにリプレイの `play.optionChanges` に記録します。それ以外のオプションは、LR2 の譜面生成と GAMBOL を含めて、プレイ開始時のままです。
 
 ## ANY KEY
 

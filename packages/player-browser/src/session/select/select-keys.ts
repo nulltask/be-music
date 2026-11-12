@@ -93,6 +93,7 @@ export type SelectKeyAction =
   | { readonly type: 'readme' }
   /** Read the library's folders again (LR2's F8, beatoraja's F2). */
   | { readonly type: 'reload' }
+  | { readonly type: 'mania-options' }
   /** Mark or unmark the focused chart as a favourite (beatoraja's F8 / F9). */
   | { readonly type: 'favorite'; readonly list: 'music' | 'charts' }
   /** The key does nothing here, but no other handler may take it (the README dialog owns the keyboard). */
@@ -239,6 +240,7 @@ export function resolveSelectKeyAction(
   if (is('select.m-ran-2p')) return { type: 'm-ran', side: '2P' };
   if (is('select.search')) return { type: 'search' };
   if (is('select.reload')) return { type: 'reload' };
+  if (is('select.mania-options')) return { type: 'mania-options' };
   if (is('select.copy-md5')) return { type: 'copy-hash', hash: 'md5' };
   if (is('select.copy-sha256')) return { type: 'copy-hash', hash: 'sha256' };
   if (is('select.autoplay-folder')) return { type: 'autoplay-folder' };

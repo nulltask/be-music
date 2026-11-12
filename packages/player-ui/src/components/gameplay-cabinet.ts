@@ -5,6 +5,7 @@ import {
   resolveScratchAngle,
   resolveDifficulty,
   resolveDifficultyName,
+  formatPacemakerLabel,
   resolveScorePace,
   resolveStageLabel,
   type BeMusicDOMGameplayFrame,
@@ -282,7 +283,7 @@ function renderGraph(
     </div>
     <div class="cab panel graph-footer" part="graph-footer" style=${place(graph.footer)}>
       <div class="option-row"><span class="eyebrow">Option</span><strong>${random ?? 'OFF'}</strong></div>
-      <span class="pacemaker">PACEMAKER ${pace.target.label}</span>
+      <span class="pacemaker">${formatPacemakerLabel(pace.target.label)}</span>
     </div>`;
 }
 

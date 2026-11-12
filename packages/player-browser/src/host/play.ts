@@ -16,6 +16,7 @@ import {
   type PlayOptions,
   type PlayResult,
   type PracticeRange,
+  type RankingScoreTarget,
   type SystemSoundSet,
 } from '@be-music/player-scene-model';
 import type { Texture } from 'pixi.js';
@@ -127,6 +128,11 @@ export interface PlaySceneOptions extends SessionSceneOptions {
   /** The play options as the select screen set them, for the frames a view reads. Defaults to `DEFAULT_PLAY_OPTIONS`. */
   readonly playOptions?: PlayOptions;
   readonly scoreTargets?: PlayFrame['scoreTargets'];
+  /**
+   * The EX score at a ranking target's place (`IR_*` in `PlayOptions.scoreTarget`) on the chart's ranking, or
+   * `undefined` when the chart has none. Without it a ranking target shows nothing.
+   */
+  readonly rankingTarget?: (target: RankingScoreTarget) => Promise<number | undefined>;
   /** The signed-in player's name, which a skin may show beside the chart. */
   readonly playerName?: string;
   /**
@@ -762,6 +768,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     ...(course?.view !== undefined ? { course: course.view } : {}),
     playOptions,
     ...(options.scoreTargets !== undefined ? { scoreTargets: options.scoreTargets } : {}),
+    ...(options.rankingTarget !== undefined ? { rankingTarget: options.rankingTarget } : {}),
     ...(options.playerName !== undefined ? { playerName: options.playerName } : {}),
     audio: options.audio,
     ...(options.sounds !== undefined ? { sounds: options.sounds } : {}),

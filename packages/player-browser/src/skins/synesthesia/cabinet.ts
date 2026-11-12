@@ -3,6 +3,7 @@ import {
   resolveScratchAngle,
   resolveCabinetLayout,
   resolveDifficultyName,
+  formatPacemakerLabel,
   resolveScorePace,
   resolveStageLabel,
   type BeMusicGameplayLayout,
@@ -310,7 +311,7 @@ function drawGraph(
   graphics.rect(footer.x + 8, boxY, footer.w - 16, 26).stroke({ color: draw.accent, width: 1, alpha: 0.5 });
   addHUDText(
     layer,
-    `PACEMAKER ${pace.target.label}`,
+    formatPacemakerLabel(pace.target.label),
     footer.x + footer.w / 2,
     boxY + 8,
     { ...displayStyle(9, SYN_WHITE), anchorX: 0.5, maxWidth: footer.w - 24 },
