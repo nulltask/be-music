@@ -1,5 +1,12 @@
 # @be-music/chart-audio-renderer
 
+## 0.5.3
+
+### Patch Changes
+
+- f57d9b0: Fix a BMS stage of a NONSTOP course stitched as bmson rendering its keysounds polyphonically: the monophonic retrigger rule now follows each slot's own format.
+- Updated dependencies: `@be-music/chart-model@0.11.0`, `@be-music/chart-parser@0.7.2`, `@be-music/chart-source@0.8.0`
+
 ## 0.5.2
 
 ### Patch Changes

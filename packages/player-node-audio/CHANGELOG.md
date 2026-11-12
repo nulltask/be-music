@@ -1,5 +1,12 @@
 # @be-music/player-node-audio
 
+## 0.2.8
+
+### Patch Changes
+
+- f57d9b0: Fix a BMS stage of a NONSTOP course stitched as bmson playing its keysounds polyphonically: the monophonic retrigger rule now follows each slot's own format.
+- Updated dependencies: `@be-music/chart-model@0.11.0`, `@be-music/chart-source@0.8.0`, `@be-music/chart-audio-renderer@0.5.3`, `@be-music/player-engine@0.18.0`
+
 ## 0.2.7
 
 ### Patch Changes

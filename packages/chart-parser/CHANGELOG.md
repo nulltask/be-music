@@ -1,5 +1,15 @@
 # @be-music/chart-parser
 
+## 0.7.2
+
+### Patch Changes
+
+- a15f307: Report nonfatal chart warnings, and keep a positive `#STOPxx` over a later zero or negative one.
+  
+  - Report nonfatal warnings when reading legacy bmson or a chart with an unknown or malformed mode hint.
+  - A zero or negative `#STOPxx` no longer replaces a positive definition of the same ID made earlier in the file, as in LR2, which stores only values above 0.
+- Updated dependencies: `@be-music/chart-model@0.11.0`, `@be-music/chart-source@0.8.0`
+
 ## 0.7.1
 
 ### Patch Changes

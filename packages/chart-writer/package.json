@@ -1,6 +1,6 @@
 {
   "name": "@be-music/chart-writer",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Writers for exporting Be-Music JSON chart sources to BMS or bmson",
   "license": "MIT",
   "bin": {

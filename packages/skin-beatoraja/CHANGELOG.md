@@ -1,5 +1,20 @@
 # @be-music/skin-beatoraja
 
+## 0.8.0
+
+### Minor Changes
+
+- a15f307: Find a sound set's guide sounds, and fix the sign of the judge timing number.
+  
+  - Find a sound set's guide sounds (`guide-pg` to `guide-ms`, in `sound/` then `defaultsound/`) with `discoverBeatorajaSystemSoundPaths`.
+  - A beatoraja skin's judge timing number (525) read with the wrong sign: it is now positive for an early press, as beatoraja's `getRecentJudgeTiming` is.
+  - beatoraja skins draw the corrected LR2 HAZARD gauge as HAZARD.
+  - The RANDOM slot of the `option1p` / `option2p` buttons steps the shared RANDOM, now one option for every source.
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/player-engine@0.18.0`, `@be-music/player-scene-model@0.9.0`, `@be-music/skin-lr2@0.7.4`
+
 ## 0.7.3
 
 ### Patch Changes
