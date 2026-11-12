@@ -201,7 +201,10 @@ export function classifyReplayAssists(replay: AssistReplay): AssistFinding[] {
     add({ option: 'scroll-remove', source: 'beatoraja', assistClass: 'light' });
 
   const longNotes = play.longNoteModifier;
-  if (longNotes === 'LEGACY') add({ option: 'long-note:LEGACY', source: '____', assistClass: 'light' });
+  // LEGACY NOTE assists only a chart it converted: a chart without charge notes keeps its standard lamp (RemyWiki's
+  // IIDX Glossary; the official page names no lamp). A replay recorded before the count was stored reads as converted.
+  if (longNotes === 'LEGACY' && (play.longNoteModifierChangeCount ?? 1) > 0)
+    add({ option: 'long-note:LEGACY', source: '____', assistClass: 'light' });
   else if (longNotes === 'REMOVE' && (play.longNoteModifierChangeCount ?? 0) > 0)
     add({ option: 'long-note:REMOVE', source: 'beatoraja', assistClass: 'assist' });
   else if (

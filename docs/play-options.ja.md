@@ -52,7 +52,7 @@ flowchart LR
 | 7 TO 9                                                                                       | beatoraja | `light`   | 変換した                                                             | `ModeModifier`                                            |
 | BPM GUIDE                                                                                    | beatoraja | `light`   | 譜面の BPM が変わる                                                  | `BMSPlayer` L201-L205                                     |
 | 地雷の REMOVE、スクロールの REMOVE                                                           | beatoraja | `light`   | 実際に取り除いた                                                     | `MineNoteModifier`、`ScrollSpeedModifier`                 |
-| LEGACY NOTE（A-SCR & LEGACY NOTE を含む）                                                    | AC 34     | `light`   |                                                                      | AC 34 のアシストオプション                                |
+| LEGACY NOTE（A-SCR & LEGACY NOTE を含む）                                                    | AC 34     | `light`   | CN か BSS を実際に変換した                                           | AC 34 のアシストオプション                                |
 | LN REMOVE                                                                                    | beatoraja | `assist`  | ロングノートを取り除いた                                             | `LongNoteModifier` L27-L37                                |
 | ADD CN、ADD HCN、ADD ALL                                                                     | beatoraja | `assist`  | CN か HCN を追加した                                                 | `LongNoteModifier` L41-L69                                |
 | EXTRA ノート変換                                                                             | beatoraja | `assist`  | ノートを変換した                                                     | `ExtraNoteModifier`                                       |
@@ -101,6 +101,40 @@ Options ダイアログ の **Display area info** で **OFF**（既定）、**ON
 
 Options ダイアログ の **Auto scratch 1P / 2P** は、各側のスクラッチノートを独立して自動化します。反対側はロングスクラッチを含めて手動のままです。[#708](https://github.com/nulltask/be-music/issues/708) の左右別 AUTO SCRATCH に従います。リプレイは選択した設定一式と実効的な左右のスイッチを保持します。全体のスイッチだけを持つ旧リプレイでは両側に適用します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
+## オートスクラッチのノーツ表示
+
+Options ダイアログの View タブにある **Auto scratch notes (AC)** は **Show**（既定）か **Hide** です。Hide では、AUTO SCRATCH が演奏しているスクラッチレーンのノーツ、ロングノートとその本体を描画しません。スクラッチの演奏、発音、カウントはそのままで、キービームとボムも描画します。設定は両サイド共通で、AUTO SCRATCH がオフのサイドと完全な AUTO プレイには影響しません。プレイ中にも反映し、すべてのスキン系統で働きます。判定も AUTO SCRATCH のアシスト区分も変わりません。
+
+AC 34 の詳細オプションには「オートスクラッチ表示」があり、「オートスクラッチ時のノートを表示するかどうかを変更」とあります。レーンのビームや爆発も隠すかどうかはページに記載がないため、Be-Music では残します。
+
+出典: AC 34 [詳細オプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。[#1137](https://github.com/nulltask/be-music/issues/1137) で追跡しています。
+
+## LR2 マニアオプション
+
+Options ダイアログの View タブには、Effects の下に **LR2 mania options** があり、どのルールセットでも選べます。LR2 の隠しマニアパネル（[`LR2f.cpp` L1054-L1470](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1054-L1470)）のうち、プレイフィールドの描画だけを変えるオプションです。ACCELERATION はモードを選び、それ以外は LR2 と同じく **0**（OFF、既定）から **100** まで 10 刻みです。ノーツの時刻、レーン、入力、音声、判定は変わらず、プレイ中にも反映します。
+
+| オプション              | 描画                                                                                                                                                                                                                                                                                  | LR2                                                                                                                 |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **ACCELERATION (LR2)**  | OFF・ACCELERATION・DECELERATION・RANDOM。ノーツの時刻はそのままで、レーン上の位置だけを写像します。ACCELERATION は `sin(p·π/2)`、DECELERATION は `1 − cos(p·π/2)`、RANDOM は `(ノーツ番号 + レーン) % 2` でノーツごとにどちらかを選びます。レーンオプションの RANDOM とは無関係です。 | [L2253-L2270](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2253-L2270) |
+| **EARTHQUAKE (LR2)**    | プレイ画面全体が揺れます。横は周期 1000 ms、縦は周期 1234 ms の正弦波で、値が振幅です（縦は 0.75 倍）。                                                                                                                                                                               | [L2175-L2181](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2175-L2181) |
+| **TORNADO (LR2)**       | 各ノーツが、レーンと周期 1000 ms の位相による正弦波で横にずれます。ずれは判定ラインからの距離に比例します。                                                                                                                                                                           | [L2293-L2295](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2293-L2295) |
+| **SUPERLOOP (LR2)**     | 各ノーツが判定ライン上の着地点を中心に回転します。周期は `(120 − 値) × 50` ms です。                                                                                                                                                                                                  | [L2296-L2306](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2296-L2306) |
+| **CHAR (LR2)**          | `レーン + ノーツ番号` で数えて `(100 − 値) × 2 / 10 + 2` 個ごとのノーツを 3 倍の距離に描くので、3 倍の速さで落ちてきます。                                                                                                                                                            | [L2328-L2331](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2328-L2331) |
+| **HEARTBEAT (LR2)**     | 各ノーツが中心を基準に周期 500 ms の正弦波で伸び縮みします。幅は値の 2 倍、高さは値のぶんだけ変わります。                                                                                                                                                                             | [L2289-L2292](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2289-L2292) |
+| **NABEATSU (LR2)**      | プレイ時計の秒が 3 の倍数の間（50 以上では 30〜39 秒台と末尾が 3 の秒も）、ノーツと小節線が周期の揺らぐ 2 つの正弦波で揺れます。プレイ開始から 1 秒間は揺れません。                                                                                                                   | [L2159-L2174](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2159-L2174) |
+| **SINCURVE (LR2)**      | 各ノーツが `sin(値 / 10 · π · p) × 値` だけ横にずれます。レーン上の位置による正弦波です。                                                                                                                                                                                             | [L2307-L2309](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2307-L2309) |
+| **WAVE (LR2)**          | 各ノーツがレーンごとの周期 1000 ms の正弦波でレーン方向にずれます。ずれは距離の 2 乗で大きくなります。                                                                                                                                                                                | [L2324-L2327](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2324-L2327) |
+| **SPIRAL effect (LR2)** | 各ノーツが 300 ms 周期で自分の軌道のまわりを回ります。1 つおきに逆向きで、判定ラインから遠いほど大きく回ります。LR2 のノーツ演出で、beatoraja のレーンオプション SPIRAL とは別物です。                                                                                                | [L2310-L2316](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2310-L2316) |
+| **SIDEJUMP (LR2)**      | 各ノーツが 500 ms 周期で横に跳ねます。1 つおきに逆向きです。                                                                                                                                                                                                                          | [L2317-L2323](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2317-L2323) |
+
+- **単位。** LR2 の式は 640×480 のピクセルで計算します。Be-Music はステージの高さ ÷ 480 で拡大縮小するので、どの解像度のスキンでも同じ強さに見えます。レーン上の位置 `p` は、判定ラインからの距離を、ステージ上端から判定ラインまでの距離で割った値で、LR2 と同じ測り方です。
+- **適用順。** 複数を同時に使うと LR2 の順で重なります。ACCELERATION が最初で、HEARTBEAT、TORNADO、SUPERLOOP、SINCURVE、SPIRAL、SIDEJUMP、WAVE、CHAR の順です。
+- **ロングノートと地雷。** ロングノートの終点は始点と同じ規則で動き、本体はその間に伸びます。地雷もノーツと同じく動きます。レーンのノーツと地雷は時刻順に通し番号を振り、LR2 の交互に働く演出はこの番号を使います。
+- **スキン系統。** 共有プレイフィールドに描画する内蔵スキンと LR2 スキンで描画します。beatoraja スキンは独自のレンダラーでノーツを描くため、ノーツ単位のオプションは適用しません。DOM に描画する内蔵スキンも同様です。EARTHQUAKE は beatoraja スキンを含むすべての系統でキャンバスを動かします。スキンが DOM に描画する部分は動きません。
+- **記録。** LR2 はこれらのオプションを使ったプレイを通常のプレイとして保存します（[スコア保存条件](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L67-L79)に含まれません）。Be-Music でもアシストなしです。リプレイはオプションのスナップショットに値を保持します。
+
+出典: OpenLR2 [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2155-L2331)。[#1115](https://github.com/nulltask/be-music/issues/1115), [#1117](https://github.com/nulltask/be-music/issues/1117), [#1119](https://github.com/nulltask/be-music/issues/1119), [#1120](https://github.com/nulltask/be-music/issues/1120), [#1121](https://github.com/nulltask/be-music/issues/1121), [#1122](https://github.com/nulltask/be-music/issues/1122), [#1118](https://github.com/nulltask/be-music/issues/1118), [#1123](https://github.com/nulltask/be-music/issues/1123), [#1124](https://github.com/nulltask/be-music/issues/1124), [#1125](https://github.com/nulltask/be-music/issues/1125), [#1126](https://github.com/nulltask/be-music/issues/1126) で追跡しています。
+
 ## ANY KEY
 
 Options ダイアログ の Play options の一番上で **Judgment windows → ????** を選び、**Play options → ANY KEY (PC)** をオンにします。既定はオフで、ほかの判定ルールでは表示しません。PC 版のアシストで、PC 版のページは名前を挙げるだけなので、Be-Music は次のように読みます（[#751](https://github.com/nulltask/be-music/issues/751)）。
@@ -114,9 +148,9 @@ Options ダイアログ の Play options の一番上で **Judgment windows → 
 
 ## LEGACY NOTE と LN REMOVE
 
-Options ダイアログ の **Long notes** は **OFF** が既定です。**LEGACY NOTE (AC 34)** はチャージノートとバックスピンスクラッチを始点だけにし、通常の LN は維持します。HCN はこの AC オプションの対象外として維持します。**LN REMOVE (beatoraja)** は、beatoraja 0.8.9 の REMOVE を除去率最大で適用した場合と同様に、スクラッチを含むすべての LN・CN・HCN を始点だけにします。始点のキー音と時刻を保持し、終点の判定と音声を除去します。該当するノートがない譜面は変化しません。
+Options ダイアログ の **Long notes** は **OFF** が既定です。**LEGACY NOTE (AC 34)** はチャージノートとバックスピンスクラッチを始点だけにし、通常の LN は維持します。HCN はこの AC オプションの対象外として維持します。**LN REMOVE (beatoraja)** は、beatoraja 0.8.9 の REMOVE を除去率最大で適用した場合と同様に、スクラッチを含むすべての LN・CN・HCN を始点だけにします。始点のキー音と時刻を保持し、終点の判定と音声を除去します。該当するノートがない譜面は変化しません。LEGACY NOTE がアシスト扱いになるのは実際に変換した譜面だけです。チャージノートのない譜面は通常のランプになります（RemyWiki の IIDX Glossary が AC について記録 [C]。公式ページはランプに触れていません。[#1139](https://github.com/nulltask/be-music/issues/1139)）。
 
-エンジンと描画は変換後のノートを共有します。リプレイには変換方式と変換後の始点だけのノートを記録し、元の譜面のフィンガープリントは読み込んだ譜面を識別する値として維持します。リプレイを開く際は記録された変換を適用してからレーン配置を復元します。参照元でもプレイ前に譜面を変換する設定のため、プレイ中の選択はロックします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
+エンジンと描画は変換後のノートを共有します。リプレイには変換方式と変換後の始点だけのノートを記録し、元の譜面のフィンガープリントは読み込んだ譜面を識別する値として維持します。変換したノート数も `play.longNoteModifierChangeCount` に記録します。この値を持たない以前の LEGACY NOTE のリプレイは、変換したものとして扱います。リプレイを開く際は記録された変換を適用してからレーン配置を復元します。参照元でもプレイ前に譜面を変換する設定のため、プレイ中の選択はロックします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
 参照元：AC 34 の[アシストオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)、beatoraja 0.8.9 の [`LongNoteModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/LongNoteModifier.java)。対応 Issue は [#710](https://github.com/nulltask/be-music/issues/710) です。
 

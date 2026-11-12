@@ -352,6 +352,8 @@ export class BeatorajaNoteLayer {
      * `LaneRenderer` sets each timeline's colour; a long note by its head's time. Omitted or off: every note is opaque.
      */
     constant?: ConstantVisibility,
+    /** Lanes whose notes are not drawn: the scratch lanes AUTO SCRATCH plays while their notes are hidden (#1137). */
+    hiddenChannels?: ReadonlySet<string>,
   ): void {
     this.invisibleLayer.clear();
     this.invisibleLayer.visible = false;
@@ -475,7 +477,7 @@ export class BeatorajaNoteLayer {
         continue;
       }
       const lane = resolveBeatorajaNoteLane(note.channel, this.variant);
-      if (lane === undefined) continue;
+      if (lane === undefined || hiddenChannels?.has(note.channel)) continue;
       const rect = rects[lane];
       if (rect === undefined) continue;
       const constantAlpha =
