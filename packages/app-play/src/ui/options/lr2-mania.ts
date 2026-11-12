@@ -22,4 +22,5 @@ export function buildLR2ManiaRows(this: OptionsDialog, effects: OptionContainer)
 const LEVEL_ROWS = [
   ['lr2Earthquake', 'EARTHQUAKE (LR2)'],
   ['lr2Tornado', 'TORNADO (LR2)'],
+  ['lr2SuperLoop', 'SUPERLOOP (LR2)'],
 ] as const;

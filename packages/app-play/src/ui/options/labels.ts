@@ -112,6 +112,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'ACCELERATION (LR2)': 'ACCELERATION (LR2)',
   'EARTHQUAKE (LR2)': 'EARTHQUAKE (LR2)',
   'TORNADO (LR2)': 'TORNADO (LR2)',
+  'SUPERLOOP (LR2)': 'SUPERLOOP (LR2)',
   'LIFT 1P (beatoraja)': 'LIFT 1P (beatoraja)',
   'LIFT height 1P': 'LIFT の高さ 1P',
   'LIFT 2P (beatoraja)': 'LIFT 2P (beatoraja)',

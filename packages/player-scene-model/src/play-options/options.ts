@@ -40,6 +40,8 @@ export interface PlayOptions {
    * change until the change (blue when the tempo rises, red when it falls).
    */
   bpmChangeWarning: boolean;
+  /** LR2 mania option SUPERLOOP (0 = OFF, 10–100): turns each note about its landing point on the judge line, once every (120 − value) × 50 ms. Drawing only. */
+  lr2SuperLoop: number;
   /** LR2 mania option TORNADO (0 = OFF, 10–100): shifts each note sideways by a sine of its lane and time, in proportion to its distance from the judge line. Drawing only. */
   lr2Tornado: number;
   /** LR2 mania option EARTHQUAKE (0 = OFF, 10–100): sways the whole play screen on 1000 ms and 1234 ms sines. Drawing only. */

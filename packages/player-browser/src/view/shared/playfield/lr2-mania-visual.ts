@@ -16,6 +16,7 @@ export interface LR2ManiaVisual {
   readonly acceleration: PlayOptions['lr2Acceleration'];
   readonly earthquake: number;
   readonly tornado: number;
+  readonly superLoop: number;
 }
 
 /** The mania drawing options of `options`, or `undefined` when none is on (the playfield then skips the pass). */
@@ -25,8 +26,10 @@ export function resolveLR2ManiaVisual(options: Partial<PlayOptions> | undefined)
     acceleration: options.lr2Acceleration ?? 'OFF',
     earthquake: options.lr2Earthquake ?? 0,
     tornado: options.lr2Tornado ?? 0,
+    superLoop: options.lr2SuperLoop ?? 0,
   };
-  const on = visual.acceleration !== 'OFF' || visual.earthquake > 0 || visual.tornado > 0 || false;
+  const on =
+    visual.acceleration !== 'OFF' || visual.earthquake > 0 || visual.tornado > 0 || visual.superLoop > 0 || false;
   return on ? visual : undefined;
 }
 
@@ -99,6 +102,15 @@ export function placeLR2ManiaNote(visual: LR2ManiaVisual, input: LR2ManiaNoteInp
   tailY = Math.min(0, tailY);
   if (visual.tornado > 0) {
     x = (visual.tornado * y * -0.5 * Math.sin((lane / 10 + (now % 1000) / 1000) * TAU)) / 100;
+  }
+  if (visual.superLoop > 0) {
+    const period = (120 - visual.superLoop) * 50;
+    const angle = wave(now, period);
+    const turnedX = x * Math.cos(angle) - y * Math.sin(angle);
+    const turnedY = x * Math.sin(angle) + y * Math.cos(angle);
+    tailY = turnedY + tailY - y;
+    y = turnedY;
+    x = turnedX;
   }
   return {
     distance: -y * unit,

@@ -102,6 +102,7 @@ export interface OptionSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  lr2SuperLoop: PlayerGUIState['lr2SuperLoop'];
   lr2Tornado: PlayerGUIState['lr2Tornado'];
   lr2Earthquake: PlayerGUIState['lr2Earthquake'];
   lr2Acceleration: PlayerGUIState['lr2Acceleration'];
@@ -307,6 +308,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
   assign(settings, 'bpmChangeWarning', booleanOf(raw.bpmChangeWarning));
+  assign(settings, 'lr2SuperLoop', resolvePlayOptionValue('lr2SuperLoop', raw.lr2SuperLoop));
   assign(settings, 'lr2Tornado', resolvePlayOptionValue('lr2Tornado', raw.lr2Tornado));
   assign(settings, 'lr2Earthquake', resolvePlayOptionValue('lr2Earthquake', raw.lr2Earthquake));
   assign(settings, 'lr2Acceleration', resolvePlayOptionValue('lr2Acceleration', raw.lr2Acceleration));
@@ -588,6 +590,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('dpFlip');
   assignState('bpmGuide');
   assignState('bpmChangeWarning');
+  assignState('lr2SuperLoop');
   assignState('lr2Tornado');
   assignState('lr2Earthquake');
   assignState('lr2Acceleration');
@@ -724,6 +727,7 @@ export function captureOptionSettings(
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    lr2SuperLoop: state.lr2SuperLoop,
     lr2Tornado: state.lr2Tornado,
     lr2Earthquake: state.lr2Earthquake,
     lr2Acceleration: state.lr2Acceleration,

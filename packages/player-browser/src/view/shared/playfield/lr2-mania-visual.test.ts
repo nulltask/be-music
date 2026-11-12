@@ -90,6 +90,17 @@ test('TORNADO shifts a note sideways in proportion to its distance', () => {
   expect(placeLR2ManiaNote(tornado, note({ lane: 0, nowMs: 0 })).xOffset).toBeCloseTo(0);
 });
 
+test('SUPERLOOP turns a note about its landing point and carries a long note with it', () => {
+  // 100 gives a 1000 ms turn; a quarter turn puts a note above the line beside it.
+  const turned = placeLR2ManiaNote(visual({ superLoop: 100 }), note({ nowMs: 250, tailDistance: 300 }));
+  expect(turned.distance).toBeCloseTo(0);
+  expect(turned.xOffset).toBeCloseTo(200);
+  expect(turned.tailDistance).toBeCloseTo(100);
+  const whole = placeLR2ManiaNote(visual({ superLoop: 100 }), note({ nowMs: 1000 }));
+  expect(whole.distance).toBeCloseTo(200);
+  expect(whole.xOffset).toBeCloseTo(0);
+});
+
 test('indexes notes and mines per lane in time order', () => {
   const notes = [
     { channel: '11', seconds: 1 },
