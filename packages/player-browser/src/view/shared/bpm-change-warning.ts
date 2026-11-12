@@ -1,6 +1,9 @@
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container } from 'pixi.js';
 import type { TimingResolver } from '@be-music/chart-model';
 import type { PlaySide } from '@be-music/player-scene-model';
+import { addHUDNumber, measureHUDNumber, type HUDTextOptions } from '../../skins/pixi-kit/hud-text.ts';
+import { ChildPool } from '../../skins/pixi-kit/pools.ts';
+import { textResolution } from '../../skins/pixi-kit/resolution.ts';
 import { measureLayer, type DisplayAreaLane } from './display-area-info.ts';
 import { setHidden, setStyle } from './dom-style.ts';
 
@@ -8,13 +11,48 @@ import { setHidden, setStyle } from './dom-style.ts';
  * AC 34's BPM-change warning (#746). The official introduction draws `<current> » <next>` in a framed box centred on the
  * lanes just above the judgment and combo, blue when the tempo rises and red when it falls. Play footage shows it from
  * 2 s before each BPM change until the change. The TYPE A–D variants of the source are not known yet; this is the style
- * the introduction shows.
+ * the introduction shows. How the warning leaves is not known from the source either: Be-Music fades it out after the
+ * change rather than cutting it.
  */
 export const BPM_CHANGE_WARNING_LEAD_SECONDS = 2;
 /** How long the warning takes to fade in. */
 const FADE_SECONDS = 0.1;
-const RISING_COLOR = 0x4aa8ff;
-const FALLING_COLOR = 0xff5a5a;
+/** How long the warning takes to fade out after its change. */
+export const BPM_CHANGE_WARNING_FADE_OUT_SECONDS = 0.3;
+
+/**
+ * The warning's look. The source's blue for a rising tempo and red for a falling one stay; a skin gives its own blue
+ * and red, type and frame so the box reads as part of it. Lengths are in units of the text size.
+ */
+export interface BPMChangeWarningStyle {
+  /** A CSS font family list, used by Canvas and DOM skins alike. */
+  readonly fontFamily: string;
+  readonly fontWeight: '500' | '600' | '700' | '800' | '900';
+  readonly letterSpacing: number;
+  readonly rising: number;
+  readonly falling: number;
+  readonly background: number;
+  readonly backgroundAlpha: number;
+  readonly borderWidth: number;
+  readonly radius: number;
+}
+
+/** The look on a skin that names none: the framed monospace box of the introduction. */
+export const DEFAULT_BPM_CHANGE_WARNING_STYLE: BPMChangeWarningStyle = {
+  fontFamily: 'monospace',
+  fontWeight: '700',
+  letterSpacing: 0,
+  rising: 0x4aa8ff,
+  falling: 0xff5a5a,
+  background: 0x000000,
+  backgroundAlpha: 0.65,
+  borderWidth: 0.125,
+  radius: 0.15,
+};
+
+/** The box's padding around the text, in units of the text size. */
+const PADDING_X = 0.6;
+const BOX_HEIGHT = 1.5;
 
 /** One BPM change of a chart, in chart seconds. */
 export interface BPMChange {
@@ -30,6 +68,8 @@ export interface BPMChangeWarning {
   readonly rising: boolean;
   /** Chart seconds since the warning appeared. */
   readonly elapsedSeconds: number;
+  /** 0 to 1: fading in as the warning appears, and out after its change. */
+  readonly opacity: number;
 }
 
 /** Where a side's warning is drawn: the centre of its box, and the text size that fits its lanes. */
@@ -66,7 +106,10 @@ export function collectBPMChanges(timing: Pick<TimingResolver, 'tempoPoints' | '
   return result;
 }
 
-/** The warning at chart time `nowSeconds`: the next change, while it is at most `leadSeconds` away. */
+/**
+ * The warning at chart time `nowSeconds`: the next change, while it is at most `leadSeconds` away; otherwise the change
+ * that just happened, fading out for {@link BPM_CHANGE_WARNING_FADE_OUT_SECONDS}.
+ */
 export function resolveBPMChangeWarning(
   changes: readonly BPMChange[],
   nowSeconds: number,
@@ -80,12 +123,26 @@ export function resolveBPMChangeWarning(
     else high = mid;
   }
   const next = changes[low];
-  if (next === undefined || next.seconds - nowSeconds > leadSeconds) return undefined;
+  if (next !== undefined && next.seconds - nowSeconds <= leadSeconds) {
+    const elapsedSeconds = nowSeconds - (next.seconds - leadSeconds);
+    return {
+      from: next.from,
+      to: next.to,
+      rising: next.to > next.from,
+      elapsedSeconds,
+      opacity: Math.min(1, Math.max(0, elapsedSeconds / FADE_SECONDS)),
+    };
+  }
+  const previous = changes[low - 1];
+  if (previous === undefined) return undefined;
+  const sinceChange = nowSeconds - previous.seconds;
+  if (sinceChange >= BPM_CHANGE_WARNING_FADE_OUT_SECONDS) return undefined;
   return {
-    from: next.from,
-    to: next.to,
-    rising: next.to > next.from,
-    elapsedSeconds: nowSeconds - (next.seconds - leadSeconds),
+    from: previous.from,
+    to: previous.to,
+    rising: previous.to > previous.from,
+    elapsedSeconds: nowSeconds - (previous.seconds - leadSeconds),
+    opacity: 1 - sinceChange / BPM_CHANGE_WARNING_FADE_OUT_SECONDS,
   };
 }
 
@@ -123,16 +180,47 @@ export function resolveBPMChangeWarningPlacements(
   return result;
 }
 
-/** How far into its fade the warning is, 0 to 1. */
-function fadeProgress(warning: BPMChangeWarning): number {
-  return Math.min(1, Math.max(0, warning.elapsedSeconds / FADE_SECONDS));
+/** The text options a Canvas skin draws the warning's figures with. */
+export function resolveBPMChangeWarningTextOptions(
+  style: BPMChangeWarningStyle,
+  size: number,
+  rising: boolean,
+): HUDTextOptions {
+  return {
+    size,
+    weight: style.fontWeight,
+    fontFamily: style.fontFamily,
+    letterSpacing: style.letterSpacing * size,
+    fill: rising ? style.rising : style.falling,
+    anchorX: 0.5,
+    anchorY: 0.5,
+  };
+}
+
+/**
+ * How many times its size a Canvas skin rasterizes the warning's text at, drawn back down to size: `density` is the
+ * canvas pixels one design pixel covers, `resolution` what Pixi-kit text already rasterizes at. In half steps so a
+ * resize does not rasterize the glyphs again at every width, and at most 4 times.
+ */
+export function resolveBPMChangeWarningTextScale(density: number, resolution: number): number {
+  if (!Number.isFinite(density) || !Number.isFinite(resolution) || resolution <= 0) return 1;
+  return Math.min(4, Math.max(1, Math.ceil((density / resolution) * 2) / 2));
+}
+
+function cssColor(color: number, alpha = 1): string {
+  const hex = `#${color.toString(16).padStart(6, '0')}`;
+  return alpha >= 1
+    ? hex
+    : `${hex}${Math.round(alpha * 255)
+        .toString(16)
+        .padStart(2, '0')}`;
 }
 
 /** A pointer-transparent warning layer, shared by Canvas and DOM skins and removed with its play view. */
 export class BPMChangeWarningOverlay {
   private root: HTMLElement | undefined;
   private canvas: Container | undefined;
-  private canvasBoxes: { box: Graphics; text: Text }[] = [];
+  private pool: ChildPool | undefined;
   private nodes: HTMLElement[] = [];
   private changes: { timing: TimingResolver; changes: BPMChange[] } | undefined;
 
@@ -147,6 +235,10 @@ export class BPMChangeWarningOverlay {
     opacity?: number;
     /** The judgment position option, when the skin's judgment follows it. */
     judgePosition?: number;
+    /** The skin's look for the box; the introduction's when it names none. */
+    style?: BPMChangeWarningStyle;
+    /** The renderer's resolution (canvas pixels per screen pixel), for a Canvas skin's text to rasterize sharp. */
+    resolution?: number;
   }): void {
     let warning: BPMChangeWarning | undefined;
     if (input.enabled && input.timing) {
@@ -154,16 +246,28 @@ export class BPMChangeWarningOverlay {
         this.changes = { timing: input.timing, changes: collectBPMChanges(input.timing) };
       warning = resolveBPMChangeWarning(this.changes.changes, input.seconds);
     }
-    this.update(warning, input.lanes, input.stage, input.screen, input.opacity, input.judgePosition);
+    this.update(
+      warning,
+      input.lanes,
+      input.stage,
+      input.screen,
+      input.opacity,
+      input.judgePosition,
+      input.style,
+      input.resolution,
+    );
   }
 
   attachCanvas(parent: Container): void {
     this.root?.remove();
     if (this.canvas?.destroyed) {
       this.canvas = undefined;
-      this.canvasBoxes = [];
+      this.pool = undefined;
     }
-    this.canvas ??= new Container({ label: 'bpm-change-warning', eventMode: 'none' });
+    if (!this.canvas) {
+      this.canvas = new Container({ label: 'bpm-change-warning', eventMode: 'none' });
+      this.pool = new ChildPool(this.canvas);
+    }
     if (this.canvas.parent !== parent) parent.addChild(this.canvas);
   }
 
@@ -183,11 +287,13 @@ export class BPMChangeWarningOverlay {
     screen: { width: number; height: number },
     opacity = 1,
     judgePosition = 0,
+    style: BPMChangeWarningStyle = DEFAULT_BPM_CHANGE_WARNING_STYLE,
+    resolution = 1,
   ): void {
     const placements = warning === undefined ? [] : resolveBPMChangeWarningPlacements(lanes, judgePosition);
     const text = warning === undefined ? '' : formatBPMChangeWarning(warning);
     if (this.canvas?.parent) {
-      this.updateCanvas(warning, text, placements);
+      this.updateCanvas(warning, text, placements, style, resolution);
       return;
     }
     const root = this.root;
@@ -196,7 +302,7 @@ export class BPMChangeWarningOverlay {
     // Nothing to place: skip the measure, which would force a layout every frame.
     if (placements.length === 0) return;
     const { width, height } = measureLayer(root, screen);
-    setStyle(root, 'opacity', String(opacity * (warning === undefined ? 1 : fadeProgress(warning))));
+    setStyle(root, 'opacity', String(opacity * (warning?.opacity ?? 1)));
     const scale = Math.min(width / stage.width, height / stage.height);
     const offsetX = (width - stage.width * scale) / 2;
     const offsetY = (height - stage.height * scale) / 2;
@@ -207,18 +313,18 @@ export class BPMChangeWarningOverlay {
         Object.assign(node.style, {
           position: 'absolute',
           whiteSpace: 'pre',
-          fontWeight: 'bold',
-          fontFamily: 'monospace',
-          lineHeight: '1.2',
-          background: '#000a',
+          // Every figure as wide as the widest, so the box keeps its width as the digits change.
+          fontVariantNumeric: 'tabular-nums',
           borderStyle: 'solid',
-          borderRadius: '3px',
+          boxSizing: 'border-box',
+          display: 'flex',
+          alignItems: 'center',
           transform: 'translate(-50%, -50%)',
         });
         root.append(node);
         this.nodes[index] = node;
       }
-      const color = warning!.rising ? '#4aa8ff' : '#ff5a5a';
+      const color = cssColor(warning!.rising ? style.rising : style.falling);
       const size = placement.size * scale;
       setHidden(node, false);
       node.dataset.side = placement.side;
@@ -227,8 +333,15 @@ export class BPMChangeWarningOverlay {
       setStyle(node, 'fontSize', `${size}px`);
       setStyle(node, 'color', color);
       setStyle(node, 'borderColor', color);
-      setStyle(node, 'borderWidth', `${Math.max(1, size / 8)}px`);
-      setStyle(node, 'padding', `${size * 0.1}px ${size * 0.6}px`);
+      setStyle(node, 'fontFamily', style.fontFamily);
+      setStyle(node, 'fontWeight', style.fontWeight);
+      setStyle(node, 'letterSpacing', `${style.letterSpacing * size}px`);
+      setStyle(node, 'lineHeight', '1');
+      setStyle(node, 'background', cssColor(style.background, style.backgroundAlpha));
+      setStyle(node, 'borderRadius', `${style.radius * size}px`);
+      setStyle(node, 'borderWidth', `${Math.max(1, size * style.borderWidth)}px`);
+      setStyle(node, 'height', `${size * BOX_HEIGHT}px`);
+      setStyle(node, 'padding', `0 ${size * PADDING_X}px`);
       setStyle(node, 'left', `${offsetX + placement.x * scale}px`);
       setStyle(node, 'top', `${offsetY + placement.y * scale}px`);
     });
@@ -239,38 +352,34 @@ export class BPMChangeWarningOverlay {
     warning: BPMChangeWarning | undefined,
     text: string,
     placements: readonly BPMChangeWarningPlacement[],
+    style: BPMChangeWarningStyle,
+    resolution: number,
   ): void {
     const canvas = this.canvas!;
+    const pool = this.pool!;
     canvas.visible = placements.length > 0;
-    canvas.alpha = warning === undefined ? 1 : fadeProgress(warning);
-    placements.forEach((placement, index) => {
-      let nodes = this.canvasBoxes[index];
-      if (!nodes) {
-        const box = new Graphics();
-        const label = new Text({ text: '', style: { fontFamily: 'monospace', fontWeight: 'bold' } });
-        label.anchor.set(0.5);
-        canvas.addChild(box, label);
-        nodes = { box, text: label };
-        this.canvasBoxes[index] = nodes;
-      }
-      const color = warning!.rising ? RISING_COLOR : FALLING_COLOR;
-      nodes.text.visible = nodes.box.visible = true;
-      nodes.text.label = `bpm-change-warning:${placement.side}`;
-      nodes.text.text = text;
-      nodes.text.style.fontSize = placement.size;
-      nodes.text.style.fill = color;
-      nodes.text.position.set(placement.x, placement.y);
-      const width = nodes.text.width + placement.size * 1.2;
-      const height = nodes.text.height + placement.size * 0.2;
-      nodes.box
-        .clear()
-        .roundRect(placement.x - width / 2, placement.y - height / 2, width, height, placement.size * 0.15)
-        .fill({ color: 0x000000, alpha: 0.65 })
-        .stroke({ color, width: Math.max(1, placement.size / 8) });
-    });
-    for (let index = placements.length; index < this.canvasBoxes.length; index++) {
-      this.canvasBoxes[index]!.text.visible = this.canvasBoxes[index]!.box.visible = false;
+    if (warning === undefined || placements.length === 0) return;
+    canvas.alpha = warning.opacity;
+    const color = warning.rising ? style.rising : style.falling;
+    // The design canvas is magnified onto the screen: rasterize the glyphs at the size they show at.
+    const raster = resolveBPMChangeWarningTextScale(Math.abs(canvas.worldTransform.a) * resolution, textResolution());
+    pool.begin();
+    for (const placement of placements) {
+      const { size } = placement;
+      // Figures in tabular cells, each glyph its own text: one text whose string and style change in place keeps the
+      // raster of the string it held, which cut the right end of a longer one off.
+      const options = resolveBPMChangeWarningTextOptions(style, size * raster, warning.rising);
+      const width = measureHUDNumber(text, options) / raster + size * PADDING_X * 2;
+      const height = size * BOX_HEIGHT;
+      const box = pool.acquireGraphics();
+      box.label = `bpm-change-warning:${placement.side}`;
+      box
+        .roundRect(placement.x - width / 2, placement.y - height / 2, width, height, size * style.radius)
+        .fill({ color: style.background, alpha: style.backgroundAlpha })
+        .stroke({ color, width: Math.max(1, size * style.borderWidth) });
+      addHUDNumber(canvas, text, placement.x, placement.y, { ...options, scale: 1 / raster }, pool);
     }
+    pool.end();
   }
 
   hide(): void {
@@ -287,9 +396,12 @@ export class BPMChangeWarningOverlay {
     this.detach();
     this.nodes = [];
     this.root = undefined;
-    if (this.canvas && !this.canvas.destroyed) this.canvas.destroy({ children: true });
+    if (this.canvas && !this.canvas.destroyed) {
+      this.pool?.destroy();
+      this.canvas.destroy({ children: true });
+    }
     this.canvas = undefined;
-    this.canvasBoxes = [];
+    this.pool = undefined;
     this.changes = undefined;
   }
 }

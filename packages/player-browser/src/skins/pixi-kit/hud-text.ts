@@ -119,6 +119,12 @@ export function addHUDNumber(
   return nodes;
 }
 
+/** The width {@link addHUDNumber} lays `text` out in (before any `maxWidth` squeeze or `scale`), for a box around it. */
+export function measureHUDNumber(text: string, opts: HUDTextOptions = {}): number {
+  const style = resolveTextStyle(opts, isTintable(opts));
+  return layoutTabularRun(text, (char) => measureGlyph(char, style)).width;
+}
+
 const GLYPH_WIDTH_CACHE = new WeakMap<TextStyle, Map<string, number>>();
 
 /** The advance of `char` in `style`, cached per style, for laying glyphs out in tabular cells. */

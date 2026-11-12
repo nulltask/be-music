@@ -324,7 +324,7 @@ Sources: beatoraja 0.8.9 [`LaneRenderer`](https://github.com/exch-bms2/beatoraja
 
 ## BPM-change warning
 
-Turn on **BPM change warning (AC)** in the Options dialog; it is off by default. Before each BPM change, `<current> » <next>` appears in a framed box on the lanes and stays until the change happens: blue when the tempo rises, red when it falls, in whole BPMs. It appears 2 s of chart time before the change, so it comes more beats ahead on a fast section than on a slow one.
+Turn on **BPM change warning (AC)** in the Options dialog; it is off by default. Before each BPM change, `<current> » <next>` appears in a framed box on the lanes and stays until the change happens: blue when the tempo rises, red when it falls, in whole BPMs. It appears 2 s of chart time before the change, so it comes more beats ahead on a fast section than on a slow one. It fades in as it appears and fades out over 0.3 s after the change; the fade-out is Be-Music's own choice, since how the source's warning leaves is not known. The built-in skins draw the box in their own type and their own blue and red, with tabular figures so its width follows only the number of digits.
 
 ```mermaid
 timeline
