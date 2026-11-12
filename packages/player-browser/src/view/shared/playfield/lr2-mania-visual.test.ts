@@ -156,6 +156,13 @@ test('NABEATSU sways a note with the note layer, and the later effects act on th
   expect(tornado.xOffset).toBeCloseTo(-12);
 });
 
+test('SINCURVE shifts a note sideways by a sine of its place along the lane', () => {
+  // 20: sin(2π · pos) × 20; a quarter of the way up is the crest.
+  expect(placeLR2ManiaNote(visual({ sinCurve: 20 }), note({ distance: 100 })).xOffset).toBeCloseTo(20);
+  expect(placeLR2ManiaNote(visual({ sinCurve: 20 }), note({ distance: 200 })).xOffset).toBeCloseTo(0);
+  expect(placeLR2ManiaNote(visual({ sinCurve: 20 }), note({ distance: 300 })).xOffset).toBeCloseTo(-20);
+});
+
 test('indexes notes and mines per lane in time order', () => {
   const notes = [
     { channel: '11', seconds: 1 },

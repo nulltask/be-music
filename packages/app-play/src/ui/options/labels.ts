@@ -116,6 +116,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'CHAR (LR2)': 'CHAR (LR2)',
   'HEARTBEAT (LR2)': 'HEARTBEAT (LR2)',
   'NABEATSU (LR2)': 'NABEATSU (LR2)',
+  'SINCURVE (LR2)': 'SINCURVE (LR2)',
   'LIFT 1P (beatoraja)': 'LIFT 1P (beatoraja)',
   'LIFT height 1P': 'LIFT の高さ 1P',
   'LIFT 2P (beatoraja)': 'LIFT 2P (beatoraja)',

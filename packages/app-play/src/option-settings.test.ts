@@ -135,6 +135,7 @@ describe('captureOptionSettings', () => {
       dpFlip: true,
       bpmGuide: true,
       bpmChangeWarning: true,
+      lr2SinCurve: 40,
       lr2Nabeatsu: 40,
       lr2Heartbeat: 40,
       lr2Char: 40,

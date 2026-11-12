@@ -102,6 +102,7 @@ export interface OptionSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  lr2SinCurve: PlayerGUIState['lr2SinCurve'];
   lr2Nabeatsu: PlayerGUIState['lr2Nabeatsu'];
   lr2Heartbeat: PlayerGUIState['lr2Heartbeat'];
   lr2Char: PlayerGUIState['lr2Char'];
@@ -311,6 +312,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
   assign(settings, 'bpmChangeWarning', booleanOf(raw.bpmChangeWarning));
+  assign(settings, 'lr2SinCurve', resolvePlayOptionValue('lr2SinCurve', raw.lr2SinCurve));
   assign(settings, 'lr2Nabeatsu', resolvePlayOptionValue('lr2Nabeatsu', raw.lr2Nabeatsu));
   assign(settings, 'lr2Heartbeat', resolvePlayOptionValue('lr2Heartbeat', raw.lr2Heartbeat));
   assign(settings, 'lr2Char', resolvePlayOptionValue('lr2Char', raw.lr2Char));
@@ -596,6 +598,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('dpFlip');
   assignState('bpmGuide');
   assignState('bpmChangeWarning');
+  assignState('lr2SinCurve');
   assignState('lr2Nabeatsu');
   assignState('lr2Heartbeat');
   assignState('lr2Char');
@@ -736,6 +739,7 @@ export function captureOptionSettings(
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    lr2SinCurve: state.lr2SinCurve,
     lr2Nabeatsu: state.lr2Nabeatsu,
     lr2Heartbeat: state.lr2Heartbeat,
     lr2Char: state.lr2Char,
