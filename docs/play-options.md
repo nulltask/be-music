@@ -109,6 +109,22 @@ AC 34's detail options list オートスクラッチ表示, which "changes wheth
 
 Source: AC 34 [detail options](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html). Tracked in [#1137](https://github.com/nulltask/be-music/issues/1137).
 
+## LR2 mania options
+
+The Options dialog's View tab has an **LR2 mania options** section under Effects, offered under every ruleset: the options of LR2's hidden mania panel ([`LR2f.cpp` L1054-L1470](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1054-L1470)) that only change what the playfield draws. Note times, lanes, input, audio and judgment are unchanged, and the options apply live.
+
+| Option                 | What it draws                                                                                                                                                                                                                                                                                                                                                                                    | LR2                                                                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| **ACCELERATION (LR2)** | OFF, ACCELERATION, DECELERATION or RANDOM. A note keeps its time but its place along the lane is remapped: ACCELERATION by `sin(p·π/2)`, so it starts fast and slows towards the line as drawn from the top (LR2 calls this "accelerating"), DECELERATION by `1 − cos(p·π/2)`, and RANDOM picks one of the two per note by `(note index + lane) % 2`. It is unrelated to the RANDOM lane option. | [L2253-L2270](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2253-L2270) |
+
+- **Units.** LR2's formulas run in its 640×480 pixels. Be-Music scales them by the stage's height over 480, so a strength looks alike on a skin of any resolution. A note's place along the lane `p` is its distance from the judge line over the judge line's distance from the top of the stage, as LR2 measures it.
+- **Order.** Several options combine in LR2's order: ACCELERATION first, then HEARTBEAT, TORNADO, SUPERLOOP, SINCURVE, SPIRAL, SIDEJUMP, WAVE and CHAR.
+- **Long notes and mines.** A long note's end moves with the same rule as its head and its body spans the two; mines move as notes do. A lane's notes and mines are numbered together in time order, the index LR2's alternating effects use.
+- **Skin families.** The built-in skins that draw on the shared playfield and LR2 skins draw them. beatoraja skins draw their notes through their own renderer and do not apply the per-note options; neither does a built-in skin that draws on the DOM.
+- **Records.** LR2 saves a play with these options as a normal play (none is in its [score-save condition](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L67-L79)), so they are unassisted here too. Replays keep the values in the option snapshot.
+
+Source: OpenLR2 [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L2155-L2331). Tracked in [#1115](https://github.com/nulltask/be-music/issues/1115).
+
 ## ANY KEY
 
 With **Judgment windows → ????** at the top of the Options dialog's Play options, turn on **Play options → ANY KEY (PC)**; it is off by default and hidden under the other judge rules. It is the PC edition's assist, which that edition's page names without describing, so Be-Music reads it this way ([#751](https://github.com/nulltask/be-music/issues/751)):

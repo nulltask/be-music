@@ -448,6 +448,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Whether a judged note keeps scrolling until its time (as in LR2) or disappears.</dd>
           <dt>Auto scratch notes (AC)</dt>
           <dd>Whether the scratch notes AUTO SCRATCH plays are drawn. Changes live; the notes still play and count.</dd>
+          <dt>LR2 mania options</dt>
+          <dd>
+            LR2's hidden panel options that only change how notes are drawn: ACCELERATION. ACCELERATION picks a mode; an
+            option with a slider is off at 0 and strongest at 100. They change live and leave judgment and records as
+            they are; beatoraja skins do not draw the per-note ones.
+          </dd>
           <dt>Show invisible notes</dt>
           <dd>Shows hidden keysound objects. Changes live; judgment is unchanged.</dd>
         </dl>
@@ -1120,6 +1126,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dt>Auto scratch notes (AC)</dt>
           <dd>
             AUTO SCRATCH が演奏するスクラッチのノーツを表示するか。プレイ中にも切り替えられ、演奏と記録は変わりません。
+          </dd>
+          <dt>LR2 mania options</dt>
+          <dd>
+            LR2 の隠しパネルにある、ノーツの描画だけを変えるオプションです: ACCELERATION。 ACCELERATION
+            はモードを選び、スライダーのものは 0 でオフ、100 で最も強くなります。プレイ中にも
+            切り替えられ、判定と記録は変わりません。ノーツ単位の演出は beatoraja スキンでは描画しません。
           </dd>
           <dt>Show invisible notes</dt>
           <dd>不可視オブジェクトを表示します。プレイ中にも切り替えられ、判定は変わりません。</dd>

@@ -19,6 +19,7 @@ import {
 import { parseReplay } from '@be-music/player-engine/replay';
 import { storeReplayView } from '../../replay-view-settings.ts';
 import type { OptionsDialog } from './index.ts';
+import { buildLR2ManiaRows } from './lr2-mania.ts';
 import { PLAY_OPTION_PAGES, VIEW_OPTION_PAGES } from './folders.ts';
 import { bottomShiftableGaugeItems, laneOptionItems, practiceGaugeItems } from './play-option-items.ts';
 /**
@@ -618,6 +619,7 @@ export function buildPlayOptionsFolder(
     { label: 'Hi-speed', min: HISPEED_MIN, max: HISPEED_MAX, step: HISPEED_STEP },
   );
   buildNoteDisplayRows.call(this, effects);
+  buildLR2ManiaRows.call(this, effects);
   this.refreshRulesetChoices();
   return { practice, replay };
 }
