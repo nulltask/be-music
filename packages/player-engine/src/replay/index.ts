@@ -7,6 +7,7 @@ export type { RulesetChartFacts } from '../ruleset/facts.ts';
 export * from './eligibility.ts';
 export * from './format.ts';
 export * from './judgment-timeline.ts';
+export * from './gauge-histories.ts';
 export * from './nonstop.ts';
 export * from './recorder.ts';
 export * from './rejudge.ts';

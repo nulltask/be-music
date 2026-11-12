@@ -353,6 +353,7 @@ export class PlayRoute {
       courseStage?: CourseStagePlay;
       nonstop?: NonstopPlay;
       preResolved?: ResolvedPlayChart;
+      fixedArrangement?: Pick<BeMusicReplay, 'chart' | 'play'>;
     },
   ): PlayScene {
     this.liveDrawing = {
@@ -376,12 +377,16 @@ export class PlayRoute {
       playOptions,
       autoPlay: overrides.autoPlay,
       replay,
+      // The arrangement asked for with the play (the result's retry on the same one), else the one pinned in the
+      // Options dialog. One recorded under other judgment rules cannot be played again, so it is left out.
       fixedArrangement:
-        replay === undefined &&
-        courseStage === undefined &&
-        nonstop === undefined &&
-        this.guiState.judgeRuleset === 'beatoraja'
-          ? this.playOptions.arrangementFor?.(chartEntry.id)
+        replay === undefined && courseStage === undefined && nonstop === undefined
+          ? overrides.fixedArrangement !== undefined &&
+            (overrides.fixedArrangement.play.judgeRuleset ?? 'lr2') === this.guiState.judgeRuleset
+            ? overrides.fixedArrangement
+            : this.guiState.judgeRuleset === 'beatoraja'
+              ? this.playOptions.arrangementFor?.(chartEntry.id)
+              : undefined
           : undefined,
       chartHashes: overrides.chartHashes,
       courseStage,
@@ -684,6 +689,8 @@ export class PlayRoute {
       nonstop?: NonstopPlay;
       /** The chart as a decide screen drew it, for a play made again after its preload failed. */
       preResolved?: ResolvedPlayChart;
+      /** The play whose note arrangement this one repeats (the result's retry on the same arrangement). */
+      fixedArrangement?: Pick<BeMusicReplay, 'chart' | 'play'>;
     } = {},
   ): Promise<void> {
     this.elements.shell.classList.add('playing');

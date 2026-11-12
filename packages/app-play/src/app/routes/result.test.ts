@@ -33,7 +33,7 @@ import { resultFromCourseLog, resultFromData } from '../../test-hook.ts';
 import type { PlayerScene } from '../../types.ts';
 import { SceneRouter } from '../scene-router.ts';
 import type { LastPlay } from './play.ts';
-import { ResultRoute, type ResultRouteDeps } from './result.ts';
+import { ResultRoute, withSameArrangement, type ResultRouteDeps } from './result.ts';
 
 vi.mock('@be-music/player-browser/host', () => ({ createResultScene: vi.fn() }));
 
@@ -503,3 +503,31 @@ for (const family of ['none', 'lr2', 'beatoraja'] as const) {
     expect(h.deps.leaderboard.maybeSubmit).toHaveBeenCalledWith(data.replay, data.chart, data.score.exScore);
   });
 }
+
+describe('withSameArrangement', () => {
+  const replay = (play: Partial<BeMusicReplay['play']> = {}): BeMusicReplay =>
+    ({
+      chart: { notes: [], noteCount: 0 },
+      play: { inputSources: [], mode: 'manual', autoScratch: false, gauge: 'GROOVE', ...play },
+    }) as unknown as BeMusicReplay;
+  const overrides = { autoPlay: false };
+
+  test('a live, unassisted play is played again on its own arrangement', () => {
+    const played = replay({ randomLane: { p1: 'RANDOM' } });
+    expect(withSameArrangement(overrides, { replay: played })).toEqual({
+      autoPlay: false,
+      fixedArrangement: { chart: played.chart, play: played.play },
+    });
+  });
+
+  test('an assisted play, a replay, an AUTO play and a retry that asked for none keep a new arrangement', () => {
+    // beatoraja plays an assisted play again on a new arrangement.
+    expect(withSameArrangement(overrides, { replay: replay({ autoScratch1P: true }) })).toBe(overrides);
+    expect(withSameArrangement(overrides, { replay: replay(), fromReplay: true })).toBe(overrides);
+    expect(withSameArrangement(overrides, { replay: replay(), autoPlay: true })).toBe(overrides);
+    expect(withSameArrangement(overrides, {})).toBe(overrides);
+    expect(withSameArrangement(overrides, undefined)).toBe(overrides);
+    const auto = { autoPlay: true };
+    expect(withSameArrangement(auto, { replay: replay() })).toBe(auto);
+  });
+});

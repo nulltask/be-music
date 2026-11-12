@@ -835,6 +835,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       replayAPI.resolveReplayJudgmentTimeline(BENCH_REPLAY, { ruleset: 'lr2' });
     },
   });
+  define('player-engine.replay.resolveReplayGaugeHistories', {
+    run: () => {
+      replayAPI.resolveReplayGaugeHistories(BENCH_REPLAY, { ruleset: 'lr2' });
+    },
+  });
   define('player-engine.replay.simulateReplayRulesets', {
     run: () => {
       replayAPI.simulateReplayRulesets(BENCH_REPLAY);

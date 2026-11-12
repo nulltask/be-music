@@ -24,6 +24,7 @@ import {
   resolveResultJingle,
   resolveResultJingles,
   resolveResultPresentation,
+  type GaugeHistorySample,
   type PlayResult,
   type PlayRunKind,
   type ReplaySlotState,
@@ -52,8 +53,12 @@ export const QUICK_RETRY_HOLD_MS = 500;
 export interface ResultSessionEvents {
   /** The player is done with the result. Fired once per entry. */
   continue(): void;
-  /** The player asked to play the chart again; without it the screen offers no quick retry. Fired once per entry. */
-  retry?(): void;
+  /**
+   * The player asked to play the chart again; without it the screen offers no quick retry. Fired once per entry.
+   * `sameArrangement` asks for the note arrangement the play just had (beatoraja's REPLAY_SAME); the host falls back
+   * to a new one where the same cannot be played again.
+   */
+  retry?(options?: { readonly sameArrangement?: boolean }): void;
   /**
    * The player asked to save the play into replay slot `slot` (0-3). The host decides whether the play can be saved and
    * shows the outcome through `replaySlots`. Without it the screen saves nothing.
@@ -76,7 +81,33 @@ export interface ResultSessionOptions {
   readonly replaySlots?: () => readonly ReplaySlotState[];
   /** The player's keys for the screen's operations. Defaults to the default keys. */
   readonly actions?: ControlActionMap;
+  /**
+   * The gauge graphs the screen steps through (beatoraja's CHANGE_GRAPH): the play's gauge history under each gauge
+   * of its ruleset, in the ruleset's order. Asked once, at the first step. Without it, or with none, the graph stays.
+   */
+  readonly gaugeGraphs?: () => readonly ResultGaugeGraph[];
   readonly on: ResultSessionEvents;
+}
+
+/** One gauge's graph of a play: the ruleset's gauge id and its history over the chart. */
+export interface ResultGaugeGraph {
+  readonly type: string;
+  readonly history: readonly GaugeHistorySample[];
+}
+
+/**
+ * The gauge graph after one step from the one shown: the next of `graphs`, wrapping, starting after the played gauge
+ * (`playedType`) when the played graph is the one shown (`shownType` undefined). `undefined` when there is none to
+ * step to. Stepping onto the played gauge shows the play's own graph again.
+ */
+export function stepResultGaugeGraph(
+  graphs: readonly ResultGaugeGraph[],
+  playedType: string | undefined,
+  shownType: string | undefined,
+): ResultGaugeGraph | undefined {
+  if (graphs.length === 0) return undefined;
+  const at = graphs.findIndex((graph) => graph.type === (shownType ?? playedType));
+  return graphs[(at + 1) % graphs.length];
 }
 
 /** Where a leaving result screen goes. */
@@ -105,9 +136,16 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
   private leaving: SceneLeaving<ResultLeavingTo> | undefined;
   /** The leaving screen told the host where it goes; nothing more happens until the next entry. */
   private completed = false;
+  /** A retry asked for the same note arrangement (the retry-same key, or beatoraja's key 7 held). */
+  private retrySame = false;
+  /** The gauge graphs the host has for the play, once asked for. */
+  private gaugeGraphs: readonly ResultGaugeGraph[] | undefined;
+  /** The result as the frame shows it: the play's own, or with another gauge's graph in place of its own. */
+  private shownResult: PlayResult;
 
   public constructor(options: ResultSessionOptions) {
     this.options = options;
+    this.shownResult = options.result;
     this.presentation = resolveResultPresentation(options.run ?? playResultRun(options.result));
   }
 
@@ -175,8 +213,10 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
     const action = resolveResultKeyAction({ ...event, buttons }, this.retryOffered, this.actions);
     switch (action?.type) {
       case 'retry':
-        this.retry(event.timeStamp);
+        this.retry(event.timeStamp, action.sameArrangement === true);
         return true;
+      case 'change-graph':
+        return this.changeGaugeGraph();
       case 'leave':
         this.escape(event.timeStamp);
         return true;
@@ -212,7 +252,7 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
     }
     return {
       clock: { nowMs, enteredAtMs: this.enteredAtMs },
-      result: this.options.result,
+      result: this.shownResult,
       ...(this.options.playChart !== undefined ? { playChart: this.options.playChart } : {}),
       presentation: this.presentation,
       inputOpenAtMs: this.inputOpenAtMs,
@@ -261,12 +301,29 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
     this.leave('continue', this.nowMs);
   }
 
-  /** Plays the chart again, once input is open. */
-  private retry(atMs: number): void {
+  /** Plays the chart again, once input is open: on a new arrangement, or on the one the play just had. */
+  private retry(atMs: number, sameArrangement = false): void {
     if (this.leaving !== undefined) return;
     this.advanceTo(atMs);
     if (this.nowMs < this.inputOpenAtMs) return;
+    this.retrySame = sameArrangement;
     this.leave('retry', this.nowMs);
+  }
+
+  /**
+   * Steps the gauge graph to the next gauge of the ruleset, as beatoraja's CHANGE_GRAPH does; the lamp, the gauge value
+   * and every count stay the play's own. Whether there was a graph to step to.
+   */
+  private changeGaugeGraph(): boolean {
+    this.gaugeGraphs ??= this.options.gaugeGraphs?.() ?? [];
+    const played = this.options.result;
+    const next = stepResultGaugeGraph(this.gaugeGraphs, played.gaugeType, this.shownResult.gaugeGraphType);
+    if (next === undefined) return false;
+    this.shownResult =
+      next.type === played.gaugeType
+        ? played
+        : { ...played, gaugeHistory: [...next.history], gaugeGraphType: next.type };
+    return true;
   }
 
   /** Saves the play into replay slot `slot`, once input is open and before the screen starts to leave. */
@@ -295,19 +352,26 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
     if (leaving === undefined || this.completed) return;
     if (nowMs - leaving.atMs < Math.max(0, this.options.timing.fadeOutMs)) return;
     this.completed = true;
-    if (leaving.to === 'retry' || (this.retryOffered && this.retryHeld(nowMs))) this.options.on.retry?.();
-    else this.options.on.continue();
+    if (leaving.to === 'retry') {
+      this.options.on.retry?.(this.retrySame ? { sameArrangement: true } : undefined);
+      return;
+    }
+    const held = this.retryOffered ? this.retryHeld(nowMs) : undefined;
+    if (held === undefined) this.options.on.continue();
+    else this.options.on.retry?.(held === 'same' ? { sameArrangement: true } : undefined);
   }
 
   /**
-   * Whether the keys still held as the screen finishes leaving ask for the chart again: LR2's white and black key held
-   * together, beatoraja's key 5 or key 7, or That-Which-Must-Not-Be-Named PC's leave key (Escape) held through.
+   * The retry the keys still held as the screen finishes leaving ask for, if any: LR2's white and black key held
+   * together, beatoraja's key 5 (a new arrangement, REPLAY_DIFFERENT) or key 7 (the same one, REPLAY_SAME; key 5 wins
+   * when both are held, as beatoraja reads them in key order), or That-Which-Must-Not-Be-Named PC's leave key (Escape)
+   * held through.
    */
-  private retryHeld(nowMs: number): boolean {
+  private retryHeld(nowMs: number): 'new' | 'same' | undefined {
     const leaveKey = this.leaveKeyDownAtMs;
-    if (leaveKey !== undefined && nowMs - leaveKey > QUICK_RETRY_HOLD_MS) return true;
+    if (leaveKey !== undefined && nowMs - leaveKey > QUICK_RETRY_HOLD_MS) return 'new';
     const down = (keys: readonly number[]) => keys.some((key) => this.buttons.isDown(`1P-key${key}` as ControlButton));
-    if (this.actions.scheme === 'beatoraja') return down([5, 7]);
-    return down([1, 3, 5, 7]) && down([2, 4, 6]);
+    if (this.actions.scheme === 'beatoraja') return down([5]) ? 'new' : down([7]) ? 'same' : undefined;
+    return down([1, 3, 5, 7]) && down([2, 4, 6]) ? 'new' : undefined;
   }
 }

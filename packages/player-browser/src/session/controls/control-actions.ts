@@ -117,6 +117,8 @@ export const CONTROL_ACTION_IDS = [
   'result.continue',
   'result.leave',
   'result.retry',
+  'result.retry-same',
+  'result.change-graph',
   'result.save-replay-1',
   'result.save-replay-2',
   'result.save-replay-3',
@@ -461,6 +463,22 @@ export const CONTROL_ACTIONS: readonly ControlActionDefinition[] = [
     defaults: both([code('KeyR')]),
     bare: true,
     bareShift: true,
+  },
+  // beatoraja's result keys (`MusicResult`): the same chart on the same note arrangement (REPLAY_SAME, key 7 held as
+  // the screen leaves) and the gauge graph stepped to the next gauge (CHANGE_GRAPH, key 6).
+  {
+    id: 'result.retry-same',
+    screen: 'result',
+    label: 'Retry (same arrangement)',
+    defaults: both([code('KeyT')]),
+    bare: true,
+  },
+  {
+    id: 'result.change-graph',
+    screen: 'result',
+    label: 'Gauge graph',
+    defaults: { lr2: [code('KeyG')], beatoraja: [code('KeyG'), button('1P-key6')] },
+    bare: true,
   },
   ...([1, 2, 3, 4] as const).map((slot) => ({
     id: `result.save-replay-${slot}` as const,

@@ -43,6 +43,8 @@ export const ACTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Open its folder': '譜面のフォルダを開く',
   'Text file': 'テキストファイル',
   'Reload folders': 'フォルダの再読み込み',
+  'Retry (same arrangement)': 'リトライ (同じ配置)',
+  'Gauge graph': 'ゲージグラフの切り替え',
   'LR2 mania options': 'LR2 マニアオプション',
   'Favorite song': 'お気に入りの曲',
   'Favorite chart': 'お気に入りの譜面',

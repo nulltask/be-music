@@ -498,6 +498,26 @@ The **Reuse previous arrangement** and **New arrangement** buttons are offered u
 
 Source: beatoraja 0.8.9 [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java) and [`Randomizer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Randomizer.java). Tracked in [#721](https://github.com/nulltask/be-music/issues/721).
 
+## Result screen: the same arrangement again, and the gauge graph
+
+Two of beatoraja's result keys ([`MusicResult` L214-L246](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L214-L246), [L267-L280](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L267-L280)) [V] are operations of the result screen, on both key maps and assignable under Keys.
+
+**Retry (same arrangement)** (`result.retry-same`, **T**) plays the chart again on the note arrangement the play just had: its lanes and `#RANDOM` outcomes, with live input and a new replay. **Retry** (`result.retry`, R) draws a new one, as before.
+
+- On the beatoraja key map, key 7 held as the screen leaves asks for the same arrangement and key 5 for a new one; key 5 wins when both are held, since beatoraja reads its keys in order. Both were a plain retry before.
+- An assisted play is played again on a new arrangement, as beatoraja does ("アシストモード時は同じ譜面でリプレイできません"). Here that is a play whose score does not update: assist class LIGHT ASSIST or ASSIST, or one that keeps no record.
+- A replay's result and an AUTO play's have no arrangement of their own to repeat, so the key retries as R does. So does a play whose judgment rules were changed on the result screen, since an arrangement is repeated only under the rules it was recorded under.
+- Offered where a retry is: a single play, not a course stage or a course result.
+
+**Gauge graph** (`result.change-graph`, **G**, and key 6 on the beatoraja key map) steps the gauge graph to the next gauge of the play's ruleset, in the ruleset's order, wrapping: ASSIST EASY to HAZARD under beatoraja's rules, EASY to DEATH under LR2's, ASSISTED EASY to EX-HARD under `____`'s. The gauge value, the lamp and every count stay the play's own; the graph alone changes, on the built-in, LR2 and beatoraja result screens. Stepping back onto the played gauge shows the play's own graph.
+
+- beatoraja logs every gauge during a play and draws the log of the one picked. Be-Music runs only the gauges a play needs, so the other graphs are re-simulated from the play's replay (`resolveReplayGaugeHistories` in `@be-music/player-engine/replay`), each gauge alone from its starting value. The simulation is deterministic, so each graph is what that gauge would have drawn.
+- A play that stopped as its gauge emptied ends every graph there. beatoraja fills the rest of each log with 0; here the graph ends at the stop [I].
+- A play with gauge auto-shift shows its own graph, which follows the gauge in force, until the key is pressed; the stepped graphs are each one gauge.
+- Not offered on a course: a stage's other gauges start from values the stage did not record. beatoraja steps its three class gauges there. LR2's P-ATTACK and G-ATTACK are not in the line-up, so a play on one steps from the first gauge.
+
+Tracked in [#1133](https://github.com/nulltask/be-music/issues/1133).
+
 ## SCATTER
 
 Under any ruleset, **Random 1P / Random 2P** offers **SCATTER (LR2)** and **SCATTER 9KEY corrected (LR2)**, recorded as `SCATTER` and `SCATTER-CORRECTED`. SCATTER reproduces LR2 beta3's placement (LR2body.exe 100201, reconstructed by OpenLR2): each key note goes to a random lane that is not yet used on its timeline or held by a long note, avoiding the lanes used on the previous timeline, and repeats one of those only when no other lane is left. A timeline with only scratch notes still advances the avoidance; invisible notes and long-note tails alone do not. Scratch stays fixed; in 14 KEY, a scratch note adds the source's set of keys on its side to the avoidance. With DP FLIP, the timeline bookkeeping follows LR2's unflipped sides. SCATTER accepts 5, 7, 9, 10 and 14 KEY charts.

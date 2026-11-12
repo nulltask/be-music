@@ -498,6 +498,26 @@ Options ダイアログ はどのルールでも **Seed 1P / Seed 2P (-1=random)
 
 参照元：beatoraja 0.8.9 の [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java) と [`Randomizer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Randomizer.java)。対応 Issue は [#721](https://github.com/nulltask/be-music/issues/721) です。
 
+## リザルト画面: 同じ配置でもう一度、ゲージグラフの切り替え
+
+beatoraja のリザルト画面のキー 2 つ（[`MusicResult` L214-L246](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L214-L246)、[L267-L280](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L267-L280)）[V] を、リザルト画面の操作として追加しました。どちらのキーマップでも使え、Keys で割り当てを変えられます。
+
+**Retry (same arrangement)**（`result.retry-same`、**T**）は、いま終えたプレイと同じノーツ配置（レーンと `#RANDOM` の結果）でその譜面をもう一度プレイします。入力は実際の操作で、新しいリプレイを記録します。**Retry**（`result.retry`、R）はこれまでどおり新しい配置を引きます。
+
+- beatoraja のキーマップでは、画面が閉じる時点で 7 鍵を押していれば同じ配置、5 鍵なら新しい配置です。両方押していれば 5 鍵が優先されます（beatoraja がキーを順に読むため）。これまではどちらも通常のリトライでした。
+- アシストを使ったプレイは、beatoraja と同じく新しい配置でプレイし直します（「アシストモード時は同じ譜面でリプレイできません」）。ここでは、スコアが更新されないプレイ（アシスト区分が LIGHT ASSIST か ASSIST、または記録を残さないプレイ）が該当します。
+- リプレイ再生のリザルトと AUTO プレイのリザルトには繰り返す配置がないので、このキーは R と同じ動作になります。リザルト画面で判定ルールを変えた場合も同じです。配置は、記録したときのルールでしか繰り返せないためです。
+- リトライできる場面でだけ使えます。単曲プレイが対象で、コースのステージやコースのリザルトでは使えません。
+
+**Gauge graph**（`result.change-graph`、**G**。beatoraja のキーマップでは 6 鍵も）は、ゲージグラフをそのプレイのルールの次のゲージに切り替えます。ルールごとの順で、最後まで行くと先頭に戻ります。beatoraja のルールでは ASSIST EASY から HAZARD、LR2 では EASY から DEATH、`____` では ASSISTED EASY から EX-HARD です。ゲージの値、ランプ、判定数はプレイのままで、変わるのはグラフだけです。内蔵、LR2、beatoraja のどのリザルト画面でも切り替わります。プレイしたゲージに戻ると、プレイ自身のグラフを表示します。
+
+- beatoraja はプレイ中にすべてのゲージを記録し、選ばれたゲージの記録を描きます。Be-Music はプレイに必要なゲージしか動かさないため、ほかのゲージのグラフはリプレイから再シミュレーションします（`@be-music/player-engine/replay` の `resolveReplayGaugeHistories`）。各ゲージを単独で、それぞれの開始値から動かします。シミュレーションは決定的なので、そのゲージでプレイしたときに描かれるグラフと同じになります。
+- ゲージが尽きて止まったプレイでは、どのグラフもそこで終わります。beatoraja は残りを 0 で埋めますが、ここではグラフを止めます [I]。
+- ゲージの自動切り替えを使ったプレイは、キーを押すまで、その時点で有効だったゲージに沿った自分のグラフを表示します。切り替えたあとのグラフは、それぞれ 1 つのゲージのものです。
+- コースでは使えません。ステージのほかのゲージは、記録されていない値から始まるためです。beatoraja はコースで段位ゲージ 3 種を切り替えます。LR2 の P-ATTACK と G-ATTACK は並びにないため、これらでプレイした場合は先頭のゲージから切り替わります。
+
+[#1133](https://github.com/nulltask/be-music/issues/1133) で追跡しています。
+
 ## SCATTER
 
 どのルールでも、**Random 1P / Random 2P** に **SCATTER (LR2)** と **SCATTER 9KEY corrected (LR2)** があり、それぞれ `SCATTER` と `SCATTER-CORRECTED` として記録します。SCATTER は LR2 beta3 の配置（LR2body.exe 100201、OpenLR2 による再構成）を再現します。各鍵盤ノートは、そのタイムラインでまだ使っておらずロングノートも押されていないレーンからランダムに選び、直前のタイムラインで使ったレーンを避けます。直前のレーンを再び使うのは、他に空きがない場合だけです。スクラッチのノートだけのタイムラインでも回避の対象は進みますが、不可視ノートやロングノートの終点だけでは進みません。スクラッチは固定し、14 鍵盤ではスクラッチのノートがあると参照元の決まった同じ側の鍵盤を回避の対象に加えます。DP FLIP を使う場合、タイムラインの管理は LR2 と同じく反転前の側に従います。SCATTER は 5・7・9・10・14 鍵盤の譜面で使えます。
