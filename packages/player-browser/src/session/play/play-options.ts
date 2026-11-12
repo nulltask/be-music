@@ -193,6 +193,8 @@ export interface PlaySessionOptions {
   longNoteMode?: 'LN' | 'CN' | 'HCN';
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
+  /** LR2's mania chart generators: each rate is 0 (off) or 10–100. A replay plays back its recorded rates and seed. */
+  lr2Mania?: import('@be-music/player-engine/lanes').LR2ManiaChartRates;
   extraNoteDepth?: number;
   extraNoteScratch?: boolean;
   mineModifier?: import('@be-music/player-scene-model').PlayOptions['mineModifier'];

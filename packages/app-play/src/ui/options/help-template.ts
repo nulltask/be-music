@@ -174,6 +174,13 @@ export const OPTIONS_HELP_TEMPLATE = html`
             The lowest gauge BEST CLEAR and SELECT TO UNDER may shift down to. LR2 has no ASSIST EASY, so its lowest is
             EASY.
           </dd>
+          <dt>ADD NOTES (LR2) · LOUDNESS (LR2) · ADD LONGNOTES (LR2) · ADD MINES (LR2)</dt>
+          <dd>
+            LR2's hidden options that rewrite the chart, each off at 0 and strongest at 100. ADD NOTES adds notes to
+            chords and LOUDNESS fills whole chords; both turn long notes into single notes, and such a play saves no
+            record. ADD LONGNOTES holds notes half-way to the next one, and ADD MINES puts mines between notes; these
+            cap the lamp. Not applied in a course or in PRACTICE.
+          </dd>
           <dt>Scroll</dt>
           <dd>
             REMOVE (beatoraja) draws the chart without its BPM and scroll changes; ADD (beatoraja) adds random scroll
@@ -878,6 +885,13 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>
             BEST CLEAR と SELECT TO UNDER で下げてよい一番下のゲージ。LR2 には ASSIST EASY がないので、一番下は EASY
             です。
+          </dd>
+          <dt>ADD NOTES (LR2) · LOUDNESS (LR2) · ADD LONGNOTES (LR2) · ADD MINES (LR2)</dt>
+          <dd>
+            譜面を書き換える LR2 の隠しオプションです。0 でオフ、100 で最も強くなります。ADD NOTES
+            は同時押しにノーツを足し、LOUDNESS は同時押しを全押しにします。どちらもロングノートを単発に戻し、
+            プレイの記録は残りません。ADD LONGNOTES は次のノーツとの中間までノーツを伸ばし、ADD MINES
+            はノーツの間に地雷を置きます。この 2 つはランプに上限が付きます。コースと PRACTICE では働きません。
           </dd>
           <dt>Scroll</dt>
           <dd>

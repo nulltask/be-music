@@ -252,6 +252,7 @@ export async function createPlaySession(
         autoScratch2P: options.autoScratch2P,
         lr2ExtraMode: options.lr2ExtraMode,
         lr2ExtraLevel: options.lr2ExtraLevel,
+        lr2Mania: options.lr2Mania,
         speed: options.speed,
         course: options.course,
         extraNoteDepth: options.extraNoteDepth,
@@ -523,6 +524,7 @@ export async function createPlaySession(
                       : {}),
                   }
                 : {}),
+              ...(playbackChart.lr2Mania !== undefined ? { lr2Mania: playbackChart.lr2Mania } : {}),
               ...(options.lr2ExtraMode !== undefined || playbackChart.lr2ExtraMode !== undefined
                 ? {
                     lr2ExtraMode: playbackChart.lr2ExtraMode ?? false,

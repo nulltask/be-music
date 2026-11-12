@@ -282,6 +282,8 @@ export interface ReplayPlay {
   dBattleScratch?: boolean;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
+  /** LR2's mania chart generators as the play applied them; absent when none was on. */
+  lr2Mania?: ReplayLR2Mania;
   lr2ExtraEffectiveLevel?: LR2ExtraLevel;
   lr2ExtraConvertedObjectCount?: number;
   lr2ExtraTempo?: number;
@@ -1035,6 +1037,7 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   }
   for (const field of ['battleChangedObjectCount', 'battleDroppedObjectCount'] as const)
     if (play[field] !== undefined) parsed[field] = expectNonNegativeInteger(play[field], `play.${field}`);
+  if (play.lr2Mania !== undefined) parsed.lr2Mania = parseLR2Mania(play.lr2Mania);
   if (play.lr2ExtraMode !== undefined) {
     if (typeof play.lr2ExtraMode !== 'boolean') throw new ReplayParseError('play.lr2ExtraMode: expected boolean');
     parsed.lr2ExtraMode = play.lr2ExtraMode;
@@ -1140,5 +1143,50 @@ function parseCourseStage(course: Record<string, unknown>): ReplayCourseStage {
     };
   }
   if (course.rate !== undefined) parsed.rate = expectFiniteNumber(course.rate, 'play.course.rate');
+  return parsed;
+}
+
+/**
+ * LR2's mania chart generators as a play applied them: each rate (0 is off, else 10–100), the seed every draw came
+ * from, and what each generator changed. The rates and the seed rebuild the chart; the counts check that they did.
+ */
+export interface ReplayLR2Mania {
+  addNotes: number;
+  loudness: number;
+  addLongNotes: number;
+  addMines: number;
+  seed: string;
+  changes: { addNotes: number; loudness: number; addLongNotes: number; addMines: number };
+}
+
+const LR2_MANIA_FIELDS = ['addNotes', 'loudness', 'addLongNotes', 'addMines'] as const;
+
+function parseLR2Mania(value: unknown): ReplayLR2Mania {
+  const record = expectRecord(value, 'play.lr2Mania');
+  const changes = expectRecord(record.changes, 'play.lr2Mania.changes');
+  const rate = (field: (typeof LR2_MANIA_FIELDS)[number]): number => {
+    const parsed = expectNonNegativeInteger(record[field], `play.lr2Mania.${field}`);
+    if (parsed > 100) throw new ReplayParseError(`play.lr2Mania.${field}: expected 0..100`);
+    return parsed;
+  };
+  if (typeof record.seed !== 'string' || !/^\d{1,19}$/.test(record.seed))
+    throw new ReplayParseError('play.lr2Mania.seed: expected a non-negative integer string');
+  const count = (field: (typeof LR2_MANIA_FIELDS)[number]): number =>
+    expectNonNegativeInteger(changes[field], `play.lr2Mania.changes.${field}`);
+  const parsed: ReplayLR2Mania = {
+    addNotes: rate('addNotes'),
+    loudness: rate('loudness'),
+    addLongNotes: rate('addLongNotes'),
+    addMines: rate('addMines'),
+    seed: record.seed,
+    changes: {
+      addNotes: count('addNotes'),
+      loudness: count('loudness'),
+      addLongNotes: count('addLongNotes'),
+      addMines: count('addMines'),
+    },
+  };
+  if (LR2_MANIA_FIELDS.every((field) => parsed[field] === 0))
+    throw new ReplayParseError('play.lr2Mania: expected at least one generator on');
   return parsed;
 }

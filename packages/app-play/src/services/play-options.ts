@@ -24,6 +24,10 @@ export type GUIPlayOptions = Pick<
   | 'dpFlip'
   | 'bpmGuide'
   | 'bpmChangeWarning'
+  | 'lr2AddMines'
+  | 'lr2AddLongNotes'
+  | 'lr2Loudness'
+  | 'lr2AddNotes'
   | 'lr2Gambol'
   | 'lr2SideJump'
   | 'lr2SpiralEffect'
@@ -115,6 +119,10 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    lr2AddMines: state.lr2AddMines,
+    lr2AddLongNotes: state.lr2AddLongNotes,
+    lr2Loudness: state.lr2Loudness,
+    lr2AddNotes: state.lr2AddNotes,
     lr2Gambol: state.lr2Gambol,
     lr2SideJump: state.lr2SideJump,
     lr2SpiralEffect: state.lr2SpiralEffect,
@@ -216,6 +224,10 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.dpFlip = options.dpFlip;
   state.bpmGuide = options.bpmGuide;
   state.bpmChangeWarning = options.bpmChangeWarning;
+  state.lr2AddMines = options.lr2AddMines;
+  state.lr2AddLongNotes = options.lr2AddLongNotes;
+  state.lr2Loudness = options.lr2Loudness;
+  state.lr2AddNotes = options.lr2AddNotes;
   state.lr2Gambol = options.lr2Gambol;
   state.lr2SideJump = options.lr2SideJump;
   state.lr2SpiralEffect = options.lr2SpiralEffect;
@@ -322,6 +334,10 @@ export class PlayOptionsService {
       hRandomThresholdBPM: play.sevenToNineThresholdBPM ?? play.options?.hRandomThresholdBPM,
       battleMode: play.battleMode ?? 'OFF',
       dBattleScratch: play.dBattleScratch ?? false,
+      lr2AddNotes: play.lr2Mania?.addNotes ?? 0,
+      lr2Loudness: play.lr2Mania?.loudness ?? 0,
+      lr2AddLongNotes: play.lr2Mania?.addLongNotes ?? 0,
+      lr2AddMines: play.lr2Mania?.addMines ?? 0,
       lr2ExtraMode: play.lr2ExtraMode ?? false,
       lr2ExtraLevel: play.lr2ExtraLevel ?? 0,
       extraNoteDepth: play.extraNoteDepth ?? 0,
@@ -386,6 +402,10 @@ const ARRANGEMENT_OPTIONS = [
   'mRan1P',
   'mRan2P',
   'lr2ExtraMode',
+  'lr2AddNotes',
+  'lr2Loudness',
+  'lr2AddLongNotes',
+  'lr2AddMines',
   'lr2ExtraLevel',
   'extraNoteDepth',
   'extraNoteScratch',

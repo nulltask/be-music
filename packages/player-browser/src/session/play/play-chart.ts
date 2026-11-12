@@ -170,6 +170,7 @@ export interface PlayChartContext {
       | 'longNoteMode'
       | 'lr2ExtraMode'
       | 'lr2ExtraLevel'
+      | 'lr2Mania'
       | 'tempo'
       | 'extraNoteDepth'
       | 'extraNoteScratch'
@@ -431,6 +432,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         : ctx.options.autoScratch2P,
       lr2ExtraMode: arrangement ? (arrangement.play.lr2ExtraMode ?? false) : ctx.options.lr2ExtraMode,
       lr2ExtraLevel: arrangement ? (arrangement.play.lr2ExtraLevel ?? 0) : ctx.options.lr2ExtraLevel,
+      // A recorded play rebuilds its generated chart from the recorded rates and seed.
+      lr2Mania: arrangement ? arrangement.play.lr2Mania : ctx.options.lr2Mania,
       speed: arrangement
         ? (arrangement.play.battleTempo ?? arrangement.play.lr2ExtraTempo ?? arrangement.play.tempo ?? 1)
         : ctx.options.tempo,
@@ -487,6 +490,15 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   ctx.notes = prepared.notes;
   ctx.mineNotes = prepared.landmineNotes;
   ctx.invisibleNotes = prepared.invisibleNotes;
+  // The recorded rates and seed must rebuild what the play recorded: a different count means another chart.
+  const recordedMania = arrangement?.play.lr2Mania;
+  if (
+    recordedMania !== undefined &&
+    (['addNotes', 'loudness', 'addLongNotes', 'addMines'] as const).some(
+      (field) => prepared.lr2Mania?.changes[field] !== recordedMania.changes[field],
+    )
+  )
+    throw new RangeError('The recorded LR2 mania chart could not be rebuilt from its seed.');
   if (arrangement !== undefined) {
     for (const [side, key] of [
       ['p1', 'randomSeed1P'],

@@ -1497,3 +1497,37 @@ test("LR2's SOFTLANDING records its drawn scroll and leaves the judgments as the
     expect(classifyReplayAssists(run.replay)).toEqual([]);
   }
 });
+
+test("LR2's mania chart generators record their rates, seed and counts, and the replay re-simulates the generated chart", async () => {
+  const json = chart([
+    { measure: 1, channel: '11', position: [0, 1], value: '01' },
+    { measure: 2, channel: '11', position: [0, 1], value: '01' },
+    { measure: 3, channel: '12', position: [0, 1], value: '01' },
+  ]);
+  const inputs = [down(0, 1_000_000, '11'), up(1, 1_050_000, '11')];
+  const lr2Mania = { addNotes: 100, loudness: 100, addLongNotes: 50, addMines: 100, seed: '777' };
+  const run = await runRecordedPlay(json, inputs, 'lr2', { lr2Mania });
+  const recorded = run.replay.play.lr2Mania!;
+  expect(recorded).toMatchObject(lr2Mania);
+  // LOUDNESS at 100 fills every chord across the 5 KEY side.
+  expect(recorded.changes.loudness).toBeGreaterThan(0);
+  expect(run.replay.chart.notes.filter((note) => note.type !== 'mine').length).toBe(18);
+  expect(run.replay.chart.notes.filter((note) => note.type === 'mine').length).toBe(recorded.changes.addMines);
+  const saved = parseReplay(serializeReplay(run.replay));
+  expect(saved.play.lr2Mania).toEqual(recorded);
+  expect(simulateReplay(saved, { ruleset: 'lr2' }).judge).toEqual(run.replay.results!.native!.judge);
+  // The same rates and seed rebuild the same chart.
+  const again = await runRecordedPlay(json, inputs, 'lr2', { lr2Mania });
+  expect(again.replay.chart.notes).toEqual(run.replay.chart.notes);
+  // ADD NOTES and LOUDNESS save nothing; ADD LONGNOTES and ADD MINES alone cap the lamp.
+  expect(classifyReplayAssists(saved).map((finding) => [finding.option, finding.assistClass])).toEqual([
+    ['lr2-add-notes', 'no-save'],
+    ['lr2-loudness', 'no-save'],
+    ['lr2-add-longnotes', 'light'],
+    ['lr2-add-mines', 'light'],
+  ]);
+  const mild = await runRecordedPlay(json, inputs, 'lr2', {
+    lr2Mania: { addLongNotes: 100, addMines: 100, seed: '5' },
+  });
+  expect(classifyReplayAssists(mild.replay).map((finding) => finding.assistClass)).toEqual(['light', 'light']);
+});
