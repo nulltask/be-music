@@ -459,6 +459,14 @@ Options ダイアログ はどのルールでも **Seed 1P / Seed 2P (-1=random)
 
 参照元：AC 34 の[プレイオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。対応 Issue は [#724](https://github.com/nulltask/be-music/issues/724) です。
 
+## BATTLE と M-RAN のキー
+
+選曲画面では、どちらのキーマップでも、テンキーの **7** で **BATTLE (????)** を、テンキーの **6** で **M-RAN 1P** を、Shift + テンキーの **6** で **M-RAN 2P** を切り替えます。いずれもキー表の操作（Keys タブの **BATTLE (????)**、**M-RAN 1P**、**M-RAN 2P**）なので、割り当てを変えられます。BATTLE のキーは、Battle がほかの選択肢のときは AC の 1 人用 BATTLE を選び、すでに選んでいるときは OFF に戻します。それぞれのオプションが働く場面で効きます（BATTLE は 7KEY の譜面、M-RAN は 2 人プレイ）。
+
+AC 34 では、オプション画面で、ダブルプレー時にテンキー 7 で BATTLE を、2 人プレー時にテンキー 6 で M-RAN を設定します。AC は各プレーヤーにテンキーがあるため、1 つのキーで両者に対応します。AC の選曲画面そのものでは、テンキー 6 はクリアレート表示の切り替え、テンキー 9 は譜面の詳細情報です（[テンキーのページ](https://p.eagate.573.jp/game/2dx/34/howto/play/tenkey.html)）。Be-Music にはどちらの表示もなく、廃止されたコマンドをテンキー 9 に割り当てることもしていません。
+
+出典: AC 34 [ゲームオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)と[テンキー](https://p.eagate.573.jp/game/2dx/34/howto/play/tenkey.html)。[#1138](https://github.com/nulltask/be-music/issues/1138) で追跡しています。
+
 ## 地雷の REMOVE と ADD
 
 どのルールでも、Options ダイアログ の **Mines (beatoraja)** で **OFF**（既定）、**REMOVE**、**ADD RANDOM**、**ADD NEAR**、**ADD ALL**（beatoraja の `ADD_BLANK`）を選びます。REMOVE はすべての地雷を取り除くため、地雷の爆発もゲージの減少も起きません。ADD は beatoraja 0.8.9 の `MineNoteModifier` に従い、参照元のタイムラインの各行をスクラッチを含むレーン順に調べ、ノート・地雷・押下中のロングノートがないセルを対象にします。ADD RANDOM はセルごとに独立した 10 分の 1 の抽選で、ADD NEAR はその行の追加前に隣のレーンが埋まっていた場合に、ADD ALL は対象のすべてのセルに地雷を置きます。追加した地雷のダメージは 10 % で、爆発音を鳴らしません。譜面にもともとある地雷は元の値を維持します。この変換はレーンオプションより前に譜面を準備するため、追加した地雷もレーンと一緒に移動します。

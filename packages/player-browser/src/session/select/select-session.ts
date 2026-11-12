@@ -511,6 +511,14 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       case 'ln-mode':
         this.stepPlayOption('longNoteMode', 1);
         return true;
+      case 'battle':
+        this.setPlayOption('battleMode', toggleACBattle(this.playOptions.battleMode));
+        return true;
+      case 'm-ran': {
+        const key = action.side === '1P' ? 'mRan1P' : 'mRan2P';
+        this.setPlayOption(key, !this.playOptions[key]);
+        return true;
+      }
       case 'search':
         this.options.on.search?.();
         return true;
@@ -1156,4 +1164,9 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     if (chart === undefined || source === undefined) this.options.audio.preview.focus(undefined);
     else this.options.audio.preview.focus({ chart: chart, source }, this);
   }
+}
+
+/** AC's one-player BATTLE switched by its key: on from any other battle mode, off from itself. */
+export function toggleACBattle(battleMode: PlayOptions['battleMode']): PlayOptions['battleMode'] {
+  return battleMode === '____:BATTLE' ? 'OFF' : '____:BATTLE';
 }

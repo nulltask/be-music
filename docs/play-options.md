@@ -459,6 +459,14 @@ Replays record the switches in `play.options.mRan1P` / `mRan2P` with every note'
 
 Source: AC 34 [play options](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html). Tracked in [#724](https://github.com/nulltask/be-music/issues/724).
 
+## BATTLE and M-RAN keys
+
+On the select screen, numpad **7** switches **BATTLE (????)** on and off, numpad **6** switches **M-RAN 1P**, and Shift + numpad **6** switches **M-RAN 2P**, on both key maps. They are operations of the key table (**BATTLE (????)**, **M-RAN 1P**, **M-RAN 2P** in the Keys tab), so they can be moved. The BATTLE key selects AC's one-player BATTLE from any other Battle choice and returns to OFF from it; each takes effect where its option does (BATTLE on a 7KEY chart, M-RAN in a two-player play).
+
+AC 34 sets BATTLE with numpad 7 in double play and M-RAN with numpad 6 in two-player play, on its option screen; there each player has a numpad, so one key serves both players. On AC's select screen itself numpad 6 switches the clear-rate display and numpad 9 the chart details ([numpad page](https://p.eagate.573.jp/game/2dx/34/howto/play/tenkey.html)); Be-Music has neither display, and binds no retired command to numpad 9.
+
+Sources: AC 34 [play options](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html) and [numpad](https://p.eagate.573.jp/game/2dx/34/howto/play/tenkey.html). Tracked in [#1138](https://github.com/nulltask/be-music/issues/1138).
+
 ## Mine REMOVE and ADD
 
 Under any ruleset, choose **Mines (beatoraja)** in the Options dialog: **OFF** (default), **REMOVE**, **ADD RANDOM**, **ADD NEAR** or **ADD ALL** (beatoraja's `ADD_BLANK`). REMOVE drops every mine, so none can explode or drain the gauge. The ADD modes follow beatoraja 0.8.9's `MineNoteModifier`: they visit every source timeline row in lane order, scratch lanes included, and consider each cell that no note, mine or held long note occupies. ADD RANDOM fills such a cell on an independent one-in-ten draw, ADD NEAR fills it when a neighbouring lane of the same row was occupied before that row's additions, and ADD ALL fills every one. Added mines deal 10 % damage and play no explosion sample; authored mines keep theirs. The modifier prepares the chart before lane options, which then move added mines with their lanes.
