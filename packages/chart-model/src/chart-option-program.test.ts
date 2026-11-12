@@ -66,7 +66,7 @@ test('missing references and unrepresentable cue time are diagnosed without chan
 });
 // The documented support boundary (docs/research/chart-authored-options.md): every other family is diagnosed and has
 // no effect, initially or on A6, so a program never carries an operation the engine cannot reproduce.
-test.each(['774:CRA-RHS1', '774:RND-MIRROR', '774:GTP-HARD', 'charatbeatHDX:BGAMODE 1'])(
+test.each(['774:CRA-RHS1', '774:RND-MIRROR', '774:GTP-HARD'])(
   'diagnoses %s without changing the effective program',
   (declaration) => {
     const result = compileChartOptions({
@@ -159,4 +159,16 @@ test('version 3 executes M-SUDDEN and the skin-level CRAZY options; CRAZY_OFF cl
   });
   expect(resolveChartOptionsAt(program, 1_000_000).crazyJudge).toBe('HIDJUDGE');
   expect(resolveChartOptionsAt(program, 2_000_000)).toEqual({ hidden: 'M-SUDDEN' });
+});
+
+test('HDX BGAMODE accepts 0, 1 and 2 in initial declarations and ignores A6', () => {
+  for (const mode of [0, 1, 2] as const) {
+    const declaration = `charatbeatHDX:BGAMODE ${mode}`;
+    const result = compileChartOptions({
+      initial: ['charatbeatHDX:BGAMODE 2', declaration, 'charatbeatHDX:BGAMODE 3'],
+      cues: [{ seconds: 1, key: '01', declaration }],
+    });
+    expect(result.program).toEqual({ version: 4, initial: { bgaMode: mode }, cues: [] });
+    expect(result.diagnostics.map(({ code }) => code)).toEqual(['invalid-parameter', 'initial-only-option']);
+  }
 });

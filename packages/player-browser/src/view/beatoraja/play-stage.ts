@@ -1,6 +1,6 @@
 import type { KeyBoundBGAFrame, BmsonBGAFrame } from '@be-music/player-engine/display';
 import type { BGACameraFeed } from '../../media/bga-camera.ts';
-import type { BGAOpacityTimelines } from '@be-music/chart-model';
+import type { BGAOpacityTimelines, ChartOptionProgram } from '@be-music/chart-model';
 import {
   resolveConstantAlpha,
   resolveNoteDisplaySeconds,
@@ -72,6 +72,7 @@ export interface BeatorajaPlayBGA {
   readonly layerTextures: ReadonlyMap<string, Texture>;
   readonly videos: ReadonlyMap<string, HTMLVideoElement>;
   readonly poorBGAMode?: 0 | 1 | 2;
+  readonly chartOptionProgram?: ChartOptionProgram;
   readonly cues: {
     base: readonly BGACue[];
     layer: readonly BGACue[];
@@ -190,6 +191,7 @@ export class BeatorajaPlayStage {
       cues: bga.cues,
       poorBGAMode: bga.poorBGAMode,
       nonstop: bga.nonstop,
+      chartOptionProgram: bga.chartOptionProgram,
       skinConfigOps: this.skinConfigOps,
     });
     view.container.addChildAt(this.bgaLayer.container, view.bgaLayerInsertIndex);
@@ -340,7 +342,13 @@ export class BeatorajaPlayStage {
       Math.min(clock.currentSeconds, clock.reversalSeconds ?? Number.POSITIVE_INFINITY),
       context,
       lanes.isPoorBGAActive(clock.currentSeconds),
-      { ...playback, seconds: clock.currentSeconds, keyBoundBGA: clock.keyBoundBGA, bmsonBGA: clock.bmsonBGA },
+      {
+        ...playback,
+        seconds: clock.currentSeconds,
+        keyBoundBGA: clock.keyBoundBGA,
+        bmsonBGA: clock.bmsonBGA,
+        bgaMode: clock.chartOptions?.bgaMode,
+      },
     );
   }
 

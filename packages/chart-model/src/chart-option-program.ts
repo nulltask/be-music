@@ -9,6 +9,8 @@ import { resolveChartLegacyOptionAlias } from './chart-option-legacy.ts';
 export interface ChartOptionState extends ChartVisualOptionFields {
   /** Compulsory visual spacing multiplier, independent of audio tempo and user hi-speed limits. */
   hiSpeed?: number;
+  /** charatbeatHDX placement inside the BGA viewport. */
+  bgaMode?: 0 | 1 | 2;
 }
 /**
  * The effective-program profile this build compiles. Version 1 holds HI-SPEED only; version 2 adds HIDDEN, CHANGE-HS
@@ -16,7 +18,7 @@ export interface ChartOptionState extends ChartVisualOptionFields {
  * (STAR, SPIN, CLONE, LINEMOVE, the Y / XY / 3D waves, HIDJUDGE, DARK, REVERSE; #931). A replay keeps the version it
  * was recorded with, so an older recording never activates a family implemented after it.
  */
-export const CHART_OPTION_PROGRAM_VERSION = 3;
+export const CHART_OPTION_PROGRAM_VERSION = 4;
 export interface ChartOptionStateCue {
   timeUs: number;
   /** Complete effective authored state at this instant. Empty restores user display settings. */
@@ -24,7 +26,7 @@ export interface ChartOptionStateCue {
 }
 /** Versioned effective operations, safe to retain in a replay without reinterpreting unsupported source IDs later. */
 export interface ChartOptionProgram {
-  version: 1 | 2 | 3;
+  version: 1 | 2 | 3 | 4;
   initial: ChartOptionState;
   cues: ChartOptionStateCue[];
 }
@@ -82,6 +84,12 @@ function compileDeclaration(source: string, timed: boolean): StateChange | Chart
   const legacy = resolveChartLegacyOptionAlias(source);
   if (legacy !== undefined && timed) return 'initial-only-alias';
   const declaration = legacy ?? source;
+  if (/^charatbeatHDX:BGAMODE(?:\s|$)/.test(declaration)) {
+    const mode = /^charatbeatHDX:BGAMODE\s+([012])$/.exec(declaration)?.[1];
+    if (mode === undefined) return 'invalid-parameter';
+    if (timed) return 'initial-only-option';
+    return (state) => ({ ...state, bgaMode: Number(mode) as 0 | 1 | 2 });
+  }
   const hiSpeed = compileHiSpeed(declaration, timed);
   if (typeof hiSpeed === 'number') return (state) => ({ ...state, hiSpeed });
   if (hiSpeed !== 'unsupported-option') return hiSpeed;
@@ -155,7 +163,10 @@ export function compileChartOptions(timeline: ChartOptionTimeline): CompiledChar
     state = value(state);
     cues.push({ timeUs, state });
   }
-  return { program: { version: CHART_OPTION_PROGRAM_VERSION, initial, cues }, diagnostics };
+  return {
+    program: { version: initial.bgaMode === undefined ? 3 : CHART_OPTION_PROGRAM_VERSION, initial, cues },
+    diagnostics,
+  };
 }
 
 /** Active effective authored options at integer replay/chart microseconds; stateless across pause and seek. */

@@ -749,3 +749,30 @@ function fitSizeCoveringAspect(
 
   return { width, height };
 }
+
+/** Rasterize the authored placement on the 256×256 BGA canvas into the terminal viewport. */
+export function placeHDXBGAFrame(source: ANSIFrame, width: number, height: number, mode: 0 | 1 | 2): ANSIFrame {
+  const scale = mode === 2 ? 0.8 : 1;
+  const placedWidth = mode === 0 ? width : (source.width * scale * width) / 256;
+  const placedHeight = mode === 0 ? height : (source.height * scale * height) / 256;
+  const left = (width - placedWidth) / 2;
+  const rgb = new Uint8Array(width * height * 3);
+  const opaqueMask = new Uint8Array(width * height);
+  const alpha = source.alpha === undefined ? undefined : new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    const sourceY = Math.floor(((y + 0.5) * source.height) / placedHeight);
+    if (sourceY >= source.height) break;
+    for (let x = 0; x < width; x++) {
+      const sourceX = Math.floor(((x + 0.5 - left) * source.width) / placedWidth);
+      if (sourceX < 0 || sourceX >= source.width) continue;
+      const from = sourceY * source.width + sourceX;
+      const to = y * width + x;
+      rgb[to * 3] = source.rgb[from * 3]!;
+      rgb[to * 3 + 1] = source.rgb[from * 3 + 1]!;
+      rgb[to * 3 + 2] = source.rgb[from * 3 + 2]!;
+      opaqueMask[to] = source.opaqueMask[from]!;
+      if (alpha) alpha[to] = source.alpha![from]!;
+    }
+  }
+  return { width, height, rgb, opaqueMask, ...(alpha ? { alpha } : {}) };
+}

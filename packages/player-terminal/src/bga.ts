@@ -32,6 +32,7 @@ import {
   createMissingSourceFrame,
   createSolidANSIFrame,
   resizeANSIFrame,
+  placeHDXBGAFrame,
 } from './bga-frame.ts';
 import {
   type FrameSource,
@@ -356,8 +357,13 @@ export class BgaANSIRenderer {
     this.rebuildFrames();
   }
 
-  getANSILines(currentSeconds: number, keyBound?: KeyBoundBGAFrame, bmson?: BmsonBGAFrame): string[] | undefined {
-    this.refreshComposite(currentSeconds, keyBound, bmson);
+  getANSILines(
+    currentSeconds: number,
+    keyBound?: KeyBoundBGAFrame,
+    bmson?: BmsonBGAFrame,
+    bgaMode?: 0 | 1 | 2,
+  ): string[] | undefined {
+    this.refreshComposite(currentSeconds, keyBound, bmson, bgaMode);
     if (!this.cachedComposite) {
       return this.blackBackgroundLines;
     }
@@ -370,7 +376,12 @@ export class BgaANSIRenderer {
     return this.cachedLines;
   }
 
-  getKittyImage(currentSeconds: number, keyBound?: KeyBoundBGAFrame, bmson?: BmsonBGAFrame): BGAKittyImage {
+  getKittyImage(
+    currentSeconds: number,
+    keyBound?: KeyBoundBGAFrame,
+    bmson?: BmsonBGAFrame,
+    bgaMode?: 0 | 1 | 2,
+  ): BGAKittyImage {
     const state = this.resolveActiveState(currentSeconds, bmson);
     const keyBoundKey = keyBound ? keyBoundResourceKey(keyBound.definitionId, keyBound.bmpKey) : '';
     const keyBoundSelection = keyBound
@@ -405,7 +416,7 @@ export class BgaANSIRenderer {
       ? resolveFrameSelection(this.poorSourceFramesByKey, this.missingPoorSourceFrame, state.poorKey, state.poorSeconds)
       : { frame: undefined, index: -1 };
     const token =
-      `${pixelWidth}x${pixelHeight}:` +
+      `${pixelWidth}x${pixelHeight}:${bgaMode ?? ''}:` +
       `${state.baseKey}:${baseSelection.index}:` +
       `${state.layerKey}:${layerSelection.index}:` +
       `${state.layer2Key}:${layer2Selection.index}:` +
@@ -428,7 +439,11 @@ export class BgaANSIRenderer {
         : normalFrames;
     const composite = mergeCompositeLayers(
       [...frames, { frame: keyBoundSelection.frame, opacity: 1, tint: 0xffffff }].map(({ frame, opacity, tint }) => ({
-        frame: frame ? resizeANSIFrame(frame, pixelWidth, pixelHeight, this.resizeAlgorithm) : undefined,
+        frame: frame
+          ? bgaMode === undefined
+            ? resizeANSIFrame(frame, pixelWidth, pixelHeight, this.resizeAlgorithm)
+            : placeHDXBGAFrame(frame, pixelWidth, pixelHeight, bgaMode)
+          : undefined,
         opacity,
         tint,
       })),
@@ -510,23 +525,57 @@ export class BgaANSIRenderer {
     this.cachedKittyImage = undefined;
   }
 
-  private refreshComposite(currentSeconds: number, keyBound?: KeyBoundBGAFrame, bmson?: BmsonBGAFrame): void {
+  private refreshComposite(
+    currentSeconds: number,
+    keyBound?: KeyBoundBGAFrame,
+    bmson?: BmsonBGAFrame,
+    bgaMode?: 0 | 1 | 2,
+  ): void {
     const state = this.resolveActiveState(currentSeconds, bmson);
     const keyBoundKey = keyBound ? keyBoundResourceKey(keyBound.definitionId, keyBound.bmpKey) : '';
     const keyBoundSelection = keyBound
       ? resolveFrameSelection(
-          this.layer2FramesByKey,
+          bgaMode === undefined ? this.layer2FramesByKey : this.layer2SourceFramesByKey,
           EMPTY_KEY_BOUND_FRAME,
           keyBoundKey,
           Math.max(0, (currentSeconds - keyBound.frameStartSeconds) * (keyBound.playbackRate ?? 1)),
         )
       : { frame: undefined, index: -1 };
-    state.opacityToken += `:${keyBoundKey}:${keyBoundSelection.index}`;
-    const baseSelection = this.resolveBaseFrame(state.baseKey, state.baseSeconds);
-    const layerSelection = this.resolveLayerFrame(state.layerKey, state.layerSeconds);
-    const layer2Selection = this.resolveLayer2Frame(state.layer2Key, state.layer2Seconds);
+    state.opacityToken += `:${keyBoundKey}:${keyBoundSelection.index}:${bgaMode ?? ''}`;
+    const baseSelection =
+      bgaMode === undefined
+        ? this.resolveBaseFrame(state.baseKey, state.baseSeconds)
+        : resolveFrameSelection(
+            this.baseSourceFramesByKey,
+            this.missingBaseSourceFrame,
+            state.baseKey,
+            state.baseSeconds,
+          );
+    const layerSelection =
+      bgaMode === undefined
+        ? this.resolveLayerFrame(state.layerKey, state.layerSeconds)
+        : resolveFrameSelection(
+            this.layerSourceFramesByKey,
+            this.missingLayerSourceFrame,
+            state.layerKey,
+            state.layerSeconds,
+          );
+    const layer2Selection =
+      bgaMode === undefined
+        ? this.resolveLayer2Frame(state.layer2Key, state.layer2Seconds)
+        : resolveFrameSelection(
+            this.layer2SourceFramesByKey,
+            this.missingLayerSourceFrame,
+            state.layer2Key,
+            state.layer2Seconds,
+          );
     const poorSelection = state.poorActive
-      ? resolveFrameSelection(this.poorFramesByKey, this.missingPoorFrame, state.poorKey, state.poorSeconds)
+      ? resolveFrameSelection(
+          bgaMode === undefined ? this.poorFramesByKey : this.poorSourceFramesByKey,
+          bgaMode === undefined ? this.missingPoorFrame : this.missingPoorSourceFrame,
+          state.poorKey,
+          state.poorSeconds,
+        )
       : { frame: undefined, index: -1 };
 
     if (
@@ -560,14 +609,20 @@ export class BgaANSIRenderer {
       { frame: layer2Selection.frame, opacity: state.opacity.layer2, tint: state.tint.layer2 },
     ].slice(0, MAX_NORMAL_BGA_COMPOSITE_LAYERS);
     const poorLayer = { frame: poorSelection.frame, opacity: state.opacity.poor, tint: state.tint.poor };
-    this.cachedComposite = mergeCompositeLayers([
-      ...(state.poorActive && poorSelection.frame
-        ? this.poorBGAMode === 1
-          ? [...normalFrames, poorLayer]
-          : [poorLayer]
-        : normalFrames),
-      { frame: keyBoundSelection.frame, opacity: 1 },
-    ]);
+    this.cachedComposite = mergeCompositeLayers(
+      [
+        ...(state.poorActive && poorSelection.frame
+          ? this.poorBGAMode === 1
+            ? [...normalFrames, poorLayer]
+            : [poorLayer]
+          : normalFrames),
+        { frame: keyBoundSelection.frame, opacity: 1 },
+      ].map((layer) =>
+        bgaMode === undefined || layer.frame === undefined
+          ? layer
+          : { ...layer, frame: placeHDXBGAFrame(layer.frame, this.displayWidth, this.displayHeight, bgaMode) },
+      ),
+    );
     this.cachedLines = undefined;
     this.cachedKittyImage = undefined;
   }

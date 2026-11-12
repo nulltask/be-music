@@ -134,6 +134,12 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 | `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOCOLORS`, `#SEEKxx`, `#MATERIALSBMP`, `#MATERIALSWAV` | 実行せず、往復で失わないよう `metadata.extras` に保持します。後続対応：[#848](https://github.com/nulltask/be-music/issues/848)（`#ExtChr`・`#CHARFILE`）、[#849](https://github.com/nulltask/be-music/issues/849)（`#SEEKxx`・`#VIDEOCOLORS`）。`#CDDA` と Materials 系は未対応のままです（Be-Music には音楽 CD も実行ファイル基準のフォルダーもないため）。出自・使用状況・理由は[歴史的なコマンド](./research/historical-bms-commands.ja.md)を参照してください。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `#MATERIALS`, `#DIVIDEPROP`                                                                  | `bms` に保持し、実行しません。`<folder>` による Materials 参照は解決しません。位置は厳密な分数で扱うため、`#DIVIDEPROP` で変わるものはありません。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
+### HDX の BGA 配置
+
+初期 `#OPTION charatbeatHDX:BGAMODE n` の `0` は BGA 枠全体に合わせます。`1` は原寸、`2` は 80% で、どちらも枠の上中央から配置します。各スキンの BGA 枠とターミナルの ANSI・Kitty 表示領域は、256×256 の論理キャンバスに対応します。`#BGA` は切り出した画像をこの規則で配置し、枠外をクリップします。BGA を自前で描くスキンには `frame.bga.bgaMode` を渡します。
+
+NONSTOP はステージの指定を引き継ぎ、ブラウザーのクロスフェードでは各スタックにそのステージの配置を適用します。リプレイは配置を表示プログラムのバージョン 4 に記録します。A6 による指定は診断し、配置は譜面 fingerprint と記録条件に影響しません。[公式資料の調査結果](./research/chart-authored-options.ja.md#charatbeathdx-の一次資料で確定した規則)
+
 ## 実行フロー
 
 player は次の順序で譜面を実行します。
