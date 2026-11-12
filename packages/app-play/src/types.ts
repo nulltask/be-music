@@ -252,6 +252,18 @@ export interface PlayerGUIState extends PlayTempoSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  lr2SideJump: PlayOptions['lr2SideJump'];
+  lr2SpiralEffect: PlayOptions['lr2SpiralEffect'];
+  lr2Wave: PlayOptions['lr2Wave'];
+  lr2SinCurve: PlayOptions['lr2SinCurve'];
+  lr2Nabeatsu: PlayOptions['lr2Nabeatsu'];
+  lr2Heartbeat: PlayOptions['lr2Heartbeat'];
+  lr2Char: PlayOptions['lr2Char'];
+  lr2SuperLoop: PlayOptions['lr2SuperLoop'];
+  lr2Tornado: PlayOptions['lr2Tornado'];
+  lr2Earthquake: PlayOptions['lr2Earthquake'];
+  lr2Acceleration: PlayOptions['lr2Acceleration'];
+  autoScratchNotes: PlayOptions['autoScratchNotes'];
   judgeTimingAutoAdjust: PlayOptions['judgeTimingAutoAdjust'];
   judgeAlgorithm: PlayOptions['judgeAlgorithm'];
   longNoteModifier: PlayOptions['longNoteModifier'];

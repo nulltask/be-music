@@ -535,10 +535,12 @@ export async function createPlaySession(
                   }
                 : {}),
               ...(options.longNoteModifier?.startsWith('ADD_')
-                ? {
-                    longNoteRate: playbackChart.longNoteModifierRate ?? 1,
-                    longNoteModifierChangeCount: playbackChart.longNoteModifierChangeCount ?? 0,
-                  }
+                ? { longNoteRate: playbackChart.longNoteModifierRate ?? 1 }
+                : {}),
+              // The count tells a chart the modifier changed from one it left alone: LEGACY NOTE and LN REMOVE assist
+              // only an actual conversion, as the additions do.
+              ...(options.longNoteModifier !== undefined && options.longNoteModifier !== 'OFF'
+                ? { longNoteModifierChangeCount: playbackChart.longNoteModifierChangeCount ?? 0 }
                 : {}),
               gaugeAutoShift: options.gaugeAutoShift,
               ...(options.bottomShiftableGauge !== undefined

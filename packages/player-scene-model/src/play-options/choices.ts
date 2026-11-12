@@ -174,6 +174,18 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   constantFadeMs: 100,
   bpmGuide: false,
   bpmChangeWarning: false,
+  lr2SideJump: 0,
+  lr2SpiralEffect: 0,
+  lr2Wave: 0,
+  lr2SinCurve: 0,
+  lr2Nabeatsu: 0,
+  lr2Heartbeat: 0,
+  lr2Char: 0,
+  lr2SuperLoop: 0,
+  lr2Tornado: 0,
+  lr2Earthquake: 0,
+  lr2Acceleration: 'OFF',
+  autoScratchNotes: 'SHOW',
   judgeTimingAutoAdjust: 'OFF',
   autoPlay: false,
   bga: 'ON',
@@ -250,6 +262,9 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
  * Choices of every enum / on-off play option, in their LR2 button cycle order: what a skin can pick from. `hiSpeed` and
  * `shutter` are numbers, without a fixed set of choices.
  */
+/** LR2's mania options run from OFF (0) to 100 in steps of 10. */
+const LR2_MANIA_LEVELS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100] as const;
+
 export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   autoPlay: BOOLEAN_CYCLE,
   bga: BGA_CYCLE,
@@ -277,6 +292,18 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   fixedDisplayArea: BOOLEAN_CYCLE,
   bpmGuide: BOOLEAN_CYCLE,
   bpmChangeWarning: BOOLEAN_CYCLE,
+  lr2SideJump: LR2_MANIA_LEVELS,
+  lr2SpiralEffect: LR2_MANIA_LEVELS,
+  lr2Wave: LR2_MANIA_LEVELS,
+  lr2SinCurve: LR2_MANIA_LEVELS,
+  lr2Nabeatsu: LR2_MANIA_LEVELS,
+  lr2Heartbeat: LR2_MANIA_LEVELS,
+  lr2Char: LR2_MANIA_LEVELS,
+  lr2SuperLoop: LR2_MANIA_LEVELS,
+  lr2Tornado: LR2_MANIA_LEVELS,
+  lr2Earthquake: LR2_MANIA_LEVELS,
+  lr2Acceleration: ['OFF', 'ACCELERATION', 'DECELERATION', 'RANDOM'],
+  autoScratchNotes: ['SHOW', 'HIDE'],
   judgeTimingAutoAdjust: JUDGE_TIMING_AUTO_ADJUST_MODES,
   visualConstant: BOOLEAN_CYCLE,
   extraNoteScratch: BOOLEAN_CYCLE,

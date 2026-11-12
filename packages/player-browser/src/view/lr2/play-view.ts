@@ -2,6 +2,11 @@ import { isFreeZoneChannel } from '@be-music/chart-model';
 import { ChartTextOverlay } from '../shared/chart-text.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
+import {
+  resolveLR2Earthquake,
+  resolveLR2ManiaVisual,
+  LR2_SCREEN_HEIGHT,
+} from '../shared/playfield/lr2-mania-visual.ts';
 /**
  * The LR2 family's play screen: an LR2 play skin (`play_<variant>.lr2skin`) drawn around the shared playfield
  * (`view/shared/playfield`) in the skin's authored coordinate space, letterboxed into the window. It draws the play session's frames:
@@ -284,6 +289,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
 
   public draw(frame: PlayFrame): void {
     this.play = frame.playfield;
+    this.playOptions = frame.playOptions;
     this.options.judgeTimingMs = frame.playOptions.judgeTimingMs;
     this.options.judgeTimingAutoAdjust = frame.playOptions.judgeTimingAutoAdjust;
     for (const event of frame.events) this.handleEvent(event);
@@ -329,6 +335,13 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
       this.designRoot.alpha,
     );
     this.chartText.show(frame.chartText ?? '', this.playfieldSkin.stage, this.app.screen, this.designRoot.alpha);
+    // LR2's EARTHQUAKE sways the whole play screen.
+    const quake = resolveLR2Earthquake(
+      resolveLR2ManiaVisual(frame.playOptions),
+      this.play.playClock(),
+      this.app.screen.height / LR2_SCREEN_HEIGHT,
+    );
+    this.root.position.set(quake.x, quake.y);
     this.bpmChangeWarning.show({
       enabled: frame.playOptions.bpmChangeWarning,
       timing: this.play.timingResolver,

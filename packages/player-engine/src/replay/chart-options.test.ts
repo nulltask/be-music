@@ -42,7 +42,9 @@ test('version 3 programs keep M-SUDDEN and the skin-level CRAZY fields', () => {
 test.each([
   { ...program(), unknown: 1 },
   { ...program(), cues: [{ timeUs: 1, state: {}, unknown: 1 }] },
-  { ...program(), version: 4 },
+  { ...program(), version: 5 },
+  { ...program(), version: 3, initial: { bgaMode: 0 } },
+  { ...program(), version: 4, initial: { bgaMode: 3 } },
   // A version-1 recording cannot carry a family implemented in version 2.
   { ...program(), initial: { hidden: 'STEALTH' } },
   { ...program(), version: 2, initial: { hidden: 'M-SUDDEN' } },
@@ -144,4 +146,9 @@ test.each([
 test.each([1.2, 1.5, 2])('accepts chart BASE-SPEED %s in version 2', (baseSpeed) => {
   const program = { version: 2, options: { baseSpeed } };
   expect(parseChartPlayOptionProgram(program)).toEqual(program);
+});
+
+test('version 4 records the BGA placement including an explicit fill mode', () => {
+  const raw = { version: 4, initial: { bgaMode: 0 }, cues: [{ timeUs: 1_000_000, state: { bgaMode: 2 } }] };
+  expect(parseChartOptionProgram(raw)).toEqual(raw);
 });

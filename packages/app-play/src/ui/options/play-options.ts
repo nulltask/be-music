@@ -19,6 +19,7 @@ import {
 import { parseReplay } from '@be-music/player-engine/replay';
 import { storeReplayView } from '../../replay-view-settings.ts';
 import type { OptionsDialog } from './index.ts';
+import { buildLR2ManiaRows } from './lr2-mania.ts';
 import { PLAY_OPTION_PAGES, VIEW_OPTION_PAGES } from './folders.ts';
 import { bottomShiftableGaugeItems, laneOptionItems, practiceGaugeItems } from './play-option-items.ts';
 /**
@@ -618,6 +619,7 @@ export function buildPlayOptionsFolder(
     { label: 'Hi-speed', min: HISPEED_MIN, max: HISPEED_MAX, step: HISPEED_STEP },
   );
   buildNoteDisplayRows.call(this, effects);
+  buildLR2ManiaRows.call(this, effects);
   this.refreshRulesetChoices();
   return { practice, replay };
 }
@@ -637,6 +639,11 @@ function buildNoteDisplayRows(this: OptionsDialog, effects: OptionContainer): vo
     this.guiState.judgedNoteDisplay = value;
     this.gameplayView?.setJudgedNoteDisplay(value);
   });
+  // AC 34's オートスクラッチ表示. Live: the playfield reads the option at each frame.
+  selectBinding(effects, this.guiState, 'autoScratchNotes', 'Auto scratch notes (AC)', {
+    Show: 'SHOW',
+    Hide: 'HIDE',
+  }).on('change', ({ value }) => this.setPlayOptions({ autoScratchNotes: value }));
   // Chart-authoring overlay — paints invisible / keysound notes (BMS channels `3x` / `4x`) as thin green bars in their
   // playable lane. Live: the gameplay view always extracts the invisible notes and preloads the green sprite, so the
   // flag flips the per-frame render branch on the very next paint.

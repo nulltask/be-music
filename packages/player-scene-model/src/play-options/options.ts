@@ -40,6 +40,30 @@ export interface PlayOptions {
    * change until the change (blue when the tempo rises, red when it falls).
    */
   bpmChangeWarning: boolean;
+  /** LR2 mania option SIDEJUMP (0 = OFF, 10–100): hops each note sideways on a 500 ms period, alternate notes in opposite directions. Drawing only. */
+  lr2SideJump: number;
+  /** LR2 mania option SPIRAL (0 = OFF, 10–100): circles each note about its own path every 300 ms, alternate notes in opposite directions. It is LR2's note effect, not beatoraja's SPIRAL lane option. Drawing only. */
+  lr2SpiralEffect: number;
+  /** LR2 mania option WAVE (0 = OFF, 10–100): shifts each note along the lane by a 1000 ms sine per lane, growing with the square of its distance. Drawing only. */
+  lr2Wave: number;
+  /** LR2 mania option SINCURVE (0 = OFF, 10–100): shifts each note sideways by a sine of its place along the lane. Drawing only. */
+  lr2SinCurve: number;
+  /** LR2 mania option NABEATSU (0 = OFF, 10–100): sways the notes and bar lines while the play clock's second is a multiple of 3 (from 50 up, also seconds 30–39 and seconds ending in 3). Drawing only. */
+  lr2Nabeatsu: number;
+  /** LR2 mania option HEARTBEAT (0 = OFF, 10–100): pulses each note's size on a 500 ms sine, twice as much in width as in height. Drawing only. */
+  lr2Heartbeat: number;
+  /** LR2 mania option CHAR (0 = OFF, 10–100): draws every n-th note at three times its distance, so it falls three times as fast. Drawing only. */
+  lr2Char: number;
+  /** LR2 mania option SUPERLOOP (0 = OFF, 10–100): turns each note about its landing point on the judge line, once every (120 − value) × 50 ms. Drawing only. */
+  lr2SuperLoop: number;
+  /** LR2 mania option TORNADO (0 = OFF, 10–100): shifts each note sideways by a sine of its lane and time, in proportion to its distance from the judge line. Drawing only. */
+  lr2Tornado: number;
+  /** LR2 mania option EARTHQUAKE (0 = OFF, 10–100): sways the whole play screen on 1000 ms and 1234 ms sines. Drawing only. */
+  lr2Earthquake: number;
+  /** LR2 mania option ACCELERATION: remaps each note's place along the lane (drawing only). RANDOM picks ACCELERATION or DECELERATION per note; it is not the lane option. */
+  lr2Acceleration: 'OFF' | 'ACCELERATION' | 'DECELERATION' | 'RANDOM';
+  /** AC 34 オートスクラッチ表示: whether the scratch notes AUTO SCRATCH plays are drawn. Display only. */
+  autoScratchNotes: 'SHOW' | 'HIDE';
   /**
    * The automatic judge-timing adjustment of a manual play: beatoraja 0.8.9's calibration on PG/GR/GD, or LR2's ON /
    * SILENT (`autojudge` 1 / 2: a 1 ms step per ten hits; SILENT also loads no keysounds, BGM or BGA and hides the judge

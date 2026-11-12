@@ -599,7 +599,9 @@ function stitchNonstopCourseAs(
       ...(hasChartOptions
         ? {
             chartOptions: {
-              version: CHART_OPTION_PROGRAM_VERSION,
+              version: chartOptionCues.some(({ state }) => state.bgaMode !== undefined)
+                ? CHART_OPTION_PROGRAM_VERSION
+                : 3,
               initial: { ...chartOptionCues[0]?.state },
               cues: chartOptionCues.slice(1),
             },

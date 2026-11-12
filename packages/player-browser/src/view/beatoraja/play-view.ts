@@ -4,6 +4,12 @@ import type { BGAOpacityTimelines } from '@be-music/chart-model';
 import { collectBPMGuideEvents } from '../../chart/bpm-guide.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
+import {
+  resolveLR2Earthquake,
+  resolveLR2ManiaVisual,
+  LR2_SCREEN_HEIGHT,
+} from '../shared/playfield/lr2-mania-visual.ts';
+import { resolveHiddenNoteChannels } from '../shared/playfield/hidden-note-channels.ts';
 import { resolveConstantVisibility, resolveWhiteNumber, resolveLaneCover } from '@be-music/player-scene-model';
 /**
  * The beatoraja family's play screen: a beatoraja play skin (`play_<variant>`) drawn by `BeatorajaPlaySkinView` with the
@@ -134,6 +140,8 @@ function resolveSkinConfigOps(
 
 /** What the beatoraja play view reads of the running play: the play session's members of these names. */
 export interface BeatorajaPlayRuntime {
+  /** The scratch lanes AUTO SCRATCH plays; empty when it is off. */
+  readonly autoScratchChannels: ReadonlySet<string>;
   readonly chart: LibraryChart | undefined;
   /** The chart as the play plays it (its `#RANDOM` branches drawn), before DP FLIP. */
   readonly resolvedChart: BeMusicJSON | undefined;
@@ -201,6 +209,7 @@ export interface BeatorajaPlayViewOptions {
   /** The course the play is a stage of, with the stage being played. */
   readonly course?: CourseView;
   /** The stages of a stitched NONSTOP chart (`PlaySessionOptions.nonstop`), whose BGA cross-fades at each seam. */
+  readonly chartOptionProgram?: import('@be-music/chart-model').ChartOptionProgram;
   readonly nonstop?: { readonly stages: readonly (NonstopBGAStage & { readonly backBMP?: string })[] };
   /** Where the chart's files are, for its `#STAGEFILE`, `#BACKBMP` and `#BANNER`. */
   readonly source?: BrowserAssetSource;
@@ -467,6 +476,7 @@ export class BeatorajaPlayView implements PlayView {
       videos: new Map([...play.bgaVideos].map(([key, { video }]) => [key, video] as const)),
       cues: play.bgaTimeline,
       poorBGAMode: play.poorBGAMode,
+      chartOptionProgram: this.options.chartOptionProgram,
       ...(nonstop !== undefined && play.nonstopBGATimelines !== undefined
         ? { nonstop: { stages: nonstop.stages, timelines: play.nonstopBGATimelines } }
         : {}),
@@ -553,6 +563,7 @@ export class BeatorajaPlayView implements PlayView {
       ...(play.bgaCamera !== undefined ? { camera: play.bgaCamera } : {}),
       bpmGuide: frame.playOptions.bpmGuide,
       judgeTimingMs: frame.playOptions.judgeTimingMs,
+      hiddenNoteChannels: resolveHiddenNoteChannels(frame.playOptions.autoScratchNotes, play.autoScratchChannels),
       constant: resolveConstantVisibility({
         enabled: frame.playOptions.visualConstant,
         durationMs: frame.playOptions.noteDurationMs,
@@ -586,6 +597,13 @@ export class BeatorajaPlayView implements PlayView {
     );
     this.chartText.attachCanvas(stage.canvas);
     this.chartText.show(frame.chartText ?? '', stage, host.app.screen, stage.canvas.alpha);
+    // LR2's EARTHQUAKE sways the whole play screen.
+    const quake = resolveLR2Earthquake(
+      resolveLR2ManiaVisual(frame.playOptions),
+      play.playClock(),
+      host.app.screen.height / LR2_SCREEN_HEIGHT,
+    );
+    this.root.position.set(quake.x, quake.y);
     this.bpmChangeWarning.attachCanvas(stage.canvas);
     this.bpmChangeWarning.show({
       enabled: frame.playOptions.bpmChangeWarning,

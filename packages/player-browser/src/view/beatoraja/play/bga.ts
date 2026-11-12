@@ -1,6 +1,6 @@
 import type { KeyBoundBGAFrame, BmsonBGAFrame } from '@be-music/player-engine/display';
 import { keyBoundBGAResourceKey } from '../../../chart/key-bound-bga.ts';
-import type { BGAOpacityTimelines } from '@be-music/chart-model';
+import { resolveChartOptionsAt, type ChartOptionProgram, type BGAOpacityTimelines } from '@be-music/chart-model';
 // BGA (background animation) rendering layer for a beatoraja play skin.
 //
 // The skin's `bga` block holds an `id` referencing one of the destination[] groups; that group's
@@ -21,7 +21,7 @@ import type { BGAOpacityTimelines } from '@be-music/chart-model';
 // (`resolveBGAStacks`, the stacks the built-in and LR2 scenes draw too), so the BGA cross-fades over
 // 3 s at a stage seam as LR2 does.
 
-import { Container, Sprite, Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { resolveBGAVideoResync } from '../../shared/bga-renderer.ts';
 import type { BGACameraFeed } from '../../../media/bga-camera.ts';
 import { fitBGACameraRect } from '../../../media/bga-camera-fit.ts';
@@ -41,6 +41,7 @@ import {
 
 export interface BeatorajaBGALayerOptions {
   skin: BeatorajaSkin;
+  chartOptionProgram?: ChartOptionProgram;
   subRegionOrigins?: ReadonlyMap<string, { x: number; y: number }>;
   poorBGAMode?: 0 | 1 | 2;
   /**
@@ -98,6 +99,8 @@ type BGADestinationProps = ReturnType<typeof destinationToSpriteProps>;
 export class BeatorajaBGALayer {
   readonly container: Container = new Container();
   private background: Sprite | undefined;
+  private clip?: Graphics;
+  private readonly chartOptionProgram?: ChartOptionProgram;
   private keyBoundSprite = new Sprite({ visible: false, label: 'bga/key-bound' });
   /** The camera's picture, made the first time a camera shows. */
   private cameraSprite: Sprite | undefined;
@@ -131,6 +134,7 @@ export class BeatorajaBGALayer {
   private readonly poorBGAMode: 0 | 1 | 2;
 
   constructor(options: BeatorajaBGALayerOptions) {
+    this.chartOptionProgram = options.chartOptionProgram;
     this.poorBGAMode = options.poorBGAMode ?? 0;
     this.textures = options.textures;
     this.subRegionOrigins = options.subRegionOrigins ?? new Map();
@@ -157,6 +161,7 @@ export class BeatorajaBGALayer {
     poorBGAActive: boolean,
     playback: {
       seconds?: number;
+      bgaMode?: 0 | 1 | 2;
       tempo?: number;
       paused?: boolean;
       started?: boolean;
@@ -184,7 +189,10 @@ export class BeatorajaBGALayer {
       return;
     }
     // One stack, or a NONSTOP chart's stages at their crossfade opacity, earlier stages behind.
+    const program = this.chartOptionProgram;
     const stacks = resolveBGAStacks({
+      bgaMode: playback.bgaMode,
+      stageBGAMode: program && ((start) => resolveChartOptionsAt(program, Math.round(start * 1_000_000)).bgaMode),
       timeline: this.cues,
       poorBGAMode: this.poorBGAMode,
       nonstop: this.nonstop,
@@ -192,6 +200,15 @@ export class BeatorajaBGALayer {
       inPoorWindow: poorBGAActive,
       bmsonBGA: playback.bmsonBGA,
     });
+    if (stacks.some(({ bgaMode }) => bgaMode !== undefined)) {
+      if (this.clip === undefined) {
+        this.clip = new Graphics({ label: 'bga/clip' });
+        this.container.addChild(this.clip);
+      }
+      this.clip.clear().rect(0, 0, props.width, props.height).fill(0xffffff);
+      this.clip.position.set(props.x, props.y);
+      this.clip.angle = props.angle;
+    }
     if (props.visible) {
       if (this.background === undefined) {
         this.background = new Sprite({
@@ -233,6 +250,7 @@ export class BeatorajaBGALayer {
           props,
           stack.alpha * (stack.opacity?.poor ?? 1),
           stack.tint?.poor,
+          stack.bgaMode,
         );
         return;
       }
@@ -247,6 +265,7 @@ export class BeatorajaBGALayer {
           props,
           stack.alpha * (stack.opacity?.base ?? 1),
           stack.tint?.base,
+          stack.bgaMode,
         );
       }
       const layerKey = this.videoKey(stack.layerCue?.bmpKey, 'layer');
@@ -260,6 +279,7 @@ export class BeatorajaBGALayer {
           props,
           stack.alpha * (stack.opacity?.layer ?? 1),
           stack.tint?.layer,
+          stack.bgaMode,
         );
       }
       const layer2Key = this.videoKey(stack.layer2Cue?.bmpKey, 'layer2');
@@ -273,6 +293,7 @@ export class BeatorajaBGALayer {
           props,
           stack.alpha * (stack.opacity?.layer2 ?? 1),
           stack.tint?.layer2,
+          stack.bgaMode,
         );
       }
       if (stack.poorKey !== undefined && stack.poorOverlays) {
@@ -291,6 +312,7 @@ export class BeatorajaBGALayer {
           props,
           stack.alpha * (stack.opacity?.poor ?? 1),
           stack.tint?.poor,
+          stack.bgaMode,
         );
       }
     });
@@ -301,8 +323,18 @@ export class BeatorajaBGALayer {
       keys.set(key, keyBound.frameStartSeconds);
       if (this.keyBoundSprite.parent !== this.container) this.container.addChild(this.keyBoundSprite);
       else this.container.setChildIndex(this.keyBoundSprite, this.container.children.length - 1);
-      this.drawImage(this.keyBoundSprite, undefined, key, this.layerTextures, props, 1);
+      this.drawImage(
+        this.keyBoundSprite,
+        undefined,
+        key,
+        this.layerTextures,
+        props,
+        1,
+        undefined,
+        stacks.at(-1)?.bgaMode,
+      );
     }
+    if (this.clip) this.clip.includeInBuild = false;
     this.syncVideos(keys, playback.seconds ?? seconds, playback);
   }
 
@@ -421,6 +453,7 @@ export class BeatorajaBGALayer {
     props: BGADestinationProps,
     alpha: number,
     tint = 0xffffff,
+    bgaMode?: 0 | 1 | 2,
   ): void {
     const texture = textures.get(key) ?? this.textures.get(key);
     // No decoded texture (or Pixi's source-less EMPTY singleton) must not enter the renderer's
@@ -436,9 +469,11 @@ export class BeatorajaBGALayer {
     // fill the rect.
     const rect = { x: props.x, y: props.y, w: props.width, h: props.height };
     const placed =
-      this.videoElements.has(key) && !this.subRegionOrigins.has(key)
-        ? rect
-        : resolveBGAImageRect(texture.frame.width, texture.frame.height, rect, this.subRegionOrigins.get(key));
+      bgaMode !== undefined
+        ? resolveBGAImageRect(texture.frame.width, texture.frame.height, rect, undefined, bgaMode)
+        : this.videoElements.has(key) && !this.subRegionOrigins.has(key)
+          ? rect
+          : resolveBGAImageRect(texture.frame.width, texture.frame.height, rect, this.subRegionOrigins.get(key));
     if (canvas !== undefined && (placed.w < rect.w || placed.h < rect.h)) {
       canvas.visible = true;
       canvas.x = rect.x;
@@ -449,6 +484,11 @@ export class BeatorajaBGALayer {
       canvas.angle = props.angle;
       canvas.blendMode = props.blendMode;
     }
+    sprite.mask =
+      bgaMode !== undefined &&
+      (placed.x < rect.x || placed.x + placed.w > rect.x + rect.w || placed.y + placed.h > rect.y + rect.h)
+        ? (this.clip ?? null)
+        : null;
     sprite.visible = true;
     sprite.x = placed.x;
     sprite.y = placed.y;

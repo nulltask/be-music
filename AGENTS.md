@@ -17,6 +17,12 @@
 - Write `bmson` in prose, `replay` for a recorded replay, and `avatar` for a user's profile image. Keep externally required identifiers and format keys unchanged. Rename persisted schema fields through explicit migrations.
 - Write the product name `Be-Music` in prose and user-facing text (service names such as `Be-Music Play` and `Be-Music Leaderboard`, and `Be-Music Skin` with a capital S). Keep lowercase `be-music` only for identifiers and machine-read values: package names, domains and URLs, file and format names, custom element and CSS names, OAuth scopes, storage keys and other persisted ids. See [the glossary](docs/glossary.md).
 
+# Reference Compatibility Rules
+
+- Match the relevant reference implementation's observable behavior. Where applicable references agree or only one defines the behavior, use that behavior as the default.
+- Where references differ, preserve each behavior in its corresponding ruleset or source-qualified option when possible. If a shared behavior needs a choice, record which reference Be-Music follows and why. See [ADR 0019](docs/adr/0019-source-qualified-option-values.md).
+- Where evidence is incomplete or a reference leaves behavior undefined, document the uncertainty. If Be-Music needs to choose a behavior, keep the choice as narrow as possible and record the reason. Use the [compatibility evidence labels](docs/format-compat.md#13-evidence-labels) to distinguish verified behavior from inference.
+
 # Commit Rules
 
 - Write commit messages in English.
@@ -43,6 +49,7 @@
 
 # Pull Request Rules
 
+- Open a separate pull request for each issue you implement. If one issue depends on another, use the dependency branch as the base so each pull request shows its own changes.
 - Do not prefix pull request titles with `[codex]`.
 - Use plain, descriptive pull request titles.
 - Do not end pull request descriptions with a "Generated with Claude Code" footer or a session link.

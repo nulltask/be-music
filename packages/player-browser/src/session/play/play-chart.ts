@@ -1,3 +1,4 @@
+import { collectLR2SortObjects } from './lr2-sort-objects.ts';
 import {
   buildChartOptionTimeline,
   compileChartPlayOptions,
@@ -574,6 +575,17 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         ctx.mineNotes,
         ctx.invisibleNotes,
       );
+    const hasLR2DoubleRandom =
+      playVariant === '14' &&
+      [lanes.random1P, lanes.random2P].some((mode) =>
+        usesLR2DoubleRandom(mode ?? 'OFF', ctx.options.judgeRuleset ?? 'lr2'),
+      );
+    const lr2Objects = hasLR2DoubleRandom
+      ? collectLR2SortObjects(resolvedPlay, ctx.options.course !== undefined)
+      : undefined;
+    const sourceChannels = hasLR2DoubleRandom
+      ? new Map([...ctx.notes, ...ctx.mineNotes, ...ctx.invisibleNotes].map((note) => [note, note.channel]))
+      : undefined;
     applyRandomMode(
       ctx.notes as Array<{ channel: string }>,
       resolveLaneOptionChannels('1P', playVariant, prepared.laneBindings),
@@ -595,6 +607,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         side: '1P',
         flipped: dpFlipped,
         playVariant: playVariant,
+        lr2Objects,
+        sourceChannels,
       },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
@@ -620,6 +634,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         side: '2P',
         flipped: dpFlipped,
         playVariant: playVariant,
+        lr2Objects,
+        sourceChannels,
       },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
@@ -980,6 +996,14 @@ export function flipDPChannel(channel: string): string {
 /** A lane option without its source qualifier. */
 type BareRandomMode = Exclude<RandomMode, `${string}:${string}`>;
 
+function usesLR2DoubleRandom(mode: string, ruleset: RulesetId): boolean {
+  const { name, source } = resolveOptionSource(mode, ruleset);
+  // AC shares the persisted S-RANDOM value, but its 14 KEY scratch rule is unverified.
+  return (
+    source === 'lr2' && (name === 'CONVERGE' || (name === 'S-RANDOM' && ruleset !== '____' && mode !== '____:S-RANDOM'))
+  );
+}
+
 export function applyRandomMode(
   notes: Array<{ channel: string }>,
   allLanes: readonly string[],
@@ -995,6 +1019,8 @@ export function applyRandomMode(
     flipped?: boolean;
     side?: '1P' | '2P';
     playVariant?: ChartPlayVariant;
+    lr2Objects?: ReturnType<typeof collectLR2SortObjects>;
+    sourceChannels?: ReadonlyMap<{ channel: string }, string>;
   } = {},
   // Extra channel-bearing arrays: mines first, then invisible notes. Chart permutations share the same lane map;
   // S-RANDOM applies the active ruleset's policy for each event kind.
@@ -1041,6 +1067,12 @@ export function applyRandomMode(
         arr.map((note) => ({ note, kind: index === 0 ? ('mine' as const) : ('invisible' as const) })),
       ),
     ];
+    const lr2Double =
+      options.playVariant === '14' &&
+      options.scratch !== undefined &&
+      usesLR2DoubleRandom(selectedMode, options.ruleset ?? 'lr2')
+        ? { scratch: options.scratch, flipped: options.flipped, objects: options.lr2Objects }
+        : undefined;
     const timedNotes = entries.map(({ note, kind }) => {
       const timed = note as {
         channel: string;
@@ -1048,6 +1080,8 @@ export function applyRandomMode(
         endSeconds?: number;
         beat?: number;
         endBeat?: number;
+        event?: BeMusicEvent;
+        generatedLongNote?: true;
       };
       // Group by whole microseconds, as the source timelines do: a modifier that recomputes some objects' seconds
       // (scroll REMOVE) can leave a mine one ulp off the notes it shares a timeline with.
@@ -1058,6 +1092,15 @@ export function applyRandomMode(
           ? { endTimeMs: toTimelineMs(timed.endSeconds ?? timed.endBeat!) }
           : {}),
         kind,
+        ...(lr2Double === undefined
+          ? {}
+          : {
+              beat: timed.beat,
+              endBeat: timed.endBeat,
+              sourceChannel: options.sourceChannels?.get(note),
+              lr2OpOffset: /^[56]/.test(timed.event?.channel ?? '') ? 40 : 0,
+              lr2SyntheticTail: timed.generatedLongNote,
+            }),
       };
     });
     const channels =
@@ -1104,6 +1147,7 @@ export function applyRandomMode(
                         scratch: options.scratch,
                         random: rng,
                         targetOutside: mode === 'CONVERGE' && options.side === '2P',
+                        lr2Double,
                         // LR2's nine-key draw reaches the 2P scratch; the corrected option keeps to the nine keys.
                         ...(mode === 'CONVERGE' && options.playVariant === '9' ? { outside: '26' } : {}),
                       })
@@ -1116,6 +1160,7 @@ export function applyRandomMode(
                         })
                       : randomizeSRandomNotes(timedNotes, allLanes, {
                           ruleset: mode === 'S-RANDOM-CORRECTED' ? 'lr2' : source,
+                          lr2Double,
                           random: rng,
                           ...(options.playVariant === '9' ? { mode: 'pms' as const } : {}),
                           // LR2's nine-key draw reaches the 2P scratch; the corrected option keeps to the nine keys.

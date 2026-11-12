@@ -24,6 +24,18 @@ export type GUIPlayOptions = Pick<
   | 'dpFlip'
   | 'bpmGuide'
   | 'bpmChangeWarning'
+  | 'lr2SideJump'
+  | 'lr2SpiralEffect'
+  | 'lr2Wave'
+  | 'lr2SinCurve'
+  | 'lr2Nabeatsu'
+  | 'lr2Heartbeat'
+  | 'lr2Char'
+  | 'lr2SuperLoop'
+  | 'lr2Tornado'
+  | 'lr2Earthquake'
+  | 'lr2Acceleration'
+  | 'autoScratchNotes'
   | 'judgeTimingAutoAdjust'
   | 'visualConstant'
   | 'lift1P'
@@ -102,6 +114,18 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    lr2SideJump: state.lr2SideJump,
+    lr2SpiralEffect: state.lr2SpiralEffect,
+    lr2Wave: state.lr2Wave,
+    lr2SinCurve: state.lr2SinCurve,
+    lr2Nabeatsu: state.lr2Nabeatsu,
+    lr2Heartbeat: state.lr2Heartbeat,
+    lr2Char: state.lr2Char,
+    lr2SuperLoop: state.lr2SuperLoop,
+    lr2Tornado: state.lr2Tornado,
+    lr2Earthquake: state.lr2Earthquake,
+    lr2Acceleration: state.lr2Acceleration,
+    autoScratchNotes: state.autoScratchNotes,
     judgeTimingAutoAdjust: state.judgeTimingAutoAdjust,
     visualConstant: state.visualConstant,
     noteDurationMs: state.noteDurationMs,
@@ -190,6 +214,18 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.dpFlip = options.dpFlip;
   state.bpmGuide = options.bpmGuide;
   state.bpmChangeWarning = options.bpmChangeWarning;
+  state.lr2SideJump = options.lr2SideJump;
+  state.lr2SpiralEffect = options.lr2SpiralEffect;
+  state.lr2Wave = options.lr2Wave;
+  state.lr2SinCurve = options.lr2SinCurve;
+  state.lr2Nabeatsu = options.lr2Nabeatsu;
+  state.lr2Heartbeat = options.lr2Heartbeat;
+  state.lr2Char = options.lr2Char;
+  state.lr2SuperLoop = options.lr2SuperLoop;
+  state.lr2Tornado = options.lr2Tornado;
+  state.lr2Earthquake = options.lr2Earthquake;
+  state.lr2Acceleration = options.lr2Acceleration;
+  state.autoScratchNotes = options.autoScratchNotes;
   state.judgeTimingAutoAdjust = options.judgeTimingAutoAdjust;
   state.visualConstant = options.visualConstant;
   state.noteDurationMs = options.noteDurationMs;

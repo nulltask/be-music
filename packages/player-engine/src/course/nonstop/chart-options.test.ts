@@ -115,3 +115,17 @@ test('NONSTOP diagnoses a stage’s BASE-SPEED without changing the stitched cha
     { code: 'unsupported-option', declaration: '774:CRA-RHS3', stage: 0 },
   ]);
 });
+
+test('HDX BGA placement changes with stage ownership, including a stage without a mode', () => {
+  const stage = (option: string) => ({ chart: parseBMS(`#BPM 120\n${option}\n#00211:01\n#00411:01`) });
+  const result = stitchNonstopCourse(
+    [stage('#OPTION charatbeatHDX:BGAMODE 2'), stage(''), stage('#OPTION charatbeatHDX:BGAMODE 0')],
+    { connections: ['cut', 'cut'] },
+  );
+  if (!result.ok) throw new Error(result.reason);
+  const program = result.map.chartOptions!;
+  expect(program.version).toBe(4);
+  expect(
+    result.map.stages.map(({ windowStart }) => resolveChartOptionsAt(program, Math.round(windowStart * 1e6)).bgaMode),
+  ).toEqual([2, undefined, 0]);
+});

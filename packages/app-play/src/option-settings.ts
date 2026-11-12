@@ -102,6 +102,18 @@ export interface OptionSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  lr2SideJump: PlayerGUIState['lr2SideJump'];
+  lr2SpiralEffect: PlayerGUIState['lr2SpiralEffect'];
+  lr2Wave: PlayerGUIState['lr2Wave'];
+  lr2SinCurve: PlayerGUIState['lr2SinCurve'];
+  lr2Nabeatsu: PlayerGUIState['lr2Nabeatsu'];
+  lr2Heartbeat: PlayerGUIState['lr2Heartbeat'];
+  lr2Char: PlayerGUIState['lr2Char'];
+  lr2SuperLoop: PlayerGUIState['lr2SuperLoop'];
+  lr2Tornado: PlayerGUIState['lr2Tornado'];
+  lr2Earthquake: PlayerGUIState['lr2Earthquake'];
+  lr2Acceleration: PlayerGUIState['lr2Acceleration'];
+  autoScratchNotes: PlayerGUIState['autoScratchNotes'];
   judgeTimingAutoAdjust: PlayerGUIState['judgeTimingAutoAdjust'];
   judgeAlgorithm: PlayerGUIState['judgeAlgorithm'];
   longNoteModifier: PlayerGUIState['longNoteModifier'];
@@ -303,6 +315,18 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
   assign(settings, 'bpmChangeWarning', booleanOf(raw.bpmChangeWarning));
+  assign(settings, 'lr2SideJump', resolvePlayOptionValue('lr2SideJump', raw.lr2SideJump));
+  assign(settings, 'lr2SpiralEffect', resolvePlayOptionValue('lr2SpiralEffect', raw.lr2SpiralEffect));
+  assign(settings, 'lr2Wave', resolvePlayOptionValue('lr2Wave', raw.lr2Wave));
+  assign(settings, 'lr2SinCurve', resolvePlayOptionValue('lr2SinCurve', raw.lr2SinCurve));
+  assign(settings, 'lr2Nabeatsu', resolvePlayOptionValue('lr2Nabeatsu', raw.lr2Nabeatsu));
+  assign(settings, 'lr2Heartbeat', resolvePlayOptionValue('lr2Heartbeat', raw.lr2Heartbeat));
+  assign(settings, 'lr2Char', resolvePlayOptionValue('lr2Char', raw.lr2Char));
+  assign(settings, 'lr2SuperLoop', resolvePlayOptionValue('lr2SuperLoop', raw.lr2SuperLoop));
+  assign(settings, 'lr2Tornado', resolvePlayOptionValue('lr2Tornado', raw.lr2Tornado));
+  assign(settings, 'lr2Earthquake', resolvePlayOptionValue('lr2Earthquake', raw.lr2Earthquake));
+  assign(settings, 'lr2Acceleration', resolvePlayOptionValue('lr2Acceleration', raw.lr2Acceleration));
+  assign(settings, 'autoScratchNotes', resolvePlayOptionValue('autoScratchNotes', raw.autoScratchNotes));
   // A boolean from before the modes is beatoraja's switch.
   assign(settings, 'judgeTimingAutoAdjust', resolvePlayOptionValue('judgeTimingAutoAdjust', raw.judgeTimingAutoAdjust));
   assign(settings, 'visualConstant', booleanOf(raw.visualConstant));
@@ -580,6 +604,18 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('dpFlip');
   assignState('bpmGuide');
   assignState('bpmChangeWarning');
+  assignState('lr2SideJump');
+  assignState('lr2SpiralEffect');
+  assignState('lr2Wave');
+  assignState('lr2SinCurve');
+  assignState('lr2Nabeatsu');
+  assignState('lr2Heartbeat');
+  assignState('lr2Char');
+  assignState('lr2SuperLoop');
+  assignState('lr2Tornado');
+  assignState('lr2Earthquake');
+  assignState('lr2Acceleration');
+  assignState('autoScratchNotes');
   assignState('judgeTimingAutoAdjust');
   assignState('visualConstant');
   assignState('noteDurationMs');
@@ -712,6 +748,18 @@ export function captureOptionSettings(
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    lr2SideJump: state.lr2SideJump,
+    lr2SpiralEffect: state.lr2SpiralEffect,
+    lr2Wave: state.lr2Wave,
+    lr2SinCurve: state.lr2SinCurve,
+    lr2Nabeatsu: state.lr2Nabeatsu,
+    lr2Heartbeat: state.lr2Heartbeat,
+    lr2Char: state.lr2Char,
+    lr2SuperLoop: state.lr2SuperLoop,
+    lr2Tornado: state.lr2Tornado,
+    lr2Earthquake: state.lr2Earthquake,
+    lr2Acceleration: state.lr2Acceleration,
+    autoScratchNotes: state.autoScratchNotes,
     judgeTimingAutoAdjust: state.judgeTimingAutoAdjust,
     visualConstant: state.visualConstant,
     noteDurationMs: state.noteDurationMs,

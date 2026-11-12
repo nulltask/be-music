@@ -1,6 +1,6 @@
 import type { KeyBoundBGAFrame, BmsonBGAFrame } from '@be-music/player-engine/display';
 import type { BGACameraFeed } from '../../media/bga-camera.ts';
-import type { BGAOpacityTimelines } from '@be-music/chart-model';
+import type { BGAOpacityTimelines, ChartOptionProgram } from '@be-music/chart-model';
 import {
   resolveConstantAlpha,
   resolveNoteDisplaySeconds,
@@ -72,6 +72,7 @@ export interface BeatorajaPlayBGA {
   readonly layerTextures: ReadonlyMap<string, Texture>;
   readonly videos: ReadonlyMap<string, HTMLVideoElement>;
   readonly poorBGAMode?: 0 | 1 | 2;
+  readonly chartOptionProgram?: ChartOptionProgram;
   readonly cues: {
     base: readonly BGACue[];
     layer: readonly BGACue[];
@@ -190,6 +191,7 @@ export class BeatorajaPlayStage {
       cues: bga.cues,
       poorBGAMode: bga.poorBGAMode,
       nonstop: bga.nonstop,
+      chartOptionProgram: bga.chartOptionProgram,
       skinConfigOps: this.skinConfigOps,
     });
     view.container.addChildAt(this.bgaLayer.container, view.bgaLayerInsertIndex);
@@ -236,6 +238,8 @@ export class BeatorajaPlayStage {
       judgeTimingMs?: number;
       /** Visual CONSTANT: notes, mines, bar lines and BPM guide lines show only near their time. */
       constant?: ConstantVisibility;
+      /** Lanes whose notes are not drawn (AUTO SCRATCH with its notes hidden). */
+      hiddenNoteChannels?: ReadonlySet<string>;
       /** The camera to show in the BGA frame in place of the chart's BGA. */
       camera?: BGACameraFeed;
     } = {},
@@ -261,6 +265,7 @@ export class BeatorajaPlayStage {
       (channel) => lanes.isLaneLNHeld(channel),
       playback.showInvisibleNotes,
       playback.constant,
+      playback.hiddenNoteChannels,
     );
     // The markers scroll with the notes' per-beat distance (`rxhs / 4 * hispeed`, `LaneRenderer.java:271-276`) on the
     // lane the active dst block resolves; skin-canvas defaults when no lane matched.
@@ -340,7 +345,13 @@ export class BeatorajaPlayStage {
       Math.min(clock.currentSeconds, clock.reversalSeconds ?? Number.POSITIVE_INFINITY),
       context,
       lanes.isPoorBGAActive(clock.currentSeconds),
-      { ...playback, seconds: clock.currentSeconds, keyBoundBGA: clock.keyBoundBGA, bmsonBGA: clock.bmsonBGA },
+      {
+        ...playback,
+        seconds: clock.currentSeconds,
+        keyBoundBGA: clock.keyBoundBGA,
+        bmsonBGA: clock.bmsonBGA,
+        bgaMode: clock.chartOptions?.bgaMode,
+      },
     );
   }
 

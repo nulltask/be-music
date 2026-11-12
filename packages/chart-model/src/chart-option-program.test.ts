@@ -66,20 +66,17 @@ test('missing references and unrepresentable cue time are diagnosed without chan
 });
 // The documented support boundary (docs/research/chart-authored-options.md): every other family is diagnosed and has
 // no effect, initially or on A6, so a program never carries an operation the engine cannot reproduce.
-test.each(['774:RND-MIRROR', '774:GTP-HARD', 'charatbeatHDX:BGAMODE 1'])(
-  'diagnoses %s without changing the effective program',
-  (declaration) => {
-    const result = compileChartOptions({
-      initial: ['774:HI-SPEED_x1.50', declaration],
-      cues: [{ seconds: 1, key: '01', declaration }],
-    });
-    expect(result.program).toEqual({ version: 3, initial: { hiSpeed: 1.5 }, cues: [] });
-    expect(result.diagnostics).toEqual([
-      { code: 'unsupported-option', declaration },
-      { code: 'unsupported-option', declaration, key: '01', seconds: 1 },
-    ]);
-  },
-);
+test.each(['774:RND-MIRROR', '774:GTP-HARD'])('diagnoses %s without changing the effective program', (declaration) => {
+  const result = compileChartOptions({
+    initial: ['774:HI-SPEED_x1.50', declaration],
+    cues: [{ seconds: 1, key: '01', declaration }],
+  });
+  expect(result.program).toEqual({ version: 3, initial: { hiSpeed: 1.5 }, cues: [] });
+  expect(result.diagnostics).toEqual([
+    { code: 'unsupported-option', declaration },
+    { code: 'unsupported-option', declaration, key: '01', seconds: 1 },
+  ]);
+});
 
 test('initial RANDOM and gameplay CRAZY belong to the play options; timed uses are diagnosed initial-only', () => {
   for (const declaration of ['774:RANDOM_MIRROR', '774:CRAZY_HELLJUDGE', '774:CRAZY_ADDMINE', '774:NOTES_COPY']) {
@@ -172,4 +169,16 @@ test('legacy BASE-SPEED is a play option only in the initial declaration', () =>
     program: { initial: {}, cues: [] },
     diagnostics: [{ code: 'initial-only-alias', declaration }],
   });
+});
+
+test('HDX BGAMODE accepts 0, 1 and 2 in initial declarations and ignores A6', () => {
+  for (const mode of [0, 1, 2] as const) {
+    const declaration = `charatbeatHDX:BGAMODE ${mode}`;
+    const result = compileChartOptions({
+      initial: ['charatbeatHDX:BGAMODE 2', declaration, 'charatbeatHDX:BGAMODE 3'],
+      cues: [{ seconds: 1, key: '01', declaration }],
+    });
+    expect(result.program).toEqual({ version: 4, initial: { bgaMode: mode }, cues: [] });
+    expect(result.diagnostics.map(({ code }) => code)).toEqual(['invalid-parameter', 'initial-only-option']);
+  }
 });
