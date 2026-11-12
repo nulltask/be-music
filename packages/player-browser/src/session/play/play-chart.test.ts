@@ -1,3 +1,6 @@
+import { PlaySession } from './play-session.ts';
+import { prepareChart } from './play-chart.ts';
+import type { LibraryChart } from '@be-music/player-scene-model';
 import { resolveChart, type ChartPlayVariant } from '@be-music/chart-model';
 import { parseChart } from '@be-music/chart-parser';
 import { preparePlaybackChart } from '@be-music/player-engine';
@@ -793,4 +796,69 @@ test('each 2P copy of a two-player chart pairs with the 1P object at its time an
   notes[0]!.channel = '15';
   for (const [second, first] of pairs) second.channel = `2${first.channel.slice(1)}`;
   expect(notes[2]!.channel).toBe('25');
+});
+
+test.each([
+  ['1P', 'S-RANDOM'],
+  ['2P', 'S-RANDOM'],
+  ['1P', 'CONVERGE'],
+  ['2P', 'CONVERGE'],
+] as const)('LR2 14 KEY %s %s follows the sorted BMS object order', (side, mode) => {
+  const right = side === '2P';
+  const scratch = right ? '26' : '16';
+  const key = right ? '21' : '11';
+  const lanes = resolveLaneOptionChannels(side, '14');
+  const far = right ? 1 : 4;
+  const near = right ? 4 : 0;
+  for (const [pattern, expected] of [
+    ['01', near],
+    ['0001', far],
+  ] as const) {
+    const json = parseChart(
+      `#BPM 120\n#PLAYER 3\n#001${scratch}:${pattern}\n#001${key}:${pattern}\n#00219:01\n#00229:01`,
+      'bms',
+    );
+    const entry: LibraryChart = {
+      id: 'scratch-order',
+      sourceId: 'scratch-order',
+      sourceLabel: 'Scratch order',
+      sourceKind: 'directory',
+      chartPath: 'scratch-order.bms',
+      directoryLabel: '',
+      fileLabel: 'scratch-order.bms',
+      title: 'Scratch order',
+      totalNotes: 4,
+      chart: json,
+    };
+    const play = new PlaySession({
+      judgeRuleset: 'lr2',
+      ...(right
+        ? { random2P: mode, randomSeed2P: '74', randomFixedLane2P: far }
+        : { random1P: mode, randomSeed1P: '48', randomFixedLane1P: far + 1 }),
+    });
+    play.chart = entry;
+    prepareChart(play, entry);
+    expect(play.resolvedPlayChart?.playVariant).toBe('14');
+    expect(play.notes.find((note) => note.event.channel === key)?.channel).toBe(lanes[expected]);
+    expect(play.notes.find((note) => note.event.channel === scratch)?.channel).toBe(scratch);
+  }
+});
+
+test.each(['10', '14'] as const)('the shared S-RANDOM choice keeps AC placement in %s KEY', (playVariant) => {
+  const scratch = '16';
+  const notes = notesOn([scratch, '11'], 1);
+  const lanes = resolveLaneOptionChannels('1P', playVariant);
+  applyRandomMode(notes, lanes, 'lr2:S-RANDOM', () => 0.95, { ruleset: '____', scratch, playVariant });
+  expect(channelsOf(notes)).toEqual([scratch, lanes.at(-1)]);
+});
+
+test('10 KEY LR2 S-RANDOM still permits a far draw with a scratch on a bar line', () => {
+  const notes = notesOn(['16', '11'], 1);
+  const lanes = resolveLaneOptionChannels('1P', '10');
+  applyRandomMode(notes, lanes, 'S-RANDOM', () => 0.95, {
+    scratch: '16',
+    playVariant: '10',
+    lr2Objects: [{ op: 2, order: 1, timeMs: 1000 }],
+  });
+  expect(channelsOf(notes)).toEqual(['16', '15']);
 });
