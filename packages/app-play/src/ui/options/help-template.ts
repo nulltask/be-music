@@ -154,6 +154,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Plays the 1P side's scratch notes for you.</dd>
           <dt>Auto scratch 2P</dt>
           <dd>Plays the 2P side's scratch notes for you.</dd>
+          <dt>GUIDE SE (beatoraja)</dt>
+          <dd>
+            Plays a sound for each judgment, from the sound set of a beatoraja theme (guide-pg.wav to guide-ms.wav). A
+            set without them plays nothing. It follows the key sound volume and is read as the play starts.
+          </dd>
           <dt>Long notes</dt>
           <dd>
             LEGACY NOTE turns charge notes into normal notes, LN REMOVE turns every long note into its head, and ADD LN
@@ -418,6 +423,15 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>How bright the lanes are, in percent. Notes, bar lines and covers keep their own. Changes live.</dd>
           <dt>Judgment display (AC)</dt>
           <dd>OFF draws no judgment or combo on the play screen. Changes live.</dd>
+          <dt>Judge detail (built-in skins)</dt>
+          <dd>
+            Shows a judgment's timing above it on the built-in skins: FAST or SLOW, or the offset in milliseconds
+            (negative early, positive late). Changes live.
+          </dd>
+          <dt>Judge detail: keys and scratch apart</dt>
+          <dd>Shows the scratch's last timing and the keys' side by side, so one does not replace the other.</dd>
+          <dt>Judgment counts (built-in skins)</dt>
+          <dd>Off draws no judgment counts, FAST / SLOW counts or timing meter during the play. Changes live.</dd>
           <dt>Judgment position (built-in skins, %)</dt>
           <dd>
             Moves the built-in skins' judgment and combo up (-) or down (+) the lanes, in percent of their height. They

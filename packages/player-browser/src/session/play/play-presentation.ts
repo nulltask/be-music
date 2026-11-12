@@ -6,10 +6,26 @@
  * what the second sought shows.
  */
 
+import { isScratch } from '@be-music/player-engine/lanes';
 import type { JudgmentKind } from '@be-music/player-engine/ruleset';
 import type { BeMusicLaneKind } from '@be-music/player-skin-sdk';
 import type { BeMusicJudgmentKind } from '../../skin/be-music/types.ts';
 import { LongNoteTracker } from './long-note-tracker.ts';
+
+/** A judgment's timing, kept for the judge detail: the signed offset (ms, > 0 late) and until when it shows. */
+export interface PlayJudgeTiming {
+  judge: JudgmentKind;
+  deltaMs: number;
+  until: number;
+}
+
+/** The timings a side's judge detail reads: the plate's own judgment's, and the last of the keys and of the scratch. */
+export interface PlayJudgeSideTimings {
+  /** The timing of the judgment on the plate; absent when that judgment has none (a miss, an AUTO hit, a mine). */
+  last?: PlayJudgeTiming;
+  keys?: PlayJudgeTiming;
+  scratch?: PlayJudgeTiming;
+}
 
 /** One play side's judgment plate: the judgment shown, until when (chart seconds), and the combos it shows. */
 export interface PlayJudgeSideState {
@@ -17,6 +33,35 @@ export interface PlayJudgeSideState {
   until: number;
   combo: number;
   courseCombo?: number;
+  timings?: PlayJudgeSideTimings;
+}
+
+/**
+ * A side's timings after a judgment on `channel`: the plate's own becomes this judgment's (none when it is untimed),
+ * and a timed one also becomes the last of its lane class, the scratch's or the keys'.
+ */
+export function advanceJudgeSideTimings(
+  previous: PlayJudgeSideTimings | undefined,
+  judge: JudgmentKind,
+  channel: string | undefined,
+  deltaMs: number | undefined,
+  until: number,
+): PlayJudgeSideTimings | undefined {
+  if (deltaMs === undefined || !Number.isFinite(deltaMs)) {
+    if (previous?.keys === undefined && previous?.scratch === undefined) return undefined;
+    return {
+      ...(previous.keys ? { keys: previous.keys } : {}),
+      ...(previous.scratch ? { scratch: previous.scratch } : {}),
+    };
+  }
+  const timing: PlayJudgeTiming = { judge, deltaMs, until };
+  const lane = channel !== undefined && isScratch(channel) ? 'scratch' : 'keys';
+  return {
+    ...(previous?.keys ? { keys: previous.keys } : {}),
+    ...(previous?.scratch ? { scratch: previous.scratch } : {}),
+    last: timing,
+    [lane]: timing,
+  };
 }
 
 /** Play-clock ms of the once-per-play moments, latched as they happen. */

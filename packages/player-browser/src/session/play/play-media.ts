@@ -24,7 +24,9 @@ import type {
   CompressorParams,
   TunableCompressor,
 } from '../../runtime/audio-bus.ts';
-import type { PlayAudioHandle } from '../../runtime/audio-service.ts';
+import type { AudioService, PlayAudioHandle } from '../../runtime/audio-service.ts';
+import type { GuideSound } from '@be-music/player-engine';
+import type { SystemSound } from '@be-music/player-scene-model';
 import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { createPlayAudioGraph } from '../../runtime/play-audio-graph.ts';
 import { chartToElapsedSeconds, resolveSamplePlaybackRate, stretchSlicePlayback } from '../../runtime/play-tempo.ts';
@@ -50,6 +52,7 @@ export interface PlayMediaContext {
       | 'audio'
       | 'judgeTimingAutoAdjust'
       | 'replay'
+      | 'guideSounds'
     >
   >;
   readonly chart: LibraryChart | undefined;
@@ -175,6 +178,10 @@ export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
       // The chart played last keeps its decodes in the audio service, so a quick retry skips decoding them.
       ...(ctx.options.audio !== undefined ? { sampleCache: ctx.options.audio.chartSamples } : {}),
     }));
+  // GUIDE SE: the sound set's judgment sounds. A SILENT play has no sound of its own, so none of these either.
+  const guideSounds = silent
+    ? new Map<GuideSound, AudioBuffer>()
+    : await decodeGuideSounds(ctx.options.audio, ctx.options.guideSounds);
   // bmson slices index into the stretched samples (a bmson chart has no NONSTOP stages: one rate).
   if (stretched && ctx.bmsonSlicePlayback !== undefined) {
     ctx.bmsonSlicePlayback = stretchSlicePlayback(ctx.bmsonSlicePlayback, ctx.playbackTempo ?? ctx.tempo);
@@ -199,6 +206,7 @@ export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
       wavCmdVolumeMultipliers: ctx.wavCmdVolumeMultipliers,
       bmsonSlicePlayback: ctx.bmsonSlicePlayback,
       ...(ctx.nonstopMixer !== undefined ? { stageMixer: ctx.nonstopMixer } : {}),
+      ...(guideSounds.size > 0 ? { guideSounds } : {}),
       playbackRate: samplePlaybackRate(ctx),
     });
   }
@@ -355,4 +363,24 @@ export function disposeBGAVideos(ctx: {
   for (const handle of new Set(ctx.bgaVideos.values())) releaseVideo(handle);
   ctx.bgaVideos.clear();
   ctx.bgaActiveVideos = {};
+}
+
+/**
+ * The guide sounds decoded through the audio service: the ones the sound set has and that decode. None without a
+ * service or without sounds.
+ */
+export async function decodeGuideSounds(
+  audio: Pick<AudioService, 'decodeSound'> | undefined,
+  sounds: PlaySessionOptions['guideSounds'],
+): Promise<Map<GuideSound, AudioBuffer>> {
+  const decoded = new Map<GuideSound, AudioBuffer>();
+  if (audio === undefined || sounds === undefined) return decoded;
+  await Promise.all(
+    (Object.entries(sounds) as [GuideSound, SystemSound | undefined][]).map(async ([name, sound]) => {
+      if (sound === undefined) return;
+      const buffer = await audio.decodeSound(sound).catch(() => undefined);
+      if (buffer !== undefined) decoded.set(name, buffer);
+    }),
+  );
+  return decoded;
 }

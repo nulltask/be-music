@@ -16,7 +16,8 @@ export interface ResultKeyEvent extends ControlActionKeyEvent {
 
 /** What a key press asks of the result screen. */
 export type ResultKeyAction =
-  | { readonly type: 'retry' }
+  | { readonly type: 'retry'; readonly sameArrangement?: true }
+  | { readonly type: 'change-graph' }
   | { readonly type: 'leave' }
   | { readonly type: 'continue' }
   | { readonly type: 'save-replay'; readonly slot: number };
@@ -54,7 +55,8 @@ export function resultReplaySlotKey(
 
 /**
  * What a key press asks of the result screen by the player's keys (`actions`), in the order the screen takes them: a
- * retry (only when one is offered), leaving (Escape), the next step (Enter / Space) and a replay slot.
+ * retry, on a new arrangement or the same one (only when one is offered), the gauge graph's next gauge, leaving
+ * (Escape), the next step (Enter / Space) and a replay slot.
  */
 export function resolveResultKeyAction(
   event: ResultKeyEvent,
@@ -62,6 +64,9 @@ export function resolveResultKeyAction(
   actions: ControlActionMap = DEFAULT_CONTROL_ACTIONS.lr2,
 ): ResultKeyAction | undefined {
   if (retryOffered && isResultRetryKey(event, actions)) return { type: 'retry' };
+  if (retryOffered && !event.repeat && actions.is('result.retry-same', event))
+    return { type: 'retry', sameArrangement: true };
+  if (!event.repeat && actions.is('result.change-graph', event)) return { type: 'change-graph' };
   if (actions.is('result.leave', event)) return { type: 'leave' };
   if (actions.is('result.continue', event)) return { type: 'continue' };
   const slot = resultReplaySlotKey(event, actions);

@@ -327,7 +327,9 @@ export function resolveBeatorajaPlayNumber(id: number, input: BeatorajaPlayNumbe
     case SYNTHETIC_NUM_JUDGE_COMBO_3P:
       return input.plateCombos?.[2] ?? 0;
     case BEATORAJA_NUM.JUDGE_1P_OFFSET_MS:
-      return input.lastJudgeDeltaMs !== undefined ? Math.trunc(input.lastJudgeDeltaMs) : 0;
+      // beatoraja's `getRecentJudgeTiming` is the note's time minus the press's (`JudgeManager` L690), positive when
+      // early: the opposite sign of the offset kept here.
+      return input.lastJudgeDeltaMs !== undefined ? Math.trunc(-input.lastJudgeDeltaMs) || 0 : 0;
 
     // Past an LR2 negative-BPM reversal the readout holds the value at the reversal: LR2's event pump is frozen there
     // and never applies a later BPM event (the reverse scroll itself keeps following the tempo map).

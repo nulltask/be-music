@@ -8,6 +8,9 @@ import type { PlayOptions } from './options.ts';
 /** The display-only play options a running play follows live. */
 export const LIVE_DISPLAY_PLAY_OPTION_KEYS: readonly (keyof PlayOptions)[] = [
   'autoScratchNotes',
+  'judgeCounts',
+  'judgeDetail',
+  'judgeDetailSplit',
   'judgeDisplay',
   'judgePosition',
   'laneBrightness',

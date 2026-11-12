@@ -316,6 +316,12 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.isSupportedBeMusicSkinAPIVersion(skinSdkAPI.BE_MUSIC_SKIN_API_VERSION);
     },
   });
+  define('player-skin-sdk.formatJudgeDetail', {
+    run: () => {
+      skinSdkAPI.formatJudgeDetail('MS', 'GREAT', -12.4);
+      skinSdkAPI.formatJudgeDetail('FAST_SLOW', 'GOOD', 30);
+    },
+  });
   define('player-skin-sdk.resolveJudgeWordY', {
     run: () => {
       skinSdkAPI.resolveJudgeWordY(236, { top: 40, judgementY: 440, judgeOffsetY: 60 });

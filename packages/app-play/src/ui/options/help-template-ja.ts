@@ -144,6 +144,11 @@ export const OPTIONS_HELP_JA = html`
         <dd>1P 側のスクラッチを自動で処理します。</dd>
         <dt>Auto scratch 2P</dt>
         <dd>2P 側のスクラッチを自動で処理します。</dd>
+        <dt>GUIDE SE (beatoraja)</dt>
+        <dd>
+          判定ごとに音を鳴らします。beatoraja テーマのサウンドセットの音 (guide-pg.wav から guide-ms.wav)
+          を使い、セットにないときは鳴りません。キー音の音量に従い、プレイの開始時に読みます。
+        </dd>
         <dt>Long notes</dt>
         <dd>
           LEGACY NOTE はチャージノートを通常ノーツに、LN REMOVE はすべてのロングノートを始点だけにし、ADD LN / CN / HCN
@@ -391,6 +396,18 @@ export const OPTIONS_HELP_JA = html`
         <dd>レーンの明るさ (%)。ノーツ、小節線、カバーの明るさは変わりません。プレイ中にも変えられます。</dd>
         <dt>Judgment display (AC)</dt>
         <dd>OFF にすると、プレイ画面に判定文字とコンボを表示しません。プレイ中にも切り替えられます。</dd>
+        <dt>Judge detail (built-in skins)</dt>
+        <dd>
+          内蔵スキンで、判定文字の上にそのタイミングを表示します。FAST / SLOW か、ミリ秒のずれ (早いと負、遅いと正)
+          です。プレイ中にも切り替えられます。
+        </dd>
+        <dt>Judge detail: keys and scratch apart</dt>
+        <dd>スクラッチと鍵盤の最後のタイミングを横に並べて表示します。片方の判定でもう片方が消えません。</dd>
+        <dt>Judgment counts (built-in skins)</dt>
+        <dd>
+          オフにすると、プレイ中に判定数、FAST / SLOW
+          の数、タイミングのメーターを描きません。プレイ中にも切り替えられます。
+        </dd>
         <dt>Judgment position (built-in skins, %)</dt>
         <dd>
           内蔵スキンの判定文字とコンボを、レーンの高さに対する割合 (%) で上 (-) または下 (+) に動かします。

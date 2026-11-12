@@ -57,3 +57,23 @@ describe('resolveResultKeyAction', () => {
     expect(resolveResultKeyAction(press({ code: 'KeyN' }), true, actions)).toEqual({ type: 'continue' });
   });
 });
+
+describe('resolveResultKeyAction: retry on the same arrangement and the gauge graph', () => {
+  it('takes T as a retry on the same arrangement only when a retry is offered', () => {
+    expect(resolveResultKeyAction(press({ code: 'KeyT' }), true)).toEqual({ type: 'retry', sameArrangement: true });
+    expect(resolveResultKeyAction(press({ code: 'KeyT' }), false)).toBeUndefined();
+    expect(resolveResultKeyAction(press({ code: 'KeyT', repeat: true }), true)).toBeUndefined();
+    expect(resolveResultKeyAction(press({ code: 'KeyT', ctrlKey: true }), true)).toBeUndefined();
+  });
+
+  it('takes G as the gauge graph on both key maps, and beatoraja’s key 6 on its own', () => {
+    expect(resolveResultKeyAction(press({ code: 'KeyG' }), false)).toEqual({ type: 'change-graph' });
+    const beatoraja = resolveControlActions('beatoraja');
+    expect(resolveResultKeyAction(press({ code: 'KeyG' }), false, beatoraja)).toEqual({ type: 'change-graph' });
+    expect(resolveResultKeyAction(press({ code: 'KeyF', buttons: ['1P-key6'] }), false, beatoraja)).toEqual({
+      type: 'change-graph',
+    });
+    // LR2's lane keys all move the screen on.
+    expect(resolveResultKeyAction(press({ code: 'KeyF', buttons: ['1P-key6'] }), false)).toEqual({ type: 'continue' });
+  });
+});

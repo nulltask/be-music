@@ -8,6 +8,7 @@ import {
   punchScale,
   type BeMusicGameplayLayout,
   type BeMusicGameplayRuntime,
+  type BeMusicJudgeDetail,
 } from '@be-music/player-skin-sdk';
 import { addHUDText, addHUDNumber, type ChildPool } from '../pixi-kit/index.ts';
 import {
@@ -82,6 +83,25 @@ export function drawJudgements(
       },
       pool,
     );
+    // The judge detail above the word: FAST / SLOW or the offset, the keys' and the scratch's side by side when apart.
+    const details = display.details ?? [];
+    details.forEach((detail, index) => {
+      const spread = details.length > 1 ? (index - (details.length - 1) / 2) * JUDGE_DETAIL_SPREAD : 0;
+      addHUDText(
+        layer,
+        detail.lane === undefined ? detail.text : `${JUDGE_DETAIL_LANES[detail.lane]} ${detail.text}`,
+        display.x + spread,
+        wordY + display.lift - (display.labelled ? 44 : 22),
+        {
+          ...displayStyle(9, JUDGE_DETAIL_COLORS[detail.tone]),
+          letterSpacing: 1,
+          anchorX: 0.5,
+          anchorY: 0.5,
+          maxWidth: details.length > 1 ? JUDGE_DETAIL_SPREAD - 6 : display.maxWidth,
+        },
+        pool,
+      );
+    });
     const combo = resolveVisibleCombo(display.judge, display.combo);
     if (combo > 0) {
       addHUDNumber(
@@ -103,10 +123,25 @@ export function drawJudgements(
   }
 }
 
+/** The judge detail's colours: FAST and SLOW as the judge panel counts them, and white for a press on the note's time. */
+const JUDGE_DETAIL_COLORS = { fast: SYN_CYAN, slow: SYN_MAGENTA, just: SYN_WHITE } as const;
+/** The names the keys' and the scratch's details lead with when they are shown apart, and how far apart they sit. */
+const JUDGE_DETAIL_LANES = { keys: 'KEY', scratch: 'SCR' } as const;
+const JUDGE_DETAIL_SPREAD = 84;
+
 function resolveJudgeDisplays(
   runtime: Runtime,
   layout: BeMusicGameplayLayout,
-): Array<{ judge: string; combo: number | undefined; x: number; lift: number; maxWidth: number }> {
+): Array<{
+  judge: string;
+  combo: number | undefined;
+  x: number;
+  lift: number;
+  maxWidth: number;
+  details?: readonly BeMusicJudgeDetail[];
+  /** The side shows a play label (AUTO PLAY, REPLAY) above the word, which the detail keeps clear of. */
+  labelled?: boolean;
+}> {
   const centerOf = (side: '1P' | '2P'): number | undefined => {
     const bounds = layout.playfield.sides[side];
     return bounds ? (bounds.left + bounds.right) / 2 : undefined;
@@ -125,6 +160,8 @@ function resolveJudgeDisplays(
       x: centerOf(state.side) ?? fallbackX,
       lift: liftOf(state.side),
       maxWidth,
+      details: state.details,
+      labelled: resolveLanePlayLabel(runtime, state.side) !== undefined,
     }));
   }
   if (!runtime.lastJudge) return [];

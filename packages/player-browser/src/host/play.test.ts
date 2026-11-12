@@ -31,7 +31,7 @@ import { createDecideScene } from './decide.ts';
 import type { BeatorajaKit } from './family-kit.ts';
 import { resolveLR2LaneRect } from '../view/lr2/play-elements.ts';
 import { resolveLR2PlayTiming } from '../view/lr2/play-view.ts';
-import { createPlayScene, type PlaySceneOptions } from './play.ts';
+import { createPlayScene, resolveGuideSounds, type PlaySceneOptions } from './play.ts';
 
 const CHART: LibraryChart = {
   id: 'chart',
@@ -741,5 +741,19 @@ describe('createPlayScene with a beatoraja kit', () => {
     expect(() => scene.updateKit({ family: 'built-in', skin: synesthesiaSkin })).not.toThrow();
     scene.dispose();
     expect(scene.resolved).toBeUndefined();
+  });
+});
+
+describe('resolveGuideSounds', () => {
+  it('names a sound set’s guide sounds by beatoraja’s judges, leaving out the ones it lacks', () => {
+    expect(
+      resolveGuideSounds({
+        guidePG: { path: 'sound/guide-pg.wav' },
+        guideMS: { path: 'sound/guide-ms.wav' },
+        playStop: { path: 'sound/playstop.wav' },
+      }),
+    ).toEqual({ PG: { path: 'sound/guide-pg.wav' }, MS: { path: 'sound/guide-ms.wav' } });
+    expect(resolveGuideSounds({})).toEqual({});
+    expect(resolveGuideSounds(undefined)).toEqual({});
   });
 });

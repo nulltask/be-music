@@ -25,7 +25,24 @@ export type SystemSoundSlot =
   | 'courseClear'
   | 'courseFail'
   | 'resultClose'
-  | 'courseClose';
+  | 'courseClose'
+  | GuideSoundSlot;
+
+/**
+ * beatoraja's GUIDE SE: one sound per judgment (`guide-pg.wav` to `guide-ms.wav`), PGREAT, GREAT, GOOD, BAD, a missed
+ * note (POOR) and an empty POOR (MISS).
+ */
+export type GuideSoundSlot = 'guidePG' | 'guideGR' | 'guideGD' | 'guideBD' | 'guidePR' | 'guideMS';
+
+/** The guide sound slots, in beatoraja's judge order. */
+export const GUIDE_SOUND_SLOTS: readonly GuideSoundSlot[] = [
+  'guidePG',
+  'guideGR',
+  'guideGD',
+  'guideBD',
+  'guidePR',
+  'guideMS',
+];
 
 /** Every system sound slot. */
 export const SYSTEM_SOUND_SLOTS: readonly SystemSoundSlot[] = [
@@ -47,6 +64,7 @@ export const SYSTEM_SOUND_SLOTS: readonly SystemSoundSlot[] = [
   'courseFail',
   'resultClose',
   'courseClose',
+  ...GUIDE_SOUND_SLOTS,
 ];
 
 /**
@@ -100,6 +118,12 @@ export interface BeatorajaThemeSounds {
     readonly folderOpen?: string;
     readonly folderClose?: string;
     readonly optionChange?: string;
+    readonly guidePG?: string;
+    readonly guideGR?: string;
+    readonly guideGD?: string;
+    readonly guideBD?: string;
+    readonly guidePR?: string;
+    readonly guideMS?: string;
   };
   readonly selectBGMPath?: string;
   /** The jingles read up front, by bytes. */
@@ -147,6 +171,7 @@ export function systemSoundSetFromBeatoraja(theme: BeatorajaThemeSounds): System
     ['courseFail', fromBytes(bgm.courseFail)],
     ['resultClose', fromBytes(bgm.resultClose)],
     ['courseClose', fromBytes(bgm.courseClose)],
+    ...GUIDE_SOUND_SLOTS.map((slot): [SystemSoundSlot, SystemSound | undefined] => [slot, fromPath(paths[slot])]),
   ]);
 }
 

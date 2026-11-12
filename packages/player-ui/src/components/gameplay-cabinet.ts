@@ -198,20 +198,25 @@ export function renderGameplayCabinet({
     </div>
     <div class="cab panel judge" part="judge" style=${place(cabinet.judge)}>
       ${cabinet.secondSide ? html`<span class="judge-owner eyebrow">1P JUDGE</span>` : nothing}
-      <dl class="counts">
-        ${counts.map(
-          ([label, value]) =>
-            html`<dt>${label}</dt>
-              <dd>${value}</dd>`,
-        )}
-      </dl>
-      <dl class="fast-slow">
-        <dt class="fast">FAST</dt>
-        <dd>${panels.judgments.fast}</dd>
-        <dt class="slow">SLOW</dt>
-        <dd>${panels.judgments.slow}</dd>
-      </dl>
-      ${renderTiming(r.lastJudgeDeltaMs, r.judgeWindows?.note.great.lateMs ?? 40)}
+      ${
+        // The player turned the judgment counts off: the panel keeps its frame.
+        r.hidesJudgeCounts
+          ? nothing
+          : html`<dl class="counts">
+                ${counts.map(
+                  ([label, value]) =>
+                    html`<dt>${label}</dt>
+                      <dd>${value}</dd>`,
+                )}
+              </dl>
+              <dl class="fast-slow">
+                <dt class="fast">FAST</dt>
+                <dd>${panels.judgments.fast}</dd>
+                <dt class="slow">SLOW</dt>
+                <dd>${panels.judgments.slow}</dd>
+              </dl>
+              ${renderTiming(r.lastJudgeDeltaMs, r.judgeWindows?.note.great.lateMs ?? 40)}`
+      }
     </div>
 
     <div class="cab panel bpm" part="bpm" style=${place(cabinet.bpm)}>

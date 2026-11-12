@@ -1,3 +1,5 @@
+import type { BeMusicJudgeDetail } from './types.ts';
+
 /**
  * Judgement word shared by the built-in skins. Like the arcade cabinet, a PERFECT (PGREAT) prints as a colour-cycling
  * GREAT; the steady GREAT keeps its skin colour, so the flicker alone tells the two apart.
@@ -40,4 +42,31 @@ export function resolveJudgeWordY(
   if (offset === 0) return skinY;
   if (offset > 0) return Math.max(skinY, Math.min(playfield.judgementY - JUDGE_WORD_MARGIN.bottom, skinY + offset));
   return Math.min(skinY, Math.max(playfield.top + JUDGE_WORD_MARGIN.top, skinY + offset));
+}
+
+/** How the judge detail reads a judgment's timing: `FAST` / `SLOW`, or the offset in milliseconds. */
+export type JudgeDetailMode = 'FAST_SLOW' | 'MS';
+
+/**
+ * A judgment's timing as the judge detail words it. `deltaMs` is the signed offset from the note's time, negative
+ * early and positive late.
+ *
+ * - `FAST_SLOW`: `FAST` or `SLOW`. A PERFECT and an offset of 0 show nothing, as a PGREAT has no FAST / SLOW.
+ * - `MS`: the offset rounded to a millisecond with its sign (`-12 ms`, `+7 ms`, `±0 ms`), for every judgment.
+ *
+ * `undefined` when there is nothing to show, and for an offset that is not finite.
+ */
+export function formatJudgeDetail(
+  mode: JudgeDetailMode,
+  judge: string,
+  deltaMs: number,
+): Pick<BeMusicJudgeDetail, 'text' | 'tone'> | undefined {
+  if (!Number.isFinite(deltaMs)) return undefined;
+  if (mode === 'FAST_SLOW') {
+    if (judge === 'PERFECT' || deltaMs === 0) return undefined;
+    return deltaMs < 0 ? { text: 'FAST', tone: 'fast' } : { text: 'SLOW', tone: 'slow' };
+  }
+  const rounded = Math.round(deltaMs);
+  if (rounded === 0) return { text: '±0 ms', tone: 'just' };
+  return rounded < 0 ? { text: `${rounded} ms`, tone: 'fast' } : { text: `+${rounded} ms`, tone: 'slow' };
 }

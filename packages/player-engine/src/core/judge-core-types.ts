@@ -311,6 +311,11 @@ export type JudgeCoreEffect =
       channel?: string;
       signedDeltaMs?: number;
       longNote?: boolean;
+      /**
+       * A POOR that takes no note: an empty POOR (a press near a note that does not consume it), or the one that sums
+       * up the notes a stopped play left. Absent for a POOR on a note.
+       */
+      poor?: 'empty' | 'remaining';
     }
   /** A no-TUI trace line. */
   | { kind: 'trace'; name: string; seconds: number; fields: readonly JudgeTraceField[] }

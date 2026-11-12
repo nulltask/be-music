@@ -9,7 +9,14 @@ import type {
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { ResultViewTiming } from '../../view/types.ts';
 import type { SessionKeyEvent } from '../session-scene.ts';
-import { QUICK_RETRY_HOLD_MS, RESULT_GRAPH_DRAW_MS, ResultSession, type ResultAudio } from './result-session.ts';
+import {
+  QUICK_RETRY_HOLD_MS,
+  RESULT_GRAPH_DRAW_MS,
+  ResultSession,
+  stepResultGaugeGraph,
+  type ResultAudio,
+  type ResultGaugeGraph,
+} from './result-session.ts';
 import { resolveControlActions, type ControlActionMap } from '../controls/control-actions.ts';
 
 const CHART: LibraryChart = {
@@ -93,12 +100,13 @@ function createSession(
     playChart?: ReturnType<typeof createEmptyJSON>;
     replaySlots?: () => readonly ReplaySlotState[];
     actions?: ControlActionMap;
+    gaugeGraphs?: () => readonly ResultGaugeGraph[];
   } = {},
 ) {
   const audio = createAudio();
   const on = {
     continue: vi.fn<() => void>(),
-    retry: vi.fn<() => void>(),
+    retry: vi.fn<(options?: { readonly sameArrangement?: boolean }) => void>(),
     saveReplay: vi.fn<(slot: number) => void>(),
   };
   const session = new ResultSession({
@@ -110,6 +118,7 @@ function createSession(
     timing: { inputDelayMs: 1500, fadeOutMs: 0, ...options.timing },
     ...(options.replaySlots !== undefined ? { replaySlots: options.replaySlots } : {}),
     ...(options.actions !== undefined ? { actions: options.actions } : {}),
+    ...(options.gaugeGraphs !== undefined ? { gaugeGraphs: options.gaugeGraphs } : {}),
     on: options.retry === false ? { continue: on.continue } : on,
   });
   return { session, audio, on };
@@ -433,6 +442,25 @@ describe('ResultSession: keys held as it leaves', () => {
     expect(on.retry).toHaveBeenCalledTimes(1);
   });
 
+  it('beatoraja’s key 7 asks for the same arrangement, key 5 for a new one, and key 5 wins when both are held', () => {
+    const leaveHolding = (...held: string[]) => {
+      const { session, on } = createSession({
+        run: 'single',
+        actions: resolveControlActions('beatoraja'),
+        timing: { fadeOutMs: 300, skipsResultSteps: true },
+      });
+      session.enter(0);
+      held.forEach((code, index) => session.handleKey(key(code, 1500 + index)));
+      session.handleKey(key('Enter', 1510));
+      session.frame(1900);
+      return on.retry;
+    };
+    // Key 7 is V and key 5 is C on the default lane keys.
+    expect(leaveHolding('v')).toHaveBeenCalledWith({ sameArrangement: true });
+    expect(leaveHolding('c')).toHaveBeenCalledWith(undefined);
+    expect(leaveHolding('v', 'c')).toHaveBeenCalledWith(undefined);
+  });
+
   it('retries on Escape held through the fade-out for QUICK_RETRY_HOLD_MS', () => {
     const { session, on } = createSession({
       run: 'single',
@@ -442,5 +470,84 @@ describe('ResultSession: keys held as it leaves', () => {
     session.handleKey(key('Escape', 1500));
     session.frame(1500 + QUICK_RETRY_HOLD_MS + 100);
     expect(on.retry).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ResultSession: retry on the same arrangement and the gauge graph', () => {
+  const graphs: ResultGaugeGraph[] = [
+    { type: 'EASY', history: [{ progress: 0, value: 20 }] },
+    { type: 'NORMAL', history: [{ progress: 0, value: 21 }] },
+    { type: 'HARD', history: [{ progress: 0, value: 100 }] },
+  ];
+
+  it('T asks the host for the same arrangement, R for a new one', () => {
+    const same = createSession({ run: 'single' });
+    same.session.enter(0);
+    expect(same.session.handleKey(key('t', 1600))).toBe(true);
+    same.session.frame(1700);
+    expect(same.on.retry).toHaveBeenCalledWith({ sameArrangement: true });
+    const fresh = createSession({ run: 'single' });
+    fresh.session.enter(0);
+    fresh.session.handleKey(key('r', 1600));
+    fresh.session.frame(1700);
+    expect(fresh.on.retry).toHaveBeenCalledWith(undefined);
+    // A run that offers no quick retry leaves T alone.
+    const course = createSession({ run: 'course' });
+    course.session.enter(0);
+    expect(course.session.handleKey(key('t', 1600))).toBe(false);
+  });
+
+  it('G steps the gauge graph through the ruleset’s gauges and back to the play’s own', () => {
+    const played = playResult({ gaugeType: 'NORMAL', gaugeHistory: [{ progress: 0, value: 55 }] });
+    const gaugeGraphs = vi.fn(() => graphs);
+    const { session } = createSession({ result: played, run: 'single', gaugeGraphs });
+    session.enter(0);
+    expect(session.frame(10).result).toBe(played);
+    expect(gaugeGraphs).not.toHaveBeenCalled();
+    expect(session.handleKey(key('g', 20))).toBe(true);
+    let shown = session.frame(30).result;
+    expect(shown.gaugeGraphType).toBe('HARD');
+    expect(shown.gaugeHistory).toEqual([{ progress: 0, value: 100 }]);
+    // The play's own gauge, value and lamp stay.
+    expect(shown.gaugeType).toBe('NORMAL');
+    expect(shown.gauge).toBe(played.gauge);
+    session.handleKey(key('g', 40));
+    shown = session.frame(50).result;
+    expect(shown.gaugeGraphType).toBe('EASY');
+    session.handleKey(key('g', 60));
+    // Back on the played gauge: the play's own history, not the re-simulated one.
+    expect(session.frame(70).result).toBe(played);
+    expect(gaugeGraphs).toHaveBeenCalledTimes(1);
+  });
+
+  it('beatoraja’s key 6 steps the graph, and a result without graphs leaves the key alone', () => {
+    const played = playResult({ gaugeType: 'NORMAL' });
+    const { session } = createSession({
+      result: played,
+      run: 'single',
+      actions: resolveControlActions('beatoraja'),
+      gaugeGraphs: () => graphs,
+    });
+    session.enter(0);
+    // Key 6 is F on the default lane keys.
+    expect(session.handleKey(key('f', 1600))).toBe(true);
+    expect(session.frame(1610).result.gaugeGraphType).toBe('HARD');
+    const none = createSession({ run: 'single' });
+    none.session.enter(0);
+    expect(none.session.handleKey(key('g', 20))).toBe(false);
+    expect(none.session.frame(30).result.gaugeGraphType).toBeUndefined();
+  });
+});
+
+describe('stepResultGaugeGraph', () => {
+  const graphs: ResultGaugeGraph[] = ['A', 'B', 'C'].map((type) => ({ type, history: [] }));
+
+  it('steps to the next gauge after the one shown, wrapping', () => {
+    expect(stepResultGaugeGraph(graphs, 'A', undefined)?.type).toBe('B');
+    expect(stepResultGaugeGraph(graphs, 'A', 'B')?.type).toBe('C');
+    expect(stepResultGaugeGraph(graphs, 'A', 'C')?.type).toBe('A');
+    // A played gauge that is not on the list (LR2's P-ATTACK) starts from the first.
+    expect(stepResultGaugeGraph(graphs, 'P-ATTACK', undefined)?.type).toBe('A');
+    expect(stepResultGaugeGraph([], 'A', undefined)).toBeUndefined();
   });
 });

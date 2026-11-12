@@ -391,6 +391,8 @@ function drawChartStack(
 /** The counts, FAST / SLOW, and where the last timed press landed between EARLY and LATE. */
 function drawJudge(ctx: CanvasRenderingContext2D, rect: BeMusicRect, runtime: BeMusicGameplayRuntime): void {
   panel(ctx, rect, runtime.secondPlayer ? '1P JUDGE' : 'JUDGE');
+  // The player turned the judgment counts off: the panel keeps its frame and its name.
+  if (runtime.hidesJudgeCounts) return;
   const counts: Array<[string, number]> = [
     ['PG', runtime.perfect ?? 0],
     ['GR', runtime.great ?? 0],

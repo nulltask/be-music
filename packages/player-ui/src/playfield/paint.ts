@@ -305,6 +305,8 @@ const JUDGMENT_FONT = 'bold 20px system-ui';
 const COMBO_FONT = '600 16px system-ui';
 const COMBO_OFFSET = 24;
 const COMBO_COLOR = '#e5efff';
+/** How far apart the keys' and the scratch's judge details sit when they are shown apart. */
+const JUDGE_DETAIL_SPREAD = 84;
 
 export function paintJudgmentDisplay(
   ctx: BeMusicPlayfieldPaintContext,
@@ -317,6 +319,14 @@ export function paintJudgmentDisplay(
       ctx.fillStyle = COMBO_COLOR;
       ctx.fillText(word.mode, word.x, (word.y ?? y) - 28);
     }
+    // The judge detail sits above the word, and above the play label when the side has one.
+    const details = word.details ?? [];
+    details.forEach((detail, index) => {
+      ctx.font = 'bold 10px sans-serif';
+      ctx.fillStyle = detail.color;
+      const spread = details.length > 1 ? (index - (details.length - 1) / 2) * JUDGE_DETAIL_SPREAD : 0;
+      ctx.fillText(detail.text, word.x + spread, (word.y ?? y) - (word.mode ? 40 : 24));
+    });
     ctx.font = JUDGMENT_FONT;
     ctx.fillStyle = word.color;
     ctx.fillText(word.text, word.x, word.y ?? y);

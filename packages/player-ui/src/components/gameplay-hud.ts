@@ -113,12 +113,17 @@ export class BeMusicGameplayHUDElement extends FrameElement<BeMusicDOMGameplayFr
     const { state: s, runtime: r, chart } = f;
     const { score, gauge, judgments, facts, totalNotes: total, seconds } = panels;
     return html`<be-music-score-summary exportparts="panel:score-panel" .data=${score}></be-music-score-summary>
-      <be-music-judgment-table
-        exportparts="panel:judgment-panel,table:judgment-table"
-        .data=${judgments}
-      ></be-music-judgment-table>
       ${
-        second
+        // The player turned the judgment counts off.
+        r.hidesJudgeCounts
+          ? nothing
+          : html`<be-music-judgment-table
+              exportparts="panel:judgment-panel,table:judgment-table"
+              .data=${judgments}
+            ></be-music-judgment-table>`
+      }
+      ${
+        second && !r.hidesJudgeCounts
           ? html`<be-music-judgment-table
               exportparts="panel:judgment-panel,table:judgment-table"
               .data=${second.judgments}

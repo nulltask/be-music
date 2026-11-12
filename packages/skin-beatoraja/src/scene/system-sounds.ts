@@ -19,6 +19,13 @@ export interface BeatorajaSystemSoundPaths {
   decide?: string;
   optionChange?: string;
   cancel?: string;
+  /** GUIDE SE: one sound per judgment, PGREAT to an empty POOR (`SystemSoundManager` `GUIDESE_*`). */
+  guidePG?: string;
+  guideGR?: string;
+  guideGD?: string;
+  guideBD?: string;
+  guidePR?: string;
+  guideMS?: string;
 }
 
 /**
@@ -73,6 +80,13 @@ const CUE_CANDIDATES: Readonly<Record<keyof BeatorajaSystemSoundPaths, readonly 
     'sound/change.ogg',
     'LR2files/Sound/lr2/o-change.wav',
   ],
+  // beatoraja reads its sound set's folder, then `defaultsound/` (`SystemSoundManager.getSoundPaths`).
+  guidePG: ['sound/guide-pg.wav', 'sound/guide-pg.ogg', 'defaultsound/guide-pg.wav', 'defaultsound/guide-pg.ogg'],
+  guideGR: ['sound/guide-gr.wav', 'sound/guide-gr.ogg', 'defaultsound/guide-gr.wav', 'defaultsound/guide-gr.ogg'],
+  guideGD: ['sound/guide-gd.wav', 'sound/guide-gd.ogg', 'defaultsound/guide-gd.wav', 'defaultsound/guide-gd.ogg'],
+  guideBD: ['sound/guide-bd.wav', 'sound/guide-bd.ogg', 'defaultsound/guide-bd.wav', 'defaultsound/guide-bd.ogg'],
+  guidePR: ['sound/guide-pr.wav', 'sound/guide-pr.ogg', 'defaultsound/guide-pr.wav', 'defaultsound/guide-pr.ogg'],
+  guideMS: ['sound/guide-ms.wav', 'sound/guide-ms.ogg', 'defaultsound/guide-ms.wav', 'defaultsound/guide-ms.ogg'],
 };
 
 /** The select screen's cue paths found in a theme's files; a cue without a file is left out. */

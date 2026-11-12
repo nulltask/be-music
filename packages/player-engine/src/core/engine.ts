@@ -15,6 +15,7 @@
  * `./signals`, `./lanes`, `./display` and `./ruleset` entries.
  */
 export * from './engine-types.ts';
+export * from './guide-sound.ts';
 export { autoPlay, manualPlay } from './play.ts';
 export { resolveChartRulesetFacts, resolvePlayChart } from './engine-preparation.ts';
 export { createTempoClock, type TempoClock, type TempoClockSegment } from './tempo-clock.ts';

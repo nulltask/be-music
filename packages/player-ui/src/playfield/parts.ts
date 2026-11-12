@@ -17,6 +17,11 @@ const BOMB_REACH = 26;
 /** How far above the judge line the judgment word's baseline sits, and the band the word and its combo take. */
 const JUDGMENT_OFFSET = 90;
 const JUDGMENT_ASCENT = 22;
+/** Room above the word for the play label and, above that, the judge detail. */
+const JUDGMENT_HEADROOM = 44;
+/** The judge detail's colours, and the names the keys' and the scratch's lead with when they are shown apart. */
+const JUDGE_DETAIL_COLORS = { fast: '#5b8cff', slow: '#ff6b7a', just: '#e5efff' } as const;
+const JUDGE_DETAIL_LANES = { keys: 'KEY', scratch: 'SCR' } as const;
 /** Baseline of the combo under the word, then the room its glyphs need below that. */
 const COMBO_OFFSET = 24;
 const COMBO_DESCENT = 6;
@@ -78,6 +83,14 @@ export function resolvePlayfieldParts(
         : {}),
       color: judgmentColor(side.judge, frame.nowMs),
       ...(keepsCombo(side.judge) && combo > 0 ? { combo } : {}),
+      ...(side.details?.length
+        ? {
+            details: side.details.map((detail) => ({
+              text: detail.lane === undefined ? detail.text : `${JUDGE_DETAIL_LANES[detail.lane]} ${detail.text}`,
+              color: JUDGE_DETAIL_COLORS[detail.tone],
+            })),
+          }
+        : {}),
     });
   }
   for (const side of ['1P', '2P'] as const) {
@@ -130,9 +143,9 @@ export function resolvePlayfieldParts(
     judgmentDisplay: {
       rect: rect(
         left,
-        minLineY - JUDGMENT_OFFSET - JUDGMENT_ASCENT - 28 + judgeOffsetY,
+        minLineY - JUDGMENT_OFFSET - JUDGMENT_ASCENT - JUDGMENT_HEADROOM + judgeOffsetY,
         width,
-        maxLineY - minLineY + JUDGMENT_ASCENT + COMBO_OFFSET + COMBO_DESCENT + 28,
+        maxLineY - minLineY + JUDGMENT_ASCENT + COMBO_OFFSET + COMBO_DESCENT + JUDGMENT_HEADROOM,
       ),
       data: { words, y: judgmentY },
     },

@@ -2,7 +2,7 @@ import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import { beforeEach, expect, test, vi } from 'vite-plus/test';
 import { loadPlaySamples } from '../../chart/play-audio.ts';
 import { createChartSampleCache, type ChartSampleCache } from '../../runtime/chart-sample-cache.ts';
-import { isSilentJudgeTimingPlay, prepareAudio, type PlayMediaContext } from './play-media.ts';
+import { decodeGuideSounds, isSilentJudgeTimingPlay, prepareAudio, type PlayMediaContext } from './play-media.ts';
 
 vi.mock('../../chart/play-audio.ts', () => ({ loadPlaySamples: vi.fn(async () => false) }));
 vi.mock('../../runtime/web-audio-session.ts', () => ({ createWebAudioSession: vi.fn(() => ({})) }));
@@ -76,4 +76,22 @@ test('keep-pitch decodes at the effective chart and player rate', async () => {
     tempo: 2.5,
     tempoPitchMode: 'keep-pitch',
   });
+});
+
+test('the guide sounds are decoded through the audio service: the ones the set has and that decode', async () => {
+  const buffer = (id: number) => ({ id }) as unknown as AudioBuffer;
+  const decodeSound = vi.fn(async (sound: { path?: string }) =>
+    sound.path === 'guide-pg.wav' ? buffer(1) : sound.path === 'guide-ms.wav' ? buffer(6) : undefined,
+  );
+  const decoded = await decodeGuideSounds(
+    { decodeSound },
+    { PG: { path: 'guide-pg.wav' }, GR: { path: 'missing.wav' }, MS: { path: 'guide-ms.wav' } },
+  );
+  expect([...decoded.keys()].sort()).toEqual(['MS', 'PG']);
+  expect(decoded.get('PG')).toEqual(buffer(1));
+  // A sound that fails to decode is left out, and no service or no sounds give none.
+  const failing = { decodeSound: vi.fn(async () => Promise.reject(new Error('decode'))) };
+  expect((await decodeGuideSounds(failing, { PG: { path: 'guide-pg.wav' } })).size).toBe(0);
+  expect((await decodeGuideSounds(undefined, { PG: { path: 'guide-pg.wav' } })).size).toBe(0);
+  expect((await decodeGuideSounds({ decodeSound }, undefined)).size).toBe(0);
 });

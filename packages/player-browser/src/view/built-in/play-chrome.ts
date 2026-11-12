@@ -13,11 +13,14 @@ import type { ChartPlayVariant } from '@be-music/chart-model';
 import { resolve____RankLabel } from '@be-music/player-engine/ruleset';
 import { resolveNonstopSongInfoState, type NonstopSongInfo } from '@be-music/player-engine/course';
 import {
+  formatJudgeDetail,
   resolveGameplayLaneGeometry,
   resolveGameplayLayout,
   resolveCabinetLayout,
+  type BeMusicJudgeDetail,
   type GameplayLayoutMode,
 } from '@be-music/player-skin-sdk';
+import type { PlayOptions } from '@be-music/player-scene-model';
 import { formatGaugeLabel, recentJudgeTimings, resolveGreenNumber } from '@be-music/player-scene-model';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 import type { PlaySessionOptions } from '../../session/play/play-options.ts';
@@ -193,7 +196,12 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     const state = ctx.play.judgeSideState[side];
     // LR2's SILENT automatic judge timing shows no judgment or combo.
     if (state.judge && seconds <= state.until && !hidesJudge) {
-      judgeSides.push({ side, judge: state.judge, combo: state.combo });
+      judgeSides.push({
+        side,
+        judge: state.judge,
+        combo: state.combo,
+        details: resolveJudgeDetails(ctx.playFrame?.playOptions, state.timings, seconds),
+      });
     }
   }
   const currentBeat = ctx.play.currentBeat(seconds);
@@ -278,6 +286,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     chart: ctx.play.chart,
     lastJudgeDeltaMs: play.lastJudgeDeltaMs,
     judgeTimings: recentJudgeTimings(play),
+    hidesJudgeCounts: ctx.playFrame?.playOptions.judgeCounts === false,
     minBPM: ctx.play.chartBPMRange?.minBPM,
     maxBPM: ctx.play.chartBPMRange?.maxBPM,
     mainBPM: ctx.play.chartBPMRange?.mainBPM,
@@ -297,6 +306,34 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     visibleMs,
     greenNumber: visibleMs === undefined ? undefined : resolveGreenNumber(visibleMs),
   };
+}
+
+/** No judge detail: one array for every judgment that shows none. */
+const NO_JUDGE_DETAILS: readonly BeMusicJudgeDetail[] = [];
+
+/**
+ * The judge detail a side's plate shows at chart time `seconds`: the timing of the judgment on the plate, or, with
+ * the keys and the scratch apart, the last timing of each that is still showing. None when the option is off.
+ */
+export function resolveJudgeDetails(
+  options: Pick<PlayOptions, 'judgeDetail' | 'judgeDetailSplit'> | undefined,
+  timings: PlayfieldRuntime['judgeSideState']['1P']['timings'],
+  seconds: number,
+): readonly BeMusicJudgeDetail[] {
+  const mode = options?.judgeDetail ?? 'OFF';
+  if (mode === 'OFF' || timings === undefined) return NO_JUDGE_DETAILS;
+  if (!options?.judgeDetailSplit) {
+    const detail = timings.last && formatJudgeDetail(mode, timings.last.judge, timings.last.deltaMs);
+    return detail ? [detail] : NO_JUDGE_DETAILS;
+  }
+  const details: BeMusicJudgeDetail[] = [];
+  for (const lane of ['scratch', 'keys'] as const) {
+    const timing = timings[lane];
+    if (timing === undefined || seconds > timing.until) continue;
+    const detail = formatJudgeDetail(mode, timing.judge, timing.deltaMs);
+    if (detail) details.push({ ...detail, lane });
+  }
+  return details.length > 0 ? details : NO_JUDGE_DETAILS;
 }
 
 /**

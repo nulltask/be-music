@@ -272,12 +272,30 @@ export interface BeMusicGameplayLayout {
   bga: BeMusicRect | undefined;
 }
 
+/** How a judgment's timing reads: early, late, or on the note's time. */
+export type BeMusicJudgeDetailTone = 'fast' | 'slow' | 'just';
+
+/**
+ * A judgment's timing as the player asked to see it beside the judgment: `FAST` / `SLOW`, or the offset in
+ * milliseconds. `lane` is set when the keys' and the scratch's timing are shown apart.
+ */
+export interface BeMusicJudgeDetail {
+  text: string;
+  tone: BeMusicJudgeDetailTone;
+  lane?: 'keys' | 'scratch';
+}
+
 /** One side's recent judgement. */
 export interface BeMusicJudgmentState {
   side: BeMusicSide;
   /** PERFECT / GREAT / GOOD / BAD / POOR. Empty when no recent judge. */
   judge?: string;
   combo?: number;
+  /**
+   * The judge detail to draw with the judgment, when the player turned it on: none, one, or the keys' and the
+   * scratch's. Absent or empty means nothing is drawn. A skin draws each `text` in its tone's colour.
+   */
+  details?: readonly BeMusicJudgeDetail[];
 }
 
 /** The 2P player's live values in a two-player play (LR2 BATTLE): its own score, combo and gauge. */
@@ -409,6 +427,11 @@ export interface BeMusicGameplayRuntime {
    * {@link lastJudgeDeltaMs}.
    */
   judgeTimings?: readonly BeMusicJudgmentTiming[];
+  /**
+   * `true` when the player turned the judgment counts off: a skin draws no count of PGREAT to POOR, no FAST / SLOW
+   * count and no timing meter during the play. Absent means they are drawn.
+   */
+  hidesJudgeCounts?: boolean;
   /** SUDDEN+ / HIDDEN+ / LIFT per play side, as fractions of the lane height. */
   laneCovers?: readonly BeMusicLaneCover[];
   /**

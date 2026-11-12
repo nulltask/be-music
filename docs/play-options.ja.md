@@ -208,9 +208,28 @@ Options ダイアログの View タブの Effects に、AC 34 の詳細オプシ
 
 出典: AC 34 [詳細オプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。[#1136](https://github.com/nulltask/be-music/issues/1136) と [#1135](https://github.com/nulltask/be-music/issues/1135) で追跡しています。
 
+## 判定の詳細と判定数の表示
+
+View タブの Effects ページにある 3 つの設定で、内蔵スキンに判定のタイミングを表示します。どれもプレイ中に反映し、記録は変わりません。
+
+- **Judge detail (built-in skins)**: **OFF**（既定）、**FAST / SLOW**、**±ms** のいずれかです。判定文字の上に、判定パネルが FAST と SLOW を数えるときの色で描きます。
+  - **FAST / SLOW** は、早い打鍵を FAST、遅い打鍵を SLOW と表示します。PGREAT と、ノーツの時刻ちょうどの打鍵には何も表示しません。
+  - **±ms** は、タイミングのある判定すべて（PGREAT を含む）について、ずれをミリ秒に丸めて表示します。早いと負、遅いと正で、EARLY–LATE のメーターやタイミンググラフと同じ符号です。
+  - タイミングのない判定（見逃し、AUTO の打鍵、地雷）には表示しません。
+- **Judge detail: keys and scratch apart**: スクラッチの最後のタイミングと鍵盤の最後のタイミングを、`SCR` と `KEY` として横に並べて表示します。それぞれ自分の判定が表示されている間だけ出るので、スクラッチの判定で鍵盤の表示が消えません。
+- **Judgment counts (built-in skins)**: オフにすると、プレイ中に PGREAT から POOR までの判定数、FAST / SLOW の数、EARLY–LATE のメーターを描きません。判定パネルの枠は残ります。リザルト画面は変わりません。
+
+出典と、出典からはわからない点:
+
+- AC 34 の詳細オプションには「判定タイミング表示位置」（表示の有無と位置）、「判定タイミング分割表示」（鍵盤とスクラッチで分割）、「判定の数リアルタイム表示」（プレー中の判定の数）があります（[オプションのページ](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)）[V]。ページには選択肢、位置、画像が載っていないため、ここでの配置と文言は Be-Music 独自のものです [C]。
+- beatoraja では、最初と最後の 2 つはプレイヤーの設定ではなく標準のプレイスキンのオプションです。**Judge Detail**（Off、EARLY/LATE、+-ms）と **Judge Count**（Off、On）です。beatoraja スキンは自分のオプションのままで、LR2 スキンにはどちらもありません。
+- beatoraja スキンの判定タイミングの数値（525）を、beatoraja と同じ符号（早いと正）にしました。`JudgeManager` はノーツの時刻から打鍵の時刻を引いた値を持ちます（[L690](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L690)、[L719-L721](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L719-L721)）[V]。これまでは逆の符号で表示していました。
+
+FAST と SLOW の数え方は変わりません。どのルールでも GREAT と GOOD だけを数えます。[#1134](https://github.com/nulltask/be-music/issues/1134) で追跡しています。
+
 ## プレイ中に反映する表示オプション
 
-プレイはオプションを開始時に読みます。描画だけを変えるオプションはプレイ中にも追従し、Options ダイアログで変えると次のフレームから反映します。対象は、オートスクラッチのノーツ表示、レーンの明るさ、判定文字の表示と位置、判定範囲、処理済みノーツ、スコアターゲットとその割合、LR2 マニアの描画オプション（ACCELERATION から SIDEJUMP まで）です。一覧は `@be-music/player-scene-model` の `LIVE_DISPLAY_PLAY_OPTION_KEYS` にあります。変更は、プレイ中に反映するほかのオプション（ハイスピード、カバー、LIFT、判定タイミング）と同じく、譜面時刻とともにリプレイの `play.optionChanges` に記録します。それ以外のオプションは、LR2 の譜面生成と GAMBOL を含めて、プレイ開始時のままです。
+プレイはオプションを開始時に読みます。描画だけを変えるオプションはプレイ中にも追従し、Options ダイアログで変えると次のフレームから反映します。対象は、オートスクラッチのノーツ表示、レーンの明るさ、判定文字の表示と位置、判定の詳細と判定数の表示、判定範囲、処理済みノーツ、スコアターゲットとその割合、LR2 マニアの描画オプション（ACCELERATION から SIDEJUMP まで）です。一覧は `@be-music/player-scene-model` の `LIVE_DISPLAY_PLAY_OPTION_KEYS` にあります。変更は、プレイ中に反映するほかのオプション（ハイスピード、カバー、LIFT、判定タイミング）と同じく、譜面時刻とともにリプレイの `play.optionChanges` に記録します。それ以外のオプションは、LR2 の譜面生成と GAMBOL を含めて、プレイ開始時のままです。
 
 ## ANY KEY
 
@@ -274,6 +293,26 @@ beatoraja のリプレイは実効アルゴリズムを `play.judgeAlgorithm` �
 リプレイには `play.options.classicHiSpeed` または `play.options.normalHiSpeedLevel` と `normalHiSpeedProfile: "AC32-measured"`、選択したハイスピード、OFF の HS-FIX を記録します。プレイ中の段階の変更は `play.optionChanges` に、実際の描画速度はリプレイの表示設定に記録します。どちらのモードにも専用のスキン表示はありません。どちらも通常の表示速度の設定で、スコアの記録条件は変更しません。
 
 参照元：AC 34 の[スピードオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option_speed.html)。対応 Issue は [#734](https://github.com/nulltask/be-music/issues/734) と [#735](https://github.com/nulltask/be-music/issues/735) です。
+
+## GUIDE SE
+
+Play タブの Assist ページにある **GUIDE SE (beatoraja)** は、beatoraja の `isGuideSE` と同じく、判定ごとにサウンドセットの音を鳴らします。どのルールでも使え、プレイの開始時に読みます。beatoraja がアシストのフラグを立てないのと同じく、アシスト区分は付きません。設定は保存され、プレイはリプレイのオプションのスナップショットに記録します。
+
+| 音             | 判定                                              |
+| -------------- | ------------------------------------------------- |
+| `guide-pg.wav` | PGREAT                                            |
+| `guide-gr.wav` | GREAT                                             |
+| `guide-gd.wav` | GOOD                                              |
+| `guide-bd.wav` | BAD                                               |
+| `guide-pr.wav` | POOR（見逃したノーツ）                            |
+| `guide-ms.wav` | 空 POOR（ノーツの近くで、ノーツを消費しない打鍵） |
+
+- **音の出どころ。** beatoraja テーマのサウンドセットにある 6 つのファイルです。`sound/` フォルダ、次に `defaultsound/` を、`.wav` か `.ogg` で探します（[`SystemSoundManager` L148-L153](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/SystemSoundManager.java#L148-L153)）[V]。セットにないファイルは鳴りません。beatoraja も見つかったファイルだけを登録します（[`BMSPlayer` L398-L410](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L398-L410)）。LR2 のサウンドセットにはガイド音がなく、Be-Music にも同梱していないため、LR2 スキンや内蔵スキンでのプレイは、beatoraja テーマが有効でない限り無音です。
+- **鳴るタイミング。** すべての判定で、エンジンが判定した時点で鳴らします。判定と同時に鳴り、1 フレーム遅れることはありません。AUTO プレイは各ノーツで PGREAT の音を鳴らし、リプレイはプレイしたとおりに鳴ります。beatoraja の `JudgeManager` がモードに関係なく判定ごとに鳴らすためです（[L694](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L694)）[V]。地雷と、届く範囲にノーツがない打鍵は判定を出さないので、beatoraja と同じく鳴りません。
+- **音量。** キーバスに流すので、**Key sound (%)** とマスター音量に従います。beatoraja がガイド音をキー音と並べて登録するのに合わせています [I]。
+- **再現していない点。** beatoraja は、見逃したチャージノートの始点と終点で POOR の音を 2 回鳴らします。Be-Music のエンジンは終点の見逃しを判定の通知なしで処理するため、1 回だけ鳴ります。LR2 の SILENT（自動判定タイミング）は音を読み込まないので、ガイド音も鳴りません。
+
+[#1128](https://github.com/nulltask/be-music/issues/1128) で追跡しています。
 
 ## BPM GUIDE
 
@@ -478,6 +517,26 @@ Options ダイアログ はどのルールでも **Seed 1P / Seed 2P (-1=random)
 **Reuse previous arrangement** と **New arrangement** ボタンはどのルールでも表示します。Reuse は、リプレイ・コース・NONSTOP を除く直前のプレイを対象に、そのレーンオプション（Random 1P / 2P、シード、Fixed key、DP flip、H-RANDOM のしきい値、Long notes）を選択します。次に同じ譜面をプレイすると、beatoraja の譜面オプションの再現が譜面のレーンオプション・シード・分岐を復元するのと同様に、記録したレーンと `#RANDOM` の結果をそのまま使い、入力は通常どおり受け付けて新しいリプレイを記録します。これらのオプションを変更するか **New arrangement** を押すと再利用を解除し、New arrangement は両側のシードも -1 に戻します。別の譜面のプレイには影響しません。再利用には直前のプレイと同じ判定ルールが必要です。ほかのルールでは何も選択せず、ほかのルールで再利用の配置をプレイした場合は「The previous arrangement was played under other judgment rules.」というエラーにします。譜面のハッシュが異なる配置を再利用した場合も明示的にエラーにします。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
 参照元：beatoraja 0.8.9 の [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java) と [`Randomizer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Randomizer.java)。対応 Issue は [#721](https://github.com/nulltask/be-music/issues/721) です。
+
+## リザルト画面: 同じ配置でもう一度、ゲージグラフの切り替え
+
+beatoraja のリザルト画面のキー 2 つ（[`MusicResult` L214-L246](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L214-L246)、[L267-L280](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L267-L280)）[V] を、リザルト画面の操作として追加しました。どちらのキーマップでも使え、Keys で割り当てを変えられます。
+
+**Retry (same arrangement)**（`result.retry-same`、**T**）は、いま終えたプレイと同じノーツ配置（レーンと `#RANDOM` の結果）でその譜面をもう一度プレイします。入力は実際の操作で、新しいリプレイを記録します。**Retry**（`result.retry`、R）はこれまでどおり新しい配置を引きます。
+
+- beatoraja のキーマップでは、画面が閉じる時点で 7 鍵を押していれば同じ配置、5 鍵なら新しい配置です。両方押していれば 5 鍵が優先されます（beatoraja がキーを順に読むため）。これまではどちらも通常のリトライでした。
+- アシストを使ったプレイは、beatoraja と同じく新しい配置でプレイし直します（「アシストモード時は同じ譜面でリプレイできません」）。ここでは、スコアが更新されないプレイ（アシスト区分が LIGHT ASSIST か ASSIST、または記録を残さないプレイ）が該当します。
+- リプレイ再生のリザルトと AUTO プレイのリザルトには繰り返す配置がないので、このキーは R と同じ動作になります。リザルト画面で判定ルールを変えた場合も同じです。配置は、記録したときのルールでしか繰り返せないためです。
+- リトライできる場面でだけ使えます。単曲プレイが対象で、コースのステージやコースのリザルトでは使えません。
+
+**Gauge graph**（`result.change-graph`、**G**。beatoraja のキーマップでは 6 鍵も）は、ゲージグラフをそのプレイのルールの次のゲージに切り替えます。ルールごとの順で、最後まで行くと先頭に戻ります。beatoraja のルールでは ASSIST EASY から HAZARD、LR2 では EASY から DEATH、`____` では ASSISTED EASY から EX-HARD です。ゲージの値、ランプ、判定数はプレイのままで、変わるのはグラフだけです。内蔵、LR2、beatoraja のどのリザルト画面でも切り替わります。プレイしたゲージに戻ると、プレイ自身のグラフを表示します。
+
+- beatoraja はプレイ中にすべてのゲージを記録し、選ばれたゲージの記録を描きます。Be-Music はプレイに必要なゲージしか動かさないため、ほかのゲージのグラフはリプレイから再シミュレーションします（`@be-music/player-engine/replay` の `resolveReplayGaugeHistories`）。各ゲージを単独で、それぞれの開始値から動かします。シミュレーションは決定的なので、そのゲージでプレイしたときに描かれるグラフと同じになります。
+- ゲージが尽きて止まったプレイでは、どのグラフもそこで終わります。beatoraja は残りを 0 で埋めますが、ここではグラフを止めます [I]。
+- ゲージの自動切り替えを使ったプレイは、キーを押すまで、その時点で有効だったゲージに沿った自分のグラフを表示します。切り替えたあとのグラフは、それぞれ 1 つのゲージのものです。
+- コースでは使えません。ステージのほかのゲージは、記録されていない値から始まるためです。beatoraja はコースで段位ゲージ 3 種を切り替えます。LR2 の P-ATTACK と G-ATTACK は並びにないため、これらでプレイした場合は先頭のゲージから切り替わります。
+
+[#1133](https://github.com/nulltask/be-music/issues/1133) で追跡しています。
 
 ## SCATTER
 

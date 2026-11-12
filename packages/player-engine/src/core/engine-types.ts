@@ -27,6 +27,7 @@ import { type ReplayRecordingOptions } from '../replay/recorder.ts';
 import type { BeMusicReplay, ReplayCourseStage, ReplayInputEvent, ReplayInputSource } from '../replay/format.ts';
 import type { ReplayTempoChange } from '../replay/view.ts';
 import { type PreparedPlaybackChartData } from './bootstrap.ts';
+import type { GuideSound } from './guide-sound.ts';
 
 /**
  * Public types of the playback engine: options, runtimes, the audio-session contract and the summary.
@@ -575,6 +576,11 @@ export interface AudioSession {
   getActiveAudioFiles?: () => string[];
   getActiveAudioVoiceCount?: () => number;
   triggerEvent?: (event: BeMusicEvent) => void;
+  /**
+   * Plays the guide sound of a judgment (beatoraja's GUIDE SE), at once. Present only on a session that has the sound
+   * set's guide sounds and a play that turned them on; a sound the set lacks plays nothing.
+   */
+  playGuideSound?: (sound: GuideSound) => void;
   /**
    * Plays `event`'s sound as if it had started `offsetSeconds` ago, for a play that seeks (`PlayerOptions.startAtSeconds`,
    * a `seek` command). A sound shorter than the offset plays nothing. Without it, sounds that started before the second

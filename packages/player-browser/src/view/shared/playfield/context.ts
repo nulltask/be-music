@@ -55,6 +55,13 @@ export type RuntimeMineNote = TimedLandmineNote;
  * effects and bombs, the BGA's timelines and textures, the clocks, the pause and the exit fade. The play session
  * (`PlaySession`) is one; the view reads it and writes only the lanes it lays out and the BGA videos it plays.
  */
+/** A judgment's timing on a side's plate: the signed offset (ms, > 0 late) and until when it shows (chart seconds). */
+export interface JudgeSideTiming {
+  judge: JudgmentKind;
+  deltaMs: number;
+  until: number;
+}
+
 export interface PlayfieldRuntime {
   /** Where the play skin is moved and how far it is scaled (LR2's 1 / 2 + the arrows); where it is drawn without one. */
   readonly skinAdjust?: { readonly x: number; readonly y: number; readonly scale: number };
@@ -92,7 +99,14 @@ export interface PlayfieldRuntime {
   readonly lastJudgeAt: number | undefined;
   readonly judgeSideState: Record<
     '1P' | '2P',
-    { judge: JudgmentKind | ''; until: number; combo: number; courseCombo?: number }
+    {
+      judge: JudgmentKind | '';
+      until: number;
+      combo: number;
+      courseCombo?: number;
+      /** The timings the judge detail reads: the plate's own judgment's, and the last of the keys and of the scratch. */
+      timings?: { last?: JudgeSideTiming; keys?: JudgeSideTiming; scratch?: JudgeSideTiming };
+    }
   >;
   readonly judgeWindows: BeMusicJudgeWindows | undefined;
   readonly lastImpulseAt: number | undefined;

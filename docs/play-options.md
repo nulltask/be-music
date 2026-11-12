@@ -208,9 +208,28 @@ Two of AC 34's detail options sit in the Options dialog's View tab, under Effect
 
 Source: AC 34 [detail options](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html). Tracked in [#1136](https://github.com/nulltask/be-music/issues/1136) and [#1135](https://github.com/nulltask/be-music/issues/1135).
 
+## Judge detail and judgment counts
+
+Three settings on the View tab's Effects page show a judgment's timing on the built-in skins. All apply live and change no record.
+
+- **Judge detail (built-in skins)**: **OFF** (the default), **FAST / SLOW** or **±ms**. It is drawn above the judgment, in the colours the judge panel counts FAST and SLOW in.
+  - **FAST / SLOW** words an early press FAST and a late one SLOW. A PGREAT and a press on the note's time show nothing.
+  - **±ms** shows the offset rounded to a millisecond for every timed judgment, a PGREAT included: negative when early, positive when late, the sign of the EARLY–LATE meter and of the timing graph.
+  - A judgment without a timing (a missed note, an AUTO hit, a mine) shows no detail.
+- **Judge detail: keys and scratch apart**: the detail shows the scratch's last timing and the keys' side by side (`SCR` and `KEY`), each for as long as its own judgment would show, so a scratch judgment does not replace the keys' reading.
+- **Judgment counts (built-in skins)**: off draws no count of PGREAT to POOR, no FAST / SLOW count and no EARLY–LATE meter during the play. The judge panel keeps its frame. The result screen is unchanged.
+
+Sources and what they leave open:
+
+- AC 34's detail options list 判定タイミング表示位置 (whether the timing is shown, and where), 判定タイミング分割表示 (keys and scratch shown apart) and 判定の数リアルタイム表示 (the counts during play) on its [options page](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html) [V]. The page lists no choices, positions or pictures, so the placement and the wording here are Be-Music's own [C].
+- beatoraja has the first and the last as options of its stock play skin, not of the player: **Judge Detail** (Off, EARLY/LATE, +-ms) and **Judge Count** (Off, On). A beatoraja skin keeps its own, and an LR2 skin has neither.
+- A beatoraja skin's judge timing number (525) now has beatoraja's sign, positive when early: `JudgeManager` keeps the note's time minus the press's ([L690](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L690), [L719-L721](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L719-L721)) [V]. It read with the opposite sign before.
+
+The FAST and SLOW counts are unchanged: GREAT and GOOD only, under every ruleset. Tracked in [#1134](https://github.com/nulltask/be-music/issues/1134).
+
 ## Live display options
 
-A play reads its options when it starts. The ones that only change what is drawn are also followed during the play: changing one in the Options dialog takes effect on the next frame. They are the auto scratch note display, lane brightness, judgment display and position, the judge area, mark processed notes, the score target and its rate, and LR2's mania drawing options (ACCELERATION to SIDEJUMP); `LIVE_DISPLAY_PLAY_OPTION_KEYS` in `@be-music/player-scene-model` lists them. A change is recorded in the replay's `play.optionChanges` at its chart time, like the other options a play takes live (hi-speed, covers, LIFT, judge timing). Every other option, including LR2's chart generators and GAMBOL, stays as the play started.
+A play reads its options when it starts. The ones that only change what is drawn are also followed during the play: changing one in the Options dialog takes effect on the next frame. They are the auto scratch note display, lane brightness, judgment display and position, the judge detail and the judgment counts, the judge area, mark processed notes, the score target and its rate, and LR2's mania drawing options (ACCELERATION to SIDEJUMP); `LIVE_DISPLAY_PLAY_OPTION_KEYS` in `@be-music/player-scene-model` lists them. A change is recorded in the replay's `play.optionChanges` at its chart time, like the other options a play takes live (hi-speed, covers, LIFT, judge timing). Every other option, including LR2's chart generators and GAMBOL, stays as the play started.
 
 ## ANY KEY
 
@@ -274,6 +293,26 @@ Under every ruleset, the Options dialog offers **CLASSIC HI-SPEED** and **Normal
 Replays store `play.options.classicHiSpeed` or `play.options.normalHiSpeedLevel` with `normalHiSpeedProfile: "AC32-measured"`, the selected hi-speed and HS-FIX OFF; level changes during play go to `play.optionChanges` and the drawn speed to the replay view. Neither mode has a dedicated skin readout. Both are ordinary visual-speed settings and change no score eligibility.
 
 Source: AC 34 [speed options](https://p.eagate.573.jp/game/2dx/34/howto/play/option_speed.html). Tracked in [#734](https://github.com/nulltask/be-music/issues/734) and [#735](https://github.com/nulltask/be-music/issues/735).
+
+## GUIDE SE
+
+**GUIDE SE (beatoraja)** on the Play tab's Assist page plays the sound set's sound for each judgment, as beatoraja's `isGuideSE` does. It is offered under every ruleset, is read as a play starts, and sets no assist class, as beatoraja sets no assist flag for it. The switch is saved, and a play records it in its replay's option snapshot.
+
+| Sound          | Judgment                                              |
+| -------------- | ----------------------------------------------------- |
+| `guide-pg.wav` | PGREAT                                                |
+| `guide-gr.wav` | GREAT                                                 |
+| `guide-gd.wav` | GOOD                                                  |
+| `guide-bd.wav` | BAD                                                   |
+| `guide-pr.wav` | POOR: a note that passed unhit                        |
+| `guide-ms.wav` | Empty POOR: a press near a note that does not take it |
+
+- **Where the sounds come from.** The six files of a beatoraja theme's sound set, in its `sound/` folder and then `defaultsound/`, as `.wav` or `.ogg` ([`SystemSoundManager` L148-L153](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/SystemSoundManager.java#L148-L153)) [V]. A file the set lacks plays nothing, as beatoraja registers only the files it finds ([`BMSPlayer` L398-L410](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayer.java#L398-L410)). An LR2 sound set has no guide sounds and Be-Music ships none, so a play on an LR2 or a built-in skin is silent unless a beatoraja theme is the active one.
+- **When they play.** At every judgment, from the engine as it judges, so a sound starts with the judgment and not a frame later. AUTO play plays PGREAT's for each note and a replay plays as the play did, since beatoraja's `JudgeManager` plays the sound for every judgment whatever the mode ([L694](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L694)) [V]. A mine and a press with no note in reach judge nothing and play nothing, as in beatoraja.
+- **Volume.** The sounds go to the key bus, so they follow **Key sound (%)** and the master volume, like the keysounds beatoraja registers them beside [I].
+- **Not carried over.** beatoraja plays two POOR sounds for a missed charge note's start and end; Be-Music's engine charges its tail miss without a judgment cue, so one plays. LR2's SILENT automatic judge timing loads no sounds, these included.
+
+Tracked in [#1128](https://github.com/nulltask/be-music/issues/1128).
 
 ## BPM GUIDE
 
@@ -478,6 +517,26 @@ Options dialog shows **Seed 1P / Seed 2P (-1=random)** under every ruleset. A se
 The **Reuse previous arrangement** and **New arrangement** buttons are offered under every ruleset. Reuse takes the last play, outside replays, courses and NONSTOP, and selects its lane options: Random 1P / 2P, the seeds, the fixed keys, DP flip, the H-RANDOM threshold and Long notes. The next play of the same chart then reuses that play's recorded lanes and `#RANDOM` outcomes exactly, with live input, and records a new replay, as beatoraja's chart-option reuse restores a chart's lane options, seeds and branches. Changing any of those options, or pressing **New arrangement**, drops the reuse; New arrangement also returns both seeds to -1. A play of another chart is unaffected. Reuse needs the judge rules the previous play used: under other rules it selects nothing, and a reused arrangement played under other rules fails with "The previous arrangement was played under other judgment rules." A reused arrangement whose chart hashes differ fails explicitly. Its record policy is in [Assist and record policy](#assist-and-record-policy).
 
 Source: beatoraja 0.8.9 [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java) and [`Randomizer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Randomizer.java). Tracked in [#721](https://github.com/nulltask/be-music/issues/721).
+
+## Result screen: the same arrangement again, and the gauge graph
+
+Two of beatoraja's result keys ([`MusicResult` L214-L246](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L214-L246), [L267-L280](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L267-L280)) [V] are operations of the result screen, on both key maps and assignable under Keys.
+
+**Retry (same arrangement)** (`result.retry-same`, **T**) plays the chart again on the note arrangement the play just had: its lanes and `#RANDOM` outcomes, with live input and a new replay. **Retry** (`result.retry`, R) draws a new one, as before.
+
+- On the beatoraja key map, key 7 held as the screen leaves asks for the same arrangement and key 5 for a new one; key 5 wins when both are held, since beatoraja reads its keys in order. Both were a plain retry before.
+- An assisted play is played again on a new arrangement, as beatoraja does ("アシストモード時は同じ譜面でリプレイできません"). Here that is a play whose score does not update: assist class LIGHT ASSIST or ASSIST, or one that keeps no record.
+- A replay's result and an AUTO play's have no arrangement of their own to repeat, so the key retries as R does. So does a play whose judgment rules were changed on the result screen, since an arrangement is repeated only under the rules it was recorded under.
+- Offered where a retry is: a single play, not a course stage or a course result.
+
+**Gauge graph** (`result.change-graph`, **G**, and key 6 on the beatoraja key map) steps the gauge graph to the next gauge of the play's ruleset, in the ruleset's order, wrapping: ASSIST EASY to HAZARD under beatoraja's rules, EASY to DEATH under LR2's, ASSISTED EASY to EX-HARD under `____`'s. The gauge value, the lamp and every count stay the play's own; the graph alone changes, on the built-in, LR2 and beatoraja result screens. Stepping back onto the played gauge shows the play's own graph.
+
+- beatoraja logs every gauge during a play and draws the log of the one picked. Be-Music runs only the gauges a play needs, so the other graphs are re-simulated from the play's replay (`resolveReplayGaugeHistories` in `@be-music/player-engine/replay`), each gauge alone from its starting value. The simulation is deterministic, so each graph is what that gauge would have drawn.
+- A play that stopped as its gauge emptied ends every graph there. beatoraja fills the rest of each log with 0; here the graph ends at the stop [I].
+- A play with gauge auto-shift shows its own graph, which follows the gauge in force, until the key is pressed; the stepped graphs are each one gauge.
+- Not offered on a course: a stage's other gauges start from values the stage did not record. beatoraja steps its three class gauges there. LR2's P-ATTACK and G-ATTACK are not in the line-up, so a play on one steps from the first gauge.
+
+Tracked in [#1133](https://github.com/nulltask/be-music/issues/1133).
 
 ## SCATTER
 

@@ -8,7 +8,7 @@ import type { BeMusicJSON } from '@be-music/chart-source';
 import type { PlayResult, PlayRunKind, ReplaySlotState, SystemSoundSet } from '@be-music/player-scene-model';
 import type { BrowserAssetSource } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
-import { ResultSession, type ResultSessionEvents } from '../session/result/result-session.ts';
+import { ResultSession, type ResultGaugeGraph, type ResultSessionEvents } from '../session/result/result-session.ts';
 import { resolveFamilyControlActions } from '../session/controls/control-actions.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
 import { logger } from '../logger.ts';
@@ -56,6 +56,11 @@ export interface ResultSceneOptions extends SessionSceneOptions {
    * 1196-1204). Pair it with `on.saveReplay`.
    */
   readonly replaySlots?: () => readonly ReplaySlotState[];
+  /**
+   * The gauge graphs the screen steps through with the gauge graph key (beatoraja's CHANGE_GRAPH): the play's gauge
+   * history under each gauge of its ruleset. Asked once, at the first step; without it the graph stays the play's own.
+   */
+  readonly gaugeGraphs?: () => readonly ResultGaugeGraph[];
   /**
    * Where the screen leads: `continue` when the player is done, `retry` to play the chart again (R). Without `retry`
    * the screen offers no quick retry. Each fires once per entry. `saveReplay` saves the play into a replay slot (keys
@@ -161,6 +166,7 @@ export function createResultScene(kit: ResultSceneKit, options: ResultSceneOptio
     audio: options.audio,
     timing: resultTimingOf(kit),
     ...(options.replaySlots !== undefined ? { replaySlots: options.replaySlots } : {}),
+    ...(options.gaugeGraphs !== undefined ? { gaugeGraphs: options.gaugeGraphs } : {}),
     on: options.on,
   });
   return new FamilyResultScene(session, createResultView(kit, session, options), {
