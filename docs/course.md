@@ -432,6 +432,7 @@ flowchart TD
 
 - **Which runs count.** A run that keeps a best record (`resolveCourseBestRecordUpdate`: not auto-played, not at another tempo, every stage judged under one ruleset), of a GRADE course, cleared (any lamp but FAILED). An EXPERT or NONSTOP course certifies nothing, whatever it is named.
 - **Which dan.** Read from the course name (`resolveCourseDanRank` in `@be-music/player-engine/records`), after NFKC normalisation: Overjoy; 発狂 (or `insane`) with 皆伝 or a dan; 皆伝; 中伝; a dan (`初段`, `七段`, `7段`, `7th dan`); a kyu (`十級`, `1st kyu`). 段位 (as in 段位認定) is not a dan. A name that names none certifies nothing.
+- **Custom courses.** Dan rank is local progression inferred from the title. Course provenance and certification are unverified. Two GRADE courses that match the same rank both contribute to that ruleset and key mode. If a title contains several rank markers, the recognition order above applies.
 - **The ladder** (`DAN_RANKS`), lowest first: 十級 … 一級, 初段 … 十段, 中伝, 皆伝, 発狂初段 … 発狂十段, 発狂皆伝, Overjoy. A higher rank replaces a lower one; a lower clear leaves the rank alone.
 - **Key mode.** The one the course names (LR2 `line`, a table's `mode`), else the one all its stages' charts share (`resolveDanCourseKeyMode`). A course whose stages differ keeps no rank.
 - **New plays only.** Ranks come from runs played from now on; course records kept before are not read back into ranks.
