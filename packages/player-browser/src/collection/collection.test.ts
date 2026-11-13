@@ -413,9 +413,8 @@ describe('parent-folder retry (LR2)', () => {
   });
 
   test("every extension in the chart's own folder comes before the parent", () => {
-    // The web player prefers .ogg over .wav, but a .wav beside the chart still beats an .ogg in the parent.
-    const source = makeAssetSource({ 'Pack/Song/sub/kick.wav': WAV, 'Pack/Song/kick.ogg': OGG });
-    expect(resolveChartAudioAsset(source, 'Pack/Song/sub/hard.bms', 'kick.wav')).toBe(WAV);
+    const source = makeAssetSource({ 'Pack/Song/sub/kick.ogg': OGG, 'Pack/Song/kick.wav': WAV });
+    expect(resolveChartAudioAsset(source, 'Pack/Song/sub/hard.bms', 'kick.wav')).toBe(OGG);
   });
 
   test('goes up one folder only', () => {
@@ -490,20 +489,24 @@ describe('resolveChartAudioAsset', () => {
     expect(entry).toBe(WAV_BYTES);
   });
 
-  test('respects the codec-priority order (opus → ogg → mp3 → wav → m4a) when multiple are present', () => {
-    const OPUS_BYTES = new Uint8Array([1]);
-    const OGG_BYTES = new Uint8Array([2]);
-    const MP3_BYTES = new Uint8Array([3]);
-    const WAV_BYTES = new Uint8Array([4]);
-    const source = makeAssetSource({
-      'Song/snare.opus': OPUS_BYTES,
-      'Song/snare.ogg': OGG_BYTES,
-      'Song/snare.mp3': MP3_BYTES,
-      'Song/snare.wav': WAV_BYTES,
-    });
-    // Even though the chart authored `.wav`, the codec walk prefers `.opus` first since it ships the smallest payload
-    // for browsers that support it.
-    expect(resolveChartAudioAsset(source, 'Song/main.bms', 'snare.wav')).toBe(OPUS_BYTES);
+  test.each([
+    ['snare.WAV', ['wav', 'opus', 'ogg', 'mp3', 'm4a']],
+    ['snare.ogg', ['ogg', 'opus', 'mp3', 'wav', 'm4a']],
+    ['snare.opus', ['opus', 'ogg', 'mp3', 'wav', 'm4a']],
+  ])('tries %s first and each alternate extension once', (authored, extensions) => {
+    const files = ['opus', 'ogg', 'mp3', 'wav', 'm4a'].map(
+      (ext, index) => [`Song/snare.${ext}`, new Uint8Array([index])] as const,
+    );
+    const source = makeAssetSource(Object.fromEntries(files));
+    const expected = extensions.map((ext) => `Song/snare.${ext}`);
+    expect(resolveChartAudioAssetCandidates(source, 'Song/main.bms', authored).map(({ key }) => key)).toEqual(expected);
+    const excludedEntries = new Set<BrowserAssetEntry>();
+    for (const key of expected) {
+      const entry = source.files.get(key)!;
+      expect(resolveChartAudioAsset(source, 'Song/main.bms', authored, { excludedEntries })).toBe(entry);
+      excludedEntries.add(entry);
+    }
+    expect(resolveChartAudioAsset(source, 'Song/main.bms', authored, { excludedEntries })).toBeUndefined();
   });
 
   test('honors the BMS #PATH_WAV prefix when supplied by the caller', () => {
