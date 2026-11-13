@@ -31,16 +31,16 @@ describe('burstGrainCount', () => {
 
 describe('judgmentParticleMultiplier', () => {
   it.each([
-    [undefined, 1],
-    [{ judgmentParticles: 'normal' }, 1],
-    [{ judgmentParticles: 'more' }, 1.5],
-    [{ judgmentParticles: 'most' }, 2],
-    [{ judgmentParticles: 'unknown' }, 1],
+    [undefined, 2],
+    [{ judgmentParticles: 'normal' }, 2],
+    [{ judgmentParticles: 'more' }, 5],
+    [{ judgmentParticles: 'most' }, 10],
+    [{ judgmentParticles: 'unknown' }, 2],
   ] as const)('resolves the density for %j', (settings, multiplier) => {
     expect(judgmentParticleMultiplier(settings)).toBe(multiplier);
   });
 
-  it.each([1, 1.5, 2])('scales individual hits and dense passages by %s', (multiplier) => {
+  it.each([2, 5, 10])('scales individual hits and dense passages by %s', (multiplier) => {
     expect(burstGrainCount(170, 24, 4, multiplier, 1, BURST_FRAME_BUDGET * multiplier)).toBe(266 * multiplier);
     expect(burstGrainCount(170, 24, 4, multiplier, 8, BURST_FRAME_BUDGET * multiplier)).toBe(120 * multiplier);
     expect(burstGrainCount(140, 16, 4, multiplier, 8, BURST_SKIRT_FRAME_BUDGET * multiplier)).toBe(90 * multiplier);
