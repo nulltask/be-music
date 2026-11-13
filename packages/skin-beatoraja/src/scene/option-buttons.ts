@@ -37,15 +37,15 @@ const EXTRA_NOTE_DEPTH_BUTTON = 350;
 /**
  * beatoraja's `option1p` (42) and `option2p` (43) step the 1P / 2P lane option through ten slots, which name the
  * `Random.OPTION_GENERAL` options outside PMS and the `Random.OPTION_PMS` ones in PMS (where S-RANDOM is beatoraja's
- * `S_RANDOM_NO_THRESHOLD`). The slot is the label's image index. The buttons step beatoraja's own RANDOM, S-RANDOM and
- * CONVERGE, and another source's reads as the slot of its bare name (ADR 0019).
+ * `S_RANDOM_NO_THRESHOLD`). The slot is the label's image index. The buttons step RANDOM, which every source shares, and
+ * beatoraja's own S-RANDOM and CONVERGE; another source's reads as the slot of its bare name (ADR 0019).
  */
 const RANDOM_BUTTONS: Readonly<Record<number, 'random1P' | 'random2P'>> = { 42: 'random1P', 43: 'random2P' };
 
 const RANDOM_OPTIONS: readonly RandomMode[] = [
   'OFF',
   'MIRROR',
-  'beatoraja:RANDOM',
+  'RANDOM',
   'R-RANDOM',
   'beatoraja:S-RANDOM',
   'SPIRAL',
@@ -58,7 +58,7 @@ const RANDOM_OPTIONS: readonly RandomMode[] = [
 const PMS_RANDOM_OPTIONS: readonly RandomMode[] = [
   'OFF',
   'MIRROR',
-  'beatoraja:RANDOM',
+  'RANDOM',
   'R-RANDOM',
   'beatoraja:S-RANDOM',
   'SPIRAL',

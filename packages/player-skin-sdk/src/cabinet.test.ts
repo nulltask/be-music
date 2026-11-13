@@ -10,6 +10,7 @@ import {
   resolveDifficulty,
   resolveDifficultyName,
   resolveScorePace,
+  formatPacemakerLabel,
   resolveStageLabel,
 } from './cabinet.ts';
 import { resolveGameplayLayout } from './layout.ts';
@@ -371,4 +372,13 @@ it('scratch input moves clockwise or counterclockwise and preserves its initial 
   expect(resolveScratchAngle(0, { angle: 1, direction: 1, atMs: 100 }, 100)).toBeCloseTo(1);
   expect(resolveScratchAngle(0, { angle: 1, direction: 1, atMs: 100 }, 220)).toBeGreaterThan(1);
   expect(resolveScratchAngle(0, { angle: 1, direction: -1, atMs: 100 }, 160)).toBeLessThan(1);
+});
+
+describe('formatPacemakerLabel', () => {
+  it('leads a short name with PACEMAKER and lets a long one stand alone', () => {
+    expect(formatPacemakerLabel('RANK AAA+')).toBe('PACEMAKER RANK AAA+');
+    expect(formatPacemakerLabel('MAX')).toBe('PACEMAKER MAX');
+    expect(formatPacemakerLabel('SCORE RATE 90%')).toBe('SCORE RATE 90%');
+    expect(formatPacemakerLabel('IR RANK TOP 50%')).toBe('IR RANK TOP 50%');
+  });
 });

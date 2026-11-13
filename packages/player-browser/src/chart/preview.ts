@@ -538,7 +538,7 @@ export class ChartPreviewEngine {
     const chart = target.chart.chart;
     const cache = this.windowCacheFor(target);
     const triggers = selectChartWindowTriggers(cache.triggers, window);
-    const monophonic = usesMonophonicWAVPlayback(chart);
+    const monophonic = (sampleKey: string): boolean => usesMonophonicWAVPlayback(chart, sampleKey);
     // What started before the window and may still sound at its start, as a play that seeks there starts it partway.
     const carried = selectChartWindowCarryOvers(cache.triggers, window, monophonic);
     if (triggers.length === 0 && carried.length === 0) return;
@@ -585,7 +585,7 @@ export class ChartPreviewEngine {
       };
       try {
         const activeSameSlot = activeBySlot.get(trigger.sampleKey);
-        if (monophonic && activeSameSlot) this.stopSourceAt(activeSameSlot, when);
+        if (monophonic(trigger.sampleKey) && activeSameSlot) this.stopSourceAt(activeSameSlot, when);
         if (durationSeconds !== undefined) source.start(when, offsetSeconds, durationSeconds);
         else source.start(when, offsetSeconds);
         this.fadeOutAtWindowEnd(handle, fadeStartAt, endAt);
@@ -757,14 +757,19 @@ export function selectChartWindowTriggers(
 export function selectChartWindowCarryOvers(
   triggers: readonly TimedSampleTrigger[],
   window: Pick<ChartPreviewWindow, 'startSeconds'>,
-  monophonic: boolean,
+  monophonic: boolean | ((sampleKey: string) => boolean),
 ): TimedSampleTrigger[] {
   const startSeconds = window.startSeconds - 1e-6;
   const before = triggers.filter((trigger) => trigger.seconds < startSeconds && trigger.event.bmson?.c !== true);
-  if (!monophonic) return before;
+  if (monophonic === false) return before;
+  const isMonophonic = monophonic === true ? () => true : monophonic;
   const lastBySlot = new Map<string, TimedSampleTrigger>();
-  for (const trigger of before) lastBySlot.set(trigger.sampleKey, trigger);
-  return [...lastBySlot.values()].sort((left, right) => left.seconds - right.seconds);
+  const kept: TimedSampleTrigger[] = [];
+  for (const trigger of before) {
+    if (isMonophonic(trigger.sampleKey)) lastBySlot.set(trigger.sampleKey, trigger);
+    else kept.push(trigger);
+  }
+  return [...kept, ...lastBySlot.values()].sort((left, right) => left.seconds - right.seconds);
 }
 
 /**

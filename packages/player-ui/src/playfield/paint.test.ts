@@ -449,3 +449,12 @@ describe('playfield painters', () => {
     expect(none.calls).toEqual([]);
   });
 });
+
+it('clips HDX placement in Canvas and preserves the cropped image size', () => {
+  const ctx = recorder();
+  const base = { id: 'wide', width: 512, height: 128 } as unknown as CanvasImageSource;
+  paintBGA(ctx, { shown: true, frame: { base, bgaMode: 1, poorActive: false } }, { x: 10, y: 20, w: 256, h: 256 });
+  expect(ctx.calls).toContain('clip');
+  expect(ctx.calls).toContain('drawImage wide -118,20,512,128');
+  expect(ctx.calls.indexOf('clip')).toBeLessThan(ctx.calls.indexOf('drawImage wide -118,20,512,128'));
+});

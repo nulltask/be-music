@@ -3,10 +3,12 @@ import {
   normalizeObjectKey,
   resolveBMSBase,
   type BeMusicEvent,
+  type ChartDiagnostic,
   type BeMusicJSON,
   type BeMusicSourceFormat,
 } from '@be-music/chart-source';
 import { buildBGATimelines, type BGATimelines } from './bga.ts';
+import { collectChartDiagnostics } from './chart-diagnostics.ts';
 import { hasControlFlow, type RandomDraws } from './control-flow.ts';
 import {
   isBmsBGMVolumeChangeChannel,
@@ -102,6 +104,8 @@ export interface ResolvedChart {
   /** The (control-flow-resolved) source chart this was resolved from: metadata, resources and raw sections. */
   readonly source: BeMusicJSON;
   readonly sourceFormat: BeMusicSourceFormat;
+  /** Nonfatal warnings from parsing and resolving this chart. */
+  readonly diagnostics: readonly ChartDiagnostic[];
   /** The `#RANDOM` / `#SWITCH` outcomes the source was resolved with (`[]` when the chart had none or none were given). */
   readonly randomDraws: RandomDraws;
   /**
@@ -138,7 +142,7 @@ export interface ResolvedChart {
    * `#LNOBJ` ends and suppressed `#LNTYPE` halves left out and bmson slices resolved. Mines are not included.
    */
   readonly sampleTriggers: ReadonlyArray<TimedSampleTrigger>;
-  /** BMS dynamic volume changes, in chart order (empty for bmson). */
+  /** BMS dynamic volume changes (97 / 98), in chart order; a bmson chart has none unless stitched from BMS stages. */
   readonly volumeChanges: ReadonlyArray<ResolvedVolumeChange>;
   /** BGA cues (base / layer / layer 2 / POOR), BMS channels and bmson `bga` alike. */
   readonly bga: BGATimelines;
@@ -225,6 +229,8 @@ class LazyResolvedChart implements ResolvedChart {
   private readonly chartPath: string | undefined;
   private playVariantCache: ChartPlayVariant | undefined;
   private judgedCache: ResolvedNoteLists | undefined;
+  private diagnosticsCache: ChartDiagnostic[] | undefined;
+  private readonly droppedStackedNotes: BeMusicEvent[] = [];
   private minesCache: ResolvedNote[] | undefined;
   private invisibleCache: ResolvedNote[] | undefined;
   private triggersCache: TimedSampleTrigger[] | undefined;
@@ -249,6 +255,14 @@ class LazyResolvedChart implements ResolvedChart {
     this.sortedEvents = context.sortedEvents;
     this.timing = createTimingResolverWithContext(chart, context);
     this.reversal = this.timing.reversal;
+  }
+
+  get diagnostics(): readonly ChartDiagnostic[] {
+    if (this.diagnosticsCache === undefined) {
+      if (this.sourceFormat === 'bmson') this.judged();
+      this.diagnosticsCache = collectChartDiagnostics(this, this.droppedStackedNotes);
+    }
+    return this.diagnosticsCache;
   }
 
   get playVariant(): ChartPlayVariant {
@@ -352,7 +366,7 @@ class LazyResolvedChart implements ResolvedChart {
   }
 
   private judged(): ResolvedNoteLists {
-    this.judgedCache ??= resolveJudgedNotes(this.noteContext());
+    this.judgedCache ??= resolveJudgedNotes(this.noteContext(), this.droppedStackedNotes);
     return this.judgedCache;
   }
 
@@ -374,9 +388,7 @@ function resolveVolumeChanges(
   sortedEvents: ReadonlyArray<BeMusicEvent>,
   timing: TimingResolver,
 ): ResolvedVolumeChange[] {
-  if (json.sourceFormat !== 'bms') {
-    return [];
-  }
+  // BMS charts, and NONSTOP charts stitched as bmson from BMS stages, carry 97 / 98 objects; bmson itself has none.
   const changes: ResolvedVolumeChange[] = [];
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);

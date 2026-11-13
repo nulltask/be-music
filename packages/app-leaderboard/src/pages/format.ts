@@ -19,19 +19,18 @@ export const LAMP_STYLES: Readonly<Record<number, { label: string; color: string
   [clearLampRank('NORMAL')]: {
     label: 'CLEAR',
     color: '#3b82f6',
-    meaning: 'Cleared on the normal gauge (GROOVE / NORMAL).',
+    meaning: en.lampMeanings[4],
   },
   [clearLampRank('HARD')]: { label: 'HARD CLEAR', color: '#e5e7eb', meaning: 'Cleared on the HARD gauge.' },
   [clearLampRank('EX_HARD')]: {
     label: 'EX HARD CLEAR',
     color: '#f5c518',
-    meaning: 'Cleared on the EX-HARD, DEATH or HAZARD gauge.',
+    meaning: en.lampMeanings[6],
   },
   [clearLampRank('FULL_COMBO')]: {
     label: 'FULL COMBO',
     color: '#22d3ee',
-    meaning:
-      'No BAD and no missed POOR (empty POORs do not count). The top lamp under LR2 and That-Which-Must-Not-Be-Named.',
+    meaning: en.lampMeanings[7],
   },
   [clearLampRank('PERFECT')]: {
     label: 'PERFECT',
@@ -93,7 +92,8 @@ export function chartTitle(title: string | null, chartFingerprint: string): stri
  * plays stored before the final value was recorded.
  */
 export function formatGauge(type: string, final: number | null): string {
-  return final === null ? type : `${type} ${final.toFixed(1)}%`;
+  const label = type === 'DEATH-CORRECTED' ? 'DEATH corrected' : type;
+  return final === null ? label : `${label} ${final.toFixed(1)}%`;
 }
 
 /**

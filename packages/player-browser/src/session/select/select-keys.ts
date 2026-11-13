@@ -73,6 +73,10 @@ export type SelectKeyAction =
   | { readonly type: 'list'; readonly option: 'sort' | 'keysFilter' }
   /** Step the LN mode (beatoraja's 3). */
   | { readonly type: 'ln-mode' }
+  /** Switch AC's one-player BATTLE on or off (AC 34's numpad 7). */
+  | { readonly type: 'battle' }
+  /** Switch a player's M-RAN on or off (AC 34's numpad 6). */
+  | { readonly type: 'm-ran'; readonly side: '1P' | '2P' }
   /** Open the search field. */
   | { readonly type: 'search' }
   /** LR2's key 4: back out on a tap, open the chart's ranking when held (`SelectSessionEvents.ranking`). */
@@ -89,6 +93,7 @@ export type SelectKeyAction =
   | { readonly type: 'readme' }
   /** Read the library's folders again (LR2's F8, beatoraja's F2). */
   | { readonly type: 'reload' }
+  | { readonly type: 'mania-options' }
   /** Mark or unmark the focused chart as a favourite (beatoraja's F8 / F9). */
   | { readonly type: 'favorite'; readonly list: 'music' | 'charts' }
   /** The key does nothing here, but no other handler may take it (the README dialog owns the keyboard). */
@@ -230,8 +235,12 @@ export function resolveSelectKeyAction(
   if (is('select.sort')) return { type: 'list', option: 'sort' };
   if (is('select.keys-filter')) return { type: 'list', option: 'keysFilter' };
   if (is('select.ln-mode')) return { type: 'ln-mode' };
+  if (is('select.battle')) return { type: 'battle' };
+  if (is('select.m-ran-1p')) return { type: 'm-ran', side: '1P' };
+  if (is('select.m-ran-2p')) return { type: 'm-ran', side: '2P' };
   if (is('select.search')) return { type: 'search' };
   if (is('select.reload')) return { type: 'reload' };
+  if (is('select.mania-options')) return { type: 'mania-options' };
   if (is('select.copy-md5')) return { type: 'copy-hash', hash: 'md5' };
   if (is('select.copy-sha256')) return { type: 'copy-hash', hash: 'sha256' };
   if (is('select.autoplay-folder')) return { type: 'autoplay-folder' };

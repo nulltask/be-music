@@ -1,3 +1,4 @@
+import { isSoftLanding } from './scroll-modifier.ts';
 import { BmsonBGAController } from './bmson-bga.ts';
 import { resolveChartGaugeType } from '../ruleset/chart-gauge.ts';
 import { resolveChartJudgeOption } from '../ruleset/chart-judge.ts';
@@ -108,6 +109,7 @@ export interface PlaySession {
   /** Chart seconds the play lasts: its last note or sound, or the UI runtime's own end. */
   readonly totalSeconds: number;
   readonly speed: number;
+  readonly chartBaseSpeed: number;
   /** HIGH-SPEED at the start of the play. */
   readonly highSpeed: number;
   /** The play tempo over the play clock: `speed` at the start, re-anchored by every tempo change. */
@@ -197,8 +199,7 @@ export async function createPlaySession(
   const scratchSides = resolveAutoScratchSides(options);
   const autoScratch = mode === 'manual' && (scratchSides.autoScratch1P || scratchSides.autoScratch2P);
   const anyKey = mode === 'manual' && options.anyKey === true;
-  const speed = options.speed ?? 1;
-  const tempoClock = createTempoClock(speed);
+  const playerSpeed = options.speed ?? 1;
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const replay = options.replayInputs !== undefined;
@@ -213,6 +214,9 @@ export async function createPlaySession(
           { playVariant: resolvedChart.playVariant, course: options.course !== undefined },
         );
   const chartPlayOptions = chartPlay.program;
+  const chartBaseSpeed = chartPlayOptions.options.baseSpeed ?? 1;
+  const speed = playerSpeed * chartBaseSpeed;
+  const tempoClock = createTempoClock(speed);
   // Without a host-prepared chart (the terminal) the engine applies the chart's ADDMINE and arrangement itself, in place
   // of the player's options, as the browser host does (#932). A replay's recorded notes already hold them.
   const preparesChartPlayOptions = options.preparedChart === undefined && !replay;
@@ -248,6 +252,7 @@ export async function createPlaySession(
         autoScratch2P: options.autoScratch2P,
         lr2ExtraMode: options.lr2ExtraMode,
         lr2ExtraLevel: options.lr2ExtraLevel,
+        lr2Mania: options.lr2Mania,
         speed: options.speed,
         course: options.course,
         extraNoteDepth: options.extraNoteDepth,
@@ -389,6 +394,7 @@ export async function createPlaySession(
       ...(options.judgeAlgorithm !== undefined ? { judgeAlgorithm: options.judgeAlgorithm } : {}),
       bmsonTotalMode: options.bmsonTotalMode,
       ...(options.customJudge !== undefined ? { customJudge: options.customJudge } : {}),
+      ...(options.lr2Gambol === 1 || options.lr2Gambol === 2 ? { lr2Gambol: options.lr2Gambol } : {}),
       ...(options.practice !== undefined
         ? {
             practice: {
@@ -450,6 +456,7 @@ export async function createPlaySession(
               judgeAlgorithm: ruleset.rulesetId === 'beatoraja' ? (options.judgeAlgorithm ?? 'combo') : undefined,
               ...(options.bmsonTotalMode !== undefined ? { bmsonTotalMode: options.bmsonTotalMode } : {}),
               ...(options.customJudge !== undefined ? { customJudge: { ...options.customJudge } } : {}),
+              ...(options.lr2Gambol === 1 || options.lr2Gambol === 2 ? { lr2Gambol: options.lr2Gambol } : {}),
               longNoteModifier: options.longNoteModifier,
               ...(options.autoScratch1P !== undefined || options.autoScratch2P !== undefined
                 ? {
@@ -473,6 +480,10 @@ export async function createPlaySession(
                           scrollRate: playbackChart.scrollRate,
                           scrollModifierTimeline: playbackChart.scrollModifierTimeline,
                         }
+                      : {}),
+                    // SOFTLANDING's drawn factors, which a replay plays back instead of drawing again.
+                    ...(isSoftLanding(options.scrollModifier)
+                      ? { scrollModifierTimeline: playbackChart.scrollModifierTimeline }
                       : {}),
                   }
                 : {}),
@@ -513,6 +524,7 @@ export async function createPlaySession(
                       : {}),
                   }
                 : {}),
+              ...(playbackChart.lr2Mania !== undefined ? { lr2Mania: playbackChart.lr2Mania } : {}),
               ...(options.lr2ExtraMode !== undefined || playbackChart.lr2ExtraMode !== undefined
                 ? {
                     lr2ExtraMode: playbackChart.lr2ExtraMode ?? false,
@@ -532,10 +544,12 @@ export async function createPlaySession(
                   }
                 : {}),
               ...(options.longNoteModifier?.startsWith('ADD_')
-                ? {
-                    longNoteRate: playbackChart.longNoteModifierRate ?? 1,
-                    longNoteModifierChangeCount: playbackChart.longNoteModifierChangeCount ?? 0,
-                  }
+                ? { longNoteRate: playbackChart.longNoteModifierRate ?? 1 }
+                : {}),
+              // The count tells a chart the modifier changed from one it left alone: LEGACY NOTE and LN REMOVE assist
+              // only an actual conversion, as the additions do.
+              ...(options.longNoteModifier !== undefined && options.longNoteModifier !== 'OFF'
+                ? { longNoteModifierChangeCount: playbackChart.longNoteModifierChangeCount ?? 0 }
                 : {}),
               gaugeAutoShift: options.gaugeAutoShift,
               ...(options.bottomShiftableGauge !== undefined
@@ -545,7 +559,7 @@ export async function createPlaySession(
               gauge: selectedGauge,
               // The tempo a live play ran at (its inputs are in chart time either way). A replay's `speed` only sets how
               // fast it is re-driven, so it records none.
-              ...(speed !== 1 && !replay ? { tempo: speed } : {}),
+              ...(playerSpeed !== 1 && !replay ? { tempo: playerSpeed } : {}),
             },
           });
         })()
@@ -795,6 +809,7 @@ export async function createPlaySession(
     summary,
     totalSeconds,
     speed,
+    chartBaseSpeed,
     highSpeed,
     tempoClock,
     leadInMs,

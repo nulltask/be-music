@@ -29,6 +29,10 @@ Also, as it is still in the early stages of development, backward compatibility 
 
 `resources.wavGain` is an optional map from WAV slot ids to finite, nonnegative linear gain. Missing slots use 1. The map belongs to Be-Music JSON and is not a BMS or bmson field. It preserves composition gain without rounding authored WAVCMD parameters. NONSTOP stores each stage's effective VOLWAV multiplied by any existing intrinsic slot gain; its target chart has no global VOLWAV. Cloning and JSON parsing copy the map independently and retain base-62 slot case.
 
+## Per-slot source format
+
+`resources.wavSourceFormat` and `resources.bmpSourceFormat` are optional maps from WAV / BMP slot ids to the format (`bms` or `bmson`) whose rules that slot follows where it differs from `sourceFormat`; missing slots follow `sourceFormat`. They are Be-Music JSON fields. A NONSTOP chart stitched as bmson lists its BMS stages' slots as `bms`, so those keysounds stay monophonic (`usesMonophonicWAVPlayback(json, key)`) and those layer images keep their black keyed out (`keysOutBGALayerBlack(json, key)`). Cloning copies the maps independently.
+
 `collectBmsWAVVolumeMultipliers` multiplies WAVCMD percentage volume, EXWAV attenuation and intrinsic gain. The backend applies the target chart's VOLWAV and dynamic bus gain separately. Browser, Node and offline playback share this calculation. Gain affects audio only; timing, scoring and fingerprints are unchanged.
 
 BMS export converts intrinsic gain into a final integer WAVCMD volume only when that volume reproduces the combined gain exactly. It never rounds, and unresolved BMS control flow must be resolved first. bmson has no supported per-channel gain field, so non-unity intrinsic gain cannot be exported to bmson. These checks also apply when preservation validation is skipped; export Be-Music JSON to retain unrepresentable gain. Unity-only maps do not change native output.

@@ -1,3 +1,4 @@
+import { randomizeLR2DoubleNotes, type LR2DoubleRandomOptions } from './lane-lr2-double.ts';
 import { drawLaneRandomIndex } from './lane-random-source.ts';
 import type { RulesetId } from './ruleset/definitions.ts';
 
@@ -6,6 +7,13 @@ export interface SRandomNote {
   channel: string;
   timeMs: number;
   endTimeMs?: number;
+  beat?: number;
+  endBeat?: number;
+  /** Unmodified channel after DP FLIP, before either side's randomization. */
+  sourceChannel?: string;
+  /** LR2 sorts explicit long-note heads with their original channel code. */
+  lr2OpOffset?: number;
+  lr2SyntheticTail?: true;
   /** Mines and hidden notes do not update beatoraja's jack timing; LR2 treats mines as placed events. */
   kind?: 'note' | 'mine' | 'invisible';
 }
@@ -15,6 +23,13 @@ export interface SRandomOptions {
   random: () => number;
   /** beatoraja's ordinary PMS S-RANDOM uses S_RANDOM_NO_THRESHOLD. */
   mode?: 'pms';
+  lr2Double?: LR2DoubleRandomOptions;
+  /**
+   * LR2's nine-key S-RANDOM: one more destination outside the playfield. LR2 draws `startlane + GetRand(9)`, and the
+   * inclusive `GetRand` reaches raw lane 10, the 2P scratch (OpenLR2 `LR2f.cpp` L27354, L27372). A note placed there
+   * cannot be hit, as SCATTER's does.
+   */
+  outside?: string;
 }
 
 /**
@@ -28,6 +43,8 @@ export function randomizeSRandomNotes(
   lanes: readonly string[],
   options: SRandomOptions,
 ): string[] {
+  if (options.ruleset === 'lr2' && options.lr2Double !== undefined)
+    return randomizeLR2DoubleNotes(notes, lanes, { ...options.lr2Double, random: options.random });
   const pms = options.ruleset === 'beatoraja' && options.mode === 'pms';
   return randomizeTimeBasedNotes(notes, lanes, options, pms ? 0 : 40, options.ruleset === 'beatoraja');
 }
@@ -139,6 +156,7 @@ function randomizeTimeBasedNotes(
   lanes = [...new Set(lanes)];
   const channels = notes.map((note) => note.channel);
   const domain = new Set(lanes);
+  const laneNumbers = allScratch?.doublePlay === true ? new Map(lanes.map((lane, index) => [lane, index])) : undefined;
   const rows = new Map<number, number[]>();
   notes.forEach((note, index) => {
     if (!visitAllRows && !domain.has(note.channel)) return;
@@ -154,7 +172,8 @@ function randomizeTimeBasedNotes(
     )
       rows.set(note.endTimeMs, []);
   });
-  if (options.ruleset !== 'beatoraja') return randomizeLR2Notes(notes, lanes, rows, channels, options.random);
+  if (options.ruleset !== 'beatoraja')
+    return randomizeLR2Notes(notes, lanes, rows, channels, options.random, options.outside);
   let scratchIndex = 0;
   const changeable = [...lanes];
   const assignable = [...lanes];
@@ -164,32 +183,36 @@ function randomizeTimeBasedNotes(
   for (const [timeMs, indices] of [...rows].sort(([left], [right]) => left - right)) {
     // Upstream restores released lanes at the end of its mutable lane lists.
     // Their order is observable when the same Java seed is reused.
-    const released = [...held]
-      .filter(([, hold]) => hold.endMs < timeMs)
-      .sort(([left], [right]) => lanes.indexOf(left) - lanes.indexOf(right));
-    for (const [source, hold] of released) {
-      held.delete(source);
-      changeable.push(source);
-      assignable.push(hold.target);
+    if (held.size > 0) {
+      const released = [...held]
+        .filter(([, hold]) => hold.endMs < timeMs)
+        .sort(([left], [right]) => lanes.indexOf(left) - lanes.indexOf(right));
+      for (const [source, hold] of released) {
+        held.delete(source);
+        changeable.push(source);
+        assignable.push(hold.target);
+      }
     }
     if (converge)
       for (const lane of lanes) if (Math.trunc(timeMs) - lastNoteTime.get(lane)! > thresholdMs * 2) streak.set(lane, 0);
-    const occupied = new Set([...held.values()].map((hold) => hold.target));
-    const free = assignable.filter((lane) => !occupied.has(lane));
-    const map = new Map([...held].map(([source, hold]) => [source, hold.target]));
-    const scoring = new Set(
-      indices
-        .filter((index) => domain.has(notes[index]!.channel) && (notes[index]!.kind ?? 'note') === 'note')
-        .map((index) => notes[index]!.channel),
-    );
+    // The mutable source and destination lists already exclude lanes reserved by active holds.
+    const free = assignable.slice();
+    const map = new Map<string, string>();
+    for (const [source, hold] of held) map.set(source, hold.target);
+    const scoring = new Set<string>();
+    for (const index of indices) {
+      const note = notes[index]!;
+      if (domain.has(note.channel) && (note.kind ?? 'note') === 'note') scoring.add(note.channel);
+    }
     let playableCombination: readonly string[] | undefined;
     if (playable) {
       // getNoteExistLane includes LN tails; source noteCount additionally counts
       // every active hold, so tails contribute twice on their exact timeline.
       const noteCount = scoring.size + held.size + [...held.values()].filter((hold) => hold.endMs === timeMs).length;
       if (noteCount > 2 && noteCount < 7) {
+        const occupied = [...held.values()].map((hold) => hold.target);
         const combinations = PMS_PLAYABLE_CHORDS.map((chord) => chord.map((index) => lanes[index]!)).filter((chord) =>
-          [...occupied].every((lane) => chord.includes(lane)),
+          occupied.every((lane) => chord.includes(lane)),
         );
         if (combinations.length > 0) {
           const candidates = combinations
@@ -204,7 +227,7 @@ function randomizeTimeBasedNotes(
       }
     }
     // Upstream assigns scoring sources first, then the row's empty/mine/hidden sources.
-    const sources = changeable.filter((lane) => !held.has(lane));
+    const sources = allScratch ? changeable.slice() : changeable;
     if (allScratch) {
       const scratch = allScratch.scratchLanes[scratchIndex]!;
       const source = sources.find((lane) => scoring.has(lane));
@@ -216,39 +239,56 @@ function randomizeTimeBasedNotes(
         scratchIndex = (scratchIndex + 1) % allScratch.scratchLanes.length;
       }
     }
-    const ordered = [...sources.filter((lane) => scoring.has(lane)), ...sources.filter((lane) => !scoring.has(lane))];
-    for (const source of ordered) {
-      let candidates = free;
-      let useSidePriority = false;
-      let useStreak = false;
-      let usePlayable = false;
-      if (options.ruleset === 'beatoraja' && scoring.has(source)) {
-        const eligible = free.filter((lane) => Math.trunc(timeMs) - lastNoteTime.get(lane)! > thresholdMs);
-        if (eligible.length > 0) {
-          candidates = eligible;
-          useSidePriority = allScratch?.doublePlay === true;
-          useStreak = converge;
-          usePlayable = playableCombination !== undefined;
-        } else {
-          const oldest = Math.min(...free.map((lane) => lastNoteTime.get(lane)!));
-          candidates = free.filter((lane) => lastNoteTime.get(lane) === oldest);
+    const nowMs = Math.trunc(timeMs);
+    const pastThreshold = (lane: string): boolean => nowMs - lastNoteTime.get(lane)! > thresholdMs;
+    for (const source of sources) {
+      if (!scoring.has(source)) continue;
+      let candidates = free.filter(pastThreshold);
+      const hasPast = candidates.length > 0;
+      if (!hasPast) {
+        const oldest = Math.min(...free.map((lane) => lastNoteTime.get(lane)!));
+        candidates = free.filter((lane) => lastNoteTime.get(lane) === oldest);
+      } else {
+        if (converge) {
+          const longest = Math.max(...candidates.map((lane) => streak.get(lane)!));
+          candidates = candidates.filter((lane) => streak.get(lane) === longest);
+        }
+        if (playableCombination !== undefined) {
+          const allowed = candidates.filter((lane) => playableCombination.includes(lane));
+          if (allowed.length > 0) candidates = allowed;
         }
       }
-      if (useStreak) {
-        const longest = Math.max(...candidates.map((lane) => streak.get(lane)!));
-        candidates = candidates.filter((lane) => streak.get(lane) === longest);
-      }
-      if (usePlayable) {
-        const allowed = candidates.filter((lane) => playableCombination!.includes(lane));
-        if (allowed.length > 0) candidates = allowed;
-      }
-      const target = useSidePriority
-        ? candidates[allScratch?.side === '2P' ? candidates.length - 1 : 0]!
-        : pickRandom(candidates, options.random);
-      if (useStreak) streak.set(target, streak.get(target)! + 1);
+      // DP ALL-SCR leans toward the scratch by lane number, regardless of how a released LN reordered the lanes.
+      const target =
+        allScratch?.doublePlay === true && hasPast
+          ? pickSideLane(candidates, laneNumbers!, allScratch.side === '2P')
+          : pickRandom(candidates, options.random);
+      if (converge && hasPast) streak.set(target, streak.get(target)! + 1);
       map.set(source, target);
       free.splice(free.indexOf(target), 1);
-      if (options.ruleset === 'beatoraja' && scoring.has(source)) lastNoteTime.set(target, Math.trunc(timeMs));
+      lastNoteTime.set(target, nowMs);
+    }
+
+    // Upstream appends recent destinations after the past-threshold ones for empty, mine and hidden sources.
+    // Empty sources don't update jack times, and removing a draw preserves the order, so partition just once per row.
+    const emptySources = sources.filter((lane) => !scoring.has(lane));
+    if (emptySources.length > 0) {
+      const firstRecent = free.findIndex((lane) => !pastThreshold(lane));
+      if (firstRecent !== -1) {
+        const recent = [free[firstRecent]!];
+        let pastEnd = firstRecent;
+        for (let index = firstRecent + 1; index < free.length; index++) {
+          const lane = free[index]!;
+          if (pastThreshold(lane)) free[pastEnd++] = lane;
+          else recent.push(lane);
+        }
+        free.length = pastEnd;
+        free.push(...recent);
+      }
+      for (const source of emptySources) {
+        const index = drawLaneRandomIndex(free.length, options.random);
+        map.set(source, free.splice(index, 1)[0]!);
+      }
     }
     for (const index of indices) {
       const note = notes[index]!;
@@ -268,6 +308,14 @@ function randomizeTimeBasedNotes(
   return channels;
 }
 
+/** The lowest-numbered lane (the highest with `highest`), numbered as the source numbers them. */
+function pickSideLane(lanes: readonly string[], numbers: ReadonlyMap<string, number>, highest: boolean): string {
+  let best = lanes[0]!;
+  for (const lane of lanes)
+    if (highest ? numbers.get(lane)! > numbers.get(best)! : numbers.get(lane)! < numbers.get(best)!) best = lane;
+  return best;
+}
+
 function pickRandom<T>(lanes: readonly T[], random: () => number): T {
   return lanes[drawLaneRandomIndex(lanes.length, random)]!;
 }
@@ -279,11 +327,13 @@ function randomizeLR2Notes(
   rows: ReadonlyMap<number, number[]>,
   channels: string[],
   random: () => number,
+  outside?: string,
 ): string[] {
   const held = new Map<string, { source: string; endMs: number }>();
+  const destinations = outside === undefined ? lanes : [...lanes, outside];
   for (const [timeMs, indices] of [...rows].sort(([left], [right]) => left - right)) {
     for (const [target, hold] of held) if (hold.endMs < timeMs) held.delete(target);
-    const free = lanes.filter((lane) => !held.has(lane));
+    const free = destinations.filter((lane) => !held.has(lane));
     const map = new Map<string, string>();
     const visible = indices
       .filter((index) => notes[index]!.kind !== 'invisible')
@@ -303,7 +353,7 @@ function randomizeLR2Notes(
       if (note.kind !== 'invisible') continue;
       let target = map.get(note.channel) ?? [...held].find(([, hold]) => hold.source === note.channel)?.[0];
       if (target === undefined) {
-        const candidates = free.length > 0 ? free : lanes.filter((lane) => !held.has(lane));
+        const candidates = free.length > 0 ? free : destinations.filter((lane) => !held.has(lane));
         target = candidates.length > 0 ? pickRandom(candidates, random) : note.channel;
         const position = free.indexOf(target);
         if (position >= 0) free.splice(position, 1);

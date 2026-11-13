@@ -135,6 +135,34 @@ describe('captureOptionSettings', () => {
       dpFlip: true,
       bpmGuide: true,
       bpmChangeWarning: true,
+      guideSE: true,
+      judgeCounts: false,
+      judgeDetailSplit: true,
+      judgeDetail: 'MS',
+      scoreTargetRate: 85.5,
+      judgePosition: 15,
+      judgeDisplay: 'OFF',
+      laneBrightness: 40,
+      scoreTarget: 'MAX',
+      markProcessedNotes: true,
+      showJudgeArea: true,
+      lr2AddMines: 40,
+      lr2AddLongNotes: 40,
+      lr2Loudness: 40,
+      lr2AddNotes: 40,
+      lr2Gambol: 2,
+      lr2SideJump: 40,
+      lr2SpiralEffect: 40,
+      lr2Wave: 40,
+      lr2SinCurve: 40,
+      lr2Nabeatsu: 40,
+      lr2Heartbeat: 40,
+      lr2Char: 40,
+      lr2SuperLoop: 40,
+      lr2Tornado: 40,
+      lr2Earthquake: 40,
+      lr2Acceleration: 'RANDOM',
+      autoScratchNotes: 'HIDE',
       judgeTimingMs: 0,
       judgeTimingAutoAdjust: 'OFF',
       visualConstant: false,
@@ -217,6 +245,7 @@ describe('captureOptionSettings', () => {
       skinEffects: 'off',
       renderResolution: 1,
       playLayout: 'touch',
+      renderer: 'webgpu',
       recordingFormat: 'mp4/avc',
       workerCount: 3,
       compressorTuning: defaultCompressorTunings(),
@@ -279,20 +308,26 @@ test('persists per-side LR2 CONVERGE targets', () => {
   );
 });
 
-test('migrates bare RANDOM, S-RANDOM, CONVERGE and BATTLE to the stored ruleset source (ADR 0019)', () => {
+test('migrates bare S-RANDOM, CONVERGE and BATTLE to the stored ruleset source (ADR 0019)', () => {
   const read = (settings: Record<string, unknown>) =>
     parseOptionSettingsDocument(JSON.stringify({ version: 0, updatedAt: 1, settings }))?.settings;
   expect(
     read({ judgeRuleset: 'beatoraja', random1P: 'RANDOM', random2P: 'S-RANDOM', battleMode: 'BATTLE' }),
-  ).toMatchObject({ random1P: 'beatoraja:RANDOM', random2P: 'beatoraja:S-RANDOM', battleMode: 'beatoraja:BATTLE' });
+  ).toMatchObject({ random1P: 'RANDOM', random2P: 'beatoraja:S-RANDOM', battleMode: 'beatoraja:BATTLE' });
+  // AC's S-RANDOM is LR2's.
   expect(read({ judgeRuleset: '____', random1P: 'S-RANDOM', battleMode: 'BATTLE' })).toMatchObject({
-    random1P: '____:S-RANDOM',
+    random1P: 'lr2:S-RANDOM',
     battleMode: '____:BATTLE',
   });
   // Without a stored ruleset the document was saved under LR2 rules, the default.
   expect(read({ random1P: 'CONVERGE', random2P: 'RANDOM' })).toMatchObject({
     random1P: 'lr2:CONVERGE',
-    random2P: 'lr2:RANDOM',
+    random2P: 'RANDOM',
+  });
+  // Values since merged read as the option they were merged into.
+  expect(read({ random1P: 'beatoraja:RANDOM', random2P: '____:S-RANDOM' })).toMatchObject({
+    random1P: 'RANDOM',
+    random2P: 'lr2:S-RANDOM',
   });
   // A qualified value is kept, and a source that does not define the name is dropped.
   expect(read({ judgeRuleset: 'lr2', random1P: 'beatoraja:S-RANDOM', random2P: '____:CONVERGE' })).toEqual({

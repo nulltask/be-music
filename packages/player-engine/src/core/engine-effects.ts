@@ -21,6 +21,7 @@ import {
   writeSampleStopEventLog,
 } from './engine-trace.ts';
 import { type AudioSession } from './engine-types.ts';
+import { resolveGuideSound } from './guide-sound.ts';
 
 /**
  * Maps judge-core effects onto a play's audio session, UI buses, replay and no-TUI trace.
@@ -199,6 +200,11 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeEffectHand
           undefined,
           effect.signedDeltaMs,
         );
+        // beatoraja's GUIDE SE: the judgment's sound, from an audio session that has the sound set's.
+        if (audioSession?.playGuideSound !== undefined) {
+          const guide = resolveGuideSound(effect.judge, effect.poor);
+          if (guide !== undefined) audioSession.playGuideSound(guide);
+        }
         return;
       case 'trace':
         if (!uiEnabled) {

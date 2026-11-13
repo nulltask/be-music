@@ -197,11 +197,13 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     search: { openFromPointer: vi.fn() },
     optionsDialog: {
       refreshPlayOptionControllers: vi.fn(),
+      refreshRecordConsequence: vi.fn(() => 'record'),
       scheduleFirstRunResolutionDetect: vi.fn(),
       setGhostAvailability: vi.fn(),
     },
     beatorajaSkinOptions: { refreshBeatorajaSelectSkinOptions: vi.fn(), clear: vi.fn() },
     playStatusShown: vi.fn(() => false),
+    showChartDiagnostics: vi.fn(),
     setStatus: vi.fn<SelectRouteDeps['setStatus']>(),
     unlockReplayOptions: vi.fn<SelectRouteDeps['unlockReplayOptions']>(),
     rememberHiSpeed: vi.fn<SelectRouteDeps['rememberHiSpeed']>(),
@@ -508,6 +510,17 @@ describe('SelectRoute: dropping the screen for another skin system or LR2 theme'
 });
 
 describe('SelectRoute: what the screen tells the app', () => {
+  test('chart warnings follow focus and clear on non-chart entries', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    const { focus } = lastMade(h).options.on;
+    const chart = chartEntry('a');
+    focus?.({ kind: 'chart', chart });
+    expect(h.deps.showChartDiagnostics).toHaveBeenLastCalledWith(chart.chart, chart.chartPath);
+    focus?.(undefined);
+    expect(h.deps.showChartDiagnostics).toHaveBeenLastCalledWith(undefined, undefined);
+  });
+
   test('a chart started goes to its decide screen, with AUTO only from the skin’s AUTO', async () => {
     const h = harness();
     await h.route.showSelect();
@@ -554,6 +567,15 @@ describe('SelectRoute: what the screen tells the app', () => {
 
     edit({ hiSpeed: 3.5 });
     expect(h.deps.rememberHiSpeed).toHaveBeenCalledWith(3.5, 'select');
+
+    // The status line says what the options do to the record when that changes, and not otherwise.
+    expect(h.deps.setStatus).not.toHaveBeenCalledWith('record');
+    vi.mocked(h.deps.optionsDialog.refreshRecordConsequence).mockReturnValue('LIGHT ASSIST');
+    edit({ autoScratch1P: true });
+    expect(h.deps.setStatus).toHaveBeenLastCalledWith('LIGHT ASSIST');
+    const calls = vi.mocked(h.deps.setStatus).mock.calls.length;
+    edit({ hiSpeed: 4 });
+    expect(vi.mocked(h.deps.setStatus).mock.calls.length).toBe(calls);
   });
 
   test('Escape at the root asks first, and staying keeps the screen', async () => {

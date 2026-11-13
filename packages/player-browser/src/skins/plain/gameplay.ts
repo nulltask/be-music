@@ -1,9 +1,11 @@
 import {
+  clampHoldSparkX,
   flashingGreatColor,
   holdSeed,
   holdSparks,
   isFlashingGreat,
   judgeDisplayWord,
+  resolveJudgeWordY,
   resolveLanePlayLabel,
   loadingDots,
   resolveLaneRuns,
@@ -17,6 +19,7 @@ import {
   resolveNoteHeight,
   resolveHellChargeLook,
   resolveLongNoteMarks,
+  resolveSongInfoLayers,
 } from '@be-music/player-skin-sdk';
 import {
   ACCENT,
@@ -30,6 +33,7 @@ import {
   PANEL,
   TEXT,
   css,
+  drawSongInfoLayers,
   stat,
   text,
 } from './theme.ts';
@@ -248,14 +252,20 @@ function drawHolds(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
     ctx.globalAlpha = 0.55 + 0.25 * Math.sin(ageMs / 90);
     ctx.fillRect(lane.x, y - 3, lane.w, 6);
     ctx.fillStyle = '#ffffff';
-    for (const spark of holdSparks(ageMs, holdSeed(lane.channel, lane.holdStartedAtMs), lane.w)) {
+    // The sparks stay on the held note, under its end and inside its width, so the end stays easy to see.
+    const maxRise = lane.holdTop === undefined ? undefined : y - lane.holdTop - PLAIN_SPARK_MAX / 2;
+    for (const spark of holdSparks(ageMs, holdSeed(lane.channel, lane.holdStartedAtMs), lane.w, { maxRise })) {
       ctx.globalAlpha = spark.alpha;
       const size = spark.size * 1.6;
-      ctx.fillRect(centerX + spark.offsetX - size / 2, y - spark.rise - size / 2, size, size);
+      const x = clampHoldSparkX(centerX + spark.offsetX, size, lane.x, lane.w);
+      ctx.fillRect(x - size / 2, y - spark.rise - size / 2, size, size);
     }
     ctx.globalAlpha = 1;
   }
 }
+
+/** Largest spark Plain draws (`holdSparks`' largest, 3.5 px, at 1.6x). */
+const PLAIN_SPARK_MAX = 3.5 * 1.6;
 
 /** The held lane's glow on the judgement line: the key beam's blue, brighter. */
 const HOLD_GLOW = 'rgb(120, 170, 255)';
@@ -273,8 +283,9 @@ function drawBombs(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
 }
 
 /** The latest judgement and combo over each play side, centred on `y` — or NOW LOADING while the chart loads. */
-function drawJudgement(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, y: number): void {
+function drawJudgement(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, skinY: number): void {
   const { runtime, layout, nowMs } = frame;
+  const y = resolveJudgeWordY(skinY, layout.playfield);
   if (runtime.loading) {
     text(ctx, `NOW LOADING${loadingDots(nowMs)}`, layout.playfield.left + 12, y, { size: 13, color: MUTED });
     return;
@@ -301,8 +312,26 @@ function drawJudgement(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFram
     const combo = side.combo ?? 0;
     const keepsCombo = side.judge === 'PERFECT' || side.judge === 'GREAT' || side.judge === 'GOOD';
     if (keepsCombo && combo > 0) text(ctx, String(combo), x, sideY + 24, { size: 16, align: 'center' });
+    // The judge detail above the word: FAST / SLOW or the offset, the keys' and the scratch's side by side when apart.
+    const details = side.details ?? [];
+    const detailY = sideY - (resolveLanePlayLabel(runtime, side.side) ? 44 : 22);
+    details.forEach((detail, index) => {
+      const spread = details.length > 1 ? (index - (details.length - 1) / 2) * JUDGE_DETAIL_SPREAD : 0;
+      text(
+        ctx,
+        detail.lane === undefined ? detail.text : `${JUDGE_DETAIL_LANES[detail.lane]} ${detail.text}`,
+        x + spread,
+        detailY,
+        { size: 10, weight: 700, color: JUDGE_DETAIL_COLORS[detail.tone], align: 'center' },
+      );
+    });
   }
 }
+
+/** The judge detail's colours, and the names the keys' and the scratch's lead with when they are shown apart. */
+const JUDGE_DETAIL_COLORS = { fast: ACCENT, slow: DANGER, just: TEXT } as const;
+const JUDGE_DETAIL_LANES = { keys: 'KEY', scratch: 'SCR' } as const;
+const JUDGE_DETAIL_SPREAD = 84;
 
 function judgeColor(judge: string): string {
   if (judge === 'GOOD') return ACCENT;
@@ -344,11 +373,13 @@ function drawHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, wid
 
   // Track, bottom left.
   // Genre, title, artist — the order every built-in skin uses.
-  if (runtime.chartGenre) {
-    text(ctx, runtime.chartGenre, left, height - 70, { size: 10, color: MUTED, maxWidth: 380, nowMs });
-  }
-  text(ctx, runtime.chartTitle ?? '', left, height - 50, { size: 16, weight: 700, maxWidth: 380, nowMs });
-  text(ctx, runtime.chartArtist ?? '', left, height - 28, { size: 11, color: MUTED, maxWidth: 380, nowMs });
+  drawSongInfoLayers(ctx, resolveSongInfoLayers(runtime), (info) => {
+    if (info.chartGenre) {
+      text(ctx, info.chartGenre, left, height - 70, { size: 10, color: MUTED, maxWidth: 380, nowMs });
+    }
+    text(ctx, info.chartTitle ?? '', left, height - 50, { size: 16, weight: 700, maxWidth: 380, nowMs });
+    text(ctx, info.chartArtist ?? '', left, height - 28, { size: 11, color: MUTED, maxWidth: 380, nowMs });
+  });
 
   // Score figures, bottom right, in one row (the 2P player's row above the 1P player's).
   scoreFigures(runtime).forEach(([label, value], index) => {
@@ -365,6 +396,8 @@ function drawHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, wid
 
   // Judgement counts down the right edge, beside the BGA; a two-player play adds the 2P player's counts beside them.
   const columnX = width - MARGIN - 80;
+  // The player turned the judgment counts off.
+  if (runtime.hidesJudgeCounts) return;
   judgeCounts(runtime).forEach(([label, count], index) => {
     const y = COLUMN_TOP + index * 22;
     text(ctx, label, columnX, y, { size: 11, color: MUTED, weight: 700 });
@@ -460,17 +493,19 @@ function drawPortraitHUD(
   );
 
   // Genre, title, artist — the order every built-in skin uses — at the top of the column.
-  const lift = runtime.chartGenre ? 12 : 0;
   const textW = track.w;
-  if (runtime.chartGenre) {
-    text(ctx, runtime.chartGenre, track.x, track.y + 8, { size: 14, color: MUTED, maxWidth: textW, nowMs });
-  }
-  text(ctx, runtime.chartTitle ?? '', track.x, track.y + 14 + lift, { size: 20, weight: 700, maxWidth: textW, nowMs });
-  text(ctx, runtime.chartArtist ?? '', track.x, track.y + 34 + lift, {
-    size: 14,
-    color: MUTED,
-    maxWidth: textW,
-    nowMs,
+  drawSongInfoLayers(ctx, resolveSongInfoLayers(runtime), (info) => {
+    const lift = info.chartGenre ? 12 : 0;
+    if (info.chartGenre) {
+      text(ctx, info.chartGenre, track.x, track.y + 8, { size: 14, color: MUTED, maxWidth: textW, nowMs });
+    }
+    text(ctx, info.chartTitle ?? '', track.x, track.y + 14 + lift, { size: 20, weight: 700, maxWidth: textW, nowMs });
+    text(ctx, info.chartArtist ?? '', track.x, track.y + 34 + lift, {
+      size: 14,
+      color: MUTED,
+      maxWidth: textW,
+      nowMs,
+    });
   });
 
   // Score figures, two by two.
@@ -480,8 +515,8 @@ function drawPortraitHUD(
     text(ctx, value, box.x, box.y + 20, { size: 22, weight: 700, maxWidth: box.w - 8, nowMs });
   });
 
-  // Judgement counts in one row: label over count.
-  judgeCounts(runtime).forEach(([label, count], index) => {
+  // Judgement counts in one row: label over count. None when the player turned them off.
+  (runtime.hidesJudgeCounts ? [] : judgeCounts(runtime)).forEach(([label, count], index) => {
     const box = counts[index]!;
     text(ctx, label, box.x, box.y, { size: 14, color: MUTED, weight: 700 });
     text(ctx, String(count ?? 0), box.x, box.y + 16, { size: 18, maxWidth: box.w - 6 });

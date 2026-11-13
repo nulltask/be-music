@@ -182,7 +182,9 @@ export function withNonstopConnection(
     ...(stage.artist !== undefined ? { artist: stage.artist } : {}),
   }));
   const rebuilt = lr2CourseDefinition(course.name, course.kind, stages, course.keyMode, keys);
-  return { ...course, connections: rebuilt.connections!, source: rebuilt.source };
+  // The hash holds the connections after stages 1-10; a longer course keeps its own past them.
+  const connections = [...rebuilt.connections!, ...(course.connections ?? []).slice(rebuilt.connections!.length)];
+  return { ...course, connections, source: rebuilt.source };
 }
 
 function escapeXML(text: string): string {
@@ -195,18 +197,27 @@ function escapeXML(text: string): string {
  * MD5s, and skipped when a stage has none. The format has no room for constraints or `release`: LR2 reads a GRADE course
  * back with {@link defaultCourseMakerConstraints} and any other course with none, and every course back as released
  * (`serializeBeatorajaCourseFile` keeps both).
+ *
+ * `options.maxStages` writes each course's first that many stages only: a file for LR2, which plays the first five
+ * (`LR2_MAX_PLAYED_STAGES`), is written with five. Without it every stage is written.
  */
-export function serializeLR2CourseFile(courses: readonly CourseDefinition[]): string {
+export function serializeLR2CourseFile(
+  courses: readonly CourseDefinition[],
+  options: { maxStages?: number } = {},
+): string {
+  const maxStages = options.maxStages ?? Number.POSITIVE_INFINITY;
   const lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<courselist>'];
   for (const course of courses) {
     let hash: string;
     if (course.source.format === 'lr2crs') {
-      hash = course.source.hash;
+      // The 32-character header, then one 32-character MD5 per stage.
+      hash = Number.isFinite(maxStages) ? course.source.hash.slice(0, 32 * (maxStages + 1)) : course.source.hash;
     } else {
-      if (course.stages.some((stage) => stage.md5 === undefined)) continue;
+      const stages = course.stages.slice(0, maxStages);
+      if (stages.some((stage) => stage.md5 === undefined)) continue;
       hash = buildLR2CourseHash({
         kind: course.kind,
-        stageMD5s: course.stages.map((stage) => stage.md5!),
+        stageMD5s: stages.map((stage) => stage.md5!),
         ...(course.connections !== undefined ? { connections: course.connections } : {}),
       });
     }

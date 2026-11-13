@@ -7,6 +7,7 @@ import {
   resolveResultJingle,
   resolveResultJingles,
   startSystemSound,
+  GUIDE_SOUND_SLOTS,
   SYSTEM_SOUND_SLOTS,
   systemSoundSetFromBeatoraja,
   type SystemSoundSet,
@@ -102,5 +103,16 @@ describe('select cues', () => {
     expect(startSystemSound({ kind: 'course', course: makeCourse('ok') })).toBe('decide');
     expect(startSystemSound({ kind: 'course', course: makeCourse('missing', { playable: false }) })).toBe('cancel');
     expect(startSystemSound({ kind: 'folder', folder: { label: 'x', charts: [] } })).toBeUndefined();
+  });
+});
+
+describe('GUIDE SE slots', () => {
+  test('a beatoraja sound set gives its guide sounds by path', () => {
+    const set = systemSoundSetFromBeatoraja({
+      paths: { guidePG: 'sound/guide-pg.wav', guideMS: 'sound/guide-ms.wav' },
+    });
+    expect(set).toEqual({ guidePG: { path: 'sound/guide-pg.wav' }, guideMS: { path: 'sound/guide-ms.wav' } });
+    for (const slot of GUIDE_SOUND_SLOTS) expect(SYSTEM_SOUND_SLOTS).toContain(slot);
+    expect(GUIDE_SOUND_SLOTS).toEqual(['guidePG', 'guideGR', 'guideGD', 'guideBD', 'guidePR', 'guideMS']);
   });
 });

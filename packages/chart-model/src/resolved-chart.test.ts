@@ -167,6 +167,11 @@ describe('resolveChart', () => {
     ]);
     expect(resolved.volumeChanges[1]!.gain).toBe(1);
   });
+  test('lists volume changes of a bmson chart stitched from BMS stages', () => {
+    const json = bmsChart([event(1, '97', '40')]);
+    json.sourceFormat = 'bmson';
+    expect(resolveChart(json).volumeChanges.map((change) => change.bus)).toEqual(['bgm']);
+  });
 
   test('isInvisibleNoteChannel matches 3x / 4x lane channels only', () => {
     expect(['31', '49', '3A', '4z', '11', 'D1', '30', '3'].map((channel) => isInvisibleNoteChannel(channel))).toEqual([

@@ -26,6 +26,7 @@ import { abortedRecordPlayFromResult, courseStageRecordPlayFromResult } from '@b
 import {
   snapHiSpeed,
   type LibraryChart,
+  type RankingScoreTarget,
   type PlayOptions,
   type PlayResult,
   type PracticeRange,
@@ -58,6 +59,7 @@ import {
 import type { PlayOptionsService } from '../../services/play-options.ts';
 import type { RecordsService } from '../../services/records.ts';
 import { libraryChartReplaySlotTarget } from '../../services/replay-slots.ts';
+import { resolveRankingTargetEXScore, type RankingPage } from '../../services/ranking-target.ts';
 import type { BeatorajaPlayEntry, BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
 import { chartCopiesItself, courseStageRecordKey, playRecordKey } from '../../chart-best-records.ts';
 import type { TestHookRecorder } from '../../test-hook.ts';
@@ -139,6 +141,15 @@ export interface PlayRouteDeps {
    * reader for shows no ghost.
    */
   readonly ghostSources?: GhostSourceDeps;
+  /**
+   * Reads a stretch of a chart's Leaderboard ranking, for the score target's ranking places; without it they show
+   * nothing.
+   */
+  readonly fetchRankingPage?: (
+    chartFingerprint: string,
+    offset: number,
+    limit: number,
+  ) => Promise<RankingPage | undefined>;
   /** The Options dialog: the compressor's tuned parameters, and the hi-speed slider. */
   readonly optionsDialog: OptionsDialog;
   /** The compressor architecture every play mounts with (`?compressor=`). */
@@ -216,6 +227,7 @@ export class PlayRoute {
   private readonly playOptions: PlayRouteDeps['playOptions'];
   private readonly guiState: PlayRouteDeps['guiState'];
   private readonly ghostSources: PlayRouteDeps['ghostSources'];
+  private readonly fetchRankingPage: PlayRouteDeps['fetchRankingPage'];
   private readonly optionsDialog: PlayRouteDeps['optionsDialog'];
   private readonly compressorMode: PlayRouteDeps['compressorMode'];
   private readonly deviceProfile: PlayRouteDeps['deviceProfile'];
@@ -251,6 +263,7 @@ export class PlayRoute {
     this.playOptions = deps.playOptions;
     this.guiState = deps.guiState;
     this.ghostSources = deps.ghostSources;
+    this.fetchRankingPage = deps.fetchRankingPage;
     this.optionsDialog = deps.optionsDialog;
     this.compressorMode = deps.compressorMode;
     this.deviceProfile = deps.deviceProfile;
@@ -296,6 +309,24 @@ export class PlayRoute {
     return source !== undefined ? { ghost: source, ghostMode: toGhostPresentationMode(ghostMode) } : {};
   }
 
+  /**
+   * The score at a ranking target's place on the chart's Leaderboard ranking, counted from the best record for NEXT.
+   * The Leaderboard keys charts by their chart fingerprint, so a chart with only a file hash has no ranking.
+   */
+  private rankingTargetOf(
+    chartEntry: LibraryChart,
+  ): ((target: RankingScoreTarget) => Promise<number | undefined>) | undefined {
+    const fetchPage = this.fetchRankingPage;
+    const chart = libraryChartReplaySlotTarget(chartEntry);
+    if (fetchPage === undefined || chart === undefined || chart.id.startsWith('sha256:')) return undefined;
+    return (target) =>
+      resolveRankingTargetEXScore(
+        target,
+        this.records.lookupChartBestRecord(chartEntry)?.exScore ?? 0,
+        (offset, limit) => fetchPage(chart.id, offset, limit),
+      );
+  }
+
   /** The play (`createPlayScene`), whichever family draws it: loading behind a decide screen, or on the stage. */
   private get gameplayView(): PlayScene | undefined {
     return this.router.play;
@@ -322,6 +353,7 @@ export class PlayRoute {
       courseStage?: CourseStagePlay;
       nonstop?: NonstopPlay;
       preResolved?: ResolvedPlayChart;
+      fixedArrangement?: Pick<BeMusicReplay, 'chart' | 'play'>;
     },
   ): PlayScene {
     this.liveDrawing = {
@@ -345,12 +377,16 @@ export class PlayRoute {
       playOptions,
       autoPlay: overrides.autoPlay,
       replay,
+      // The arrangement asked for with the play (the result's retry on the same one), else the one pinned in the
+      // Options dialog. One recorded under other judgment rules cannot be played again, so it is left out.
       fixedArrangement:
-        replay === undefined &&
-        courseStage === undefined &&
-        nonstop === undefined &&
-        this.guiState.judgeRuleset === 'beatoraja'
-          ? this.playOptions.arrangementFor?.(chartEntry.id)
+        replay === undefined && courseStage === undefined && nonstop === undefined
+          ? overrides.fixedArrangement !== undefined &&
+            (overrides.fixedArrangement.play.judgeRuleset ?? 'lr2') === this.guiState.judgeRuleset
+            ? overrides.fixedArrangement
+            : this.guiState.judgeRuleset === 'beatoraja'
+              ? this.playOptions.arrangementFor?.(chartEntry.id)
+              : undefined
           : undefined,
       chartHashes: overrides.chartHashes,
       courseStage,
@@ -548,6 +584,7 @@ export class PlayRoute {
     const { onExit, onChartFinished, onRestart, onHiSpeedChange, onTempoChange } = callbacks;
     const source = resolveChartSource(this.library.collection, chartEntry);
     const practiceRange = practicing ? this.practiceRange?.(chartEntry) : undefined;
+    const rankingTarget = this.rankingTargetOf(chartEntry);
     const view = createPlayScene(kit, {
       chart: chartEntry,
       allowSeek: 'practice',
@@ -584,6 +621,7 @@ export class PlayRoute {
             )
           : (this.records.lookupChartBestRecord(chartEntry)?.exScore ?? 0),
       },
+      ...(rankingTarget !== undefined ? { rankingTarget } : {}),
       ...(this.leaderboard.playerName !== undefined ? { playerName: this.leaderboard.playerName } : {}),
       on: {
         exit: onExit,
@@ -651,6 +689,8 @@ export class PlayRoute {
       nonstop?: NonstopPlay;
       /** The chart as a decide screen drew it, for a play made again after its preload failed. */
       preResolved?: ResolvedPlayChart;
+      /** The play whose note arrangement this one repeats (the result's retry on the same arrangement). */
+      fixedArrangement?: Pick<BeMusicReplay, 'chart' | 'play'>;
     } = {},
   ): Promise<void> {
     this.elements.shell.classList.add('playing');

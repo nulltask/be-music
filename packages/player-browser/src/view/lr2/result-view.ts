@@ -21,7 +21,7 @@ import {
   resolveLR2ResultTimers,
   type LR2ResultState,
 } from '@be-music/skin-lr2/state';
-import type { PlayResult } from '@be-music/player-scene-model';
+import { scrollCourseStages, type PlayResult } from '@be-music/player-scene-model';
 import { Color, Container, Graphics, type Texture } from 'pixi.js';
 import type { BrowserAssetSource } from '../../collection/types.ts';
 import type { LR2Kit } from '../../host/family-kit.ts';
@@ -52,6 +52,9 @@ import {
   resolveSolidSpecialGraphicTexture,
 } from '../../skin/lr2/scene-textures.ts';
 import type { IntentSink, ResultFrame, ResultIntent, ResultView, SceneViewTiming } from '../types.ts';
+
+/** The course stages an LR2 skin lists at once: texts 150-154 and 160-164 name stages 1-5. */
+const LR2_COURSE_STAGE_ROWS = 5;
 
 const log = logger('result');
 
@@ -206,7 +209,16 @@ export class LR2ResultView implements ResultView {
       result,
       resolveLR2ResultState({
         result,
-        ...(result.course !== undefined ? { course: result.course } : {}),
+        // A course run longer than LR2's five stage rows (texts 150-154) scrolls its stage list to show every stage.
+        ...(result.course !== undefined
+          ? {
+              course: scrollCourseStages(
+                result.course,
+                frame.clock.nowMs - frame.clock.enteredAtMs,
+                LR2_COURSE_STAGE_ROWS,
+              ),
+            }
+          : {}),
         // The `#FLIPRESULT` of the skin the result is shown on (op 351).
         flipResult: skin.scratchFlip?.flipResult === true,
         // The skin's CUSTOMOPTION defaults: LITONE4-style result skins gate most of their chrome on `#IF,<default>`.

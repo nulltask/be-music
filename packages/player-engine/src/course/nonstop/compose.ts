@@ -42,12 +42,24 @@ import {
   type NonstopTempoPoint,
 } from './readouts.ts';
 import { createNonstopStageTiming } from './stage.ts';
+import type { NonstopSongInfo } from './song-info.ts';
 import { flattenNonstopBGAOpacity, hasBGAOpacity, placeNonstopBGAOpacity } from './bga-opacity.ts';
 import { placeNonstopBmsonBGA } from './bmson-bga.ts';
 import { placeNonstopKeyBoundBGA } from './key-bound-bga.ts';
 import { createNonstopBMPAllocator } from './bga-resources.ts';
+import { placeNonstopKeyframes } from './scroll-speed.ts';
 
 /** One stage to stitch: its BMS or bmson chart with control flow resolved, and whether it is a `.pms` chart. */
+/** A stage chart's song, as its metadata names it (blank names left out). */
+function stageSongInfo(chart: BeMusicJSON): NonstopSongInfo {
+  const info: NonstopSongInfo = {};
+  for (const key of ['title', 'subtitle', 'artist', 'genre'] as const) {
+    const value = chart.metadata[key]?.trim();
+    if (value) info[key] = value;
+  }
+  return info;
+}
+
 export interface NonstopStageInput {
   chart: BeMusicJSON;
   pms?: boolean;
@@ -58,10 +70,10 @@ export interface NonstopStageInput {
  * (`ReplayNonstopRun.stitch`), so a stitched chart is rebuilt by the rules it was played on. Raise it whenever a change
  * moves a stitched note, sound, rank or timing, or changes gauge inputs; keep earlier rules reachable through `options.stitch`.
  */
-export const NONSTOP_STITCH_VERSION = 3;
+export const NONSTOP_STITCH_VERSION = 4;
 
 /** The stitching rule versions {@link stitchNonstopCourse} can follow. */
-export const NONSTOP_STITCH_VERSIONS: readonly number[] = [1, 2, 3];
+export const NONSTOP_STITCH_VERSIONS: readonly number[] = [1, 2, 3, 4];
 
 export interface StitchNonstopOptions extends NonstopPlanOptions {
   /** The stitching rules to follow ({@link NONSTOP_STITCH_VERSION} by default); one it does not know is refused. */
@@ -107,6 +119,13 @@ export interface NonstopStitchStage {
   bgaFadeOut?: NonstopFade;
   /** Whether LR2 announces the stage when it starts (ops 280-289, title text): only after a BLANK connection. */
   lr2StageMarker: boolean;
+  /** The stage's song, as its chart names it, for the play screen ({@link resolveNonstopSongInfoState}). */
+  songInfo?: NonstopSongInfo;
+  /**
+   * The stage's `#BACKBMP`, through `assetPath`, for the play screen to show while the stage is shown. The stitched
+   * chart's own `#BACKBMP` is the first stage's.
+   */
+  backBMP?: string;
 }
 
 export interface NonstopStitchMap {
@@ -120,6 +139,11 @@ export interface NonstopStitchMap {
   keyBoundBGA?: KeyBoundBGACue[];
   /** Resolved conditional animations, remapped to stage-owned resources and FIT time. */
   bmsonBGA?: BmsonBGAEventCue[];
+  /**
+   * The slot each stage's mines explode with (its own `#WAV00`, rule version 4), from its window on, for the engine's
+   * `landmineSampleKeys` option; a cue without `sampleKey` is a stage without `#WAV00`. Omitted when no stage has one.
+   */
+  landmineSampleKeys?: { seconds: number; sampleKey?: string }[];
   stages: NonstopStitchStage[];
   /**
    * What the BPM readouts show over the play ({@link resolveNonstopTempo}, look it up with `nonstopBPMAt`): each
@@ -187,7 +211,9 @@ interface StitchedStop {
  *
  * A note of a later stage that lands before the previous stage's last note, or within 0.1 s of it on a lane that
  * note's stage also used there, becomes background sound, as LR2 does at the seam. Keysound and BGA keys are renumbered
- * into one base-62 space (`#BASE 62`); BMS output refuses more than 3843 of either (`id-space`), while bmson output uses longer keys. The chart's
+ * into one base-62 space (`#BASE 62`); bmson output uses longer keys. BMS output holds at most 3843 of either, so from
+ * rule version 3 a course of BMS stages past that (four or five keysound-heavy charts often are) is stitched as bmson
+ * instead, as one with CN / HCN long notes is; earlier versions refuse it (`id-space`). The chart's
  * judge rank is the first stage's (the map's `stageRanks` change it for later stages). LR2 keeps the last TOTAL
  * declaration across the stage loop, including when later stages omit it. Version 1 retains its former last-stage-only
  * TOTAL rule for existing replays. A stitching rule version it does not know is refused (`stitch-version`).
@@ -195,6 +221,20 @@ interface StitchedStop {
 export function stitchNonstopCourse(
   stages: readonly NonstopStageInput[],
   options: StitchNonstopOptions,
+): StitchNonstopResult {
+  const result = stitchNonstopCourseAs(stages, options, false);
+  // A course BMS output cannot key is stitched as bmson: this changes no course that stitched before, so the replays of
+  // earlier runs stitch as they did.
+  if (!result.ok && result.reason === 'id-space' && (options.stitch ?? NONSTOP_STITCH_VERSION) >= 3)
+    return stitchNonstopCourseAs(stages, options, true);
+  return result;
+}
+
+/** {@link stitchNonstopCourse}, with bmson output forced by `bmsonOutput`. */
+function stitchNonstopCourseAs(
+  stages: readonly NonstopStageInput[],
+  options: StitchNonstopOptions,
+  bmsonOutput: boolean,
 ): StitchNonstopResult {
   if (!NONSTOP_STITCH_VERSIONS.includes(options.stitch ?? NONSTOP_STITCH_VERSION)) {
     return { ok: false, reason: 'stitch-version' };
@@ -236,6 +276,7 @@ export function stitchNonstopCourse(
 
   // BMS has one global LNMODE. Version 3 uses per-note bmson types when a BMS stage needs CN/HCN.
   const asBmson =
+    bmsonOutput ||
     bmsonStage >= 0 ||
     ((options.stitch ?? NONSTOP_STITCH_VERSION) >= 3 &&
       resolved.some((stage) => stage.notes.some((note) => isHeldLongNote(note) && note.lnMode !== 1)));
@@ -251,6 +292,21 @@ export function stitchNonstopCourse(
   let hasChartOptions = false;
   const stopKeys = new NonstopKeyAllocator(asBmson);
   const chart = createEmptyJSON(asBmson ? 'bmson' : 'bms');
+  // Rule version 4 keeps more of each stage's own rules: per-slot BMS playback and BGA keying in bmson output,
+  // `#DEFEXRANK` in BMS output, `#EXRANKxx`, 97 / 98 volume, SCROLL and SPEED changes, each stage's `#WAV00`, and a
+  // negative-BPM reversal, which freezes the rest of the play as it does in LR2.
+  const perStageRules = (options.stitch ?? NONSTOP_STITCH_VERSION) >= 4;
+  const bpmKeys = new NonstopKeyAllocator(asBmson);
+  let reversal: { seconds: number; stage: number } | undefined;
+  const volumeChannels = new Set<string>();
+  // SCROLL (`SC`) and SPEED (`SP`): the channels an earlier stage set, and one key per distinct value.
+  const keyframeChannels = new Set<string>();
+  const keyframeKeys = {
+    SC: { allocator: new NonstopKeyAllocator(asBmson), byValue: new Map<number, string>(), table: chart.bms.scroll },
+    SP: { allocator: new NonstopKeyAllocator(asBmson), byValue: new Map<number, string>(), table: chart.bms.speed },
+  };
+  const landmineSampleKeys: { seconds: number; sampleKey?: string }[] = [];
+  const exRankChanges: { seconds: number; exRank: number }[][] = stages.map(() => []);
   let totalStage = stages.length - 1;
   if ((options.stitch ?? NONSTOP_STITCH_VERSION) >= 2)
     while (totalStage >= 0 && stages[totalStage]!.chart.metadata.total === undefined) totalStage--;
@@ -294,6 +350,9 @@ export function stitchNonstopCourse(
       if (!known.has(`w${stitched}`)) {
         known.add(`w${stitched}`);
         stageWAV[index]!.push(stitched);
+        // A BMS stage's slot keeps BMS playback (one voice per slot) in bmson output.
+        if (perStageRules && asBmson && source.sourceFormat === 'bms')
+          (chart.resources.wavSourceFormat ??= {})[stitched] = 'bms';
         const path = wavResources[key];
         if (path !== undefined) chart.resources.wav[stitched] = assetPath(index, 'wav', path);
         const intrinsicGain = (source.resources.wavGain?.[key] ?? 1) * volWAVToLinearGain(source.bms.volWAV);
@@ -365,8 +424,67 @@ export function stitchNonstopCourse(
     if (!bmson) return { ok: false, reason: 'id-space', stage: index };
     bmsonBGA.push(...bmson);
     if (!addStageObjects(chartIndex, push, wav, bmp, asBmson)) return { ok: false, reason: 'id-space', stage: index };
+    if (perStageRules) {
+      const inWindow = (seconds: number): boolean => seconds >= window.start && seconds < window.end;
+      const explosion = wavResources['00'] !== undefined ? wav('00') : undefined;
+      if (wavResources['00'] !== undefined && explosion === undefined)
+        return { ok: false, reason: 'id-space', stage: index };
+      landmineSampleKeys.push({
+        seconds: Math.max(0, window.start),
+        ...(explosion !== undefined ? { sampleKey: explosion } : {}),
+      });
+      for (const change of chartIndex.judgeRank.changes) {
+        const seconds = stitchedSeconds(index, change.seconds);
+        if (inWindow(seconds)) exRankChanges[index]!.push({ seconds, exRank: change.exRankValue });
+      }
+      objects.push(
+        ...placeNonstopVolumeChanges(
+          chartIndex,
+          window,
+          (seconds) => stitchedSeconds(index, seconds),
+          index,
+          volumeChannels,
+        ),
+      );
+      for (const [channel, timeline, interpolate] of [
+        ['SC', chartIndex.scroll, false],
+        ['SP', chartIndex.speed, true],
+      ] as const) {
+        const own = timeline.map((point) => ({
+          seconds: stitchedSeconds(index, chartIndex.timing.beatToSeconds(point.beat)),
+          value: point.speed,
+        }));
+        const keys = keyframeKeys[channel];
+        for (const keyframe of placeNonstopKeyframes(own, window, {
+          interpolate,
+          carried: keyframeChannels.has(channel),
+          origin: placements[index]!.offsetSeconds,
+        })) {
+          let key = keys.byValue.get(keyframe.value);
+          if (key === undefined) {
+            key = keys.allocator.fresh();
+            if (key === undefined) return { ok: false, reason: 'id-space', stage: index };
+            keys.table[key] = keyframe.value;
+            keys.byValue.set(keyframe.value, key);
+          }
+          objects.push({ seconds: keyframe.seconds, channel, value: key, stage: index });
+          keyframeChannels.add(channel);
+        }
+      }
+      // LR2 freezes its event pump at a negative BPM for the rest of the play, later stages included (OpenLR2
+      // `LR2f.cpp` L12610, L12717-L12723). Like the stage's other BPM changes, it counts only in the stage's window
+      // (LR2 drops those from the last-measure line on, L26970-L26976).
+      if (chartIndex.reversal !== undefined) {
+        const seconds = stitchedSeconds(index, chartIndex.reversal.seconds);
+        const counts = options.placement === 'lr2' ? seconds < window.end : inWindow(seconds);
+        if (counts && (reversal === undefined || seconds < reversal.seconds)) reversal = { seconds, stage: index };
+      }
+    }
 
     for (const stop of chartIndex.timing.stopPoints) {
+      // A negative STOP (LR2's negative `#STOPxx`) only moves later objects earlier, which their stitched times
+      // already carry; it has no pause to write.
+      if (!(stop.seconds > 0)) continue;
       // `beatToSeconds` at a STOP's own beat is its start (the STOP counts from just after it).
       const seconds = stitchedSeconds(index, chartIndex.timing.beatToSeconds(stop.beat));
       if (seconds >= window.start && seconds < window.end) {
@@ -409,6 +527,19 @@ export function stitchNonstopCourse(
     }
     objects.push(control);
   }
+  if (reversal !== undefined) {
+    // `|BPM|` keeps the 150-BPM scroll; the sign arms the reversal.
+    const key = bpmKeys.fresh();
+    if (key === undefined) return { ok: false, reason: 'id-space', stage: reversal.stage };
+    chart.resources.bpm[key] = -STITCHED_BPM;
+    objects.push({ seconds: reversal.seconds, channel: '08', value: key, stage: reversal.stage });
+  }
+  if (perStageRules && asBmson) {
+    stages.forEach((stage, index) => {
+      if (stage.chart.sourceFormat !== 'bms') return;
+      for (const key of stageBMP[index]!) (chart.resources.bmpSourceFormat ??= {})[key] = 'bms';
+    });
+  }
   convertSeamNotes(objects, stages.length);
   layOnGrid(chart, objects, stops, barLines, stopKeys);
   if (chart.events.length === 0 && objects.length > 0) return { ok: false, reason: 'id-space' };
@@ -417,6 +548,13 @@ export function stitchNonstopCourse(
   chart.metadata.bpm = STITCHED_BPM;
   if (options.title !== undefined) chart.metadata.title = options.title;
   if (first.rank !== undefined) chart.metadata.rank = first.rank;
+  const backBMPs = stages.map((stage, index) => {
+    const path = stage.chart.metadata.backBMP?.trim();
+    return path ? assetPath(index, 'bmp', path) : undefined;
+  });
+  if (backBMPs[0] !== undefined) chart.metadata.backBMP = backBMPs[0];
+  if (perStageRules && !asBmson && stages[0]!.chart.bms.defExRank !== undefined)
+    chart.bms.defExRank = stages[0]!.chart.bms.defExRank;
   const total = stages[totalStage]?.chart.metadata.total;
   if (total !== undefined) chart.metadata.total = total;
 
@@ -428,7 +566,8 @@ export function stitchNonstopCourse(
     })),
     headerBPM: stage.chart.metadata.bpm,
     ...(stage.chart.metadata.rank !== undefined ? { rank: stage.chart.metadata.rank } : {}),
-    ...(asBmson
+    exRankChanges: exRankChanges[index]!,
+    ...(asBmson || perStageRules
       ? {
           sourceFormat: stage.chart.sourceFormat === 'bmson' ? ('bmson' as const) : ('bms' as const),
           ...(stage.chart.bms.defExRank !== undefined ? { exRank: stage.chart.bms.defExRank } : {}),
@@ -460,7 +599,9 @@ export function stitchNonstopCourse(
       ...(hasChartOptions
         ? {
             chartOptions: {
-              version: CHART_OPTION_PROGRAM_VERSION,
+              version: chartOptionCues.some(({ state }) => state.bgaMode !== undefined)
+                ? CHART_OPTION_PROGRAM_VERSION
+                : 3,
               initial: { ...chartOptionCues[0]?.state },
               cues: chartOptionCues.slice(1),
             },
@@ -472,6 +613,7 @@ export function stitchNonstopCourse(
         : {}),
       ...(keyBoundBGA.length > 0 ? { keyBoundBGA } : {}),
       ...(bmsonBGA.some((cue) => cue.sequences.length > 0) ? { bmsonBGA } : {}),
+      ...(landmineSampleKeys.some((cue) => cue.sampleKey !== undefined) ? { landmineSampleKeys } : {}),
       tempo: resolveNonstopTempo(readouts, placements, options),
       stageRanks,
       stages: placements.map((placement, index) => {
@@ -498,6 +640,8 @@ export function stitchNonstopCourse(
             ? { bgaFadeIn: { start: previousBoundary - BGA_FADE_SECONDS, end: previousBoundary } }
             : {}),
           lr2StageMarker: before === 'blank1' || before === 'blank2',
+          songInfo: stageSongInfo(stages[index]!.chart),
+          ...(backBMPs[index] !== undefined ? { backBMP: backBMPs[index] } : {}),
         };
       }),
     },
@@ -600,6 +744,35 @@ function addStageObjects(
     }
   }
   return ok;
+}
+
+/**
+ * A stage's 97 / 98 volume changes (rule version 4), at stitched seconds: inside its window as they are; at its start
+ * the volume in force there (its own last change before, or full volume when an earlier stage changed it), so a stage
+ * plays at the volumes it would alone. Changes past the window are dropped, as they would set the next stage's volume.
+ */
+function placeNonstopVolumeChanges(
+  chart: ResolvedChart,
+  window: { start: number; end: number },
+  stitchedSeconds: (seconds: number) => number,
+  stage: number,
+  changedChannels: Set<string>,
+): StitchedObject[] {
+  const own = chart.volumeChanges.map((change) => ({
+    seconds: stitchedSeconds(change.seconds),
+    channel: normalizeChannel(change.event.channel),
+    value: change.event.value.toUpperCase(),
+    stage,
+  }));
+  const placed: StitchedObject[] = [];
+  for (const channel of ['97', '98']) {
+    const before = own.filter((change) => change.channel === channel && change.seconds <= window.start).at(-1);
+    if (before !== undefined) placed.push({ ...before, seconds: window.start });
+    else if (changedChannels.has(channel)) placed.push({ seconds: window.start, channel, value: 'FF', stage });
+  }
+  placed.push(...own.filter((change) => change.seconds > window.start && change.seconds < window.end));
+  for (const object of placed) changedChannels.add(object.channel);
+  return placed;
 }
 
 /** The judged lanes a seam note is compared on: a tap or long-note head on `1x` / `2x`, or `5x` / `6x` heads. */

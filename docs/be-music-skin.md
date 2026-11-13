@@ -357,6 +357,7 @@ Every flag defaults to `false`, and the frame field it unlocks stays empty (or `
 - **Once-per-play moments:** `failedAtMs` (the gauge failed mid-play), `allNotesDoneAtMs` (the last playable note was judged), `outroAtMs` (the chart ended), `gaugeRiseAtMs` (the gauge first rose), and `gaugeMaxAtMs` (it first reached its maximum). Each is a play-clock time latched when the moment happens, `undefined` before.
 - **Histories:** `scoreHistory` and `gaugeHistory`, the samples the result screen receives. They are the host's live arrays: read them, never mutate them.
 - **Pacemaker and best record:** `bestEXScore` (the player's best EX score on the chart before this play) and `targetEXScore` with `targetLabel` (a pacemaker the host sets). `resolveScorePace(runtime)` holds each to the share of notes judged so far, and paces the AAA line when the host sets no pacemaker. `formatScoreDiff` prints the gap (`+0168`).
+- **NONSTOP song info:** in a NONSTOP play, `chartTitle`, `chartArtist` and `chartGenre` are the song of the stage being played. As each stage begins they crossfade over 0.6 s: `songInfoFade` holds the song being replaced and the crossfade's `progress` (0 to 1). `resolveSongInfoLayers(runtime)` returns the song info layers to draw, back to front, each with its opacity, so a skin draws its title block once per layer. A skin that ignores `songInfoFade` switches the song at once.
 - **Stage and player:** `course` (the course and stage being played; `resolveStageLabel` names it `1ST STAGE` … `FINAL STAGE`, or `FREE PLAY` for a single chart), `playerName` (the signed-in player), `random1P` (the 1P lane option) and `tempo` (the play tempo, 1 at the chart's own speed). `resolveDifficultyName(runtime.chart)` names `#DIFFICULTY`.
 
 Every runtime field is optional. A host that can't provide one leaves it `undefined`, so draw a sensible fallback.
@@ -391,8 +392,11 @@ Every runtime field is optional. A host that can't provide one leaves it `undefi
 - `result` (`BeMusicResultData`): scores, judgement counts, gauge and score history, and the replay. When the host provides them, also `lamp` (the clear lamp: `FAILED`, the gauge it was cleared on, `FULL_COMBO`, `PERFECT`, `MAX`), `gaugeType`, `judgeRuleset`, `fast` / `slow`, `judgeTimings` (every timed judgement of the play), `run` (`'single'`, `'stage'` for a course stage, `'course'` for a whole EXPERT / GRADE course with the stages summed, or `'nonstop'`), `course` (the course a stage or run belongs to) and `courseRun` (a course run's stages played and trophy).
 - `rankLabel` (That-Which-Must-Not-Be-Named DJ level) and `ratePercent`.
 - `elapsedMs` since the scene mounted, or `Infinity` once the player skipped the entrance.
+- `shownMs` since the scene mounted, going on after the entrance: for what keeps moving while the result is shown.
 - `nowMs` and `effects`.
 - `settings` and `chartImage`: see [Skin settings](#skin-settings) and [Song images](#chart-images).
+
+`resolveResultCourseCard` gives a course run's card (the course and every stage chart). When its stages laid out at their usual height run past the card, `resolveResultCourseScroll(overflowPx, frame.shownMs)` gives how far the list has scrolled up (`offsetPx`) and how opaque it is (`alpha`): it rests at the top, scrolls until the last stage is at the bottom, rests, fades out, and fades back in at the top to start over, as the built-in skins do.
 
 `resolveResultVerdict` (`STAGE CLEAR` / `FAILED`, or `COURSE CLEAR` / `COURSE FAILED` for a course run), `resolveResultLamp` and `resolveResultTrackRows` give the headline, clear lamp (the one clear-lamp rule, on beatoraja's lamps) and track rows the built-in skins show. `binJudgmentTimings(result.judgeTimings, binMs, rangeMs?)` turns the timings into a histogram.
 

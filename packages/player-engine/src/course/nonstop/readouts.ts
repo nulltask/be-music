@@ -21,6 +21,11 @@ export interface NonstopStageReadoutInput {
   sourceFormat?: 'bms' | 'bmson';
   bmsonJudgeRank?: number;
   exRank?: number;
+  /**
+   * The stage's own `#EXRANKxx` changes (channel `A0`), at stitched seconds inside its window, in time order, with the
+   * `#EXRANKxx` value (`#DEFEXRANK` units).
+   */
+  exRankChanges?: readonly { seconds: number; exRank: number }[];
   /** Stitched seconds of the stage's first and last judged note heads, when it has any. */
   noteHeads?: { first: number; last: number };
 }
@@ -28,9 +33,10 @@ export interface NonstopStageReadoutInput {
 /**
  * How a later stage's `#RANK` sets the judge windows: `'chart'` as a chart opening with that `#RANK` does, or
  * `'lr2-nonstop'` by the table LR2's NONSTOP rank object reads (`LR2body.exe` 0x42be2f). Mixed bmson output also
- * carries raw `judge_rank` (`'bmson'`) or BMS `#DEFEXRANK` (`'bms-exrank'`) values.
+ * carries raw `judge_rank` (`'bmson'`) or BMS `#DEFEXRANK` (`'bms-exrank'`) values. `'bms-exrank-change'` is a stage's
+ * own `#EXRANKxx` change (channel `A0`, `#DEFEXRANK` units), which only the `lr2` ruleset applies, as for a chart alone.
  */
-export type NonstopStageRankTable = 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank';
+export type NonstopStageRankTable = 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank' | 'bms-exrank-change';
 
 /** A later stage's `#RANK` taking over the judge windows from stitched `seconds` on. */
 export interface NonstopStageRank {
@@ -121,24 +127,29 @@ export function nonstopBPMAt(tempo: readonly NonstopTempoPoint[], seconds: numbe
  *   `#RANK` gets, and a stage without `#RANK` is NORMAL, as it would be alone. The change comes halfway between the
  *   previous stage's last note and the stage's first one, so the previous stage's last notes keep their rank even when
  *   they lie past the boundary or are hit late; without notes on either side, at the boundary.
+ *
+ * A stage's own `#EXRANKxx` changes (`exRankChanges`) follow as `'bms-exrank-change'`, at their own time with
+ * `'lr2'`; by default each holds from its time (or the stage's own switch, when it comes earlier) until the next stage
+ * switches, so it changes that stage's judging as it would the chart alone.
  */
 export function resolveNonstopStageRanks(
   stages: readonly Pick<
     NonstopStageReadoutInput,
-    'rank' | 'noteHeads' | 'sourceFormat' | 'bmsonJudgeRank' | 'exRank'
+    'rank' | 'noteHeads' | 'sourceFormat' | 'bmsonJudgeRank' | 'exRank' | 'exRankChanges'
   >[],
   placements: readonly NonstopStagePlacement[],
   options: NonstopPlanOptions = {},
 ): NonstopStageRank[] {
   const lr2 = options.placement === 'lr2';
-  const ranks: NonstopStageRank[] = [];
+  // Each stage's switch, in stage order (the first stage has none: the chart opens with its rank).
+  const switches: (NonstopStageRank | undefined)[] = [undefined];
   for (let index = 1; index < stages.length && index < placements.length; index += 1) {
     const declared = stages[index]!.rank;
     const rank = declared !== undefined && Number.isFinite(declared) ? Math.trunc(declared) : undefined;
     if (lr2) {
-      if (rank !== undefined) {
-        ranks.push({ seconds: placements[index]!.offsetSeconds, rank, table: 'lr2-nonstop' });
-      }
+      switches.push(
+        rank !== undefined ? { seconds: placements[index]!.offsetSeconds, rank, table: 'lr2-nonstop' } : undefined,
+      );
       continue;
     }
     const previousLast = stages[index - 1]!.noteHeads?.last;
@@ -149,14 +160,38 @@ export function resolveNonstopStageRanks(
         : stageWindow(placements, index).start;
     const stage = stages[index]!;
     if (stage.sourceFormat === 'bmson') {
-      ranks.push({
+      switches.push({
         seconds,
         rank: stage.bmsonJudgeRank !== undefined && stage.bmsonJudgeRank > 0 ? stage.bmsonJudgeRank : 100,
         table: 'bmson',
       });
     } else if (stage.exRank !== undefined) {
-      ranks.push({ seconds, rank: stage.exRank, table: 'bms-exrank' });
-    } else ranks.push({ seconds, rank: rank ?? DEFAULT_RANK, table: 'chart' });
+      switches.push({ seconds, rank: stage.exRank, table: 'bms-exrank' });
+    } else switches.push({ seconds, rank: rank ?? DEFAULT_RANK, table: 'chart' });
   }
-  return ranks.sort((left, right) => left.seconds - right.seconds);
+  // Pushed stage by stage, each switch before the stage's own changes: the stable sort keeps a change after a switch at
+  // the same time.
+  const ranks: NonstopStageRank[] = [];
+  // Whether the ranks went in out of time order: sorting a list already in order would only cost time.
+  let unordered = false;
+  let last = Number.NEGATIVE_INFINITY;
+  for (let index = 0; index < switches.length; index += 1) {
+    const own = switches[index];
+    if (own !== undefined) {
+      ranks.push(own);
+      if (own.seconds < last) unordered = true;
+      last = own.seconds;
+    }
+    const changes = stages[index]?.exRankChanges;
+    if (changes === undefined || changes.length === 0) continue;
+    const next = lr2 ? undefined : switches[index + 1]?.seconds;
+    for (const change of changes) {
+      const seconds = lr2 || own === undefined ? change.seconds : Math.max(change.seconds, own.seconds);
+      if (next !== undefined && seconds >= next) continue;
+      ranks.push({ seconds, rank: change.exRank, table: 'bms-exrank-change' });
+      if (seconds < last) unordered = true;
+      last = seconds;
+    }
+  }
+  return unordered ? ranks.sort((left, right) => left.seconds - right.seconds) : ranks;
 }

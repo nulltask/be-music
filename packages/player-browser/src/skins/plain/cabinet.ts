@@ -3,7 +3,9 @@ import {
   resolveCabinetLayout,
   resolveScratchAngle,
   resolveDifficultyName,
+  formatPacemakerLabel,
   resolveScorePace,
+  resolveSongInfoLayers,
   resolveStageLabel,
   type BeMusicGameplayFrame,
   type BeMusicGameplayRuntime,
@@ -11,7 +13,7 @@ import {
   type CabinetLayout,
   type ScorePace,
 } from '@be-music/player-skin-sdk';
-import { ACCENT, DANGER, INK, LINE, MUTED, NOTE_FILL, PANEL, TEXT, text } from './theme.ts';
+import { ACCENT, DANGER, INK, LINE, MUTED, NOTE_FILL, PANEL, TEXT, drawSongInfoLayers, text } from './theme.ts';
 
 /** The gauge as a row of cells, the way a cabinet's groove gauge reads. */
 const GAUGE_CELLS = 50;
@@ -261,7 +263,7 @@ function drawGraph(
   });
 
   panel(ctx, footer, 'OPTION');
-  // A source-qualified lane option shows its bare name (`lr2:RANDOM` as RANDOM, ADR 0019).
+  // A source-qualified lane option shows its bare name (`lr2:S-RANDOM` as S-RANDOM, ADR 0019).
   text(ctx, (runtime.random1P ?? 'OFF').replace(/^[^:]*:/, ''), footer.x + footer.w - 8, footer.y + 10, {
     size: 11,
     weight: 700,
@@ -272,7 +274,7 @@ function drawGraph(
   const boxY = footer.y + footer.h - 8 - 26;
   ctx.strokeStyle = LINE;
   ctx.strokeRect(footer.x + 8.5, boxY + 0.5, footer.w - 17, 26);
-  text(ctx, `PACEMAKER ${pace.target.label}`, footer.x + footer.w / 2, boxY + 13, {
+  text(ctx, formatPacemakerLabel(pace.target.label), footer.x + footer.w / 2, boxY + 13, {
     size: 11,
     weight: 700,
     align: 'center',
@@ -328,19 +330,21 @@ function drawPlayers(
   const second = runtime.secondPlayer;
   const titleX = rect.x + plateW;
   const titleW = rect.w - plateW * (second ? 2 : 1) - 8;
-  text(ctx, runtime.chartTitle ?? '', titleX + titleW / 2, rect.y + 17, {
-    size: 15,
-    weight: 800,
-    align: 'center',
-    maxWidth: titleW,
-    nowMs,
-  });
-  text(ctx, runtime.chartArtist ?? '', titleX + titleW / 2, rect.y + 36, {
-    size: 10,
-    color: MUTED,
-    align: 'center',
-    maxWidth: titleW,
-    nowMs,
+  drawSongInfoLayers(ctx, resolveSongInfoLayers(runtime), (info) => {
+    text(ctx, info.chartTitle ?? '', titleX + titleW / 2, rect.y + 17, {
+      size: 15,
+      weight: 800,
+      align: 'center',
+      maxWidth: titleW,
+      nowMs,
+    });
+    text(ctx, info.chartArtist ?? '', titleX + titleW / 2, rect.y + 36, {
+      size: 10,
+      color: MUTED,
+      align: 'center',
+      maxWidth: titleW,
+      nowMs,
+    });
   });
   if (second) {
     const x = rect.x + rect.w - plateW + 4;
@@ -358,8 +362,10 @@ function drawChartStack(
 ): void {
   panel(ctx, rect);
   const inner = rect.w - 16;
-  text(ctx, runtime.chartTitle ?? '', rect.x + 8, rect.y + 12, { size: 13, weight: 800, maxWidth: inner, nowMs });
-  text(ctx, runtime.chartArtist ?? '', rect.x + 8, rect.y + 28, { size: 9, color: MUTED, maxWidth: inner, nowMs });
+  drawSongInfoLayers(ctx, resolveSongInfoLayers(runtime), (info) => {
+    text(ctx, info.chartTitle ?? '', rect.x + 8, rect.y + 12, { size: 13, weight: 800, maxWidth: inner, nowMs });
+    text(ctx, info.chartArtist ?? '', rect.x + 8, rect.y + 28, { size: 9, color: MUTED, maxWidth: inner, nowMs });
+  });
   const difficulty = resolveDifficultyName(runtime.chart);
   const level = runtime.chart?.playLevel;
   let x = rect.x + 8;
@@ -385,6 +391,8 @@ function drawChartStack(
 /** The counts, FAST / SLOW, and where the last timed press landed between EARLY and LATE. */
 function drawJudge(ctx: CanvasRenderingContext2D, rect: BeMusicRect, runtime: BeMusicGameplayRuntime): void {
   panel(ctx, rect, runtime.secondPlayer ? '1P JUDGE' : 'JUDGE');
+  // The player turned the judgment counts off: the panel keeps its frame and its name.
+  if (runtime.hidesJudgeCounts) return;
   const counts: Array<[string, number]> = [
     ['PG', runtime.perfect ?? 0],
     ['GR', runtime.great ?? 0],

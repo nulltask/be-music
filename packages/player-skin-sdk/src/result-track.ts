@@ -3,6 +3,7 @@ import { resolveClearLamp } from '@be-music/player-engine/ruleset';
 import { isAutoPlayResult } from '@be-music/player-scene-model';
 import type { BeMusicResultData } from './result-data.ts';
 import { formatPlayVariantLabel } from './chart-stats.ts';
+import { COURSE_KIND_LABELS } from './select-list.ts';
 
 /**
  * The play's clear lamp as the result track column labels it: `PERFECT` (every note a PGREAT), `FULL COMBO` (no BAD /
@@ -88,4 +89,113 @@ export function resolveResultTrackRows(result: Pick<BeMusicResultData, 'score' |
     },
     { label: 'COMBO BREAK', value: String(Math.max(0, score.bad + score.poor)) },
   ];
+}
+
+/** One stage of a course run, as its result's track column lists it. */
+export interface ResultCourseStageRow {
+  /** The stage number, from 1. */
+  stage: number;
+  title: string;
+  subtitle?: string;
+  artist?: string;
+  genre?: string;
+  /** The chart's play level, `-` when unknown. */
+  level: string;
+  /** The chart's `#DIFFICULTY` (1 BEGINNER … 5 INSANE), when known. */
+  difficulty?: number;
+  /** The run reached the stage; a stage after the one a course failed on reads `false`. */
+  played: boolean;
+}
+
+/** What the track column of a course run's result shows in place of one chart: the course and its stages. */
+export interface ResultCourseCard {
+  /** `DAN`, `COURSE` or `NONSTOP`. */
+  kind: string;
+  title: string;
+  /** The stages reached out of the course's, and the trophy earned (`2 / 4 STAGES · goldmedal`). */
+  detail: string;
+  stages: ResultCourseStageRow[];
+}
+
+/**
+ * The course card of a course run's result (an EXPERT / GRADE run, or a NONSTOP run, its stitched play as one): the
+ * course and every stage chart it plays in order, the ones the run never reached marked unplayed. `undefined` for any
+ * other result, a course stage's included, whose track column shows its own chart.
+ */
+export function resolveResultCourseCard(
+  result: Pick<BeMusicResultData, 'run' | 'course' | 'courseRun'>,
+): ResultCourseCard | undefined {
+  const { course, courseRun } = result;
+  if (course === undefined || course.stageIndex !== undefined) return undefined;
+  if (result.run !== 'course' && result.run !== 'nonstop') return undefined;
+  const total = course.stages.length;
+  // A NONSTOP run without a course log (a practice run) played every stage of its stitched chart.
+  const reached = Math.min(total, courseRun?.stagesPlayed ?? total);
+  const detail = [`${reached} / ${total} STAGES`, ...(courseRun?.trophy !== undefined ? [courseRun.trophy] : [])];
+  return {
+    kind: COURSE_KIND_LABELS[course.kind],
+    title: course.title,
+    detail: detail.join(' · '),
+    stages: course.stages.map((stage, index) => ({
+      stage: index + 1,
+      title: stage.title,
+      ...(stage.subtitle !== undefined ? { subtitle: stage.subtitle } : {}),
+      ...(stage.artist !== undefined ? { artist: stage.artist } : {}),
+      ...(stage.genre !== undefined ? { genre: stage.genre } : {}),
+      level: stage.level !== undefined ? String(stage.level) : '-',
+      ...(stage.difficulty !== undefined ? { difficulty: stage.difficulty } : {}),
+      played: index < reached,
+    })),
+  };
+}
+
+/** How a course card's stage list scrolls when its stages do not fit ({@link resolveResultCourseScroll}). */
+export interface ResultCourseScrollTiming {
+  /** How long the list rests at the top, and again at the bottom, before it moves on. */
+  holdMs: number;
+  /** How fast it scrolls, in px per second. */
+  pxPerSecond: number;
+  /** How long the list fades out at the bottom, and again how long it fades in at the top. */
+  fadeMs: number;
+}
+
+/** The built-in skins' timing: a 2.5 s rest at each end, 30 px a second between, and a 0.4 s fade each way. */
+export const RESULT_COURSE_SCROLL_TIMING: Readonly<ResultCourseScrollTiming> = {
+  holdMs: 2500,
+  pxPerSecond: 30,
+  fadeMs: 400,
+};
+
+/** Where a course card's stage list is: how far it has scrolled up (px) and how opaque it is (0..1). */
+export interface ResultCourseScroll {
+  offsetPx: number;
+  alpha: number;
+}
+
+/**
+ * Where a course card's stage list is `elapsedMs` into the result, when the stages laid out at their usual height run
+ * `overflowPx` past the card: it rests at the top, scrolls up until the last stage is at the bottom, rests there, fades
+ * out, and fades back in at the top to start over. A list that fits, and the result before it shows, rest at the top.
+ */
+export function resolveResultCourseScroll(
+  overflowPx: number,
+  elapsedMs: number,
+  timing: Readonly<ResultCourseScrollTiming> = RESULT_COURSE_SCROLL_TIMING,
+): ResultCourseScroll {
+  const top = { offsetPx: 0, alpha: 1 };
+  if (!(overflowPx > 0) || !(elapsedMs > 0) || !Number.isFinite(elapsedMs) || !(timing.pxPerSecond > 0)) return top;
+  const hold = Math.max(0, timing.holdMs);
+  const fade = Math.max(0, timing.fadeMs);
+  const travel = (overflowPx / timing.pxPerSecond) * 1000;
+  // A rest at the top, the scroll, a rest at the bottom, the fade out there and the fade in at the top.
+  let t = elapsedMs % (hold * 2 + travel + fade * 2);
+  if (t < hold) return top;
+  t -= hold;
+  if (t < travel) return { offsetPx: (t / travel) * overflowPx, alpha: 1 };
+  t -= travel;
+  if (t < hold) return { offsetPx: overflowPx, alpha: 1 };
+  t -= hold;
+  if (t < fade) return { offsetPx: overflowPx, alpha: 1 - t / fade };
+  t -= fade;
+  return { offsetPx: 0, alpha: fade > 0 ? t / fade : 1 };
 }

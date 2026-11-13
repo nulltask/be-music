@@ -357,6 +357,7 @@ flowchart LR
 - **1 プレイに 1 度の瞬間:** `failedAtMs`（プレイ中にゲージが尽きた）、`allNotesDoneAtMs`（最後のノーツが判定された）、`outroAtMs`（譜面が終わった）、`gaugeRiseAtMs`（ゲージが初めて上がった）、`gaugeMaxAtMs`（初めて最大に達した）。どれもその瞬間に固定されるプレイクロック時刻で、それまでは `undefined` です。
 - **推移:** `scoreHistory` と `gaugeHistory`。リザルト画面が受け取るのと同じサンプルです。ホストが更新中の配列そのものなので、読むだけにして変更しないでください。
 - **ペースメーカーと自己ベスト:** `bestEXScore`（このプレイより前のその譜面の自己ベストの EX スコア）と、ホストが決めるペースメーカーの `targetEXScore` と `targetLabel`。`resolveScorePace(runtime)` はそれぞれを判定済みのノーツの割合に合わせ、ホストがペースメーカーを決めていないときは AAA のラインを使います。`formatScoreDiff` は差を表示します（`+0168`）。
+- **NONSTOP の曲情報:** NONSTOP のプレイでは、`chartTitle`、`chartArtist`、`chartGenre` はプレイ中のステージの曲のものです。各ステージが始まると 0.6 秒かけてクロスフェードします。`songInfoFade` は置き換わる前の曲と、クロスフェードの進み具合 `progress`（0〜1）を持ちます。`resolveSongInfoLayers(runtime)` は描く曲情報のレイヤーを奥から順に不透明度付きで返すので、スキンはタイトル部分をレイヤーごとに 1 回ずつ描けば済みます。`songInfoFade` を読まないスキンでは、曲はすぐに切り替わります。
 - **ステージとプレイヤー:** `course`（プレイ中のコースとステージ。`resolveStageLabel` が `1ST STAGE` … `FINAL STAGE`、単曲では `FREE PLAY` と名付けます）、`playerName`（サインイン中のプレイヤー）、`random1P`（1P のレーンオプション）、`tempo`（プレイのテンポ。譜面どおりの速さで 1）。`resolveDifficultyName(runtime.chart)` は `#DIFFICULTY` の名前を返します。
 
 runtime のフィールドはすべて省略可能です。ホストが提供できない値は `undefined` になるので、適切な代替表示を用意してください。
@@ -391,8 +392,11 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
 - `result`（`BeMusicResultData`）: スコア、判定数、ゲージとスコアの推移、リプレイ。ホストが提供する場合は、`lamp`（クリアランプ: `FAILED`、クリアしたゲージ、`FULL_COMBO`、`PERFECT`、`MAX`）、`gaugeType`、`judgeRuleset`、`fast` / `slow`、`judgeTimings`（プレイ中のタイミング付き判定すべて）、`run`（`'single'`、コースのステージなら `'stage'`、ステージを合計した EXPERT / GRADE コース全体なら `'course'`、`'nonstop'`）、`course`（ステージやコースの実行が属するコース）、`courseRun`（コースの実行で遊んだステージ数とトロフィー）も入ります。
 - `rankLabel`（名前を言ってはいけないあのゲームの DJ LEVEL）、`ratePercent`。
 - `elapsedMs`: シーン開始からの経過。登場演出をスキップした後は `Infinity`。
+- `shownMs`: シーン開始からの経過。登場演出の後も進みます。リザルトを表示している間ずっと動くものに使います。
 - `nowMs`、`effects`。
 - `settings` と `chartImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照。
+
+`resolveResultCourseCard` はコースの実行のカード（コースとすべてのステージの譜面）を返します。ステージを通常の高さで並べるとカードからはみ出すときは、`resolveResultCourseScroll(overflowPx, frame.shownMs)` がリストを上へスクロールした量（`offsetPx`）と不透明度（`alpha`）を返します。先頭で止まり、最後のステージがいちばん下に来るまでスクロールし、止まってからフェードアウトし、先頭でフェードインして最初に戻ります。組み込みスキンもこのとおりに動きます。
 
 `resolveResultVerdict`（`STAGE CLEAR` / `FAILED`、コースの実行なら `COURSE CLEAR` / `COURSE FAILED`）、`resolveResultLamp`、`resolveResultTrackRows` が、組み込みスキンの表示する見出し、クリアランプ（唯一のクリアランプの規則で、beatoraja のランプで決めたもの）、トラック行を返します。`binJudgmentTimings(result.judgeTimings, binMs, rangeMs?)` でタイミングをヒストグラムにできます。
 

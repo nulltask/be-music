@@ -46,7 +46,18 @@ export interface BMSResources {
   wav: Record<string, string>;
   /** Intrinsic per-slot linear gain, e.g. a composed NONSTOP stage's VOLWAV. Omitted slots use unity. */
   wavGain?: Record<string, number>;
+  /**
+   * The format whose playback rules a WAV slot follows where it differs from the chart's `sourceFormat`, e.g. a BMS
+   * stage's slot in a NONSTOP chart stitched as bmson (BMS slots restart on retrigger). Omitted slots follow
+   * `sourceFormat`.
+   */
+  wavSourceFormat?: Record<string, BeMusicSourceFormat>;
   bmp: Record<string, string>;
+  /**
+   * The format whose drawing rules a BMP slot follows where it differs from the chart's `sourceFormat`, e.g. a BMS
+   * stage's image in a NONSTOP chart stitched as bmson (BMS keys out layer black). Omitted slots follow `sourceFormat`.
+   */
+  bmpSourceFormat?: Record<string, BeMusicSourceFormat>;
   bpm: Record<string, number>;
   stop: Record<string, number>;
   text: Record<string, string>;
@@ -385,9 +396,32 @@ export interface BeMusicPreservation {
   bmson: BmsonPreservation;
 }
 
+/** A warning about input the chart reader or resolver recovered from. */
+export interface ChartDiagnostic {
+  readonly code:
+    | 'legacy-bmson'
+    | 'unknown-mode-hint'
+    | 'stacked-note-length'
+    | 'missing-reference'
+    | 'unsupported-option'
+    | 'invalid-option';
+  readonly message: string;
+  readonly subject?: string;
+  readonly position:
+    | { readonly kind: 'field'; readonly path: string }
+    | {
+        readonly kind: 'object';
+        readonly measure: number;
+        readonly position: BeMusicPosition;
+        readonly channel: string;
+      };
+}
+
 export interface BeMusicJSON {
   format: typeof BMS_JSON_FORMAT;
   sourceFormat: BeMusicSourceFormat;
+  /** Warnings from reading the original input, when available. */
+  diagnostics?: readonly ChartDiagnostic[];
   metadata: BeMusicMetadata;
   resources: BMSResources;
   measures: BeMusicMeasure[];
@@ -505,6 +539,7 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
   return {
     format: json.format,
     sourceFormat: json.sourceFormat,
+    ...(json.diagnostics === undefined ? {} : { diagnostics: json.diagnostics }),
     metadata: {
       ...json.metadata,
       extras: { ...json.metadata.extras },
@@ -512,7 +547,13 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
     resources: {
       wav: { ...json.resources.wav },
       ...(json.resources.wavGain !== undefined ? { wavGain: { ...json.resources.wavGain } } : {}),
+      ...(json.resources.wavSourceFormat !== undefined
+        ? { wavSourceFormat: { ...json.resources.wavSourceFormat } }
+        : {}),
       bmp: { ...json.resources.bmp },
+      ...(json.resources.bmpSourceFormat !== undefined
+        ? { bmpSourceFormat: { ...json.resources.bmpSourceFormat } }
+        : {}),
       bpm: { ...json.resources.bpm },
       stop: { ...json.resources.stop },
       text: { ...json.resources.text },

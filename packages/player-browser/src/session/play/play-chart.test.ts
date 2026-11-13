@@ -1,3 +1,6 @@
+import { PlaySession } from './play-session.ts';
+import { prepareChart } from './play-chart.ts';
+import type { LibraryChart } from '@be-music/player-scene-model';
 import { resolveChart, type ChartPlayVariant } from '@be-music/chart-model';
 import { parseChart } from '@be-music/chart-parser';
 import { preparePlaybackChart } from '@be-music/player-engine';
@@ -37,6 +40,17 @@ function notesOn(channels: readonly string[], beat = 0): TestNote[] {
   return channels.map((channel) => ({ channel, beat }));
 }
 
+/**
+ * Where each key goes under RANDOM, drawn as beatoraja 0.8.9's LaneRandomShuffleModifier draws it: each destination in
+ * key order takes one of the remaining source keys.
+ */
+function beatorajaShuffle(keys: readonly string[], random: () => number): string[] {
+  const available = [...keys];
+  const destination = new Map<string, string>();
+  for (const target of keys) destination.set(available.splice(Math.floor(random() * available.length), 1)[0]!, target);
+  return keys.map((key) => destination.get(key)!);
+}
+
 function channelsOf(notes: readonly { channel: string }[]): string[] {
   return notes.map((note) => note.channel);
 }
@@ -64,16 +78,14 @@ describe('applyRandomMode', () => {
 
   test('a single used key can move under RANDOM within the complete mode', () => {
     const notes = notesOn(['13']);
-    const expected = shuffleArray([...KEYS_7], seededRandom(1))[KEYS_7.indexOf('13')];
+    const expected = beatorajaShuffle(KEYS_7, seededRandom(1))[KEYS_7.indexOf('13')];
     applyRandomMode(notes, KEYS_1P, 'RANDOM', seededRandom(1));
     expect(channelsOf(notes)).toEqual([expected]);
   });
 
-  // A qualified RANDOM, S-RANDOM or CONVERGE runs its source's algorithm under every judge ruleset; a bare one runs the
+  // A qualified S-RANDOM or CONVERGE runs its source's algorithm under every judge ruleset; a bare one runs the
   // ruleset's own (ADR 0019).
   test.each([
-    ['RANDOM', 'lr2'],
-    ['RANDOM', 'beatoraja'],
     ['S-RANDOM', 'lr2'],
     ['S-RANDOM', 'beatoraja'],
   ] as const)('%s (%s) runs its source algorithm under every ruleset', (name, source) => {
@@ -90,12 +102,116 @@ describe('applyRandomMode', () => {
     }
   });
 
-  test('LR2 RANDOM and beatoraja RANDOM draw different arrangements from the same random source', () => {
-    const lr2 = notesOn(KEYS_7);
-    const beatoraja = notesOn(KEYS_7);
-    applyRandomMode(lr2, KEYS_1P, 'lr2:RANDOM', seededRandom(3), { ruleset: 'beatoraja', fixedLane: 1 });
-    applyRandomMode(beatoraja, KEYS_1P, 'beatoraja:RANDOM', seededRandom(3), { ruleset: 'lr2', fixedLane: 1 });
-    expect(channelsOf(lr2)).not.toEqual(channelsOf(beatoraja));
+  test('RANDOM is one option: every ruleset and every older source-qualified value draws the same arrangement', () => {
+    const expected = beatorajaShuffle(KEYS_7, seededRandom(3));
+    for (const value of ['RANDOM', 'lr2:RANDOM', 'beatoraja:RANDOM', '____:RANDOM'] as const)
+      for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+        const notes = notesOn(KEYS_7);
+        applyRandomMode(notes, KEYS_1P, value as 'RANDOM', seededRandom(3), { ruleset });
+        expect(channelsOf(notes)).toEqual(expected);
+      }
+  });
+
+  test('AC S-RANDOM is LR2 S-RANDOM', () => {
+    const chord = () => [
+      ...notesOn(KEYS_7, 0),
+      ...notesOn(['11', '13'], 0.01).map((note) => ({ ...note, seconds: 0.01 })),
+    ];
+    const lr2 = chord();
+    applyRandomMode(lr2, KEYS_1P, 'lr2:S-RANDOM', seededRandom(5), { ruleset: 'beatoraja' });
+    for (const [value, ruleset] of [
+      ['S-RANDOM', '____'],
+      ['____:S-RANDOM', 'beatoraja'],
+    ] as const) {
+      const notes = chord();
+      applyRandomMode(notes, KEYS_1P, value as 'S-RANDOM', seededRandom(5), { ruleset });
+      expect(channelsOf(notes)).toEqual(channelsOf(lr2));
+    }
+  });
+
+  test('a fixed key moves the original key 1 to the chosen key after RANDOM, under every ruleset', () => {
+    for (const ruleset of ['lr2', 'beatoraja', '____'] as const)
+      for (const fixedLane of [1, 3, 7]) {
+        const notes = notesOn(KEYS_7);
+        applyRandomMode(notes, KEYS_1P, 'RANDOM', seededRandom(11), { ruleset, fixedLane, playVariant: '7' });
+        const placed = channelsOf(notes);
+        expect(placed[0]).toBe(KEYS_7[fixedLane - 1]);
+        expect([...placed].sort()).toEqual(KEYS_7);
+        // Only key 1 and the key that drew the fixed lane trade places.
+        const drawn = beatorajaShuffle(KEYS_7, seededRandom(11));
+        const changed = placed.flatMap((lane, index) => (lane === drawn[index] ? [] : [index]));
+        expect(changed.length === 0 || changed.length === 2).toBe(true);
+      }
+    // Nine-key RANDOM ignores it, as LR2's does.
+    const pms = notesOn(resolveLaneOptionChannels('1P', '9'));
+    applyRandomMode(pms, resolveLaneOptionChannels('1P', '9'), 'RANDOM', seededRandom(11), {
+      fixedLane: 3,
+      playVariant: '9',
+    });
+    expect(channelsOf(pms)).toEqual(beatorajaShuffle(resolveLaneOptionChannels('1P', '9'), seededRandom(11)));
+  });
+
+  test.each(['10', '14'] as const)('RANDOM ignores Fixed key 2P on %s KEY under every ruleset', (playVariant) => {
+    const lanes = resolveLaneOptionChannels('2P', playVariant);
+    const drawn = beatorajaShuffle(lanes, seededRandom(11));
+    const fixedLane = lanes.indexOf(drawn[0]!) === 0 ? 2 : 1;
+    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+      const notes = notesOn(lanes);
+      applyRandomMode(notes, lanes, 'RANDOM', seededRandom(11), { ruleset, side: '2P', fixedLane, playVariant });
+      expect(channelsOf(notes)).toEqual(drawn);
+    }
+  });
+
+  test('LR2 nine-key S-RANDOM and CONVERGE can reach the 2P scratch; the corrected options keep to the nine keys (#1083)', () => {
+    const pms = resolveLaneOptionChannels('1P', '9');
+    // The last draw of ten destinations is the tenth one, outside the playfield.
+    const last = () => 0.99;
+    for (const mode of ['lr2:S-RANDOM', 'S-RANDOM', 'lr2:CONVERGE'] as const) {
+      const notes = notesOn(['11'].concat(mode === 'lr2:CONVERGE' ? [pms[4]!] : []));
+      applyRandomMode(notes, pms, mode, last, { ruleset: 'lr2', playVariant: '9' });
+      expect(channelsOf(notes), mode).toContain('26');
+    }
+    for (const mode of ['S-RANDOM-CORRECTED', 'CONVERGE-CORRECTED'] as const) {
+      const notes = notesOn(['11', pms[4]!]);
+      applyRandomMode(notes, pms, mode, last, { ruleset: 'beatoraja', playVariant: '9' });
+      expect(
+        channelsOf(notes).every((lane) => pms.includes(lane)),
+        mode,
+      ).toBe(true);
+    }
+    expect(() => applyRandomMode(notesOn(KEYS_7), KEYS_1P, 'S-RANDOM-CORRECTED', last, { playVariant: '7' })).toThrow(
+      /nine-key/,
+    );
+    // beatoraja's S-RANDOM never leaves the keys.
+    const beatoraja = notesOn(['11']);
+    applyRandomMode(beatoraja, pms, 'beatoraja:S-RANDOM', last, { playVariant: '9' });
+    expect(pms).toContain(channelsOf(beatoraja)[0]);
+  });
+
+  test('LR2 CONVERGE puts its 2P target one lane right; CONVERGE corrected keeps it on the key picked (#1083)', () => {
+    const keys2P = resolveLaneOptionChannels('2P', '14');
+    const converge = (mode: 'lr2:CONVERGE' | 'CONVERGE-CORRECTED', fixedLane: number, variant: '10' | '14' = '14') => {
+      const lanes = variant === '14' ? keys2P : resolveLaneOptionChannels('2P', '10');
+      const notes = notesOn([lanes[2]!]);
+      applyRandomMode(notes, lanes, mode, seededRandom(1), {
+        ruleset: 'lr2',
+        side: '2P',
+        scratch: '26',
+        fixedLane,
+        playVariant: variant,
+      });
+      return channelsOf(notes)[0];
+    };
+    // 0 is key 1 on 2P, not the scratch; key n is key n + 1; the last key points past the keys.
+    expect(converge('lr2:CONVERGE', 0)).toBe('21');
+    expect(converge('lr2:CONVERGE', 3)).toBe(keys2P[3]);
+    expect(converge('lr2:CONVERGE', 7)).toBe('2A');
+    expect(converge('lr2:CONVERGE', 5, '10')).toBe('28');
+    // A key past the mode's range resets to 0, as LR2 does.
+    expect(converge('lr2:CONVERGE', 9)).toBe('21');
+    expect(converge('CONVERGE-CORRECTED', 0)).toBe('26');
+    expect(converge('CONVERGE-CORRECTED', 3)).toBe(keys2P[2]);
+    expect(converge('CONVERGE-CORRECTED', 7)).toBe(keys2P[6]);
   });
 
   test('beatoraja CONVERGE stays a PMS arrangement under every ruleset', () => {
@@ -132,7 +248,7 @@ describe('applyRandomMode', () => {
   test('RANDOM moves every key by one permutation drawn from the random', () => {
     const notes = [...notesOn(KEYS_7, 0), ...notesOn(KEYS_7, 1), ...notesOn(['16'], 2)];
     applyRandomMode(notes, KEYS_1P, 'RANDOM', seededRandom(7));
-    const expected = shuffleArray([...KEYS_7], seededRandom(7));
+    const expected = beatorajaShuffle(KEYS_7, seededRandom(7));
     expect(channelsOf(notes)).toEqual([...expected, ...expected, '16']);
     expect([...expected].sort()).toEqual(KEYS_7);
     expect(expected).not.toEqual(KEYS_7);
@@ -680,4 +796,69 @@ test('each 2P copy of a two-player chart pairs with the 1P object at its time an
   notes[0]!.channel = '15';
   for (const [second, first] of pairs) second.channel = `2${first.channel.slice(1)}`;
   expect(notes[2]!.channel).toBe('25');
+});
+
+test.each([
+  ['1P', 'S-RANDOM'],
+  ['2P', 'S-RANDOM'],
+  ['1P', 'CONVERGE'],
+  ['2P', 'CONVERGE'],
+] as const)('LR2 14 KEY %s %s follows the sorted BMS object order', (side, mode) => {
+  const right = side === '2P';
+  const scratch = right ? '26' : '16';
+  const key = right ? '21' : '11';
+  const lanes = resolveLaneOptionChannels(side, '14');
+  const far = right ? 1 : 4;
+  const near = right ? 4 : 0;
+  for (const [pattern, expected] of [
+    ['01', near],
+    ['0001', far],
+  ] as const) {
+    const json = parseChart(
+      `#BPM 120\n#PLAYER 3\n#001${scratch}:${pattern}\n#001${key}:${pattern}\n#00219:01\n#00229:01`,
+      'bms',
+    );
+    const entry: LibraryChart = {
+      id: 'scratch-order',
+      sourceId: 'scratch-order',
+      sourceLabel: 'Scratch order',
+      sourceKind: 'directory',
+      chartPath: 'scratch-order.bms',
+      directoryLabel: '',
+      fileLabel: 'scratch-order.bms',
+      title: 'Scratch order',
+      totalNotes: 4,
+      chart: json,
+    };
+    const play = new PlaySession({
+      judgeRuleset: 'lr2',
+      ...(right
+        ? { random2P: mode, randomSeed2P: '74', randomFixedLane2P: far }
+        : { random1P: mode, randomSeed1P: '48', randomFixedLane1P: far + 1 }),
+    });
+    play.chart = entry;
+    prepareChart(play, entry);
+    expect(play.resolvedPlayChart?.playVariant).toBe('14');
+    expect(play.notes.find((note) => note.event.channel === key)?.channel).toBe(lanes[expected]);
+    expect(play.notes.find((note) => note.event.channel === scratch)?.channel).toBe(scratch);
+  }
+});
+
+test.each(['10', '14'] as const)('the shared S-RANDOM choice keeps AC placement in %s KEY', (playVariant) => {
+  const scratch = '16';
+  const notes = notesOn([scratch, '11'], 1);
+  const lanes = resolveLaneOptionChannels('1P', playVariant);
+  applyRandomMode(notes, lanes, 'lr2:S-RANDOM', () => 0.95, { ruleset: '____', scratch, playVariant });
+  expect(channelsOf(notes)).toEqual([scratch, lanes.at(-1)]);
+});
+
+test('10 KEY LR2 S-RANDOM still permits a far draw with a scratch on a bar line', () => {
+  const notes = notesOn(['16', '11'], 1);
+  const lanes = resolveLaneOptionChannels('1P', '10');
+  applyRandomMode(notes, lanes, 'S-RANDOM', () => 0.95, {
+    scratch: '16',
+    playVariant: '10',
+    lr2Objects: [{ op: 2, order: 1, timeMs: 1000 }],
+  });
+  expect(channelsOf(notes)).toEqual(['16', '15']);
 });

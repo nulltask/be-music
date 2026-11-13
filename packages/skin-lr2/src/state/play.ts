@@ -1,3 +1,4 @@
+import { isSPToDPBattleMode } from '@be-music/player-engine/lanes';
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import {
   computeScoreRate,
@@ -166,7 +167,7 @@ export function resolveLR2PlayKeyModeOps(
   const source = lanes.battleSourceVariant;
   const sourceOp = source === undefined ? undefined : SOURCE_KEY_MODE_OPS[source];
   if (sourceOp === undefined) return [resolveLR2PlayKeyModeOp(lanes)];
-  const doubled = battleMode === 'D-BATTLE' || battleMode === 'SP-TO-DP';
+  const doubled = battleMode === 'D-BATTLE' || isSPToDPBattleMode(battleMode);
   if (doubled && source === '7') return [sourceOp, LR2_OP.KEYS_14];
   if (doubled && source === '5') return [sourceOp, LR2_OP.KEYS_10];
   return [sourceOp];

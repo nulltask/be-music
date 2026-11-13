@@ -14,7 +14,6 @@ import {
 } from '@be-music/chart-model';
 import { createEmptyJSON, type BeMusicJSON } from '../../chart-source/src/index.ts';
 import { parseChart, parseChartFile, resolveBMSControlFlowWithDraws } from '../../chart-parser/src/index.ts';
-import { resolveBeatorajaDefaultTotal, resolveLR2DefaultTotal } from './ruleset/index.ts';
 import {
   type PlayerLoadProgress,
   type PlayerRulesetInfo,
@@ -23,6 +22,7 @@ import {
   type PlayerSummary,
 } from './index.ts';
 import { formatRandomPatternSummary, resolveBMSControlFlowForPlayback } from './core/engine-preparation.ts';
+import { createVirtualClock } from './core/characterization/virtual-clock.ts';
 import { extractPlayableNotes } from './display.ts';
 import type { PlayerUICommand } from './core/ui-signal-bus.ts';
 import { simulateReplay, type BeMusicReplay } from './replay/index.ts';
@@ -403,9 +403,9 @@ describe('player', () => {
       tui: false,
     });
 
-    // LR2 `LR2_bmsload.cpp`: `(n / 5 + 200) * 0.8` below 400 notes — one note yields 160.16, not the flat 160 the
-    // engine used to assume. See `resolveLR2DefaultTotal`.
-    expect(summary.gauge?.effectiveTotal).toBeCloseTo(resolveLR2DefaultTotal(1), 9);
+    // LR2 `LR2_bmsload.cpp`: `(n / 5 + 200) * 0.8` below 400 notes — one note yields 160.16, which LR2 keeps in an int
+    // as 160 (#1081).
+    expect(summary.gauge?.effectiveTotal).toBe(160);
     expect(summary.gauge?.current).toBe(100);
     expect(summary.gauge?.cleared).toBe(true);
   });
@@ -455,7 +455,7 @@ describe('player', () => {
       judgeRuleset: 'beatoraja',
     });
     expect(beatoraja.gauge?.type).toBe('NORMAL');
-    expect(beatoraja.gauge?.effectiveTotal).toBeCloseTo(resolveBeatorajaDefaultTotal(1), 9);
+    expect(beatoraja.gauge?.effectiveTotal).toBe(260);
 
     const ____ = await autoPlay(json, {
       auto: true,
@@ -866,19 +866,23 @@ describe('player', () => {
 
   test('player: a long note held to its end completes', async () => {
     const commands: PlayerUICommand[] = [];
-    await manualPlay(createLNOBJLongNoteChart(), {
-      speed: 1,
-      leadInMs: 0,
-      audio: false,
-      createUIRuntime: createLongNoteCommandRecorder(commands),
-      createInputRuntime: createScheduledInputRuntime([
-        { delayMs: 520, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
-        { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
-        { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
-      ]),
-    }).catch((error: unknown) => {
-      if (!(error instanceof PlayerInterruptedError)) throw error;
-    });
+    await createVirtualClock()
+      .run(() =>
+        manualPlay(createLNOBJLongNoteChart(), {
+          speed: 1,
+          leadInMs: 0,
+          audio: false,
+          createUIRuntime: createLongNoteCommandRecorder(commands),
+          createInputRuntime: createScheduledInputRuntime([
+            { delayMs: 520, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
+            { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
+            { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
+          ]),
+        }),
+      )
+      .catch((error: unknown) => {
+        if (!(error instanceof PlayerInterruptedError)) throw error;
+      });
     expect(commands).toEqual([
       { kind: 'long-note-start', channel: '11', beat: 4, mode: 'ln' },
       { kind: 'long-note-end', channel: '11', outcome: 'complete' },
@@ -887,20 +891,24 @@ describe('player', () => {
 
   test('player: a long note released early is dropped', async () => {
     const commands: PlayerUICommand[] = [];
-    await manualPlay(createLNOBJLongNoteChart(1), {
-      speed: 1,
-      leadInMs: 0,
-      audio: false,
-      createUIRuntime: createLongNoteCommandRecorder(commands),
-      createInputRuntime: createScheduledInputRuntime([
-        { delayMs: 520, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
-        { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
-        { delayMs: 900, command: { kind: 'kitty-state', pressTokens: [], repeatTokens: [], releaseTokens: ['z'] } },
-        { delayMs: 1200, command: { kind: 'interrupt', reason: 'escape' } },
-      ]),
-    }).catch((error: unknown) => {
-      if (!(error instanceof PlayerInterruptedError)) throw error;
-    });
+    await createVirtualClock()
+      .run(() =>
+        manualPlay(createLNOBJLongNoteChart(1), {
+          speed: 1,
+          leadInMs: 0,
+          audio: false,
+          createUIRuntime: createLongNoteCommandRecorder(commands),
+          createInputRuntime: createScheduledInputRuntime([
+            { delayMs: 520, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
+            { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
+            { delayMs: 900, command: { kind: 'kitty-state', pressTokens: [], repeatTokens: [], releaseTokens: ['z'] } },
+            { delayMs: 1200, command: { kind: 'interrupt', reason: 'escape' } },
+          ]),
+        }),
+      )
+      .catch((error: unknown) => {
+        if (!(error instanceof PlayerInterruptedError)) throw error;
+      });
     expect(commands).toEqual([
       { kind: 'long-note-start', channel: '11', beat: 4, mode: 'ln' },
       { kind: 'long-note-end', channel: '11', outcome: 'dropped' },

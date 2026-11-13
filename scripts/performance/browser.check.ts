@@ -5,11 +5,18 @@ test('capture real-skin CPU and allocation profiles', async ({ player }) => {
   await mkdir(out, { recursive: true });
   const errors: string[] = [];
   player.page.on('pageerror', (e) => errors.push(e.message));
-  await player.open({ 'be-music.built-in-skin': 'synesthesia', 'be-music.skin-effects': 'full' });
+  // PERF_RENDERER=webgpu measures WebGPU instead of the default WebGL 2; PERF_EFFECTS=reduced|off the skin's lighter effects.
+  await player.open(
+    { 'be-music.built-in-skin': 'synesthesia', 'be-music.skin-effects': process.env.PERF_EFFECTS ?? 'full' },
+    process.env.PERF_RENDERER ? { renderer: process.env.PERF_RENDERER } : {},
+  );
   await player.drop('songs', { prefix: SONGS });
   const cdp = await player.page.context().newCDPSession(player.page);
   await cdp.send('Performance.enable');
   await cdp.send('Profiler.enable');
+  // A slower machine: PERF_CPU_THROTTLE=4 runs the page at a quarter of this one's CPU speed.
+  const throttle = Number(process.env.PERF_CPU_THROTTLE ?? '1');
+  if (throttle > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: throttle });
   const summaries: Array<{
     name: string;
     elapsedMs: number;
@@ -17,10 +24,13 @@ test('capture real-skin CPU and allocation profiles', async ({ player }) => {
     p50: number | undefined;
     p95: number | undefined;
     p99: number | undefined;
+    over17: number;
     over33: number;
     before: { metrics: Array<{ name: string; value: number }> };
     after: { metrics: Array<{ name: string; value: number }> };
   }> = [];
+  // PERF_FRAMES_ONLY=1 records frame intervals without the CPU and allocation profilers, which add overhead of their own.
+  const profile = !process.env.PERF_FRAMES_ONLY;
   async function capture(name: string, action: () => Promise<void>) {
     await cdp.send('HeapProfiler.collectGarbage');
     const before = await cdp.send('Performance.getMetrics');
@@ -37,17 +47,19 @@ test('capture real-skin CPU and allocation profiles', async ({ player }) => {
       }
       requestAnimationFrame(tick);
     });
-    await cdp.send('HeapProfiler.startSampling', {
-      samplingInterval: 16384,
-      includeObjectsCollectedByMajorGC: true,
-      includeObjectsCollectedByMinorGC: true,
-    });
-    await cdp.send('Profiler.start');
+    if (profile) {
+      await cdp.send('HeapProfiler.startSampling', {
+        samplingInterval: 16384,
+        includeObjectsCollectedByMajorGC: true,
+        includeObjectsCollectedByMinorGC: true,
+      });
+      await cdp.send('Profiler.start');
+    }
     const start = Date.now();
     await action();
     const elapsedMs = Date.now() - start;
-    const cpu = await cdp.send('Profiler.stop');
-    const heap = await cdp.send('HeapProfiler.stopSampling');
+    const cpu = profile ? await cdp.send('Profiler.stop') : undefined;
+    const heap = profile ? await cdp.send('HeapProfiler.stopSampling') : undefined;
     const after = await cdp.send('Performance.getMetrics');
     const frames = await player.page.evaluate(() => {
       const g = globalThis as typeof globalThis & { __perfTimes: number[]; __perfRun: boolean };
@@ -63,13 +75,14 @@ test('capture real-skin CPU and allocation profiles', async ({ player }) => {
       p50: quantile(0.5),
       p95: quantile(0.95),
       p99: quantile(0.99),
+      over17: sorted.filter((v) => v > 16.7).length,
       over33: sorted.filter((v) => v > 33.4).length,
       before,
       after,
     };
     summaries.push(summary);
-    await writeFile(`${out}/${name}.cpuprofile`, JSON.stringify(cpu.profile));
-    await writeFile(`${out}/${name}.heapprofile`, JSON.stringify(heap.profile));
+    if (cpu) await writeFile(`${out}/${name}.cpuprofile`, JSON.stringify(cpu.profile));
+    if (heap) await writeFile(`${out}/${name}.heapprofile`, JSON.stringify(heap.profile));
     await writeFile(`${out}/${name}.json`, JSON.stringify({ summary, frames }, null, 2));
     await player.page.screenshot({ path: `${out}/${name}.png` });
   }

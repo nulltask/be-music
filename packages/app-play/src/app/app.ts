@@ -1,4 +1,6 @@
+import { createChartDiagnosticsPanel } from '../ui/chart-diagnostics.ts';
 import { promptRandomMixConditions } from '../ui/random-mix-dialog.ts';
+import { promptRandomMixSave } from '../ui/random-mix-save-dialog.ts';
 import { playerText } from '../player-copy.ts';
 import { BGACameraService } from '../services/bga-camera.ts';
 import { requestPlayerWindowClose } from '../ui/close-window.ts';
@@ -21,7 +23,7 @@ import { resolveChartSource } from '@be-music/player-browser/collection';
 import { logger } from '@be-music/player-browser';
 import { BeatorajaSkinOptionsPanel, type BeatorajaSkinOptionsPanelDeps } from '../ui/beatoraja-skin-options.ts';
 import { LeaderboardPanel } from '../leaderboard-ui.ts';
-import { fetchLeaderboardTopReplay } from '../leaderboard.ts';
+import { fetchLeaderboardRankingPage, fetchLeaderboardTopReplay } from '../leaderboard.ts';
 import { GhostReplayFile } from '../services/ghost.ts';
 import { playerFullscreenElement, toggleFullscreen } from '../fullscreen.ts';
 import { bindPlayerHeader, runPlayerHeaderAction, setPlayerHeaderSettingsOpen } from '../player-header.ts';
@@ -104,6 +106,9 @@ export class PlayerWebApp {
   private readonly fpsOverlay = createFpsOverlay(
     document.querySelector<HTMLElement>('#fps-overlay') ?? document.createElement('div'),
   );
+  private readonly chartDiagnostics = createChartDiagnosticsPanel(
+    document.querySelector<HTMLElement>('#chart-diagnostics') ?? document.createElement('div'),
+  );
   /** Mounting {@link sceneHost} on the page, started as the first scene shows (`mountStage`). */
   private stageMount: Promise<void> | undefined;
   /**
@@ -116,6 +121,7 @@ export class PlayerWebApp {
     host: {
       setScene: async (scene, role) => {
         await this.mountStage();
+        this.chartDiagnostics.show();
         await this.sceneHost.setScene(scene);
         // The quick options belong to choosing a chart and playing it.
         this.optionsDialog?.setQuickOptionsShown(role === 'select' || role === 'play');
@@ -418,6 +424,7 @@ export class PlayerWebApp {
       showBeatorajaResult: (data, options) => this.resultRoute.showBeatorajaResult(data, options),
       courseReplaySlots: (courseLog, native, kept) => this.resultRoute.courseReplaySlots(courseLog, native, kept),
       unlockReplayOptions: () => this.unlockReplayOptions(),
+      onRunResult: (course) => this.courseRoute.noteNonstopResult(course),
     });
     this.courseRoute = new CourseRoute({
       courses: this.courses,
@@ -425,6 +432,7 @@ export class PlayerWebApp {
       records: this.records,
       courseMaker: this.courseMaker,
       promptRandomMix: (request) => promptRandomMixConditions(request),
+      promptRandomMixSave: (request) => promptRandomMixSave(request),
       replayAutoSave: this.replayAutoSave,
       leaderboard: this.leaderboard,
       familyKits: this.familyKits,
@@ -465,6 +473,7 @@ export class PlayerWebApp {
       beatorajaSkinOptions: this.beatorajaSkinOptions,
       playStatusShown: () => this.status.playShown,
       setStatus: (text) => this.status.set(text),
+      showChartDiagnostics: (chart, path) => this.chartDiagnostics.show(chart, path),
       unlockReplayOptions: () => this.unlockReplayOptions(),
       rememberHiSpeed: (value, source) => this.playRoute.rememberHiSpeed(value, source),
       showDecide: (chartEntry, overrides) => this.decideRoute.showDecide(chartEntry, overrides),
@@ -508,6 +517,7 @@ export class PlayerWebApp {
       recordingDeps: () => this.recording.deps(),
       setRecordingFilenameBase: (base) => this.recording.setFilenameBase(base),
       setStatus: (text) => this.status.set(text),
+      showChartDiagnostics: (chart, path) => this.chartDiagnostics.show(chart, path),
       setPlayStatus: (text) => this.status.setPlay(text),
       lockReplayOptionsForPlay: (liveTempo, chartEntry) => this.lockReplayOptionsForPlay(liveTempo, chartEntry),
       showSelect: () => this.showSelect(),
@@ -570,6 +580,9 @@ export class PlayerWebApp {
         fetchLeaderboardTopReplay: (chartFingerprint) =>
           fetchLeaderboardTopReplay(chartFingerprint, this.guiState.judgeRuleset),
       },
+      // The ranking under the ruleset the play is judged by, as the ghost's top run is.
+      fetchRankingPage: (chartFingerprint, offset, limit) =>
+        fetchLeaderboardRankingPage(chartFingerprint, this.guiState.judgeRuleset, offset, limit),
       optionsDialog: this.optionsDialog,
       compressorMode: this.compressorMode,
       deviceProfile,
@@ -783,7 +796,10 @@ export class PlayerWebApp {
    */
   private mountStage(): Promise<void> {
     this.stageMount ??= (async () => {
-      await this.sceneHost.mount(this.elements.stage, { resolution: this.guiState.renderResolution });
+      await this.sceneHost.mount(this.elements.stage, {
+        resolution: this.guiState.renderResolution,
+        renderer: this.guiState.renderer,
+      });
       this.shell.wireCanvasFullscreen();
       this.shell.wireTouchControls();
       this.sceneHost.app.ticker.add(this.shell.syncGameplayShellState);
@@ -887,9 +903,11 @@ export class PlayerWebApp {
    * kept for a quick retry go: the next play is most likely another chart, and they would sit through the select
    * screen.
    */
-  private showSelect(): Promise<void> {
+  private async showSelect(): Promise<void> {
     this.audio.chartSamples.release();
-    return this.selectRoute.showSelect();
+    await this.selectRoute.showSelect();
+    // A RANDOM MIX run that just ended offers to save its course over the select screen.
+    void this.courseRoute.offerRandomMixSave();
   }
 
   /**

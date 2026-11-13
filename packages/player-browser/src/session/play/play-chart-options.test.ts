@@ -1,3 +1,4 @@
+import type { ChartPlayOptionProgram } from '@be-music/chart-model';
 import { parseBMS } from '@be-music/chart-parser';
 import { createReplayRecorder, parseReplay, serializeReplay } from '@be-music/player-engine/replay';
 import { createEmptyScore } from '@be-music/player-engine/ruleset';
@@ -127,4 +128,26 @@ test('a replay of a copied chart rebuilds the recorded double-play notes', () =>
   const shape = (play: PlaySession) =>
     [...play.notes, ...play.mineNotes].map((note) => `${note.seconds}:${note.channel}`).sort();
   expect(shape(restored)).toEqual(shape(original));
+});
+
+test('BASE-SPEED bypasses the user tempo cap and replays use their recorded program', () => {
+  const source = SP('774:CRA-RHS3');
+  const original = prepare(source, { tempo: 1.25 });
+  expect(original.getTempo()).toBe(1.25);
+  expect(original.playbackTempo).toBe(2.5);
+  const record = (chartPlayOptions: ChartPlayOptionProgram | undefined) =>
+    parseReplay(
+      serializeReplay(
+        createReplayRecorder({
+          json: entry(source).chart,
+          chart: original.preparedChart!,
+          chartPlayOptions,
+          play: { mode: 'manual', autoScratch: false, tempo: 1.25 },
+        }).finalize({ summary: { ...createEmptyScore(original.notes.length), fast: 0, slow: 0 } }),
+      ),
+    );
+  const replay = record(original.chartPlay?.program);
+  expect(replay.chart.chartPlayOptions).toEqual({ version: 2, options: { baseSpeed: 2 } });
+  expect(prepare(source, { replay }).playbackTempo).toBe(2.5);
+  expect(prepare(source, { replay: record(undefined) }).playbackTempo).toBe(1.25);
 });

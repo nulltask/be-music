@@ -1,6 +1,6 @@
 {
   "name": "@be-music/app-leaderboard",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "private": true,
   "description": "Chart and course rankings, score APIs, and web pages for Be-Music",
   "license": "MIT",

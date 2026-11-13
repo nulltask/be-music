@@ -6,6 +6,9 @@ export function withChartOverrides(source: ResolvedChart, overrides: Partial<Res
     get source() {
       return source.source;
     },
+    get diagnostics() {
+      return source.diagnostics;
+    },
     get sourceFormat() {
       return source.sourceFormat;
     },

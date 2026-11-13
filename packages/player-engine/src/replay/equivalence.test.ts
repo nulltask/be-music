@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vite-plus/test';
 import { resolveChart } from '@be-music/chart-model';
 import { manualPlay, preparePlaybackChart } from '../index.ts';
 import { runRecordedPlay } from '../test-support/recorded-play.ts';
+import { classifyReplayAssists } from '../records/assist-policy.ts';
 import { recordPlayFromSummary } from '../records/best-record.ts';
 import { resolveRulesetResultMissCount } from './result-lamp.ts';
 import { resolveRulesetConfig, simulateReplay } from './simulate.ts';
@@ -1204,6 +1205,8 @@ for (const longNoteModifier of ['LEGACY', 'REMOVE'] as const) {
   test(`${longNoteModifier} records effective head-only notes for deterministic simulation`, async () => {
     const run = await runRecordedPlay(longNoteChart(2), [down(0, 1_000_000, '11')], 'beatoraja', { longNoteModifier });
     expect(run.replay.play.longNoteModifier).toBe(longNoteModifier);
+    // The conversion count separates a converted chart from one the modifier left alone (#1139).
+    expect(run.replay.play.longNoteModifierChangeCount).toBeGreaterThan(0);
     expect(run.replay.chart.notes.every((note) => note.type === 'normal' && note.endTimeUs === undefined)).toBe(true);
     expect(simulateReplay(run.replay, { ruleset: 'beatoraja' }).judge).toEqual(run.replay.results!.native!.judge);
   });
@@ -1453,4 +1456,78 @@ test('SURVIVAL TO GROOVE leaves a failed course class gauge selected while conti
   expect(run.summary.perfect).toBe(1);
   const replay = parseReplay(serializeReplay(run.replay));
   expect(simulateReplay(replay, { ruleset: 'beatoraja' }).gauge).toEqual(replay.results!.native!.gauge);
+});
+
+test("LR2's GAMBOL narrows the windows of the play, and the replay re-simulates with it", async () => {
+  // One note at 1 s, hit 20 ms late: a GREAT under NORMAL (PGREAT 18 ms, GREAT 40 ms).
+  const json = chart([{ measure: 1, channel: '11', position: [0, 1], value: '01' }]);
+  const inputs = [down(0, 1_020_000, '11'), up(1, 1_100_000, '11')];
+  const plain = await runRecordedPlay(json, inputs, 'lr2');
+  expect(plain.replay.play.lr2Gambol).toBeUndefined();
+  expect(plain.replay.results!.native!.judge).toMatchObject({ great: 1 });
+  // LEVEL 1 keeps it a GREAT (24 ms); LEVEL 2 leaves only BAD past 12 ms.
+  const level1 = await runRecordedPlay(json, inputs, 'lr2', { lr2Gambol: 1 });
+  expect(level1.replay.play.lr2Gambol).toBe(1);
+  expect(level1.replay.results!.native!.judge).toMatchObject({ great: 1 });
+  const level2 = await runRecordedPlay(json, inputs, 'lr2', { lr2Gambol: 2 });
+  expect(level2.replay.play.lr2Gambol).toBe(2);
+  expect(level2.replay.results!.native!.judge).toMatchObject({ great: 0, bad: 1 });
+  expect(simulateReplay(level2.replay, { ruleset: 'lr2' }).judge).toEqual(level2.replay.results!.native!.judge);
+});
+
+test("LR2's SOFTLANDING records its drawn scroll and leaves the judgments as they were", async () => {
+  const json = chart([
+    { measure: 1, channel: '11', position: [0, 1], value: '01' },
+    { measure: 2, channel: '12', position: [1, 2], value: '01' },
+  ]);
+  const inputs = [down(0, 1_000_000, '11'), up(1, 1_050_000, '11'), down(2, 2_500_000, '12'), up(3, 2_550_000, '12')];
+  const plain = await runRecordedPlay(json, inputs, 'lr2');
+  for (const scrollModifier of ['SOFTLANDING-1', 'SOFTLANDING-2'] as const) {
+    const run = await runRecordedPlay(json, inputs, 'lr2', { scrollModifier });
+    expect(run.replay.play.scrollModifier).toBe(scrollModifier);
+    const timeline = run.replay.play.scrollModifierTimeline!;
+    expect(timeline[0]?.beat).toBe(0);
+    expect(timeline.every((point) => point.speed >= 0.5 && point.speed <= 2)).toBe(true);
+    // LEVEL 2 also draws at the note in the middle of measure 2.
+    expect(timeline.some((point) => point.beat === 10)).toBe(scrollModifier === 'SOFTLANDING-2');
+    // Only the scroll moves: the same inputs judge the same.
+    expect(run.replay.results!.native!.judge).toEqual(plain.replay.results!.native!.judge);
+    expect(simulateReplay(run.replay, { ruleset: 'lr2' }).judge).toEqual(run.replay.results!.native!.judge);
+    // LR2 saves the play as a normal one.
+    expect(classifyReplayAssists(run.replay)).toEqual([]);
+  }
+});
+
+test("LR2's mania chart generators record their rates, seed and counts, and the replay re-simulates the generated chart", async () => {
+  const json = chart([
+    { measure: 1, channel: '11', position: [0, 1], value: '01' },
+    { measure: 2, channel: '11', position: [0, 1], value: '01' },
+    { measure: 3, channel: '12', position: [0, 1], value: '01' },
+  ]);
+  const inputs = [down(0, 1_000_000, '11'), up(1, 1_050_000, '11')];
+  const lr2Mania = { addNotes: 100, loudness: 100, addLongNotes: 50, addMines: 100, seed: '777' };
+  const run = await runRecordedPlay(json, inputs, 'lr2', { lr2Mania });
+  const recorded = run.replay.play.lr2Mania!;
+  expect(recorded).toMatchObject(lr2Mania);
+  // LOUDNESS at 100 fills every chord across the 5 KEY side.
+  expect(recorded.changes.loudness).toBeGreaterThan(0);
+  expect(run.replay.chart.notes.filter((note) => note.type !== 'mine').length).toBe(18);
+  expect(run.replay.chart.notes.filter((note) => note.type === 'mine').length).toBe(recorded.changes.addMines);
+  const saved = parseReplay(serializeReplay(run.replay));
+  expect(saved.play.lr2Mania).toEqual(recorded);
+  expect(simulateReplay(saved, { ruleset: 'lr2' }).judge).toEqual(run.replay.results!.native!.judge);
+  // The same rates and seed rebuild the same chart.
+  const again = await runRecordedPlay(json, inputs, 'lr2', { lr2Mania });
+  expect(again.replay.chart.notes).toEqual(run.replay.chart.notes);
+  // ADD NOTES and LOUDNESS save nothing; ADD LONGNOTES and ADD MINES alone cap the lamp.
+  expect(classifyReplayAssists(saved).map((finding) => [finding.option, finding.assistClass])).toEqual([
+    ['lr2-add-notes', 'no-save'],
+    ['lr2-loudness', 'no-save'],
+    ['lr2-add-longnotes', 'light'],
+    ['lr2-add-mines', 'light'],
+  ]);
+  const mild = await runRecordedPlay(json, inputs, 'lr2', {
+    lr2Mania: { addLongNotes: 100, addMines: 100, seed: '5' },
+  });
+  expect(classifyReplayAssists(mild.replay).map((finding) => finding.assistClass)).toEqual(['light', 'light']);
 });

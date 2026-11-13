@@ -19,6 +19,7 @@ import {
   resolveJudgeInputChannels,
   runJudgeCoreStep,
   clampToReversal,
+  resolveLandmineSampleKey,
   stepJudgeCore,
   toJudgeClock,
   type JudgeCoreEffect,
@@ -723,6 +724,39 @@ test.each([false, true])(
     );
   },
 );
+
+test.each([
+  [[{ seconds: 0, sampleKey: 'a1' }], 'a1'],
+  [
+    [
+      { seconds: 0, sampleKey: 'a1' },
+      { seconds: 2, sampleKey: 'b1' },
+    ],
+    'b1',
+  ],
+  [[{ seconds: 3, sampleKey: 'b1' }], '00'],
+  [[{ seconds: 0, sampleKey: 'a1' }, { seconds: 2 }], undefined],
+] as const)('a mine explodes with the slot its time cue names (%j)', (cues, expected) => {
+  const json = structuredClone(LONG_AND_MINE);
+  json.resources.wav['00'] = 'explosion.wav';
+  json.resources.wav.a1 = 'a.wav';
+  json.resources.wav.b1 = 'b.wav';
+  const state = createCore(json, 'beatoraja');
+  Object.assign(state.config, { landmineSampleKeys: cues });
+  stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
+  const effects = [...stepJudgeCore(state, advance(2.49)), ...stepJudgeCore(state, advance(2.6))];
+  const sounds = effects.filter((effect) => effect.kind === 'sound' && effect.source === 'mine-hit');
+  expect(sounds.map((effect) => (effect.kind === 'sound' ? effect.event.value : undefined))).toEqual(
+    expected === undefined ? [] : [expected],
+  );
+});
+
+test('resolveLandmineSampleKey reads #WAV00 without cues and the last cue at or before a mine', () => {
+  expect(resolveLandmineSampleKey(undefined, 1)).toBe('00');
+  expect(resolveLandmineSampleKey([{ seconds: 1, sampleKey: 'a1' }], 0.5)).toBe('00');
+  expect(resolveLandmineSampleKey([{ seconds: 1, sampleKey: 'a1' }], 1)).toBe('a1');
+  expect(resolveLandmineSampleKey([{ seconds: 1, sampleKey: 'a1' }, { seconds: 2 }], 2.5)).toBeUndefined();
+});
 
 describe('bmson layered input audio', () => {
   function layered(long = false) {

@@ -102,6 +102,34 @@ export interface OptionSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  guideSE: PlayerGUIState['guideSE'];
+  judgeCounts: PlayerGUIState['judgeCounts'];
+  judgeDetailSplit: PlayerGUIState['judgeDetailSplit'];
+  judgeDetail: PlayerGUIState['judgeDetail'];
+  scoreTargetRate: PlayerGUIState['scoreTargetRate'];
+  judgePosition: PlayerGUIState['judgePosition'];
+  judgeDisplay: PlayerGUIState['judgeDisplay'];
+  laneBrightness: PlayerGUIState['laneBrightness'];
+  scoreTarget: PlayerGUIState['scoreTarget'];
+  markProcessedNotes: PlayerGUIState['markProcessedNotes'];
+  showJudgeArea: PlayerGUIState['showJudgeArea'];
+  lr2AddMines: PlayerGUIState['lr2AddMines'];
+  lr2AddLongNotes: PlayerGUIState['lr2AddLongNotes'];
+  lr2Loudness: PlayerGUIState['lr2Loudness'];
+  lr2AddNotes: PlayerGUIState['lr2AddNotes'];
+  lr2Gambol: PlayerGUIState['lr2Gambol'];
+  lr2SideJump: PlayerGUIState['lr2SideJump'];
+  lr2SpiralEffect: PlayerGUIState['lr2SpiralEffect'];
+  lr2Wave: PlayerGUIState['lr2Wave'];
+  lr2SinCurve: PlayerGUIState['lr2SinCurve'];
+  lr2Nabeatsu: PlayerGUIState['lr2Nabeatsu'];
+  lr2Heartbeat: PlayerGUIState['lr2Heartbeat'];
+  lr2Char: PlayerGUIState['lr2Char'];
+  lr2SuperLoop: PlayerGUIState['lr2SuperLoop'];
+  lr2Tornado: PlayerGUIState['lr2Tornado'];
+  lr2Earthquake: PlayerGUIState['lr2Earthquake'];
+  lr2Acceleration: PlayerGUIState['lr2Acceleration'];
+  autoScratchNotes: PlayerGUIState['autoScratchNotes'];
   judgeTimingAutoAdjust: PlayerGUIState['judgeTimingAutoAdjust'];
   judgeAlgorithm: PlayerGUIState['judgeAlgorithm'];
   longNoteModifier: PlayerGUIState['longNoteModifier'];
@@ -171,6 +199,7 @@ export interface OptionSettings {
   skinEffects: SkinEffects;
   renderResolution: number;
   playLayout: PlayLayout;
+  renderer: PlayerGUIState['renderer'];
   recordingFormat: string;
   workerCount: number;
   compressorTuning: Record<TunableCompressor, CompressorTuning>;
@@ -192,6 +221,8 @@ type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 const SKIN_FAMILIES: readonly SkinFamilyOverride[] = ['auto', 'default', 'lr2', 'beatoraja'];
 const SKIN_EFFECTS: readonly SkinEffects[] = ['full', 'reduced', 'off'];
 const PLAY_LAYOUTS: readonly PlayLayout[] = ['auto', 'standard', 'touch'];
+const RENDERERS: readonly PlayerGUIState['renderer'][] = ['webgl', 'webgpu'];
+const RENDERER_KEY = 'be-music.renderer';
 const VOLUME_KEY = 'be-music.volumes';
 const BUILT_IN_SKIN_KEY = 'be-music.built-in-skin';
 const SKIN_EFFECTS_KEY = 'be-music.skin-effects';
@@ -300,6 +331,34 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'dpFlip', booleanOf(raw.dpFlip));
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
   assign(settings, 'bpmChangeWarning', booleanOf(raw.bpmChangeWarning));
+  assign(settings, 'guideSE', resolvePlayOptionValue('guideSE', raw.guideSE));
+  assign(settings, 'judgeCounts', resolvePlayOptionValue('judgeCounts', raw.judgeCounts));
+  assign(settings, 'judgeDetailSplit', resolvePlayOptionValue('judgeDetailSplit', raw.judgeDetailSplit));
+  assign(settings, 'judgeDetail', resolvePlayOptionValue('judgeDetail', raw.judgeDetail));
+  assign(settings, 'scoreTargetRate', resolvePlayOptionValue('scoreTargetRate', raw.scoreTargetRate));
+  assign(settings, 'judgePosition', resolvePlayOptionValue('judgePosition', raw.judgePosition));
+  assign(settings, 'judgeDisplay', resolvePlayOptionValue('judgeDisplay', raw.judgeDisplay));
+  assign(settings, 'laneBrightness', resolvePlayOptionValue('laneBrightness', raw.laneBrightness));
+  assign(settings, 'scoreTarget', resolvePlayOptionValue('scoreTarget', raw.scoreTarget));
+  assign(settings, 'markProcessedNotes', resolvePlayOptionValue('markProcessedNotes', raw.markProcessedNotes));
+  assign(settings, 'showJudgeArea', resolvePlayOptionValue('showJudgeArea', raw.showJudgeArea));
+  assign(settings, 'lr2AddMines', resolvePlayOptionValue('lr2AddMines', raw.lr2AddMines));
+  assign(settings, 'lr2AddLongNotes', resolvePlayOptionValue('lr2AddLongNotes', raw.lr2AddLongNotes));
+  assign(settings, 'lr2Loudness', resolvePlayOptionValue('lr2Loudness', raw.lr2Loudness));
+  assign(settings, 'lr2AddNotes', resolvePlayOptionValue('lr2AddNotes', raw.lr2AddNotes));
+  assign(settings, 'lr2Gambol', resolvePlayOptionValue('lr2Gambol', raw.lr2Gambol));
+  assign(settings, 'lr2SideJump', resolvePlayOptionValue('lr2SideJump', raw.lr2SideJump));
+  assign(settings, 'lr2SpiralEffect', resolvePlayOptionValue('lr2SpiralEffect', raw.lr2SpiralEffect));
+  assign(settings, 'lr2Wave', resolvePlayOptionValue('lr2Wave', raw.lr2Wave));
+  assign(settings, 'lr2SinCurve', resolvePlayOptionValue('lr2SinCurve', raw.lr2SinCurve));
+  assign(settings, 'lr2Nabeatsu', resolvePlayOptionValue('lr2Nabeatsu', raw.lr2Nabeatsu));
+  assign(settings, 'lr2Heartbeat', resolvePlayOptionValue('lr2Heartbeat', raw.lr2Heartbeat));
+  assign(settings, 'lr2Char', resolvePlayOptionValue('lr2Char', raw.lr2Char));
+  assign(settings, 'lr2SuperLoop', resolvePlayOptionValue('lr2SuperLoop', raw.lr2SuperLoop));
+  assign(settings, 'lr2Tornado', resolvePlayOptionValue('lr2Tornado', raw.lr2Tornado));
+  assign(settings, 'lr2Earthquake', resolvePlayOptionValue('lr2Earthquake', raw.lr2Earthquake));
+  assign(settings, 'lr2Acceleration', resolvePlayOptionValue('lr2Acceleration', raw.lr2Acceleration));
+  assign(settings, 'autoScratchNotes', resolvePlayOptionValue('autoScratchNotes', raw.autoScratchNotes));
   // A boolean from before the modes is beatoraja's switch.
   assign(settings, 'judgeTimingAutoAdjust', resolvePlayOptionValue('judgeTimingAutoAdjust', raw.judgeTimingAutoAdjust));
   assign(settings, 'visualConstant', booleanOf(raw.visualConstant));
@@ -404,6 +463,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'hsFix', oneOf(raw.hsFix, PLAY_OPTION_CHOICES.hsFix!));
   assign(settings, 'skinEffects', oneOf(raw.skinEffects, SKIN_EFFECTS));
   assign(settings, 'playLayout', oneOf(raw.playLayout, PLAY_LAYOUTS));
+  assign(settings, 'renderer', oneOf(raw.renderer, RENDERERS));
   assign(settings, 'tempoPitchMode', oneOf(raw.tempoPitchMode, ['pitch', 'keep-pitch'] as const));
   assign(settings, 'tempoStretchAlgorithm', oneOf(raw.tempoStretchAlgorithm, ['wsola', 'signalsmith'] as const));
   assign(settings, 'masterVolume', percentOf(raw.masterVolume));
@@ -576,6 +636,34 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('dpFlip');
   assignState('bpmGuide');
   assignState('bpmChangeWarning');
+  assignState('guideSE');
+  assignState('judgeCounts');
+  assignState('judgeDetailSplit');
+  assignState('judgeDetail');
+  assignState('scoreTargetRate');
+  assignState('judgePosition');
+  assignState('judgeDisplay');
+  assignState('laneBrightness');
+  assignState('scoreTarget');
+  assignState('markProcessedNotes');
+  assignState('showJudgeArea');
+  assignState('lr2AddMines');
+  assignState('lr2AddLongNotes');
+  assignState('lr2Loudness');
+  assignState('lr2AddNotes');
+  assignState('lr2Gambol');
+  assignState('lr2SideJump');
+  assignState('lr2SpiralEffect');
+  assignState('lr2Wave');
+  assignState('lr2SinCurve');
+  assignState('lr2Nabeatsu');
+  assignState('lr2Heartbeat');
+  assignState('lr2Char');
+  assignState('lr2SuperLoop');
+  assignState('lr2Tornado');
+  assignState('lr2Earthquake');
+  assignState('lr2Acceleration');
+  assignState('autoScratchNotes');
   assignState('judgeTimingAutoAdjust');
   assignState('visualConstant');
   assignState('noteDurationMs');
@@ -658,6 +746,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('skinEffects');
   assignState('renderResolution');
   assignState('playLayout');
+  assignState('renderer');
   assignState('recordingFormat');
 }
 
@@ -707,6 +796,34 @@ export function captureOptionSettings(
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    guideSE: state.guideSE,
+    judgeCounts: state.judgeCounts,
+    judgeDetailSplit: state.judgeDetailSplit,
+    judgeDetail: state.judgeDetail,
+    scoreTargetRate: state.scoreTargetRate,
+    judgePosition: state.judgePosition,
+    judgeDisplay: state.judgeDisplay,
+    laneBrightness: state.laneBrightness,
+    scoreTarget: state.scoreTarget,
+    markProcessedNotes: state.markProcessedNotes,
+    showJudgeArea: state.showJudgeArea,
+    lr2AddMines: state.lr2AddMines,
+    lr2AddLongNotes: state.lr2AddLongNotes,
+    lr2Loudness: state.lr2Loudness,
+    lr2AddNotes: state.lr2AddNotes,
+    lr2Gambol: state.lr2Gambol,
+    lr2SideJump: state.lr2SideJump,
+    lr2SpiralEffect: state.lr2SpiralEffect,
+    lr2Wave: state.lr2Wave,
+    lr2SinCurve: state.lr2SinCurve,
+    lr2Nabeatsu: state.lr2Nabeatsu,
+    lr2Heartbeat: state.lr2Heartbeat,
+    lr2Char: state.lr2Char,
+    lr2SuperLoop: state.lr2SuperLoop,
+    lr2Tornado: state.lr2Tornado,
+    lr2Earthquake: state.lr2Earthquake,
+    lr2Acceleration: state.lr2Acceleration,
+    autoScratchNotes: state.autoScratchNotes,
     judgeTimingAutoAdjust: state.judgeTimingAutoAdjust,
     visualConstant: state.visualConstant,
     noteDurationMs: state.noteDurationMs,
@@ -789,6 +906,7 @@ export function captureOptionSettings(
     skinEffects: state.skinEffects,
     renderResolution: state.renderResolution,
     playLayout: state.playLayout,
+    renderer: state.renderer,
     recordingFormat: state.recordingFormat,
     workerCount: extras.workerCount,
     compressorTuning: extras.compressorTuning,
@@ -831,6 +949,7 @@ export function writeOptionSettings(document: OptionSettingsDocument, storage: S
     if (settings.renderResolution !== undefined)
       storage.setItem(RENDER_RESOLUTION_STORAGE_KEY, String(settings.renderResolution));
     if (settings.playLayout) storage.setItem(PLAY_LAYOUT_KEY, settings.playLayout);
+    if (settings.renderer) storage.setItem(RENDERER_KEY, settings.renderer);
     if (settings.recordingFormat) storage.setItem(RECORDING_FORMAT_KEY, settings.recordingFormat);
     if (settings.workerCount !== undefined) storage.setItem(WORKER_COUNT_STORAGE_KEY, String(settings.workerCount));
     if (settings.compressorTuning) storage.setItem(COMPRESSOR_TUNING_KEY, JSON.stringify(settings.compressorTuning));

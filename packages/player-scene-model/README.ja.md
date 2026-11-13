@@ -5,7 +5,7 @@
 Be-Music プレイヤーの各画面が何を表示し、どう振る舞うかを、どのスキンの種類が描くかに関係なく表すモデルです。
 標準・LR2・beatoraja の各スキンの種類はこれらのモデルを共有し、描画だけを受け持ちます
 （[ADR 0001](../../docs/adr/0001-skin-families-only-draw.ja.md)、[ADR 0002](../../docs/adr/0002-scene-model-package.ja.md)）。
-ターミナルプレイヤーやスキンパッケージからも使えます。
+ターミナルプレイヤーやスキンパッケージからも使えます。現在は Web ランタイム、スキン SDK、LR2 と beatoraja の状態を求める関数が使っています。
 
 このパッケージは実行環境に依存しません。レンダラー・DOM・Node を使わず、時刻と乱数は入力として受け取るため、どの
 モデルもブラウザ・Node・テストで同じように動きます。依存するのは `@be-music/chart-model`・`@be-music/chart-source`・

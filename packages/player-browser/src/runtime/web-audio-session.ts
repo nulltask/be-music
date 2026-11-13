@@ -15,7 +15,7 @@ import {
   type BeMusicEvent,
   type BeMusicJSON,
 } from '@be-music/chart-source';
-import type { AudioSession } from '@be-music/player-engine';
+import type { AudioSession, GuideSound } from '@be-music/player-engine';
 import {
   normalizePath,
   resolveSampleSliceEnvelope,
@@ -117,6 +117,12 @@ export interface WebAudioSessionContext {
    * loop (#949) goes back to its start with a seek, so its range comes round again smoothly. Absent or 0: no fades.
    */
   seekCrossfadeSeconds?: number;
+  /**
+   * beatoraja's GUIDE SE: the decoded sound of each judgment. With any, the session plays the judgment's on the key
+   * bus as the engine judges ({@link AudioSession.playGuideSound}), at the key volume like a keysound; without, the
+   * session has no `playGuideSound`.
+   */
+  guideSounds?: ReadonlyMap<GuideSound, AudioBuffer>;
 }
 
 /** A crossfade's gains: one before each bus mixer, so one position's voices fade together. */
@@ -458,7 +464,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     // Scheduled BGM cues clamp to "now" so a slightly-late polling tick still fires immediately rather than
     // throwing for a past timestamp; player-input keysounds and immediate triggers go through the no-`when` path.
     if (previousSlice) stopSource(previousSlice, startAt);
-    if (usesMonophonicWAVPlayback(chart)) {
+    if (usesMonophonicWAVPlayback(chart, sampleKey)) {
       const previous = activeBySlot.get(sampleKey);
       if (previous) {
         stopSource(previous, startAt);
@@ -513,7 +519,22 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     }
   };
 
+  const guideSounds = context.guideSounds;
   return {
+    ...(guideSounds !== undefined && guideSounds.size > 0
+      ? {
+          playGuideSound: (sound: GuideSound): void => {
+            const buffer = guideSounds.get(sound);
+            if (buffer === undefined) return;
+            // Straight to the key bus, at once: a guide sound is no chart sample, so it has no lane to stop it, no
+            // `#WAVCMD` gain and no tempo rate.
+            const node = audioContext.createBufferSource();
+            node.buffer = buffer;
+            node.connect(audioBus.keyMixer);
+            node.start();
+          },
+        }
+      : {}),
     backendLabel: context.backendLabel ?? 'web-audio',
     chartStartDelayMs: context.chartStartDelayMs ?? 0,
     start: (): void => {

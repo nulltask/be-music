@@ -3,6 +3,7 @@ import {
   resolveScratchAngle,
   resolveCabinetLayout,
   resolveDifficultyName,
+  formatPacemakerLabel,
   resolveScorePace,
   resolveStageLabel,
   type BeMusicGameplayLayout,
@@ -14,6 +15,7 @@ import {
 import type { Container, Graphics } from 'pixi.js';
 import { addHUDNumber, addHUDText, type ChildPool } from '../pixi-kit/index.ts';
 import { drawFrame } from './draw.ts';
+import { drawSongInfoLayers } from './song-info.ts';
 import { clampPercent, drawGaugeCells } from './player-hud.ts';
 import {
   SYN_AMBER,
@@ -297,7 +299,7 @@ function drawGraph(
   addHUDText(layer, 'OPTION', footer.x + 10, footer.y + 7, labelStyle(), pool);
   addHUDText(
     layer,
-    // A source-qualified lane option shows its bare name (`lr2:RANDOM` as RANDOM, ADR 0019).
+    // A source-qualified lane option shows its bare name (`lr2:S-RANDOM` as S-RANDOM, ADR 0019).
     (runtime.random1P ?? 'OFF').replace(/^[^:]*:/, ''),
     footer.x + footer.w - 10,
     footer.y + 6,
@@ -309,7 +311,7 @@ function drawGraph(
   graphics.rect(footer.x + 8, boxY, footer.w - 16, 26).stroke({ color: draw.accent, width: 1, alpha: 0.5 });
   addHUDText(
     layer,
-    `PACEMAKER ${pace.target.label}`,
+    formatPacemakerLabel(pace.target.label),
     footer.x + footer.w / 2,
     boxY + 8,
     { ...displayStyle(9, SYN_WHITE), anchorX: 0.5, maxWidth: footer.w - 24 },
@@ -405,33 +407,38 @@ function drawPlayers(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): vo
   const second = runtime.secondPlayer;
   const titleX = rect.x + plateW + 4;
   const titleW = rect.w - plateW * (second ? 2 : 1) - 12;
-  addHUDText(
-    layer,
-    runtime.chartTitle?.trim() || 'Untitled chart',
-    titleX + titleW / 2,
-    rect.y + 10,
-    {
-      size: 14,
-      weight: '500',
-      fill: SYN_WHITE,
-      fontFamily: SYN_TEXT_FONT,
-      anchorX: 0.5,
-      maxWidth: titleW,
-      dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
-    },
-    pool,
-  );
-  const artist = runtime.chartArtist?.trim();
-  if (artist) {
-    addHUDText(
+  drawSongInfoLayers(runtime, (info) => {
+    const title = addHUDText(
       layer,
-      artist,
+      info.chartTitle?.trim() || 'Untitled chart',
       titleX + titleW / 2,
-      rect.y + 33,
-      { size: 9, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, anchorX: 0.5, maxWidth: titleW },
+      rect.y + 10,
+      {
+        size: 14,
+        weight: '500',
+        fill: SYN_WHITE,
+        fontFamily: SYN_TEXT_FONT,
+        anchorX: 0.5,
+        maxWidth: titleW,
+        dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
+      },
       pool,
     );
-  }
+    const artist = info.chartArtist?.trim();
+    return [
+      title,
+      artist
+        ? addHUDText(
+            layer,
+            artist,
+            titleX + titleW / 2,
+            rect.y + 33,
+            { size: 9, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, anchorX: 0.5, maxWidth: titleW },
+            pool,
+          )
+        : undefined,
+    ];
+  });
   if (second) {
     const x = rect.x + rect.w - 10;
     addHUDText(layer, 'PLAYER 2P', x, rect.y + 6, { ...labelStyle(), anchorX: 1 }, pool);
@@ -451,29 +458,31 @@ function drawChartStack(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime):
   const { graphics, layer, pool, accent } = draw;
   frame(draw, rect);
   const inner = rect.w - 16;
-  addHUDText(
-    layer,
-    runtime.chartTitle?.trim() || 'Untitled chart',
-    rect.x + 8,
-    rect.y + 5,
-    {
-      size: 12,
-      weight: '500',
-      fill: SYN_WHITE,
-      fontFamily: SYN_TEXT_FONT,
-      maxWidth: inner,
-      dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
-    },
-    pool,
-  );
-  addHUDText(
-    layer,
-    runtime.chartArtist?.trim() ?? '',
-    rect.x + 8,
-    rect.y + 23,
-    { size: 8, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, maxWidth: inner },
-    pool,
-  );
+  drawSongInfoLayers(runtime, (info) => [
+    addHUDText(
+      layer,
+      info.chartTitle?.trim() || 'Untitled chart',
+      rect.x + 8,
+      rect.y + 5,
+      {
+        size: 12,
+        weight: '500',
+        fill: SYN_WHITE,
+        fontFamily: SYN_TEXT_FONT,
+        maxWidth: inner,
+        dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
+      },
+      pool,
+    ),
+    addHUDText(
+      layer,
+      info.chartArtist?.trim() ?? '',
+      rect.x + 8,
+      rect.y + 23,
+      { size: 8, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, maxWidth: inner },
+      pool,
+    ),
+  ]);
   let x = rect.x + 8;
   const difficulty = resolveDifficultyName(runtime.chart);
   if (difficulty) {
@@ -502,6 +511,8 @@ function drawJudge(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime): void
   const { graphics, layer, pool } = draw;
   frame(draw, rect);
   addHUDText(layer, runtime.secondPlayer ? '1P JUDGE' : 'JUDGE', rect.x + 10, rect.y + 6, labelStyle(), pool);
+  // The player turned the judgment counts off: the panel keeps its frame and its name.
+  if (runtime.hidesJudgeCounts) return;
   const counts = [
     ['PG', runtime.perfect],
     ['GR', runtime.great],

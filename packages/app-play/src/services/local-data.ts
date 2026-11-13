@@ -17,6 +17,7 @@ const LOCAL_STORAGE_KEYS: Readonly<Record<string, string>> = {
   'be-music.skin-settings': 'Skin settings',
   'be-music.skin-effects': 'Skin effects',
   'be-music.play-layout': 'Play layout',
+  'be-music.renderer': 'Renderer',
   'be-music.recording-format': 'Recording format',
   'be-music.course-table-urls': 'Difficulty tables whose courses are imported on load',
   'be-music.play-in-silent-mode': 'Play sound with the device in silent mode',
@@ -34,6 +35,13 @@ const DATABASES: Readonly<Record<string, { description: string; stores: Readonly
       replaySlots: 'What each slot holds',
       replaySlotData: 'Each slot’s replay, gzip-compressed',
       meta: 'Storage revision',
+    },
+  },
+  'be-music-charts': {
+    description: 'Parsed charts, so a folder dropped again loads faster',
+    stores: {
+      parsedCharts: 'Each chart’s parse result, by the SHA-256 of its file',
+      meta: 'The build that parsed them',
     },
   },
 };

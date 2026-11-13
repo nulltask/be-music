@@ -342,7 +342,7 @@ describe('player chart preview', () => {
     vi.doUnmock('@be-music/player-node-audio/audio-sink');
   });
 
-  test('waits briefly before rendering the focused chart preview', async () => {
+  test('waits briefly before rendering the focused chart preview', async ({ onTestFinished }) => {
     vi.resetModules();
     const chart = createEmptyJSON('bms');
     chart.metadata.bpm = 120;
@@ -383,21 +383,31 @@ describe('player chart preview', () => {
       settleDelayMs: 60,
     });
 
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    onTestFinished(async () => {
+      try {
+        await controller.dispose();
+      } finally {
+        vi.useRealTimers();
+        vi.doUnmock('@be-music/chart-parser');
+        vi.doUnmock('@be-music/chart-audio-renderer');
+        vi.doUnmock('@be-music/player-node-audio/audio-sink');
+      }
+    });
+
     controller.focus({ filePath: '/charts/delayed-preview.bms' });
-    await delay(20);
+    await vi.advanceTimersByTimeAsync(59);
+    expect(parseChartFile).not.toHaveBeenCalled();
     expect(renderJSON).not.toHaveBeenCalled();
 
-    await waitForMockCall(renderJSON, { timeoutMs: 500 });
+    await vi.advanceTimersByTimeAsync(1);
     expect(parseChartFile).toHaveBeenCalledTimes(1);
     expect(renderJSON).toHaveBeenCalledTimes(1);
-
-    await controller.dispose();
-    vi.doUnmock('@be-music/chart-parser');
-    vi.doUnmock('@be-music/chart-audio-renderer');
-    vi.doUnmock('@be-music/player-node-audio/audio-sink');
   });
 
-  test('skips preview rendering for entries that lose focus before the settle delay elapses', async () => {
+  test('skips preview rendering for entries that lose focus before the settle delay elapses', async ({
+    onTestFinished,
+  }) => {
     vi.resetModules();
     const firstChart = createEmptyJSON('bms');
     firstChart.metadata.bpm = 120;
@@ -443,21 +453,31 @@ describe('player chart preview', () => {
       settleDelayMs: 60,
     });
 
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    onTestFinished(async () => {
+      try {
+        await controller.dispose();
+      } finally {
+        vi.useRealTimers();
+        vi.doUnmock('@be-music/chart-parser');
+        vi.doUnmock('@be-music/chart-audio-renderer');
+        vi.doUnmock('@be-music/player-node-audio/audio-sink');
+      }
+    });
+
     controller.focus({ filePath: '/charts/first.bms' });
-    await delay(20);
+    await vi.advanceTimersByTimeAsync(59);
     controller.focus({ filePath: '/charts/second.bms' });
 
-    await waitForMockCall(renderJSON, { timeoutMs: 500 });
-    await delay(80);
+    await vi.advanceTimersByTimeAsync(59);
+    expect(parseChartFile).not.toHaveBeenCalled();
+    expect(renderJSON).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
 
     expect(parseChartFile).toHaveBeenCalledTimes(1);
     expect(parseChartFile.mock.calls[0]?.[0]).toBe('/charts/second.bms');
     expect(renderJSON).toHaveBeenCalledTimes(1);
-
-    await controller.dispose();
-    vi.doUnmock('@be-music/chart-parser');
-    vi.doUnmock('@be-music/chart-audio-renderer');
-    vi.doUnmock('@be-music/player-node-audio/audio-sink');
   });
 });
 

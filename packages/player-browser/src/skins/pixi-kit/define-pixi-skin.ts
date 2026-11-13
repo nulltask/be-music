@@ -207,6 +207,11 @@ class GameplayScreen {
   constructor(definition: PixiSkinDefinition) {
     this.definition = definition;
     this.root.addChild(this.layer, this.lanes, this.droppedLongNotes, this.notes, this.overlayLayer, this.bombs);
+    // Each rebuilt-every-frame layer is its own render group: a pooled child shown or hidden, or a graphics whose
+    // batches change, then re-collects only that layer's instructions instead of the whole screen's.
+    this.layer.isRenderGroup = true;
+    this.overlayLayer.isRenderGroup = true;
+    this.bombs.isRenderGroup = true;
   }
 
   build(frame: BeMusicGameplayFrame): Container {
@@ -229,6 +234,7 @@ class GameplayScreen {
         overlayLayerPool: this.overlayLayerPool,
         runtime,
         layout: frame.layout,
+        settings: frame.settings,
       });
     } finally {
       this.layerPool.end();

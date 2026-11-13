@@ -196,7 +196,9 @@ export function createBeatAtSecondsResolverFromTimingResolver(resolver: TimingRe
     }
     lastSeconds = safeSeconds;
 
-    while (stopCursor < stopWindows.length && safeSeconds >= stopWindows[stopCursor]!.endSeconds) {
+    // A window ends at its `endSeconds`; one of negative length (LR2's negative `#STOPxx`) ends at its start instead,
+    // where the chart position jumps ahead by the time it takes back.
+    while (stopCursor < stopWindows.length && safeSeconds >= windowCloseSeconds(stopWindows[stopCursor]!)) {
       endedStopSeconds += stopWindows[stopCursor]!.durationSeconds;
       stopCursor += 1;
     }
@@ -208,6 +210,10 @@ export function createBeatAtSecondsResolverFromTimingResolver(resolver: TimingRe
     const adjustedSeconds = Math.max(0, safeSeconds - endedStopSeconds);
     return secondsToBeatWithoutStops(resolver.tempoPoints, adjustedSeconds);
   };
+}
+
+function windowCloseSeconds(window: StopBeatWindow): number {
+  return Math.max(window.startSeconds, window.endSeconds);
 }
 
 export function createStopBeatWindows(resolver: TimingResolver): StopBeatWindow[] {

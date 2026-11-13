@@ -20,6 +20,7 @@ import {
   comboTier,
   effectProfile,
   hash01,
+  clampHoldSparkX,
   holdSeed,
   holdSparks,
   resolveLaneRuns,
@@ -340,6 +341,15 @@ function cachedBurst(seed: number, count = BURST_PARTICLES_MAX): BurstParticle[]
 }
 
 const bombMasks = new WeakMap<Container, Graphics>();
+/** The shape each bomb mask was last drawn for ({@link maskShape}). */
+const bombMaskShapes = new WeakMap<Graphics, string>();
+
+/** A key for the bomb mask over lane runs `runs` from `top` to `bottom`. */
+function maskShape(top: number, bottom: number, runs: readonly { left: number; right: number }[]): string {
+  let shape = `${top},${bottom}`;
+  for (const run of runs) shape += `;${run.left},${run.right}`;
+  return shape;
+}
 
 /**
  * The Synesthesia hit: a 3D particle burst in perspective. Layered back to front —
@@ -363,11 +373,22 @@ export function renderSynesthesiaBombs({ layer, pool, bombs, combo, effects, lan
       layer.mask = mask;
       bombMasks.set(layer, mask);
     }
-    const top = Math.min(...lanes.map((lane) => lane.top));
-    const bottom = Math.max(...lanes.map((lane) => lane.bottom)) + 48;
-    mask.clear();
-    for (const run of resolveLaneRuns(lanes)) {
-      mask.rect(run.left - 4, top, run.right - run.left + 8, bottom - top).fill(0xffffff);
+    let top = Number.POSITIVE_INFINITY;
+    let bottom = Number.NEGATIVE_INFINITY;
+    for (const lane of lanes) {
+      top = Math.min(top, lane.top);
+      bottom = Math.max(bottom, lane.bottom);
+    }
+    bottom += 48;
+    const runs = resolveLaneRuns(lanes);
+    // The lanes rarely move, and a rebuilt mask re-triangulates and re-uploads: redraw it only when they do.
+    const shape = maskShape(top, bottom, runs);
+    if (bombMaskShapes.get(mask) !== shape) {
+      bombMaskShapes.set(mask, shape);
+      mask.clear();
+      for (const run of runs) {
+        mask.rect(run.left - 4, top, run.right - run.left + 8, bottom - top).fill(0xffffff);
+      }
     }
   }
   const profile = effectProfile(effects);
@@ -394,6 +415,12 @@ export function renderSynesthesiaBombs({ layer, pool, bombs, combo, effects, lan
     renderBomb(pool, bomb, tier, crowd, profile.amount, grains, skirt);
   }
 }
+
+/**
+ * Width (px) of a hold ember's bright core: its glow sprite is drawn larger, but fades out well inside its square, so
+ * this is the part kept inside the held note.
+ */
+const HOLD_EMBER_CORE = 8;
 
 /** Sparks a held lane gives off at most, at full effects (`holdSparks`' default: one every 45 ms for 520 ms). */
 const HOLD_SPARK_INTERVAL_MS = 45;
@@ -425,9 +452,11 @@ function renderSynesthesiaHolds(
     halo.tint = light.glow;
     halo.alpha = 0.65 + 0.25 * Math.sin(ageMs / 90);
     if (amount <= 0) continue;
+    // The embers stay on the held note, under its end and inside its width, so the end stays easy to see.
     const sparks = holdSparks(ageMs, holdSeed(lane.channel, lane.holdStartedAtMs), lane.w, {
       intervalMs: HOLD_SPARK_INTERVAL_MS / amount,
       riseSpeed: 0.22,
+      maxRise: lane.holdTop === undefined ? undefined : lane.bottom - lane.holdTop - HOLD_EMBER_CORE / 2,
     });
     for (const spark of sparks) {
       const ember = pool.acquireSprite();
@@ -437,7 +466,10 @@ function renderSynesthesiaHolds(
       const size = spark.size * 5;
       ember.width = size;
       ember.height = size;
-      ember.position.set(centerX + spark.offsetX, lane.bottom - spark.rise);
+      ember.position.set(
+        clampHoldSparkX(centerX + spark.offsetX, Math.min(size, HOLD_EMBER_CORE), lane.x, lane.w),
+        lane.bottom - spark.rise,
+      );
       // White-hot when born, cooling into the lane's colour as it rises.
       ember.tint = spark.alpha > 0.7 ? 0xffffff : light.glow;
       ember.alpha = spark.alpha;
@@ -461,6 +493,18 @@ function renderPlainFlashes(pool: ChildPool, bombs: readonly BeMusicBomb[]): voi
     sprite.tint = LIGHTS[bomb.kind].glow;
     sprite.alpha = 0.7 * (1 - t);
   }
+}
+
+const BOMB_LABELS = new Map<string, string>();
+
+/** The bomb graphics' debug label for `channel`, made once per channel. */
+function bombLabel(channel: string): string {
+  let label = BOMB_LABELS.get(channel);
+  if (label === undefined) {
+    label = `synesthesia-bomb[ch=${channel}]`;
+    BOMB_LABELS.set(channel, label);
+  }
+  return label;
 }
 
 const BOMB_HEAD = scratchProjected();
@@ -493,7 +537,7 @@ function renderBomb(
   const position = BOMB_POSITION;
 
   const effects = pool.acquireGraphics();
-  effects.label = `synesthesia-bomb[ch=${bomb.channel}]`;
+  effects.label = bombLabel(bomb.channel);
   effects.blendMode = 'add';
 
   // 1. Light pillar.

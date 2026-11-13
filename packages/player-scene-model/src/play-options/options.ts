@@ -40,6 +40,62 @@ export interface PlayOptions {
    * change until the change (blue when the tempo rises, red when it falls).
    */
   bpmChangeWarning: boolean;
+  /** beatoraja's GUIDE SE: the sound set's sound for each judgment plays at the judgment. Read as the play starts. */
+  guideSE: boolean;
+  /** Whether the built-in skins show the judgment counts during a play. */
+  judgeCounts: boolean;
+  /** Whether the judge detail shows the keys' and the scratch's timing apart. */
+  judgeDetailSplit: boolean;
+  /** What the built-in skins show of a judgment's timing beside it: nothing, FAST or SLOW, or the offset in milliseconds. */
+  judgeDetail: 'OFF' | 'FAST_SLOW' | 'MS';
+  /** The score rate the SCORE RATE target paces towards, in percent. */
+  scoreTargetRate: number;
+  /** The built-in skins' judgment and combo moved down the lanes by this percentage of their height (negative is up). */
+  judgePosition: number;
+  /** AC 34 判定文字の表示位置, its on / off part: OFF draws no judgment or combo on any play screen. Display only. */
+  judgeDisplay: 'SKIN' | 'OFF';
+  /** AC 34 レーンの明るさ調整: the lanes' brightness in percent, 100 as the skin draws them and 0 black. Notes, bar lines and covers keep theirs. Display only. */
+  laneBrightness: number;
+  /** The score graph's fixed target (beatoraja's TargetProperty): a rank border, MAX or the next rank above the best record. A ghost's pacemaker takes its place while one runs. */
+  scoreTarget: import('./score-target.ts').ScoreTargetId;
+  /** beatoraja's mark processed note: a tap note judged before its time is drawn as processed until it goes. Display only. */
+  markProcessedNotes: boolean;
+  /** beatoraja's judge area display: the judge windows as coloured bands above the judge line. Display only. */
+  showJudgeArea: boolean;
+  /** LR2 mania chart option (0 = OFF, 10–100) ADD MINES: a mine may be put half-way across a gap of a key lane. */
+  lr2AddMines: number;
+  /** LR2 mania chart option (0 = OFF, 10–100) ADD LONGNOTES: a key note may be held half-way to the next object of its lane. */
+  lr2AddLongNotes: number;
+  /** LR2 mania chart option (0 = OFF, 10–100) LOUDNESS: each chord may be filled across the whole side. Turns long notes into their heads; no score is saved. */
+  lr2Loudness: number;
+  /** LR2 mania chart option (0 = OFF, 10–100) ADD NOTES: at each chord, each note may add a note on an empty lane. Turns long notes into their heads; no score is saved. */
+  lr2AddNotes: number;
+  /** LR2 mania option GAMBOL (LR2 rules only): 0 is OFF; 1 fixes the judge windows at VERY HARD; 2 also narrows GREAT and GOOD to 12 ms. Recorded as `play.lr2Gambol`. */
+  lr2Gambol: 0 | 1 | 2;
+  /** LR2 mania option SIDEJUMP (0 = OFF, 10–100): hops each note sideways on a 500 ms period, alternate notes in opposite directions. Drawing only. */
+  lr2SideJump: number;
+  /** LR2 mania option SPIRAL (0 = OFF, 10–100): circles each note about its own path every 300 ms, alternate notes in opposite directions. It is LR2's note effect, not beatoraja's SPIRAL lane option. Drawing only. */
+  lr2SpiralEffect: number;
+  /** LR2 mania option WAVE (0 = OFF, 10–100): shifts each note along the lane by a 1000 ms sine per lane, growing with the square of its distance. Drawing only. */
+  lr2Wave: number;
+  /** LR2 mania option SINCURVE (0 = OFF, 10–100): shifts each note sideways by a sine of its place along the lane. Drawing only. */
+  lr2SinCurve: number;
+  /** LR2 mania option NABEATSU (0 = OFF, 10–100): sways the notes and bar lines while the play clock's second is a multiple of 3 (from 50 up, also seconds 30–39 and seconds ending in 3). Drawing only. */
+  lr2Nabeatsu: number;
+  /** LR2 mania option HEARTBEAT (0 = OFF, 10–100): pulses each note's size on a 500 ms sine, twice as much in width as in height. Drawing only. */
+  lr2Heartbeat: number;
+  /** LR2 mania option CHAR (0 = OFF, 10–100): draws every n-th note at three times its distance, so it falls three times as fast. Drawing only. */
+  lr2Char: number;
+  /** LR2 mania option SUPERLOOP (0 = OFF, 10–100): turns each note about its landing point on the judge line, once every (120 − value) × 50 ms. Drawing only. */
+  lr2SuperLoop: number;
+  /** LR2 mania option TORNADO (0 = OFF, 10–100): shifts each note sideways by a sine of its lane and time, in proportion to its distance from the judge line. Drawing only. */
+  lr2Tornado: number;
+  /** LR2 mania option EARTHQUAKE (0 = OFF, 10–100): sways the whole play screen on 1000 ms and 1234 ms sines. Drawing only. */
+  lr2Earthquake: number;
+  /** LR2 mania option ACCELERATION: remaps each note's place along the lane (drawing only). RANDOM picks ACCELERATION or DECELERATION per note; it is not the lane option. */
+  lr2Acceleration: 'OFF' | 'ACCELERATION' | 'DECELERATION' | 'RANDOM';
+  /** AC 34 オートスクラッチ表示: whether the scratch notes AUTO SCRATCH plays are drawn. Display only. */
+  autoScratchNotes: 'SHOW' | 'HIDE';
   /**
    * The automatic judge-timing adjustment of a manual play: beatoraja 0.8.9's calibration on PG/GR/GD, or LR2's ON /
    * SILENT (`autojudge` 1 / 2: a 1 ms step per ten hits; SILENT also loads no keysounds, BGM or BGA and hides the judge
@@ -145,7 +201,10 @@ export interface PlayOptions {
   sevenToNinePattern: import('@be-music/player-engine/lanes').SevenToNinePattern;
   sevenToNineType: import('@be-music/player-engine/lanes').SevenToNineType;
   battleMode: BattleMode;
-  /** LR2 D-BATTLE: hold the scratch key through the decide animation to keep scratch objects playable. */
+  /**
+   * LR2 D-BATTLE: keep scratch objects playable, as LR2's hidden `randSC` command does (a side's buttons 12 and 13 held
+   * together at decide, OpenLR2 `Main.cpp` L1242-L1247, `LR2f.cpp` L27432-L27438).
+   */
   dBattleScratch: boolean;
   /**
    * That-Which-Must-Not-Be-Named M-RAN per player (two-player play only): MIRROR applied after a RANDOM-type arrangement,
@@ -208,9 +267,11 @@ export interface PlayOptions {
    *
    * - `OFF` — original chart layout
    * - `MIRROR` — reverse the lane order (1↔7, 2↔6, 3↔5)
-   * - `RANDOM` — chart-wide random permutation of the lanes
+   * - `RANDOM` — chart-wide random permutation of the lanes, the same option in every source (beatoraja's draw, with
+   *   LR2's fixed key)
    * - `R-RANDOM` — chart-wide cyclic rotation, optionally reflected, excluding regular and mirror
-   * - `S-RANDOM` — per-chord random assignment (chord shapes are NOT preserved)
+   * - `S-RANDOM` — per-note random assignment (chord shapes are NOT preserved): LR2's and AC's without jack avoidance,
+   *   beatoraja's with it
    * - `H-RANDOM` — beatoraja per-row random assignment with a configurable jack threshold
    * - `SPIRAL` — beatoraja row rotations, frozen during active holds
    * - `RANDOM-EX` — beatoraja chart-wide permutation including scratches/wheels
@@ -218,18 +279,24 @@ export interface PlayOptions {
    * - `CONVERGE` — LR2 selected-lane concentration, or beatoraja PMS streak-based concentration
    * - `SCATTER` — LR2 previous-row avoidance, with active-LN reservations
    * - `SCATTER-CORRECTED` — explicitly corrected 9KEY SCATTER, excluding LR2 beta3's tenth destination
+   * - `S-RANDOM-CORRECTED` — LR2's 9KEY S-RANDOM without that tenth destination
+   * - `CONVERGE-CORRECTED` — LR2's CONVERGE without the tenth destination and with the 2P target on the key picked
    * - `SYNCHRONIZE-RANDOM` — That-Which-Must-Not-Be-Named BATTLE: one RANDOM draw, identical on both sides
    * - `SYMMETRY-RANDOM` — That-Which-Must-Not-Be-Named BATTLE: one RANDOM draw, mirrored on the 2P side
    *
-   * RANDOM, S-RANDOM and CONVERGE name a different algorithm in each source, so they carry it (`lr2:RANDOM`,
-   * `beatoraja:S-RANDOM`); a bare one runs the judge ruleset's own (ADR 0019).
+   * S-RANDOM and CONVERGE name a different algorithm in each source, so they carry it (`lr2:S-RANDOM`,
+   * `beatoraja:CONVERGE`); a bare one runs the judge ruleset's own (ADR 0019). Older values `lr2:RANDOM`,
+   * `beatoraja:RANDOM`, `____:RANDOM` and `____:S-RANDOM` read as `RANDOM` and `lr2:S-RANDOM`.
    */
   random1P: RandomMode;
   /** beatoraja H-RANDOM jack threshold in 16th-note BPM units (1..1000, default 120). */
   hRandomThresholdBPM: number;
-  /** LR2 randFix key index: 0 uses the mode default (scratch, or key 5 for PMS). */
   randomSeed1P: string;
   randomSeed2P: string;
+  /**
+   * LR2 randFix key index: after RANDOM, the original key 1 moves to this key (0 = off; 9 KEY ignores it). LR2 CONVERGE
+   * concentrates on it, 0 using the mode default (scratch, or key 5 for PMS).
+   */
   randomFixedLane1P: number;
   randomFixedLane2P: number;
   /** 2P side note arrangement (channels 21..25 + 28 + 29). */
@@ -254,11 +321,11 @@ export type HSFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT' | 'STAR
 export type HiddenSuddenMode = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
 
 /**
- * Lane-option values; resolveRandomModes supplies the choices. A source-qualified RANDOM, S-RANDOM or CONVERGE runs its
- * source's algorithm under every ruleset, and a bare one the judge ruleset's own (ADR 0019).
+ * Lane-option values; resolveRandomModes supplies the choices. A source-qualified S-RANDOM or CONVERGE runs its source's
+ * algorithm under every ruleset, and a bare one the judge ruleset's own (ADR 0019). RANDOM is one option for every source.
  */
 export type RandomMode =
-  | QualifiedOptionValue<'RANDOM' | 'S-RANDOM' | 'CONVERGE'>
+  | QualifiedOptionValue<'S-RANDOM' | 'CONVERGE'>
   | 'OFF'
   | 'MIRROR'
   | 'RANDOM'
@@ -274,6 +341,8 @@ export type RandomMode =
   | 'CONVERGE'
   | 'SCATTER'
   | 'SCATTER-CORRECTED'
+  | 'S-RANDOM-CORRECTED'
+  | 'CONVERGE-CORRECTED'
   | 'SYNCHRONIZE-RANDOM'
   | 'SYMMETRY-RANDOM';
 

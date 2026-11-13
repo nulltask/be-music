@@ -68,7 +68,7 @@ function choice(conditions: RandomMixConditions, confirmed = true) {
 }
 
 /** RANDOM MIX conditions for the fixture songs, which read as 5 keys (they have no notes). */
-const MIX5: RandomMixConditions = { ...DEFAULT_RANDOM_MIX_CONDITIONS, keyModes: [5] };
+const MIX5: RandomMixConditions = { ...DEFAULT_RANDOM_MIX_CONDITIONS, keyMode: 5 };
 
 /** The RANDOM MIX bar of a course folder. */
 function randomMixBar(kind: 'expert' | 'nonstop'): LibraryCourse {
@@ -108,6 +108,9 @@ function stageLog(final = 80, play: Partial<BeMusicReplay['play']> = {}): BeMusi
   } as unknown as BeMusicReplay;
 }
 
+/** When a RANDOM MIX run ends in these tests. */
+const ENDED_AT = new Date(2026, 10, 9, 21, 34, 56);
+
 /** Where the select screen was when the course bar was started. */
 const AT_COURSE_BAR = { folderPath: ['courses'] } as unknown as BrowseSnapshot;
 
@@ -143,6 +146,10 @@ function harness(options: { family?: 'built-in' | 'beatoraja'; beatorajaMounts?:
     setRandomMixSettings: vi.fn<CourseRouteDeps['courseMaker']['maker']['setRandomMixSettings']>(),
     defaultConnection: 'fade' as const,
     setDefaultConnection: vi.fn<CourseRouteDeps['courseMaker']['maker']['setDefaultConnection']>(),
+    saveRandomMix: vi.fn<CourseRouteDeps['courseMaker']['maker']['saveRandomMix']>((course, name) => ({
+      ...course,
+      name,
+    })),
   };
   const deps = {
     courses,
@@ -161,6 +168,8 @@ function harness(options: { family?: 'built-in' | 'beatoraja'; beatorajaMounts?:
     },
     courseMaker: { maker },
     promptRandomMix: vi.fn<CourseRouteDeps['promptRandomMix']>(async () => undefined),
+    promptRandomMixSave: vi.fn<CourseRouteDeps['promptRandomMixSave']>(async () => undefined),
+    now: () => ENDED_AT,
     random: () => 0.5,
     replayAutoSave: { saveCourse: vi.fn<CourseRouteDeps['replayAutoSave']['saveCourse']>() },
     leaderboard: { maybeSubmitCourse: vi.fn<CourseRouteDeps['leaderboard']['maybeSubmitCourse']>() },
@@ -252,7 +261,14 @@ describe('CourseRoute: starting a course', () => {
       defaultConnection: 'fade',
     });
     expect(request.countMatches(MIX5)).toBe(2);
-    expect(request.countMatches({ ...MIX5, keyModes: [14] })).toBe(0);
+    expect(request.countMatches({ ...MIX5, keyMode: 14 })).toBe(0);
+    // Charts can fit the conditions yet give no stage 1 under the draw settings (the BPM limits here), which OK checks.
+    const settings = { ...DEFAULT_LR2_RANDOM_MIX_SETTINGS, bpmRange: 0 };
+    expect(request.canStart({ conditions: MIX5, settings, defaultConnection: 'fade' })).toBe(true);
+    expect(request.countMatches(MIX5)).toBeGreaterThan(0);
+    expect(
+      request.canStart({ conditions: MIX5, settings: { ...settings, maxBPM: 10 }, defaultConnection: 'fade' }),
+    ).toBe(false);
     expect(h.deps.showDecide).not.toHaveBeenCalled();
     expect(h.maker.setRandomMixConditions).not.toHaveBeenCalled();
     // Nothing was hashed to open the dialog.
@@ -340,7 +356,7 @@ describe('CourseRoute: starting a course', () => {
     expect(h.deps.showDecide).toHaveBeenCalledTimes(1);
   });
 
-  test('a NONSTOP mix goes to the NONSTOP route with its decide screen, at most five songs', async () => {
+  test('a NONSTOP mix goes to the NONSTOP route with its decide screen, never endless', async () => {
     const h = harness();
     hashAll(h);
     h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 'infinity' }));
@@ -643,5 +659,109 @@ describe('CourseRoute: a course replay', () => {
     await h.route.startCourseReplay(grade(['a', 'b', 'c']), log);
     expect(h.deps.showDecide).not.toHaveBeenCalled();
     expect(h.courses.active).toBeUndefined();
+  });
+});
+
+describe('CourseRoute: saving a RANDOM MIX once it is over', () => {
+  test('a run played through offers, back on the select screen, to save its kept draw under the time it ended', async () => {
+    const h = harness();
+    hashAll(h);
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 2 }));
+    await h.route.startCourse(randomMixBar('expert'));
+    const kept = h.maker.keepRandomMix.mock.calls[0]![0];
+    // Nothing is offered before the run is over.
+    await h.route.offerRandomMixSave();
+    expect(h.deps.promptRandomMixSave).not.toHaveBeenCalled();
+    await h.decided().start();
+    h.courses.active!.run.recordStage(stageLog(70, { course: { kind: 'expert' } }));
+    h.route.continueCourse();
+    await vi.waitFor(() => expect(h.deps.playChart).toHaveBeenCalledTimes(2));
+    h.courses.active!.run.recordStage(stageLog(70, { course: { kind: 'expert' } }));
+    h.route.continueCourse();
+    await vi.waitFor(() => expect(h.deps.showResult).toHaveBeenCalledTimes(1));
+    // The dialog waits for the select screen: the course result is shown first.
+    expect(h.deps.promptRandomMixSave).not.toHaveBeenCalled();
+    h.deps.promptRandomMixSave.mockResolvedValue('My mix');
+    await h.route.offerRandomMixSave();
+    const [request] = h.deps.promptRandomMixSave.mock.calls[0]!;
+    expect(request.endedAt).toBe(ENDED_AT);
+    // Every stage drawn, in the order drawn.
+    expect(request.course.stages.map((stage) => stage.title).sort()).toEqual(['a', 'b']);
+    expect(request.course.stages.map((stage) => stage.title)).toEqual(kept.stages.map((stage) => stage.title));
+    expect(request.setup).toMatchObject({
+      kind: 'expert',
+      conditions: { ...MIX5, count: 2 },
+      settings: h.maker.randomMixSettings,
+      defaultConnection: 'fade',
+    });
+    expect(h.maker.saveRandomMix).toHaveBeenCalledWith(kept, 'My mix');
+    expect(h.deps.setStatus).toHaveBeenLastCalledWith('Saved the course "My mix"');
+    // It is offered once.
+    await h.route.offerRandomMixSave();
+    expect(h.deps.promptRandomMixSave).toHaveBeenCalledTimes(1);
+  });
+
+  test('a run given up offers every stage drawn; not saving keeps nothing', async () => {
+    const h = harness();
+    hashAll(h);
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 2 }));
+    await h.route.startCourse(randomMixBar('expert'));
+    await h.decided().start();
+    h.courses.giveUp(h.courses.active!, stageLog(40, { aborted: true, course: { kind: 'expert' } }));
+    await h.route.showCourseResult();
+    await h.route.offerRandomMixSave();
+    const [request] = h.deps.promptRandomMixSave.mock.calls[0]!;
+    expect(request.course.stages).toHaveLength(2);
+    expect(h.maker.saveRandomMix).not.toHaveBeenCalled();
+  });
+
+  test('backing out of the decide screen offers nothing', async () => {
+    const h = harness();
+    hashAll(h);
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 2 }));
+    await h.route.startCourse(randomMixBar('expert'));
+    h.decided().cancel!();
+    await h.route.offerRandomMixSave();
+    expect(h.deps.promptRandomMixSave).not.toHaveBeenCalled();
+  });
+
+  test('an endless run saves the stages it played as a new course, its count shown as endless', async () => {
+    const h = harness();
+    hashAll(h);
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 'infinity' }));
+    await h.route.startCourse(randomMixBar('expert'));
+    await h.decided().start();
+    h.courses.active!.run.recordStage(stageLog(0, { course: { kind: 'expert' } }));
+    h.route.continueCourse();
+    await vi.waitFor(() => expect(h.deps.showResult).toHaveBeenCalled());
+    h.deps.promptRandomMixSave.mockResolvedValue('');
+    await h.route.offerRandomMixSave();
+    const [request] = h.deps.promptRandomMixSave.mock.calls[0]!;
+    expect(request.setup.conditions.count).toBe('infinity');
+    // The stage drawn ahead is not part of the run.
+    expect(request.course.stages).toHaveLength(1);
+    const [course, name] = h.maker.saveRandomMix.mock.calls[0]!;
+    expect(course.stages).toHaveLength(1);
+    // A blank name saves under the offered one.
+    expect(name).toBe('2026-11-09 21:34');
+  });
+
+  test('a NONSTOP mix is offered once its own run reaches its result', async () => {
+    const h = harness();
+    hashAll(h);
+    h.deps.promptRandomMix.mockResolvedValue(choice({ ...MIX5, count: 'infinity' }));
+    await h.route.startCourse(randomMixBar('nonstop'));
+    const [entry] = h.deps.startNonstopCourse.mock.calls[0]!;
+    // Another NONSTOP course's result is not the mix's.
+    h.route.noteNonstopResult({ ...entry });
+    await h.route.offerRandomMixSave();
+    expect(h.deps.promptRandomMixSave).not.toHaveBeenCalled();
+    h.route.noteNonstopResult(entry);
+    h.deps.promptRandomMixSave.mockResolvedValue('Nonstop mix');
+    await h.route.offerRandomMixSave();
+    const [request] = h.deps.promptRandomMixSave.mock.calls[0]!;
+    // An endless count asked of a NONSTOP mix drew five stages, which the dialog shows.
+    expect(request.setup).toMatchObject({ kind: 'nonstop', conditions: { count: 5 } });
+    expect(h.maker.saveRandomMix).toHaveBeenCalledWith(entry.definition, 'Nonstop mix');
   });
 });

@@ -25,6 +25,7 @@ import {
   recordPlayFromResult,
   type BestRecord,
   type RecordPlay,
+  resolveReplayRecordPolicy,
 } from '@be-music/player-engine/records';
 import {
   resolveResultJingle,
@@ -50,6 +51,8 @@ import {
   type ReplaySlotStore,
 } from '../../services/replay-slots.ts';
 import { ResultReplaySlots } from '../../services/replay-slot-service.ts';
+import { describeResultRecord } from '../../services/record-consequence.ts';
+import { resolveResultGaugeGraphs } from '../../services/gauge-graphs.ts';
 import type { ReplaySlotsPanel } from '../../replay-slots-panel.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
@@ -114,7 +117,12 @@ export interface ResultRouteDeps {
   /** Plays a chart again (R on the result). */
   readonly playChart: (
     chartEntry: LibraryChart,
-    overrides: { autoPlay: boolean; replay?: BeMusicReplay },
+    overrides: {
+      autoPlay: boolean;
+      replay?: BeMusicReplay;
+      /** The play whose note arrangement the chart is played on again. */
+      fixedArrangement?: Pick<BeMusicReplay, 'chart' | 'play'>;
+    },
   ) => Promise<void>;
   /** Re-enables the options a play latched, once its result shows. */
   readonly unlockReplayOptions: () => void;
@@ -361,11 +369,15 @@ export class ResultRoute {
     const onRetry =
       retryTarget === undefined
         ? undefined
-        : (): void => {
+        : (asked?: { readonly sameArrangement?: boolean }): void => {
             // Straight back into the chart, the result screen gone first.
             void this.leaveThen(() => {
               if (retryTarget.kind === 'nonstop') retryTarget.retry();
-              else void this.playChart(retryTarget.play.chart, retryTarget.play.overrides);
+              else
+                void this.playChart(
+                  retryTarget.play.chart,
+                  withSameArrangement(retryTarget.play.overrides, asked?.sameArrangement === true ? result : undefined),
+                );
             });
           };
     const resultScene = createResultScene(kit, {
@@ -377,6 +389,7 @@ export class ResultRoute {
       sounds,
       audio: this.audio,
       ...resultSceneReplaySlots(options.replaySlots),
+      gaugeGraphs: () => resolveResultGaugeGraphs(result),
       on: {
         continue: onContinue,
         ...(onRetry !== undefined ? { retry: onRetry } : {}),
@@ -471,7 +484,11 @@ export class ResultRoute {
       retryTarget?.kind === 'nonstop'
         ? retryTarget.retry
         : retryTarget?.kind === 'replay'
-          ? () => void this.playChart(retryTarget.play.chart, retryTarget.play.overrides)
+          ? (asked?: { readonly sameArrangement?: boolean }) =>
+              void this.playChart(
+                retryTarget.play.chart,
+                withSameArrangement(retryTarget.play.overrides, asked?.sameArrangement === true ? data : undefined),
+              )
           : undefined;
     // The active theme's jingles: a beatoraja theme's when its result falls back to this view (a NONSTOP course on a
     // theme without a result skin).
@@ -492,9 +509,9 @@ export class ResultRoute {
     const onRetry =
       retry === undefined
         ? undefined
-        : (): void => {
+        : (asked?: { readonly sameArrangement?: boolean }): void => {
             // Straight back into the chart, skipping select and decide: the result screen (and its jingle) goes first.
-            void this.leaveThen(retry);
+            void this.leaveThen(() => retry(asked));
           };
     // LR2 saves no score from two-player BATTLE: its replay is kept, its record and ranking are not.
     const recorded = !data.practice && data.secondPlayer === undefined;
@@ -516,6 +533,7 @@ export class ResultRoute {
       sounds: resolveResultSoundSet(resultFamily, themeJingles),
       audio: this.audio,
       ...resultSceneReplaySlots(replaySlots),
+      gaugeGraphs: () => resolveResultGaugeGraphs(data),
       on: {
         continue: onContinue,
         ...(onRetry !== undefined ? { retry: onRetry } : {}),
@@ -531,7 +549,9 @@ export class ResultRoute {
     });
     // A newer navigation that took the stage first keeps its own status; the play is still kept, saved and ranked.
     if (shown) {
-      this.setPlayStatus(`Result: ${data.chart.title}`);
+      // What the play did to its record, from the policy the record went through; the Leaderboard's line follows it.
+      const record = run === 'single' ? describeResultRecord(data, kept !== undefined) : undefined;
+      this.setPlayStatus(`Result: ${data.chart.title}${record !== undefined ? ` — ${record}` : ''}`);
       // The built-in, Native and LR2 skins have no replay-slot UI: the card stands in for one.
       if (replaySlots !== undefined) this.replaySlots.panel.showResult(replaySlots);
     }
@@ -569,4 +589,20 @@ function resultSceneReplaySlots(slots: ResultReplaySlots | undefined): { replayS
 /** The result scene's save into a replay slot (keys 1-4, a beatoraja skin's buttons), when the run has slots. */
 function resultSaveReplay(slots: ResultReplaySlots | undefined): { saveReplay?: (slot: number) => void } {
   return slots !== undefined ? { saveReplay: (slot) => void slots.save(slot) } : {};
+}
+
+/**
+ * A retry's overrides on the note arrangement of the play just finished (`played`), as beatoraja's REPLAY_SAME plays
+ * it: only a live play's (not a replay's or an AUTO play's), and not an assisted one's, which beatoraja plays again on
+ * a new arrangement (`MusicResult`: "アシストモード時は同じ譜面でリプレイできません"). Otherwise the overrides as they are.
+ */
+export function withSameArrangement<T extends { autoPlay: boolean; replay?: BeMusicReplay }>(
+  overrides: T,
+  played: Pick<PlayResult, 'replay' | 'fromReplay' | 'autoPlay'> | undefined,
+): T & { fixedArrangement?: Pick<BeMusicReplay, 'chart' | 'play'> } {
+  const replay = played?.replay;
+  if (replay === undefined || played?.fromReplay === true || played?.autoPlay === true) return overrides;
+  if (overrides.autoPlay || overrides.replay !== undefined) return overrides;
+  if (!resolveReplayRecordPolicy(replay).updatesScore) return overrides;
+  return { ...overrides, fixedArrangement: { chart: replay.chart, play: replay.play } };
 }

@@ -106,6 +106,13 @@ export interface BeMusicJudgmentWord {
   /** Colour this frame. A PGREAT's GREAT cycles; the other words stay put. */
   readonly color: string;
   readonly combo?: number;
+  /** The judge detail above the word: FAST / SLOW or the offset, each in its own colour. */
+  readonly details?: readonly BeMusicJudgmentWordDetail[];
+}
+/** One judge detail of a judgment word: its text and colour. */
+export interface BeMusicJudgmentWordDetail {
+  readonly text: string;
+  readonly color: string;
 }
 /** The judgment words showing this frame, on the text baseline `y`. */
 export interface BeMusicJudgmentDisplayData {

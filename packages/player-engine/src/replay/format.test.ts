@@ -563,6 +563,7 @@ test('replay round-trip preserves mixed NONSTOP rank units and absolute TOTAL', 
   replay.chart.judgeRank.stageRanks = [
     { timeUs: 0, rank: 125, table: 'bmson' },
     { timeUs: 1e6, rank: 150, table: 'bms-exrank' },
+    { timeUs: 2e6, rank: 50, table: 'bms-exrank-change' },
   ];
   const parsed = parseReplay(serializeReplay(replay));
   expect(parsed.chart.totalUnit).toBe('absolute');
@@ -639,6 +640,18 @@ test('round-trips confirmed beatoraja algorithms and rejects the internal Score 
   }
   const invalid = JSON.parse(serializeReplay(makeReplay()));
   invalid.play.judgeAlgorithm = 'score';
+  expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
+});
+
+test("round-trips LR2's GAMBOL level and rejects anything else", () => {
+  for (const lr2Gambol of [1, 2] as const) {
+    const replay = makeReplay();
+    replay.play.lr2Gambol = lr2Gambol;
+    expect(parseReplay(serializeReplay(replay)).play.lr2Gambol).toBe(lr2Gambol);
+  }
+  expect(parseReplay(serializeReplay(makeReplay())).play.lr2Gambol).toBeUndefined();
+  const invalid = JSON.parse(serializeReplay(makeReplay()));
+  invalid.play.lr2Gambol = 3;
   expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
 });
 
@@ -819,6 +832,49 @@ test('scroll modifier selection and actual-change fact round trip independently'
   expect(() => parseReplay({ ...replay, play: { ...replay.play, scrollModifierChanged: 1 } })).toThrow(
     /scrollModifierChanged/,
   );
+});
+
+test("LR2's mania chart generators round-trip and reject malformed records", () => {
+  const lr2Mania = {
+    addNotes: 30,
+    loudness: 0,
+    addLongNotes: 100,
+    addMines: 10,
+    seed: '16777215',
+    changes: { addNotes: 4, loudness: 0, addLongNotes: 9, addMines: 1 },
+  };
+  const replay = makeReplay();
+  replay.play.lr2Mania = lr2Mania;
+  expect(parseReplay(serializeReplay(replay)).play.lr2Mania).toEqual(lr2Mania);
+  const broken = (change: (mania: Record<string, unknown>) => void) => {
+    const raw = JSON.parse(serializeReplay(replay));
+    change(raw.play.lr2Mania);
+    return () => parseReplay(raw);
+  };
+  expect(broken((mania) => (mania.addNotes = 110))).toThrow(/0\.\.100/);
+  expect(broken((mania) => (mania.seed = -1))).toThrow(/seed/);
+  expect(broken((mania) => delete mania.changes)).toThrow(ReplayParseError);
+  expect(broken((mania) => Object.assign(mania, { addNotes: 0, loudness: 0, addLongNotes: 0, addMines: 0 }))).toThrow(
+    /at least one/,
+  );
+});
+
+test('SOFTLANDING round-trips its level and drawn factors, and needs its timeline', () => {
+  for (const scrollModifier of ['SOFTLANDING-1', 'SOFTLANDING-2'] as const) {
+    const replay = makeReplay();
+    const scrollModifierTimeline = [
+      { beat: 0, speed: 1.5 },
+      { beat: 4, speed: 0.5 },
+    ];
+    Object.assign(replay.play, { scrollModifier, scrollModifierChanged: true, scrollModifierTimeline });
+    expect(parseReplay(serializeReplay(replay)).play).toMatchObject({ scrollModifier, scrollModifierTimeline });
+    const missing = JSON.parse(serializeReplay(replay));
+    delete missing.play.scrollModifierTimeline;
+    expect(() => parseReplay(missing)).toThrow(/SOFTLANDING requires/);
+    const late = JSON.parse(serializeReplay(replay));
+    late.play.scrollModifierTimeline[0].beat = 1;
+    expect(() => parseReplay(late)).toThrow(/initial beat zero/);
+  }
 });
 
 test('scroll ADD preserves its parameters and effective curve, rejecting incomplete or malformed replay data', () => {

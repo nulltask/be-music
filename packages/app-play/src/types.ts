@@ -73,12 +73,14 @@ export interface PlayerGUIState extends PlayTempoSettings {
   /** Showmanship level for the built-in skins. Persisted in `localStorage`. */
   skinEffects: 'full' | 'reduced' | 'off';
   /**
-   * Render resolution (canvas pixels per CSS pixel), one of 1× up to the display's `devicePixelRatio` in 0.5 steps;
+   * Render resolution (canvas pixels per CSS pixel), one of 0.5×, 0.75×, then 1× up to the display's `devicePixelRatio` in 0.5 steps;
    * 1.5× until picked. Persisted in `localStorage`.
    */
   renderResolution: number;
   /** Gameplay layout pick: `'auto'` follows the device (touch layout on phones / tablets). Persisted in `localStorage`. */
   playLayout: 'auto' | 'standard' | 'touch';
+  /** Renderer: WebGL 2 (the default) or WebGPU. Persisted in `localStorage`; takes effect on the next load. */
+  renderer: 'webgl' | 'webgpu';
   /**
    * When true, gameplay auto-pauses on tab visibility change / window blur and auto-resumes on focus. False (the
    * default) keeps the play scene running in the background — convenient for capturing recordings while another window
@@ -250,6 +252,34 @@ export interface PlayerGUIState extends PlayTempoSettings {
   constantFadeMs: number;
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
+  guideSE: PlayOptions['guideSE'];
+  judgeCounts: PlayOptions['judgeCounts'];
+  judgeDetailSplit: PlayOptions['judgeDetailSplit'];
+  judgeDetail: PlayOptions['judgeDetail'];
+  scoreTargetRate: PlayOptions['scoreTargetRate'];
+  judgePosition: PlayOptions['judgePosition'];
+  judgeDisplay: PlayOptions['judgeDisplay'];
+  laneBrightness: PlayOptions['laneBrightness'];
+  scoreTarget: PlayOptions['scoreTarget'];
+  markProcessedNotes: PlayOptions['markProcessedNotes'];
+  showJudgeArea: PlayOptions['showJudgeArea'];
+  lr2AddMines: PlayOptions['lr2AddMines'];
+  lr2AddLongNotes: PlayOptions['lr2AddLongNotes'];
+  lr2Loudness: PlayOptions['lr2Loudness'];
+  lr2AddNotes: PlayOptions['lr2AddNotes'];
+  lr2Gambol: PlayOptions['lr2Gambol'];
+  lr2SideJump: PlayOptions['lr2SideJump'];
+  lr2SpiralEffect: PlayOptions['lr2SpiralEffect'];
+  lr2Wave: PlayOptions['lr2Wave'];
+  lr2SinCurve: PlayOptions['lr2SinCurve'];
+  lr2Nabeatsu: PlayOptions['lr2Nabeatsu'];
+  lr2Heartbeat: PlayOptions['lr2Heartbeat'];
+  lr2Char: PlayOptions['lr2Char'];
+  lr2SuperLoop: PlayOptions['lr2SuperLoop'];
+  lr2Tornado: PlayOptions['lr2Tornado'];
+  lr2Earthquake: PlayOptions['lr2Earthquake'];
+  lr2Acceleration: PlayOptions['lr2Acceleration'];
+  autoScratchNotes: PlayOptions['autoScratchNotes'];
   judgeTimingAutoAdjust: PlayOptions['judgeTimingAutoAdjust'];
   judgeAlgorithm: PlayOptions['judgeAlgorithm'];
   longNoteModifier: PlayOptions['longNoteModifier'];

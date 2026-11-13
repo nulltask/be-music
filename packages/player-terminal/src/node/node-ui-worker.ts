@@ -251,9 +251,19 @@ async function bootstrap(): Promise<void> {
       // it is driven by the true clock.
       const bgaANSILines = useKittyGraphicsForBGA
         ? undefined
-        : bgaRenderer?.getANSILines(latestFrame.currentSeconds, latestFrame.keyBoundBGA, latestFrame.bmsonBGA);
+        : bgaRenderer?.getANSILines(
+            latestFrame.currentSeconds,
+            latestFrame.keyBoundBGA,
+            latestFrame.bmsonBGA,
+            latestFrame.chartOptions?.bgaMode,
+          );
       const bgaKittyImage = useKittyGraphicsForBGA
-        ? bgaRenderer?.getKittyImage(latestFrame.currentSeconds, latestFrame.keyBoundBGA, latestFrame.bmsonBGA)
+        ? bgaRenderer?.getKittyImage(
+            latestFrame.currentSeconds,
+            latestFrame.keyBoundBGA,
+            latestFrame.bmsonBGA,
+            latestFrame.chartOptions?.bgaMode,
+          )
         : undefined;
       if (useKittyGraphicsForBGA) {
         if (bgaKittyImage && !loggedFirstKittyImageReady) {

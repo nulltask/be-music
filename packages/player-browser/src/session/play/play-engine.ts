@@ -62,7 +62,7 @@ import { logger } from '../../logger.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import type { BeMusicJudgmentKind } from '../../skin/be-music/types.ts';
 import { beginExitSequence, resolvePlayEnding, type PlayEndingContext } from './play-ending.ts';
-import type { PlayPresentation } from './play-presentation.ts';
+import { advanceJudgeSideTimings, type PlayPresentation } from './play-presentation.ts';
 import { resolveSeekWaiters, settleSeekWaiters } from './play-seek.ts';
 import { applyPlayEvent } from './play-state.ts';
 import { resolveLaneInputTokens } from './play-cover-keys.ts';
@@ -91,6 +91,7 @@ export interface PlayEngineContext
       | 'allowSeek'
       | 'judgeAlgorithm'
       | 'customJudge'
+      | 'lr2Gambol'
       | 'longNoteModifier'
       | 'longNoteRate'
       | 'sevenToNinePattern'
@@ -364,11 +365,13 @@ function publishJudge(
   // the moment that side last hit a note — rather than mirroring the global running combo on both sides.
   // A course stage also snapshots the course combo, which an LR2 skin shows there during an expert or grade course.
   const { combo, courseCombo } = ctx.playState;
+  const timings = advanceJudgeSideTimings(ctx.judgeSideState[side].timings, judge, channel, state.deltaMs, until);
   ctx.judgeSideState[side] = {
     judge,
     until,
     combo,
     ...(courseCombo !== undefined ? { courseCombo: courseCombo.combo } : {}),
+    ...(timings !== undefined ? { timings } : {}),
   };
   // POOR / BAD judgements briefly swap the base BGA for the chart's POOR BGA. We trigger the same window for `BAD`
   // because the LR2 spec doesn't distinguish the two for the BGA channel.
@@ -632,7 +635,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
       ...(ctx.nonstopMixer !== undefined ? { stageMixer: ctx.nonstopMixer } : {}),
       playbackRate: samplePlaybackRate(ctx),
       playbackRateFollowsTempo: supportsLiveTempoChange(ctx.options.tempoPitchMode ?? 'pitch'),
-      tempo: ctx.tempo,
+      tempo: ctx.playbackTempo ?? ctx.tempo,
       // A looping PRACTICE play fades in and crossfades back to its start each time round (#949).
       ...(!ctx.options.replay && ctx.options.practiceRange !== undefined
         ? { seekCrossfadeSeconds: PRACTICE_LOOP_CROSSFADE_SECONDS }
@@ -674,6 +677,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
         ? (ctx.options.replay.play.bmsonTotalMode ?? 'beatoraja')
         : ctx.options.bmsonTotalMode,
       customJudge: ctx.options.replay ? ctx.options.replay.play.customJudge : ctx.options.customJudge,
+      lr2Gambol: ctx.options.replay ? ctx.options.replay.play.lr2Gambol : ctx.options.lr2Gambol,
       judgeTimingAutoAdjust: ctx.options.replay === undefined ? (ctx.options.judgeTimingAutoAdjust ?? 'OFF') : 'OFF',
       judgeTimingMs: ctx.options.judgeTimingMs,
       battleMode: ctx.options.replay
@@ -781,6 +785,8 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             ],
           }),
       chartTextStages: ctx.options.nonstop?.chartText,
+      // Each stitched NONSTOP stage's mines explode with its own #WAV00.
+      landmineSampleKeys: ctx.options.nonstop?.landmineSampleKeys,
       // A stitched NONSTOP chart's later stages take over the judge rank (a replay restores the recorded changes).
       ...(ctx.options.replay === undefined && ctx.options.nonstop !== undefined
         ? { stageRanks: ctx.options.nonstop.stageRanks }

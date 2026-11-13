@@ -9,6 +9,26 @@ function fakeFiles(paths: ReadonlyArray<string>): Map<string, Uint8Array> {
   return new Map(paths.map((p) => [p, new Uint8Array(0)]));
 }
 
+describe('discoverBeatorajaSystemSoundPaths: GUIDE SE', () => {
+  it('finds the six guide sounds in the sound folder, then in defaultsound', () => {
+    const files = fakeFiles([
+      'sound/guide-pg.wav',
+      'Sound/Guide-GR.ogg',
+      'defaultsound/guide-gd.wav',
+      'sound/guide-bd.wav',
+      'defaultsound/guide-bd.wav',
+      'sound/guide-ms.wav',
+    ]);
+    expect(discoverBeatorajaSystemSoundPaths(files)).toEqual({
+      guidePG: 'sound/guide-pg.wav',
+      guideGR: 'Sound/Guide-GR.ogg',
+      guideGD: 'defaultsound/guide-gd.wav',
+      guideBD: 'sound/guide-bd.wav',
+      guideMS: 'sound/guide-ms.wav',
+    });
+  });
+});
+
 describe('discoverBeatorajaSystemSoundPaths', () => {
   it('picks the first canonical filename it finds for each slot', () => {
     const files = fakeFiles([

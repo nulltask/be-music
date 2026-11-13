@@ -20,6 +20,20 @@ describe('json', () => {
     cloned.resources.wavGain!['01'] = 0;
     expect(source.resources.wavGain['01']).toBe(0.77);
   });
+  test('cloneJSON copies optional per-slot source formats independently', () => {
+    const source = createEmptyJSON('bmson');
+    expect(cloneJSON(source).resources.wavSourceFormat).toBeUndefined();
+    expect(cloneJSON(source).resources.bmpSourceFormat).toBeUndefined();
+    source.resources.wavSourceFormat = { a1: 'bms' };
+    source.resources.bmpSourceFormat = { b1: 'bms' };
+    const cloned = cloneJSON(source);
+    expect(cloned.resources.wavSourceFormat).toEqual({ a1: 'bms' });
+    expect(cloned.resources.bmpSourceFormat).toEqual({ b1: 'bms' });
+    cloned.resources.wavSourceFormat!.a1 = 'bmson';
+    cloned.resources.bmpSourceFormat!.b1 = 'bmson';
+    expect(source.resources.wavSourceFormat.a1).toBe('bms');
+    expect(source.resources.bmpSourceFormat.b1).toBe('bms');
+  });
   test('json: createEmptyJSON initializes defaults and preservation layers', () => {
     const json = createEmptyJSON();
     expect(json.sourceFormat).toBe('bms');

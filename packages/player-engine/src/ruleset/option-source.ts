@@ -8,15 +8,12 @@ import { isRulesetId, type RulesetId } from './definitions.ts';
 
 /** The names two sources define with different behavior, with the sources that define each. */
 export const QUALIFIED_OPTION_SOURCES: {
-  readonly RANDOM: readonly ['lr2', 'beatoraja', '____'];
-  readonly 'S-RANDOM': readonly ['lr2', 'beatoraja', '____'];
+  readonly 'S-RANDOM': readonly ['lr2', 'beatoraja'];
   readonly CONVERGE: readonly ['lr2', 'beatoraja'];
   readonly BATTLE: readonly ['beatoraja', '____'];
 } = {
-  /** LR2's randFix shuffle, beatoraja's per-lane draw on Java `Random`, and AC's (LR2's, provisionally). */
-  RANDOM: ['lr2', 'beatoraja', '____'],
-  /** LR2's free-lane draw, beatoraja's 40 ms jack avoidance, and AC's (LR2's, provisionally). */
-  'S-RANDOM': ['lr2', 'beatoraja', '____'],
+  /** LR2's free-lane draw, which AC's matches (no jack avoidance), and beatoraja's 40 ms jack avoidance. */
+  'S-RANDOM': ['lr2', 'beatoraja'],
   /** LR2's concentration on one lane and beatoraja's PMS jack-streak arrangement. */
   CONVERGE: ['lr2', 'beatoraja'],
   /**
@@ -25,6 +22,32 @@ export const QUALIFIED_OPTION_SOURCES: {
    */
   BATTLE: ['beatoraja', '____'],
 } as const satisfies Record<string, readonly RulesetId[]>;
+
+/**
+ * The source whose value a ruleset's bare colliding name runs where that ruleset defines the name alike to another
+ * source: AC's S-RANDOM places notes as LR2's does, so `____` reads a bare S-RANDOM as `lr2:S-RANDOM`.
+ */
+const SHARED_OPTION_SOURCES: Readonly<Partial<Record<QualifiedOptionName, Partial<Record<RulesetId, RulesetId>>>>> = {
+  'S-RANDOM': { ____: 'lr2' },
+};
+
+/**
+ * Qualified values that are no longer separate options, with the value each now reads as. LR2, beatoraja and AC define
+ * RANDOM alike (one chart-wide shuffle of the keys), so it is one bare RANDOM; AC's S-RANDOM is LR2's. Settings and
+ * replays that hold the old values keep working.
+ */
+const MERGED_OPTION_VALUES: ReadonlyMap<string, string> = new Map([
+  ['lr2:RANDOM', 'RANDOM'],
+  ['beatoraja:RANDOM', 'RANDOM'],
+  ['____:RANDOM', 'RANDOM'],
+  ['____:S-RANDOM', 'lr2:S-RANDOM'],
+]);
+
+/** The value `value` reads as now: a merged qualified value becomes its current value; any other stays as it is. */
+export function canonicalOptionValue(value: string): string {
+  // Only a qualified value can be a merged one, and most values are bare.
+  return value.includes(':') ? (MERGED_OPTION_VALUES.get(value) ?? value) : value;
+}
 
 /** A name {@link QUALIFIED_OPTION_SOURCES} lists. */
 export type QualifiedOptionName = keyof typeof QUALIFIED_OPTION_SOURCES;
@@ -63,35 +86,55 @@ export function optionValueName(value: string): string {
 
 /**
  * The source whose behavior `value` runs under the judge ruleset `ruleset`: a qualified value keeps its source, and a
- * bare colliding value is the ruleset's own. A value no source qualifies keeps `source` undefined.
+ * bare colliding value is the ruleset's own (or the source whose value the ruleset shares). A merged value reads as its
+ * current one, so `lr2:RANDOM` is the bare RANDOM. A value no source qualifies keeps `source` undefined.
  */
 export function resolveOptionSource(value: string, ruleset: RulesetId): OptionSourceParts {
-  const parts = splitOptionSource(value);
+  const parts = splitOptionSource(canonicalOptionValue(value));
   if (parts.source !== undefined || !isQualifiedOptionName(parts.name)) return parts;
-  return { source: ruleset, name: parts.name };
+  return { source: SHARED_OPTION_SOURCES[parts.name]?.[ruleset] ?? ruleset, name: parts.name };
 }
 
 /**
- * `name` qualified with `source` when the name collides and `source` defines it; the bare name otherwise (a name only
- * one source defines, or a source that does not define it).
+ * `name` qualified with `source` when the name collides and `source` defines it, or with the source whose value
+ * `source` shares (`____`'s S-RANDOM is `lr2:S-RANDOM`); the bare name otherwise (a name only one source defines, or a
+ * source that does not define it).
  */
 export function qualifyOptionValue(source: RulesetId, name: string): string {
   if (!isQualifiedOptionName(name)) return name;
-  return (QUALIFIED_OPTION_SOURCES[name] as readonly RulesetId[]).includes(source) ? `${source}:${name}` : name;
+  const shared = SHARED_OPTION_SOURCES[name]?.[source] ?? source;
+  return (QUALIFIED_OPTION_SOURCES[name] as readonly RulesetId[]).includes(shared) ? `${shared}:${name}` : name;
 }
 
 /**
- * The qualified form of a stored value, read as `ruleset`'s own when it is bare: what a settings migration writes
- * (ADR 0019). A qualified value, a name no source qualifies, and a bare name `ruleset` does not define stay as they are.
+ * The qualified form of a stored value, read as `ruleset`'s own when it is bare, and a merged value as its current one:
+ * what a settings migration writes (ADR 0019). A qualified value, a name no source qualifies, and a bare name `ruleset` does not define stay as they are.
  */
 export function migrateOptionValue(value: string, ruleset: RulesetId): string {
-  const parts = splitOptionSource(value);
-  return parts.source === undefined ? qualifyOptionValue(ruleset, parts.name) : value;
+  const current = canonicalOptionValue(value);
+  const parts = splitOptionSource(current);
+  return parts.source === undefined ? qualifyOptionValue(ruleset, parts.name) : current;
+}
+
+/**
+ * The sources whose option `value` is, its own first: `lr2:S-RANDOM` is LR2's and AC's (`['lr2', '____']`),
+ * `beatoraja:CONVERGE` beatoraja's. A bare value has none.
+ */
+export function optionValueSources(value: string): RulesetId[] {
+  const { source, name } = splitOptionSource(canonicalOptionValue(value));
+  if (source === undefined) return [];
+  const shared = isQualifiedOptionName(name) ? SHARED_OPTION_SOURCES[name] : undefined;
+  return [
+    source,
+    ...Object.entries(shared ?? {})
+      .filter(([, target]) => target === source)
+      .map(([ruleset]) => ruleset as RulesetId),
+  ];
 }
 
 /** Whether `value` names a source that defines it: a bare value, or a qualified one whose source defines the name. */
 export function isKnownOptionSource(value: string): boolean {
-  const parts = splitOptionSource(value);
+  const parts = splitOptionSource(canonicalOptionValue(value));
   if (parts.source === undefined) return true;
   return (
     isQualifiedOptionName(parts.name) &&

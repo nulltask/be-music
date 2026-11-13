@@ -44,6 +44,13 @@ export interface PlayResult {
   chart: LibraryChart;
   /** The gauge graph, from the start of the play to its end. */
   gaugeHistory: GaugeHistorySample[];
+  /** The chart's length in seconds, the span the histories' `progress` runs over; absent when it is not known. */
+  chartSeconds?: number;
+  /**
+   * The gauge whose graph `gaugeHistory` holds when the result screen stepped the graph off the played gauge
+   * (beatoraja's CHANGE_GRAPH); absent while it is the play's own. The gauge value, type and lamp stay the play's.
+   */
+  gaugeGraphType?: string;
   /** The EX-score graph. */
   scoreHistory: ScoreHistorySample[];
   /** The replay the engine recorded, when it recorded one. */
@@ -189,6 +196,7 @@ export function playResultFromPlayState(state: PlayState, facts: PlayResultFacts
     playSeconds: facts.playSeconds ?? facts.seconds,
     chart: facts.chart,
     gaugeHistory: [...state.gaugeHistory, { progress, value: state.gauge }],
+    ...(state.totalSeconds > 0 ? { chartSeconds: state.totalSeconds } : {}),
     scoreHistory: [...state.scoreHistory, { progress, exScore: state.exScore }],
     ...(facts.practice !== true && facts.replay !== undefined ? { replay: facts.replay } : {}),
     ...(facts.fromReplay === true ? { fromReplay: true } : {}),

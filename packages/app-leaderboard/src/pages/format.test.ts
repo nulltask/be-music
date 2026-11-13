@@ -77,6 +77,8 @@ describe('page formatting', () => {
     expect(formatGauge('GROOVE', 100)).toBe('GROOVE 100.0%');
     expect(formatGauge('HARD', 2.34)).toBe('HARD 2.3%');
     expect(formatGauge('NORMAL', null)).toBe('NORMAL');
+    expect(formatGauge('DEATH-CORRECTED', 70)).toBe('DEATH corrected 70.0%');
+    expect(formatGauge('DEATH-CORRECTED', null)).toBe('DEATH corrected');
   });
 
   test('names the recording software from the replay recorder', () => {

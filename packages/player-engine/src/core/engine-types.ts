@@ -27,6 +27,7 @@ import { type ReplayRecordingOptions } from '../replay/recorder.ts';
 import type { BeMusicReplay, ReplayCourseStage, ReplayInputEvent, ReplayInputSource } from '../replay/format.ts';
 import type { ReplayTempoChange } from '../replay/view.ts';
 import { type PreparedPlaybackChartData } from './bootstrap.ts';
+import type { GuideSound } from './guide-sound.ts';
 
 /**
  * Public types of the playback engine: options, runtimes, the audio-session contract and the summary.
@@ -104,6 +105,8 @@ export interface PlayerPlaySettings {
   autoScratch?: boolean;
   /** beatoraja's note-selection algorithm; other source rulesets retain their own fixed selection. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  /** LR2's mania option GAMBOL (LR2 rules only): 1 or 2 fixes the judge windows; 0 or absent is off. Recorded into the replay. */
+  lr2Gambol?: 0 | 1 | 2;
   /** beatoraja CUSTOM JUDGE rates; absent while the option is off. Recorded into the replay. */
   customJudge?: import('../ruleset/custom-judge.ts').BeatorajaCustomJudge;
   /**
@@ -131,10 +134,15 @@ export interface PlayerPlaySettings {
   battleMode?: BattleMode;
   /** The 2P player's gauge in a two-player play (`battleMode: 'TWO-PLAYER'`); absent plays the 1P gauge. */
   gauge2P?: string;
-  /** LR2 D-BATTLE: the scratch key was held through the decide animation, so scratch objects stay playable. */
+  /** LR2 D-BATTLE: scratch objects stay playable, as LR2's hidden `randSC` command keeps them (buttons 12 + 13 at decide). */
   dBattleScratch?: boolean;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
+  /**
+   * LR2's mania chart generators (ADD NOTES, LOUDNESS, ADD LONGNOTES, ADD MINES): each rate is 0 (off) or 10–100. `seed`
+   * is the seed a replay recorded; without one the play draws a fresh seed. Not applied in a course or in PRACTICE.
+   */
+  lr2Mania?: import('./lr2-mania-chart.ts').LR2ManiaChartRates & { seed?: string };
   mineModifier?: MineModifier;
   /** Independently assist the source play side; explicit values override autoScratch for that side. */
   autoScratch1P?: boolean;
@@ -167,6 +175,7 @@ export interface PlayerPlaySettings {
    * flow and no draws is rejected with a `TypeError`.
    */
   randomDraws?: RandomDraws;
+  /** Player tempo multiplier relative to the chart's standard playback rate. */
   speed?: number;
   inferBmsLNTypeWhenMissing?: boolean;
   /**
@@ -224,11 +233,17 @@ export interface PlayerPlaySettings {
   startAtSeconds?: number;
 }
 
+/** From `seconds` on, mines explode with the `sampleKey` WAV slot (silent without one). */
+export interface LandmineSampleKeyCue {
+  seconds: number;
+  sampleKey?: string;
+}
+
 /** One judge rank change of {@link PlayerPlaySettings.stageRanks}. */
 export interface PlayerStageRank {
   seconds: number;
   rank: number;
-  table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank';
+  table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank' | 'bms-exrank-change';
 }
 
 /**
@@ -252,6 +267,11 @@ export interface PlayerPlayRuntime {
   keyBoundBGACues?: readonly KeyBoundBGACue[];
   /** Remapped bmson event animations supplied by a NONSTOP host. */
   bmsonBGACues?: readonly BmsonBGAEventCue[];
+  /**
+   * The WAV slot a mine explodes with, by chart time, in place of `#WAV00` (`NonstopStitchMap.landmineSampleKeys`): a
+   * mine uses the last cue at or before its own time, and a cue without `sampleKey` keeps it silent. Absent: `#WAV00`.
+   */
+  landmineSampleKeys?: readonly LandmineSampleKeyCue[];
   /**
    * Pre-built playback chart data the host wants the engine to use verbatim instead of running its own
    * `preparePlaybackChartData` pass. When provided, the engine treats the supplied {@link PreparedPlaybackChartData}
@@ -305,9 +325,8 @@ export interface PlayerPlayRuntime {
   onHighSpeedChange?: (highSpeed: number) => void;
   /**
    * Called when the play tempo changes during the play (a `{ kind: 'tempo' }` input command, or a replay following
-   * {@link PlayerPlayRecording.replayTempoChanges}), with the new tempo and the chart second it took effect at. Chart time
-   * stays continuous across the change and runs at the new tempo from then on; a host with its own clock follows it
-   * from that chart second.
+   * {@link PlayerPlayRecording.replayTempoChanges}), with the new player multiplier and the chart second it took
+   * effect at. Chart time stays continuous across the change. The clock frames carry the effective playback rate.
    */
   onTempoChange?: (change: PlayerTempoChange) => void;
   onResolvedChart?: (json: BeMusicJSON) => void;
@@ -557,6 +576,11 @@ export interface AudioSession {
   getActiveAudioFiles?: () => string[];
   getActiveAudioVoiceCount?: () => number;
   triggerEvent?: (event: BeMusicEvent) => void;
+  /**
+   * Plays the guide sound of a judgment (beatoraja's GUIDE SE), at once. Present only on a session that has the sound
+   * set's guide sounds and a play that turned them on; a sound the set lacks plays nothing.
+   */
+  playGuideSound?: (sound: GuideSound) => void;
   /**
    * Plays `event`'s sound as if it had started `offsetSeconds` ago, for a play that seeks (`PlayerOptions.startAtSeconds`,
    * a `seek` command). A sound shorter than the offset plays nothing. Without it, sounds that started before the second

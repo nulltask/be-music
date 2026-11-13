@@ -455,6 +455,8 @@ export type PlayIntent =
   /** Move or switch a lane cover (beatoraja's cover buttons and wheel). */
   | { readonly type: 'cover'; readonly command: LaneCoverCommand }
   | { readonly type: 'constant-visibility'; readonly durationMs?: number; readonly fadeMs?: number }
+  /** Display-only play options changed during the play (`pickLiveDisplayPlayOptions`); the frames follow at once. */
+  | { readonly type: 'display-options'; readonly values: Partial<PlayOptions> }
   | { readonly type: 'pause' }
   /** Give the play up, as holding ESC does. */
   | { readonly type: 'quit' }

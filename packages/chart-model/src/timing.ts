@@ -242,12 +242,22 @@ export function collectTempoChanges(json: BeMusicJSON, sortedEvents: ReadonlyArr
   return changes;
 }
 
-/** A `#STOPxx` object (BMS) or bmson stop with a positive length, in 1/192 of a 4/4 measure. */
+/**
+ * A `#STOPxx` object (BMS) or bmson stop, in 1/192 of a 4/4 measure. Positive, except for a BMS STOP whose `#STOPxx`
+ * is zero, negative or undefined, which LR2 plays as {@link LR2_UNSET_STOP_UNITS}.
+ */
 export interface StopChange {
   readonly event: BeMusicEvent;
   readonly beat: number;
   readonly duration: number;
 }
+
+/**
+ * What LR2 plays for a STOP whose `#STOPxx` is zero, negative or undefined: it stores only `#STOPxx` values above 0
+ * (OpenLR2 L26324-26331), so the slot keeps its initial `-1.0` (L25773) and the STOP adds `-1/192` of a measure at the
+ * tempo in force (L26666-26669), moving everything after it that much earlier.
+ */
+const LR2_UNSET_STOP_UNITS = -1;
 
 /**
  * The STOP objects that take effect, in chart order. BMS keeps one `#STOPxx` per position and the last one wins, as LR2
@@ -267,10 +277,15 @@ export function collectStopChanges(
     if (!isStopChannel(normalizeChannel(event.channel))) {
       continue;
     }
-    const duration = json.resources.stop[normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson')];
-    if (typeof duration !== 'number' || duration <= 0) {
+    const value = json.resources.stop[normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson')];
+    const positive = typeof value === 'number' && Number.isFinite(value) && value > 0;
+    if (!positive && !lastStopWins) {
+      // A non-positive or missing bmson stop is skipped, as its spec says.
       continue;
     }
+    // A BMS STOP without a positive `#STOPxx` (zero, negative or undefined) plays as LR2 plays it, and takes part in
+    // the last-one-wins rule as any STOP does.
+    const duration = positive ? value : LR2_UNSET_STOP_UNITS;
     const beat = beatResolver.eventToBeat(event);
     const replaced = lastStopWins ? indexByBeat.get(beat) : undefined;
     if (replaced !== undefined) {

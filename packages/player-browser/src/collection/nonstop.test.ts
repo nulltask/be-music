@@ -39,6 +39,56 @@ describe('createNonstopAssets', () => {
     );
   });
 
+  test('looks the declared files up ahead of the stitch, yielding between slices, and files only what is asked for', async () => {
+    const chart = createEmptyJSON('bms');
+    chart.resources.wav = { '01': 'kick.wav', '02': 'snare.wav', '03': 'gone.wav' };
+    chart.resources.bmp = { '01': 'bg.bmp' };
+    const kick = bytes(1);
+    const files = source('a', { 'Song/kick.ogg': kick, 'Song/snare.wav': bytes(2), 'Song/bg.png': bytes(3) });
+    const lookups = { count: 0 };
+    const counted: BrowserAssetSource = {
+      ...files,
+      files: new Proxy(files.files as Map<string, Uint8Array>, {
+        get(target, property) {
+          if (property === 'has') lookups.count += 1;
+          const value = Reflect.get(target, property, target) as unknown;
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      }),
+    };
+    const assets = createNonstopAssets([{ chart, source: counted, chartPath: 'Song/a.bms' }]);
+    let clock = 0;
+    let yields = 0;
+    // Every lookup takes 10 ms on this clock, past the slice, so the prefetch yields after each one.
+    await assets.prefetch({
+      now: () => (clock += 10),
+      yieldToHost: async () => {
+        yields += 1;
+      },
+    });
+    expect(yields).toBe(4);
+    expect(assets.source.files.size).toBe(0);
+    const prefetched = lookups.count;
+    expect(assets.assetPath(0, 'wav', 'kick.wav')).toBe('s0/Song/kick.ogg');
+    expect(assets.assetPath(0, 'wav', 'gone.wav')).toBe('s0/Song/gone.wav');
+    expect(assets.assetPath(0, 'bmp', 'bg.bmp')).toBe('s0/Song/bg.png');
+    // The stitch found every lookup done.
+    expect(lookups.count).toBe(prefetched);
+    expect([...assets.source.files.keys()]).toEqual(['s0/Song/kick.ogg', 's0/Song/bg.png']);
+    expect(assets.source.audioFallbacks?.get('s0/Song/kick.ogg')).toEqual([kick]);
+  });
+
+  test('follows the #PATH_WAV of the stage charts as played', () => {
+    const loaded = createEmptyJSON('bms');
+    const played = createEmptyJSON('bms');
+    played.bms.pathWAV = 'wav/';
+    const files = source('c', { 'Song C/wav/hat.wav': bytes(4), 'Song C/hat.wav': bytes(5) });
+    const assets = createNonstopAssets([{ chart: loaded, source: files, chartPath: 'Song C/c.bms' }]);
+    expect(assets.assetPath(0, 'wav', 'hat.wav')).toBe('s0/Song C/hat.wav');
+    assets.setStageCharts([played]);
+    expect(assets.assetPath(0, 'wav', 'hat.wav')).toBe('s0/Song C/wav/hat.wav');
+  });
+
   test("follows a stage chart's #PATH_WAV", () => {
     const chart = createEmptyJSON('bms');
     chart.bms.pathWAV = 'wav/';

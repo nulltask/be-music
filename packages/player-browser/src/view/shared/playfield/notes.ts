@@ -25,11 +25,23 @@ import {
   resolveReversedDrawClock,
 } from '../../../chart/note-draw-window.ts';
 import { PIXELS_PER_BEAT } from '../../../stage/design.ts';
-import { resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
+import { isScratch, resolveLR2LaneIndex } from '@be-music/player-engine/lanes';
+import { renderJudgeArea } from '../judge-area.ts';
 import { resolveBeMusicLaneKind } from '../../../skin/be-music/registry.ts';
 import { renderDefaultNote } from './default-playfield.ts';
 import type { PlayfieldLaneRect } from '../../types.ts';
 import type { PlayfieldContext, RuntimeNote } from './context.ts';
+import { resolveHiddenNoteChannels } from './hidden-note-channels.ts';
+import { resolveLaneDim } from './lane-brightness.ts';
+import { resolveProcessedNoteAlpha } from './processed-note.ts';
+import {
+  LR2_SCREEN_HEIGHT,
+  placeLR2ManiaNote,
+  resolveLR2ManiaNoteIndexes,
+  resolveLR2ManiaVisual,
+  resolveLR2Nabeatsu,
+  type LR2ManiaNotePlacement,
+} from './lr2-mania-visual.ts';
 import { renderLongNote } from './long-notes.ts';
 import { renderMeasureLines } from './measure-lines.ts';
 import { renderMineNote } from './mines.ts';
@@ -38,6 +50,16 @@ import { hasChartNoteVisual, placeChartNoteVisual, type ChartNoteScreenVisual } 
 export function renderNotes(ctx: PlayfieldContext, seconds: number, height: number): void {
   const overscan = ctx.noteOverscan;
   ctx.noteLayerPool.begin();
+  // AC 34's lane brightness: a black layer over each lane, under everything that scrolls on it.
+  const laneDim = resolveLaneDim(ctx.playOptions?.laneBrightness);
+  if (laneDim > 0) {
+    for (const lane of ctx.play.laneX.values()) {
+      ctx.noteLayerPool
+        .acquireGraphics()
+        .rect(lane.x, lane.top, lane.w, lane.bottom - lane.top)
+        .fill({ color: 0x000000, alpha: laneDim });
+    }
+  }
   if (ctx.play.isIntroPlaying()) {
     // Intro period — the theme is sliding its frame chrome in. Notes and measure lines stay off-screen until the
     // playhead is live. The `noteLayerPool.end()` below hides every pooled child that the (skipped) draw passes
@@ -101,6 +123,22 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
   const beatDistance = ctx.play.scrollMapper
     ? (toBeat: number): number => ctx.play.scrollMapper!.distanceBetween(currentBeat, toBeat)
     : (toBeat: number): number => toBeat - currentBeat;
+  // beatoraja's judge area: under the notes, so they stay readable.
+  if (ctx.playOptions?.showJudgeArea === true && ctx.play.judgeWindows !== undefined) {
+    const scrollScales = new Map<object, number>();
+    renderJudgeArea({
+      lanes: Array.from(ctx.play.laneX, ([channel, lane]) => {
+        const area = { x: lane.x, w: lane.w, top: lane.top, bottom: lane.bottom, scratch: isScratch(channel) };
+        scrollScales.set(area, lane.scrollScale ?? 1);
+        return area;
+      }),
+      note: ctx.play.judgeWindows.note,
+      scratch: ctx.play.judgeWindows.scratch,
+      distanceAt: (ms, lane) =>
+        beatDistance(ctx.play.currentBeat(displaySeconds + ms / 1000)) * pixelsPerBeat * (scrollScales.get(lane) ?? 1),
+      pool: ctx.noteLayerPool,
+    });
+  }
   if (ctx.options.bpmGuide && ctx.play.timingResolver) {
     const timing = ctx.play.timingResolver;
     if (ctx.bpmGuideCache?.timing !== timing) ctx.bpmGuideCache = { timing, events: collectBPMGuideEvents(timing) };
@@ -169,6 +207,30 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     cursor?.note ??
     findFirstIndexAtOrAfter(ctx.play.notes, currentBeat - ctx.play.maxLongNoteBeatSpan, (note) => note.beat);
   const hideJudgedNotes = ctx.options.judgedNoteDisplay === 'HIDE';
+  // AC 34's オートスクラッチ表示: the scratch notes AUTO SCRATCH plays are not drawn; they still play and count (#1137).
+  const hiddenChannels = resolveHiddenNoteChannels(ctx.playOptions?.autoScratchNotes, ctx.play.autoScratchChannels);
+  // LR2's mania drawing options: each note's and mine's place, shift and size, after the chart's own options.
+  const mania = resolveLR2ManiaVisual(ctx.playOptions);
+  const maniaIndexes = mania !== undefined ? resolveLR2ManiaNoteIndexes(ctx.play.notes, ctx.play.mineNotes) : undefined;
+  const maniaUnit = ctx.playfieldSkin.stage.height / LR2_SCREEN_HEIGHT;
+  const maniaNowMs = ctx.play.playClock();
+  // NABEATSU sways the notes and the bar lines together: the layer moves, and each note is told so.
+  const sway = resolveLR2Nabeatsu(mania, maniaNowMs, maniaUnit);
+  ctx.noteLayer.position.set(sway.x, sway.y);
+  const placeMania =
+    mania === undefined
+      ? undefined
+      : (object: object, lane: PlayfieldLaneRect, laneIndex: number, y: number, yEnd?: number): LR2ManiaNotePlacement =>
+          placeLR2ManiaNote(mania, {
+            distance: lane.bottom - y,
+            ...(yEnd !== undefined ? { tailDistance: lane.bottom - yEnd } : {}),
+            lineY: lane.bottom,
+            lane: Math.max(0, laneIndex),
+            index: maniaIndexes?.get(object) ?? 0,
+            nowMs: maniaNowMs,
+            unit: maniaUnit,
+            sway,
+          });
   for (let noteIndex = firstNoteIndex; noteIndex < ctx.play.notes.length; noteIndex += 1) {
     const note = ctx.play.notes[noteIndex]!;
     if (isPastDrawWindow(drawWindow, note.beat)) {
@@ -182,7 +244,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
       continue;
     }
     const lane = ctx.play.laneX.get(note.channel);
-    if (!lane) {
+    if (!lane || hiddenChannels?.has(note.channel)) {
       continue;
     }
     const headVisual = chartVisual?.(
@@ -191,26 +253,32 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
       note.channel,
       note.beat,
     );
+    // The LR2-spec lane index (LR2 `#SRC_NOTE,...,index`), for the lane kind a Be-Music Skin draws and the labels.
+    const laneIndex = resolveLR2LaneIndex(note.channel, ctx.play.chartPlayVariant);
+    const scrolledY = headVisual?.y ?? lane.bottom - beatDistance(note.beat) * pixelsPerBeat * (lane.scrollScale ?? 1);
+    // A long note's end before the mania options, which move it with the head.
+    const scrolledEndY =
+      note.endBeat !== undefined
+        ? scrolledLongNoteEndY(note.endBeat, lane, note.channel, note.beat, beatDistance, pixelsPerBeat, chartVisual)
+        : undefined;
+    const maniaPlacement = placeMania?.(note, lane, laneIndex, scrolledY, scrolledEndY);
     const y = resolveDrawY(
       drawWindow,
-      headVisual?.y ?? lane.bottom - beatDistance(note.beat) * pixelsPerBeat * (lane.scrollScale ?? 1),
+      maniaPlacement !== undefined ? lane.bottom - maniaPlacement.distance : scrolledY,
       lane.bottom,
     );
     const noteAlpha = alpha * (headVisual?.alpha ?? 1);
     if (noteAlpha <= 0) continue;
-    // The LR2-spec lane index (LR2 `#SRC_NOTE,...,index`), for the lane kind a Be-Music Skin draws and the labels.
-    const laneIndex = resolveLR2LaneIndex(note.channel, ctx.play.chartPlayVariant);
     // Long-note render: draw LN_BODY between start and end beats, capped with LN_START / LN_END sprites. Falls
     // through to single-note render if the chart has no long-note end-beat for this entry.
     if (note.endBeat !== undefined) {
       if (!isLongNoteDrawnAtTime(drawWindow, note.endSeconds ?? note.seconds)) {
         continue;
       }
-      const rawEndY = lane.bottom - beatDistance(note.endBeat) * pixelsPerBeat * (lane.scrollScale ?? 1);
       // A long note keeps its lane geometry: only CHANGE-HS moves its tail, and its head's HIDDEN opacity applies.
       const yEnd = resolveDrawY(
         drawWindow,
-        chartVisual?.(rawEndY, lane, note.channel, note.beat).y ?? rawEndY,
+        maniaPlacement?.tailDistance !== undefined ? lane.bottom - maniaPlacement.tailDistance : scrolledEndY!,
         lane.bottom,
       );
       // yEnd is *above* y (smaller value, since beats grow upward visually). Under beatoraja's rules a tail below the
@@ -226,10 +294,11 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
       if (drawWindow.rules === 'beatoraja' && yEnd >= headY) {
         continue;
       }
-      if (noteAlpha === 1) renderLongNote(ctx, laneIndex, note, lane, headY, yEnd, drawBottom);
+      const longLane = applyManiaLane(lane, maniaPlacement);
+      if (noteAlpha === 1) renderLongNote(ctx, laneIndex, note, longLane, headY, yEnd, drawBottom);
       else
         ctx.noteLayerPool.withAlpha(noteAlpha, () =>
-          renderLongNote(ctx, laneIndex, note, lane, headY, yEnd, drawBottom, noteAlpha),
+          renderLongNote(ctx, laneIndex, note, longLane, headY, yEnd, drawBottom, noteAlpha),
         );
       continue;
     }
@@ -250,7 +319,10 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     if (note.judged && hideJudgedNotes) {
       continue;
     }
-    const noteLane = applyChartLaneVisual(lane, headVisual);
+    const noteLane = applyManiaLane(applyChartLaneVisual(lane, headVisual), maniaPlacement);
+    const size = maniaSize(maniaPlacement);
+    // beatoraja's mark processed note: a note judged before its time is drawn dimmed until it goes (#1130).
+    const tapAlpha = noteAlpha * resolveProcessedNoteAlpha(ctx.playOptions?.markProcessedNotes, note.judged);
     const style = chartNoteStyle(headVisual);
     // CLONE afterimages go first, so the note draws over them.
     if (headVisual !== undefined && headVisual.clones.length > 0) {
@@ -263,10 +335,10 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
         );
       }
     }
-    if (noteAlpha === 1) renderSingleNote(ctx, laneIndex, note.channel, noteLane, y, 1, headVisual?.scale, style);
+    if (tapAlpha === 1) renderSingleNote(ctx, laneIndex, note.channel, noteLane, y, 1, headVisual?.scale, style, size);
     else
-      ctx.noteLayerPool.withAlpha(noteAlpha, () =>
-        renderSingleNote(ctx, laneIndex, note.channel, noteLane, y, noteAlpha, headVisual?.scale, style),
+      ctx.noteLayerPool.withAlpha(tapAlpha, () =>
+        renderSingleNote(ctx, laneIndex, note.channel, noteLane, y, tapAlpha, headVisual?.scale, style, size),
       );
   }
   // Landmine notes — same scroll math, separate sprite. Drawn after regular notes so a mine sitting at the same beat
@@ -289,12 +361,17 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     if (!lane) continue;
     const rawMineY = lane.bottom - beatDistance(mine.beat) * pixelsPerBeat * (lane.scrollScale ?? 1);
     const mineVisual = chartVisual?.(rawMineY, lane, mine.channel, mine.beat);
-    const y = resolveDrawY(drawWindow, mineVisual?.y ?? rawMineY, lane.bottom);
+    const laneIndex = resolveLR2LaneIndex(mine.channel, ctx.play.chartPlayVariant);
+    const minePlacement = placeMania?.(mine, lane, laneIndex, mineVisual?.y ?? rawMineY);
+    const y = resolveDrawY(
+      drawWindow,
+      minePlacement !== undefined ? lane.bottom - minePlacement.distance : (mineVisual?.y ?? rawMineY),
+      lane.bottom,
+    );
     if (y < lane.top - overscan || y > resolveDrawBottom(drawWindow, lane.bottom)) continue;
     const mineAlpha = alpha * (mineVisual?.alpha ?? 1);
     if (mineAlpha <= 0) continue;
-    const mineLane = applyChartLaneVisual(lane, mineVisual);
-    const laneIndex = resolveLR2LaneIndex(mine.channel, ctx.play.chartPlayVariant);
+    const mineLane = applyManiaLane(applyChartLaneVisual(lane, mineVisual), minePlacement);
     if (mineAlpha === 1) renderMineNote(ctx, laneIndex, mine.channel, mineLane, y);
     else
       ctx.noteLayerPool.withAlpha(mineAlpha, () =>
@@ -337,6 +414,36 @@ function applyChartLaneVisual(
   return { ...lane, x: lane.x + (lane.w - w) / 2 + visual.xOffset, w };
 }
 
+/** A long note's end as scrolled and placed by the chart's own options, before the mania options. */
+function scrolledLongNoteEndY(
+  endBeat: number,
+  lane: PlayfieldLaneRect,
+  channel: string,
+  beat: number,
+  beatDistance: (toBeat: number) => number,
+  pixelsPerBeat: number,
+  chartVisual:
+    | ((y: number, lane: PlayfieldLaneRect, channel: string, beat: number) => ChartNoteScreenVisual)
+    | undefined,
+): number {
+  const rawEndY = lane.bottom - beatDistance(endBeat) * pixelsPerBeat * (lane.scrollScale ?? 1);
+  return chartVisual?.(rawEndY, lane, channel, beat).y ?? rawEndY;
+}
+
+/** The lane rect a note draws in under the mania options' sideways shift; the lane itself when there is none. */
+function applyManiaLane(lane: PlayfieldLaneRect, placement: LR2ManiaNotePlacement | undefined): PlayfieldLaneRect {
+  if (placement === undefined || placement.xOffset === 0) return lane;
+  return { ...lane, x: lane.x + placement.xOffset };
+}
+
+/** The mania options' change of a tap note's size, or `undefined` when there is none. */
+function maniaSize(
+  placement: LR2ManiaNotePlacement | undefined,
+): { readonly w: number; readonly h: number } | undefined {
+  if (placement === undefined || (placement.widthDelta === 0 && placement.heightDelta === 0)) return undefined;
+  return { w: placement.widthDelta, h: placement.heightDelta };
+}
+
 /** STAR's colour and SPIN's rotation for a tap note, or `undefined` when neither applies. */
 interface ChartNoteStyle {
   readonly tint?: number;
@@ -362,6 +469,8 @@ function renderSingleNote(
    * Be-Music Skin's note takes neither (its binding draws the note itself).
    */
   style?: ChartNoteStyle,
+  /** Added to the note's width and height about its centre (LR2's HEARTBEAT). A Be-Music Skin's note takes the width. */
+  size?: { readonly w: number; readonly h: number },
 ): void {
   // `y` is where the chart timing intersects the judgement line for this note. We anchor the sprite by its **bottom
   // edge** so the just-timing moment lines up with the bottom edge of the visual note (LR2 / BMS convention) instead
@@ -371,16 +480,18 @@ function renderSingleNote(
     const sprite = ctx.noteLayerPool.acquireSprite();
     sprite.texture = cell.texture;
     sprite.label = drawLabel(ctx, 'note', laneIndex, channel);
-    sprite.x = lane.x + (lane.w - cell.width * scale) / 2;
-    sprite.y = y - cell.height * scale;
-    sprite.width = cell.width * scale;
-    sprite.height = cell.height * scale;
+    const width = Math.max(0, cell.width * scale + (size?.w ?? 0));
+    const height = Math.max(0, cell.height * scale + (size?.h ?? 0));
+    sprite.x = lane.x + (lane.w - width) / 2;
+    sprite.y = y - cell.height * scale - (size?.h ?? 0) / 2;
+    sprite.width = width;
+    sprite.height = height;
     if (style !== undefined) {
       if (style.tint !== undefined) sprite.tint = style.tint;
       if (style.rotation !== 0) {
         sprite.anchor.set(0.5);
-        sprite.x += (cell.width * scale) / 2;
-        sprite.y += (cell.height * scale) / 2;
+        sprite.x += width / 2;
+        sprite.y += height / 2;
         sprite.rotation = style.rotation;
       }
     }
@@ -391,8 +502,8 @@ function renderSingleNote(
   if (binding) {
     binding.addNote({
       kind,
-      x: lane.x,
-      w: lane.w,
+      x: lane.x - (size?.w ?? 0) / 2,
+      w: Math.max(0, lane.w + (size?.w ?? 0)),
       y,
       ...(alpha !== 1 ? { alpha } : {}),
       autoplay: ctx.play.isAutoplayedChannel(channel),
@@ -401,6 +512,13 @@ function renderSingleNote(
   }
   const graphic = ctx.noteLayerPool.acquireGraphics();
   graphic.label = drawLabel(ctx, 'note-fallback', laneIndex, channel);
-  renderDefaultNote({ graphics: graphic, kind, x: lane.x, w: lane.w, y, nowMs: ctx.play.playClock() });
+  renderDefaultNote({
+    graphics: graphic,
+    kind,
+    x: lane.x - (size?.w ?? 0) / 2,
+    w: Math.max(0, lane.w + (size?.w ?? 0)),
+    y,
+    nowMs: ctx.play.playClock(),
+  });
   if (style?.tint !== undefined) graphic.tint = style.tint;
 }

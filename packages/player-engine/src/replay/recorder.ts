@@ -74,6 +74,7 @@ export interface ReplayRecorderPlaySettings {
   mode: 'manual' | 'auto';
   autoScratch: boolean;
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  lr2Gambol?: 1 | 2;
   customJudge?: BeatorajaCustomJudge;
   longNoteModifier?: LongNoteModifier;
   longNoteRate?: number;
@@ -91,6 +92,7 @@ export interface ReplayRecorderPlaySettings {
   dBattleScratch?: boolean;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
+  lr2Mania?: import('./format.ts').ReplayLR2Mania;
   lr2ExtraEffectiveLevel?: LR2ExtraLevel;
   lr2ExtraConvertedObjectCount?: number;
   lr2ExtraTempo?: number;
@@ -186,7 +188,7 @@ export interface ReplayRecorderOptions {
   stageRanks?: ReadonlyArray<{
     seconds: number;
     rank: number;
-    table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank';
+    table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank' | 'bms-exrank-change';
   }>;
   /** LR2 negative-BPM reversal (chart seconds, #134) — recorded so re-simulations freeze judging at the same point. */
   reversalSeconds?: number;
@@ -361,6 +363,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (tempoChanges.length > 0) play.tempoChanges = tempoChanges.map((change) => ({ ...change }));
       if (options.play.view !== undefined) play.view = structuredClone(options.play.view);
       if (options.play.judgeAlgorithm !== undefined) play.judgeAlgorithm = options.play.judgeAlgorithm;
+      if (options.play.lr2Gambol !== undefined) play.lr2Gambol = options.play.lr2Gambol;
       if (options.play.customJudge !== undefined) play.customJudge = { ...options.play.customJudge };
       if (options.play.scrollModifier !== undefined) play.scrollModifier = options.play.scrollModifier;
       if (options.play.scrollSection !== undefined) play.scrollSection = options.play.scrollSection;
@@ -395,6 +398,8 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
         'lr2ExtraTempo',
       ] as const)
         if (options.play[field] !== undefined) Object.assign(play, { [field]: options.play[field] });
+      if (options.play.lr2Mania !== undefined)
+        play.lr2Mania = { ...options.play.lr2Mania, changes: { ...options.play.lr2Mania.changes } };
       if (options.play.extraNoteDepth !== undefined) play.extraNoteDepth = options.play.extraNoteDepth;
       if (options.play.extraNoteScratch !== undefined) play.extraNoteScratch = options.play.extraNoteScratch;
       if (options.play.extraNoteChangeCount !== undefined)

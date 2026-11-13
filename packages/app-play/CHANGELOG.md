@@ -1,5 +1,47 @@
 # @be-music/app-play
 
+## 0.14.0
+
+### Minor Changes
+
+- a15f307: Add the LR2 mania options, AC and beatoraja display options, score targets, GUIDE SE and a renderer choice, and fix NONSTOP and RANDOM MIX starts.
+  
+  - Add **Lane brightness (AC)** and **Judgment display (AC)** to Options → View → Effects.
+  - List the new **BATTLE (????)**, **M-RAN 1P** and **M-RAN 2P** select keys in the Keys tab and its help.
+  - Add **Auto scratch notes (AC)** to Options → View: Show or Hide the scratch notes AUTO SCRATCH plays. It applies live and is saved with the other settings.
+  - Add **Show judge area (beatoraja)** and **Mark processed notes (beatoraja)** to Options → View → Effects. Both apply live and are saved with the other settings.
+  - Add **GUIDE SE (beatoraja)** to the Options dialog's Play → Assist page: a beatoraja sound set's sound plays at each judgment.
+  - Add **Judge detail**, **Judge detail: keys and scratch apart** and **Judgment counts** for the built-in skins to the Options dialog's View → Effects page.
+  - Add **Judgment position (built-in skins, %)** to the Options dialog's View → Effects page: the built-in skins' judgment and combo move up or down the lanes, live during a play.
+  - Offer 0.5× and 0.75× render resolutions for GPUs that cannot keep up even on a 1× display, and run the first-run resolution benchmark on 1× displays too, so a low-spec machine settles on a resolution that holds the frame rate instead of dropping frames at 1×.
+  - Add **GAMBOL (LR2)** to Options → Play options, shown with LR2 rules: OFF, LEVEL 1 or LEVEL 2. It is locked during play and saved with the other settings.
+  - Under LR2 rules the Gauge list offers DEATH corrected, LR2's HAZARD clearing by survival, while DEATH now needs HP 80 at the end of a single chart as in LR2. DEATH corrected is also among the LR2 PRACTICE gauge choices.
+  - Add **ADD NOTES (LR2)**, **LOUDNESS (LR2)**, **ADD LONGNOTES (LR2)** and **ADD MINES (LR2)** to Options → Play options. They are locked during play and saved with the other settings.
+  - Add an **LR2 mania options** section to Options → View → Effects with ACCELERATION, EARTHQUAKE, TORNADO, SUPERLOOP, CHAR, HEARTBEAT, NABEATSU, SINCURVE, WAVE, SPIRAL effect, SIDEJUMP. The options apply live and are saved with the other settings.
+  - The Options dialog offers S-RANDOM 9KEY corrected (LR2) and CONVERGE corrected (LR2), the corrected forms of LR2's S-RANDOM and CONVERGE, while S-RANDOM (LR2 / ????) and CONVERGE (LR2) now reproduce LR2's nine-key draw onto the 2P scratch and CONVERGE's 2P target one lane to the right.
+  - Add **SOFTLANDING LEVEL 1 (LR2)** and **SOFTLANDING LEVEL 2 (LR2)** to the scroll selector. The selector is now labelled **Scroll**, and its beatoraja choices read **REMOVE (beatoraja)** and **ADD (beatoraja)**.
+  - Open the Options dialog on its LR2 mania options section with F2 on the select screen under the LR2 key map, the key LR2 shows its mania panel with.
+  - The Options dialog lists RANDOM once instead of once per source, since LR2, beatoraja and ???? shuffle the keys alike, and lists S-RANDOM as S-RANDOM (LR2 / ????) and S-RANDOM (beatoraja). Saved settings holding a per-source RANDOM or ????'s S-RANDOM keep working.
+  - Show the song being played in a NONSTOP play with the built-in skins: the title, artist and genre now follow each stage, crossfading as the next stage begins, instead of showing the course's title throughout.
+  - Keep parsed charts in this browser (IndexedDB `be-music-charts`), keyed by the SHA-256 of each chart file, so a folder dropped again, or reloaded, lists its charts without parsing them again. A new build clears what an earlier build parsed. The Local data viewer lists the new database.
+  - Once a RANDOM MIX run is over, played through or given up, and its result left, the select screen offers to save it: the dialog names the course by the date and time the run ended (editable), lists every stage drawn, and shows the settings the run started with, read-only. Saving keeps the course as one of your own, which the next draw no longer replaces. A NONSTOP RANDOM MIX now takes 1-99 stages, as an EXPERT one does, and a RANDOM MIX of any counted length is kept as its folder's newest course (only an endless run is not); your courses now keep every stage. Exporting your courses as `.lr2crs` writes each course's first five stages, the ones LR2 plays. A course result with more stages than the skin lists scrolls its stage list so every stage is shown.
+  - Say what the picked options do to a play's record before it is played: a **Record kept** row on the Options dialog's Play tab and the select screen's status line when an option changes it. The result's status line states what the play did to its record, and the Leaderboard's line names the board a ranked play is on.
+  - Options → Skin & display → Renderer picks WebGL 2 or WebGPU, and the player now draws with WebGL 2 by default: on a laptop's integrated GPU the play screen held its frame rate at 1920 × 1080 with WebGL 2 (135 fps) but not with WebGPU (about 80 fps). The pick is kept per browser and takes effect on the next load; `?renderer=` in the URL still overrides it.
+  - On the result screen, T plays the chart again on the note arrangement it just had (a new one after an assisted play, as beatoraja does), and G steps the gauge graph through the ruleset's gauges, re-simulated from the play's replay.
+  - Add **Target (beatoraja)** to Options → Replay / ghost: RANK A- to RANK MAX-, MAX or NEXT RANK. The built-in pacemaker's default label reads RANK AAA.
+  - Add the ranking targets (IR NEXT, IR RANK, IR RANK TOP) and SCORE RATE with **Target score rate (%)** to the Options dialog's target. A ranking target reads the chart's Leaderboard ranking under the play's judge ruleset.
+  - The Options dialog offers SP TO DP corrected (LR2), which leaves a DP-TO-SP merge unflipped where LR2's DP FLIP moves it out of reach; SP TO DP (LR2) now ignores DP FLIP on a doubled SP chart, as LR2 does.
+  - Show chart load warnings on the Music Select and decide screens across skin families.
+  - Fix the page freezing when a NONSTOP course starts or restarts from a large library: the stages' files are looked up ahead of the stitch a slice at a time, so the select screen keeps drawing, and the stitch itself no longer scans every file of the library.
+  - Restore the missing scratch lane in the Be-Music Play icon and use scalable artwork for standard and maskable install icons.
+  - Explain that Fixed key 2P targets CONVERGE and CONVERGE corrected and has no effect on RANDOM.
+  - Fix a RANDOM MIX narrowed by difficulty that started nothing after OK. When every chart that fits changes BPM (common for ANOTHER or INSANE), the BPM range leaves no chart that can be stage 1, while the dialog still counted matches and accepted OK. OK now checks for a chart that can be stage 1 under the draw settings and, when none can, keeps the dialog open and says to widen the BPM range or limits. The dialog's draw settings also gain Draw charts whose BPM changes (on by default): stage 1 may then change BPM, and the BPM limits and range place a chart by its max BPM, so charts with BPM changes are drawn too. Off, LR2's rule applies, where a BPM range limits stage 1 to charts that keep one BPM.
+  - Fix a NONSTOP RANDOM MIX of four or five stages that often failed to start with "cannot stitch the NONSTOP course: id-space": stages with many keysounds are now stitched together however many keys they use. The RANDOM MIX dialog's Keys are now radio buttons: one key mode per mix, EXPERT and NONSTOP alike, as LR2 draws in one key mode. With several picked, the match count counted charts a run could not reach and a run whose stage 1 came from a key mode with few charts came out shorter than asked. Conditions saved with several key modes open on one of them (7 keys when they included it).
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-model@0.11.0`, `@be-music/chart-parser@0.7.2`, `@be-music/chart-source@0.8.0`, `@be-music/player-browser@0.19.0`, `@be-music/player-engine@0.18.0`, `@be-music/player-scene-model@0.9.0`, `@be-music/player-skin-sdk@0.12.0`, `@be-music/player-ui@0.9.0`, `@be-music/skin-beatoraja@0.8.0`, `@be-music/skin-lr2@0.7.4`
+
 ## 0.13.1
 
 ### Patch Changes

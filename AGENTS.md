@@ -17,6 +17,12 @@
 - Write `bmson` in prose, `replay` for a recorded replay, and `avatar` for a user's profile image. Keep externally required identifiers and format keys unchanged. Rename persisted schema fields through explicit migrations.
 - Write the product name `Be-Music` in prose and user-facing text (service names such as `Be-Music Play` and `Be-Music Leaderboard`, and `Be-Music Skin` with a capital S). Keep lowercase `be-music` only for identifiers and machine-read values: package names, domains and URLs, file and format names, custom element and CSS names, OAuth scopes, storage keys and other persisted ids. See [the glossary](docs/glossary.md).
 
+# Reference Compatibility Rules
+
+- Match the relevant reference implementation's observable behavior. Where applicable references agree or only one defines the behavior, use that behavior as the default.
+- Where references differ, preserve each behavior in its corresponding ruleset or source-qualified option when possible. If a shared behavior needs a choice, record which reference Be-Music follows and why. See [ADR 0019](docs/adr/0019-source-qualified-option-values.md).
+- Where evidence is incomplete or a reference leaves behavior undefined, document the uncertainty. If Be-Music needs to choose a behavior, keep the choice as narrow as possible and record the reason. Use the [compatibility evidence labels](docs/format-compat.md#13-evidence-labels) to distinguish verified behavior from inference.
+
 # Commit Rules
 
 - Write commit messages in English.
@@ -25,6 +31,7 @@
 - Use `feat:` for new features, `fix:` for bug fixes, `docs:` for documentation-only changes, `refactor:` for non-functional code changes, `perf:` for performance improvements, `test:` for tests, `style:` for formatting-only changes, `ci:` for CI configuration, and `chore:` for maintenance tasks.
 - Keep one logical change per commit when possible.
 - For documentation-only updates, append `[ci skip]` at the end of the commit message.
+- Author and commit as `nulltask <nulltask@gmail.com>`, and add no `Co-Authored-By` trailer.
 
 # Branch Naming Rules
 
@@ -42,11 +49,14 @@
 
 # Pull Request Rules
 
+- Open a separate pull request for each issue you implement. If one issue depends on another, use the dependency branch as the base so each pull request shows its own changes.
 - Do not prefix pull request titles with `[codex]`.
 - Use plain, descriptive pull request titles.
+- Do not end pull request descriptions with a "Generated with Claude Code" footer or a session link.
 
 # Changeset Rules
 
+- Add the changeset in the same pull request as the change it describes: a PR with a `feat` / `fix` / `perf` change to a package, or a bump of a public runtime dependency, carries its `.changeset/*.md`. Follow the rules below for which changes need one and how to write it.
 - Base the unreleased set on the diff from the last release: list candidates with `git log --oneline origin/main..origin/devel`. Skip commits already covered by an existing `.changeset/*.md` and only add entries for the uncovered ones.
 - One changeset per package. Putting several packages in a single markdown makes Changesets duplicate the same note into every package's CHANGELOG. For a commit that spans multiple packages, split it into one changeset per package and write each note from that package's own perspective.
 - Only write entries that are worth landing in a CHANGELOG:
@@ -98,6 +108,7 @@
 # Benchmark Rules
 
 - When exported functions are added or removed, update benchmarks accordingly (add or delete benchmark cases).
+- A package's cases are registered through `scripts/bench/packages/`, usually from `packages/<package>/scripts/exports-cases.ts`, keyed `<package>.<export>`. The benchmark (and the CI job `Benchmark (PR)`) fails when an exported function has no case or a case names a removed export, so check coverage locally with `pnpm run bench --packages <package> --time 5 --warmup-time 2`.
 
 # Layering and File-Size Rules
 

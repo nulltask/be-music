@@ -1,9 +1,13 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
+  BPM_CHANGE_WARNING_FADE_OUT_SECONDS,
+  DEFAULT_BPM_CHANGE_WARNING_STYLE,
   collectBPMChanges,
   formatBPMChangeWarning,
   resolveBPMChangeWarning,
   resolveBPMChangeWarningPlacements,
+  resolveBPMChangeWarningTextOptions,
+  resolveBPMChangeWarningTextScale,
   type BPMChange,
 } from './bpm-change-warning.ts';
 import type { DisplayAreaLane } from './display-area-info.ts';
@@ -41,16 +45,26 @@ describe('AC 34 BPM-change warning', () => {
     { seconds: 64.78, from: 200, to: 138 },
   ];
 
-  test('shows the next change from 2 s before it until the change itself', () => {
+  test('shows the next change from 2 s before it, and fades it out after the change', () => {
     expect(resolveBPMChangeWarning(changes, 42.2)).toBeUndefined();
     expect(resolveBPMChangeWarning(changes, 42.28)).toMatchObject({ from: 138, to: 200, rising: true });
     expect(resolveBPMChangeWarning(changes, 43.28)?.elapsedSeconds).toBeCloseTo(1);
     expect(resolveBPMChangeWarning(changes, 44.27)).toMatchObject({ to: 200 });
-    // The warning goes on the change.
-    expect(resolveBPMChangeWarning(changes, 44.28)).toBeUndefined();
+    // The warning starts to go on the change: still the change that happened, fading out.
+    expect(resolveBPMChangeWarning(changes, 44.28)).toMatchObject({ from: 138, to: 200, rising: true, opacity: 1 });
+    expect(resolveBPMChangeWarning(changes, 44.28 + BPM_CHANGE_WARNING_FADE_OUT_SECONDS / 2)?.opacity).toBeCloseTo(0.5);
+    expect(resolveBPMChangeWarning(changes, 44.29 + BPM_CHANGE_WARNING_FADE_OUT_SECONDS)).toBeUndefined();
     expect(resolveBPMChangeWarning(changes, 63)).toMatchObject({ from: 200, to: 138, rising: false });
-    expect(resolveBPMChangeWarning(changes, 65)).toBeUndefined();
+    expect(resolveBPMChangeWarning(changes, 65)?.opacity).toBeCloseTo(1 - 0.22 / BPM_CHANGE_WARNING_FADE_OUT_SECONDS);
+    expect(resolveBPMChangeWarning(changes, 65.1)).toBeUndefined();
     expect(resolveBPMChangeWarning([], 0)).toBeUndefined();
+  });
+
+  test('fades in as it appears and holds until its change', () => {
+    expect(resolveBPMChangeWarning(changes, 42.28)?.opacity).toBe(0);
+    expect(resolveBPMChangeWarning(changes, 42.33)?.opacity).toBeCloseTo(0.5);
+    expect(resolveBPMChangeWarning(changes, 43)?.opacity).toBe(1);
+    expect(resolveBPMChangeWarning(changes, 44.27)?.opacity).toBe(1);
   });
 
   test('a change less than 2 s after another warns as soon as the first one has happened', () => {
@@ -59,12 +73,39 @@ describe('AC 34 BPM-change warning', () => {
       { seconds: 11, from: 180, to: 90 },
     ];
     expect(resolveBPMChangeWarning(close, 9.5)).toMatchObject({ to: 180 });
-    expect(resolveBPMChangeWarning(close, 10)).toMatchObject({ from: 180, to: 90, elapsedSeconds: 1 });
+    // The next change's warning takes over at full strength instead of the first one fading out.
+    expect(resolveBPMChangeWarning(close, 10)).toMatchObject({ from: 180, to: 90, elapsedSeconds: 1, opacity: 1 });
+  });
+
+  test("draws the figures in the style's type, in its colour for the direction", () => {
+    expect(resolveBPMChangeWarningTextOptions(DEFAULT_BPM_CHANGE_WARNING_STYLE, 20, true)).toEqual({
+      size: 20,
+      weight: '700',
+      fontFamily: 'monospace',
+      letterSpacing: 0,
+      fill: 0x4aa8ff,
+      anchorX: 0.5,
+      anchorY: 0.5,
+    });
+    const wide = { ...DEFAULT_BPM_CHANGE_WARNING_STYLE, letterSpacing: 0.1 };
+    expect(resolveBPMChangeWarningTextOptions(wide, 20, false)).toMatchObject({ letterSpacing: 2, fill: 0xff5a5a });
   });
 
   test('prints whole BPMs as current » next', () => {
     expect(formatBPMChangeWarning({ from: 138, to: 200 })).toBe('138 » 200');
     expect(formatBPMChangeWarning({ from: 155.5, to: 77.9 })).toBe('155 » 77');
+  });
+
+  test('rasterizes the figures at the size the magnified canvas shows them, in half steps up to 4 times', () => {
+    expect(resolveBPMChangeWarningTextScale(1, 1)).toBe(1);
+    expect(resolveBPMChangeWarningTextScale(0.6, 1)).toBe(1);
+    expect(resolveBPMChangeWarningTextScale(1.5625, 1)).toBe(2);
+    expect(resolveBPMChangeWarningTextScale(1.2, 1)).toBe(1.5);
+    // Pixi-kit text already rasterizes at the canvas density on a Pixi skin.
+    expect(resolveBPMChangeWarningTextScale(3, 3)).toBe(1);
+    expect(resolveBPMChangeWarningTextScale(9, 1)).toBe(4);
+    expect(resolveBPMChangeWarningTextScale(Number.NaN, 1)).toBe(1);
+    expect(resolveBPMChangeWarningTextScale(2, 0)).toBe(1);
   });
 
   const lanes: DisplayAreaLane[] = [
@@ -79,5 +120,10 @@ describe('AC 34 BPM-change warning', () => {
       { side: '2P', x: 800, y: 350, size: 20 },
     ]);
     expect(resolveBPMChangeWarningPlacements([])).toEqual([]);
+  });
+
+  test('moves with the judgment position, by the same share of the lanes', () => {
+    expect(resolveBPMChangeWarningPlacements(lanes, -30).map((placement) => placement.y)).toEqual([80, 200]);
+    expect(resolveBPMChangeWarningPlacements(lanes, 10).map((placement) => placement.y)).toEqual([240, 400]);
   });
 });

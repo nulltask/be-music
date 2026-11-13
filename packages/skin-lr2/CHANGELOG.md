@@ -1,5 +1,15 @@
 # @be-music/skin-lr2
 
+## 0.7.4
+
+### Patch Changes
+
+- a15f307: Show the corrected HAZARD gauge and SP TO DP corrected on LR2 skins.
+  
+  - LR2 skins draw the corrected HAZARD gauge pick on the HAZARD cell and as a red gauge.
+  - LR2 skins show SP TO DP corrected as SP TO DP (DP-TO-SP, 9-TO-7) and light the same battle and key-mode ops for it.
+- Updated dependencies: `@be-music/chart-model@0.11.0`, `@be-music/chart-source@0.8.0`, `@be-music/player-engine@0.18.0`, `@be-music/player-scene-model@0.9.0`
+
 ## 0.7.3
 
 ### Patch Changes

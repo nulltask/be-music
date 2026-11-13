@@ -55,6 +55,13 @@ export type RuntimeMineNote = TimedLandmineNote;
  * effects and bombs, the BGA's timelines and textures, the clocks, the pause and the exit fade. The play session
  * (`PlaySession`) is one; the view reads it and writes only the lanes it lays out and the BGA videos it plays.
  */
+/** A judgment's timing on a side's plate: the signed offset (ms, > 0 late) and until when it shows (chart seconds). */
+export interface JudgeSideTiming {
+  judge: JudgmentKind;
+  deltaMs: number;
+  until: number;
+}
+
 export interface PlayfieldRuntime {
   /** Where the play skin is moved and how far it is scaled (LR2's 1 / 2 + the arrows); where it is drawn without one. */
   readonly skinAdjust?: { readonly x: number; readonly y: number; readonly scale: number };
@@ -75,6 +82,7 @@ export interface PlayfieldRuntime {
   readonly laneTimelineBeats: Float64Array;
   readonly scrollHiSpeed: HiSpeedTransition;
   readonly tempo: number;
+  readonly playbackTempo?: number;
   readonly playState: PlayState;
   readonly score: ScoreSummary;
   /** The 2P player of a two-player play (LR2 BATTLE): its scores, play state and the engine's gauge for it. */
@@ -91,7 +99,14 @@ export interface PlayfieldRuntime {
   readonly lastJudgeAt: number | undefined;
   readonly judgeSideState: Record<
     '1P' | '2P',
-    { judge: JudgmentKind | ''; until: number; combo: number; courseCombo?: number }
+    {
+      judge: JudgmentKind | '';
+      until: number;
+      combo: number;
+      courseCombo?: number;
+      /** The timings the judge detail reads: the plate's own judgment's, and the last of the keys and of the scratch. */
+      timings?: { last?: JudgeSideTiming; keys?: JudgeSideTiming; scratch?: JudgeSideTiming };
+    }
   >;
   readonly judgeWindows: BeMusicJudgeWindows | undefined;
   readonly lastImpulseAt: number | undefined;
@@ -171,6 +186,8 @@ export interface PlayfieldRuntime {
   displayBPM(seconds: number): number | undefined;
   isIntroPlaying(): boolean;
   isAutoplayedChannel(channel: string): boolean;
+  /** The scratch lanes AUTO SCRATCH plays (empty when it is off, and under a full AUTO play's own switch). */
+  readonly autoScratchChannels: ReadonlySet<string>;
   resolveLaneCovers(): readonly BeMusicLaneCover[];
   resolveLongNoteMode(note: RuntimeNote): BeMusicLongNote['mode'];
   resolveChartDurationSeconds(): number;
@@ -200,6 +217,8 @@ export interface PlayChrome {
 
 /** The view's members the playfield passes use (a play view's members of these names), with the running play as `play`. */
 export interface PlayfieldContext extends LaneGeometryContext {
+  /** The frame's play options, for the options that only change what the playfield draws. */
+  playOptions?: import('@be-music/player-scene-model').PlayOptions;
   readonly drawsLift?: boolean;
   bpmGuideCache?: {
     timing: import('@be-music/chart-model').TimingResolver;
@@ -225,6 +244,8 @@ export interface PlayfieldContext extends LaneGeometryContext {
   readonly shutterLayer: Graphics;
   readonly overlay: Text;
   readonly noteLayerPool: ChildPool;
+  /** The layer the notes and bar lines draw in; LR2's NABEATSU sways it. */
+  readonly noteLayer: { readonly position: { set(x: number, y: number): void } };
   readonly bombLayerPool: ChildPool;
   readonly textLayerPool: ChildPool;
   readonly skinBinding: BeMusicGameplayBinding | undefined;

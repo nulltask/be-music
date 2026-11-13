@@ -13,6 +13,7 @@ import {
   floorRise,
   hsvToHex,
   mixCamera,
+  mixColor,
   particleRiverPoint,
   particleRiverPointInto,
   perlin2,
@@ -112,6 +113,20 @@ describe('hsvToHex', () => {
     expect(hsvToHex(2 / 3, 1, 1)).toBe(0x0000ff);
     expect(hsvToHex(1.5, 0, 1)).toBe(0xffffff);
     expect(hsvToHex(-1 / 3, 1, 1)).toBe(0x0000ff);
+  });
+});
+
+describe('mixColor', () => {
+  it('paints a colour at an alpha over an opaque one, channel by channel', () => {
+    expect(mixColor(0x000000, 0xffffff, 0.5)).toBe(0x808080);
+    expect(mixColor(0x090302, 0xff6a14, 0)).toBe(0x090302);
+    expect(mixColor(0x090302, 0xff6a14, 1)).toBe(0xff6a14);
+    expect(mixColor(0x102030, 0x405060, 0.25)).toBe(0x1c2c3c);
+  });
+
+  it('clamps the alpha', () => {
+    expect(mixColor(0x000000, 0xffffff, 2)).toBe(0xffffff);
+    expect(mixColor(0x123456, 0xffffff, -1)).toBe(0x123456);
   });
 });
 

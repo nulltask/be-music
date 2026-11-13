@@ -143,6 +143,8 @@ export function resolveClassGauge(gaugeId: string, gaugeSet: CourseGaugeSet): Ga
 
 /** The class-gauge set a play mode uses when the course names none (beatoraja's `BMSPlayerRule` per mode). */
 export function resolveDefaultCourseGaugeSet(laneMode: string): CourseGaugeSet {
+  // A generic bmson keyboard plays beatoraja's KEYBOARD rule, as a single play does (#1089).
+  if (laneMode.endsWith(' KEY GENERIC')) return '24k';
   if (laneMode.startsWith('5') || laneMode.startsWith('10')) return '5k';
   if (laneMode.startsWith('9')) return '9k';
   if (laneMode.startsWith('24') || laneMode.startsWith('48')) return '24k';
@@ -171,6 +173,7 @@ export function resolveCourseGaugeId(rulesetId: RulesetId, kind: RulesetCourseKi
       case 'HARD':
         return `${prefix}-HARD`;
       case 'DEATH':
+      case 'DEATH-CORRECTED':
         return `${prefix}-DEATH`;
       case 'EASY':
         return kind === 'grade' ? 'GRADE' : 'COURSE-EASY';
@@ -183,6 +186,7 @@ export function resolveCourseGaugeId(rulesetId: RulesetId, kind: RulesetCourseKi
       return 'EXCLASS';
     case 'EX-HARD':
     case 'DEATH':
+    case 'DEATH-CORRECTED':
       return 'EXHARDCLASS';
     default:
       return 'CLASS';

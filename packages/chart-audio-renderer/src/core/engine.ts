@@ -306,7 +306,7 @@ async function scheduleSampleRenders(params: {
         sampleMaxFrames: frameWindow.sampleMaxFrames,
         slice: frameWindow.slice,
       }) - 1;
-    if (usesMonophonicWAVPlayback(json)) {
+    if (usesMonophonicWAVPlayback(json, trigger.sampleKey)) {
       latestBMSScheduleBySampleKey.set(trigger.sampleKey, scheduleIndex);
     }
     if (triggerGain > 0) {
@@ -401,7 +401,7 @@ function trimPreviousBMSRetrigger(
   scheduled: ScheduledSampleRender[],
   latestBMSScheduleBySampleKey: Map<string, number>,
 ): void {
-  if (!usesMonophonicWAVPlayback(json)) {
+  if (!usesMonophonicWAVPlayback(json, trigger.sampleKey)) {
     return;
   }
   const previousIndex = latestBMSScheduleBySampleKey.get(trigger.sampleKey);

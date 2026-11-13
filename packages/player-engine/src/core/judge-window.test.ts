@@ -6,6 +6,7 @@ import {
   resolveBMSJudgeWindowsMsForPercent,
   resolveBMSRankJudgeRankPercent,
   resolveJudgeRankPercent,
+  resolveLR2GambolWindowsMs,
   resolveLR2NonstopRankWindowsMs,
   resolveJudgeWindowsMs,
 } from './judge-window.ts';
@@ -22,6 +23,14 @@ describe('judge-window', () => {
     expect(resolveLR2NonstopRankWindowsMs(3)).toEqual({ pgreat: 21, great: 60, good: 120, bad: 200 });
     expect(resolveLR2NonstopRankWindowsMs(4)).toEqual({ pgreat: 18, great: 40, good: 100, bad: 200 });
     expect(resolveLR2NonstopRankWindowsMs(3, 50)).toEqual({ pgreat: 21, great: 50, good: 50, bad: 50 });
+  });
+
+  test('resolveLR2GambolWindowsMs reads GAMBOL per level and table', () => {
+    expect(resolveLR2GambolWindowsMs(1, 'opening')).toEqual({ pgreat: 8, great: 24, good: 40, bad: 200 });
+    expect(resolveLR2GambolWindowsMs(2, 'opening')).toEqual({ pgreat: 8, great: 12, good: 12, bad: 200 });
+    expect(resolveLR2GambolWindowsMs(1, 'nonstop')).toEqual({ pgreat: 12, great: 24, good: 60, bad: 200 });
+    expect(resolveLR2GambolWindowsMs(2, 'nonstop')).toEqual({ pgreat: 12, great: 12, good: 12, bad: 200 });
+    expect(resolveLR2GambolWindowsMs(1, 'opening', 10)).toEqual({ pgreat: 8, great: 10, good: 10, bad: 10 });
   });
 
   test('BMS: #RANK maps onto the measured LR2 windows with a fixed ±200ms BAD gate', () => {

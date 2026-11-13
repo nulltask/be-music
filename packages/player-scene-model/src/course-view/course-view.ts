@@ -2,10 +2,15 @@ import { parseLR2NonstopConnections, type CourseKind, type NonstopConnection } f
 import { resolveLibraryChartDifficultyValue } from '../library/difficulty.ts';
 import type { LibraryCourse } from '../library/entries.ts';
 
-/** One stage of a course, as a skin shows it: the stage chart's title, subtitle, play level and difficulty. */
+/**
+ * One stage of a course, as a skin shows it: the stage chart's title, subtitle, artist, genre, play level and
+ * difficulty.
+ */
 export interface CourseStageView {
   title: string;
   subtitle?: string;
+  artist?: string;
+  genre?: string;
   level?: number;
   /** The chart's `#DIFFICULTY` (1 BEGINNER … 5 INSANE); absent when the chart names none or is not in the library. */
   difficulty?: number;
@@ -39,12 +44,14 @@ export function resolveCourseView(course: LibraryCourse, stageIndex?: number): C
       const chart = stage.chart;
       const level = typeof chart?.playLevel === 'string' ? Number.parseInt(chart.playLevel, 10) : chart?.playLevel;
       const difficulty = chart !== undefined ? resolveLibraryChartDifficultyValue(chart) : undefined;
-      return {
-        title: chart?.title ?? stage.title,
-        ...(chart?.subtitle !== undefined ? { subtitle: chart.subtitle } : {}),
-        ...(level !== undefined && Number.isFinite(level) ? { level } : {}),
-        ...(difficulty !== undefined && Number.isFinite(difficulty) ? { difficulty } : {}),
-      };
+      // Set field by field, in this order: a spread per optional field costs more than the fields themselves.
+      const view: CourseStageView = { title: chart?.title ?? stage.title };
+      if (chart?.subtitle !== undefined) view.subtitle = chart.subtitle;
+      if (chart?.artist !== undefined) view.artist = chart.artist;
+      if (chart?.genre !== undefined) view.genre = chart.genre;
+      if (level !== undefined && Number.isFinite(level)) view.level = level;
+      if (difficulty !== undefined && Number.isFinite(difficulty)) view.difficulty = difficulty;
+      return view;
     }),
     ...(stageIndex !== undefined ? { stageIndex } : {}),
     ...(course.definition.kind === 'nonstop'
@@ -56,4 +63,26 @@ export function resolveCourseView(course: LibraryCourse, stageIndex?: number): C
         }
       : {}),
   };
+}
+
+/** How long a course result's stage list stays at one position while it scrolls ({@link scrollCourseStages}). */
+export const COURSE_STAGE_SCROLL_STEP_MS = 2000;
+
+/**
+ * A course run's result as its stage list shows at `elapsedMs` into the screen, when the course has more stages than
+ * the skin has rows (`rows`: LR2's five, beatoraja's ten): the list scrolls up one stage every `stepMs` until its last
+ * stage reaches the bottom row, then starts again from stage 1, so every stage is shown in turn. A course that fits, or
+ * a stage being played (`stageIndex`, whose stage slots the skin marks), is returned as it is.
+ */
+export function scrollCourseStages(
+  course: CourseView,
+  elapsedMs: number,
+  rows: number,
+  stepMs: number = COURSE_STAGE_SCROLL_STEP_MS,
+): CourseView {
+  const positions = course.stages.length - Math.max(1, Math.floor(rows)) + 1;
+  if (positions <= 1 || course.stageIndex !== undefined || !(stepMs > 0)) return course;
+  const step = Number.isFinite(elapsedMs) ? Math.floor(Math.max(0, elapsedMs) / stepMs) : 0;
+  const offset = step % positions;
+  return offset === 0 ? course : { ...course, stages: course.stages.slice(offset) };
 }

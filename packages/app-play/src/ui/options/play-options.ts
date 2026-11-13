@@ -11,14 +11,19 @@ import {
   HISPEED_MAX,
   HISPEED_MIN,
   HISPEED_STEP,
+  JUDGE_POSITION_LIMIT,
   KEYS_FILTER_CYCLE,
+  parseRankingScoreTarget,
   PLAY_OPTION_CHOICES,
+  resolveScoreTarget,
+  SCORE_TARGET_IDS,
   SORT_CYCLE,
   type PlayOptions,
 } from '@be-music/player-scene-model';
 import { parseReplay } from '@be-music/player-engine/replay';
 import { storeReplayView } from '../../replay-view-settings.ts';
 import type { OptionsDialog } from './index.ts';
+import { buildLR2ManiaRows } from './lr2-mania.ts';
 import { PLAY_OPTION_PAGES, VIEW_OPTION_PAGES } from './folders.ts';
 import { bottomShiftableGaugeItems, laneOptionItems, practiceGaugeItems } from './play-option-items.ts';
 /**
@@ -53,11 +58,18 @@ export function buildPlayOptionsFolder(
       this.deps.refreshSelectRecords();
     }),
   );
+  // What the options picked do to a play's record, from the resolver a finished play's record goes through.
+  this.recordConsequenceController = folder.addBinding(this.recordConsequence, 'text', {
+    label: 'Record kept',
+    readonly: true,
+  });
   // `lanes` is the Arrangement page and `notes` the Modifiers page.
   const [judge, lanes, notes, assist, practice, replay] = folder.addTab({
     pages: PLAY_OPTION_PAGES.map((title) => ({ title })),
   }).pages;
-  const [hiSpeed, covers, effects] = viewFolder.addTab({ pages: VIEW_OPTION_PAGES.map((title) => ({ title })) }).pages;
+  const viewTabs = viewFolder.addTab({ pages: VIEW_OPTION_PAGES.map((title) => ({ title })) });
+  this.viewTabs = viewTabs;
+  const [hiSpeed, covers, effects] = viewTabs.pages;
   if (!judge || !lanes || !notes || !assist || !practice || !replay || !hiSpeed || !covers || !effects)
     return { practice: folder, replay: folder };
   const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);
@@ -203,10 +215,26 @@ export function buildPlayOptionsFolder(
       this.setPlayOptions({ bottomShiftableGauge: value }),
     ),
   );
-  this.scrollModifierController = selectBinding(notes, this.guiState, 'scrollModifier', 'Scroll (beatoraja)', {
+  // LR2's mania chart generators: 0 is off, 10–100 the rate, as LR2's panel steps them. They build the chart before the
+  // play, so they are locked during one.
+  for (const [key, label] of [
+    ['lr2AddNotes', 'ADD NOTES (LR2)'],
+    ['lr2Loudness', 'LOUDNESS (LR2)'],
+    ['lr2AddLongNotes', 'ADD LONGNOTES (LR2)'],
+    ['lr2AddMines', 'ADD MINES (LR2)'],
+  ] as const) {
+    trackPlayOption(
+      notes
+        .addBinding(this.guiState, key, { label, min: 0, max: 100, step: 10 })
+        .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
+    );
+  }
+  this.scrollModifierController = selectBinding(notes, this.guiState, 'scrollModifier', 'Scroll', {
     OFF: 'OFF',
-    REMOVE: 'REMOVE',
-    ADD: 'ADD',
+    'REMOVE (beatoraja)': 'REMOVE',
+    'ADD (beatoraja)': 'ADD',
+    'SOFTLANDING LEVEL 1 (LR2)': 'SOFTLANDING-1',
+    'SOFTLANDING LEVEL 2 (LR2)': 'SOFTLANDING-2',
   });
   trackPlayOption(
     this.scrollModifierController.on('change', ({ value }) => {
@@ -248,6 +276,12 @@ export function buildPlayOptionsFolder(
   trackPlayOption(
     assist.addBinding(this.guiState, 'autoScratch2P', { label: 'Auto scratch 2P' }).on('change', ({ value }) => {
       this.setPlayOptions({ autoScratch2P: value });
+    }),
+  );
+  // beatoraja's GUIDE SE: the sound set's sound for each judgment. Read as the play starts, when the sounds are decoded.
+  trackPlayOption(
+    assist.addBinding(this.guiState, 'guideSE', { label: 'GUIDE SE (beatoraja)' }).on('change', ({ value }) => {
+      this.setPlayOptions({ guideSE: value });
     }),
   );
   // The PC edition's ANY KEY (#751), offered with the `____` judge rules (`refreshRulesetChoices`); saves no record.
@@ -293,7 +327,7 @@ export function buildPlayOptionsFolder(
         .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
     ),
   );
-  // LR2 reads the scratch key held through the decide animation; the Options dialog has no decide animation.
+  // LR2 keeps the scratch through a hidden command at decide (`randSC`, buttons 12 + 13); the dialog has a switch instead.
   this.dBattleScratchController = trackPlayOption(
     lanes
       .addBinding(this.guiState, 'dBattleScratch', { label: 'D-BATTLE scratch (LR2)' })
@@ -320,6 +354,14 @@ export function buildPlayOptionsFolder(
   });
   trackPlayOption(
     this.longNoteModeController.on('change', ({ value }) => this.setPlayOptions({ longNoteMode: value })),
+  );
+  // LR2's mania option GAMBOL: part of LR2's judge rules, so it is offered under them only.
+  this.lr2GambolController = trackPlayOption(
+    selectBinding(judge, this.guiState, 'lr2Gambol', 'GAMBOL (LR2)', {
+      OFF: 0,
+      'LEVEL 1': 1,
+      'LEVEL 2': 2,
+    }).on('change', ({ value }) => this.setPlayOptions({ lr2Gambol: value })),
   );
   this.customJudgeController = trackPlayOption(
     judge.addBinding(this.guiState, 'customJudge', { label: 'CUSTOM JUDGE (beatoraja)' }).on('change', ({ value }) => {
@@ -618,6 +660,7 @@ export function buildPlayOptionsFolder(
     { label: 'Hi-speed', min: HISPEED_MIN, max: HISPEED_MAX, step: HISPEED_STEP },
   );
   buildNoteDisplayRows.call(this, effects);
+  buildLR2ManiaRows.call(this, effects);
   this.refreshRulesetChoices();
   return { practice, replay };
 }
@@ -637,6 +680,48 @@ function buildNoteDisplayRows(this: OptionsDialog, effects: OptionContainer): vo
     this.guiState.judgedNoteDisplay = value;
     this.gameplayView?.setJudgedNoteDisplay(value);
   });
+  // AC 34's detail options. Live: the views read both at each frame.
+  effects
+    .addBinding(this.guiState, 'laneBrightness', { label: 'Lane brightness (AC)', min: 0, max: 100, step: 10 })
+    .on('change', ({ value }) => this.setPlayOptions({ laneBrightness: value }));
+  // The built-in skins' judge detail and judgment counts. AC 34 lists the timing display, its keys / scratch split and
+  // the realtime judgment counts; a beatoraja skin has the first and the last as its own options.
+  selectBinding(effects, this.guiState, 'judgeDetail', 'Judge detail (built-in skins)', {
+    OFF: 'OFF',
+    'FAST / SLOW': 'FAST_SLOW',
+    '±ms': 'MS',
+  }).on('change', ({ value }) => this.setPlayOptions({ judgeDetail: value }));
+  effects
+    .addBinding(this.guiState, 'judgeDetailSplit', { label: 'Judge detail: keys and scratch apart' })
+    .on('change', ({ value }) => this.setPlayOptions({ judgeDetailSplit: value }));
+  effects
+    .addBinding(this.guiState, 'judgeCounts', { label: 'Judgment counts (built-in skins)' })
+    .on('change', ({ value }) => this.setPlayOptions({ judgeCounts: value }));
+  // The built-in skins' judgment and combo, moved up (-) or down (+) the lanes. LR2 and beatoraja skins place their own.
+  effects
+    .addBinding(this.guiState, 'judgePosition', {
+      label: 'Judgment position (built-in skins, %)',
+      min: -JUDGE_POSITION_LIMIT,
+      max: JUDGE_POSITION_LIMIT,
+      step: 5,
+    })
+    .on('change', ({ value }) => this.setPlayOptions({ judgePosition: value }));
+  selectBinding(effects, this.guiState, 'judgeDisplay', 'Judgment display (AC)', {
+    'Skin default': 'SKIN',
+    OFF: 'OFF',
+  }).on('change', ({ value }) => this.setPlayOptions({ judgeDisplay: value }));
+  // beatoraja's judge area and mark processed note. Live: the playfield reads both at each frame.
+  effects
+    .addBinding(this.guiState, 'showJudgeArea', { label: 'Show judge area (beatoraja)' })
+    .on('change', ({ value }) => this.setPlayOptions({ showJudgeArea: value }));
+  effects
+    .addBinding(this.guiState, 'markProcessedNotes', { label: 'Mark processed notes (beatoraja)' })
+    .on('change', ({ value }) => this.setPlayOptions({ markProcessedNotes: value }));
+  // AC 34's オートスクラッチ表示. Live: the playfield reads the option at each frame.
+  selectBinding(effects, this.guiState, 'autoScratchNotes', 'Auto scratch notes (AC)', {
+    Show: 'SHOW',
+    Hide: 'HIDE',
+  }).on('change', ({ value }) => this.setPlayOptions({ autoScratchNotes: value }));
   // Chart-authoring overlay — paints invisible / keysound notes (BMS channels `3x` / `4x`) as thin green bars in their
   // playable lane. Live: the gameplay view always extracts the invisible notes and preloads the green sprite, so the
   // flag flips the per-frame render branch on the very next paint.
@@ -662,6 +747,18 @@ export function buildReplayViewFolder(this: OptionsDialog, folder: OptionContain
   }
   // The ghost with the play (`services/ghost.ts`): which replay it plays and how it shows. Disabled during a play like
   // the other options, and on a course bar; "Ghost status" says whether the bar under the cursor would show it.
+  // The score graph's fixed target, in beatoraja's names. It paces a play that runs no ghost; live.
+  selectBinding(
+    folder,
+    this.guiState,
+    'scoreTarget',
+    'Target (beatoraja)',
+    Object.fromEntries(SCORE_TARGET_IDS.map((id) => [scoreTargetLabel(id), id])),
+  ).on('change', ({ value }) => this.setPlayOptions({ scoreTarget: value }));
+  // The rate the SCORE RATE target paces towards (beatoraja's `RATE_<n>`); live.
+  folder
+    .addBinding(this.guiState, 'scoreTargetRate', { label: 'Target score rate (%)', min: 0, max: 100, step: 0.5 })
+    .on('change', ({ value }) => this.setPlayOptions({ scoreTargetRate: value }));
   const refresh = () => this.refreshGhostAvailability();
   this.ghostController = selectBinding(folder, this.guiState, 'ghost', 'Ghost', {
     OFF: 'OFF',
@@ -748,4 +845,10 @@ export function hiSpeedControl(
 /** A value on the grid of `step`, as a slider of that step shows it. */
 export function onGrid(step: number): (value: number) => number {
   return (value) => Math.round(Math.round(value / step) * step * 1000) / 1000;
+}
+
+/** A score target's name in the dialog: beatoraja's own, with SCORE RATE's rate left to its slider. */
+export function scoreTargetLabel(id: PlayOptions['scoreTarget']): string {
+  if (id === 'SCORE_RATE') return 'SCORE RATE';
+  return parseRankingScoreTarget(id)?.label ?? resolveScoreTarget(id, { totalNotes: 1 })?.label ?? id;
 }

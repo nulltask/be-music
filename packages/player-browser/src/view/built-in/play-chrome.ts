@@ -11,12 +11,16 @@ import { pickActiveBGACue } from '../../chart/bga-timeline.ts';
 
 import type { ChartPlayVariant } from '@be-music/chart-model';
 import { resolve____RankLabel } from '@be-music/player-engine/ruleset';
+import { resolveNonstopSongInfoState, type NonstopSongInfo } from '@be-music/player-engine/course';
 import {
+  formatJudgeDetail,
   resolveGameplayLaneGeometry,
   resolveGameplayLayout,
   resolveCabinetLayout,
+  type BeMusicJudgeDetail,
   type GameplayLayoutMode,
 } from '@be-music/player-skin-sdk';
+import type { PlayOptions } from '@be-music/player-scene-model';
 import { formatGaugeLabel, recentJudgeTimings, resolveGreenNumber } from '@be-music/player-scene-model';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 import type { PlaySessionOptions } from '../../session/play/play-options.ts';
@@ -99,10 +103,39 @@ export interface LaneGeometryContext {
 /** What the skinless chrome's runtime is made from each frame: a play view's members of these names. */
 export interface PlayChromeContext {
   readonly play: PlayfieldRuntime;
-  readonly options: Readonly<Pick<PlaySessionOptions, 'autoPlay' | 'beMusicEffects' | 'judgeTimingAutoAdjust'>>;
+  readonly options: Readonly<
+    Pick<PlaySessionOptions, 'autoPlay' | 'beMusicEffects' | 'judgeTimingAutoAdjust' | 'nonstop'>
+  >;
   readonly audioFrame: AudioFeatures | undefined;
   /** The frame being drawn, for what it carries beside the play: the best record, the course and the player. */
   readonly playFrame?: Pick<PlayFrame, 'scoreTargets' | 'course' | 'playerName' | 'playOptions'>;
+}
+
+type SongInfoRuntime = Pick<
+  SkinlessGameplayChromeRuntime,
+  'chartTitle' | 'chartArtist' | 'chartGenre' | 'songInfoFade'
+>;
+
+/** A NONSTOP stage's song as the runtime names it; a stage without a title keeps the stitched chart's (the course's). */
+function stageSongInfo(info: NonstopSongInfo | undefined, fallbackTitle: string | undefined): SongInfoRuntime {
+  return { chartTitle: info?.title ?? fallbackTitle, chartArtist: info?.artist, chartGenre: info?.genre };
+}
+
+/**
+ * The song info the chrome shows at `seconds`: the chart's, or in a stitched NONSTOP play the stage being played's,
+ * crossfading from the previous stage's as each stage's window starts (`resolveNonstopSongInfoState`).
+ */
+export function resolveSongInfoRuntime(ctx: PlayChromeContext, seconds: number): SongInfoRuntime {
+  const chart = ctx.play.chart;
+  const stages = ctx.options.nonstop?.stages;
+  if (stages === undefined || stages.length === 0) {
+    return { chartTitle: chart?.title, chartArtist: chart?.artist, chartGenre: chart?.genre };
+  }
+  const state = resolveNonstopSongInfoState(stages, seconds);
+  const current = stageSongInfo(stages[state.stage]?.songInfo, chart?.title);
+  if (state.previous === undefined) return current;
+  const { songInfoFade: _fade, ...previous } = stageSongInfo(stages[state.previous]?.songInfo, chart?.title);
+  return { ...current, songInfoFade: { ...previous, progress: state.progress } };
 }
 
 /** Lane rects, playfield bounds, and judgement line of the built-in playfield for the loaded chart. */
@@ -152,7 +185,10 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   const judgeSides: SkinlessGameplayJudgeState[] = [];
   // A chart's HIDJUDGE (#931) hides the judgment display as LR2's SILENT does.
   const hidesJudge =
-    ctx.options.judgeTimingAutoAdjust === 'LR2-SILENT' || ctx.play.engineFrame?.chartOptions?.crazyJudge === 'HIDJUDGE';
+    ctx.options.judgeTimingAutoAdjust === 'LR2-SILENT' ||
+    ctx.play.engineFrame?.chartOptions?.crazyJudge === 'HIDJUDGE' ||
+    // The player's own switch (AC 34's 判定文字の表示位置, OFF).
+    ctx.playFrame?.playOptions.judgeDisplay === 'OFF';
   for (const side of ['1P', '2P'] as const) {
     if (side === '2P' && !usesPlayer2) {
       continue;
@@ -160,7 +196,12 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     const state = ctx.play.judgeSideState[side];
     // LR2's SILENT automatic judge timing shows no judgment or combo.
     if (state.judge && seconds <= state.until && !hidesJudge) {
-      judgeSides.push({ side, judge: state.judge, combo: state.combo });
+      judgeSides.push({
+        side,
+        judge: state.judge,
+        combo: state.combo,
+        details: resolveJudgeDetails(ctx.playFrame?.playOptions, state.timings, seconds),
+      });
     }
   }
   const currentBeat = ctx.play.currentBeat(seconds);
@@ -175,23 +216,27 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   const targetPace = frame?.scoreTargets?.targetPaceEXScore;
   const targetLabel = frame?.scoreTargets?.targetLabel;
   const nowMs = ctx.play.playClock();
+  const songInfo = resolveSongInfoRuntime(ctx, seconds);
+  // One literal with every field, absent ones `undefined`: the skins read this object every frame, and conditional
+  // spreads would hand them a different hidden class from frame to frame (megamorphic reads) and allocate the pieces.
   return {
-    ...(best !== undefined && best > 0 ? { bestEXScore: best } : {}),
-    ...(target !== undefined && target > 0 ? { targetEXScore: target } : {}),
-    ...(target !== undefined && target > 0 && targetPace !== undefined ? { targetPaceEXScore: targetPace } : {}),
-    ...(targetLabel !== undefined ? { targetLabel } : {}),
-    ...(frame?.course !== undefined ? { course: frame.course } : {}),
-    ...(frame?.playerName !== undefined ? { playerName: frame.playerName } : {}),
-    ...(frame !== undefined ? { random1P: frame.playOptions.random1P } : {}),
+    bestEXScore: best !== undefined && best > 0 ? best : undefined,
+    targetEXScore: target !== undefined && target > 0 ? target : undefined,
+    targetPaceEXScore: target !== undefined && target > 0 ? targetPace : undefined,
+    targetLabel,
+    course: frame?.course,
+    playerName: frame?.playerName,
+    random1P: frame?.playOptions.random1P,
     tempo: ctx.play.tempo,
-    chartTitle: ctx.play.chart?.title,
-    chartArtist: ctx.play.chart?.artist,
-    chartGenre: ctx.play.chart?.genre,
+    chartTitle: songInfo.chartTitle,
+    chartArtist: songInfo.chartArtist,
+    chartGenre: songInfo.chartGenre,
+    songInfoFade: songInfo.songInfoFade,
     // The scroll above runs on the chart's tempo; a NONSTOP readout shows the stage's own BPM — see `displayBPM`.
     bpm: ctx.play.displayBPM(seconds) ?? bpm,
     // The player's hi-speed, as the select panel and the host show it (HS-FIX scales only the scroll).
     hiSpeed: play.view.hiSpeed.player,
-    ...(play.view.hiSpeed.floating ? { floatingHiSpeed: true as const } : {}),
+    floatingHiSpeed: play.view.hiSpeed.floating ? true : undefined,
     score: ctx.play.score.score,
     exScore: ctx.play.score.exScore,
     exScoreMax: total * 2,
@@ -210,7 +255,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     lastJudge: seconds <= ctx.play.lastJudgeUntil && !hidesJudge ? ctx.play.lastJudge : undefined,
     judgeSides,
     rank: total <= 0 ? undefined : resolve____RankLabel(ctx.play.score.exScore, total),
-    ...(ctx.play.secondPlayer !== undefined ? { secondPlayer: secondPlayerRuntime(ctx.play.secondPlayer) } : {}),
+    secondPlayer: ctx.play.secondPlayer !== undefined ? secondPlayerRuntime(ctx.play.secondPlayer) : undefined,
     autoplay: ctx.options.autoPlay === true,
     // The camera fills the BGA frame even on a chart without a BGA.
     hasBGA: ctx.play.hasBGA || ctx.play.bgaCamera !== undefined,
@@ -223,7 +268,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     keyBeams: Object.fromEntries(
       ctx.play.laneChannels.map((channel) => [channel, resolveKeyBeamAlpha(ctx.play, channel, 120, nowMs)]),
     ),
-    ...(ctx.play.ghostSide ? { ghostSide: ctx.play.ghostSide } : {}),
+    ghostSide: ctx.play.ghostSide || undefined,
     rulesetLabel: ctx.play.resolveJudgeRuleset(),
     gaugeLabel: formatGaugeLabel(ctx.play.gaugeState.type) ?? 'GROOVE',
     gaugeSurvival: ctx.play.gaugeState.survival === true,
@@ -241,6 +286,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     chart: ctx.play.chart,
     lastJudgeDeltaMs: play.lastJudgeDeltaMs,
     judgeTimings: recentJudgeTimings(play),
+    hidesJudgeCounts: ctx.playFrame?.playOptions.judgeCounts === false,
     minBPM: ctx.play.chartBPMRange?.minBPM,
     maxBPM: ctx.play.chartBPMRange?.maxBPM,
     mainBPM: ctx.play.chartBPMRange?.mainBPM,
@@ -262,10 +308,52 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
   };
 }
 
+/** No judge detail: one array for every judgment that shows none. */
+const NO_JUDGE_DETAILS: readonly BeMusicJudgeDetail[] = [];
+
+/**
+ * The judge detail a side's plate shows at chart time `seconds`: the timing of the judgment on the plate, or, with
+ * the keys and the scratch apart, the last timing of each that is still showing. None when the option is off.
+ */
+export function resolveJudgeDetails(
+  options: Pick<PlayOptions, 'judgeDetail' | 'judgeDetailSplit'> | undefined,
+  timings: PlayfieldRuntime['judgeSideState']['1P']['timings'],
+  seconds: number,
+): readonly BeMusicJudgeDetail[] {
+  const mode = options?.judgeDetail ?? 'OFF';
+  if (mode === 'OFF' || timings === undefined) return NO_JUDGE_DETAILS;
+  if (!options?.judgeDetailSplit) {
+    const detail = timings.last && formatJudgeDetail(mode, timings.last.judge, timings.last.deltaMs);
+    return detail ? [detail] : NO_JUDGE_DETAILS;
+  }
+  const details: BeMusicJudgeDetail[] = [];
+  for (const lane of ['scratch', 'keys'] as const) {
+    const timing = timings[lane];
+    if (timing === undefined || seconds > timing.until) continue;
+    const detail = formatJudgeDetail(mode, timing.judge, timing.deltaMs);
+    if (detail) details.push({ ...detail, lane });
+  }
+  return details.length > 0 ? details : NO_JUDGE_DETAILS;
+}
+
+/**
+ * The judgment position option in stage pixels: `position` percent of the lanes' height, from their top to the judge
+ * line. Positive is down the lanes.
+ */
+export function resolveJudgeOffsetY(position: number, top: number, judgementY: number): number {
+  return Math.round(((judgementY - top) * position) / 100);
+}
+
 /** Keep the base layout/BGA fixed and publish each side's actual line for the skin's chrome. */
 function withLiftLines(ctx: BeMusicLayoutContext, layout: BeMusicGameplayLayout): BeMusicGameplayLayout {
   const bga = resolveVideoBGA(ctx, layout.bga, resolveLaneGeometry(ctx));
   if (bga !== layout.bga) layout = { ...layout, bga };
+  const judgeOffsetY = resolveJudgeOffsetY(
+    ctx.playFrame?.playOptions.judgePosition ?? 0,
+    layout.playfield.top,
+    layout.playfield.judgementY,
+  );
+  if (judgeOffsetY !== 0) layout = { ...layout, playfield: { ...layout.playfield, judgeOffsetY } };
   if (!ctx.drawsLift) return layout;
   const sides = { ...layout.playfield.sides };
   for (const cover of ctx.play.resolveLaneCovers()) {
@@ -285,6 +373,8 @@ export interface BGATargetsContext extends LaneGeometryContext {
 /** What the Be-Music chrome's layout is worked out from, and its cache: a play view's members of these names. */
 export interface BeMusicLayoutContext extends LaneGeometryContext {
   readonly drawsLift?: boolean;
+  /** The frame being drawn, for its judgment position. */
+  readonly playFrame?: PlayChromeContext['playFrame'];
   beMusicLayout:
     | {
         twoPlayer: boolean;

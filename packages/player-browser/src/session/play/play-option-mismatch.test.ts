@@ -39,7 +39,9 @@ describe('describeChartConvertingOptions', () => {
         random2P: 'lr2:S-RANDOM',
         battleMode: '____:BATTLE',
       }),
-    ).toEqual(['Random 1P: CONVERGE (beatoraja)', 'Random 2P: S-RANDOM (LR2)', 'Battle: BATTLE (????)']);
+    ).toEqual(['Random 1P: CONVERGE (beatoraja)', 'Random 2P: S-RANDOM (LR2 / ????)', 'Battle: BATTLE (????)']);
+    // A value since merged reads as the option it was merged into.
+    expect(describeChartConvertingOptions({ random1P: 'lr2:RANDOM' as 'RANDOM' })).toEqual(['Random 1P: RANDOM']);
   });
 });
 

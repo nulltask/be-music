@@ -130,6 +130,48 @@ export function resolveLR2NonstopRankWindowsMs(rank: number, debugBadWindowMs?: 
   };
 }
 
+/** LR2's mania option GAMBOL: LEVEL 1 or LEVEL 2. */
+export type LR2GambolLevel = 1 | 2;
+
+/**
+ * GAMBOL's windows (OpenLR2 `LR2f.cpp` L27612-L27625 as a chart opens, L12863-L12876 at the NONSTOP rank object). LEVEL
+ * 1 is the table's own VERY HARD row whatever the chart's rank; LEVEL 2 keeps its PGREAT and narrows GREAT and GOOD to
+ * 12 ms. The two tables differ because LR2's NONSTOP rank object has its own VERY HARD (see
+ * `LR2_NONSTOP_RANK_WINDOWS_MS`).
+ *
+ * | Table   | Level | PGREAT | GREAT | GOOD  |
+ * | ------- | ----- | ------ | ----- | ----- |
+ * | opening | 1     | ±8ms   | ±24ms | ±40ms |
+ * | opening | 2     | ±8ms   | ±12ms | ±12ms |
+ * | nonstop | 1     | ±12ms  | ±24ms | ±60ms |
+ * | nonstop | 2     | ±12ms  | ±12ms | ±12ms |
+ */
+const LR2_GAMBOL_WINDOWS_MS: Readonly<
+  Record<'opening' | 'nonstop', Readonly<Record<LR2GambolLevel, readonly [number, number, number]>>>
+> = {
+  opening: { 1: [8, 24, 40], 2: [8, 12, 12] },
+  nonstop: { 1: [12, 24, 60], 2: [12, 12, 12] },
+};
+
+/** The windows GAMBOL fixes for the play: `opening` as the chart opens, `nonstop` from a later NONSTOP stage's rank on. */
+export function resolveLR2GambolWindowsMs(
+  level: LR2GambolLevel,
+  table: 'opening' | 'nonstop',
+  debugBadWindowMs?: number,
+): JudgeWindowsMs {
+  const bad =
+    typeof debugBadWindowMs === 'number' && Number.isFinite(debugBadWindowMs) && debugBadWindowMs > 0
+      ? debugBadWindowMs
+      : LR2_BAD_WINDOW_MS;
+  const [pgreat, great, good] = LR2_GAMBOL_WINDOWS_MS[table][level];
+  return {
+    pgreat: clampWindow(pgreat, bad),
+    great: clampWindow(great, bad),
+    good: clampWindow(good, bad),
+    bad,
+  };
+}
+
 export function resolveBMSJudgeWindowsMsForPercent(
   judgeRankPercent: number,
   debugBadWindowMs?: number,

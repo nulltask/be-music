@@ -59,8 +59,11 @@ const BEATORAJA_LIGHT_LANE_OPTIONS: ReadonlySet<string> = new Set([
   'S_RANDOM_PLAYABLE',
 ]);
 
-/** LR2's lane options that cap the lamp at EASY and save no score (OpenLR2 `LR2f.cpp` L9334, `random > 3`). */
-const LR2_LIGHT_LANE_OPTIONS: ReadonlySet<string> = new Set(['SCATTER', 'SCATTER-CORRECTED']);
+/**
+ * LR2's lane options that cap the lamp at EASY and save no score (OpenLR2 `LR2f.cpp` L9334, `random > 3`): SCATTER and
+ * the corrected nine-key CONVERGE (LR2's own CONVERGE is classified by its source below).
+ */
+const LR2_LIGHT_LANE_OPTIONS: ReadonlySet<string> = new Set(['SCATTER', 'SCATTER-CORRECTED', 'CONVERGE-CORRECTED']);
 
 /** Whether a selected option took `value` at any point of the play: at the start or in a later change. */
 function optionEverTook(
@@ -153,9 +156,16 @@ export function classifyReplayAssists(replay: AssistReplay): AssistFinding[] {
 
   // A lane arrangement the chart forced (#844) is nanasigroove's, which has no assist class, and every play of the chart
   // gets it: it is not the player's assist, whatever lane value the host recorded for it.
+  // The 2P lane option arranges nothing on a chart without a 2P side, and beatoraja builds its 2P modifier only for a
+  // two-player mode (`BMSPlayer` L292), so it counts there only. LR2 caps the lamp for a 2P SCATTER or CONVERGE on any
+  // chart (`random > 3`, OpenLR2 `LR2f.cpp` L9334), so LR2's own 2P values always count (#1080).
   if (replay.chart?.chartPlayOptions?.options.random === undefined) {
     add(laneFinding(play.randomLane?.p1, playedRuleset));
-    add(laneFinding(play.randomLane?.p2, playedRuleset));
+    const secondSide = laneFinding(play.randomLane?.p2, playedRuleset);
+    // Without the chart's notes the side is unknown, so the option counts.
+    const notes = replay.chart?.notes;
+    if (secondSide !== undefined && (secondSide.source === 'lr2' || notes === undefined || hasSecondPlayerSide(notes)))
+      add(secondSide);
   }
 
   const battle = play.battleMode === undefined ? undefined : splitOptionSource(play.battleMode);
@@ -181,6 +191,15 @@ export function classifyReplayAssists(replay: AssistReplay): AssistFinding[] {
     default:
       break;
   }
+  // LR2's mania chart generators. ADD NOTES and LOUDNESS set LR2's `isNosave`; ADD LONGNOTES and ADD MINES only fail its
+  // score-save condition (OpenLR2 `LR2f.cpp` L67-L79, L27073-L27080), like SCATTER.
+  const mania = play.lr2Mania;
+  if (mania !== undefined) {
+    if (mania.addNotes > 0) add({ option: 'lr2-add-notes', source: 'lr2', assistClass: 'no-save' });
+    if (mania.loudness > 0) add({ option: 'lr2-loudness', source: 'lr2', assistClass: 'no-save' });
+    if (mania.addLongNotes > 0) add({ option: 'lr2-add-longnotes', source: 'lr2', assistClass: 'light' });
+    if (mania.addMines > 0) add({ option: 'lr2-add-mines', source: 'lr2', assistClass: 'light' });
+  }
   if (play.lr2ExtraMode === true)
     add({ option: 'lr2-extra-mode', source: 'lr2', assistClass: 'light', lr2Slot: 'extra' });
   if ((play.extraNoteChangeCount ?? 0) > 0) add({ option: 'extra-notes', source: 'beatoraja', assistClass: 'assist' });
@@ -191,7 +210,10 @@ export function classifyReplayAssists(replay: AssistReplay): AssistFinding[] {
     add({ option: 'scroll-remove', source: 'beatoraja', assistClass: 'light' });
 
   const longNotes = play.longNoteModifier;
-  if (longNotes === 'LEGACY') add({ option: 'long-note:LEGACY', source: '____', assistClass: 'light' });
+  // LEGACY NOTE assists only a chart it converted: a chart without charge notes keeps its standard lamp (RemyWiki's
+  // IIDX Glossary; the official page names no lamp). A replay recorded before the count was stored reads as converted.
+  if (longNotes === 'LEGACY' && (play.longNoteModifierChangeCount ?? 1) > 0)
+    add({ option: 'long-note:LEGACY', source: '____', assistClass: 'light' });
   else if (longNotes === 'REMOVE' && (play.longNoteModifierChangeCount ?? 0) > 0)
     add({ option: 'long-note:REMOVE', source: 'beatoraja', assistClass: 'assist' });
   else if (

@@ -1,5 +1,16 @@
 # @be-music/player-terminal
 
+## 0.9.7
+
+### Patch Changes
+
+- a15f307: Show chart load warnings, accept DEATH-CORRECTED and honor charatbeatHDX BGAMODE.
+  
+  - Show nonfatal chart load warnings on standard error when starting a chart.
+  - Accept DEATH-CORRECTED as a command-line gauge and list it in the help.
+  - Honor charatbeatHDX BGAMODE in ANSI and Kitty BGA rendering.
+- Updated dependencies: `@be-music/chart-model@0.11.0`, `@be-music/chart-parser@0.7.2`, `@be-music/chart-source@0.8.0`, `@be-music/player-node-audio@0.2.8`, `@be-music/chart-audio-renderer@0.5.3`, `@be-music/player-engine@0.18.0`
+
 ## 0.9.6
 
 ### Patch Changes

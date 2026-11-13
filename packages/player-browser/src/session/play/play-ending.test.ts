@@ -1,12 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { PlayViewTiming } from '../../view/types.ts';
-import {
-  beginExitSequence,
-  FAILED_CLOSE_MS,
-  resolvePlayEnding,
-  type PlayEndingContext,
-  type PlayEndingInput,
-} from './play-ending.ts';
+import { beginExitSequence, resolvePlayEnding, type PlayEndingContext, type PlayEndingInput } from './play-ending.ts';
 import type { PlayMoment } from './play-session-theme.ts';
 
 const timing = { beatToSeconds: (beat: number) => beat * 0.5 };
@@ -77,8 +71,7 @@ describe('resolvePlayEnding', () => {
 function createExit(viewTiming: Pick<PlayViewTiming, 'fadeOutMs' | 'closeMs'>) {
   const moments: PlayMoment[] = [];
   const fadeOutAudibleTo = vi.fn();
-  const clock = { ms: 10_000 };
-  const ctx = {
+  const state = {
     theme: {
       timing: () => ({ loadEndOffsetMs: 0, playStartOffsetMs: 0, ...viewTiming }),
       moment: (moment: PlayMoment) => moments.push(moment),
@@ -91,9 +84,17 @@ function createExit(viewTiming: Pick<PlayViewTiming, 'fadeOutMs' | 'closeMs'>) {
     exitFadeOutHandle: undefined,
     exitCloseHandle: undefined,
     audioBus: { fadeOutAudibleTo },
-    playClock: () => clock.ms,
-  } as unknown as PlayEndingContext;
-  return { ctx, moments, fadeOutAudibleTo, callback: vi.fn() };
+    playClock: () => 10_000,
+  };
+  return {
+    ctx: state as unknown as PlayEndingContext,
+    moments,
+    fadeOutAudibleTo,
+    callback: vi.fn(),
+    dispose: () => {
+      state.disposed = true;
+    },
+  };
 }
 
 beforeEach(() => {
@@ -122,7 +123,8 @@ describe('beginExitSequence', () => {
     expect(exit.callback).toHaveBeenCalledTimes(1);
     // No timer 3 (`exit-close`): the FAILED plate is for failures only.
     vi.advanceTimersByTime(5000);
-    expect(exit.moments.map((moment) => moment.kind)).toEqual(['exit-fade-out']);
+    expect(exit.moments).toEqual([{ kind: 'exit-fade-out', at: 10_000 }]);
+    expect(exit.callback).toHaveBeenCalledOnce();
   });
 
   test('the chart’s end lets its keysounds ring through the fade-out', () => {
@@ -159,22 +161,27 @@ describe('beginExitSequence', () => {
     beginExitSequence(exit.ctx, exit.callback, { failed: true });
     expect(exit.moments).toEqual([{ kind: 'exit-close', at: 10_000 }]);
     // Picture and sound fade together over the hold.
-    expect(exit.fadeOutAudibleTo).toHaveBeenCalledWith(0, FAILED_CLOSE_MS);
-    expect([exit.ctx.exitFadeStartedAt, exit.ctx.exitFadeOutMs]).toEqual([10_000, FAILED_CLOSE_MS]);
-    vi.advanceTimersByTime(FAILED_CLOSE_MS - 1);
+    expect(exit.fadeOutAudibleTo).toHaveBeenCalledWith(0, 1500);
+    expect([exit.ctx.exitFadeStartedAt, exit.ctx.exitFadeOutMs]).toEqual([10_000, 1500]);
+    vi.advanceTimersByTime(1500 - 1);
     expect(exit.callback).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(exit.callback).toHaveBeenCalledTimes(1);
   });
 
-  test('a second exit while one runs hands over at once, and a disposed play never calls back', () => {
+  test('a second exit while one runs hands over at once', () => {
     const exit = createExit(lr2);
     beginExitSequence(exit.ctx, exit.callback);
     const second = vi.fn();
     beginExitSequence(exit.ctx, second);
     expect(second).toHaveBeenCalledTimes(1);
     expect(exit.moments).toHaveLength(1);
-    (exit.ctx as { disposed: boolean }).disposed = true;
+  });
+
+  test('disposing during fade-out suppresses the pending callback', () => {
+    const exit = createExit(lr2);
+    beginExitSequence(exit.ctx, exit.callback);
+    exit.dispose();
     vi.advanceTimersByTime(1000);
     expect(exit.callback).not.toHaveBeenCalled();
   });

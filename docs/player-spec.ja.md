@@ -134,6 +134,12 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 | `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOCOLORS`, `#SEEKxx`, `#MATERIALSBMP`, `#MATERIALSWAV` | 実行せず、往復で失わないよう `metadata.extras` に保持します。後続対応：[#848](https://github.com/nulltask/be-music/issues/848)（`#ExtChr`・`#CHARFILE`）、[#849](https://github.com/nulltask/be-music/issues/849)（`#SEEKxx`・`#VIDEOCOLORS`）。`#CDDA` と Materials 系は未対応のままです（Be-Music には音楽 CD も実行ファイル基準のフォルダーもないため）。出自・使用状況・理由は[歴史的なコマンド](./research/historical-bms-commands.ja.md)を参照してください。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `#MATERIALS`, `#DIVIDEPROP`                                                                  | `bms` に保持し、実行しません。`<folder>` による Materials 参照は解決しません。位置は厳密な分数で扱うため、`#DIVIDEPROP` で変わるものはありません。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
+### HDX の BGA 配置
+
+初期 `#OPTION charatbeatHDX:BGAMODE n` の `0` は BGA 枠全体に合わせます。`1` は原寸、`2` は 80% で、どちらも枠の上中央から配置します。各スキンの BGA 枠とターミナルの ANSI・Kitty 表示領域は、256×256 の論理キャンバスに対応します。`#BGA` は切り出した画像をこの規則で配置し、枠外をクリップします。BGA を自前で描くスキンには `frame.bga.bgaMode` を渡します。
+
+NONSTOP はステージの指定を引き継ぎ、ブラウザーのクロスフェードでは各スタックにそのステージの配置を適用します。リプレイは配置を表示プログラムのバージョン 4 に記録します。A6 による指定は診断し、配置は譜面 fingerprint と記録条件に影響しません。[公式資料の調査結果](./research/chart-authored-options.ja.md#charatbeathdx-の一次資料で確定した規則)
+
 ## 実行フロー
 
 player は次の順序で譜面を実行します。
@@ -293,7 +299,7 @@ ruleset の 5 KEY / 7 KEY 判定幅を切り替えることもありません。
 [BMS 仕様 — player 固有挙動](./bms-spec.ja.md#player-固有挙動) にあります。モードを表す拡張子は `.pms` だけで、それ以外の
 拡張子では使われているレーンで決めます。そのため 6 / 7 鍵の列がない `.bme` 譜面は、beatoraja と同じく `5 KEY SP` /
 `5 KEY DP` です。
-判定の流れは [README — レーンモード自動判定](../README.ja.md#レーンモード自動判定と入力割り当て) にフローチャートで示しています。
+判定の流れは [`@be-music/chart-model` — レーンモード自動判定](../packages/chart-model/README.ja.md#レーンモード自動判定) にフローチャートで示しています。
 現実装で自動判定できる主なモードは次のとおりです。
 
 - `5 KEY SP`
@@ -549,7 +555,7 @@ flowchart TD
 - `summary.emptyPoor` を加算し、ノート判定カウンタ (`perfect`/`great`/`good`/`bad`/`poor`) は **更新しない**。ノートを消費していないため。POOR カウンタに両者の合計を表示するかは提示側の選択で、LR2 は合算します（OpenLR2 `ApplyJudgeNote` が空POOR 分岐でも `playerstat.poor` を加算）。
 - EX-SCORE とスコアは **変化させない**。
 - combo はルールセットが指示する場合のみ切る（`comboBreaksOnEmptyPoor`）。beatoraja の 5 鍵 / PMS のみ切れ、LR2 と 名前を言ってはいけないあのゲームは切れません。
-- ゲージには `EMPTY_POOR` を適用する。デルタはルールセットのゲージ表（[`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)）にあり、`lr2` では GROOVE `-2`、HARD `-2`（TOTAL 補正対象）、EASY `-1.6`、DEATH `-10`。GROOVE / EASY ではほぼ無害だが、HARD / DEATH では実害が出る。
+- ゲージには `EMPTY_POOR` を適用する。デルタはルールセットのゲージ表（[`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)）にあり、`lr2` では GROOVE `-2`、HARD `-2`（TOTAL 補正対象）、EASY `-1.6`、DEATH `0`。GROOVE / EASY ではほぼ無害だが、HARD では実害が出る。
 - **POOR BGA を発火する** (`trigger-poor-bga`)。
 - **judge 表示を `POOR` で 0.6 秒フラッシュ** する (`publishJudgeCombo('POOR', combo)`)。 LR2 spec 上は op 246 (1P 空POOR) / 266 (2P 空POOR) と op 245 / 265 (見逃しPOOR) が分岐するが、本実装では NOWJUDGE index 0 / 1 を同じ `'poor'` skin slot に解決しているため、視覚上は同一の POOR 表示になる。
 
@@ -634,7 +640,11 @@ POOR カウンタに `poor` と `emptyPoor` の合計を表示するかは提示
   なら、尽きたゲージのまま譜面の最後まで判定を続けます。リプレイはこのフラグを記録するので、再シミュレーションも
   同じ判定で止まります。フラグがなかった頃のログは最後まで判定を続けます。
 - コースのステージ（`PlayerOptions.course`）は、ルールセットのコース用ゲージで、前のステージが残した値から始めます。
-  [コースと段位認定](./course.ja.md#コースのステージを遊ぶ) を参照してください。
+  [コースと段位認定](./course.ja.md#コースのステージを遊ぶ) を参照してください。`lr2` で GROOVE か EASY を選んだときは、
+  LR2 がコース中のこの 2 つで行うとおり、コース用ゲージでも地雷のダメージを `2%` で止めます（OpenLR2 `LR2f.cpp`
+  L2054-L2056）。判定で `2%` を下回ったときは、これまでどおりそのステージで失敗します。
+- `lr2` では LR2 と同じく TOTAL を整数として扱います。`#TOTAL` と既定の TOTAL は切り捨て、`1` 未満は既定値にします
+  （OpenLR2 `LR2f.cpp` L26299、L27566-L27579）。
 - テーブルは [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) にあり、
   `RulesetGauge` を通して適用されます。最終スコアと summary の authority は共有エンジンで、
   browser scene は `summary.gauge` をミラーします。
@@ -675,12 +685,15 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 
 ゲージ更新後の値は、現在の gauge type の min/max range に clamp します。
 
+Be-Music はゲージを倍精度で計算します。beatoraja はゲージ値を単精度で扱い、LR2 は GROOVE のノート1つあたりの回復量を単精度で計算します。ゲージが閾値に近いと、丸めの違いでクリア判定が変わることがあります。[beatoraja GrooveGauge](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GrooveGauge.java#L176-L240) · [OpenLR2 の回復量の計算](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27658-L27660)
+
 `HARD` / `EASY` の variant は LR2 の値（beatoraja `GaugeProperty` の `HARD_LR2` / `EASY_LR2`）に合わせます。`DEATH` は beatoraja の `HAZARD_LR2` ではなく LR2 本体（OpenLR2 `LR2f.cpp` L27673-L27680、LR2body.exe `ParseBMSFile`）に合わせます。
 
 - `HARD`: 回復 `PGREAT/GREAT +0.1` / `GOOD +0.05`（TOTAL 非依存）、減少 `BAD -6` / `見逃しPOOR -10` / `空POOR -2`。減少には lr2oraja の `MODIFY_DAMAGE`、つまり `#TOTAL` の係数（`TOTAL ≥240` で `×1.0` から `<112` で `×10` まで）とノーツ数の係数（20 ノーツ以下で `×10` から 1000 ノーツ以上で `×1.0` まで）の大きい方を掛け、ゲージが `32%` 未満のときはさらに `×0.6` に緩和します（lr2oraja は比較前にゲージを偶数パーセントへ切り捨てるため、
   「表示 30 %」は内部 32 % に相当します）。
 - `EASY`: 増加は GROOVE の `1.2` 倍、減少は `0.8` 倍（`BAD -3.2` / `POOR -4.8` / `空POOR -1.6`）。クリア閾値は GROOVE と同じ `80%` です。
 - `DEATH`: 回復なし（`PGREAT` / `GREAT` / `GOOD` は `0`）、`BAD` / `見逃しPOOR` は `-100`（即死）、`空POOR` は減少なし（`0`）。beatoraja の `HAZARD` は独自の `+0.15` / `+0.06` の回復と `空POOR -10` のままです。
+- `DEATH`（LR2 の HAZARD）は、単曲では最後に `80%` 以上ないとクリアになりません。LR2 の CheckClear が GROOVE と同じように判定するためです（[L1842-L1862](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1842-L1862)）。地雷で生き残ったまま失敗になることがあり、クリアのランプは NORMAL です。`DEATH-CORRECTED`（Options ダイアログでは **DEATH corrected**）はこの境界の無い同じゲージで、生き残ればクリアです。beatoraja と ???? のルールではそれぞれの `DEATH` として読み、コースではどちらも同じコース用ゲージで遊びます（[#1082](https://github.com/nulltask/be-music/issues/1082)）。
 - `HARD` / `DEATH` は `2%` 未満になった時点で `0%` に落ちて FAILED 確定（以後回復しません）。地雷ダメージなどの生デルタは guts・TOTAL 補正の対象外です。
 
 ## ロングノート

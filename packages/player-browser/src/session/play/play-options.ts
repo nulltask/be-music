@@ -4,7 +4,7 @@ import type { BattleMode, LaneKeyOverrides, LR2ExtraLevel } from '@be-music/play
  * draws it. `createPlayScene` takes them as its `settings`, `course`, `replay`, `preResolved`, `audio` and `on`.
  */
 
-import type { CourseView, PlayResult, HSFix, RandomMode } from '@be-music/player-scene-model';
+import type { CourseView, PlayResult, HSFix, RandomMode, SystemSound } from '@be-music/player-scene-model';
 import type { GameplayLayoutMode } from '@be-music/player-skin-sdk';
 import type { NonstopStitchMap } from '@be-music/player-engine/course';
 import type {
@@ -15,7 +15,7 @@ import type {
 } from '@be-music/player-engine/replay';
 import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
 import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
-import type { ResolvedPlayChart } from '@be-music/player-engine';
+import type { GuideSound, ResolvedPlayChart } from '@be-music/player-engine';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { ControlKeyOverrides, ControlScheme } from '../controls/control-buttons.ts';
@@ -177,6 +177,8 @@ export interface PlaySessionOptions {
   coverKeys?: boolean;
   /** beatoraja's note-selection algorithm. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  /** LR2's mania option GAMBOL (LR2 rules only): 1 or 2; 0 or absent is off. */
+  lr2Gambol?: 0 | 1 | 2;
   /** beatoraja CUSTOM JUDGE rates; absent while the option is off. */
   customJudge?: import('@be-music/player-engine/ruleset').BeatorajaCustomJudge;
   longNoteModifier?: import('@be-music/player-scene-model').PlayOptions['longNoteModifier'];
@@ -191,6 +193,8 @@ export interface PlaySessionOptions {
   longNoteMode?: 'LN' | 'CN' | 'HCN';
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
+  /** LR2's mania chart generators: each rate is 0 (off) or 10–100. A replay plays back its recorded rates and seed. */
+  lr2Mania?: import('@be-music/player-engine/lanes').LR2ManiaChartRates;
   extraNoteDepth?: number;
   extraNoteScratch?: boolean;
   mineModifier?: import('@be-music/player-scene-model').PlayOptions['mineModifier'];
@@ -426,6 +430,11 @@ export interface PlaySessionOptions {
    * makes them itself.
    */
   audio?: AudioService;
+  /**
+   * beatoraja's GUIDE SE: the sound set's sound for each judgment, when the player turned it on. Each is decoded
+   * through {@link audio} as the play loads and played on the key bus at its judgment; one the set lacks is left out.
+   */
+  guideSounds?: Partial<Record<GuideSound, SystemSound>>;
 }
 
 export interface PlayDisposeOptions {

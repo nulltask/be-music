@@ -77,19 +77,39 @@ function wasLaneDownAtMs(state: JudgeCoreState, channel: string, atMs: number): 
   return wasLaneDownAt(history, atMs);
 }
 
-/** The explosion sample event of a mine, or `undefined` when the chart has no `#WAV00`. */
+/**
+ * The explosion sample event of a mine, or `undefined` when its slot (`#WAV00` unless `sampleKey` names another, as
+ * a stitched NONSTOP stage's does) has no file.
+ */
 export function resolveLandmineExplosionEvent(
   landmineEvent: BeMusicEvent,
   resources: Readonly<Record<string, string>>,
+  sampleKey: string = LANDMINE_EXPLOSION_SAMPLE_KEY,
 ): BeMusicEvent | undefined {
-  const sourcePath = resources[LANDMINE_EXPLOSION_SAMPLE_KEY];
+  const sourcePath = resources[sampleKey];
   if (typeof sourcePath !== 'string' || sourcePath.length === 0) {
     return undefined;
   }
   return {
     ...landmineEvent,
-    value: LANDMINE_EXPLOSION_SAMPLE_KEY,
+    value: sampleKey,
   };
+}
+
+/**
+ * The explosion slot of a mine at `seconds` under `cues` (`JudgeCoreConfig.landmineSampleKeys`): the last cue at or
+ * before it, `undefined` (silent) when that cue names none, and `#WAV00` without cues or before the first.
+ */
+export function resolveLandmineSampleKey(
+  cues: ReadonlyArray<{ seconds: number; sampleKey?: string }> | undefined,
+  seconds: number,
+): string | undefined {
+  let key: string | undefined = LANDMINE_EXPLOSION_SAMPLE_KEY;
+  for (const cue of cues ?? []) {
+    if (cue.seconds > seconds) break;
+    key = cue.sampleKey;
+  }
+  return key;
 }
 
 function detonateLandmine(
@@ -106,9 +126,13 @@ function detonateLandmine(
     return;
   }
   const landmineGaugeEffect = resolveLandmineGaugeEffect(landmine.event, config.idBase, config.sourceFormat);
-  const landmineExplosionEvent = landmine.silent
+  const explosionKey = landmine.silent
     ? undefined
-    : resolveLandmineExplosionEvent(landmine.event, config.wavResources);
+    : resolveLandmineSampleKey(config.landmineSampleKeys, landmine.seconds);
+  const landmineExplosionEvent =
+    explosionKey === undefined
+      ? undefined
+      : resolveLandmineExplosionEvent(landmine.event, config.wavResources, explosionKey);
   if (landmineExplosionEvent) {
     emit({
       kind: 'sound',
@@ -1063,6 +1087,6 @@ function chargeRemainingNotes(
   }
   emit({ kind: 'poor-trace', action: 'trigger', seconds: totalSeconds });
   setCombo(state, totalSeconds, 0, 'remaining-notes', emit, 'POOR');
-  emit({ kind: 'judge-combo', judge: 'POOR', combo: state.combo });
+  emit({ kind: 'judge-combo', judge: 'POOR', combo: state.combo, poor: 'remaining' });
   emit({ kind: 'frame', seconds: totalSeconds });
 }

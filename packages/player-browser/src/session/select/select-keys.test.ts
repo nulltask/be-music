@@ -114,6 +114,14 @@ describe('resolveSelectKeyAction', () => {
   });
 });
 
+describe('resolveSelectKeyAction on F2', () => {
+  it('opens LR2’s mania options on the LR2 key map and reloads the folders on beatoraja’s', () => {
+    const f2 = down('F2');
+    expect(resolveSelectKeyAction(f2, LIST, 'lr2')).toEqual({ type: 'mania-options' });
+    expect(resolveSelectKeyAction(f2, LIST, 'beatoraja')).toEqual({ type: 'reload' });
+  });
+});
+
 describe('resolveSelectKeyAction on the player’s control buttons', () => {
   const OPEN: SelectKeyState = { panel: 1, readTextOpen: false };
 
@@ -186,6 +194,10 @@ describe('resolveSelectKeyAction on the beatoraja key map', () => {
     expect(resolve(down('Digit1'))).toEqual({ type: 'list', option: 'keysFilter' });
     expect(resolve(down('Digit2'))).toEqual({ type: 'list', option: 'sort' });
     expect(resolve(down('Digit3'))).toEqual({ type: 'ln-mode' });
+    // AC 34's numpad 7 and 6, on both key maps.
+    expect(resolve(down('Numpad7'))).toEqual({ type: 'battle' });
+    expect(resolve(down('Numpad6'))).toEqual({ type: 'm-ran', side: '1P' });
+    expect(resolve({ ...down('Numpad6'), shiftKey: true })).toEqual({ type: 'm-ran', side: '2P' });
     expect(resolve(down('F8'))).toEqual({ type: 'favorite', list: 'music' });
     expect(resolve(down('F9'))).toEqual({ type: 'favorite', list: 'charts' });
   });

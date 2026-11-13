@@ -9,7 +9,7 @@ import type { EffectiveBattleMode } from '../core/battle-mode.ts';
 import { getPlayModeLayouts, type ChartPlayVariant } from '@be-music/chart-model';
 import type { LR2ExtraLevel } from '../core/lr2-extra-lanes.ts';
 import type { ScrollTimelinePoint } from '@be-music/chart-model';
-import type { ScrollModifier } from '../core/scroll-modifier.ts';
+import { isSoftLanding, type ScrollModifier } from '../core/scroll-modifier.ts';
 import type { LongNoteModifier } from '../core/long-note-modifier.ts';
 import type { MineModifier } from '../core/mine-modifier.ts';
 import {
@@ -177,7 +177,11 @@ export interface ReplayJudgeRank {
    * `timeUs` on, the windows a chart opening with `rank` gets (`'chart'`) or LR2's NONSTOP rank table
    * (`'lr2-nonstop'`). Absent in logs recorded before it existed, which played with the first stage's rank throughout.
    */
-  stageRanks?: Array<{ timeUs: number; rank: number; table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank' }>;
+  stageRanks?: Array<{
+    timeUs: number;
+    rank: number;
+    table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank' | 'bms-exrank-change';
+  }>;
 }
 
 export interface ReplayChart {
@@ -257,6 +261,8 @@ export interface ReplayPlay {
   autoScratch: boolean;
   /** Effective manual assist per side; older replays fall back to autoScratch for both. */
   judgeAlgorithm?: 'combo' | 'duration' | 'lowest';
+  /** LR2's mania option GAMBOL, LEVEL 1 or 2: the play's fixed judge windows under LR2 rules. Absent while it was off. */
+  lr2Gambol?: 1 | 2;
   /** beatoraja CUSTOM JUDGE rates in percent; absent while the option was off. */
   customJudge?: BeatorajaCustomJudge;
   longNoteModifier?: LongNoteModifier;
@@ -272,10 +278,12 @@ export interface ReplayPlay {
   battleAssist2P?: boolean;
   battleChangedObjectCount?: number;
   battleDroppedObjectCount?: number;
-  /** LR2 D-BATTLE: scratch objects stayed playable (scratch key held through the decide animation). */
+  /** LR2 D-BATTLE: scratch objects stayed playable (LR2's hidden `randSC` command, buttons 12 + 13 at decide). */
   dBattleScratch?: boolean;
   lr2ExtraMode?: boolean;
   lr2ExtraLevel?: LR2ExtraLevel;
+  /** LR2's mania chart generators as the play applied them; absent when none was on. */
+  lr2Mania?: ReplayLR2Mania;
   lr2ExtraEffectiveLevel?: LR2ExtraLevel;
   lr2ExtraConvertedObjectCount?: number;
   lr2ExtraTempo?: number;
@@ -304,8 +312,9 @@ export interface ReplayPlay {
   /** The 2P player's gauge of a two-player play (`battleMode: 'TWO-PLAYER'`); `results.secondPlayer` is its result. */
   gauge2P?: GaugeType;
   /**
-   * Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'lr2:RANDOM'` / ...). A bare
-   * colliding name (`'RANDOM'`, `'S-RANDOM'`, `'CONVERGE'`) is the played ruleset's own (ADR 0019).
+   * Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'RANDOM'` / `'lr2:S-RANDOM'` /
+   * ...). A bare colliding name (`'S-RANDOM'`, `'CONVERGE'`) is the played ruleset's own (ADR 0019). Older replays may hold
+   * `'lr2:RANDOM'` and the like, which read as `'RANDOM'` (`canonicalOptionValue`).
    */
   randomLane?: { p1?: string; p2?: string };
   dpFlip?: boolean;
@@ -654,8 +663,16 @@ function parseStageRanks(value: unknown): ReplayJudgeRank['stageRanks'] {
     const path = `chart.judgeRank.stageRanks[${index}]`;
     const record = expectRecord(entry, path);
     const table = record.table;
-    if (table !== 'chart' && table !== 'lr2-nonstop' && table !== 'bmson' && table !== 'bms-exrank') {
-      throw new ReplayParseError(`${path}.table: expected 'chart', 'lr2-nonstop', 'bmson' or 'bms-exrank'`);
+    if (
+      table !== 'chart' &&
+      table !== 'lr2-nonstop' &&
+      table !== 'bmson' &&
+      table !== 'bms-exrank' &&
+      table !== 'bms-exrank-change'
+    ) {
+      throw new ReplayParseError(
+        `${path}.table: expected 'chart', 'lr2-nonstop', 'bmson', 'bms-exrank' or 'bms-exrank-change'`,
+      );
     }
     return {
       timeUs: expectFiniteNumber(record.timeUs, `${path}.timeUs`),
@@ -872,6 +889,10 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     const inputs = parseControlInputs(play.controlInputs);
     if (inputs.length > 0) parsed.controlInputs = inputs;
   }
+  if (play.lr2Gambol !== undefined) {
+    if (play.lr2Gambol !== 1 && play.lr2Gambol !== 2) throw new ReplayParseError('play.lr2Gambol: expected 1 or 2');
+    parsed.lr2Gambol = play.lr2Gambol;
+  }
   if (play.judgeAlgorithm !== undefined) {
     if (!['combo', 'duration', 'lowest'].includes(play.judgeAlgorithm as string)) {
       throw new ReplayParseError('play.judgeAlgorithm: expected combo, duration or lowest');
@@ -890,8 +911,14 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     parsed.customJudge = judge;
   }
   if (play.scrollModifier !== undefined) {
-    if (play.scrollModifier !== 'OFF' && play.scrollModifier !== 'REMOVE' && play.scrollModifier !== 'ADD')
-      throw new ReplayParseError('play.scrollModifier: expected OFF, REMOVE or ADD');
+    if (
+      play.scrollModifier !== 'OFF' &&
+      play.scrollModifier !== 'REMOVE' &&
+      play.scrollModifier !== 'ADD' &&
+      play.scrollModifier !== 'SOFTLANDING-1' &&
+      play.scrollModifier !== 'SOFTLANDING-2'
+    )
+      throw new ReplayParseError('play.scrollModifier: expected OFF, REMOVE, ADD, SOFTLANDING-1 or SOFTLANDING-2');
     parsed.scrollModifier = play.scrollModifier;
   }
   if (play.scrollSection !== undefined) {
@@ -923,7 +950,12 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     (parsed.scrollSection === undefined || parsed.scrollRate === undefined || !parsed.scrollModifierTimeline?.length)
   )
     throw new ReplayParseError('play.scrollModifier: ADD requires section, rate and an effective timeline');
-  if (parsed.scrollModifier === 'ADD' && parsed.scrollModifierTimeline?.[0]?.beat !== 0)
+  if (isSoftLanding(parsed.scrollModifier) && !parsed.scrollModifierTimeline?.length)
+    throw new ReplayParseError('play.scrollModifier: SOFTLANDING requires an effective timeline');
+  if (
+    (parsed.scrollModifier === 'ADD' || isSoftLanding(parsed.scrollModifier)) &&
+    parsed.scrollModifierTimeline?.[0]?.beat !== 0
+  )
     throw new ReplayParseError('play.scrollModifierTimeline: expected initial beat zero');
   if (play.scrollModifierChanged !== undefined) {
     if (typeof play.scrollModifierChanged !== 'boolean')
@@ -1005,6 +1037,7 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   }
   for (const field of ['battleChangedObjectCount', 'battleDroppedObjectCount'] as const)
     if (play[field] !== undefined) parsed[field] = expectNonNegativeInteger(play[field], `play.${field}`);
+  if (play.lr2Mania !== undefined) parsed.lr2Mania = parseLR2Mania(play.lr2Mania);
   if (play.lr2ExtraMode !== undefined) {
     if (typeof play.lr2ExtraMode !== 'boolean') throw new ReplayParseError('play.lr2ExtraMode: expected boolean');
     parsed.lr2ExtraMode = play.lr2ExtraMode;
@@ -1110,5 +1143,50 @@ function parseCourseStage(course: Record<string, unknown>): ReplayCourseStage {
     };
   }
   if (course.rate !== undefined) parsed.rate = expectFiniteNumber(course.rate, 'play.course.rate');
+  return parsed;
+}
+
+/**
+ * LR2's mania chart generators as a play applied them: each rate (0 is off, else 10–100), the seed every draw came
+ * from, and what each generator changed. The rates and the seed rebuild the chart; the counts check that they did.
+ */
+export interface ReplayLR2Mania {
+  addNotes: number;
+  loudness: number;
+  addLongNotes: number;
+  addMines: number;
+  seed: string;
+  changes: { addNotes: number; loudness: number; addLongNotes: number; addMines: number };
+}
+
+const LR2_MANIA_FIELDS = ['addNotes', 'loudness', 'addLongNotes', 'addMines'] as const;
+
+function parseLR2Mania(value: unknown): ReplayLR2Mania {
+  const record = expectRecord(value, 'play.lr2Mania');
+  const changes = expectRecord(record.changes, 'play.lr2Mania.changes');
+  const rate = (field: (typeof LR2_MANIA_FIELDS)[number]): number => {
+    const parsed = expectNonNegativeInteger(record[field], `play.lr2Mania.${field}`);
+    if (parsed > 100) throw new ReplayParseError(`play.lr2Mania.${field}: expected 0..100`);
+    return parsed;
+  };
+  if (typeof record.seed !== 'string' || !/^\d{1,19}$/.test(record.seed))
+    throw new ReplayParseError('play.lr2Mania.seed: expected a non-negative integer string');
+  const count = (field: (typeof LR2_MANIA_FIELDS)[number]): number =>
+    expectNonNegativeInteger(changes[field], `play.lr2Mania.changes.${field}`);
+  const parsed: ReplayLR2Mania = {
+    addNotes: rate('addNotes'),
+    loudness: rate('loudness'),
+    addLongNotes: rate('addLongNotes'),
+    addMines: rate('addMines'),
+    seed: record.seed,
+    changes: {
+      addNotes: count('addNotes'),
+      loudness: count('loudness'),
+      addLongNotes: count('addLongNotes'),
+      addMines: count('addMines'),
+    },
+  };
+  if (LR2_MANIA_FIELDS.every((field) => parsed[field] === 0))
+    throw new ReplayParseError('play.lr2Mania: expected at least one generator on');
   return parsed;
 }

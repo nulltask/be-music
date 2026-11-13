@@ -1,6 +1,8 @@
+import { isScratch } from '@be-music/player-engine/lanes';
+import { renderJudgeArea } from '../shared/judge-area.ts';
 import type { KeyBoundBGAFrame, BmsonBGAFrame } from '@be-music/player-engine/display';
 import type { BGACameraFeed } from '../../media/bga-camera.ts';
-import type { BGAOpacityTimelines } from '@be-music/chart-model';
+import type { BGAOpacityTimelines, ChartOptionProgram } from '@be-music/chart-model';
 import {
   resolveConstantAlpha,
   resolveNoteDisplaySeconds,
@@ -72,6 +74,7 @@ export interface BeatorajaPlayBGA {
   readonly layerTextures: ReadonlyMap<string, Texture>;
   readonly videos: ReadonlyMap<string, HTMLVideoElement>;
   readonly poorBGAMode?: 0 | 1 | 2;
+  readonly chartOptionProgram?: ChartOptionProgram;
   readonly cues: {
     base: readonly BGACue[];
     layer: readonly BGACue[];
@@ -190,6 +193,7 @@ export class BeatorajaPlayStage {
       cues: bga.cues,
       poorBGAMode: bga.poorBGAMode,
       nonstop: bga.nonstop,
+      chartOptionProgram: bga.chartOptionProgram,
       skinConfigOps: this.skinConfigOps,
     });
     view.container.addChildAt(this.bgaLayer.container, view.bgaLayerInsertIndex);
@@ -236,6 +240,14 @@ export class BeatorajaPlayStage {
       judgeTimingMs?: number;
       /** Visual CONSTANT: notes, mines, bar lines and BPM guide lines show only near their time. */
       constant?: ConstantVisibility;
+      /** Lanes whose notes are not drawn (AUTO SCRATCH with its notes hidden). */
+      hiddenNoteChannels?: ReadonlySet<string>;
+      /** beatoraja's mark processed note. */
+      markProcessedNotes?: boolean;
+      /** AC 34's lane brightness as the opacity of the black layer over the lanes. */
+      laneDim?: number;
+      /** beatoraja's judge area: the windows to draw as bands above the judge line, while the option is on. */
+      judgeArea?: Pick<import('@be-music/player-skin-sdk').BeMusicJudgeWindows, 'note' | 'scratch'>;
       /** The camera to show in the BGA frame in place of the chart's BGA. */
       camera?: BGACameraFeed;
     } = {},
@@ -245,7 +257,10 @@ export class BeatorajaPlayStage {
     if (authored) lanes.setLaneHeight?.(authored.bottomY - authored.topY);
     this.noteLayer.setLift(lanes.laneCover ? resolveLaneCover(lanes.laneCover).lift : 0);
     view.update(context);
-    this.guideLayer.visible = clock !== undefined && playback.bpmGuide === true && playback.started !== false;
+    this.guideLayer.visible =
+      clock !== undefined &&
+      (playback.bpmGuide === true || playback.judgeArea !== undefined || (playback.laneDim ?? 0) > 0) &&
+      playback.started !== false;
     if (clock === undefined) return;
     const activeOps = context.activeOps;
     const displaySeconds = resolveNoteDisplaySeconds(clock.currentSeconds, playback.judgeTimingMs ?? 0);
@@ -261,6 +276,8 @@ export class BeatorajaPlayStage {
       (channel) => lanes.isLaneLNHeld(channel),
       playback.showInvisibleNotes,
       playback.constant,
+      playback.hiddenNoteChannels,
+      playback.markProcessedNotes === true,
     );
     // The markers scroll with the notes' per-beat distance (`rxhs / 4 * hispeed`, `LaneRenderer.java:271-276`) on the
     // lane the active dst block resolves; skin-canvas defaults when no lane matched.
@@ -320,8 +337,42 @@ export class BeatorajaPlayStage {
           },
         ];
       });
+      // The guide layer sits under the notes: the lane dim and the judge area draw there, behind what scrolls.
+      const laneDim = playback.laneDim ?? 0;
+      const laneAreas =
+        playback.judgeArea !== undefined || laneDim > 0
+          ? [...new Set(clock.notes.map((note) => note.channel))].flatMap((channel) =>
+              this.noteLayer.getDisplayAreaLanes(activeOps, [channel]).map((lane) => ({
+                x: lane.x,
+                w: lane.w,
+                top: lane.top,
+                bottom: lane.bottom,
+                scratch: isScratch(channel),
+              })),
+            )
+          : [];
+      // AC 34's lane brightness: a black layer over each lane.
+      if (laneDim > 0) {
+        for (const lane of laneAreas) {
+          this.guidePool
+            .acquireGraphics()
+            .rect(lane.x, lane.top, lane.w, lane.bottom - lane.top)
+            .fill({ color: 0x000000, alpha: laneDim });
+        }
+      }
+      if (playback.judgeArea !== undefined) {
+        const beatAt = layout.beatAtSeconds;
+        renderJudgeArea({
+          lanes: laneAreas,
+          note: playback.judgeArea.note,
+          scratch: playback.judgeArea.scratch,
+          distanceAt: (ms) =>
+            beatAt === undefined ? 0 : placement.distance(beatAt(noteClock.currentSeconds + ms / 1000)) * pixelsPerBeat,
+          pool: this.guidePool,
+        });
+      }
       renderBPMGuide({
-        enabled: true,
+        enabled: playback.bpmGuide === true,
         events: layout.guideEvents ?? [],
         window: placement.window,
         distance: placement.distance,
@@ -340,7 +391,13 @@ export class BeatorajaPlayStage {
       Math.min(clock.currentSeconds, clock.reversalSeconds ?? Number.POSITIVE_INFINITY),
       context,
       lanes.isPoorBGAActive(clock.currentSeconds),
-      { ...playback, seconds: clock.currentSeconds, keyBoundBGA: clock.keyBoundBGA, bmsonBGA: clock.bmsonBGA },
+      {
+        ...playback,
+        seconds: clock.currentSeconds,
+        keyBoundBGA: clock.keyBoundBGA,
+        bmsonBGA: clock.bmsonBGA,
+        bgaMode: clock.chartOptions?.bgaMode,
+      },
     );
   }
 

@@ -1,4 +1,4 @@
-import { expect, test } from 'vite-plus/test';
+import { expect, test, vi } from 'vite-plus/test';
 import { parseBMS } from '@be-music/chart-parser';
 import { classifyReplayAssists } from '../records/assist-policy.ts';
 import { checkReplayEligibility } from '../replay/eligibility.ts';
@@ -59,14 +59,18 @@ test('arrangement-only programs are recorded, arrange the engine-prepared chart 
 });
 
 test('the engine-prepared chart takes the chart ADDMINE in place of the mine option (#932)', async () => {
+  // ADD RANDOM fills a blank cell when its draw is over 0.9, and the play session draws with `Math.random`: left to
+  // chance, about 1 run in 370 fills none of this chart's cells (#1144). A fixed draw fills every one.
+  const random = vi.spyOn(Math, 'random').mockReturnValue(0.95);
   const result = await observePlay({
     driver: 'auto',
     chart: parseBMS(['#BPM 120', '#OPTION 774:CRAZY_ADDMINE', '#00111:01010101', '#00212:01010101', ''].join('\n')),
     options: { mineModifier: 'REMOVE' },
-  });
+  }).finally(() => random.mockRestore());
   expect(result.outcome).toBe('completed');
   expect(result.replay?.play.mineModifier).toBe('ADD_RANDOM');
-  expect(result.replay?.chart.notes.some((note) => note.type === 'mine')).toBe(true);
+  // Each of the eight note rows has five blank lanes on this 5KEY play.
+  expect(result.replay?.chart.notes.filter((note) => note.type === 'mine').length).toBeGreaterThanOrEqual(40);
 });
 
 test('NOTES COPY plays the chart as double play, and the replay re-simulates it (#932)', async () => {

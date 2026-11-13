@@ -1,6 +1,12 @@
 import { ChartTextOverlay } from '../shared/chart-text.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
+import { resolveBuiltInBPMChangeWarningStyle } from './bpm-change-warning-style.ts';
+import {
+  resolveLR2Earthquake,
+  resolveLR2ManiaVisual,
+  LR2_SCREEN_HEIGHT,
+} from '../shared/playfield/lr2-mania-visual.ts';
 /**
  * The built-in family's play screen: a Be-Music Skin's chrome around the shared playfield (`view/shared/playfield`),
  * letterboxed into the window. It draws the play session's frames; its skin answers the shared playfield through a
@@ -228,6 +234,7 @@ export class BuiltInPlayView
   public draw(frame: PlayFrame): void {
     this.play = frame.playfield;
     this.playFrame = frame;
+    this.playOptions = frame.playOptions;
     this.options.judgeTimingMs = frame.playOptions.judgeTimingMs;
     this.options.judgeTimingAutoAdjust = frame.playOptions.judgeTimingAutoAdjust;
     this.options.visualConstant = frame.playOptions.visualConstant;
@@ -240,7 +247,9 @@ export class BuiltInPlayView
     if (!frame.shown) return;
     this.perf.beginTick();
     this.chromeRuntime = undefined;
-    render(this, frame.seconds, frame.playfield.audioAnalyzer !== undefined ? frame.audio : undefined);
+    // With effects off the skins' audio drive is silent, so the frame's analysis is left unread (and unrun).
+    const reactsToAudio = frame.playfield.audioAnalyzer !== undefined && this.options.beMusicEffects !== 'off';
+    render(this, frame.seconds, reactsToAudio ? frame.audio : undefined);
     // A skin drawing through the player's renderer or on its DOM screen draws the frame just collected now.
     const overlayLanes = Array.from(this.play.laneX, ([channel, lane]) => ({
       ...lane,
@@ -263,14 +272,24 @@ export class BuiltInPlayView
       this.designRoot.alpha,
     );
     this.chartText.show(frame.chartText ?? '', this.playfieldSkin.stage, this.app.screen, this.designRoot.alpha);
+    // LR2's EARTHQUAKE sways the whole play screen.
+    const quake = resolveLR2Earthquake(
+      resolveLR2ManiaVisual(frame.playOptions),
+      this.play.playClock(),
+      this.app.screen.height / LR2_SCREEN_HEIGHT,
+    );
+    this.root.position.set(quake.x, quake.y);
     this.bpmChangeWarning.show({
       enabled: frame.playOptions.bpmChangeWarning,
+      judgePosition: frame.playOptions.judgePosition,
       timing: this.play.timingResolver,
       seconds: frame.seconds,
       lanes: overlayLanes,
       stage: this.playfieldSkin.stage,
       screen: this.app.screen,
       opacity: this.designRoot.alpha,
+      style: resolveBuiltInBPMChangeWarningStyle(this.kit.skin.id),
+      resolution: this.app.renderer.resolution,
     });
     this.skinBindingInstance?.flush();
     this.dom?.setOpacity(this.designRoot.alpha);

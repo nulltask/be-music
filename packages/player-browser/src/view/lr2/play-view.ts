@@ -2,6 +2,12 @@ import { isFreeZoneChannel } from '@be-music/chart-model';
 import { ChartTextOverlay } from '../shared/chart-text.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
+import { resolveLinearTargetPace } from '../shared/target-pace.ts';
+import {
+  resolveLR2Earthquake,
+  resolveLR2ManiaVisual,
+  LR2_SCREEN_HEIGHT,
+} from '../shared/playfield/lr2-mania-visual.ts';
 /**
  * The LR2 family's play screen: an LR2 play skin (`play_<variant>.lr2skin`) drawn around the shared playfield
  * (`view/shared/playfield`) in the skin's authored coordinate space, letterboxed into the window. It draws the play session's frames:
@@ -16,7 +22,7 @@ import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
  * the play from the skin's timing ({@link resolveLR2PlayTiming}) and handles its input.
  */
 
-import type { LR2Skin, LR2SpecialGraphic } from '@be-music/skin-lr2';
+import type { LR2Skin } from '@be-music/skin-lr2';
 import { LR2_SPECIAL_GRAPHIC, isLR2SpecialGraphic } from '@be-music/skin-lr2';
 import {
   resolveLR2NonstopStage,
@@ -152,6 +158,8 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
   private loaded = true;
   /** The stage a stitched NONSTOP play shows. */
   private nonstopStage = 0;
+  /** Whether a stage of the stitched NONSTOP play has a `#BACKBMP`: the shown stage's then stands in for the chart's. */
+  private readonly nonstopBackBMP: boolean;
   /** The frame rate over a sliding one-second window, for the skin's frame-rate readout (number 20). */
   private fps = 0;
   private fpsFrameCount = 0;
@@ -163,6 +171,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     this.skin = kit.skin;
     this.invisibleNoteSkin = kit.invisibleNoteSkin;
     this.options = { ...options };
+    this.nonstopBackBMP = options.nonstop?.stages.some((stage) => stage.backBMP !== undefined) === true;
     this.timing = resolveLR2PlayTiming(kit.skin);
     this.timers = new LR2PlayTimers(play);
     const skin = kit.skin;
@@ -281,6 +290,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
 
   public draw(frame: PlayFrame): void {
     this.play = frame.playfield;
+    this.playOptions = frame.playOptions;
     this.options.judgeTimingMs = frame.playOptions.judgeTimingMs;
     this.options.judgeTimingAutoAdjust = frame.playOptions.judgeTimingAutoAdjust;
     for (const event of frame.events) this.handleEvent(event);
@@ -293,6 +303,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     this.perf.time('updateFPS', () => this.updateFPS());
     this.perf.time('updateScores', () => {
       this.updateNonstopStage();
+      this.showNonstopBackBMP();
       this.refreshState(frame);
       // The disc's angle this frame, before it draws.
       this.turntable.update(this.play.playClock(), {
@@ -301,7 +312,8 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
       });
     });
     this.perf.time('render', () =>
-      render(this, frame.seconds, frame.playfield.audioAnalyzer !== undefined ? frame.audio : undefined),
+      // Nothing an LR2 skin draws reacts to the audio: the frame's analysis is left unread (and unrun).
+      render(this, frame.seconds, undefined),
     );
     const overlayLanes = Array.from(this.play.laneX, ([channel, lane]) => ({
       ...lane,
@@ -324,6 +336,13 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
       this.designRoot.alpha,
     );
     this.chartText.show(frame.chartText ?? '', this.playfieldSkin.stage, this.app.screen, this.designRoot.alpha);
+    // LR2's EARTHQUAKE sways the whole play screen.
+    const quake = resolveLR2Earthquake(
+      resolveLR2ManiaVisual(frame.playOptions),
+      this.play.playClock(),
+      this.app.screen.height / LR2_SCREEN_HEIGHT,
+    );
+    this.root.position.set(quake.x, quake.y);
     this.bpmChangeWarning.show({
       enabled: frame.playOptions.bpmChangeWarning,
       timing: this.play.timingResolver,
@@ -392,6 +411,7 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     }
     // A play that may show this skin again keeps the textures. Destroying them and decoding the same bytes crashes
     // PixiJS v8. The play destroys the retainer when it ends.
+    this.dropNonstopBackBMPAlias();
     this.handTexturesBack();
     try {
       releaseTexturesOnHost(this.host, [...this.textures.values()]);
@@ -490,12 +510,18 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     const seconds = play.currentSeconds();
     const bpm = play.displayBPM(seconds);
     const second = play.secondPlayer;
-    // A replay ghost paced as the target (its EX score now and over the chart): numbers 151 / 153, bar graphs 14 / 15.
+    // The target (its EX score now and over the chart): numbers 151 / 153, bar graphs 14 / 15. A replay ghost paces as
+    // it was played; a fixed target (a rank border, a score rate, a ranking place) advances with the notes judged.
     const targets = frame?.scoreTargets;
     const target =
       targets?.targetPaceEXScore !== undefined
         ? { exScore: targets.targetPaceEXScore, finalEXScore: targets.targetEXScore ?? targets.targetPaceEXScore }
-        : undefined;
+        : targets?.targetEXScore !== undefined
+          ? {
+              exScore: resolveLinearTargetPace(targets.targetEXScore, play.score),
+              finalEXScore: targets.targetEXScore,
+            }
+          : undefined;
     this.lr2State = resolveLR2PlayState(setup, {
       play: frame?.state ?? play.playState,
       score: play.score,
@@ -526,6 +552,23 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     const nonstop = this.options.nonstop;
     if (nonstop === undefined || this.options.course === undefined) return;
     this.nonstopStage = resolveLR2NonstopStage(nonstop.stages, this.play.currentSeconds());
+  }
+
+  /**
+   * Shows the `#BACKBMP` of the stage the play shows (`gr=101`), as the skin reads it under LR2's special path: a stage
+   * without one draws nothing there. The skin's present / absent ops (195 / 194) stay the first stage's, as the skin is
+   * set up once for the whole play.
+   */
+  private showNonstopBackBMP(): void {
+    if (!this.nonstopBackBMP) return;
+    const texture = this.textures.get(nonstopBackBMPKey(this.nonstopStage));
+    if (texture !== undefined) this.textures.set(LR2_SPECIAL_GRAPHIC.BACKBMP, texture);
+    else this.textures.delete(LR2_SPECIAL_GRAPHIC.BACKBMP);
+  }
+
+  /** Drops the shown stage's `#BACKBMP` from its alias key, so the texture is handed back or released once. */
+  private dropNonstopBackBMPAlias(): void {
+    if (this.nonstopBackBMP) this.textures.delete(LR2_SPECIAL_GRAPHIC.BACKBMP);
   }
 
   /** Samples the frame rate over a sliding one-second window. */
@@ -633,9 +676,14 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
     const source = this.options.source;
     if (!chartEntry || !source) return;
     const meta = chartEntry.chart.metadata;
-    const candidates: Array<{ key: LR2SpecialGraphic; assetPath: string }> = [];
+    const candidates: Array<{ key: string; assetPath: string }> = [];
     if (meta.stageFile) candidates.push({ key: LR2_SPECIAL_GRAPHIC.STAGEFILE, assetPath: meta.stageFile });
-    if (meta.backBMP) candidates.push({ key: LR2_SPECIAL_GRAPHIC.BACKBMP, assetPath: meta.backBMP });
+    if (this.nonstopBackBMP) {
+      // Each stage's own, under a key of its own; `showNonstopBackBMP` shows the shown stage's.
+      this.options.nonstop?.stages.forEach((stage, index) => {
+        if (stage.backBMP !== undefined) candidates.push({ key: nonstopBackBMPKey(index), assetPath: stage.backBMP });
+      });
+    } else if (meta.backBMP) candidates.push({ key: LR2_SPECIAL_GRAPHIC.BACKBMP, assetPath: meta.backBMP });
     if (meta.banner) candidates.push({ key: LR2_SPECIAL_GRAPHIC.BANNER, assetPath: meta.banner });
     await Promise.all(
       candidates.map(async ({ key, assetPath }) => {
@@ -656,4 +704,9 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
       }),
     );
   }
+}
+
+/** The texture key of a stitched NONSTOP stage's `#BACKBMP`. */
+function nonstopBackBMPKey(stage: number): string {
+  return `${LR2_SPECIAL_GRAPHIC.BACKBMP}:stage${stage}`;
 }

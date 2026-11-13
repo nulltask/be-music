@@ -47,7 +47,7 @@ export interface RulesetJudgeRankFacts {
 export interface RulesetStageRank {
   timeUs: number;
   rank: number;
-  table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank';
+  table: 'chart' | 'lr2-nonstop' | 'bmson' | 'bms-exrank' | 'bms-exrank-change';
 }
 
 /**

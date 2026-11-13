@@ -1,5 +1,11 @@
-import { resolvePracticeGaugeTypes, splitOptionSource, type RulesetId } from '@be-music/player-engine/ruleset';
 import {
+  optionValueSources,
+  resolvePracticeGaugeTypes,
+  splitOptionSource,
+  type RulesetId,
+} from '@be-music/player-engine/ruleset';
+import {
+  formatGaugeLabel,
   laneCoversFromPlayOptions,
   resolveRandomModes,
   type LaneCoverState,
@@ -29,6 +35,8 @@ const LANE_OPTION_SOURCES: Readonly<Record<string, RulesetId>> = {
   S_RANDOM_PLAYABLE: 'beatoraja',
   SCATTER: 'lr2',
   'SCATTER-CORRECTED': 'lr2',
+  'S-RANDOM-CORRECTED': 'lr2',
+  'CONVERGE-CORRECTED': 'lr2',
   'SYNCHRONIZE-RANDOM': '____',
   'SYMMETRY-RANDOM': '____',
 };
@@ -36,6 +44,8 @@ const LANE_OPTION_SOURCES: Readonly<Record<string, RulesetId>> = {
 /** How the Options dialog spells a lane option's name. */
 const LANE_OPTION_NAMES: Readonly<Record<string, string>> = {
   'SCATTER-CORRECTED': 'SCATTER 9KEY corrected',
+  'S-RANDOM-CORRECTED': 'S-RANDOM 9KEY corrected',
+  'CONVERGE-CORRECTED': 'CONVERGE corrected',
   RANDOM_PLAYABLE: 'RANDOM PLAYABLE',
   S_RANDOM_PLAYABLE: 'S-RANDOM PLAYABLE',
   'SYNCHRONIZE-RANDOM': 'SYNCHRONIZE RANDOM',
@@ -47,27 +57,42 @@ function sourceOrder(ruleset: RulesetId): RulesetId[] {
   return [ruleset, ...(['lr2', 'beatoraja', '____'] as const).filter((source) => source !== ruleset)];
 }
 
-/** The source a lane option value comes from; `undefined` for OFF and MIRROR, which every source defines alike. */
+/**
+ * The source a lane option value comes from; `undefined` for OFF, MIRROR and RANDOM, which every source defines alike.
+ */
 export function laneOptionSource(mode: RandomMode): RulesetId | undefined {
   return splitOptionSource(mode).source ?? LANE_OPTION_SOURCES[mode];
 }
 
+/** The sources that define a lane option value as it runs: its source, and those sharing it (AC's S-RANDOM is LR2's). */
+function laneOptionSources(mode: RandomMode): readonly RulesetId[] {
+  const shared = optionValueSources(mode);
+  if (shared.length > 0) return shared;
+  const source = laneOptionSource(mode);
+  return source === undefined ? [] : [source];
+}
+
 /**
- * The Options dialog's lane options under `ruleset`, grouped by source (ADR 0019): OFF and MIRROR, then the judge ruleset's
- * own source's options, then the other sources'. Each source-specific option names its source, so `lr2:RANDOM` reads
- * `RANDOM (LR2)` and `beatoraja:RANDOM` reads `RANDOM (beatoraja)`.
+ * The Options dialog's lane options under `ruleset`, grouped by source (ADR 0019): OFF, MIRROR and RANDOM, then the judge
+ * ruleset's own source's options, then the other sources'. Each source-specific option names its sources, so
+ * `lr2:S-RANDOM` reads `S-RANDOM (LR2 / ????)` and `beatoraja:S-RANDOM` reads `S-RANDOM (beatoraja)`; a shared one sits
+ * in the group of the first source in that order.
  */
 export function laneOptionItems(ruleset: RulesetId, duplicatedBattle1P = false): PlayOptionItem<RandomMode>[] {
   const modes = resolveRandomModes(ruleset, duplicatedBattle1P);
+  const order = sourceOrder(ruleset);
   const item = (mode: RandomMode): PlayOptionItem<RandomMode> => {
-    const source = laneOptionSource(mode);
+    const sources = laneOptionSources(mode);
     const name = splitOptionSource(mode).name;
     const text = LANE_OPTION_NAMES[name] ?? name;
-    return { text: source === undefined ? text : `${text} (${SOURCE_LABELS[source]})`, value: mode };
+    const label = sources.map((source) => SOURCE_LABELS[source]).join(' / ');
+    return { text: sources.length === 0 ? text : `${text} (${label})`, value: mode };
   };
+  const group = (mode: RandomMode): RulesetId | undefined =>
+    order.find((source) => laneOptionSources(mode).includes(source));
   return [
-    ...modes.filter((mode) => laneOptionSource(mode) === undefined),
-    ...sourceOrder(ruleset).flatMap((source) => modes.filter((mode) => laneOptionSource(mode) === source)),
+    ...modes.filter((mode) => group(mode) === undefined),
+    ...order.flatMap((source) => modes.filter((mode) => group(mode) === source)),
   ].map(item);
 }
 
@@ -84,6 +109,7 @@ export function battleModeItems(ruleset: RulesetId): PlayOptionItem<PlayOptions[
       ...(ruleset === 'lr2' ? [{ text: 'COUPLE (LR2)', value: 'COUPLE' as const }] : []),
       { text: 'D-BATTLE (LR2)', value: 'D-BATTLE' },
       { text: 'SP TO DP (LR2)', value: 'SP-TO-DP' },
+      { text: 'SP TO DP corrected (LR2)', value: 'SP-TO-DP-CORRECTED' },
     ],
     beatoraja: [
       { text: 'BATTLE (beatoraja)', value: 'beatoraja:BATTLE' },
@@ -108,8 +134,6 @@ const PRACTICE_GAUGE_NAMES: Readonly<Partial<Record<PracticeGaugeType, string>>>
   CLASS: 'GRADE',
   EXCLASS: 'EX GRADE',
   EXHARDCLASS: 'EXHARD GRADE',
-  'P-ATTACK': 'P.ATTACK',
-  'G-ATTACK': 'G.ATTACK',
 };
 
 /**
@@ -118,7 +142,10 @@ const PRACTICE_GAUGE_NAMES: Readonly<Partial<Record<PracticeGaugeType, string>>>
  */
 export function practiceGaugeItems(ruleset: RulesetId): PlayOptionItem<PracticeGaugeType>[] {
   return resolvePracticeGaugeTypes(ruleset).map((value) => ({
-    text: ruleset === 'lr2' && value === 'DEATH' ? 'HAZARD' : (PRACTICE_GAUGE_NAMES[value] ?? value),
+    text:
+      ruleset === 'lr2' && value === 'DEATH'
+        ? 'HAZARD'
+        : (PRACTICE_GAUGE_NAMES[value] ?? formatGaugeLabel(value) ?? value),
     value,
   }));
 }

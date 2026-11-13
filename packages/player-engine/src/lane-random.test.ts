@@ -486,3 +486,54 @@ test('beatoraja restores LN source and destination lanes at the end of the sourc
   ];
   expect(randomizeSRandomNotes(notes, ['a', 'b'], { ruleset: 'beatoraja', random: zero })).toEqual(['a', 'b']);
 });
+
+describe('beatoraja candidate order (#1087)', () => {
+  test('a row places its empty and mine-only lanes over the lanes past the threshold first', () => {
+    // t=0 puts the note on a; at t=10 a is within 40 ms, so the note takes b and the mine on b's source goes to c, the
+    // lane past the threshold, before a.
+    const channels = randomizeSRandomNotes(
+      [
+        { channel: 'a', timeMs: 0 },
+        { channel: 'a', timeMs: 10 },
+        { channel: 'b', timeMs: 10, kind: 'mine' },
+      ],
+      ['a', 'b', 'c'],
+      { ruleset: 'beatoraja', random: () => 0 },
+    );
+    expect(channels).toEqual(['a', 'b', 'c']);
+  });
+
+  test('successive empty-source draws keep past and recent lanes in their relative order', () => {
+    const draws = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.5, 0.5, 0, 0];
+    const channels = randomizeSRandomNotes(
+      [
+        { channel: 'a', timeMs: 0 },
+        { channel: 'b', timeMs: 5 },
+        { channel: 'a', timeMs: 10 },
+        { channel: 'b', timeMs: 10, kind: 'mine' },
+        { channel: 'c', timeMs: 10, kind: 'invisible' },
+        { channel: 'd', timeMs: 10, kind: 'invisible' },
+        { channel: 'e', timeMs: 10, kind: 'mine' },
+      ],
+      ['a', 'b', 'c', 'd', 'e'],
+      { ruleset: 'beatoraja', random: () => draws.shift()! },
+    );
+    expect(channels).toEqual(['a', 'b', 'c', 'a', 'e', 'd', 'b']);
+    expect(draws).toEqual([]);
+  });
+
+  test('DP ALL-SCR takes the lowest-numbered lane on 1P even after a released long note reorders the lanes', () => {
+    const channels = randomizeAllScratchNotes(
+      [
+        { channel: 'k1', timeMs: 0 },
+        { channel: 'k2', timeMs: 0, endTimeMs: 100 },
+        { channel: 'k2', timeMs: 300 },
+        { channel: 'k3', timeMs: 300 },
+      ],
+      ['k1', 'k2', 'k3', 'S'],
+      { random: () => 0, scratchLanes: ['S'], doublePlay: true, side: '1P' },
+    );
+    // k1 released at t=300 goes to the end of the free lanes; the 1P pick is still lane k1, the lowest number.
+    expect(channels).toEqual(['S', 'k1', 'k1', 'S']);
+  });
+});

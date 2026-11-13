@@ -5,6 +5,7 @@ import {
   createRandomMixCourse,
   drawRandomMixStage,
   filterRandomMixCandidates,
+  hasRandomMixFirstStage,
   isRandomMixKept,
   listRandomMixKeyModes,
   matchesRandomMixConditions,
@@ -50,7 +51,7 @@ describe('RANDOM MIX conditions', () => {
     expect(normalizeRandomMixConditions(undefined)).toEqual(DEFAULT_RANDOM_MIX_CONDITIONS);
     expect(
       normalizeRandomMixConditions({
-        keyModes: [14, 7, 7, 'x', -1],
+        keyMode: 14,
         by: 'difficulty',
         minLevel: 120,
         maxLevel: -4,
@@ -61,18 +62,32 @@ describe('RANDOM MIX conditions', () => {
         loops: 500,
       }),
     ).toEqual({
-      keyModes: [7, 14],
+      keyMode: 14,
       by: 'difficulty',
       minLevel: 99,
       maxLevel: 0,
       difficulties: [2, 5],
       estimateDifficulty: false,
+      allowBPMChanges: true,
       count: 'infinity',
     });
     expect(normalizeRandomMixConditions({ count: 0, loops: 'infinity', by: 'other' })).toEqual({
       ...DEFAULT_RANDOM_MIX_CONDITIONS,
       count: 1,
     });
+  });
+
+  test('normalize reads the key-mode set an earlier version kept as one key mode', () => {
+    // The fallback's key mode when the set holds it, else the set's lowest.
+    expect(normalizeRandomMixConditions({ keyModes: [14, 7, 'x', -1] }).keyMode).toBe(7);
+    expect(normalizeRandomMixConditions({ keyModes: [14, 10] }).keyMode).toBe(10);
+    expect(normalizeRandomMixConditions({ keyModes: [] }).keyMode).toBe(7);
+    // A stored key mode wins over a leftover set; a malformed one falls back.
+    expect(normalizeRandomMixConditions({ keyMode: 5, keyModes: [14] }).keyMode).toBe(5);
+    expect(normalizeRandomMixConditions({ keyMode: 0 }).keyMode).toBe(7);
+    expect(
+      normalizeRandomMixConditions({ keyMode: 7.5 }, { ...DEFAULT_RANDOM_MIX_CONDITIONS, keyMode: 9 }).keyMode,
+    ).toBe(9);
   });
 
   test('a chart matches by key mode and then by level range or difficulty', () => {
@@ -95,17 +110,21 @@ describe('RANDOM MIX conditions', () => {
 
   test('filter keeps library order and lists the key modes', () => {
     const charts = [chart(1, { keyMode: 14 }), chart(2), chart(3, { keyMode: 5 }), chart(4)];
-    expect(filterRandomMixCandidates(charts, conditions({ keyModes: [7, 5] })).map((c) => c.n)).toEqual([2, 3, 4]);
+    expect(filterRandomMixCandidates(charts, conditions({ keyMode: 7 })).map((c) => c.n)).toEqual([2, 4]);
+    expect(filterRandomMixCandidates(charts, conditions({ keyMode: 5 })).map((c) => c.n)).toEqual([3]);
     expect(listRandomMixKeyModes(charts)).toEqual([5, 7, 14]);
   });
 
-  test('a NONSTOP draw is capped and never endless; only five stages or fewer are kept', () => {
+  test('a NONSTOP draw counts as an EXPERT one but is never endless; every counted draw is kept', () => {
     expect(resolveRandomMixCount('nonstop', 'infinity')).toBe(5);
-    expect(resolveRandomMixCount('nonstop', 40)).toBe(5);
+    expect(resolveRandomMixCount('nonstop', 40)).toBe(40);
+    expect(resolveRandomMixCount('nonstop', 99)).toBe(99);
     expect(resolveRandomMixCount('nonstop', 3)).toBe(3);
     expect(resolveRandomMixCount('expert', 'infinity')).toBe('infinity');
+    expect(resolveRandomMixCount('expert', 40)).toBe(40);
     expect(isRandomMixKept(5)).toBe(true);
-    expect(isRandomMixKept(6)).toBe(false);
+    expect(isRandomMixKept(6)).toBe(true);
+    expect(isRandomMixKept(99)).toBe(true);
     expect(isRandomMixKept('infinity')).toBe(false);
   });
 });
@@ -191,5 +210,67 @@ describe('createRandomMixCourse', () => {
     expect(course).toMatchObject({ name: 'RANDOM MIX', kind: 'expert', keyMode: 7, release: false });
     expect(course.stages.map((stage) => stage.md5)).toEqual(['a'.repeat(32), 'b'.repeat(32)]);
     expect(createRandomMixCourse('expert', [])).toBeUndefined();
+  });
+
+  test('gives a NONSTOP draw the default connection after every stage, past the ten an LR2 hash holds', () => {
+    const stages = Array.from({ length: 12 }, (_, index) => ({
+      md5: index.toString(16).padStart(32, '0'),
+      keyMode: 7,
+    }));
+    const course = createRandomMixCourse('nonstop', stages, { defaultConnection: 'cut' })!;
+    expect(course.stages).toHaveLength(12);
+    expect(course.connections).toEqual(Array.from({ length: 11 }, () => 'cut'));
+    expect(createRandomMixCourse('expert', stages)!.connections).toBeUndefined();
+  });
+});
+
+describe('hasRandomMixFirstStage', () => {
+  test('is false when every chart that fits changes BPM under a BPM range, and true without the range', () => {
+    // The charts the dialog counts (say every ANOTHER) all change BPM: none can be stage 1 under a BPM range.
+    const pool = [chart(1, { bpm: [150, 200] }), chart(2, { bpm: [120, 180] })];
+    expect(hasRandomMixFirstStage(pool, { settings: settings({ bpmRange: 10 }), bpmOf })).toBe(false);
+    expect(drawRandomMixStage(pool, { settings: settings({ bpmRange: 10 }), bpmOf }, seeded(1))).toBeUndefined();
+    expect(hasRandomMixFirstStage(pool, { settings: settings(), bpmOf })).toBe(true);
+    expect(hasRandomMixFirstStage([...pool, chart(3)], { settings: settings({ bpmRange: 10 }), bpmOf })).toBe(true);
+  });
+
+  test('applies the BPM limits, and stops at the first chart that can be stage 1', () => {
+    const pool = Array.from({ length: 100 }, (_, n) => chart(n, { bpm: [150, 150] }));
+    expect(hasRandomMixFirstStage(pool, { settings: settings({ maxBPM: 140 }), bpmOf })).toBe(false);
+    let asked = 0;
+    expect(
+      hasRandomMixFirstStage(pool, { settings: settings({ bpmRange: 10 }), bpmOf: (c) => (asked++, bpmOf(c)) }),
+    ).toBe(true);
+    expect(asked).toBe(1);
+    expect(hasRandomMixFirstStage([], { settings: settings(), bpmOf })).toBe(false);
+  });
+});
+
+describe('allowBPMChanges', () => {
+  test('lets a chart whose BPM changes be stage 1, placed by its max BPM', () => {
+    const pool = [chart(1, { bpm: [150, 200] }), chart(2, { bpm: [120, 180] })];
+    const ranged = settings({ bpmRange: 10 });
+    expect(hasRandomMixFirstStage(pool, { settings: ranged, bpmOf, allowBPMChanges: true })).toBe(true);
+    expect(drawRandomMixStage(pool, { settings: ranged, bpmOf, allowBPMChanges: true }, seeded(1))).toBeDefined();
+    // Later stages lie within the range around stage 1's max BPM, by their own max BPM.
+    const first = pool[0]!;
+    const later = [chart(3, { bpm: [100, 205] }), chart(4, { bpm: [100, 230] })];
+    for (let seed = 0; seed < 10; seed += 1)
+      expect(
+        drawRandomMixStage(later, { settings: ranged, bpmOf, first, allowBPMChanges: true }, seeded(seed))?.n,
+      ).toBe(3);
+    // The BPM limits read the max BPM too.
+    expect(hasRandomMixFirstStage(pool, { settings: settings({ maxBPM: 190 }), bpmOf, allowBPMChanges: true })).toBe(
+      true,
+    );
+    expect(hasRandomMixFirstStage(pool, { settings: settings({ maxBPM: 170 }), bpmOf, allowBPMChanges: true })).toBe(
+      false,
+    );
+  });
+
+  test('is on by default and kept across storage', () => {
+    expect(DEFAULT_RANDOM_MIX_CONDITIONS.allowBPMChanges).toBe(true);
+    expect(normalizeRandomMixConditions({ allowBPMChanges: false }).allowBPMChanges).toBe(false);
+    expect(normalizeRandomMixConditions({}).allowBPMChanges).toBe(true);
   });
 });

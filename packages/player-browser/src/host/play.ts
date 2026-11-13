@@ -4,7 +4,7 @@
  */
 
 import { BGACameraFeed } from '../media/bga-camera.ts';
-import type { ResolvedPlayChart } from '@be-music/player-engine';
+import type { GuideSound, ResolvedPlayChart } from '@be-music/player-engine';
 import type { BeMusicReplay, ReplayCourseStage } from '@be-music/player-engine/replay';
 import type { RulesetId } from '@be-music/player-engine/ruleset';
 import {
@@ -16,6 +16,9 @@ import {
   type PlayOptions,
   type PlayResult,
   type PracticeRange,
+  type GuideSoundSlot,
+  type RankingScoreTarget,
+  type SystemSound,
   type SystemSoundSet,
 } from '@be-music/player-scene-model';
 import type { Texture } from 'pixi.js';
@@ -127,6 +130,11 @@ export interface PlaySceneOptions extends SessionSceneOptions {
   /** The play options as the select screen set them, for the frames a view reads. Defaults to `DEFAULT_PLAY_OPTIONS`. */
   readonly playOptions?: PlayOptions;
   readonly scoreTargets?: PlayFrame['scoreTargets'];
+  /**
+   * The EX score at a ranking target's place (`IR_*` in `PlayOptions.scoreTarget`) on the chart's ranking, or
+   * `undefined` when the chart has none. Without it a ranking target shows nothing.
+   */
+  readonly rankingTarget?: (target: RankingScoreTarget) => Promise<number | undefined>;
   /** The signed-in player's name, which a skin may show beside the chart. */
   readonly playerName?: string;
   /**
@@ -269,6 +277,7 @@ function createPlayView(
       ...(settings.dpFlip !== undefined ? { dpFlip: settings.dpFlip } : {}),
       ...(course?.view !== undefined ? { course: course.view } : {}),
       ...(settings.nonstop !== undefined ? { nonstop: settings.nonstop } : {}),
+      chartOptionProgram: options.replay ? options.replay.chart.chartOptions : settings.nonstop?.chartOptions,
       ...(source !== undefined ? { source } : {}),
       // The skin's Lua sounds play through the audio service, owned by the scene's session (not the play, which owns its
       // audio graph: a play that ended keeps ringing out after the scene leaves).
@@ -661,7 +670,12 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       ...settings,
       ...(kit.family === 'built-in' && LIFT_SKINS.has(kit.skin.id) ? { coverKeys: true } : {}),
       controlScheme: resolveControlScheme(kit.family, settings.builtInControlScheme),
+      // beatoraja's GUIDE SE: the sound set's judgment sounds, when the player turned them on.
+      ...(playOptions.guideSE ? { guideSounds: resolveGuideSounds(options.sounds) } : {}),
       judgeTimingAutoAdjust: playOptions.judgeTimingAutoAdjust,
+      ...(playOptions.lr2Gambol !== 0 && (settings.judgeRuleset ?? 'lr2') === 'lr2'
+        ? { lr2Gambol: playOptions.lr2Gambol }
+        : {}),
       ...(playOptions.customJudge && settings.judgeRuleset === 'beatoraja'
         ? {
             customJudge: {
@@ -691,6 +705,12 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       longNoteMode: playOptions.longNoteMode,
       lr2ExtraMode: playOptions.lr2ExtraMode,
       lr2ExtraLevel: playOptions.lr2ExtraLevel,
+      lr2Mania: {
+        addNotes: playOptions.lr2AddNotes,
+        loudness: playOptions.lr2Loudness,
+        addLongNotes: playOptions.lr2AddLongNotes,
+        addMines: playOptions.lr2AddMines,
+      },
       extraNoteDepth: playOptions.extraNoteDepth,
       extraNoteScratch: playOptions.extraNoteScratch,
       gaugeAutoShift: playOptions.gaugeAutoShift,
@@ -752,6 +772,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     ...(course?.view !== undefined ? { course: course.view } : {}),
     playOptions,
     ...(options.scoreTargets !== undefined ? { scoreTargets: options.scoreTargets } : {}),
+    ...(options.rankingTarget !== undefined ? { rankingTarget: options.rankingTarget } : {}),
     ...(options.playerName !== undefined ? { playerName: options.playerName } : {}),
     audio: options.audio,
     ...(options.sounds !== undefined ? { sounds: options.sounds } : {}),
@@ -813,4 +834,24 @@ function resolvePracticeSessionOptions(
     extraNoteDepth: 0,
     lr2ExtraMode: false,
   };
+}
+
+/** beatoraja's name for each guide sound slot, in its judge order. */
+const GUIDE_SOUND_NAMES: readonly (readonly [GuideSound, GuideSoundSlot])[] = [
+  ['PG', 'guidePG'],
+  ['GR', 'guideGR'],
+  ['GD', 'guideGD'],
+  ['BD', 'guideBD'],
+  ['PR', 'guidePR'],
+  ['MS', 'guideMS'],
+];
+
+/** The guide sound of each judgment a sound set has: its `guidePG` to `guideMS` slots, by beatoraja's judge names. */
+export function resolveGuideSounds(sounds: SystemSoundSet | undefined): Partial<Record<GuideSound, SystemSound>> {
+  const found: Partial<Record<GuideSound, SystemSound>> = {};
+  for (const [name, slot] of GUIDE_SOUND_NAMES) {
+    const sound = sounds?.[slot];
+    if (sound !== undefined) found[name] = sound;
+  }
+  return found;
 }

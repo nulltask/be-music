@@ -2,7 +2,7 @@ import { expect, test, vi } from 'vite-plus/test';
 import { createJudgeEffectHandler } from './engine-effects.ts';
 import type { JudgeTimingAutoAdjust } from './judge-timing.ts';
 
-function setup(mode: JudgeTimingAutoAdjust = 'BEATORAJA') {
+function setup(mode: JudgeTimingAutoAdjust = 'BEATORAJA', audioSession?: { playGuideSound?: (sound: string) => void }) {
   const recordOptionChange = vi.fn();
   const pushCommand = vi.fn();
   const publishJudgeCombo = vi.fn();
@@ -13,7 +13,7 @@ function setup(mode: JudgeTimingAutoAdjust = 'BEATORAJA') {
     writeOutput() {},
     wavResources: {},
     idBase: 36,
-    audioSession: undefined,
+    audioSession: audioSession as never,
     playbackStateLogger: {} as never,
     playbackEventTracer: {} as never,
     uiSignals: { pushCommand } as never,
@@ -105,4 +105,20 @@ test('LR2 SILENT adjusts as ON does, and OFF and beatoraja take no LR2 step', ()
     play.settleJudgeTiming();
     expect(play.timing.value).toBe(500);
   }
+});
+
+test('each judgment plays its guide sound through an audio session that has them', () => {
+  const playGuideSound = vi.fn();
+  const play = setup('OFF', { playGuideSound });
+  play.effect({ kind: 'judge-combo', seconds: 1, judge: 'PERFECT', combo: 1, channel: '11', signedDeltaMs: 0 });
+  play.effect({ kind: 'judge-combo', seconds: 2, judge: 'BAD', combo: 0, channel: '11', signedDeltaMs: 200 });
+  // A missed note, then an empty POOR, then the POOR that only sums up what a stopped play left.
+  play.effect({ kind: 'judge-combo', seconds: 3, judge: 'POOR', combo: 0, channel: '12', signedDeltaMs: 300 });
+  play.effect({ kind: 'judge-combo', judge: 'POOR', combo: 0, poor: 'empty' });
+  play.effect({ kind: 'judge-combo', judge: 'POOR', combo: 0, poor: 'remaining' });
+  play.effect({ kind: 'judge-combo', judge: 'READY', combo: 0 });
+  expect(playGuideSound.mock.calls.map(([sound]) => sound)).toEqual(['PG', 'BD', 'PR', 'MS']);
+  // A session without guide sounds is left alone.
+  const silent = setup('OFF', {});
+  expect(() => silent.effect({ kind: 'judge-combo', judge: 'GREAT', combo: 1 })).not.toThrow();
 });

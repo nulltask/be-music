@@ -72,8 +72,12 @@ export const CONTROL_ACTION_IDS = [
   'select.sort',
   'select.keys-filter',
   'select.ln-mode',
+  'select.battle',
+  'select.m-ran-1p',
+  'select.m-ran-2p',
   'select.search',
   'select.reload',
+  'select.mania-options',
   'select.copy-md5',
   'select.copy-sha256',
   'select.autoplay-folder',
@@ -113,6 +117,8 @@ export const CONTROL_ACTION_IDS = [
   'result.continue',
   'result.leave',
   'result.retry',
+  'result.retry-same',
+  'result.change-graph',
   'result.save-replay-1',
   'result.save-replay-2',
   'result.save-replay-3',
@@ -253,6 +259,24 @@ export const CONTROL_ACTIONS: readonly ControlActionDefinition[] = [
     defaults: { beatoraja: [code('Digit3')] },
     bare: true,
   },
+  // That-Which-Must-Not-Be-Named AC 34 sets BATTLE with numpad 7 and M-RAN with numpad 6 on its option screen; here they
+  // are select-screen keys of their own. Each player has a numpad there; here the 2P M-RAN takes Shift + numpad 6.
+  { id: 'select.battle', screen: 'select', label: 'BATTLE (????)', defaults: both([code('Numpad7')]), bare: true },
+  {
+    id: 'select.m-ran-1p',
+    screen: 'select',
+    label: 'M-RAN 1P',
+    defaults: both([code('Numpad6')]),
+    bare: true,
+    bareShift: true,
+  },
+  {
+    id: 'select.m-ran-2p',
+    screen: 'select',
+    label: 'M-RAN 2P',
+    defaults: both([code('Numpad6')]),
+    modifiers: { ctrl: false, shift: true },
+  },
   { id: 'select.search', screen: 'select', label: 'Search', defaults: both([code('Digit0')]), bare: true },
   {
     id: 'select.reload',
@@ -260,6 +284,9 @@ export const CONTROL_ACTIONS: readonly ControlActionDefinition[] = [
     label: 'Reload folders',
     defaults: { lr2: [code('F8')], beatoraja: [code('F2')] },
   },
+  // LR2 shows its mania options panel while F2 is held on the select screen. beatoraja's F2 reloads the folders, so the
+  // action is unbound there.
+  { id: 'select.mania-options', screen: 'select', label: 'LR2 mania options', defaults: { lr2: [code('F2')] } },
   {
     id: 'select.copy-md5',
     screen: 'select',
@@ -436,6 +463,22 @@ export const CONTROL_ACTIONS: readonly ControlActionDefinition[] = [
     defaults: both([code('KeyR')]),
     bare: true,
     bareShift: true,
+  },
+  // beatoraja's result keys (`MusicResult`): the same chart on the same note arrangement (REPLAY_SAME, key 7 held as
+  // the screen leaves) and the gauge graph stepped to the next gauge (CHANGE_GRAPH, key 6).
+  {
+    id: 'result.retry-same',
+    screen: 'result',
+    label: 'Retry (same arrangement)',
+    defaults: both([code('KeyT')]),
+    bare: true,
+  },
+  {
+    id: 'result.change-graph',
+    screen: 'result',
+    label: 'Gauge graph',
+    defaults: { lr2: [code('KeyG')], beatoraja: [code('KeyG'), button('1P-key6')] },
+    bare: true,
   },
   ...([1, 2, 3, 4] as const).map((slot) => ({
     id: `result.save-replay-${slot}` as const,

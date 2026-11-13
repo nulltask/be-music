@@ -7,7 +7,12 @@ for (const renderer of ['webgl', 'webgpu']) {
       if (message.text().includes('Blend filter requires backBuffer')) warnings.push(message.text());
     });
     await player.page.setViewportSize({ width: 1280, height: 720 });
-    await player.open({ 'be-music.built-in-skin': 'synesthesia', 'be-music.skin-effects': 'full' });
+    // The frosted glass is on by default only on macOS; turn it on so every platform renders it.
+    await player.open({
+      'be-music.built-in-skin': 'synesthesia',
+      'be-music.skin-effects': 'full',
+      'be-music.skin-settings': JSON.stringify({ version: 0, skins: { synesthesia: { frostedGlass: true } } }),
+    });
     await player.page.goto(`/?e2e=1&renderer=${renderer}`);
     await player.waitFor((state) => state.scene.kind === 'select', 'select screen');
     await player.drop('songs', { prefix: SONGS });

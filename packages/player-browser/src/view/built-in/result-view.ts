@@ -160,6 +160,7 @@ export class BuiltInResultView implements ResultView {
       rankLabel: resolveBuiltInRankLabel(result.score.exScore, result.score.total),
       ratePercent: computeScoreRate(result.score) * 100,
       elapsedMs: settled ? Number.POSITIVE_INFINITY : nowMs - enteredAtMs,
+      shownMs: nowMs - enteredAtMs,
       nowMs,
       effects: this.kit.effects ?? 'full',
     });

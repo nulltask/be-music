@@ -7,4 +7,5 @@
  */
 export * from './best-record.ts';
 export * from './assist-policy.ts';
+export * from './planned-assists.ts';
 export * from './dan-rank.ts';

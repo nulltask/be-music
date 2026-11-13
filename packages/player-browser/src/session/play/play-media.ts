@@ -24,7 +24,9 @@ import type {
   CompressorParams,
   TunableCompressor,
 } from '../../runtime/audio-bus.ts';
-import type { PlayAudioHandle } from '../../runtime/audio-service.ts';
+import type { AudioService, PlayAudioHandle } from '../../runtime/audio-service.ts';
+import type { GuideSound } from '@be-music/player-engine';
+import type { SystemSound } from '@be-music/player-scene-model';
 import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { createPlayAudioGraph } from '../../runtime/play-audio-graph.ts';
 import { chartToElapsedSeconds, resolveSamplePlaybackRate, stretchSlicePlayback } from '../../runtime/play-tempo.ts';
@@ -50,6 +52,7 @@ export interface PlayMediaContext {
       | 'audio'
       | 'judgeTimingAutoAdjust'
       | 'replay'
+      | 'guideSounds'
     >
   >;
   readonly chart: LibraryChart | undefined;
@@ -57,6 +60,7 @@ export interface PlayMediaContext {
   readonly resolvedChart: BeMusicJSON | undefined;
   readonly disposed: boolean;
   readonly tempo: number;
+  readonly playbackTempo?: number;
   audioContext: AudioContext | undefined;
   audioBus: AudioBusHandle | undefined;
   audioAnalyzer: AudioAnalyzer | undefined;
@@ -165,7 +169,7 @@ export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
       source: ctx.source,
       chartPath: ctx.chart.chartPath,
       samples: ctx.decodedSamples,
-      tempo: ctx.tempo,
+      tempo: ctx.playbackTempo ?? ctx.tempo,
       tempoPitchMode: pitchMode,
       tempoStretchAlgorithm: ctx.options.tempoStretchAlgorithm ?? 'signalsmith',
       ...(ctx.options.nonstop !== undefined ? { nonstop: ctx.options.nonstop } : {}),
@@ -174,9 +178,13 @@ export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
       // The chart played last keeps its decodes in the audio service, so a quick retry skips decoding them.
       ...(ctx.options.audio !== undefined ? { sampleCache: ctx.options.audio.chartSamples } : {}),
     }));
+  // GUIDE SE: the sound set's judgment sounds. A SILENT play has no sound of its own, so none of these either.
+  const guideSounds = silent
+    ? new Map<GuideSound, AudioBuffer>()
+    : await decodeGuideSounds(ctx.options.audio, ctx.options.guideSounds);
   // bmson slices index into the stretched samples (a bmson chart has no NONSTOP stages: one rate).
   if (stretched && ctx.bmsonSlicePlayback !== undefined) {
-    ctx.bmsonSlicePlayback = stretchSlicePlayback(ctx.bmsonSlicePlayback, ctx.tempo);
+    ctx.bmsonSlicePlayback = stretchSlicePlayback(ctx.bmsonSlicePlayback, ctx.playbackTempo ?? ctx.tempo);
   }
   // Build the WebAudioSession now that the sample cache is populated. The session captures the maps by reference
   // (the underlying entries can still grow if asset loading races onto a later tick), and owns every sample
@@ -198,14 +206,15 @@ export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
       wavCmdVolumeMultipliers: ctx.wavCmdVolumeMultipliers,
       bmsonSlicePlayback: ctx.bmsonSlicePlayback,
       ...(ctx.nonstopMixer !== undefined ? { stageMixer: ctx.nonstopMixer } : {}),
+      ...(guideSounds.size > 0 ? { guideSounds } : {}),
       playbackRate: samplePlaybackRate(ctx),
     });
   }
 }
 
 /** Every sample's playback rate: the play tempo when it moves the pitch, 1 when the samples were stretched to it. */
-export function samplePlaybackRate(ctx: Pick<PlayMediaContext, 'options' | 'tempo'>): number {
-  return resolveSamplePlaybackRate(ctx.options.tempoPitchMode ?? 'pitch', ctx.tempo);
+export function samplePlaybackRate(ctx: Pick<PlayMediaContext, 'options' | 'tempo' | 'playbackTempo'>): number {
+  return resolveSamplePlaybackRate(ctx.options.tempoPitchMode ?? 'pitch', ctx.playbackTempo ?? ctx.tempo);
 }
 
 /**
@@ -241,7 +250,7 @@ export async function prepareBGA(ctx: PlayMediaContext): Promise<void> {
       maxLongEdgePx: ctx.options.bgaTranscodeMaxLongEdgePx,
       useWebCodecs: ctx.options.bgaTranscodeUseWebCodecs,
     },
-    tempo: ctx.tempo,
+    tempo: ctx.playbackTempo ?? ctx.tempo,
     isCancelled: () => ctx.disposed,
   });
   if (ctx.disposed) return;
@@ -304,7 +313,7 @@ export function disposePlayAudio(ctx: PlayMediaTeardownContext, options: PlayDis
             bmsonSlicePlayback: ctx.bmsonSlicePlayback,
             currentSeconds: ctx.currentSeconds(),
           }),
-          ctx.tempo,
+          ctx.playbackTempo ?? ctx.tempo,
         )
       : 0;
   const webAudioSession = ctx.webAudioSession;
@@ -354,4 +363,24 @@ export function disposeBGAVideos(ctx: {
   for (const handle of new Set(ctx.bgaVideos.values())) releaseVideo(handle);
   ctx.bgaVideos.clear();
   ctx.bgaActiveVideos = {};
+}
+
+/**
+ * The guide sounds decoded through the audio service: the ones the sound set has and that decode. None without a
+ * service or without sounds.
+ */
+export async function decodeGuideSounds(
+  audio: Pick<AudioService, 'decodeSound'> | undefined,
+  sounds: PlaySessionOptions['guideSounds'],
+): Promise<Map<GuideSound, AudioBuffer>> {
+  const decoded = new Map<GuideSound, AudioBuffer>();
+  if (audio === undefined || sounds === undefined) return decoded;
+  await Promise.all(
+    (Object.entries(sounds) as [GuideSound, SystemSound | undefined][]).map(async ([name, sound]) => {
+      if (sound === undefined) return;
+      const buffer = await audio.decodeSound(sound).catch(() => undefined);
+      if (buffer !== undefined) decoded.set(name, buffer);
+    }),
+  );
+  return decoded;
 }

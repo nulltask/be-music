@@ -69,3 +69,11 @@ describe('resolveGrooveGaugeBeads', () => {
     expect(LR2_GROOVE_GAUGE_CLEAR_ZONE_PERCENT).toBe(80);
   });
 });
+
+test('shares one bead list per gauge state', () => {
+  const beads = resolveGrooveGaugeBeads(50);
+  expect(resolveGrooveGaugeBeads(50.4)).toBe(beads);
+  expect(resolveGrooveGaugeBeads(50, { survivalGauge: true })).not.toBe(beads);
+  expect(Object.isFrozen(beads)).toBe(true);
+  expect(Object.isFrozen(beads[0])).toBe(true);
+});

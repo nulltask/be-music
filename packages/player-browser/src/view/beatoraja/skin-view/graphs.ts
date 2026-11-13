@@ -41,8 +41,24 @@ export interface PolylineGraphEntry {
    * `Sprite` per segment.
    */
   graphics: Graphics;
-  /** Last point count painted, used to skip the rebuild when the polyline hasn't grown. */
+  /**
+   * The signature ({@link polylineSignature}) of the polyline last painted, used to skip the rebuild while it is the
+   * same line: it changes when a sample lands and when the line is another one of the same length (a result's gauge
+   * graph stepped to another gauge).
+   */
   lastPointCount: number;
+}
+
+/**
+ * A number that tells one polyline from another: its point count mixed with every point's height. Two lines of the
+ * same length differ in it unless their heights agree to a thousandth at every point.
+ */
+export function polylineSignature(points: readonly { readonly x: number; readonly y: number }[]): number {
+  let hash = points.length;
+  for (let index = 0; index < points.length; index += 1) {
+    hash = (Math.imul(hash, 31) + Math.round(points[index]!.y * 1000) + index) | 0;
+  }
+  return hash;
 }
 
 export interface GaugeGraphEntry {
@@ -306,7 +322,8 @@ export class BeatorajaGraphRenderer {
       graphics.visible = false;
       return;
     }
-    if (entry.lastPointCount !== points.length) {
+    const signature = polylineSignature(points);
+    if (entry.lastPointCount !== signature) {
       // Re-stroke the polyline. We use `props.tint` as the line color (beatoraja's reference
       // theme paints score-history graphs with a tinted "line" texture; collapsing to a single
       // color line is a simplification that loses texture detail but preserves the data shape).
@@ -321,7 +338,7 @@ export class BeatorajaGraphRenderer {
       // beatoraja result skins). Authors who need a different thickness can revisit when
       // we expose a per-graph stroke-width knob.
       graphics.stroke({ color: props.tint, width: 2, alpha: 1 });
-      entry.lastPointCount = points.length;
+      entry.lastPointCount = signature;
     }
     graphics.x = props.x;
     graphics.y = props.y;
@@ -349,7 +366,8 @@ export class BeatorajaGraphRenderer {
       graphics.visible = false;
       return;
     }
-    if (entry.lastPointCount !== points.length) {
+    const signature = polylineSignature(points);
+    if (entry.lastPointCount !== signature) {
       graphics.clear();
       const first = points[0]!;
       graphics.moveTo(first.x * props.width, (1 - first.y) * props.height);
@@ -362,7 +380,7 @@ export class BeatorajaGraphRenderer {
       // pick the color via dst rgb. 2px stroke matches the polyline-graph and bpmgraph
       // conventions.
       graphics.stroke({ color: props.tint, width: 2, alpha: 1 });
-      entry.lastPointCount = points.length;
+      entry.lastPointCount = signature;
     }
     graphics.x = props.x;
     graphics.y = props.y;

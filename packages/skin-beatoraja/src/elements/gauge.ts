@@ -102,6 +102,7 @@ export function beatorajaGaugeModeFromString(type: string | undefined): Beatoraj
     case 'EX-HARD':
       return BEATORAJA_GAUGE_MODE.EXHARD;
     case 'DEATH':
+    case 'DEATH-CORRECTED':
     case 'HAZARD':
       return BEATORAJA_GAUGE_MODE.HAZARD;
     case 'CLASS':

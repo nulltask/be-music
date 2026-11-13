@@ -115,7 +115,15 @@ export function resolveBGAImageRect(
   imageHeight: number,
   rect: BGARect,
   origin?: { x: number; y: number },
+  bgaMode?: 0 | 1 | 2,
 ): BGARect {
+  if (bgaMode === 0) return { ...rect };
+  if (bgaMode !== undefined && imageWidth > 0 && imageHeight > 0) {
+    const scale = bgaMode === 2 ? 0.8 : 1;
+    const w = (imageWidth * scale * rect.w) / BMS_BGA_CANVAS_SIZE;
+    const h = (imageHeight * scale * rect.h) / BMS_BGA_CANVAS_SIZE;
+    return { x: rect.x + (rect.w - w) / 2, y: rect.y, w, h };
+  }
   if (!(imageWidth > 0) || !(imageHeight > 0) || Math.max(imageWidth, imageHeight) > BMS_BGA_CANVAS_SIZE) {
     return { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
   }
@@ -260,6 +268,7 @@ export function isMissLayerShown(missSeconds: number | undefined, seconds: numbe
 
 /** One BGA stack to draw: its base and layer cues (and a POOR image in place of them) at `alpha`. */
 export interface BGAStack {
+  bgaMode?: 0 | 1 | 2;
   tint?: Record<keyof BGAOpacityTimelines, number>;
   opacity?: Record<keyof BGAOpacityTimelines, number>;
   poorOverlays?: boolean;
@@ -275,6 +284,8 @@ export interface BGAStack {
 
 /** What {@link resolveBGAStacks} reads: the chart's cues, a stitched NONSTOP chart's stages and the BGA rect's flags. */
 export interface BGAStacksInput {
+  bgaMode?: 0 | 1 | 2;
+  stageBGAMode?: (windowStart: number) => 0 | 1 | 2 | undefined;
   bmsonBGA?: BmsonBGAFrame;
   noPoor?: boolean;
   poorBGAMode?: 0 | 1 | 2;
@@ -314,8 +325,10 @@ export function resolveBGAStacks(input: BGAStacksInput): BGAStack[] {
     mode: 0 | 1 | 2 = 0,
     opacity?: BGAOpacityTimelines,
     stage?: number,
+    bgaMode?: 0 | 1 | 2,
   ): BGAStack => {
     const stack: BGAStack = {
+      ...(bgaMode !== undefined ? { bgaMode } : {}),
       ...(opacity !== undefined
         ? {
             opacity: {
@@ -360,12 +373,13 @@ export function resolveBGAStacks(input: BGAStacksInput): BGAStack[] {
     return stack;
   };
   const nonstop = input.nonstop;
-  if (nonstop === undefined) return [pick(input.timeline, 1, input.poorBGAMode, input.timeline.opacity)];
+  if (nonstop === undefined)
+    return [pick(input.timeline, 1, input.poorBGAMode, input.timeline.opacity, undefined, input.bgaMode)];
   return nonstop.stages.flatMap((stage, index) => {
     const timeline = nonstop.timelines[index];
     const alpha = resolveNonstopBGAAlpha(stage, seconds);
     return timeline !== undefined && alpha > 0
-      ? [pick(timeline, alpha, stage.poorBGAMode, stage.bgaOpacity, index)]
+      ? [pick(timeline, alpha, stage.poorBGAMode, stage.bgaOpacity, index, input.stageBGAMode?.(stage.windowStart))]
       : [];
   });
 }

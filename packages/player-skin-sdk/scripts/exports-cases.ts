@@ -64,6 +64,21 @@ const BENCH_RESULT = {
   gaugeHistory: [{ progress: 0, value: 20 }],
   scoreHistory: [{ progress: 0, exScore: 0 }],
 } satisfies skinSdkAPI.BeMusicResultData;
+const BENCH_COURSE_RESULT = {
+  ...BENCH_RESULT,
+  run: 'course',
+  course: {
+    kind: 'grade',
+    title: 'Bench Dan',
+    stages: [
+      { title: 'Bench', artist: 'be-music', level: 12, difficulty: 4 },
+      { title: 'Bench 2', artist: 'be-music', level: 12 },
+      { title: 'Bench 3', level: 12 },
+      { title: 'Bench 4', level: 12 },
+    ],
+  },
+  courseRun: { stagesPlayed: 3 },
+} satisfies skinSdkAPI.BeMusicResultData;
 const BENCH_CHANNELS_7K = ['16', '11', '12', '13', '14', '15', '18', '19'];
 const BENCH_SELECT_ENTRIES: readonly number[] = Array.from({ length: 40 }, (_, index) => index);
 const BENCH_LAYOUT_INPUT = { laneChannels: BENCH_CHANNELS_7K, playVariant: '7' } as const;
@@ -215,7 +230,12 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
   });
   define('player-skin-sdk.holdSparks', {
     run: () => {
-      skinSdkAPI.holdSparks(5_000, 1234, 40);
+      skinSdkAPI.holdSparks(5_000, 1234, 40, { maxRise: 60 });
+    },
+  });
+  define('player-skin-sdk.clampHoldSparkX', {
+    run: () => {
+      skinSdkAPI.clampHoldSparkX(98, 10, 100, 40);
     },
   });
   define('player-skin-sdk.longNoteCentreLineAlpha', {
@@ -294,6 +314,17 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
   define('player-skin-sdk.isSupportedBeMusicSkinAPIVersion', {
     run: () => {
       skinSdkAPI.isSupportedBeMusicSkinAPIVersion(skinSdkAPI.BE_MUSIC_SKIN_API_VERSION);
+    },
+  });
+  define('player-skin-sdk.formatJudgeDetail', {
+    run: () => {
+      skinSdkAPI.formatJudgeDetail('MS', 'GREAT', -12.4);
+      skinSdkAPI.formatJudgeDetail('FAST_SLOW', 'GOOD', 30);
+    },
+  });
+  define('player-skin-sdk.resolveJudgeWordY', {
+    run: () => {
+      skinSdkAPI.resolveJudgeWordY(236, { top: 40, judgementY: 440, judgeOffsetY: 60 });
     },
   });
   define('player-skin-sdk.judgeDisplayWord', {
@@ -380,6 +411,16 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
   define('player-skin-sdk.resolveResultTrackRows', {
     run: () => {
       skinSdkAPI.resolveResultTrackRows(BENCH_RESULT);
+    },
+  });
+  define('player-skin-sdk.resolveResultCourseCard', {
+    run: () => {
+      skinSdkAPI.resolveResultCourseCard(BENCH_COURSE_RESULT);
+    },
+  });
+  define('player-skin-sdk.resolveResultCourseScroll', {
+    run: () => {
+      skinSdkAPI.resolveResultCourseScroll(120, 4200);
     },
   });
   define('player-skin-sdk.resolveGameplayLaneGeometry', {
@@ -499,6 +540,11 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.resolveCabinetLayout(cabinetLayout);
     },
   });
+  define('player-skin-sdk.formatPacemakerLabel', {
+    run: () => {
+      skinSdkAPI.formatPacemakerLabel('SCORE RATE 90%');
+    },
+  });
   define('player-skin-sdk.resolveScorePace', {
     run: () => {
       skinSdkAPI.resolveScorePace({
@@ -514,6 +560,15 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
   define('player-skin-sdk.formatScoreDiff', {
     run: () => {
       skinSdkAPI.formatScoreDiff(-168);
+    },
+  });
+  define('player-skin-sdk.resolveSongInfoLayers', {
+    run: () => {
+      skinSdkAPI.resolveSongInfoLayers({
+        chartTitle: 'Bench B',
+        chartArtist: 'be-music',
+        songInfoFade: { chartTitle: 'Bench A', chartArtist: 'be-music', progress: 0.5 },
+      });
     },
   });
   define('player-skin-sdk.resolveStageLabel', {

@@ -9,6 +9,7 @@ import {
 } from '@be-music/player-skin-sdk';
 import { logger } from '../../logger.ts';
 import { PIXI_HOST_TARGET, rendersOnPixiHost, type PixiHostTarget } from '../../skins/pixi-kit/host-render.ts';
+import { resolveHoldTops } from './hold-top.ts';
 import type {
   BeMusicBGAFrame,
   BeMusicBomb,
@@ -111,8 +112,10 @@ class SkinSurface {
     // Dynamic: sprites showing the texture follow its size when the stage changes (a rotation between the skin's
     // landscape and portrait stages).
     if (this.hostRenderer) {
-      // Multisampled, like the antialiased WebGL context the skin would otherwise draw on.
-      this.source = new TextureSource({ scaleMode: 'nearest', antialias: true, autoGenerateMipmaps: false });
+      // Not multisampled: on an integrated GPU a 4x multisampled target over the built-in skins' additive particles cost
+      // a quarter of the frame. Pixi-kit skins draw their sub-pixel points grown to a pixel and faded by area instead
+      // (see `pointLayerFor`), so they keep their light without the samples.
+      this.source = new TextureSource({ scaleMode: 'nearest', antialias: false, autoGenerateMipmaps: false });
       this.texture = new RenderTexture({ source: this.source, dynamic: true });
     } else {
       this.source = new CanvasSource({ resource: this.canvas, scaleMode: 'nearest' });
@@ -395,6 +398,8 @@ export class BeMusicGameplayBinding {
     const frame = this.frame;
     if (!frame || this.drawnFrame === this.frameNumber) return;
     this.drawnFrame = this.frameNumber;
+    // The lanes were collected before the notes; now both are in, each held lane learns where its note ends.
+    resolveHoldTops(frame.lanes, frame.longNotes);
     if (!this.surface) {
       try {
         this.drawPlayfield?.(frame);

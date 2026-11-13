@@ -313,6 +313,11 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  define('chart-model.keysOutBGALayerBlack', {
+    run: (fixtures) => {
+      chartAPI.keysOutBGALayerBlack(fixtures.sampleBmsJSON, '01');
+    },
+  });
   define('chart-model.resolvePoorBGAMode', {
     run: () => {
       chartAPI.resolvePoorBGAMode('1');

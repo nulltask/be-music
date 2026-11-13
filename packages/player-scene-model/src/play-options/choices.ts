@@ -1,3 +1,4 @@
+import { clampScoreTargetRate, DEFAULT_SCORE_TARGET_RATE, SCORE_TARGET_IDS } from './score-target.ts';
 import { clampExtraNoteDepth, isOnePlayerBattleMode } from '@be-music/player-engine/lanes';
 import { clampScrollSection, clampScrollRate } from '@be-music/player-engine/lanes';
 import { clampFloatingHiSpeed } from './floating-hi-speed.ts';
@@ -10,6 +11,7 @@ import {
   GAUGE_AUTO_SHIFTS,
   LR2_GAUGE_TYPES,
   PRACTICE_GAUGE_TYPES,
+  canonicalOptionValue,
   clampCustomJudgeRate,
   isGaugeType,
   isQualifiedOptionName,
@@ -79,25 +81,31 @@ export const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
 
 /** Source display spelling, without changing the recorded gauge identifier. */
 export function formatGaugeLabel(id: string | undefined): string | undefined {
-  return id === 'P-ATTACK' ? 'P.ATTACK' : id === 'G-ATTACK' ? 'G.ATTACK' : id;
+  return id === 'P-ATTACK'
+    ? 'P.ATTACK'
+    : id === 'G-ATTACK'
+      ? 'G.ATTACK'
+      : id === 'DEATH-CORRECTED'
+        ? 'DEATH corrected'
+        : id;
 }
 
 /**
  * LR2's own lane options, in its RANDOM button order: cells 0..5 on `#SRC_BUTTON,type=42 / 43` (OpenLR2 `random` 0-5):
- * off / mirror / random / s-random / scatter / converge. An LR2 button steps only these, LR2's own RANDOM, S-RANDOM and
- * CONVERGE (ADR 0019); its label reads the bare name of any value. Every source's choices are in resolveRandomModes.
+ * off / mirror / random / s-random / scatter / converge. An LR2 button steps only these, LR2's own S-RANDOM and CONVERGE
+ * (ADR 0019); its label reads the bare name of any value. Every source's choices are in resolveRandomModes.
  */
 export const RANDOM_CYCLE: readonly RandomMode[] = [
   'OFF',
   'MIRROR',
-  'lr2:RANDOM',
+  'RANDOM',
   'lr2:S-RANDOM',
   'SCATTER',
   'lr2:CONVERGE',
 ];
 
 /** The sources of each colliding lane option, the judge ruleset's own first. */
-function sourcesFirst<Name extends 'RANDOM' | 'S-RANDOM' | 'CONVERGE'>(
+function sourcesFirst<Name extends 'S-RANDOM' | 'CONVERGE'>(
   name: Name,
   sources: readonly RulesetId[],
   ruleset: RulesetId,
@@ -108,18 +116,19 @@ function sourcesFirst<Name extends 'RANDOM' | 'S-RANDOM' | 'CONVERGE'>(
 
 /**
  * The lane options offered under `ruleset`; LR2's sprite cycle stays separate. Every lane option is offered under every
- * ruleset and runs its own source's algorithm (#774). RANDOM, S-RANDOM and CONVERGE name a different algorithm in each
- * source, so they are offered once per source, qualified (`lr2:RANDOM`, `beatoraja:RANDOM`, `____:RANDOM`; CONVERGE is
- * LR2's and beatoraja's), with the judge ruleset's own first (ADR 0019). `duplicatedBattle1P` is the 1P side of a chart
+ * ruleset and runs its own source's algorithm (#774). RANDOM is one option: every source shuffles the keys alike. S-RANDOM
+ * and CONVERGE name a different algorithm in LR2 and beatoraja, so they are offered once per source, qualified
+ * (`lr2:S-RANDOM`, which AC's matches, and `beatoraja:S-RANDOM`), with the judge ruleset's own first (ADR 0019). `duplicatedBattle1P` is the 1P side of a chart
  * copied onto both sides (BATTLE, BATTLE AS, D-BATTLE), which also takes SYNCHRONIZE RANDOM and SYMMETRY RANDOM.
  */
 export function resolveRandomModes(ruleset: RulesetId, duplicatedBattle1P = false): readonly RandomMode[] {
   return [
     'OFF',
     'MIRROR',
-    ...sourcesFirst('RANDOM', ['lr2', 'beatoraja', '____'], ruleset),
+    'RANDOM',
     'R-RANDOM',
-    ...sourcesFirst('S-RANDOM', ['lr2', 'beatoraja', '____'], ruleset),
+    ...sourcesFirst('S-RANDOM', ['lr2', 'beatoraja'], ruleset),
+    'S-RANDOM-CORRECTED',
     'SPIRAL',
     'H-RANDOM',
     'ALL-SCR',
@@ -130,18 +139,21 @@ export function resolveRandomModes(ruleset: RulesetId, duplicatedBattle1P = fals
     'SCATTER',
     'SCATTER-CORRECTED',
     ...sourcesFirst('CONVERGE', ['lr2', 'beatoraja'], ruleset),
+    'CONVERGE-CORRECTED',
     ...(duplicatedBattle1P ? (['SYNCHRONIZE-RANDOM', 'SYMMETRY-RANDOM'] as const) : []),
   ];
 }
 
 /**
- * Whether `mode` is one of {@link resolveRandomModes}'s choices, or a bare colliding name (RANDOM, S-RANDOM, CONVERGE)
- * that stored settings and replays from before ADR 0019 hold, read as the judge ruleset's own.
+ * Whether `mode` is one of {@link resolveRandomModes}'s choices, a bare colliding name (S-RANDOM, CONVERGE) that stored
+ * settings and replays from before ADR 0019 hold, read as the judge ruleset's own, or a value since merged into one
+ * (`lr2:RANDOM` is RANDOM, `____:S-RANDOM` is `lr2:S-RANDOM`; `canonicalOptionValue` reads it).
  */
 export function isRandomModeChoice(mode: unknown, duplicatedBattle1P = false): mode is RandomMode {
   if (typeof mode !== 'string') return false;
-  if (resolveRandomModes('lr2', duplicatedBattle1P).includes(mode as RandomMode)) return true;
-  const parts = splitOptionSource(mode);
+  const current = canonicalOptionValue(mode);
+  if (resolveRandomModes('lr2', duplicatedBattle1P).includes(current as RandomMode)) return true;
+  const parts = splitOptionSource(current);
   return parts.source === undefined && isQualifiedOptionName(parts.name) && parts.name !== 'BATTLE';
 }
 
@@ -163,6 +175,34 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   constantFadeMs: 100,
   bpmGuide: false,
   bpmChangeWarning: false,
+  guideSE: false,
+  judgeCounts: true,
+  judgeDetailSplit: false,
+  judgeDetail: 'OFF',
+  scoreTargetRate: DEFAULT_SCORE_TARGET_RATE,
+  judgePosition: 0,
+  judgeDisplay: 'SKIN',
+  laneBrightness: 100,
+  scoreTarget: 'RATE_AAA',
+  markProcessedNotes: false,
+  showJudgeArea: false,
+  lr2AddMines: 0,
+  lr2AddLongNotes: 0,
+  lr2Loudness: 0,
+  lr2AddNotes: 0,
+  lr2Gambol: 0,
+  lr2SideJump: 0,
+  lr2SpiralEffect: 0,
+  lr2Wave: 0,
+  lr2SinCurve: 0,
+  lr2Nabeatsu: 0,
+  lr2Heartbeat: 0,
+  lr2Char: 0,
+  lr2SuperLoop: 0,
+  lr2Tornado: 0,
+  lr2Earthquake: 0,
+  lr2Acceleration: 'OFF',
+  autoScratchNotes: 'SHOW',
   judgeTimingAutoAdjust: 'OFF',
   autoPlay: false,
   bga: 'ON',
@@ -239,6 +279,12 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
  * Choices of every enum / on-off play option, in their LR2 button cycle order: what a skin can pick from. `hiSpeed` and
  * `shutter` are numbers, without a fixed set of choices.
  */
+/** LR2's mania options run from OFF (0) to 100 in steps of 10. */
+const LR2_MANIA_LEVELS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100] as const;
+
+/** The lane brightness steps, in percent: 100 leaves the lanes as the skin draws them. */
+const LANE_BRIGHTNESS_LEVELS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100] as const;
+
 export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   autoPlay: BOOLEAN_CYCLE,
   bga: BGA_CYCLE,
@@ -257,7 +303,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   judgeAlgorithm: ['combo', 'duration', 'lowest'],
   longNoteModifier: ['OFF', 'LEGACY', 'REMOVE', 'ADD_LN', 'ADD_CN', 'ADD_HCN', 'ADD_ALL'],
   mineModifier: ['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'],
-  scrollModifier: ['OFF', 'REMOVE', 'ADD'],
+  scrollModifier: ['OFF', 'REMOVE', 'ADD', 'SOFTLANDING-1', 'SOFTLANDING-2'],
   gaugeAutoShift: GAUGE_AUTO_SHIFTS,
   bmsonTotalMode: ['beatoraja', 'spec'],
   bottomShiftableGauge: ['ASSIST-EASY', 'EASY', 'GROOVE'],
@@ -266,6 +312,32 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   fixedDisplayArea: BOOLEAN_CYCLE,
   bpmGuide: BOOLEAN_CYCLE,
   bpmChangeWarning: BOOLEAN_CYCLE,
+  guideSE: BOOLEAN_CYCLE,
+  judgeCounts: BOOLEAN_CYCLE,
+  judgeDetailSplit: BOOLEAN_CYCLE,
+  judgeDetail: ['OFF', 'FAST_SLOW', 'MS'],
+  judgeDisplay: ['SKIN', 'OFF'],
+  laneBrightness: LANE_BRIGHTNESS_LEVELS,
+  scoreTarget: SCORE_TARGET_IDS,
+  markProcessedNotes: BOOLEAN_CYCLE,
+  showJudgeArea: BOOLEAN_CYCLE,
+  lr2AddMines: LR2_MANIA_LEVELS,
+  lr2AddLongNotes: LR2_MANIA_LEVELS,
+  lr2Loudness: LR2_MANIA_LEVELS,
+  lr2AddNotes: LR2_MANIA_LEVELS,
+  lr2Gambol: [0, 1, 2],
+  lr2SideJump: LR2_MANIA_LEVELS,
+  lr2SpiralEffect: LR2_MANIA_LEVELS,
+  lr2Wave: LR2_MANIA_LEVELS,
+  lr2SinCurve: LR2_MANIA_LEVELS,
+  lr2Nabeatsu: LR2_MANIA_LEVELS,
+  lr2Heartbeat: LR2_MANIA_LEVELS,
+  lr2Char: LR2_MANIA_LEVELS,
+  lr2SuperLoop: LR2_MANIA_LEVELS,
+  lr2Tornado: LR2_MANIA_LEVELS,
+  lr2Earthquake: LR2_MANIA_LEVELS,
+  lr2Acceleration: ['OFF', 'ACCELERATION', 'DECELERATION', 'RANDOM'],
+  autoScratchNotes: ['SHOW', 'HIDE'],
   judgeTimingAutoAdjust: JUDGE_TIMING_AUTO_ADJUST_MODES,
   visualConstant: BOOLEAN_CYCLE,
   extraNoteScratch: BOOLEAN_CYCLE,
@@ -276,6 +348,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
     'AUTO',
     'COUPLE',
     'SP-TO-DP',
+    'SP-TO-DP-CORRECTED',
     'D-BATTLE',
     'beatoraja:BATTLE',
     '____:BATTLE',
@@ -320,9 +393,20 @@ export function clampShutter(value: number): number {
   return clamp(snapped, 0, 1);
 }
 
+/** How far the judgment position goes either way, in percent of the lanes' height. */
+export const JUDGE_POSITION_LIMIT = 30;
+
+/** A judgment position as a whole percentage within ±{@link JUDGE_POSITION_LIMIT}; 0 for a value that is not finite. */
+export function clampJudgePosition(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return clamp(Math.round(value), -JUDGE_POSITION_LIMIT, JUDGE_POSITION_LIMIT);
+}
+
 /** Numeric play options, each with the clamp applied to a value set for it. */
 const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: number) => number } = {
   hRandomThresholdBPM: clampHRandomThresholdBPM,
+  judgePosition: clampJudgePosition,
+  scoreTargetRate: clampScoreTargetRate,
   longNoteRate: clampLongNoteRate,
   practiceStartGauge: (value) => clamp(Math.trunc(value), 1, 120),
   practiceJudgeRank: (value) => (value <= 0 ? 0 : clamp(Math.trunc(value), 1, 400)),
@@ -362,9 +446,10 @@ export function resolvePlayOptionValue<K extends keyof PlayOptions>(
   if (!Object.hasOwn(DEFAULT_PLAY_OPTIONS, key)) return undefined;
   if (key === 'randomSeed1P' || key === 'randomSeed2P') return parseLaneRandomSeed(value) as PlayOptions[K] | undefined;
   if (key === 'gauge1P' || key === 'gauge2P') return isGaugeType(value) ? (value as PlayOptions[K]) : undefined;
-  // A bare colliding name from before ADR 0019 stays valid: it is the judge ruleset's own.
+  // A bare colliding name from before ADR 0019 stays valid: it is the judge ruleset's own. A merged value reads as the
+  // option it was merged into.
   if (key === 'random1P' || key === 'random2P')
-    return isRandomModeChoice(value, true) ? (value as PlayOptions[K]) : undefined;
+    return isRandomModeChoice(value, true) ? (canonicalOptionValue(value) as PlayOptions[K]) : undefined;
   if (key === 'battleMode' && value === 'BATTLE') return value as PlayOptions[K];
   // Settings and replays from before the modes store beatoraja's switch as a boolean.
   if (key === 'judgeTimingAutoAdjust' && typeof value === 'boolean')
@@ -413,15 +498,21 @@ export function isListPlayOption(key: keyof PlayOptions): boolean {
   return LIST_PLAY_OPTIONS.has(key);
 }
 
+/** Every play option's key, listed once: the options resolve on every scene and every settings change. */
+const PLAY_OPTION_KEYS = Object.keys(DEFAULT_PLAY_OPTIONS) as readonly (keyof PlayOptions)[];
+
 /**
  * Play options as stored by a host, made whole and valid: each field of `stored` that {@link resolvePlayOptionValue}
  * accepts (clamped for the numeric ones) over {@link DEFAULT_PLAY_OPTIONS}; anything else is dropped.
  */
 export function resolvePlayOptions(stored: Readonly<Partial<Record<keyof PlayOptions, unknown>>> = {}): PlayOptions {
   const options: PlayOptions = { ...DEFAULT_PLAY_OPTIONS };
-  for (const key of Object.keys(DEFAULT_PLAY_OPTIONS) as Array<keyof PlayOptions>) {
+  for (const key of PLAY_OPTION_KEYS) {
     if (!Object.hasOwn(stored, key)) continue;
-    const value = resolvePlayOptionValue(key, stored[key]);
+    const raw = stored[key];
+    // A default is valid as it stands and already in place: most stored options are their default, so skip them.
+    if (raw === options[key]) continue;
+    const value = resolvePlayOptionValue(key, raw);
     if (value !== undefined) (options as Record<keyof PlayOptions, unknown>)[key] = value;
   }
   if (options.floatingHiSpeed) {

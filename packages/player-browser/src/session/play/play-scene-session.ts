@@ -1,6 +1,12 @@
 import { resolveConstantVisibility } from '@be-music/player-scene-model';
 import { diffReplayOptions, resolveReplayOptionsAt, type ReplayOptionState } from '@be-music/player-engine/replay';
-import { resolvePlayOptions } from '@be-music/player-scene-model';
+import {
+  parseRankingScoreTarget,
+  pickLiveDisplayPlayOptions,
+  resolvePlayOptions,
+  resolveScoreTarget,
+  type RankingScoreTarget,
+} from '@be-music/player-scene-model';
 /**
  * The play session as a scene session (`SceneSession`, `session/session-scene.ts`): what `createPlayScene` hands its
  * `SessionScene` so the scene's ticker reads a {@link PlayFrame} off the play every frame and the view's intents reach
@@ -33,6 +39,11 @@ export interface PlaySceneFacts {
   readonly course?: CourseView;
   readonly playOptions: PlayOptions;
   readonly scoreTargets?: PlayFrame['scoreTargets'];
+  /**
+   * The EX score at a ranking target's place on the chart's ranking, or `undefined` when the chart has no ranking (or
+   * no host fetches one). Asked once per target the play shows; the target is drawn from when it settles.
+   */
+  readonly rankingTarget?: (target: RankingScoreTarget) => Promise<number | undefined>;
   readonly playerName?: string;
   readonly audio?: Pick<AudioService, 'stopOwned' | 'playCue'>;
   readonly sounds?: SystemSoundSet;
@@ -54,12 +65,15 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
   private readonly facts: PlaySceneFacts;
   private recordedOptions: ReplayOptionState | undefined;
   private pending: PlayViewEvent[] = [];
+  /** The play options the frames carry: the ones the play started with, and its display options as changed since. */
+  private playOptions: PlayOptions;
   private enteredAtMs = 0;
   private failureSoundPlayed = false;
 
   public constructor(play: PlaySession, facts: PlaySceneFacts) {
     this.play = play;
     this.facts = facts;
+    this.playOptions = facts.playOptions;
   }
 
   /** A moment the play raised for its view (the session's theme `moment`), queued for the next frame. */
@@ -116,6 +130,12 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       case 'cover':
         changePlayView(play, intent.command);
         return;
+      case 'display-options': {
+        // Only the display options: what shapes the chart, the judgment or the record stays as the play started.
+        const live = pickLiveDisplayPlayOptions(intent.values);
+        if (live !== undefined) this.playOptions = { ...this.playOptions, ...live };
+        return;
+      }
       case 'pause':
         play.requestTogglePause();
         return;
@@ -141,13 +161,63 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
    * Advances the play to now — the engine's UI signals drained into the play state, the replay's view recorded or
    * replayed, the score readout eased — and returns what the view draws.
    */
+  /** The host's score targets with the fixed target, kept while the target, the note count and the host's object stay. */
+  private fixedScoreTargets:
+    | {
+        id: PlayOptions['scoreTarget'];
+        rate: number;
+        rankingEXScore: number | undefined;
+        totalNotes: number;
+        host: PlayFrame['scoreTargets'];
+        resolved: PlayFrame['scoreTargets'];
+      }
+    | undefined;
+
+  /** The ranking targets asked for so far, each with its score once the host's ranking gave one. */
+  private readonly rankingScores = new Map<PlayOptions['scoreTarget'], number | undefined>();
+
+  /** The score at a ranking target's place, asking the host the first time the play shows that target. */
+  private rankingEXScore(id: PlayOptions['scoreTarget']): number | undefined {
+    if (this.rankingScores.has(id)) return this.rankingScores.get(id);
+    const target = parseRankingScoreTarget(id);
+    if (target === undefined) return undefined;
+    this.rankingScores.set(id, undefined);
+    void this.facts.rankingTarget?.(target).then(
+      (score) => {
+        if (score !== undefined) this.rankingScores.set(id, score);
+      },
+      () => undefined,
+    );
+    return undefined;
+  }
+
+  private resolveHostScoreTargets(options: PlayOptions, totalNotes: number): PlayFrame['scoreTargets'] {
+    const host = this.facts.scoreTargets;
+    const id = options.scoreTarget;
+    const rate = options.scoreTargetRate;
+    const rankingEXScore = this.rankingEXScore(id);
+    const kept = this.fixedScoreTargets;
+    if (
+      kept !== undefined &&
+      kept.id === id &&
+      kept.rate === rate &&
+      kept.rankingEXScore === rankingEXScore &&
+      kept.totalNotes === totalNotes &&
+      kept.host === host
+    )
+      return kept.resolved;
+    const resolved = resolveFixedScoreTargets(host, id, totalNotes, { rate, rankingEXScore });
+    this.fixedScoreTargets = { id, rate, rankingEXScore, totalNotes, host, resolved };
+    return resolved;
+  }
+
   public frame(nowMs: number): PlayFrame {
     const play = this.play;
     // A paused play drains too: a seek moves it while it stays paused.
     if (!play.disposed) drainSharedEngineSignals(play);
     const seconds = play.currentSeconds();
     const replay = play.options.replay;
-    let playOptions = this.facts.playOptions;
+    let playOptions = this.playOptions;
     if (replay?.play.options !== undefined || replay?.play.optionChanges !== undefined) {
       const recorded = resolveReplayOptionsAt(
         replay.play.options,
@@ -204,7 +274,11 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
     const running = ghost !== undefined && (shows || !ghost.drawsOnPlayfield) ? ghost : undefined;
     running?.update(seconds, play.playClock());
     const playfield = running !== undefined && shows ? running.present(play) : play;
-    const scoreTargets = resolveFrameScoreTargets(this.facts.scoreTargets, running, play.score);
+    const scoreTargets = resolveFrameScoreTargets(
+      this.resolveHostScoreTargets(playOptions, play.score.total),
+      running,
+      play.score,
+    );
     return {
       clock: { nowMs, enteredAtMs: this.enteredAtMs },
       chart: play.chart ?? this.facts.chart,
@@ -226,11 +300,36 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       notes: { notes: play.notes, mines: play.mineNotes, invisible: play.invisibleNotes },
       heldLanes: play.pressedChannels,
       events,
-      audio: play.audioAnalyzer?.sample(play.playClock()) ?? SILENT_AUDIO,
+      // Analysed only when a view reads it: only audio-reactive skins do, and the analysis (an FFT and the waveform,
+      // every frame) is wasted on the rest and with effects off.
+      get audio() {
+        return play.audioAnalyzer?.sample(play.playClock()) ?? SILENT_AUDIO;
+      },
       shown: play.shown,
       playfield,
     };
   }
+}
+
+/**
+ * The host's score targets with the target the player picked (`PlayOptions.scoreTarget`) when the host names none: a
+ * rank border, MAX, the next rank or a score rate (`rate`, in percent) for the play's note count, or a ranking
+ * target once its score is known (`rankingEXScore`).
+ */
+export function resolveFixedScoreTargets(
+  host: PlayFrame['scoreTargets'],
+  scoreTarget: PlayOptions['scoreTarget'],
+  totalNotes: number,
+  extra: { readonly rate?: number; readonly rankingEXScore?: number | undefined } = {},
+): PlayFrame['scoreTargets'] {
+  if (host?.targetEXScore !== undefined) return host;
+  const target = resolveScoreTarget(scoreTarget, {
+    totalNotes,
+    ...(extra.rate !== undefined ? { rate: extra.rate } : {}),
+    ...(extra.rankingEXScore !== undefined ? { rankingEXScore: extra.rankingEXScore } : {}),
+    ...(host?.bestEXScore !== undefined ? { bestEXScore: host.bestEXScore } : {}),
+  });
+  return target === undefined ? host : { ...host, targetEXScore: target.exScore, targetLabel: target.label };
 }
 
 /**

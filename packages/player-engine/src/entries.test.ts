@@ -13,6 +13,7 @@ function exportedValues(entry: object): string[] {
 describe('designed entries', () => {
   it('@be-music/player-engine exports the engine and nothing the other entries carry', () => {
     expect(exportedValues(engine)).toEqual([
+      'GUIDE_SOUNDS',
       'PlayerInterruptedError',
       'applyChartPlayOptions',
       'autoPlay',
@@ -22,6 +23,7 @@ describe('designed entries', () => {
       'resolveChartNotesPlayVariant',
       'resolveChartRulesetFacts',
       'resolveEffectiveChartPlayOptions',
+      'resolveGuideSound',
       'resolvePlayChart',
     ]);
   });
@@ -69,6 +71,7 @@ describe('designed entries', () => {
       'inputSourceKey',
       'isOnePlayerBattleMode',
       'isPlayableInputChannel',
+      'isSPToDPBattleMode',
       'isSameInputSource',
       'isScratch',
       'isScratchSpin',

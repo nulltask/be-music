@@ -211,7 +211,8 @@ describe('resolveBeatorajaPlayNumber — judge popup and records', () => {
     expect(resolveBeatorajaPlayNumber(SYNTHETIC_NUM_JUDGE_COMBO_1P, numbers)).toBe(12);
     expect(resolveBeatorajaPlayNumber(SYNTHETIC_NUM_JUDGE_COMBO_2P, numbers)).toBe(0);
     expect(resolveBeatorajaPlayNumber(SYNTHETIC_NUM_JUDGE_COMBO_3P, numbers)).toBe(7);
-    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.JUDGE_1P_OFFSET_MS, numbers)).toBe(-12);
+    // An early press (a negative offset here) reads positive, as beatoraja's judge timing does.
+    expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.JUDGE_1P_OFFSET_MS, numbers)).toBe(12);
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.JUDGE_1P_OFFSET_MS, input())).toBe(0);
     expect(resolveBeatorajaPlayNumber(BEATORAJA_NUM.BEST_MAXCOMBO, numbers)).toBe(40);
   });

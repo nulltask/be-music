@@ -82,6 +82,7 @@ export function paintBGA(ctx: BeMusicPlayfieldPaintContext, data: BeMusicBGAData
         rect,
         frame.stacks !== undefined && (track === 'base' || (track === 'poor' && !stack.poorOverlays)),
         stack.origins?.[track],
+        stack.bgaMode,
       );
     };
     if (stack.poorActive && !stack.poorOverlays) draw('poor');
@@ -102,7 +103,15 @@ export function placeBGAImage(
   isVideo: boolean,
   rect: BeMusicRect,
   origin?: { x: number; y: number },
+  bgaMode?: 0 | 1 | 2,
 ): BeMusicRect {
+  if (bgaMode === 0) return { ...rect };
+  if (bgaMode !== undefined && width > 0 && height > 0) {
+    const scale = bgaMode === 2 ? 0.8 : 1;
+    const w = (width * scale * rect.w) / BGA_CANVAS_SIZE;
+    const h = (height * scale * rect.h) / BGA_CANVAS_SIZE;
+    return { x: rect.x + (rect.w - w) / 2, y: rect.y, w, h };
+  }
   if (isVideo || !(width > 0) || !(height > 0) || Math.max(width, height) > BGA_CANVAS_SIZE) return { ...rect };
   const scaleX = rect.w / BGA_CANVAS_SIZE;
   const scaleY = rect.h / BGA_CANVAS_SIZE;
@@ -120,11 +129,21 @@ function drawBGAImage(
   rect: BeMusicRect,
   fillCanvas = false,
   origin?: { x: number; y: number },
+  bgaMode?: 0 | 1 | 2,
 ): void {
   const { width, height, isVideo } = imageSize(image);
-  const placed = placeBGAImage(width, height, isVideo, rect, origin);
+  const placed = placeBGAImage(width, height, isVideo, rect, origin, bgaMode);
   if (fillCanvas && (placed.w < rect.w || placed.h < rect.h)) ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  if (bgaMode === undefined) {
+    ctx.drawImage(image, placed.x, placed.y, placed.w, placed.h);
+    return;
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.x, rect.y, rect.w, rect.h);
+  ctx.clip();
   ctx.drawImage(image, placed.x, placed.y, placed.w, placed.h);
+  ctx.restore();
 }
 
 function imageSize(image: CanvasImageSource): { width: number; height: number; isVideo: boolean } {
@@ -286,6 +305,8 @@ const JUDGMENT_FONT = 'bold 20px system-ui';
 const COMBO_FONT = '600 16px system-ui';
 const COMBO_OFFSET = 24;
 const COMBO_COLOR = '#e5efff';
+/** How far apart the keys' and the scratch's judge details sit when they are shown apart. */
+const JUDGE_DETAIL_SPREAD = 84;
 
 export function paintJudgmentDisplay(
   ctx: BeMusicPlayfieldPaintContext,
@@ -298,6 +319,14 @@ export function paintJudgmentDisplay(
       ctx.fillStyle = COMBO_COLOR;
       ctx.fillText(word.mode, word.x, (word.y ?? y) - 28);
     }
+    // The judge detail sits above the word, and above the play label when the side has one.
+    const details = word.details ?? [];
+    details.forEach((detail, index) => {
+      ctx.font = 'bold 10px sans-serif';
+      ctx.fillStyle = detail.color;
+      const spread = details.length > 1 ? (index - (details.length - 1) / 2) * JUDGE_DETAIL_SPREAD : 0;
+      ctx.fillText(detail.text, word.x + spread, (word.y ?? y) - (word.mode ? 40 : 24));
+    });
     ctx.font = JUDGMENT_FONT;
     ctx.fillStyle = word.color;
     ctx.fillText(word.text, word.x, word.y ?? y);
@@ -314,12 +343,27 @@ export function paintJudgmentDisplay(
  * `tnum` cannot be turned on; each digit takes the widest digit's advance instead.
  */
 function paintTabular(ctx: BeMusicPlayfieldPaintContext, text: string, x: number, y: number): void {
-  const run = layoutTabularRun(text, (char) => ctx.measureText(char).width);
+  const font = ctx.font;
+  const run = layoutTabularRun(text, (char) => measureChar(ctx, font, char));
   const left = x - run.width / 2;
   const align = ctx.textAlign;
   ctx.textAlign = 'center';
   for (const glyph of run.glyphs) ctx.fillText(glyph.char, left + glyph.x + glyph.w / 2, y);
   ctx.textAlign = align;
+}
+
+/** Advances of the characters {@link paintTabular} has measured, by font: the combo redraws them every frame. */
+const CHAR_WIDTHS = new Map<string, Map<string, number>>();
+
+function measureChar(ctx: BeMusicPlayfieldPaintContext, font: string, char: string): number {
+  let widths = CHAR_WIDTHS.get(font);
+  if (!widths) CHAR_WIDTHS.set(font, (widths = new Map()));
+  let width = widths.get(char);
+  if (width === undefined) {
+    width = ctx.measureText(char).width;
+    widths.set(char, width);
+  }
+  return width;
 }
 
 /** Paints every part on one stage-sized surface, each clipped to its rect as its own canvas would clip it. */

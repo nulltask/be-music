@@ -116,13 +116,13 @@ L5（リプレイのノーツと play document の時刻の同値性）と、入
   理由は `unranked`）。ただし自己ベストは動かさず、ランキング・集計・すべてのリストから外れます。プレイのページは
   開け、理由を表示します（`score.unranked`）。単独で送った**コースのステージ**はこれに当たります（`course-stage`）。
   ステージは前のステージが残した状態から始まるので、単曲のプレイではありません。代わりにコースのプレイの一部として
-  ランキングに載ります（6.1 節）。**テンポを変えたプレイ**（`tempo`。`play.tempo` が 1 以外。Web プレイヤーの
-  テンポスライダー）も同じです。beatoraja の周波数トレーナーがスコアを保存しないのと同じく、練習として扱います。
+  ランキングに載ります（6.1 節）。**テンポを変えたプレイ**（`tempo`。プレイヤーの倍率が一度でも 1 以外）も同じです。
+  beatoraja の周波数トレーナーと同様に練習として扱います。倍率は譜面の [BASE-SPEED](./adr/0041-chart-authored-base-speed.ja.md) を基準にします。
   **落ちたプレイ**（ゲージが尽きたもの）
   は保存し、プレイ回数に数えます。**ESC で投げたプレイ**（`play.aborted`）も同じです。LR2 と beatoraja が保存するのと
   同じく、途中で投げたプレイはゲージの値に関係なく、どのルールセットでも落ちたプレイとして順位付けします。
 - **ランプと BP はルールセットごとに各ゲームに従います**: `lr2` では DEATH でのクリアは NORMAL です（LR2body.exe の
-  `CheckClear`）。beatoraja と 名前を言ってはいけないあのゲームでは DEATH（`HAZARD`）のクリアは EX HARD です。BP には LR2 も含めどのルールセットでも
+  `CheckClear`）。beatoraja では、ゲージからランプを決める場合に HAZARD は FULL COMBO になります。名前を言ってはいけないあのゲームは DEATH を EX-HARD として扱います。新規送信には更新後の beatoraja のランプを適用し、保存済み結果のランプは維持します。BP には LR2 も含めどのルールセットでも
   空 POOR を数えます。この規則より前に保存された `lr2` の結果は、マイグレーション `0012` で書き直しました。BP には、途中で落ちたり ESC で投げたりして判定されなかったノートも両ゲームと同じく数えます（#584）。この規則より前に保存された BP はそのままです。
   ランプと BP はどのクライアントとも同じ規則で決めます（`@be-music/player-engine/replay` の `resolveRulesetResultLamp` と `resolveRulesetResultMissCount`、`@be-music/player-engine/ruleset` の `resolveClearLamp` と `resolveMissCount`）。フルコンボにはすべてのノートが GOOD 以上である必要があるので、ノートのない譜面はゲージのランプになります。ランプはその順位（`clearLampRank`）で保存します。1 FAILED、2 ASSIST EASY、3 EASY、4 NORMAL、5 HARD、6 EX HARD、7 FULL COMBO、8 PERFECT、9 MAX です。
 - **自己ベストは beatoraja 方式**: EX スコア、クリアランプ、ミス数のベストを別々に持ち、それぞれ達成したスコアを

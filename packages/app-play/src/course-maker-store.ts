@@ -1,7 +1,9 @@
 // The player's own courses (made on the select screen) kept across reloads in IndexedDB, as LR2 keeps them in its
 // database: the courses as `.lr2crs` text plus what that format has no room for (the stage titles, the constraints,
 // whether each course is flagged for IR (`release`, LR2's `ir` column) and which are a folder's last RANDOM MIX), the default NONSTOP connection and the
-// RANDOM MIX settings (LR2's `config.xml` `<course>`) and the conditions the RANDOM MIX dialog last confirmed.
+// RANDOM MIX settings (LR2's `config.xml` `<course>`) and the conditions the RANDOM MIX dialog last confirmed. Every
+// stage of a course is kept, past the five LR2 plays (a saved RANDOM MIX may have up to 99), and a NONSTOP course's
+// connections past the ten an LR2 course hash holds.
 
 import {
   LR2_NONSTOP_CONNECTIONS,
@@ -53,6 +55,11 @@ interface StoredMadeCourses {
    * the player flagged it.
    */
   release?: boolean[];
+  /**
+   * Each NONSTOP course's connections, which the LR2 hash holds for stages 1-10 only (absent in records saved before
+   * they were kept, and for a course that is not NONSTOP: the hash's are read).
+   */
+  connections?: (string[] | null)[];
   /** Whether each course is its folder's last RANDOM MIX (absent in records saved before RANDOM MIX). */
   randomMix?: boolean[];
   defaultConnection: string;
@@ -70,6 +77,9 @@ export function serializeMadeCourses(made: MadeCourses): StoredMadeCourses {
     titles: made.courses.map((course) => course.stages.map((stage) => stage.title ?? '')),
     constraints: made.courses.map((course) => [...course.constraints]),
     release: made.courses.map((course) => course.release),
+    connections: made.courses.map((course) =>
+      course.kind === 'nonstop' && course.connections !== undefined ? [...course.connections] : null,
+    ),
     randomMix: made.courses.map((course) => made.randomMixes.includes(course)),
     defaultConnection: made.defaultConnection,
     randomMixSettings: { ...made.randomMixSettings },
@@ -77,12 +87,20 @@ export function serializeMadeCourses(made: MadeCourses): StoredMadeCourses {
       ? {
           randomMixConditions: {
             ...made.randomMixConditions,
-            keyModes: [...made.randomMixConditions.keyModes],
             difficulties: [...made.randomMixConditions.difficulties],
           },
         }
       : {}),
   };
+}
+
+/** A NONSTOP course's kept connections, `count` of them: an unknown or missing one reads as FADE, LR2's default. */
+function readConnections(values: readonly unknown[], count: number): NonstopConnection[] {
+  return Array.from({ length: Math.max(0, count) }, (_, index) =>
+    LR2_NONSTOP_CONNECTIONS.includes(values[index] as NonstopConnection)
+      ? (values[index] as NonstopConnection)
+      : 'fade',
+  );
 }
 
 /** Reads a stored record back; anything unreadable gives no course, the FADE default and LR2's RANDOM MIX defaults. */
@@ -102,13 +120,19 @@ export function parseMadeCourses(value: unknown): MadeCourses {
   const titles = Array.isArray(stored.titles) ? stored.titles : [];
   const constraints = Array.isArray(stored.constraints) ? stored.constraints : [];
   const releases: unknown[] = Array.isArray(stored.release) ? stored.release : [];
-  const courses = parseLR2CourseFile(stored.lr2crs).map((course, index) => {
+  const connections: unknown[] = Array.isArray(stored.connections) ? stored.connections : [];
+  // The player's own courses are read whole, not cut to the five stages LR2 plays.
+  const courses = parseLR2CourseFile(stored.lr2crs, { maxStages: Number.POSITIVE_INFINITY }).map((course, index) => {
     const names = titles[index];
     const kept = constraints[index];
     const release = releases[index];
+    const keptConnections = connections[index];
     return {
       ...course,
       ...(Array.isArray(kept) ? { constraints: normalizeCourseConstraints(kept) } : {}),
+      ...(course.kind === 'nonstop' && Array.isArray(keptConnections)
+        ? { connections: readConnections(keptConnections, course.stages.length - 1) }
+        : {}),
       // `parseLR2CourseFile` reads every course released (LR2.exe imports with `ir = 1`); a made course is not.
       release: release === true,
       stages: course.stages.map((stage, stageIndex) => {

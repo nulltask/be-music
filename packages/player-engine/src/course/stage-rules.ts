@@ -21,9 +21,9 @@ export function resolveCourseStageSettings(definition: CourseDefinition): Omit<R
   return settings;
 }
 
-/** The lane options a host offers, as the select screen names them; RANDOM, S-RANDOM and CONVERGE may carry a source. */
+/** The lane options a host offers, as the select screen names them; S-RANDOM and CONVERGE may carry a source. */
 export type CourseLaneOption =
-  | QualifiedOptionValue<'RANDOM' | 'S-RANDOM' | 'CONVERGE'>
+  | QualifiedOptionValue<'S-RANDOM' | 'CONVERGE'>
   | 'OFF'
   | 'MIRROR'
   | 'RANDOM'
@@ -39,6 +39,8 @@ export type CourseLaneOption =
   | 'CONVERGE'
   | 'SCATTER'
   | 'SCATTER-CORRECTED'
+  | 'S-RANDOM-CORRECTED'
+  | 'CONVERGE-CORRECTED'
   | 'SYNCHRONIZE-RANDOM'
   | 'SYMMETRY-RANDOM';
 

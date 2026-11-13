@@ -10,21 +10,35 @@
  * - `'EX-HARD'` — independent beatoraja / AC survival gauge, without HARD's low-life softening.
  * - `'G-ATTACK'` — LR2 GOOD ATTACK: GOOD recovers; PGREAT costs the same as missed POOR.
  * - `'P-ATTACK'` — LR2 PERFECT ATTACK: GOOD or worse kills; GREAT drains one percent.
- * - `'DEATH'` — starts full and ends the run on the first break; beatoraja calls it `HAZARD`.
+ * - `'DEATH'` — starts full and ends the run on the first break; beatoraja calls it `HAZARD`. LR2 (its HAZARD) also
+ *   clears a single chart only with HP 80 or more at the end, as it checks GROOVE (OpenLR2 `LR2f.cpp` L1842-L1862).
+ * - `'DEATH-CORRECTED'` — LR2's HAZARD that clears by surviving, without that 80 border. Under the other rulesets it
+ *   reads as their DEATH.
  */
-export type GaugeType = 'GROOVE' | 'HARD' | 'DEATH' | 'EASY' | 'EX-HARD' | 'ASSIST-EASY' | 'P-ATTACK' | 'G-ATTACK';
+export type GaugeType =
+  | 'GROOVE'
+  | 'HARD'
+  | 'DEATH'
+  | 'DEATH-CORRECTED'
+  | 'EASY'
+  | 'EX-HARD'
+  | 'ASSIST-EASY'
+  | 'P-ATTACK'
+  | 'G-ATTACK';
 
 /** Every gauge type, in the order LR2's gauge button cycles them (`#SRC_BUTTON,type=40 / 41` cells 0..5). */
 export const LR2_GAUGE_TYPES: readonly GaugeType[] = ['GROOVE', 'HARD', 'DEATH', 'EASY', 'P-ATTACK', 'G-ATTACK'];
 
 /** Every accepted gauge pick; source-specific menus use resolveGaugeTypes. */
-export const GAUGE_TYPES: readonly GaugeType[] = [...LR2_GAUGE_TYPES, 'EX-HARD', 'ASSIST-EASY'];
+export const GAUGE_TYPES: readonly GaugeType[] = [...LR2_GAUGE_TYPES, 'EX-HARD', 'ASSIST-EASY', 'DEATH-CORRECTED'];
+/** LR2's menu: its own six gauges, then the corrected HAZARD. */
+const LR2_MENU_GAUGE_TYPES: readonly GaugeType[] = [...LR2_GAUGE_TYPES, 'DEATH-CORRECTED'];
 const BEATORAJA_GAUGE_TYPES: readonly GaugeType[] = ['GROOVE', 'HARD', 'EX-HARD', 'DEATH', 'EASY', 'ASSIST-EASY'];
 const ____GAUGE_TYPES: readonly GaugeType[] = ['GROOVE', 'HARD', 'EX-HARD', 'EASY', 'ASSIST-EASY'];
 
 /** Source menu choices: LR2 has no EX-HARD; the AC menu has no DEATH pick. */
 export function resolveGaugeTypes(ruleset: 'lr2' | 'beatoraja' | '____'): readonly GaugeType[] {
-  return ruleset === 'lr2' ? LR2_GAUGE_TYPES : ruleset === 'beatoraja' ? BEATORAJA_GAUGE_TYPES : ____GAUGE_TYPES;
+  return ruleset === 'lr2' ? LR2_MENU_GAUGE_TYPES : ruleset === 'beatoraja' ? BEATORAJA_GAUGE_TYPES : ____GAUGE_TYPES;
 }
 
 /** Whether `value` names a gauge type. */

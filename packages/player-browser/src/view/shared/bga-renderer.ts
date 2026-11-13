@@ -1,3 +1,4 @@
+import { resolveChartOptionsAt } from '@be-music/chart-model';
 import { keyBoundBGAResourceKey } from '../../chart/key-bound-bga.ts';
 import { canDrawBGAPixelsOnGPU, drawBGAPixelsOnGPU } from '../../media/bga-gpu-pixels.ts';
 import { isColorKeyVideoCanvas } from '../../media/color-key-video.ts';
@@ -12,7 +13,7 @@ import { fitBGACameraRect } from '../../media/bga-camera-fit.ts';
  */
 
 import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player-engine/display';
-import { Texture } from 'pixi.js';
+import { Texture, type Sprite } from 'pixi.js';
 import {
   buildSkinBGAFrame,
   pickActiveBGACue,
@@ -32,7 +33,7 @@ import type { PlayfieldRuntime } from './playfield/context.ts';
 /** The view's members the BGA passes use: a play view's members of these names. */
 export interface BGARendererContext {
   readonly play: PlayfieldRuntime;
-  readonly options: Readonly<Pick<PlaySessionOptions, 'bga' | 'autoPlay' | 'nonstop'>>;
+  readonly options: Readonly<Pick<PlaySessionOptions, 'bga' | 'autoPlay' | 'nonstop' | 'replay'>>;
   readonly playfieldSkin: PlayfieldSkin;
   readonly bgaLayerPool: ChildPool;
   readonly bgaTargetsScratch: PlayfieldBGATarget[];
@@ -54,7 +55,14 @@ export interface BGARendererContext {
  * frames). They differ only past an LR2 negative-BPM reversal, where the event pump stops firing new BGA cues but a
  * movie that is already playing keeps running.
  */
+const maskedBGASprites = new WeakMap<ChildPool, Sprite[]>();
+
 export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: number = seconds): void {
+  let masked = maskedBGASprites.get(ctx.bgaLayerPool);
+  if (masked) {
+    for (const sprite of masked) sprite.mask = null;
+    masked.length = 0;
+  }
   ctx.bgaLayerPool.begin();
   ctx.bgaTargetsScratch.length = 0;
   const camera = ctx.play.bgaCamera;
@@ -181,8 +189,9 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
   const binding = ctx.skinBinding;
   if (binding?.drawsBGA) {
     // The skin composites the BGA itself: hand it the images and leave the BGA layer empty.
-    const skinFrame = (stack: BGAStack) =>
-      buildSkinBGAFrame(
+    const skinFrame = (stack: BGAStack) => ({
+      ...(stack.bgaMode !== undefined ? { bgaMode: stack.bgaMode } : {}),
+      ...buildSkinBGAFrame(
         {
           base: stack.baseCue?.bmpKey !== undefined ? resolveBGAFrameKey(ctx, stack.baseCue.bmpKey) : undefined,
           layer:
@@ -202,11 +211,13 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
               ctx,
               (track === 'layer' ? ctx.play.bgaLayerTextures : ctx.play.bgaTextures).get(key),
               ctx.play.bgaSubRegionOrigins?.has(key),
+              stack.bgaMode !== undefined,
             ),
             tint,
           ),
         ctx.play.bgaSubRegionOrigins,
-      );
+      ),
+    });
     const frame = leading !== undefined ? skinFrame(leading) : { poorActive: false };
     binding.setBGA({
       ...frame,
@@ -223,6 +234,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
                         ctx.play.bgaSubRegionOrigins.has(keyBoundKey),
                       ),
                       origins: { layer: ctx.play.bgaSubRegionOrigins.get(keyBoundKey) ?? { x: 0, y: 0 } },
+                      bgaMode: leading?.bgaMode,
                       poorActive: false,
                       alpha: 1,
                     },
@@ -253,6 +265,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       alpha = 1,
       overlay = false,
       tint = 0xffffff,
+      placementMode?: 0 | 1 | 2,
     ): void => {
       if (!key) return;
       const resolvedKey = resolveBGAFrameKey(ctx, key, layerName);
@@ -262,21 +275,23 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       // horizontally and top-aligned (a 256x161 frame leaves a band at the bottom), while a larger image or a
       // video fills the rect, as LR2 and beatoraja do.
       const placed =
-        ctx.play.bgaVideos.has(resolvedKey) && !ctx.play.bgaSubRegionOrigins.has(resolvedKey)
-          ? bga.preserveVideoAspect
-            ? (() => {
-                const scale = Math.min(bga.w / texture.width, bga.h / texture.height);
-                const w = texture.width * scale;
-                const h = texture.height * scale;
-                return { x: bga.x + (bga.w - w) / 2, y: bga.y + (bga.h - h) / 2, w, h };
-              })()
-            : bga
-          : resolveBGAImageRect(
-              texture.frame.width,
-              texture.frame.height,
-              bga,
-              ctx.play.bgaSubRegionOrigins.get(resolvedKey),
-            );
+        placementMode !== undefined
+          ? resolveBGAImageRect(texture.frame.width, texture.frame.height, bga, undefined, placementMode)
+          : ctx.play.bgaVideos.has(resolvedKey) && !ctx.play.bgaSubRegionOrigins.has(resolvedKey)
+            ? bga.preserveVideoAspect
+              ? (() => {
+                  const scale = Math.min(bga.w / texture.width, bga.h / texture.height);
+                  const w = texture.width * scale;
+                  const h = texture.height * scale;
+                  return { x: bga.x + (bga.w - w) / 2, y: bga.y + (bga.h - h) / 2, w, h };
+                })()
+              : bga
+            : resolveBGAImageRect(
+                texture.frame.width,
+                texture.frame.height,
+                bga,
+                ctx.play.bgaSubRegionOrigins.get(resolvedKey),
+              );
       if (layerName !== 'layer' && layerName !== 'layer2' && !overlay && (placed.w < bga.w || placed.h < bga.h)) {
         // The base canvas around a small image is black (a 1x1 black BMP blanks the BGA in LR2 and beatoraja), so
         // fill the rect before drawing the image; the layer track's canvas stays transparent.
@@ -297,6 +312,20 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
       sprite.width = placed.w;
       sprite.height = placed.h;
       bga.applyToSprite(sprite);
+      if (
+        placementMode !== undefined &&
+        (placed.x < bga.x || placed.x + placed.w > bga.x + bga.w || placed.y + placed.h > bga.y + bga.h)
+      ) {
+        const mask = ctx.bgaLayerPool.acquireGraphics().rect(0, 0, bga.w, bga.h).fill(0xffffff);
+        mask.position.set(bga.x, bga.y);
+        mask.rotation = backdrop.rotation;
+        sprite.mask = mask;
+        if (!masked) {
+          masked = [];
+          maskedBGASprites.set(ctx.bgaLayerPool, masked);
+        }
+        masked.push(sprite);
+      }
       sprite.alpha *= alpha;
       const skinTint = sprite.tint;
       sprite.tint = [16, 8, 0].reduce(
@@ -317,6 +346,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
           stack.alpha * (stack.opacity?.poor ?? 1),
           false,
           stack.tint?.poor,
+          stack.bgaMode,
         );
         continue;
       }
@@ -327,6 +357,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
         stack.alpha * (stack.opacity?.base ?? 1),
         false,
         stack.tint?.base,
+        stack.bgaMode,
       );
       // Layer track is composited on top with black→transparent so the base track shows through where the
       // foreground BMP is empty.
@@ -337,6 +368,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
         stack.alpha * (stack.opacity?.layer ?? 1),
         false,
         stack.tint?.layer,
+        stack.bgaMode,
       );
       drawLayer(
         stack.layer2Cue?.bmpKey,
@@ -345,6 +377,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
         stack.alpha * (stack.opacity?.layer2 ?? 1),
         false,
         stack.tint?.layer2,
+        stack.bgaMode,
       );
       if (stack.poorKey && stack.poorOverlays)
         drawLayer(
@@ -354,9 +387,11 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
           stack.alpha * (stack.opacity?.poor ?? 1),
           true,
           stack.tint?.poor,
+          stack.bgaMode,
         );
     }
-    if (keyBoundKey && !bga.noLayer) drawLayer(keyBoundKey, ctx.play.bgaLayerTextures, 'layer2', 1, true);
+    if (keyBoundKey && !bga.noLayer)
+      drawLayer(keyBoundKey, ctx.play.bgaLayerTextures, 'layer2', 1, true, undefined, leading?.bgaMode);
   }
   ctx.bgaLayerPool.end();
 }
@@ -418,7 +453,11 @@ function resolveBGAStacks(
 ): BGAStack[] {
   const stages = ctx.options.nonstop?.stages;
   const timelines = ctx.play.nonstopBGATimelines;
+  const program = ctx.options.replay ? ctx.options.replay.chart.chartOptions : ctx.options.nonstop?.chartOptions;
   return resolveBGAStacksOf({
+    bgaMode: ctx.play.engineFrame?.chartOptions?.bgaMode,
+    stageBGAMode:
+      program && ((windowStart) => resolveChartOptionsAt(program, Math.round(windowStart * 1_000_000)).bgaMode),
     timeline: ctx.play.bgaTimeline,
     poorBGAMode: ctx.play.poorBGAMode,
     nonstop: stages !== undefined && timelines !== undefined ? { stages, timelines } : undefined,
@@ -468,6 +507,7 @@ function resolveSkinBGAImage(
   ctx: BGARendererContext,
   texture: Texture | undefined,
   subRegion = false,
+  authoredPlacement = false,
 ): BeMusicImage | undefined {
   if (!texture) return undefined;
   const source = texture.source;
@@ -476,7 +516,7 @@ function resolveSkinBGAImage(
   const { frame } = texture;
   // A keyed video is a canvas rather than a <video>; present a full-source movie at the BMS canvas size
   // so Canvas skins retain the same fill behavior as Pixi. Aliases keep their native crop dimensions.
-  const fullKeyedVideo = !subRegion && isColorKeyVideoCanvas(resource);
+  const fullKeyedVideo = !authoredPlacement && !subRegion && isColorKeyVideoCanvas(resource);
   if (
     !fullKeyedVideo &&
     !subRegion &&
@@ -579,7 +619,7 @@ function syncBGAVideo(
     }
     return;
   }
-  handle.video.playbackRate = ctx.play.tempo * playbackRate;
+  handle.video.playbackRate = (ctx.play.playbackTempo ?? ctx.play.tempo) * playbackRate;
   if (previous !== undefined && previous.key === key && previous.cueSeconds === (cue?.seconds ?? 0)) {
     // Same cue still active: the video plays forward on its own and the Pixi VideoSource pulls fresh frames each tick;
     // one that drifted from the chart is set back in step.

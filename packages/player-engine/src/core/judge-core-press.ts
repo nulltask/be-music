@@ -566,7 +566,7 @@ function chargeEmptyPoor(state: JudgeCoreState, nowSec: number, emit: JudgeCoreE
     });
   }
   // The UI maps this back to the LR2 `'poor'` skin slot (NOWJUDGE 0/1 share one kind in our model).
-  emit({ kind: 'judge-combo', judge: 'POOR', combo: state.combo });
+  emit({ kind: 'judge-combo', judge: 'POOR', combo: state.combo, poor: 'empty' });
 }
 
 /** A release of `input.channels`; `recordedChannels` are the lanes the replay records (see {@link handleLanePress}). */

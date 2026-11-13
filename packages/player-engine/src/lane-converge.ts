@@ -1,3 +1,4 @@
+import { randomizeLR2DoubleNotes, type LR2DoubleRandomOptions } from './lane-lr2-double.ts';
 import type { SRandomNote } from './lane-random.ts';
 
 /**
@@ -9,12 +10,30 @@ import type { SRandomNote } from './lane-random.ts';
 export function randomizeLR2ConvergeNotes(
   notes: readonly SRandomNote[],
   lanes: readonly string[],
-  options: { target: string; scratch?: string; random: () => number },
+  options: {
+    target: string;
+    scratch?: string;
+    random: () => number;
+    /**
+     * LR2's nine-key CONVERGE: its fallback draw also reaches raw lane 10, the 2P scratch, outside the playfield
+     * (inclusive `GetRand(9)`, OpenLR2 `LR2f.cpp` L27354, L27372), as SCATTER's does.
+     */
+    outside?: string;
+    /** LR2's 2P target may point one lane past the keys, where nothing can hit the note. */
+    targetOutside?: boolean;
+    lr2Double?: LR2DoubleRandomOptions;
+  },
 ): string[] {
   const channels = notes.map((note) => note.channel);
   const domain = new Set(lanes);
-  if (!domain.has(options.target) && options.target !== options.scratch)
+  if (!domain.has(options.target) && options.target !== options.scratch && options.targetOutside !== true)
     throw new RangeError('CONVERGE target must be a key or scratch of this side.');
+  if (options.lr2Double !== undefined)
+    return randomizeLR2DoubleNotes(notes, lanes, {
+      ...options.lr2Double,
+      random: options.random,
+      target: options.target,
+    });
   const held = new Map<string, { source: string; endMs: number }>();
   const rows = new Map<number, number[]>();
   notes.forEach((note, index) => {
@@ -42,7 +61,9 @@ export function randomizeLR2ConvergeNotes(
       if (visible || target === undefined) {
         if (!used.has(options.target)) target = options.target;
         else {
-          const free = lanes.filter((lane) => !used.has(lane));
+          const free = (options.outside === undefined ? lanes : [...lanes, options.outside]).filter(
+            (lane) => !used.has(lane),
+          );
           if (free.length === 0) throw new RangeError('CONVERGE has more simultaneous events than available lanes.');
           const draw = options.random();
           if (!Number.isFinite(draw) || draw < 0 || draw >= 1)

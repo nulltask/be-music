@@ -1,5 +1,5 @@
 import { drawJudgements } from './judgements.ts';
-import { bindGlassSurface } from './glass.ts';
+import { bindGlassSurface, frostedGlassEnabled, unbindGlassSurface } from './glass.ts';
 import { Graphics, type Container } from 'pixi.js';
 import { resolveGrooveRect, resolvePortraitHUDColumn } from './layout.ts';
 import {
@@ -11,11 +11,22 @@ import {
   drawSecondPlayerFigures,
 } from './player-hud.ts';
 import { cabinetWellBottom, drawSynesthesiaCabinet } from './cabinet.ts';
+import { drawSongInfoLayers } from './song-info.ts';
 import { drawSynesthesiaMoments } from './moments.ts';
 import { ChargeCloud } from './charge-cloud.ts';
 import { KICK_REST, stepKick, type KickState } from './kick.ts';
 import { createFlock, stepFlock, type Flock } from './boids.ts';
-import { drawFrame, drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
+import {
+  drawFrame,
+  drawPointCloud,
+  drawReticle,
+  type CloudTransform,
+  drawSchool,
+  GRAIN_OFFSETS,
+  grainsFor,
+  sharedShapeBatch,
+  type Grains,
+} from './draw.ts';
 import {
   floorRise,
   clipSegmentOutsideRect,
@@ -23,6 +34,7 @@ import {
   cameraBasis,
   hsvToHex,
   mixCamera,
+  mixColor,
   particleRiverPointInto,
   pointCloudPyramid,
   projectPoint,
@@ -43,6 +55,7 @@ import {
   floorRowStep,
   spectrumLevels,
   spectrumRise,
+  SPECTRUM_WAVE_SPEED,
 } from './spectrum-floor.ts';
 import {
   SYN_AMBER,
@@ -72,6 +85,7 @@ import {
   impulse,
   LOADING_WORD,
   loadingDots,
+  resolveJudgeWordY,
   type BeMusicGameplayLayout,
   type BeMusicGameplayRuntime,
   type BeMusicLaneKind,
@@ -86,6 +100,7 @@ import {
   type ChildPool,
   type HUDTextOptions,
   type PixiChromeContext,
+  pointLayerFor,
 } from '../pixi-kit/index.ts';
 
 type Runtime = BeMusicGameplayRuntime;
@@ -183,6 +198,7 @@ function advanceSchools(
   forces: { gather: number; scatter: number },
   bands: readonly number[],
   onset: number,
+  shown: number,
 ): { flocks: Flock[]; swell: number } {
   let state = SCHOOLS.get(key);
   if (!state || state.flocks[0]!.count !== size || nowMs < state.lastMs) {
@@ -194,10 +210,11 @@ function advanceSchools(
     SCHOOLS.set(key, state);
   }
   const dt = (nowMs - state.lastMs) / 1000;
-  state.flocks.forEach((flock, index) => {
+  // Only the schools on screen swim (reduced effects show one); the rest wait where they are.
+  for (let index = 0; index < Math.min(shown, state.flocks.length); index += 1) {
     // Offset each leader's clock so the schools never shadow one another.
-    stepFlock(flock, dt, { seconds: nowMs / 1000 + index * 41.7, ...forces });
-  });
+    stepFlock(state.flocks[index]!, dt, { seconds: nowMs / 1000 + index * 41.7, ...forces });
+  }
   state.kick = stepKick(state.kick, bands, onset, Math.min(0.1, dt));
   state.lastMs = nowMs;
   return { flocks: state.flocks, swell: state.kick.swell };
@@ -206,17 +223,41 @@ function advanceSchools(
  * The idle monitor's charge cloud, one per chrome layer (it outlives the per-frame pools), with the clock of its last
  * simulation step. A smaller cloud than the select screen's: the monitor is small.
  */
-const MONITOR_CLOUDS = new WeakMap<Container, { cloud: ChargeCloud; lastSeconds: number | undefined }>();
+const MONITOR_CLOUDS = new WeakMap<Container, MonitorCloud>();
 
-function monitorCloudFor(layer: Container): { cloud: ChargeCloud; lastSeconds: number | undefined } {
+/** A chrome layer's monitor cloud, the clock of its last simulation step, and whether this frame drew it. */
+interface MonitorCloud {
+  cloud: ChargeCloud;
+  lastSeconds: number | undefined;
+  drawn: boolean;
+}
+
+function monitorCloudFor(layer: Container): MonitorCloud {
   let state = MONITOR_CLOUDS.get(layer);
   if (state === undefined) {
-    state = { cloud: new ChargeCloud(192), lastSeconds: undefined };
+    state = { cloud: new ChargeCloud(192), lastSeconds: undefined, drawn: false };
     MONITOR_CLOUDS.set(layer, state);
   }
   return state;
 }
 const PYRAMIDS = [pointCloudPyramid(3, 520), pointCloudPyramid(8, 420), pointCloudPyramid(5, 700)];
+/** The idle monitor's pyramids: cloud, x, z, scale and resting yaw. */
+const MONITOR_PYRAMIDS = [
+  [PYRAMIDS[2]!, 40, 1500, 520, 0.2],
+  [PYRAMIDS[0]!, -330, 700, 250, 0.5],
+  [PYRAMIDS[1]!, 330, 820, 230, -0.3],
+] as const;
+/** Scratch transform and style for the monitor's pyramids, refilled per pyramid each frame. */
+const PYRAMID_TRANSFORM: CloudTransform = { scale: 1, x: 0, y: 0, z: 0, yaw: 0 };
+const PYRAMID_STYLE: Parameters<typeof drawPointCloud>[4] = {
+  colorOf: (point) => emberColor(0.35 + 0.55 * point.weight),
+  alpha: 0.8,
+  size: 1,
+  seconds: 0,
+  shimmer: 0.3,
+  referenceScale: 1,
+  skip: (px, py) => !insideBGA(px, py, -2),
+};
 
 /**
  * Synesthesia gameplay HUD after a cosmic particle world: a black void lit by an ember horizon, data dust and speed
@@ -231,12 +272,14 @@ export function renderSynesthesiaChrome({
   overlayLayerPool,
   runtime,
   layout,
+  settings,
 }: PixiChromeContext): void {
+  const frosted = frostedGlassEnabled(settings);
   const seconds = (runtime.nowMs ?? 0) / 1000;
-  // The idle monitor shows its cloud only while there is no BGA; it redraws (and re-shows) it below if so. Its clock
+  // The idle monitor shows its cloud only while there is no BGA; a frame that does not draw it hides it below. Its clock
   // carries on across hidden frames: the cloud clamps each step, so a gap just resumes it.
   const monitorCloud = MONITOR_CLOUDS.get(layer);
-  if (monitorCloud) monitorCloud.cloud.view.visible = false;
+  if (monitorCloud) monitorCloud.drawn = false;
   const beatPhase = runtime.beatPhase ?? 0;
   const pulse = (1 - beatPhase) ** 2;
   const hue = sceneHue(seconds, beatPhase);
@@ -259,7 +302,10 @@ export function renderSynesthesiaChrome({
   const hitColor = IMPULSE_COLORS[runtime.impulseKind ?? 'white'];
   // Camera: the background roams between random shots (flying, sometimes hard-cutting) with a handheld drift,
   // reframing floor, rivers, and schools. Reduced effects halve the moves; effects off keep the camera at rest.
-  const camera = mixCamera(REST_CAMERA, roamingCamera(seconds, 7, CAMERA_RANGE, CAMERA_CYCLE_S), effects.amount);
+  const camera =
+    effects.amount > 0
+      ? mixCamera(REST_CAMERA, roamingCamera(seconds, 7, CAMERA_RANGE, CAMERA_CYCLE_S), effects.amount)
+      : REST_CAMERA;
   const horizon = vanishingPoint(camera, VIEW.centerX, VIEW.horizon, FLOOR.focal).y;
   // The space listens to the mix: the ember haze and floor swell on the bass, dust speeds with loudness, rivers weave with the mids, the schools tighten on bass hits and scatter on transients.
   const drive = audioDrive(runtime.audio, runtime.effects);
@@ -297,6 +343,7 @@ export function renderSynesthesiaChrome({
       },
       drive.bands,
       drive.onset,
+      effects.screenWide ? SCHOOL_SPECS.length : 1,
     );
     const shown = effects.screenWide ? schools.length : 1;
     const schoolBasis = cameraBasis(camera, SCRATCH_BASIS);
@@ -338,10 +385,13 @@ export function renderSynesthesiaChrome({
     standby.blendMode = 'add';
     drawBGAFrame(panels, standby, layer, hasBGA, seconds, pulse, hue, camera, drive, layerPool, cabinet ? 0 : 6);
   }
-  const glass = overlayLayerPool.acquireGraphics();
-  glass.label = 'synesthesia-gameplay/glass';
+  if (monitorCloud && !monitorCloud.drawn) monitorCloud.cloud.view.visible = false;
+  // The frosted panels' surface sits under the HUD; with the setting off the panels are plain fills on the HUD itself.
+  const glass = frosted ? overlayLayerPool.acquireGraphics() : undefined;
+  if (glass) glass.label = 'synesthesia-gameplay/glass';
   const front = overlayLayerPool.acquireGraphics();
-  bindGlassSurface(front, glass);
+  if (glass) bindGlassSurface(front, glass);
+  else unbindGlassSurface(front);
   front.label = 'synesthesia-gameplay/header';
   drawProgressLight(front, playfieldLeft, wellTop, layout.playfield.judgementY, runtime.progressRatio, accent);
   if (portrait) {
@@ -358,10 +408,10 @@ export function renderSynesthesiaChrome({
     drawChartPlate(front, overlayLayer, runtime, accent, overlayLayerPool);
     drawScorePanel(front, overlayLayer, runtime, accent, overlayLayerPool);
     // The judge tally owns the side column on the right edge.
-    drawJudgeTally(front, overlayLayer, runtime, STAGE_SIDE_COLUMN.x, overlayLayerPool);
+    if (!runtime.hidesJudgeCounts) drawJudgeTally(front, overlayLayer, runtime, STAGE_SIDE_COLUMN.x, overlayLayerPool);
     drawHeader(front, overlayLayer, runtime, layout, accent, pulse, overlayLayerPool);
   }
-  const judgeY = resolveJudgeWordY(layout);
+  const judgeY = resolveSkinJudgeWordY(layout);
   if (runtime.loading) {
     drawLoading(
       overlayLayer,
@@ -389,10 +439,10 @@ export function renderSynesthesiaChrome({
  * Where the judgement word sits: at its fixed height on the landscape stage, and a little over halfway down the lanes on
  * a portrait one.
  */
-function resolveJudgeWordY(layout: BeMusicGameplayLayout): number {
-  if (layout.orientation !== 'portrait') return 236;
+function resolveSkinJudgeWordY(layout: BeMusicGameplayLayout): number {
   const { top, judgementY } = layout.playfield;
-  return Math.round(top + (judgementY - top) * 0.58);
+  const skinY = layout.orientation !== 'portrait' ? 236 : Math.round(top + (judgementY - top) * 0.58);
+  return resolveJudgeWordY(skinY, layout.playfield);
 }
 
 /** NOW LOADING on the lanes: wide-tracked light breathing in the accent glow, dots ticking beneath. */
@@ -482,14 +532,16 @@ function drawGround(graphics: Graphics, hasBGA: boolean, hit: number, hitColor: 
   ];
   // The bands are authored on the 480 px landscape height and stretch to the stage's.
   const stretch = VIEW.height / DESIGN_HEIGHT;
+  // A key press tints the sky above the horizon: mixed into the flat, opaque bands rather than a second full fill.
+  const tint = hit > 0 ? 0.06 * hit : 0;
+  const sky = tint > 0 ? horizon : 0;
   let top = 0;
   for (const [color, until] of bands) {
     const bottom = until * stretch;
-    fillAroundBGA(graphics, 0, top, VIEW.width, bottom - top, color, hasBGA);
+    const split = Math.max(top, Math.min(bottom, sky));
+    if (split > top) fillAroundBGA(graphics, 0, top, VIEW.width, split - top, mixColor(color, hitColor, tint), hasBGA);
+    if (bottom > split) fillAroundBGA(graphics, 0, split, VIEW.width, bottom - split, color, hasBGA);
     top = bottom;
-  }
-  if (hit > 0) {
-    fillAroundBGA(graphics, 0, 0, VIEW.width, horizon, hitColor, hasBGA, 0.06 * hit);
   }
 }
 
@@ -563,6 +615,18 @@ function drawFloor(
     graphics.moveTo(pieces[index]!, pieces[index + 1]!).lineTo(pieces[index + 2]!, pieces[index + 3]!);
   }
   graphics.stroke({ color: SYN_EMBER, width: 1, alpha: Math.min(0.4, 0.05 * glow) });
+  // The lattice is the skin's densest draw (thousands of points a frame), so its projection and grains are worked out
+  // inline: a row shares its depth, size, colour and grain count, and each point goes straight to the point layer.
+  // Equivalent to `projectViewInto` for the ground and the risen point, then `sharedShapeBatch.rect` of a square.
+  const points = pointLayerFor(graphics);
+  const { cosYaw, sinYaw, cosPitch, sinPitch } = basis;
+  const centerX = VIEW.centerX;
+  const width = VIEW.width;
+  const bottom = VIEW.height + 4;
+  const groundY = height - camera.y;
+  const grains = FLOOR_GRAINS;
+  // A silent history (effects off, or a quiet stretch) leaves the floor flat: no point needs its spectrum looked up.
+  const silent = spectrum.silent;
   const spacing = 90;
   const offset = distance % spacing;
   for (let z = spacing - offset; z < 2400; z += spacing) {
@@ -570,25 +634,56 @@ function drawFloor(
     const alpha = Math.min(1, (0.12 + 0.7 * nearness * nearness) * (0.7 + 0.3 * pulse) * glow);
     const size = 0.6 + 1.4 * nearness * nearness;
     const color = emberColor(0.3 + 0.65 * nearness);
+    grainsFor(size, 1, grains);
+    const grainCount = grains.count;
+    const grainSize = grains.size;
+    // A grain's alpha per unit of the point's, before grainsFor's clamp (applied per point below).
+    const grainAlpha = (size * size * 0.8) / (grainCount * grainSize * grainSize);
+    const lz = z - camera.z;
+    const worldZ = z + distance;
+    const age = z / SPECTRUM_WAVE_SPEED;
     // Near rows get more points, so they read as continuous waveforms.
     const step = floorRowStep(z, focal, FLOOR_SCREEN_GAP);
     for (let x = -1500; x <= 1500; x += step) {
+      const lx = x - camera.x;
+      const x1 = lx * cosYaw - lz * sinYaw;
+      const z1 = lx * sinYaw + lz * cosYaw;
       // The band follows where the point sits on screen: bass at the left edge, highs at the right.
-      const ground = projectViewInto(SCRATCH_A, x, height, z, basis, VIEW.centerX, horizon, focal);
-      if (!ground.visible || ground.x < -4 || ground.x > VIEW.width + 4) continue;
-      const ridge = spectrumRise(spectrum, ground.x / VIEW.width, z);
-      const rise = ridge + floorRise(x, z + distance, seconds, FLOOR_GROUND);
-      const point = projectViewInto(SCRATCH_A, x, height - rise, z, basis, VIEW.centerX, horizon, focal);
-      if (!point.visible || point.x < -4 || point.x > VIEW.width + 4 || point.y > VIEW.height + 4) continue;
-      if (hasBGA && insideBGA(point.x, point.y, 2)) continue;
+      const groundDepth = focal + groundY * sinPitch + z1 * cosPitch;
+      if (groundDepth <= 1e-3) continue;
+      const groundX = centerX + (x1 * focal) / groundDepth;
+      if (groundX < -4 || groundX > width + 4) continue;
+      const ridge = silent ? 0 : SPECTRUM_RIDGE_HEIGHT * spectrum.sample(groundX / width, age) ** 1.5;
+      const ly = groundY - ridge - floorRise(x, worldZ, seconds, FLOOR_GROUND);
+      const y2 = ly * cosPitch - z1 * sinPitch;
+      const depth = focal + ly * sinPitch + z1 * cosPitch;
+      if (depth <= 1e-3) continue;
+      const scale = focal / depth;
+      const px = centerX + x1 * scale;
+      const py = horizon + y2 * scale;
+      if (px < -4 || px > width + 4 || py > bottom) continue;
+      if (hasBGA && insideBGA(px, py, 2)) continue;
       // Crests catch more light than the valleys.
       const lit = Math.min(1, alpha * (1 + (1.4 * ridge) / SPECTRUM_RIDGE_HEIGHT));
-      sharedShapeBatch.rect(graphics, color, lit, point.x - size / 2, point.y - size / 2, size, size);
+      // The batch drops what rounds to no eighth of alpha.
+      if (lit < 1 / 16) continue;
+      const pointAlpha = Math.min(1, lit * grainAlpha);
+      for (let grain = 0; grain < grainCount; grain += 1) {
+        points.point(
+          px + GRAIN_OFFSETS[grain * 2]! * size,
+          py + GRAIN_OFFSETS[grain * 2 + 1]! * size,
+          grainSize,
+          color,
+          pointAlpha,
+        );
+      }
     }
   }
   sharedShapeBatch.flush();
 }
 
+/** Scratch grains of a floor row. */
+const FLOOR_GRAINS: Grains = { count: 0, size: 0, alpha: 0 };
 /** Scratch buffer for clipped floor lines (`x0, y0, x1, y1` quads), reused every frame. */
 const FLOOR_PIECES: number[] = [];
 /** Height (world units) of the Perlin-noise ground under the floor's spectrum ridges. */
@@ -796,28 +891,25 @@ function drawBGAFrame(
   const baseHorizon = BGA.y + BGA.h * 0.66;
   const view = { cx, cy: baseHorizon, focal: 220, camera: orbitCamera, orbit };
   // Particle pyramids on the horizon.
-  for (const [pyramid, x, z, scale, yaw] of [
-    [PYRAMIDS[2]!, 40, 1500, 520, 0.2],
-    [PYRAMIDS[0]!, -330, 700, 250, 0.5],
-    [PYRAMIDS[1]!, 330, 820, 230, -0.3],
-  ] as const) {
-    drawPointCloud(light, pyramid, { scale, x, y: 0, z, yaw: yaw + seconds * 0.04 }, view, {
-      colorOf: (point) => emberColor(0.35 + 0.55 * point.weight),
-      alpha: 0.8,
-      size: 1,
-      seconds,
-      shimmer: 0.3,
-      referenceScale: 220 / (220 + z),
-      skip: (px, py) => inside(px, py),
-    });
+  const transform = PYRAMID_TRANSFORM;
+  const style = PYRAMID_STYLE;
+  style.seconds = seconds;
+  for (const [pyramid, x, z, scale, yaw] of MONITOR_PYRAMIDS) {
+    transform.scale = scale;
+    transform.x = x;
+    transform.z = z;
+    transform.yaw = yaw + seconds * 0.04;
+    style.referenceScale = 220 / (220 + z);
+    drawPointCloud(light, pyramid, transform, view, style);
   }
   // Floor points scrolling in.
   // A coarser lattice than the main floor: the monitor is small, so this keeps the point count down.
   const offset = (seconds * 90) % 80;
+  const orbitBasis = cameraBasis(orbitCamera, SCRATCH_BASIS);
   for (let z = 80 - offset; z < 1400; z += 80) {
     const nearness = 1 - z / 1400;
     for (let x = -600; x <= 600; x += 40) {
-      const point = projectPoint(viewPoint({ x, y: 70, z }, orbitCamera, orbit), cx, baseHorizon, 220);
+      const point = projectViewInto(SCRATCH_A, x, 70, z, orbitBasis, cx, baseHorizon, 220, orbit);
       if (!point.visible || inside(point.x, point.y)) continue;
       const size = 0.5 + 1.1 * nearness * nearness;
       sharedShapeBatch.rect(
@@ -837,9 +929,14 @@ function drawBGAFrame(
   const roam = wanderPoint(seconds * 0.8, 2, { minX: -55, maxX: 55, minY: -125, maxY: -70, minZ: -120, maxZ: 0 });
   const at = projectPoint(viewPoint(roam, view.camera, view.orbit), view.cx, view.cy, view.focal);
   const state = monitorCloudFor(layer);
+  // The cloud sits just under `light` (the slots after it hold `light`'s point layers). Moving a child, even back in
+  // place, makes Pixi rebuild the whole layer's draw list, so it moves only when out of place.
   const host = light.parent!;
-  if (state.cloud.view.parent === host) host.removeChild(state.cloud.view);
-  host.addChildAt(state.cloud.view, host.getChildIndex(light) + 1);
+  const cloudView = state.cloud.view;
+  if (cloudView.parent !== host || host.getChildIndex(cloudView) !== host.getChildIndex(light) - 1) {
+    if (cloudView.parent === host) host.removeChild(cloudView);
+    host.addChildAt(cloudView, host.getChildIndex(light));
+  }
   const scale = at.visible ? 60 * at.scale * (1 + 0.03 * pulse) : 0;
   state.cloud.update({
     x: at.x,
@@ -852,6 +949,7 @@ function drawBGAFrame(
     clip: { x: BGA.x, y: BGA.y, w: BGA.w, h: BGA.h - 22 },
   });
   state.lastSeconds = seconds;
+  state.drawn = true;
   // Lock-on reticle tracking it, while it stays inside the monitor.
   const lock = scale * 0.55 + 5 * pulse;
   if (at.visible && insideBGA(at.x - lock, at.y - lock) && insideBGA(at.x + lock, at.y + lock)) {
@@ -946,44 +1044,48 @@ function drawChartPlate(graphics: Graphics, layer: Container, runtime: Runtime, 
   drawSecondPlayerFigures(layer, runtime, SONG_PLATE, pool);
   const w = SONG_PLATE.w - (runtime.secondPlayer !== undefined ? SECOND_PLAYER_FIGURES_WIDTH : 0);
   // Genre, title, artist — the order every built-in skin uses; the genre rides a small line above the title.
-  const genre = runtime.chartGenre?.trim();
-  const lift = genre ? 5 : 0;
-  if (genre) {
-    addHUDText(
-      layer,
-      genre.toUpperCase(),
-      x + 14,
-      y + 3,
-      { size: 8, weight: '500', fill: SYN_DIM, fontFamily: SYN_TEXT_FONT, letterSpacing: 1, maxWidth: w - 28 },
-      pool,
-    );
-  }
-  addHUDText(
-    layer,
-    runtime.chartTitle?.trim() || 'Untitled chart',
-    x + 14,
-    y + 6 + lift,
-    {
-      size: 15,
-      weight: '500',
-      fill: SYN_WHITE,
-      fontFamily: SYN_TEXT_FONT,
-      maxWidth: w - 28,
-      dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
-    },
-    pool,
-  );
-  const artist = runtime.chartArtist?.trim();
-  if (artist) {
-    addHUDText(
-      layer,
-      artist,
-      x + 14,
-      y + 28,
-      { size: 10, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, maxWidth: w - 28 },
-      pool,
-    );
-  }
+  drawSongInfoLayers(runtime, (info) => {
+    const genre = info.chartGenre?.trim();
+    const lift = genre ? 5 : 0;
+    const artist = info.chartArtist?.trim();
+    return [
+      genre
+        ? addHUDText(
+            layer,
+            genre.toUpperCase(),
+            x + 14,
+            y + 3,
+            { size: 8, weight: '500', fill: SYN_DIM, fontFamily: SYN_TEXT_FONT, letterSpacing: 1, maxWidth: w - 28 },
+            pool,
+          )
+        : undefined,
+      addHUDText(
+        layer,
+        info.chartTitle?.trim() || 'Untitled chart',
+        x + 14,
+        y + 6 + lift,
+        {
+          size: 15,
+          weight: '500',
+          fill: SYN_WHITE,
+          fontFamily: SYN_TEXT_FONT,
+          maxWidth: w - 28,
+          dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
+        },
+        pool,
+      ),
+      artist
+        ? addHUDText(
+            layer,
+            artist,
+            x + 14,
+            y + 28,
+            { size: 10, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, maxWidth: w - 28 },
+            pool,
+          )
+        : undefined,
+    ];
+  });
 }
 
 function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, accent: number, pool: ChildPool): void {
@@ -1206,41 +1308,45 @@ function drawPortraitHUD(
   drawFrame(graphics, plate.x, plate.y, plate.w, plate.h, accent);
   const textX = plate.x + 10;
   const textW = plate.w - 20;
-  const genre = runtime.chartGenre?.trim();
-  addHUDText(
-    layer,
-    genre ? genre.toUpperCase() : 'NOW PLAYING',
-    textX,
-    plate.y + 6,
-    { size: 10, weight: '500', fill: SYN_DIM, fontFamily: SYN_TEXT_FONT, letterSpacing: 1, maxWidth: textW },
-    pool,
-  );
-  addHUDText(
-    layer,
-    runtime.chartTitle?.trim() || 'Untitled chart',
-    textX,
-    plate.y + 19,
-    {
-      size: 14,
-      weight: '500',
-      fill: SYN_WHITE,
-      fontFamily: SYN_TEXT_FONT,
-      maxWidth: textW,
-      dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
-    },
-    pool,
-  );
-  const artist = runtime.chartArtist?.trim();
-  if (artist) {
-    addHUDText(
-      layer,
-      artist,
-      textX,
-      plate.y + 39,
-      { size: 10, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, maxWidth: textW },
-      pool,
-    );
-  }
+  drawSongInfoLayers(runtime, (info) => {
+    const genre = info.chartGenre?.trim();
+    const artist = info.chartArtist?.trim();
+    return [
+      addHUDText(
+        layer,
+        genre ? genre.toUpperCase() : 'NOW PLAYING',
+        textX,
+        plate.y + 6,
+        { size: 10, weight: '500', fill: SYN_DIM, fontFamily: SYN_TEXT_FONT, letterSpacing: 1, maxWidth: textW },
+        pool,
+      ),
+      addHUDText(
+        layer,
+        info.chartTitle?.trim() || 'Untitled chart',
+        textX,
+        plate.y + 19,
+        {
+          size: 14,
+          weight: '500',
+          fill: SYN_WHITE,
+          fontFamily: SYN_TEXT_FONT,
+          maxWidth: textW,
+          dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
+        },
+        pool,
+      ),
+      artist
+        ? addHUDText(
+            layer,
+            artist,
+            textX,
+            plate.y + 39,
+            { size: 10, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, maxWidth: textW },
+            pool,
+          )
+        : undefined,
+    ];
+  });
 
   // Score panel: SCORE and EX on the left of a divider, COMBO and RANK on the right, the rate filament along the foot.
   drawFrame(graphics, score.x, score.y, score.w, score.h, accent);
@@ -1326,6 +1432,8 @@ function drawPortraitHUD(
     ['MAX', SYN_MIST, runtime.maxCombo],
   ];
   const cellW = (tally.w - 12) / 4;
+  // The player turned the judgment counts off: the tally keeps its frame.
+  if (runtime.hidesJudgeCounts) return;
   cells.forEach(([label, color, count], index) => {
     const x = tally.x + 6 + (index % 4) * cellW;
     const y = tally.y + 6 + Math.floor(index / 4) * 28;

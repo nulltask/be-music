@@ -17,11 +17,11 @@
       "combo": 1,
       "maxCombo": 1,
       "gauge": {
-        "current": 73.066667,
+        "current": 72.666667,
         "max": 100,
         "clearThreshold": 80,
         "initial": 20,
-        "effectiveTotal": 160.96,
+        "effectiveTotal": 160,
         "cleared": false,
         "type": "GROOVE",
         "survival": false,
@@ -88,7 +88,7 @@
           "noteCount": 6,
           "maxCombo": 1,
           "djLevel": "D",
-          "gauge": {"type":"GROOVE","final":73.066667,"cleared":false},
+          "gauge": {"type":"GROOVE","final":72.666667,"cleared":false},
           "score": 75000
         }
       }
@@ -103,7 +103,7 @@
         "noteCount": 6,
         "maxCombo": 1,
         "djLevel": "D",
-        "gauge": {"type":"GROOVE","final":73.066667,"cleared":false},
+        "gauge": {"type":"GROOVE","final":72.666667,"cleared":false},
         "score": 75000
       },
       "beatoraja": {
@@ -144,12 +144,12 @@
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
-      "1260.000 PERFECT combo=1 ch=13 delta=0 gauge=46.826667",
-      "1400.000 BAD combo=0 ch=12 delta=-608 gauge=42.826667",
-      "1516.667 PERFECT combo=1 ch=11 delta=0 gauge=69.653333",
-      "2376.667 BAD combo=0 ch=16 delta=-125 gauge=65.653333",
-      "2610.000 POOR combo=0 ch=14 delta=110 gauge=59.653333",
-      "3600.000 GOOD combo=1 ch=15 delta=100 gauge=73.066667"
+      "1260.000 PERFECT combo=1 ch=13 delta=0 gauge=46.666667",
+      "1400.000 BAD combo=0 ch=12 delta=-608 gauge=42.666667",
+      "1516.667 PERFECT combo=1 ch=11 delta=0 gauge=69.333333",
+      "2376.667 BAD combo=0 ch=16 delta=-125 gauge=65.333333",
+      "2610.000 POOR combo=0 ch=14 delta=110 gauge=59.333333",
+      "3600.000 GOOD combo=1 ch=15 delta=100 gauge=72.666667"
     ],
     "ui": [
       "500.000 flash-lane 11",
@@ -212,7 +212,7 @@
       "Audio backend: characterization",
       "--- Result ---",
       "TOTAL  : 6",
-      "GAUGE  : 73.07 / 100.00 FAILED (TOTAL 160.96)",
+      "GAUGE  : 72.67 / 100.00 FAILED (TOTAL 160)",
       "PGREAT : 2",
       "GREAT  : 0",
       "GOOD   : 1",
@@ -243,11 +243,11 @@
       "combo": 1,
       "maxCombo": 1,
       "gauge": {
-        "current": 73.066667,
+        "current": 72.666667,
         "max": 100,
         "clearThreshold": 80,
         "initial": 20,
-        "effectiveTotal": 160.96,
+        "effectiveTotal": 160,
         "cleared": false,
         "type": "GROOVE",
         "survival": false,
@@ -291,12 +291,12 @@
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
-      "1250.000 PERFECT combo=1 ch=13 delta=0 gauge=46.826667",
-      "1400.000 BAD combo=0 ch=12 delta=-608 gauge=42.826667",
-      "1516.667 PERFECT combo=1 ch=11 delta=0 gauge=69.653333",
-      "2383.333 BAD combo=0 ch=16 delta=-125 gauge=65.653333",
-      "2616.667 POOR combo=0 ch=14 delta=100.001 gauge=59.653333",
-      "3600.000 GOOD combo=1 ch=15 delta=100 gauge=73.066667"
+      "1250.000 PERFECT combo=1 ch=13 delta=0 gauge=46.666667",
+      "1400.000 BAD combo=0 ch=12 delta=-608 gauge=42.666667",
+      "1516.667 PERFECT combo=1 ch=11 delta=0 gauge=69.333333",
+      "2383.333 BAD combo=0 ch=16 delta=-125 gauge=65.333333",
+      "2616.667 POOR combo=0 ch=14 delta=100.001 gauge=59.333333",
+      "3600.000 GOOD combo=1 ch=15 delta=100 gauge=72.666667"
     ],
     "ui": [
       "500.000 press-lane 11",

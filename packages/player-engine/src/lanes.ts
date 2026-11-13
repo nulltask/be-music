@@ -90,6 +90,7 @@ export {
 export { randomizeLR2ScatterNotes } from './lane-scatter.ts';
 
 export { clampScrollSection, clampScrollRate, type ScrollModifier } from './core/scroll-modifier.ts';
+export type { LR2ManiaChartRates } from './core/lr2-mania-chart.ts';
 
 export { clampExtraNoteDepth } from './core/extra-note-modifier.ts';
 
@@ -97,6 +98,7 @@ export type { LR2ExtraLevel } from './core/lr2-extra-lanes.ts';
 
 export {
   isOnePlayerBattleMode,
+  isSPToDPBattleMode,
   resolveEffectiveBattleMode,
   type BattleMode,
   type EffectiveBattleMode,

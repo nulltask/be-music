@@ -4,6 +4,7 @@
 // seeds them: never rename one.
 
 import { parseCompressorMode, type CompressorMode } from '@be-music/player-browser/audio';
+import { DEFAULT_SCORE_TARGET_RATE } from '@be-music/player-scene-model';
 import { readStoredHiSpeed } from '../hi-speed-storage.ts';
 import { readStoredPlayTempoSettings } from '../play-tempo-settings.ts';
 import { parseRecordingFormatKey, recordingFormatKey } from '../recording-format-choice.ts';
@@ -83,6 +84,36 @@ export function storeSkinEffects(
     storage?.setItem(SKIN_EFFECTS_STORAGE_KEY, level);
   } catch {
     // Private windows / blocked storage: the pick still applies for this session.
+  }
+}
+
+export const RENDERER_STORAGE_KEY = 'be-music.renderer';
+
+/** The renderer the player draws with: WebGL 2 or WebGPU. */
+export type RendererChoice = 'webgl' | 'webgpu';
+
+/**
+ * Stored renderer pick, else WebGL 2: on a laptop's integrated GPU the WebGPU path drew the built-in skin at 1920 × 1080
+ * well under the display's rate where WebGL 2 kept up.
+ */
+export function readStoredRenderer(storage: SettingStorage | undefined = defaultSettingStorage()): RendererChoice {
+  try {
+    return storage?.getItem(RENDERER_STORAGE_KEY) === 'webgpu' ? 'webgpu' : 'webgl';
+  } catch {
+    // Storage blocked — the default.
+    return 'webgl';
+  }
+}
+
+/** Remembers the renderer pick; it takes effect when the player next loads. */
+export function storeRenderer(
+  renderer: RendererChoice,
+  storage: SettingStorage | undefined = defaultSettingStorage(),
+): void {
+  try {
+    storage?.setItem(RENDERER_STORAGE_KEY, renderer);
+  } catch {
+    // Private windows / blocked storage: the pick lasts for this session only.
   }
 }
 
@@ -257,6 +288,34 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     dpFlip: false,
     bpmGuide: false,
     bpmChangeWarning: false,
+    guideSE: false,
+    judgeCounts: true,
+    judgeDetailSplit: false,
+    judgeDetail: 'OFF',
+    scoreTargetRate: DEFAULT_SCORE_TARGET_RATE,
+    judgePosition: 0,
+    judgeDisplay: 'SKIN',
+    laneBrightness: 100,
+    scoreTarget: 'RATE_AAA',
+    markProcessedNotes: false,
+    showJudgeArea: false,
+    lr2AddMines: 0,
+    lr2AddLongNotes: 0,
+    lr2Loudness: 0,
+    lr2AddNotes: 0,
+    lr2Gambol: 0,
+    lr2SideJump: 0,
+    lr2SpiralEffect: 0,
+    lr2Wave: 0,
+    lr2SinCurve: 0,
+    lr2Nabeatsu: 0,
+    lr2Heartbeat: 0,
+    lr2Char: 0,
+    lr2SuperLoop: 0,
+    lr2Tornado: 0,
+    lr2Earthquake: 0,
+    lr2Acceleration: 'OFF',
+    autoScratchNotes: 'SHOW',
     judgeTimingAutoAdjust: 'OFF',
     visualConstant: false,
     noteDurationMs: 500,
@@ -334,6 +393,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
       readStoredRenderResolution(storage) ?? DEFAULT_RENDER_RESOLUTION,
     ),
     playLayout: readStoredPlayLayout(storage),
+    renderer: readStoredRenderer(storage),
     status: 'Ready',
     openFolder: inputs.actions.openFolder,
     openFiles: inputs.actions.openFiles,

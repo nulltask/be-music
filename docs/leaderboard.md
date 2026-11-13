@@ -117,12 +117,13 @@ A manual play that seeks is practice (`PlayResult.practice`). Its first seek dis
   their own page still opens and says why (`score.unranked`). A **course stage** sent on its own is one
   (`course-stage`): a stage starts from the state the previous one left, so it is not a single-chart play; it is ranked
   as part of its course run instead (section 6.1). So is a **play at another tempo** (`tempo`: `play.tempo` other than
-  1, the web player's tempo slider): it is practice, as beatoraja's frequency trainer does not save its scores.
+  1 at any point): it is practice, as beatoraja's frequency trainer does not save its scores. The multiplier is relative
+  to the chart's [BASE-SPEED](./adr/0041-chart-authored-base-speed.md).
   **Failed plays** (the gauge
   emptied) are stored and count as plays. So are **plays given up with ESC** (`play.aborted`): a play quit mid-way is
   ranked as a failed play under every ruleset, whatever its gauge stood at, as LR2 and beatoraja save one.
 - **Lamps and BP per ruleset** follow each game: under `lr2` a DEATH clear is a NORMAL clear (LR2body.exe `CheckClear`);
-  beatoraja and That-Which-Must-Not-Be-Named give DEATH (`HAZARD`) an EX HARD lamp. Every ruleset counts empty POORs in BP, LR2 included. BP also counts the notes a play never judged because it failed or was given up mid-way, as both games count them.
+  beatoraja gives HAZARD the FULL COMBO lamp when the gauge determines the lamp. That-Which-Must-Not-Be-Named reads DEATH as EX-HARD. New submissions use the updated beatoraja lamp and previously stored results retain their lamp. Every ruleset counts empty POORs in BP, LR2 included. BP also counts the notes a play never judged because it failed or was given up mid-way, as both games count them.
   The lamp and BP come from the rules every client uses (`resolveRulesetResultLamp` and `resolveRulesetResultMissCount` in `@be-music/player-engine/replay`, `resolveClearLamp` and `resolveMissCount` in `@be-music/player-engine/ruleset`): a full combo needs every note judged GOOD or better, so a chart without notes takes its gauge's lamp. Lamps are stored as their rank (`clearLampRank`): 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 NORMAL, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX.
 - **Personal bests, beatoraja style**: the best EX score, the best clear lamp and the fewest misses are kept separately,
   each pointing at the score that set it, so each best identifies its score and replay. Misses count for every

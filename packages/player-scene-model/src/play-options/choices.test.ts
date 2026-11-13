@@ -6,6 +6,7 @@ import {
   formatGaugeLabel,
   RANDOM_CYCLE,
   clampHiSpeed,
+  clampJudgePosition,
   clampShutter,
   cyclePlayOptionValue,
   DEFAULT_PLAY_OPTIONS,
@@ -29,6 +30,15 @@ describe('DEFAULT_PLAY_OPTIONS', () => {
     expect(DEFAULT_PLAY_OPTIONS.shutter).toBe(SHUTTER_DEFAULT);
     expect(DEFAULT_PLAY_OPTIONS.gauge1P).toBe('GROOVE');
     expect(DEFAULT_PLAY_OPTIONS.gauge2P).toBe('GROOVE');
+  });
+
+  test('holds values that resolve to themselves, so resolving the options can skip a stored default', () => {
+    for (const key of Object.keys(DEFAULT_PLAY_OPTIONS) as (keyof PlayOptions)[]) {
+      const resolved = resolvePlayOptionValue(key, DEFAULT_PLAY_OPTIONS[key]);
+      // An option that keeps nothing by default (a seed) resolves to nothing and stays at its default too.
+      if (resolved !== undefined) expect(resolved, key).toBe(DEFAULT_PLAY_OPTIONS[key]);
+    }
+    expect(resolvePlayOptions({ ...DEFAULT_PLAY_OPTIONS })).toEqual(resolvePlayOptions());
   });
 
   test('offers a value of each option with choices among them', () => {
@@ -132,6 +142,18 @@ describe('clampHiSpeed / clampShutter', () => {
   });
 });
 
+describe('clampJudgePosition', () => {
+  test('keeps a whole percentage within the limit either way', () => {
+    expect(clampJudgePosition(12.4)).toBe(12);
+    expect(clampJudgePosition(-45)).toBe(-30);
+    expect(clampJudgePosition(99)).toBe(30);
+    expect(clampJudgePosition(Number.NaN)).toBe(0);
+    expect(resolvePlayOptionValue('judgePosition', -17.6)).toBe(-18);
+    expect(resolvePlayOptionValue('judgePosition', 'low')).toBeUndefined();
+    expect(DEFAULT_PLAY_OPTIONS.judgePosition).toBe(0);
+  });
+});
+
 describe('isListPlayOption', () => {
   test('names the options that change the bar list', () => {
     expect(isListPlayOption('sort')).toBe(true);
@@ -167,8 +189,8 @@ test('offers the three confirmed beatoraja launcher algorithms only', () => {
 });
 
 test('R-RANDOM is offered under every ruleset without changing LR2 button indices', () => {
-  // An LR2 button cycles LR2's own RANDOM and S-RANDOM (ADR 0019).
-  expect(RANDOM_CYCLE).toEqual(['OFF', 'MIRROR', 'lr2:RANDOM', 'lr2:S-RANDOM', 'SCATTER', 'lr2:CONVERGE']);
+  // An LR2 button cycles the shared RANDOM and LR2's own S-RANDOM (ADR 0019).
+  expect(RANDOM_CYCLE).toEqual(['OFF', 'MIRROR', 'RANDOM', 'lr2:S-RANDOM', 'SCATTER', 'lr2:CONVERGE']);
   expect(resolveRandomModes('lr2')).toContain('R-RANDOM');
   for (const source of ['beatoraja', '____'] as const) expect(resolveRandomModes(source)).toContain('R-RANDOM');
   expect(resolvePlayOptions({ random1P: 'R-RANDOM', random2P: 'R-RANDOM' })).toMatchObject({
@@ -426,18 +448,26 @@ test('bmson TOTAL mode is opt-in and validates both choices', () => {
   expect(resolvePlayOptionValue('bmsonTotalMode', 'SPEC')).toBeUndefined();
 });
 
-test('RANDOM and S-RANDOM are offered once per source, the judge ruleset own first (ADR 0019)', () => {
-  expect(resolveRandomModes('beatoraja').filter((mode) => mode.endsWith(':RANDOM'))).toEqual([
-    'beatoraja:RANDOM',
-    'lr2:RANDOM',
-    '____:RANDOM',
+test('RANDOM is one option and S-RANDOM is offered once per source, the judge ruleset own first (ADR 0019)', () => {
+  for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+    expect(resolveRandomModes(ruleset)).toContain('RANDOM');
+    expect(resolveRandomModes(ruleset).filter((mode) => mode.endsWith(':RANDOM'))).toEqual([]);
+  }
+  expect(resolveRandomModes('beatoraja').filter((mode) => mode.endsWith(':S-RANDOM'))).toEqual([
+    'beatoraja:S-RANDOM',
+    'lr2:S-RANDOM',
   ]);
+  // AC's S-RANDOM is LR2's.
   expect(resolveRandomModes('____').filter((mode) => mode.endsWith(':S-RANDOM'))).toEqual([
-    '____:S-RANDOM',
     'lr2:S-RANDOM',
     'beatoraja:S-RANDOM',
   ]);
-  expect(resolveRandomModes('lr2')).not.toContain('RANDOM');
+  // Values merged since then still validate and read as the option they were merged into.
+  for (const value of ['lr2:RANDOM', 'beatoraja:RANDOM', '____:RANDOM']) {
+    expect(isRandomModeChoice(value)).toBe(true);
+    expect(resolvePlayOptionValue('random1P', value)).toBe('RANDOM');
+  }
+  expect(resolvePlayOptionValue('random2P', '____:S-RANDOM')).toBe('lr2:S-RANDOM');
   // Bare values from before the qualification still validate; an unknown source does not.
   expect(isRandomModeChoice('S-RANDOM')).toBe(true);
   expect(isRandomModeChoice('pms:RANDOM')).toBe(false);

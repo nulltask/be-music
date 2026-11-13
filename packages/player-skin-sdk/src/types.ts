@@ -258,6 +258,11 @@ export interface BeMusicGameplayLayout {
     /** Top of the lanes, and the judgement line notes land on. */
     top: number;
     judgementY: number;
+    /**
+     * How far down (negative: up) the player moved the judgment and combo from where the skin puts them, in stage
+     * pixels. Absent means 0. A skin adds it to its own judgment position.
+     */
+    judgeOffsetY?: number;
     /** Horizontal extent of each play side present (`2P` only in double play). */
     sides: Partial<
       Record<BeMusicSide, { left: number; right: number; /** Actual line after per-side LIFT. */ judgementY?: number }>
@@ -267,12 +272,30 @@ export interface BeMusicGameplayLayout {
   bga: BeMusicRect | undefined;
 }
 
+/** How a judgment's timing reads: early, late, or on the note's time. */
+export type BeMusicJudgeDetailTone = 'fast' | 'slow' | 'just';
+
+/**
+ * A judgment's timing as the player asked to see it beside the judgment: `FAST` / `SLOW`, or the offset in
+ * milliseconds. `lane` is set when the keys' and the scratch's timing are shown apart.
+ */
+export interface BeMusicJudgeDetail {
+  text: string;
+  tone: BeMusicJudgeDetailTone;
+  lane?: 'keys' | 'scratch';
+}
+
 /** One side's recent judgement. */
 export interface BeMusicJudgmentState {
   side: BeMusicSide;
   /** PERFECT / GREAT / GOOD / BAD / POOR. Empty when no recent judge. */
   judge?: string;
   combo?: number;
+  /**
+   * The judge detail to draw with the judgment, when the player turned it on: none, one, or the keys' and the
+   * scratch's. Absent or empty means nothing is drawn. A skin draws each `text` in its tone's colour.
+   */
+  details?: readonly BeMusicJudgeDetail[];
 }
 
 /** The 2P player's live values in a two-player play (LR2 BATTLE): its own score, combo and gauge. */
@@ -295,11 +318,27 @@ export interface BeMusicSecondPlayerRuntime {
   rank?: string;
 }
 
-/** Live gameplay values for the HUD. */
-export interface BeMusicGameplayRuntime {
+/** The song a NONSTOP play's song info crossfades away from ({@link BeMusicGameplayRuntime.songInfoFade}). */
+export interface BeMusicSongInfoFade {
   chartTitle?: string;
   chartArtist?: string;
   chartGenre?: string;
+  /** 0 (the old song alone) to 1 (the new song alone). */
+  progress: number;
+}
+
+/** Live gameplay values for the HUD. */
+export interface BeMusicGameplayRuntime {
+  /** The song's title, artist and genre: in a NONSTOP play, those of the stage being played. */
+  chartTitle?: string;
+  chartArtist?: string;
+  chartGenre?: string;
+  /**
+   * While a NONSTOP play's song info crossfades into the next stage's (`chartTitle` and friends are already the new
+   * song's): the song it replaces, and how far the crossfade is, 0 (the old song alone) to 1 (the new song alone). A skin
+   * draws the old song at `1 - progress` and the new one at `progress`; one that ignores it switches at once.
+   */
+  songInfoFade?: BeMusicSongInfoFade;
   /** BPM at the playhead: follows the chart's tempo changes (and holds through stops), not just its header BPM. */
   bpm?: number;
   hiSpeed?: number;
@@ -388,6 +427,11 @@ export interface BeMusicGameplayRuntime {
    * {@link lastJudgeDeltaMs}.
    */
   judgeTimings?: readonly BeMusicJudgmentTiming[];
+  /**
+   * `true` when the player turned the judgment counts off: a skin draws no count of PGREAT to POOR, no FAST / SLOW
+   * count and no timing meter during the play. Absent means they are drawn.
+   */
+  hidesJudgeCounts?: boolean;
   /** SUDDEN+ / HIDDEN+ / LIFT per play side, as fractions of the lane height. */
   laneCovers?: readonly BeMusicLaneCover[];
   /**
@@ -504,6 +548,12 @@ export interface BeMusicLaneFrame {
   /** True while a long note in this lane is held, and the play-clock ms the hold started. */
   holding?: boolean;
   holdStartedAtMs?: number;
+  /**
+   * While {@link holding}: the y of the held long note's top this frame (its end as it falls, or the lane's `top` while
+   * the end is still above the lane). Hold effects that rise from the judgement line stay under it, so they never cover
+   * the end the player lets go at (see `HoldSparkOptions.maxRise`).
+   */
+  holdTop?: number;
 }
 
 /**
@@ -634,6 +684,8 @@ export interface BeMusicMeasureLine {
  * top edge, and stretch a larger image or a video over the whole rect.
  */
 export interface BeMusicBGAFrame {
+  /** HDX placement in the BGA viewport: fill, top-centred 100%, or top-centred 80%. Clip to the viewport. */
+  bgaMode?: 0 | 1 | 2;
   /** Authored BGA sub-region placement on the 256×256 canvas; other images retain normal placement. */
   origins?: Partial<Record<'base' | 'layer' | 'layer2' | 'poor', { x: number; y: number }>>;
   /** Authored channel opacity (0..1) for each plane; omitted means opaque. */
@@ -870,6 +922,11 @@ export interface BeMusicResultFrame {
   ratePercent: number;
   /** Milliseconds since the scene mounted, or `Infinity` once the player skipped the entrance. */
   elapsedMs: number;
+  /**
+   * Milliseconds since the scene mounted, going on after the entrance is skipped or settles: for what keeps moving while
+   * the result is shown, such as a course card's stage list scrolling (`resolveResultCourseScroll`).
+   */
+  shownMs: number;
   nowMs: number;
   effects: BeMusicEffectLevel;
   chartImage: BeMusicChartImageLookup;

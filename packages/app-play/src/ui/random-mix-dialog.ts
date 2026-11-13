@@ -1,8 +1,8 @@
 import { html, nothing, render, type TemplateResult } from 'lit';
 import {
+  DEFAULT_RANDOM_MIX_CONDITIONS,
   RANDOM_MIX_DIFFICULTIES,
   RANDOM_MIX_MAX_COUNT,
-  RANDOM_MIX_NONSTOP_MAX_COUNT,
   resolveRandomMixCount,
   type LR2RandomMixSettings,
   type NonstopConnection,
@@ -12,12 +12,13 @@ import {
 import { connectionSelect, RANDOM_MIX_FIELDS, randomMixSelect } from '../course-maker-panel.ts';
 import { playerText } from '../player-copy.ts';
 
-// The RANDOM MIX dialog: deciding a RANDOM MIX bar asks which charts to draw from (key modes, a level range or the
+// The RANDOM MIX dialog: deciding a RANDOM MIX bar asks which charts to draw from (a key mode, a level range or the
 // difficulties) and how many stages (or endless), with the draw settings the Options dialog's My courses also sets
 // (LR2's favorite level, BPM range and BPM limits, and a NONSTOP mix's connection), then OK starts the mix. It opens on
 // what was last confirmed, and says how many charts match; OK is off while none does.
 
-const DIFFICULTY_NAMES: Readonly<Record<number, string>> = {
+/** The `#DIFFICULTY` names the RANDOM MIX dialogs show. */
+export const RANDOM_MIX_DIFFICULTY_NAMES: Readonly<Record<number, string>> = {
   1: 'BEGINNER',
   2: 'NORMAL',
   3: 'HYPER',
@@ -27,7 +28,7 @@ const DIFFICULTY_NAMES: Readonly<Record<number, string>> = {
 
 /** What the dialog is opened with. */
 export interface RandomMixDialogRequest {
-  /** The course folder the RANDOM MIX bar is in: a NONSTOP mix has at most five stages and no endless count. */
+  /** The course folder the RANDOM MIX bar is in: a NONSTOP mix has no endless count. */
   kind: 'expert' | 'nonstop';
   /** The key modes the library has, ascending: the ones offered. */
   keyModes: readonly number[];
@@ -39,6 +40,11 @@ export interface RandomMixDialogRequest {
   defaultConnection: NonstopConnection;
   /** How many charts fit `conditions`. */
   countMatches: (conditions: RandomMixConditions) => number;
+  /**
+   * Whether a chart that fits can be stage 1 under the draw settings (`hasRandomMixFirstStage`): a BPM range lets only
+   * a chart that keeps one BPM be stage 1, and the BPM limits apply, which the count does not read. Asked on OK only.
+   */
+  canStart: (choice: RandomMixDialogChoice) => boolean;
 }
 
 /** What OK confirms: the conditions, LR2's RANDOM MIX settings and the NONSTOP connection. */
@@ -57,16 +63,19 @@ export function toggleRandomMixValue(values: readonly number[], value: number, o
 }
 
 /**
- * The conditions as the dialog first shows them: key modes the library lacks are dropped (all offered ones when none is
- * left), and a NONSTOP mix's count is capped.
+ * The conditions as the dialog first shows them: a key mode the library lacks gives way to the default one (7 keys), or
+ * to the library's lowest when it lacks that too, and a NONSTOP mix's endless count reads as five stages.
  */
 export function resolveRandomMixDialogConditions(
   request: Pick<RandomMixDialogRequest, 'kind' | 'keyModes' | 'initial'>,
 ): RandomMixConditions {
-  const offered = request.initial.keyModes.filter((keyMode) => request.keyModes.includes(keyMode));
+  const offered = request.keyModes;
+  const preferred = [request.initial.keyMode, DEFAULT_RANDOM_MIX_CONDITIONS.keyMode].find((keyMode) =>
+    offered.includes(keyMode),
+  );
   return {
     ...request.initial,
-    keyModes: offered.length > 0 ? offered : [...request.keyModes],
+    keyMode: preferred ?? offered[0] ?? request.initial.keyMode,
     count: resolveRandomMixCount(request.kind, request.initial.count),
   };
 }
@@ -96,12 +105,19 @@ export function promptRandomMixConditions(request: RandomMixDialogRequest): Prom
     settings: { ...request.settings },
     defaultConnection: request.defaultConnection,
   };
+  // Set when OK found no chart that can be stage 1; any change clears it.
+  let blocked = false;
   const update = (next: Partial<RandomMixDialogChoice>): void => {
     choice = { ...choice, ...next };
+    blocked = false;
+    draw();
+  };
+  const block = (): void => {
+    blocked = true;
     draw();
   };
   const draw = (): void => {
-    render(template(request, choice, update), dialog);
+    render(template(request, choice, update, { blocked, block }), dialog);
   };
   draw();
   dialog.returnValue = '';
@@ -111,7 +127,9 @@ export function promptRandomMixConditions(request: RandomMixDialogRequest): Prom
     dialog.addEventListener(
       'close',
       () => {
-        resolve({ choice, confirmed: dialog.returnValue === 'ok' && request.countMatches(choice.conditions) > 0 });
+        const confirmed =
+          dialog.returnValue === 'ok' && request.countMatches(choice.conditions) > 0 && request.canStart(choice);
+        resolve({ choice, confirmed });
       },
       { once: true },
     );
@@ -177,13 +195,13 @@ function template(
   request: RandomMixDialogRequest,
   choice: RandomMixDialogChoice,
   set: (next: Partial<RandomMixDialogChoice>) => void,
+  start: { blocked: boolean; block: () => void },
 ): TemplateResult {
   const { conditions, settings } = choice;
   const update = (next: Partial<RandomMixConditions>): void => set({ conditions: { ...conditions, ...next } });
   const t = playerText().course.randomMixDialog;
   const matches = request.countMatches(conditions);
   const nonstop = request.kind === 'nonstop';
-  const countMax = nonstop ? RANDOM_MIX_NONSTOP_MAX_COUNT : RANDOM_MIX_MAX_COUNT;
   const levelInput = (id: string, label: string, key: 'minLevel' | 'maxLevel') =>
     html`<label class="random-mix-level" for=${id}>
       <span class="label">${label}</span>
@@ -220,6 +238,12 @@ function template(
       const ok = form.querySelector<HTMLButtonElement>('button[value="ok"]');
       if (ok !== null && !ok.disabled) form.requestSubmit(ok);
     }}
+    @submit=${(event: SubmitEvent) => {
+      // OK keeps the dialog open, and says why, when no chart that fits can be stage 1 under the draw settings.
+      if ((event.submitter as HTMLButtonElement | null)?.value !== 'ok' || request.canStart(choice)) return;
+      event.preventDefault();
+      start.block();
+    }}
   >
     <header>
       <h2 id="random-mix-dialog-title">${t.title}</h2>
@@ -227,24 +251,17 @@ function template(
     </header>
     <fieldset class="random-mix-group">
       <legend class="label">${t.keys}</legend>
-      <div class="random-mix-choices">
+      <div class="random-mix-choices" role="radiogroup">
         ${request.keyModes.map(
           (keyMode) =>
             html`<label class="random-mix-check">
               <input
                 class="input"
-                type="checkbox"
-                name="key-mode"
+                type="radio"
+                name="random-mix-key-mode"
                 value=${keyMode}
-                .checked=${conditions.keyModes.includes(keyMode)}
-                @change=${(event: Event) =>
-                  update({
-                    keyModes: toggleRandomMixValue(
-                      conditions.keyModes,
-                      keyMode,
-                      (event.currentTarget as HTMLInputElement).checked,
-                    ),
-                  })}
+                .checked=${conditions.keyMode === keyMode}
+                @change=${() => update({ keyMode })}
               />
               <span>${t.keyMode(keyMode)}</span>
             </label>`,
@@ -295,7 +312,7 @@ function template(
                             ),
                           })}
                       />
-                      <span>${DIFFICULTY_NAMES[difficulty]}</span>
+                      <span>${RANDOM_MIX_DIFFICULTY_NAMES[difficulty]}</span>
                     </label>`,
                 )}
               </div>
@@ -313,8 +330,10 @@ function template(
       }
     </fieldset>
     <div class="random-mix-group">
-      ${countField('random-mix-count', t.count, conditions.count, countMax, !nonstop, (count) => update({ count }))}
-      ${nonstop ? html`<p class="random-mix-note">${t.nonstopLimit(RANDOM_MIX_NONSTOP_MAX_COUNT)}</p>` : nothing}
+      ${countField('random-mix-count', t.count, conditions.count, RANDOM_MIX_MAX_COUNT, !nonstop, (count) =>
+        update({ count }),
+      )}
+      ${nonstop ? html`<p class="random-mix-note">${t.nonstopNoInfinity}</p>` : nothing}
     </div>
     <fieldset class="random-mix-group">
       <legend class="label">${t.settings}</legend>
@@ -336,9 +355,19 @@ function template(
             : nothing
         }
       </div>
+      <label class="random-mix-check">
+        <input
+          class="input"
+          type="checkbox"
+          name="allow-bpm-changes"
+          .checked=${conditions.allowBPMChanges}
+          @change=${(event: Event) => update({ allowBPMChanges: (event.currentTarget as HTMLInputElement).checked })}
+        />
+        <span>${t.allowBPMChanges}</span>
+      </label>
     </fieldset>
-    <p class="random-mix-matches" role="status" aria-live="polite" data-empty=${matches === 0}>
-      ${matches > 0 ? t.matches(matches) : t.noMatch}
+    <p class="random-mix-matches" role="status" aria-live="polite" data-empty=${matches === 0 || start.blocked}>
+      ${matches === 0 ? t.noMatch : start.blocked ? t.noFirstStage(matches) : t.matches(matches)}
     </p>
     <footer>
       <button type="submit" value="" class="btn" data-variant="outline">${t.cancel}</button>

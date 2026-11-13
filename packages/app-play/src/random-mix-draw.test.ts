@@ -67,4 +67,21 @@ describe('RandomMixDraw', () => {
     // A pool of one folder repeats it.
     expect(await lonely.take(3)).toHaveLength(3);
   });
+
+  test('draws charts whose BPM changes only when allowed', async () => {
+    const pool = [poolChart(1), poolChart(2)];
+    const ranged = { ...DEFAULT_LR2_RANDOM_MIX_SETTINGS, bpmRange: 10 };
+    const changing = () => ({ min: 120, max: 180 });
+    const md5Of = async (chart: LibraryChart) => md5(Number(chart.id.slice(1)));
+    const strict = new RandomMixDraw(pool, { settings: ranged, bpmOf: changing, md5Of, random: sequence() });
+    expect(await strict.take(2)).toHaveLength(0);
+    const allowed = new RandomMixDraw(pool, {
+      settings: ranged,
+      bpmOf: changing,
+      md5Of,
+      random: sequence(),
+      allowBPMChanges: true,
+    });
+    expect(await allowed.take(2)).toHaveLength(2);
+  });
 });

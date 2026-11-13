@@ -123,6 +123,8 @@ export interface SelectSessionEvents {
   exitMenu?(): void;
   /** The player asked to read the library's folders again (LR2's F8, beatoraja's F2). Without it the key does nothing. */
   reload?(): void;
+  /** LR2's F2: the host shows the LR2 mania options. Absent when the host has no place for them. */
+  maniaOptions?(): void;
   /** The player held LR2's key 4 on a chart: show its ranking (LR2's IR). */
   ranking?(chart: LibraryChart): void;
   /**
@@ -511,12 +513,24 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       case 'ln-mode':
         this.stepPlayOption('longNoteMode', 1);
         return true;
+      case 'battle':
+        this.setPlayOption('battleMode', toggleACBattle(this.playOptions.battleMode));
+        return true;
+      case 'm-ran': {
+        const key = action.side === '1P' ? 'mRan1P' : 'mRan2P';
+        this.setPlayOption(key, !this.playOptions[key]);
+        return true;
+      }
       case 'search':
         this.options.on.search?.();
         return true;
       case 'reload':
         if (this.options.on.reload === undefined) return false;
         this.options.on.reload();
+        return true;
+      case 'mania-options':
+        if (this.options.on.maniaOptions === undefined) return false;
+        this.options.on.maniaOptions();
         return true;
       case 'favorite':
         this.applyBrowse({ type: 'favorite', list: action.list }, atMs);
@@ -604,6 +618,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   }
 
   public frame(nowMs: number): SelectFrame {
+    const analyzer = this.options.audio.analyzer;
     if (this.entered) {
       this.nowMs = Math.max(this.nowMs, nowMs);
       this.settleLaunch();
@@ -639,7 +654,10 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
         ? { courseMaker: this.courseMakerState(this.options.courseMaker) }
         : {}),
       ...(replaySlots !== undefined ? { replaySlots } : {}),
-      audio: this.options.audio.analyzer.sample(nowMs),
+      // Analysed only when a view reads it (an audio-reactive skin with its effects on).
+      get audio() {
+        return analyzer.sample(nowMs);
+      },
     };
   }
 
@@ -1152,4 +1170,9 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     if (chart === undefined || source === undefined) this.options.audio.preview.focus(undefined);
     else this.options.audio.preview.focus({ chart: chart, source }, this);
   }
+}
+
+/** AC's one-player BATTLE switched by its key: on from any other battle mode, off from itself. */
+export function toggleACBattle(battleMode: PlayOptions['battleMode']): PlayOptions['battleMode'] {
+  return battleMode === '____:BATTLE' ? 'OFF' : '____:BATTLE';
 }

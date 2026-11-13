@@ -24,6 +24,34 @@ export type GUIPlayOptions = Pick<
   | 'dpFlip'
   | 'bpmGuide'
   | 'bpmChangeWarning'
+  | 'guideSE'
+  | 'judgeCounts'
+  | 'judgeDetailSplit'
+  | 'judgeDetail'
+  | 'scoreTargetRate'
+  | 'judgePosition'
+  | 'judgeDisplay'
+  | 'laneBrightness'
+  | 'scoreTarget'
+  | 'markProcessedNotes'
+  | 'showJudgeArea'
+  | 'lr2AddMines'
+  | 'lr2AddLongNotes'
+  | 'lr2Loudness'
+  | 'lr2AddNotes'
+  | 'lr2Gambol'
+  | 'lr2SideJump'
+  | 'lr2SpiralEffect'
+  | 'lr2Wave'
+  | 'lr2SinCurve'
+  | 'lr2Nabeatsu'
+  | 'lr2Heartbeat'
+  | 'lr2Char'
+  | 'lr2SuperLoop'
+  | 'lr2Tornado'
+  | 'lr2Earthquake'
+  | 'lr2Acceleration'
+  | 'autoScratchNotes'
   | 'judgeTimingAutoAdjust'
   | 'visualConstant'
   | 'lift1P'
@@ -102,6 +130,34 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
+    guideSE: state.guideSE,
+    judgeCounts: state.judgeCounts,
+    judgeDetailSplit: state.judgeDetailSplit,
+    judgeDetail: state.judgeDetail,
+    scoreTargetRate: state.scoreTargetRate,
+    judgePosition: state.judgePosition,
+    judgeDisplay: state.judgeDisplay,
+    laneBrightness: state.laneBrightness,
+    scoreTarget: state.scoreTarget,
+    markProcessedNotes: state.markProcessedNotes,
+    showJudgeArea: state.showJudgeArea,
+    lr2AddMines: state.lr2AddMines,
+    lr2AddLongNotes: state.lr2AddLongNotes,
+    lr2Loudness: state.lr2Loudness,
+    lr2AddNotes: state.lr2AddNotes,
+    lr2Gambol: state.lr2Gambol,
+    lr2SideJump: state.lr2SideJump,
+    lr2SpiralEffect: state.lr2SpiralEffect,
+    lr2Wave: state.lr2Wave,
+    lr2SinCurve: state.lr2SinCurve,
+    lr2Nabeatsu: state.lr2Nabeatsu,
+    lr2Heartbeat: state.lr2Heartbeat,
+    lr2Char: state.lr2Char,
+    lr2SuperLoop: state.lr2SuperLoop,
+    lr2Tornado: state.lr2Tornado,
+    lr2Earthquake: state.lr2Earthquake,
+    lr2Acceleration: state.lr2Acceleration,
+    autoScratchNotes: state.autoScratchNotes,
     judgeTimingAutoAdjust: state.judgeTimingAutoAdjust,
     visualConstant: state.visualConstant,
     noteDurationMs: state.noteDurationMs,
@@ -190,6 +246,34 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.dpFlip = options.dpFlip;
   state.bpmGuide = options.bpmGuide;
   state.bpmChangeWarning = options.bpmChangeWarning;
+  state.guideSE = options.guideSE;
+  state.judgeCounts = options.judgeCounts;
+  state.judgeDetailSplit = options.judgeDetailSplit;
+  state.judgeDetail = options.judgeDetail;
+  state.scoreTargetRate = options.scoreTargetRate;
+  state.judgePosition = options.judgePosition;
+  state.judgeDisplay = options.judgeDisplay;
+  state.laneBrightness = options.laneBrightness;
+  state.scoreTarget = options.scoreTarget;
+  state.markProcessedNotes = options.markProcessedNotes;
+  state.showJudgeArea = options.showJudgeArea;
+  state.lr2AddMines = options.lr2AddMines;
+  state.lr2AddLongNotes = options.lr2AddLongNotes;
+  state.lr2Loudness = options.lr2Loudness;
+  state.lr2AddNotes = options.lr2AddNotes;
+  state.lr2Gambol = options.lr2Gambol;
+  state.lr2SideJump = options.lr2SideJump;
+  state.lr2SpiralEffect = options.lr2SpiralEffect;
+  state.lr2Wave = options.lr2Wave;
+  state.lr2SinCurve = options.lr2SinCurve;
+  state.lr2Nabeatsu = options.lr2Nabeatsu;
+  state.lr2Heartbeat = options.lr2Heartbeat;
+  state.lr2Char = options.lr2Char;
+  state.lr2SuperLoop = options.lr2SuperLoop;
+  state.lr2Tornado = options.lr2Tornado;
+  state.lr2Earthquake = options.lr2Earthquake;
+  state.lr2Acceleration = options.lr2Acceleration;
+  state.autoScratchNotes = options.autoScratchNotes;
   state.judgeTimingAutoAdjust = options.judgeTimingAutoAdjust;
   state.visualConstant = options.visualConstant;
   state.noteDurationMs = options.noteDurationMs;
@@ -283,6 +367,10 @@ export class PlayOptionsService {
       hRandomThresholdBPM: play.sevenToNineThresholdBPM ?? play.options?.hRandomThresholdBPM,
       battleMode: play.battleMode ?? 'OFF',
       dBattleScratch: play.dBattleScratch ?? false,
+      lr2AddNotes: play.lr2Mania?.addNotes ?? 0,
+      lr2Loudness: play.lr2Mania?.loudness ?? 0,
+      lr2AddLongNotes: play.lr2Mania?.addLongNotes ?? 0,
+      lr2AddMines: play.lr2Mania?.addMines ?? 0,
       lr2ExtraMode: play.lr2ExtraMode ?? false,
       lr2ExtraLevel: play.lr2ExtraLevel ?? 0,
       extraNoteDepth: play.extraNoteDepth ?? 0,
@@ -347,6 +435,10 @@ const ARRANGEMENT_OPTIONS = [
   'mRan1P',
   'mRan2P',
   'lr2ExtraMode',
+  'lr2AddNotes',
+  'lr2Loudness',
+  'lr2AddLongNotes',
+  'lr2AddMines',
   'lr2ExtraLevel',
   'extraNoteDepth',
   'extraNoteScratch',

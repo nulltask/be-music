@@ -92,6 +92,8 @@ export interface NonstopRouteDeps {
   ) => Promise<boolean>;
   /** Re-enables the options a play latched, once its result shows. */
   readonly unlockReplayOptions: () => void;
+  /** Told when a NONSTOP run played live (not a replay played back) reaches its result: a RANDOM MIX is over then. */
+  readonly onRunResult?: (course: LibraryCourse) => void;
 }
 
 /** A NONSTOP course from its start (or a restitch) to its result. */
@@ -113,6 +115,7 @@ export class NonstopRoute {
   private readonly courseReplaySlots: NonstopRouteDeps['courseReplaySlots'];
   private readonly showBeatorajaResult: NonstopRouteDeps['showBeatorajaResult'];
   private readonly unlockReplayOptions: NonstopRouteDeps['unlockReplayOptions'];
+  private readonly onRunResult: NonstopRouteDeps['onRunResult'];
 
   public constructor(deps: NonstopRouteDeps) {
     this.courses = deps.courses;
@@ -132,6 +135,7 @@ export class NonstopRoute {
     this.courseReplaySlots = deps.courseReplaySlots;
     this.showBeatorajaResult = deps.showBeatorajaResult;
     this.unlockReplayOptions = deps.unlockReplayOptions;
+    this.onRunResult = deps.onRunResult;
   }
 
   /**
@@ -157,7 +161,7 @@ export class NonstopRoute {
       const found = await this.records.resolveChartHashes(stage.chart);
       if (found !== undefined) hashes.set(stage.chart.id, found);
     }
-    const prepared = prepareNonstopPlay(course, {
+    const prepared = await prepareNonstopPlay(course, {
       sourceOf: (chartEntry) => resolveChartSource(this.library.collection, chartEntry),
       hashesOf: (chartEntry) => hashes.get(chartEntry.id),
       ...(run !== undefined
@@ -215,6 +219,7 @@ export class NonstopRoute {
       await this.showNonstopReplayResult(nonstop, nonstop.replay, fallback, resolved);
       return;
     }
+    this.onRunResult?.(nonstop.course);
     if (fallback?.practice) {
       const info = resolveCourseView(nonstop.course);
       const retry = (): void => void this.startNonstopCourse(nonstop.course);

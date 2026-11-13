@@ -15,7 +15,9 @@ import {
   bmsExRankValueToJudgeRankPercent,
   resolveBMSJudgeWindowsMsForPercent,
   resolveBMSRankJudgeRankPercent,
+  resolveLR2GambolWindowsMs,
   resolveLR2NonstopRankWindowsMs,
+  type LR2GambolLevel,
   type JudgeWindowsMs,
 } from '../core/judge-window.ts';
 import {
@@ -141,6 +143,13 @@ export interface GaugeSpec {
   survival: boolean;
   /** LR2 survival gauges: values below this collapse to 0 (death border). */
   death?: number;
+  /** A survival gauge that also needs this value at the end to clear: LR2's HAZARD on a single chart (80). */
+  clearBorder?: number;
+  /**
+   * LR2: landmine damage stops at this value instead of going lower. LR2 holds HP at 2 when the player picked GROOVE
+   * or EASY, in a course too (OpenLR2 `LR2f.cpp` L2054-L2056), where the course gauge itself has no 2 % floor.
+   */
+  mineFloor?: number;
   /** Per-judge deltas in percent, `[PG, GR, GD, BD, missPOOR, emptyPOOR]`, AFTER TOTAL modifiers. */
   values: readonly [number, number, number, number, number, number];
   /** Low-gauge damage reduction steps (first match wins). */
@@ -234,6 +243,8 @@ export interface ResolveRulesetOptions {
   judgeAlgorithm?: BeatorajaJudgeAlgorithm;
   /** beatoraja CUSTOM JUDGE window and long-note margin rates; absent while the option is off. */
   customJudge?: BeatorajaCustomJudge;
+  /** LR2's mania option GAMBOL (LR2 rules only): fixes the judge windows for the play; absent while it is off. */
+  lr2Gambol?: LR2GambolLevel;
   /** PRACTICE (beatoraja's `PracticeProperty`, under every ruleset): replaces the gauge, TOTAL and judgerank of the play. */
   practice?: PracticeRules;
   /**
@@ -546,10 +557,13 @@ function resolveLR2Gauge(gaugeId: string, total: number, noteCount: number): Gau
       };
     }
     case 'DEATH':
+    case 'DEATH-CORRECTED':
       // LR2's own DEATH table (OpenLR2 LR2f.cpp L27673-L27680; LR2body.exe `ParseBMSFile` case 2 at 0x4b5c2e):
-      // no gain at all, BAD / POOR kill, and an empty POOR costs nothing. beatoraja's HAZARD_LR2 differs.
+      // no gain at all, BAD / POOR kill, and an empty POOR costs nothing. beatoraja's HAZARD_LR2 differs. LR2's
+      // CheckClear also wants HP 80 at the end of a single chart, as for GROOVE (L1842-L1862), so a mine can leave a
+      // surviving run FAILED; the corrected HAZARD clears by surviving (#1082).
       return {
-        id: 'DEATH',
+        id: gaugeId,
         min: 0,
         max: 100,
         initial: 100,
@@ -558,6 +572,7 @@ function resolveLR2Gauge(gaugeId: string, total: number, noteCount: number): Gau
         death: 2,
         values: [0, 0, 0, -100, -100, 0],
         guts: [],
+        ...(gaugeId === 'DEATH' ? { clearBorder: 80 } : {}),
       };
     default:
       return {
@@ -801,7 +816,8 @@ function resolveDefaultGaugeId(rulesetId: RulesetId, playGauge: string): string 
     case 'HARD':
       return 'HARD';
     case 'DEATH':
-      return rulesetId === 'lr2' ? 'DEATH' : rulesetId === 'beatoraja' ? 'HAZARD' : 'EX-HARD';
+    case 'DEATH-CORRECTED':
+      return rulesetId === 'lr2' ? playGauge : rulesetId === 'beatoraja' ? 'HAZARD' : 'EX-HARD';
     default:
       return rulesetId === 'lr2' ? 'GROOVE' : 'NORMAL';
   }
@@ -885,7 +901,10 @@ function resolveGaugeShift(
 ): Pick<RulesetConfig, 'gaugeBank' | 'gaugeFallback'> {
   const { gaugeAutoShift: policy, course } = options;
   if (policy === 'BEST_CLEAR' || policy === 'SELECT_TO_UNDER') {
-    const ladder = resolveGaugeShiftLadder(rulesetId, course?.kind);
+    // The corrected HAZARD takes HAZARD's place on LR2's ladder.
+    const ladder = resolveGaugeShiftLadder(rulesetId, course?.kind).map((id) =>
+      id === 'DEATH' && initialGauge.id === 'DEATH-CORRECTED' ? 'DEATH-CORRECTED' : id,
+    );
     const selected = ladder.indexOf(initialGauge.id);
     if (selected < 0) return {};
     return {
@@ -908,14 +927,21 @@ function resolveGaugeShift(
  * recovery on final gauge tables separately, without changing this damage-scaling value.
  */
 function resolveEffectiveTotal(rulesetId: RulesetId, chart: RulesetChartFacts, baseNoteCount: number): number {
-  const fallback = resolveDefaultTotal(rulesetId, baseNoteCount, chart.laneMode);
+  // LR2 keeps TOTAL in an int: `#TOTAL` through `atol`, the default assigned to it, and a value below 1 replaced by the
+  // default (OpenLR2 `LR2f.cpp` L25824, L26299, L27566-L27579).
+  const lr2 = rulesetId === 'lr2';
+  const fallback = lr2
+    ? Math.trunc(resolveDefaultTotal(rulesetId, baseNoteCount, chart.laneMode))
+    : resolveDefaultTotal(rulesetId, baseNoteCount, chart.laneMode);
   const raw = chart.total;
   if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) {
     return fallback;
   }
-  return (chart.totalUnit ?? (chart.sourceFormat === 'bmson' ? 'percent' : 'absolute')) === 'percent'
-    ? (raw / 100) * fallback
-    : raw;
+  if ((chart.totalUnit ?? (chart.sourceFormat === 'bmson' ? 'percent' : 'absolute')) === 'percent')
+    return (raw / 100) * fallback;
+  if (!lr2) return raw;
+  const truncated = Math.trunc(raw);
+  return truncated < 1 ? fallback : truncated;
 }
 
 /**
@@ -979,6 +1005,8 @@ function resolveRulesetTables(
   const overrideBadMs = options.judgeWindowOverrideMs;
   if (options.customJudge !== undefined && rulesetId !== 'beatoraja')
     throw new RangeError('CUSTOM JUDGE is available only for beatoraja.');
+  const gambol = options.lr2Gambol;
+  if (gambol !== undefined && rulesetId !== 'lr2') throw new RangeError('GAMBOL is available only for LR2.');
   const { practice } = options;
   if (practice !== undefined && course !== undefined) throw new RangeError('PRACTICE plays a single chart.');
   if (practice !== undefined && !isPracticeGaugeType(practice.gauge, rulesetId))
@@ -987,14 +1015,18 @@ function resolveRulesetTables(
     applyCourseJudgeConstraint(applyChartJudgeModifiers(tables, options.chartJudge), course?.judge);
   // A course gauge starts from the value its own id carried in (auto-shift carries every ladder gauge's), else from the
   // value the played gauge carried.
-  const courseGaugeOf = (id: string, total: number, stage: RulesetCourseOptions): GaugeSpec =>
-    resolveCourseGauge(
+  // LR2 keeps a GROOVE or EASY pick's mine damage at 2 % on its course gauge too (#1082).
+  const courseMineFloor = rulesetId === 'lr2' && ['GROOVE', 'EASY'].includes(selectedGauge) ? 2 : undefined;
+  const courseGaugeOf = (id: string, total: number, stage: RulesetCourseOptions): GaugeSpec => {
+    const spec = resolveCourseGauge(
       rulesetId,
       id,
       { ...stage, initialGauge: stage.initialGauges?.[id] ?? stage.initialGauge },
       chart.laneMode,
       resolveLR2HardDamageMultiplier(total, baseNotes),
     );
+    return courseMineFloor === undefined ? spec : { ...spec, mineFloor: courseMineFloor };
+  };
   const courseGauge = (total: number): GaugeSpec | undefined =>
     course === undefined ? undefined : courseGaugeOf(gaugeId, total, course);
   // Gauge auto-shift's parallel gauges; `singleGaugeOf` builds a single-play gauge of the ruleset by id.
@@ -1020,29 +1052,41 @@ function resolveRulesetTables(
     const initialStage =
       chart.sourceFormat === 'bmson' ? chart.judgeRank.stageRanks?.find((change) => change.timeUs === 0) : undefined;
     const stagePercent = (rank: number, table: string): number =>
-      table === 'bmson' || table === 'bms-exrank'
+      table === 'bmson' || table === 'bms-exrank' || table === 'bms-exrank-change'
         ? bmsExRankValueToJudgeRankPercent(rank)
         : resolveBMSRankJudgeRankPercent(rank);
-    const staticTables = constrain(
-      resolveLR2WindowTables(
-        practiceRank ??
-          (initialStage !== undefined ? stagePercent(initialStage.rank, initialStage.table) : chart.judgeRank.percent),
-        overrideBadMs,
-      ),
-    );
+    // GAMBOL fixes the windows whatever the chart's rank: LR2 sets them after the rank's own, as the chart opens and at
+    // each NONSTOP rank object. LR2 has no `#EXRANKxx`, so a fixed window ignores those changes too.
+    const gambolTables = (table: 'opening' | 'nonstop'): RulesetWindowTables =>
+      constrain(lr2WindowTables(resolveLR2GambolWindowsMs(gambol!, table, overrideBadMs)));
+    const staticTables =
+      gambol !== undefined
+        ? gambolTables('opening')
+        : constrain(
+            resolveLR2WindowTables(
+              practiceRank ??
+                (initialStage !== undefined
+                  ? stagePercent(initialStage.rank, initialStage.table)
+                  : chart.judgeRank.percent),
+              overrideBadMs,
+            ),
+          );
     const timelineTables = [
-      ...timeline.map((change) => ({
+      ...(gambol !== undefined ? [] : timeline).map((change) => ({
         timeUs: change.timeUs,
         tables: constrain(resolveLR2WindowTables(bmsExRankValueToJudgeRankPercent(change.exRankValue), overrideBadMs)),
       })),
       // A stitched NONSTOP chart's later stages (`RulesetStageRank`); stable after the `#EXRANKxx` changes on a tie.
       ...(practiceRank !== undefined ? [] : (chart.judgeRank.stageRanks ?? [])).map((change) => ({
         timeUs: change.timeUs,
-        tables: constrain(
-          change.table === 'lr2-nonstop'
-            ? lr2WindowTables(resolveLR2NonstopRankWindowsMs(change.rank, overrideBadMs))
-            : resolveLR2WindowTables(stagePercent(change.rank, change.table), overrideBadMs),
-        ),
+        tables:
+          gambol !== undefined
+            ? gambolTables(change.table === 'lr2-nonstop' ? 'nonstop' : 'opening')
+            : constrain(
+                change.table === 'lr2-nonstop'
+                  ? lr2WindowTables(resolveLR2NonstopRankWindowsMs(change.rank, overrideBadMs))
+                  : resolveLR2WindowTables(stagePercent(change.rank, change.table), overrideBadMs),
+              ),
       })),
     ].sort((left, right) => left.timeUs - right.timeUs);
     const initialGauge = practice
@@ -1092,25 +1136,28 @@ function resolveRulesetTables(
     const customize = (tables: RulesetWindowTables): RulesetWindowTables =>
       options.customJudge === undefined ? tables : applyCustomJudgeTables(tables, options.customJudge);
     // Legacy BMS NONSTOP stage ranks apply only to LR2. Mixed bmson courses explicitly carry each stage's units.
+    // Stage-owned `#EXRANKxx` changes (`bms-exrank-change`) stay with LR2, as beatoraja ignores `A0` in a chart alone.
     const stageTables =
       chart.sourceFormat === 'bmson'
-        ? (chart.judgeRank.stageRanks ?? []).map((change) => ({
-            timeUs: change.timeUs,
-            tables: constrain(
-              customize(
-                resolveBeatorajaWindowTables({
-                  ...chart,
-                  sourceFormat: change.table === 'bmson' ? 'bmson' : 'bms',
-                  judgeRank: {
-                    percent: chart.judgeRank.percent,
-                    ...(change.table === 'bmson' || change.table === 'bms-exrank'
-                      ? { sourceExRank: change.rank }
-                      : { sourceRank: change.rank }),
-                  },
-                }),
+        ? (chart.judgeRank.stageRanks ?? [])
+            .filter((change) => change.table !== 'bms-exrank-change')
+            .map((change) => ({
+              timeUs: change.timeUs,
+              tables: constrain(
+                customize(
+                  resolveBeatorajaWindowTables({
+                    ...chart,
+                    sourceFormat: change.table === 'bmson' ? 'bmson' : 'bms',
+                    judgeRank: {
+                      percent: chart.judgeRank.percent,
+                      ...(change.table === 'bmson' || change.table === 'bms-exrank'
+                        ? { sourceExRank: change.rank }
+                        : { sourceRank: change.rank }),
+                    },
+                  }),
+                ),
               ),
-            ),
-          }))
+            }))
         : [];
     const tables =
       stageTables.find((change) => change.timeUs === 0)?.tables ??

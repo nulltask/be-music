@@ -1,5 +1,6 @@
 import type { LibraryChart } from '@be-music/player-scene-model';
 import { leaderboardLink } from './service-links.ts';
+import type { RankingPage } from './services/ranking-target.ts';
 import { playerText } from './player-copy.ts';
 import {
   computeChartFingerprint,
@@ -172,6 +173,36 @@ export async function fetchLeaderboardTopReplay(
 }
 
 /**
+ * Reads a stretch of a chart's Leaderboard ranking under `ruleset` (unassisted plays): the EX scores from `offset`,
+ * best first, and the ranking's player count (`GET /api/v0/charts/:chartFingerprint/leaderboard`). `undefined` when
+ * the ranking cannot be read. No session is needed.
+ */
+export async function fetchLeaderboardRankingPage(
+  chartFingerprint: string,
+  ruleset: RulesetId,
+  offset: number,
+  limit: number,
+  options: Pick<LeaderboardClientOptions, 'fetch'> = {},
+): Promise<RankingPage | undefined> {
+  const doFetch = options.fetch ?? fetch.bind(globalThis);
+  const query = new URLSearchParams({ ruleset, offset: String(offset), limit: String(limit) });
+  const response = await doFetch(`/api/v0/charts/${encodeURIComponent(chartFingerprint)}/leaderboard?${query}`, {
+    credentials: 'same-origin',
+  }).catch(() => undefined);
+  if (response === undefined || !response.ok) return undefined;
+  const body = (await response.json().catch(() => undefined)) as
+    | { entries?: { exScore?: unknown }[]; players?: unknown }
+    | undefined;
+  if (!Array.isArray(body?.entries) || typeof body.players !== 'number') return undefined;
+  const exScores: number[] = [];
+  for (const entry of body.entries) {
+    if (typeof entry.exScore !== 'number') return undefined;
+    exScores.push(entry.exScore);
+  }
+  return { exScores, players: body.players };
+}
+
+/**
  * Requires a session, posts `body(false)` gzipped, and resends `body(true)` (with
  * the chart documents) when the server does not know a chart (409 `chart-document-required`).
  */
@@ -338,9 +369,16 @@ export function describeCourseLeaderboardResult(result: CourseLeaderboardSubmitR
  * One status-line summary of a submission, for the ruleset the play was judged under: rank, players, EX score, and
  * which personal bests it improved.
  */
-export function describeLeaderboardResult(result: LeaderboardSubmitResult, playedRuleset: string): string {
+export function describeLeaderboardResult(
+  result: LeaderboardSubmitResult,
+  playedRuleset: string,
+  board?: 'main' | 'assisted' | 'unranked',
+): string {
   if (result.status === 'failed') return playerText().lb.notSubmitted(result.error);
-  return describeRankedResult(result, playedRuleset, false);
+  const line = describeRankedResult(result, playedRuleset, false);
+  // A ranked play names the board it is ranked on; a stored one already says it is not ranked.
+  if (result.unranked !== undefined || board === undefined || board === 'unranked') return line;
+  return `${line} · ${playerText().record.board[board]}`;
 }
 
 function describeRankedResult(

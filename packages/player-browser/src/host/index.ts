@@ -26,7 +26,7 @@ export {
 export { createDecideScene, type DecideScene, type DecideSceneKit, type DecideSceneOptions } from './decide.ts';
 export type { DecideSessionEvents } from '../session/decide/decide-session.ts';
 export { createResultScene, type ResultScene, type ResultSceneKit, type ResultSceneOptions } from './result.ts';
-export type { ResultSessionEvents } from '../session/result/result-session.ts';
+export type { ResultGaugeGraph, ResultSessionEvents } from '../session/result/result-session.ts';
 export {
   createPlayScene,
   type BGACamera,

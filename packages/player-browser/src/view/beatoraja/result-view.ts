@@ -27,7 +27,12 @@ import {
   type BeatorajaResultInput,
 } from '@be-music/skin-beatoraja/scene';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import type { LibraryChart, PlayResult, ReplaySlotState } from '@be-music/player-scene-model';
+import {
+  scrollCourseStages,
+  type LibraryChart,
+  type PlayResult,
+  type ReplaySlotState,
+} from '@be-music/player-scene-model';
 import { Point, type Container, type Renderer } from 'pixi.js';
 import { computeBeatorajaBPMCurve, type BPMCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
@@ -98,6 +103,9 @@ export interface BeatorajaResultViewOptions {
   readonly skinSounds?: BeatorajaSkinAudio;
 }
 
+/** The course stages a beatoraja skin lists at once: strings 150-159 name stages 1-10. */
+const BEATORAJA_COURSE_STAGE_ROWS = 10;
+
 /** The beatoraja result view. See the module comment. */
 export class BeatorajaResultView implements ResultView {
   public readonly family = 'beatoraja' as const;
@@ -115,6 +123,8 @@ export class BeatorajaResultView implements ResultView {
   private host: PixiSceneHost | undefined;
   private emit: IntentSink<ResultIntent> | undefined;
   private disposed = false;
+  /** How long the screen has shown, on its own clock: a long course run's stage list scrolls by it. */
+  private sceneMs = 0;
 
   public constructor(kit: BeatorajaKit, options: BeatorajaResultViewOptions = {}) {
     this.kit = kit;
@@ -131,7 +141,8 @@ export class BeatorajaResultView implements ResultView {
             ...(this.reading?.playChart !== undefined ? { chart: this.reading.playChart } : {}),
             ...(this.reading !== undefined ? { lamp: this.reading.result.lamp } : {}),
           }) ?? 0,
-        resolveTextContent: (ref) => this.read((input) => resolveBeatorajaResultText(ref, input)),
+        resolveTextContent: (ref) =>
+          this.read((input) => resolveBeatorajaResultText(ref, this.withScrolledStages(input))),
         resolveNumberValue: (ref) => this.read((input) => resolveBeatorajaResultNumber(ref, input)),
         resolveFontFamily: fonts !== undefined ? (id) => fonts.family(id) : undefined,
         resolveFontKind: fonts !== undefined ? (id) => fonts.kind(id) : undefined,
@@ -211,6 +222,7 @@ export class BeatorajaResultView implements ResultView {
     if (host === undefined || this.disposed) return;
     this.stage.fitTo(host);
     const reading = this.readingOf(frame);
+    this.sceneMs = beatorajaSceneNowMs(frame.clock);
     const timers = resolveBeatorajaSceneTimers(frame, 'entry', 'result');
     const skinSounds = this.options.skinSounds;
     this.stage.view.update({
@@ -244,6 +256,17 @@ export class BeatorajaResultView implements ResultView {
     events.mapPositionToPoint(point, event.clientX, event.clientY);
     const hit = events.rootBoundary.hitTest(point.x, point.y);
     return hit !== null && hit.eventMode === 'static' && hit.cursor === 'pointer';
+  }
+
+  /**
+   * The result as its stage list shows now: a course run longer than the skin's ten stage rows scrolls through every
+   * stage ({@link scrollCourseStages}).
+   */
+  private withScrolledStages(input: BeatorajaResultInput): BeatorajaResultInput {
+    const course = input.result.course;
+    if (course === undefined) return input;
+    const shown = scrollCourseStages(course, this.sceneMs, BEATORAJA_COURSE_STAGE_ROWS);
+    return shown === course ? input : { ...input, result: { ...input.result, course: shown } };
   }
 
   /** Reads the result being drawn through `resolve`; `undefined` before the first frame. */

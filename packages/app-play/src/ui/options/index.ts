@@ -2,6 +2,7 @@
 // a play puts on them. Each folder is built in a module of its own (`play-options.ts`, `tempo.ts`, …) with the dialog as
 // `this`; the tabs, the folder titles and the remembered open states are `folders.ts`'. The dialog reaches the app only
 // through `OptionsDialogDeps`, which the app (`app/app.ts`) builds.
+import { pickLiveDisplayPlayOptions } from '@be-music/player-scene-model';
 import type { BeatorajaSkinConfig, BeatorajaSkinHeader } from '@be-music/skin-beatoraja';
 import type { LR2DiscoveredTheme } from '@be-music/skin-lr2';
 import type { TunableCompressor } from '@be-music/player-browser/audio';
@@ -17,6 +18,7 @@ import {
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 import {
   OptionFolder,
+  type OptionTabs,
   type OptionBinding,
   type OptionButton,
   type OptionContainer,
@@ -61,7 +63,7 @@ import {
 } from './compressor.ts';
 import { buildCourseFolder } from './course.ts';
 import { buildDeveloperFolder } from './developer.ts';
-import { OPTION_FOLDERS, OPTIONS_TABS, type OptionFolderSpec } from './folders.ts';
+import { OPTION_FOLDERS, OPTIONS_TABS, VIEW_OPTION_PAGES, type OptionFolderSpec } from './folders.ts';
 import { buildLibraryFolder } from './library.ts';
 import { PlayLock } from './play-lock.ts';
 import {
@@ -81,6 +83,7 @@ import { buildKeyConfigFolder } from './keys.ts';
 import { relabelOptions } from './labels.ts';
 import { buildTempoFolder } from './tempo.ts';
 import { onPlayerLangChange, playerLang } from '../../player-copy.ts';
+import { describeRecordConsequence } from '../../services/record-consequence.ts';
 import { releaseFocusOnClose } from '../dialog-focus.ts';
 /**
  * What the Options dialog needs from the app: the settings and stores its controllers change, readers of what the app has
@@ -268,6 +271,7 @@ export class OptionsDialog {
   public lr2ExtraLevelController: OptionBinding<PlayOptions['lr2ExtraLevel']> | undefined;
   public extraNoteDepthController: PaneBinding | undefined;
   public customJudgeController: PaneBinding | undefined;
+  public lr2GambolController: PaneBinding | undefined;
   /** PRACTICE toggle first, then its settings. */
   public practiceControllers: PaneBinding[] = [];
   /** PRACTICE's GAUGE TYPE: the judge ruleset's own gauges. */
@@ -395,6 +399,9 @@ export class OptionsDialog {
   /** A play option set from the menu ({@link OptionsDialogDeps.setPlayOptions}). */
   public setPlayOptions(changes: Partial<PlayOptions>): void {
     this.deps.setPlayOptions(changes);
+    // A running play follows its display options at once; the rest it read when it started.
+    const live = pickLiveDisplayPlayOptions(changes);
+    if (live !== undefined) this.gameplayView?.controller.dispatch({ type: 'display-options', values: live });
   }
   /** The header gear follows the Options dialog: open, closed with its close button, Escape or a backdrop click. */
   private reportExpanded: ((open: boolean) => void) | undefined;
@@ -405,6 +412,18 @@ export class OptionsDialog {
   /** Opens the Options dialog when it is closed, and closes it when it is open. */
   public toggle(): void {
     if (this.gui !== undefined) this.gui.expanded = !this.gui.expanded;
+  }
+  /** The dialog's tabs, the View folder's pages and the LR2 mania options section on its Effects page. */
+  public topTabs: OptionTabs | undefined;
+  public viewTabs: OptionTabs | undefined;
+  public lr2ManiaFolder: OptionFolder | undefined;
+  /** Opens the Options dialog on the LR2 mania options: the View tab's Effects page, scrolled to the section. */
+  public openLR2ManiaOptions(): void {
+    if (this.gui === undefined) return;
+    this.gui.expanded = true;
+    this.topTabs?.select(OPTIONS_TABS.indexOf('View'));
+    this.viewTabs?.select(VIEW_OPTION_PAGES.indexOf('Effects'));
+    this.lr2ManiaFolder?.element.scrollIntoView({ block: 'start' });
   }
   /**
    * Builds the Options dialog (`#options-modal`) and wires every controller to the gameplay / scene state. Centralizing
@@ -428,6 +447,8 @@ export class OptionsDialog {
         help.attach();
         relabelOptions(gui, playerLang());
       }
+      // The select screen's keys change options too, so the row is read again as the dialog opens.
+      if (event.expanded) this.refreshRecordConsequence();
       this.reportExpanded?.(event.expanded);
     });
     // Closed, the keys go back to the play: left on the gear, Enter (meant to start the chart) would open it again.
@@ -446,6 +467,7 @@ export class OptionsDialog {
     const addFolder = (parent: Pick<OptionContainer, 'addFolder'>, folder: OptionFolderSpec): OptionFolder =>
       parent.addFolder({ title: folder.title });
     const tabs = gui.addTab({ pages: OPTIONS_TABS.map((title) => ({ title })) });
+    this.topTabs = tabs;
     const [play, view, keys, skin, audio, cameraTab, library, leaderboard, advanced] = tabs.pages;
     if (!play || !view || !keys || !skin || !audio || !cameraTab || !library || !leaderboard || !advanced) return;
     // Tabs in the order a session uses them: how to play and what the lanes show, the keys, how it looks and sounds,
@@ -480,6 +502,7 @@ export class OptionsDialog {
     this.refreshCompressorStageVisibility();
     gui.on('change', () => {
       this.scheduleSettingsSave();
+      this.refreshRecordConsequence();
       // The quick options panel reads the same values.
       this.quickOptionsPanel?.refresh();
     });
@@ -490,7 +513,11 @@ export class OptionsDialog {
     help.attach();
     // The labels in the player's language, and again when it changes (Help's language switch, the header's menu).
     relabelOptions(gui, playerLang());
-    onPlayerLangChange(() => relabelOptions(gui, playerLang()));
+    onPlayerLangChange(() => {
+      relabelOptions(gui, playerLang());
+      this.refreshRecordConsequence();
+    });
+    this.refreshRecordConsequence();
   }
   /**
    * Writes every Options dialog setting locally immediately; remote publishing is debounced for slider changes.
@@ -520,6 +547,15 @@ export class OptionsDialog {
   public setGhostAvailability(facts: GhostBarFacts | undefined): void {
     this.ghostBar = facts;
     this.refreshGhostAvailability();
+  }
+  /** The "Record" row: what the options picked do to a play's record, before it is played. */
+  public recordConsequenceController: PaneBinding | undefined;
+  public readonly recordConsequence = { text: '-' };
+  /** Rewrites the "Record" row from the settings as they stand, and returns its line. */
+  public refreshRecordConsequence(): string {
+    this.recordConsequence.text = describeRecordConsequence(this.guiState);
+    this.recordConsequenceController?.refresh();
+    return this.recordConsequence.text;
   }
   /** Repaints "Ghost", "Ghost mode" and "Ghost status": disabled during a play and on a course bar. */
   public refreshGhostAvailability(): void {
@@ -671,6 +707,12 @@ export class OptionsDialog {
       this.setPlayOptions({ customJudge: false });
     }
     if (this.customJudgeController) this.customJudgeController.hidden = !beatoraja;
+    // GAMBOL is part of LR2's judge rules.
+    if (ruleset !== 'lr2' && this.guiState.lr2Gambol !== 0) {
+      this.guiState.lr2Gambol = 0;
+      this.setPlayOptions({ lr2Gambol: 0 });
+    }
+    if (this.lr2GambolController) this.lr2GambolController.hidden = ruleset !== 'lr2';
     // The rates belong to beatoraja's rules; under them they stay in place, disabled while CUSTOM JUDGE is off.
     for (const controller of this.customJudgeRateControllers) {
       controller.hidden = !beatoraja;
@@ -706,8 +748,8 @@ export class OptionsDialog {
         : paneOptions({ 'Source default': 'combo' as const });
       this.judgeAlgorithmController.refresh();
     }
-    // Every lane option is offered under every ruleset, grouped by source; RANDOM, S-RANDOM and CONVERGE once per
-    // source (ADR 0019).
+    // Every lane option is offered under every ruleset, grouped by source; S-RANDOM and CONVERGE once per source, and
+    // RANDOM once for all (ADR 0019).
     for (const side of ['1P', '2P'] as const) {
       const items = laneOptionItems(ruleset, side === '1P' && isDuplicatedBattleChoice(this.guiState.battleMode));
       const key = `random${side}` as const;

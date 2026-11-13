@@ -88,11 +88,11 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
       tempoClock,
       // Before the chart starts (the lead-in) a change sets the tempo it starts at.
       nowMs: session.clock?.nowMs() ?? 0,
-      tempo,
+      tempo: tempo * session.chartBaseSpeed,
       setAudioTempo: (next) => audioSession?.setTempo?.(next),
       // A replay's tempo only sets how fast it is re-driven: its re-recorded log carries none.
-      recordTempoChange: (seconds, next) => {
-        if (!session.replay) replayRecorder?.recordTempoChange(seconds, next);
+      recordTempoChange: (seconds) => {
+        if (!session.replay) replayRecorder?.recordTempoChange(seconds, tempo);
       },
       onTempoChange: (change) => {
         if (!uiEnabled) {
@@ -101,7 +101,7 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
             ['value', `x${change.tempo}`],
           ]);
         }
-        options.onTempoChange?.(change);
+        options.onTempoChange?.({ ...change, tempo });
       },
     });
   };
@@ -194,7 +194,7 @@ export function createPlayControls(session: PlaySession, judge: PlayJudge): Play
     seekReplayTempoChanges: (seconds, nowMs) => {
       if (!session.replay) return;
       replayTempoChangeIndex = 0;
-      let tempo = tempoClock.initialTempo;
+      let tempo = options.speed ?? 1;
       while (replayTempoChangeIndex < replayTempoChanges.length) {
         const change = replayTempoChanges[replayTempoChangeIndex]!;
         if (change.timeUs / 1_000_000 > seconds) break;

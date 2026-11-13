@@ -8,6 +8,7 @@ import {
   describeLeaderboardResult,
   describeSkippedCourseSubmission,
   describeSkippedSubmission,
+  fetchLeaderboardRankingPage,
   fetchLeaderboardTopReplay,
   prepareCourseLeaderboardSubmission,
   prepareLeaderboardSubmission,
@@ -381,5 +382,56 @@ describe('course submissions', () => {
     expect(describeSkippedCourseSubmission('not-a-course-run')).toMatch(/one run/);
     expect(describeSkippedCourseSubmission('missing-fingerprint')).toMatch(/no fingerprint/);
     expect(describeSkippedCourseSubmission('fingerprint-mismatch')).toMatch(/does not match/);
+  });
+});
+
+describe('fetchLeaderboardRankingPage', () => {
+  test('reads a stretch of the ranking’s EX scores and its player count', async () => {
+    const urls: string[] = [];
+    const fetchImpl = (async (input: string) => {
+      urls.push(input);
+      return Response.json({ entries: [{ exScore: 1900 }, { exScore: 1800 }], players: 42, offset: 100, limit: 2 });
+    }) as typeof fetch;
+    expect(await fetchLeaderboardRankingPage('bmfp0:chart', 'beatoraja', 100, 2, { fetch: fetchImpl })).toEqual({
+      exScores: [1900, 1800],
+      players: 42,
+    });
+    expect(urls).toEqual(['/api/v0/charts/bmfp0%3Achart/leaderboard?ruleset=beatoraja&offset=100&limit=2']);
+  });
+
+  test('has none when the ranking cannot be read', async () => {
+    const failing = (async () => new Response('', { status: 500 })) as typeof fetch;
+    expect(await fetchLeaderboardRankingPage('bmfp0:chart', 'lr2', 0, 100, { fetch: failing })).toBeUndefined();
+    const malformed = (async () => Response.json({ entries: [{}], players: 1 })) as typeof fetch;
+    expect(await fetchLeaderboardRankingPage('bmfp0:chart', 'lr2', 0, 100, { fetch: malformed })).toBeUndefined();
+    const offline = (async () => {
+      throw new TypeError('offline');
+    }) as typeof fetch;
+    expect(await fetchLeaderboardRankingPage('bmfp0:chart', 'lr2', 0, 100, { fetch: offline })).toBeUndefined();
+  });
+});
+
+describe('describeLeaderboardResult board', () => {
+  const result = {
+    ruleset: 'lr2' as const,
+    rank: 3,
+    players: 10,
+    exScore: 1500,
+    improved: { exScore: false, lamp: false, missCount: false },
+  };
+
+  test('names the board a ranked play is on, and not for a stored or a failed one', () => {
+    const accepted = { status: 'accepted' as const, scoreId: 's', results: [result] as never };
+    const plain = describeLeaderboardResult(accepted, 'lr2');
+    expect(describeLeaderboardResult(accepted, 'lr2', 'main')).toBe(`${plain} · main board`);
+    expect(describeLeaderboardResult(accepted, 'lr2', 'assisted')).toBe(`${plain} · assisted board`);
+    expect(describeLeaderboardResult(accepted, 'lr2', 'unranked')).toBe(plain);
+    const stored = { ...accepted, unranked: 'no-save' };
+    expect(describeLeaderboardResult(stored, 'lr2', 'assisted')).toBe(
+      'Leaderboard: stored, not ranked (an option that saves no record was on)',
+    );
+    expect(describeLeaderboardResult({ status: 'failed', httpStatus: 500, error: 'x' }, 'lr2', 'main')).toBe(
+      'Leaderboard: not submitted (x)',
+    );
   });
 });

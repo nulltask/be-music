@@ -1,3 +1,5 @@
+import type { PlayJudgeSideState } from './play-presentation.ts';
+import { collectLR2SortObjects } from './lr2-sort-objects.ts';
 import {
   buildChartOptionTimeline,
   compileChartPlayOptions,
@@ -77,7 +79,6 @@ import {
   resolveOptionSource,
   type GaugeType,
   type RulesetId,
-  type JudgmentKind,
   type ScoreSummary,
 } from '@be-music/player-engine/ruleset';
 import { collectChartVolumeMultipliers } from '../../chart/play-audio.ts';
@@ -169,6 +170,7 @@ export interface PlayChartContext {
       | 'longNoteMode'
       | 'lr2ExtraMode'
       | 'lr2ExtraLevel'
+      | 'lr2Mania'
       | 'tempo'
       | 'extraNoteDepth'
       | 'extraNoteScratch'
@@ -235,7 +237,7 @@ export interface PlayChartContext {
   readonly laneReleasedAt: Map<string, number>;
   lastJudge: string;
   lastJudgeUntil: number;
-  judgeSideState: Record<'1P' | '2P', { judge: JudgmentKind | ''; until: number; combo: number; courseCombo?: number }>;
+  judgeSideState: Record<'1P' | '2P', PlayJudgeSideState>;
   gaugeState: PlayerGaugeSummary;
   fastCount: number;
   slowCount: number;
@@ -330,7 +332,9 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   );
   if (
     ctx.options.replay === undefined &&
-    laneSources.some(({ source, name }) => name === 'CONVERGE' && source === 'lr2') &&
+    laneSources.some(
+      ({ source, name }) => (name === 'CONVERGE' && source === 'lr2') || name === 'CONVERGE-CORRECTED',
+    ) &&
     !['5', '7', '9', '10', '14'].includes(playVariant)
   )
     throw new RangeError('LR2 CONVERGE supports 5/7/9/10/14 KEY charts.');
@@ -392,6 +396,11 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // the visualization on mid-song without a chart restart; the per-frame render loop is gated on
   // `showInvisibleNotes`. The audio horizon is left at 0: the engine recomputes its own from realtime triggers.
   if (
+    (arrangement?.play.scrollModifier === 'SOFTLANDING-1' || arrangement?.play.scrollModifier === 'SOFTLANDING-2') &&
+    arrangement.play.scrollModifierTimeline === undefined
+  )
+    throw new RangeError('A recorded SOFTLANDING requires its effective timeline.');
+  if (
     arrangement?.play.scrollModifier === 'ADD' &&
     (arrangement.play.scrollModifierTimeline === undefined ||
       arrangement.play.scrollSection === undefined ||
@@ -423,6 +432,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         : ctx.options.autoScratch2P,
       lr2ExtraMode: arrangement ? (arrangement.play.lr2ExtraMode ?? false) : ctx.options.lr2ExtraMode,
       lr2ExtraLevel: arrangement ? (arrangement.play.lr2ExtraLevel ?? 0) : ctx.options.lr2ExtraLevel,
+      // A recorded play rebuilds its generated chart from the recorded rates and seed.
+      lr2Mania: arrangement ? arrangement.play.lr2Mania : ctx.options.lr2Mania,
       speed: arrangement
         ? (arrangement.play.battleTempo ?? arrangement.play.lr2ExtraTempo ?? arrangement.play.tempo ?? 1)
         : ctx.options.tempo,
@@ -460,6 +471,13 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
           }
         : {}),
       chartNotes,
+      // LR2 copies 1P's arranged lanes to 2P, mines included, when both players pick the same lane option (#1086). A
+      // replay rebuilds its 2P mines only when it recorded them.
+      twoPlayerMines: arrangement
+        ? arrangement.chart.notes.some(
+            (note) => note.type === 'mine' && (note.sourceChannel ?? note.channel).startsWith('2'),
+          )
+        : (lanes.random1P ?? 'OFF') === (lanes.random2P ?? 'OFF'),
     },
     0,
     Math.random,
@@ -472,6 +490,15 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   ctx.notes = prepared.notes;
   ctx.mineNotes = prepared.landmineNotes;
   ctx.invisibleNotes = prepared.invisibleNotes;
+  // The recorded rates and seed must rebuild what the play recorded: a different count means another chart.
+  const recordedMania = arrangement?.play.lr2Mania;
+  if (
+    recordedMania !== undefined &&
+    (['addNotes', 'loudness', 'addLongNotes', 'addMines'] as const).some(
+      (field) => prepared.lr2Mania?.changes[field] !== recordedMania.changes[field],
+    )
+  )
+    throw new RangeError('The recorded LR2 mania chart could not be rebuilt from its seed.');
   if (arrangement !== undefined) {
     for (const [side, key] of [
       ['p1', 'randomSeed1P'],
@@ -497,7 +524,22 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     const battleDuplicated = isDuplicatedBattle(prepared.battleMode ?? 'OFF');
     // A chart that copied itself onto the 2P side (#932) authored both sides, so DP FLIP leaves them too.
     const chartCopied = prepared.chartNotes === 'COPY' || prepared.chartNotes === 'DBLCOPY';
-    if (ctx.options.dpFlip && !battleDuplicated && !chartCopied && ['10', '14', '48'].includes(playVariant)) {
+    // LR2 decides DP FLIP on the source chart's key mode (OpenLR2 `LR2f.cpp` L27318): SP TO DP never flips its doubled
+    // chart, and a DP-TO-SP merge flips every note onto the 2P side, out of reach. The corrected SP TO DP leaves the
+    // merge unflipped (#1084).
+    const flipVariant =
+      prepared.battleMode === 'SP-TO-DP'
+        ? ctx.options.battleMode === 'SP-TO-DP-CORRECTED'
+          ? undefined
+          : prepared.battleSourceVariant
+        : playVariant;
+    const dpFlipped =
+      ctx.options.dpFlip === true &&
+      !battleDuplicated &&
+      !chartCopied &&
+      flipVariant !== undefined &&
+      ['10', '14', '48'].includes(flipVariant);
+    if (dpFlipped) {
       for (const note of ctx.notes) {
         note.channel = flipDPChannel(note.channel);
       }
@@ -550,6 +592,17 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         ctx.mineNotes,
         ctx.invisibleNotes,
       );
+    const hasLR2DoubleRandom =
+      playVariant === '14' &&
+      [lanes.random1P, lanes.random2P].some((mode) =>
+        usesLR2DoubleRandom(mode ?? 'OFF', ctx.options.judgeRuleset ?? 'lr2'),
+      );
+    const lr2Objects = hasLR2DoubleRandom
+      ? collectLR2SortObjects(resolvedPlay, ctx.options.course !== undefined)
+      : undefined;
+    const sourceChannels = hasLR2DoubleRandom
+      ? new Map([...ctx.notes, ...ctx.mineNotes, ...ctx.invisibleNotes].map((note) => [note, note.channel]))
+      : undefined;
     applyRandomMode(
       ctx.notes as Array<{ channel: string }>,
       resolveLaneOptionChannels('1P', playVariant, prepared.laneBindings),
@@ -569,8 +622,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
                 .map((lane) => lane.channel),
         doublePlay: playVariant === '10' || playVariant === '14' || playVariant === '48',
         side: '1P',
-        flipped: ctx.options.dpFlip && !battleDuplicated && !chartCopied && ['10', '14', '48'].includes(playVariant),
+        flipped: dpFlipped,
         playVariant: playVariant,
+        lr2Objects,
+        sourceChannels,
       },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
@@ -594,8 +649,10 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
                 .map((lane) => lane.channel),
         doublePlay: playVariant === '10' || playVariant === '14' || playVariant === '48',
         side: '2P',
-        flipped: ctx.options.dpFlip && !battleDuplicated && !chartCopied && ['10', '14', '48'].includes(playVariant),
+        flipped: dpFlipped,
         playVariant: playVariant,
+        lr2Objects,
+        sourceChannels,
       },
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
@@ -944,16 +1001,25 @@ export function flipDPChannel(channel: string): string {
  * untouched. Every supported mode uses the complete mode domain, even on sparse charts.
  *
  * - `MIRROR` — deterministic reversal of the full mode key set
- * - `RANDOM` — chart-wide permutation of the full mode key set (Fisher-Yates with the supplied RNG)
+ * - `RANDOM` — chart-wide permutation of the full mode key set, one option for every source (beatoraja's draw, then
+ *   LR2's fixed key)
  * - `S-RANDOM` — source-specific pure randomizer with active-LN reservations and beatoraja jack avoidance
  *
- * RANDOM, S-RANDOM and CONVERGE run their qualified source's algorithm (`lr2:RANDOM`, `beatoraja:CONVERGE`), and a bare
- * one `options.ruleset`'s own (ADR 0019). AC's RANDOM and S-RANDOM are LR2's, provisionally.
+ * S-RANDOM and CONVERGE run their qualified source's algorithm (`lr2:S-RANDOM`, `beatoraja:CONVERGE`), and a bare one
+ * `options.ruleset`'s own (ADR 0019); AC's S-RANDOM is LR2's.
  * - `SCATTER` — LR2 previous-row avoidance with active-LN reservations and source DP scratch masks
 
  */
 /** A lane option without its source qualifier. */
 type BareRandomMode = Exclude<RandomMode, `${string}:${string}`>;
+
+function usesLR2DoubleRandom(mode: string, ruleset: RulesetId): boolean {
+  const { name, source } = resolveOptionSource(mode, ruleset);
+  // AC shares the persisted S-RANDOM value, but its 14 KEY scratch rule is unverified.
+  return (
+    source === 'lr2' && (name === 'CONVERGE' || (name === 'S-RANDOM' && ruleset !== '____' && mode !== '____:S-RANDOM'))
+  );
+}
 
 export function applyRandomMode(
   notes: Array<{ channel: string }>,
@@ -970,6 +1036,8 @@ export function applyRandomMode(
     flipped?: boolean;
     side?: '1P' | '2P';
     playVariant?: ChartPlayVariant;
+    lr2Objects?: ReturnType<typeof collectLR2SortObjects>;
+    sourceChannels?: ReadonlyMap<{ channel: string }, string>;
   } = {},
   // Extra channel-bearing arrays: mines first, then invisible notes. Chart permutations share the same lane map;
   // S-RANDOM applies the active ruleset's policy for each event kind.
@@ -986,6 +1054,8 @@ export function applyRandomMode(
     throw new RangeError('LR2 SCATTER requires a five-, seven- or nine-key domain.');
   if (mode === 'SCATTER-CORRECTED' && options.playVariant !== '9')
     throw new RangeError('Corrected SCATTER is a nine-key arrangement.');
+  if (mode === 'S-RANDOM-CORRECTED' && options.playVariant !== '9')
+    throw new RangeError(`${mode} is a nine-key arrangement.`);
   if (mode === 'CONVERGE' && source === '____') throw new RangeError('CONVERGE is unavailable for this ruleset.');
   if (mode === 'CONVERGE' && source === 'beatoraja' && options.playVariant !== '9')
     throw new RangeError('beatoraja CONVERGE is a PMS arrangement.');
@@ -998,6 +1068,8 @@ export function applyRandomMode(
     mode === 'S-RANDOM' ||
     mode === 'SCATTER' ||
     mode === 'SCATTER-CORRECTED' ||
+    mode === 'S-RANDOM-CORRECTED' ||
+    mode === 'CONVERGE-CORRECTED' ||
     mode === 'S-RANDOM-EX' ||
     mode === 'SPIRAL' ||
     mode === 'H-RANDOM' ||
@@ -1012,6 +1084,12 @@ export function applyRandomMode(
         arr.map((note) => ({ note, kind: index === 0 ? ('mine' as const) : ('invisible' as const) })),
       ),
     ];
+    const lr2Double =
+      options.playVariant === '14' &&
+      options.scratch !== undefined &&
+      usesLR2DoubleRandom(selectedMode, options.ruleset ?? 'lr2')
+        ? { scratch: options.scratch, flipped: options.flipped, objects: options.lr2Objects }
+        : undefined;
     const timedNotes = entries.map(({ note, kind }) => {
       const timed = note as {
         channel: string;
@@ -1019,6 +1097,8 @@ export function applyRandomMode(
         endSeconds?: number;
         beat?: number;
         endBeat?: number;
+        event?: BeMusicEvent;
+        generatedLongNote?: true;
       };
       // Group by whole microseconds, as the source timelines do: a modifier that recomputes some objects' seconds
       // (scroll REMOVE) can leave a mine one ulp off the notes it shares a timeline with.
@@ -1029,6 +1109,15 @@ export function applyRandomMode(
           ? { endTimeMs: toTimelineMs(timed.endSeconds ?? timed.endBeat!) }
           : {}),
         kind,
+        ...(lr2Double === undefined
+          ? {}
+          : {
+              beat: timed.beat,
+              endBeat: timed.endBeat,
+              sourceChannel: options.sourceChannels?.get(note),
+              lr2OpOffset: /^[56]/.test(timed.event?.channel ?? '') ? 40 : 0,
+              lr2SyntheticTail: timed.generatedLongNote,
+            }),
       };
     });
     const channels =
@@ -1061,16 +1150,23 @@ export function applyRandomMode(
                     doublePlay: options.doublePlay,
                     side: options.side,
                   })
-                : mode === 'CONVERGE'
-                  ? source === 'beatoraja'
+                : mode === 'CONVERGE' || mode === 'CONVERGE-CORRECTED'
+                  ? mode === 'CONVERGE' && source === 'beatoraja'
                     ? randomizePMSConvergeNotes(timedNotes, allLanes, {
                         random: rng,
                         thresholdBPM: options.hRandomThresholdBPM,
                       })
                     : randomizeLR2ConvergeNotes(timedNotes, allLanes, {
-                        target: allLanes[(options.fixedLane ?? 0) - 1] ?? options.scratch ?? allLanes[4]!,
+                        target:
+                          mode === 'CONVERGE' && options.side === '2P'
+                            ? resolveLR2SecondSideConvergeTarget(allLanes, options.fixedLane ?? 0)
+                            : (allLanes[(options.fixedLane ?? 0) - 1] ?? options.scratch ?? allLanes[4]!),
                         scratch: options.scratch,
                         random: rng,
+                        targetOutside: mode === 'CONVERGE' && options.side === '2P',
+                        lr2Double,
+                        // LR2's nine-key draw reaches the 2P scratch; the corrected option keeps to the nine keys.
+                        ...(mode === 'CONVERGE' && options.playVariant === '9' ? { outside: '26' } : {}),
                       })
                   : mode === 'SPIRAL'
                     ? randomizeSpiralNotes(timedNotes, allLanes, rng)
@@ -1080,9 +1176,14 @@ export function applyRandomMode(
                           thresholdBPM: options.hRandomThresholdBPM,
                         })
                       : randomizeSRandomNotes(timedNotes, allLanes, {
-                          ruleset: source,
+                          ruleset: mode === 'S-RANDOM-CORRECTED' ? 'lr2' : source,
+                          lr2Double,
                           random: rng,
                           ...(options.playVariant === '9' ? { mode: 'pms' as const } : {}),
+                          // LR2's nine-key draw reaches the 2P scratch; the corrected option keeps to the nine keys.
+                          ...(mode === 'S-RANDOM' && source !== 'beatoraja' && options.playVariant === '9'
+                            ? { outside: '26' }
+                            : {}),
                         });
     entries.forEach(({ note }, index) => {
       note.channel = channels[index]!;
@@ -1131,35 +1232,41 @@ export function applyRandomMode(
   }
 
   if (mode === 'RANDOM' || mode === 'RANDOM-EX') {
-    // RANDOM-EX is beatoraja's whatever the judge rules: only beatoraja defines a scratch-inclusive shuffle.
-    if (source === 'beatoraja' || mode === 'RANDOM-EX') {
-      const available = [...domainLanes];
-      const map = new Map<string, string>();
-      for (const target of domainLanes) {
-        const source = available.splice(drawLaneRandomIndex(available.length, rng), 1)[0]!;
-        map.set(source, target);
-      }
-      remapAll(map);
-      return;
-    }
-    const perm = shuffleArray([...domainLanes], rng);
-    // LR2 randFix pins the original key-1 axis in five/seven-key modes;
-    // the historical nine-key RANDOM branch ignores it.
-    if (mode === 'RANDOM' && options.playVariant !== '9') {
-      const target = domainLanes[(options.fixedLane ?? 0) - 1];
-      if (target !== undefined) {
-        const index = perm.indexOf(target);
-        [perm[0], perm[index]] = [perm[index]!, perm[0]!];
-      }
-    }
-
+    // LR2, beatoraja and That-Which-Must-Not-Be-Named define RANDOM alike, one chart-wide shuffle of the keys, so every
+    // source draws it as beatoraja 0.8.9's LaneRandomShuffleModifier does: the seed then gives beatoraja's arrangement.
+    // RANDOM-EX is the same draw over the keys and the scratch.
+    const available = [...domainLanes];
     const map = new Map<string, string>();
-    for (let index = 0; index < domainLanes.length; index += 1) {
-      map.set(domainLanes[index]!, perm[index]!);
+    for (const target of domainLanes) {
+      const source = available.splice(drawLaneRandomIndex(available.length, rng), 1)[0]!;
+      map.set(source, target);
+    }
+    // LR2 applies randFix to 1P RANDOM outside nine-key play.
+    const fixed =
+      mode === 'RANDOM' && options.side !== '2P' && options.playVariant !== '9'
+        ? domainLanes[(options.fixedLane ?? 0) - 1]
+        : undefined;
+    if (fixed !== undefined) {
+      const first = domainLanes[0]!;
+      const displaced = [...map].find(([, target]) => target === fixed)![0];
+      map.set(displaced, map.get(first)!);
+      map.set(first, fixed);
     }
     remapAll(map);
     return;
   }
+}
+
+/**
+ * LR2's 2P CONVERGE target. LR2 adds the 2P start lane to the fixed key (`randFix[1] + startlane`, OpenLR2 `LR2f.cpp`
+ * L27374-L27380), one more than 1P's `randFix[0]`, so key `n` lands one lane to the right: 0 (the default) is key 1
+ * rather than the scratch, and the last key points past the keys, where nothing can hit the note. A fixed key past the
+ * mode's range is reset to 0, as LR2 does (L27325-L27331). Past the keys is the next LR2 lane: `28` on 10KEY, and on
+ * 14KEY, which has no channel for it, `2A`, which no 10 / 14KEY layout has.
+ */
+function resolveLR2SecondSideConvergeTarget(keys: readonly string[], fixedLane: number): string {
+  const index = fixedLane > keys.length ? 0 : fixedLane;
+  return keys[index] ?? (keys.length === 5 ? '28' : '2A');
 }
 
 const LONG_NOTE_MODE_VALUES = { LN: 1, CN: 2, HCN: 3 } as const;

@@ -17,8 +17,10 @@ test('PRACTICE lists the judge ruleset’s own gauges, named as it names them (#
     'EASY',
     'P.ATTACK',
     'G.ATTACK',
+    'DEATH corrected',
   ]);
   expect(practiceGaugeItems('lr2')[2]).toEqual({ text: 'HAZARD', value: 'DEATH' });
+  expect(practiceGaugeItems('lr2').at(-1)).toEqual({ text: 'DEATH corrected', value: 'DEATH-CORRECTED' });
   expect(practiceGaugeItems('beatoraja').map((item) => item.text)).toEqual([
     'ASSIST EASY',
     'EASY',
@@ -49,18 +51,25 @@ test('the lowest auto-shift gauge reads as the ruleset’s own gauges; LR2 start
 });
 
 test('lane options are grouped by source, the judge ruleset own first, and name their source', () => {
-  const items = laneOptionItems('beatoraja');
-  expect(items.slice(0, 3).map((item) => item.text)).toEqual(['OFF', 'MIRROR', 'RANDOM (beatoraja)']);
-  const sources = items.slice(2).map((item) => laneOptionSource(item.value));
+  const items = laneOptionItems('beatoraja', true);
+  expect(items.slice(0, 4).map((item) => item.text)).toEqual(['OFF', 'MIRROR', 'RANDOM', 'R-RANDOM (beatoraja)']);
+  const sources = items.slice(3).map((item) => laneOptionSource(item.value));
   // One block per source: beatoraja, then LR2, then ????.
   expect([...new Set(sources)]).toEqual(['beatoraja', 'lr2', '____']);
   expect(sources).toEqual(
     [...sources].sort((a, b) => ['beatoraja', 'lr2', '____'].indexOf(a!) - ['beatoraja', 'lr2', '____'].indexOf(b!)),
   );
-  expect(items).toContainEqual({ text: 'RANDOM (LR2)', value: 'lr2:RANDOM' });
-  expect(items).toContainEqual({ text: 'S-RANDOM (????)', value: '____:S-RANDOM' });
+  expect(items).toContainEqual({ text: 'RANDOM', value: 'RANDOM' });
+  expect(items).toContainEqual({ text: 'S-RANDOM (LR2 / ????)', value: 'lr2:S-RANDOM' });
+  expect(items.map((item) => item.value)).not.toContain('____:S-RANDOM');
   expect(items).toContainEqual({ text: 'CONVERGE (beatoraja)', value: 'beatoraja:CONVERGE' });
   expect(items).toContainEqual({ text: 'SCATTER 9KEY corrected (LR2)', value: 'SCATTER-CORRECTED' });
+});
+
+test('the S-RANDOM AC shares with LR2 sits in the AC group under AC rules', () => {
+  const values = laneOptionItems('____').map((item) => item.value);
+  expect(values.slice(0, 3)).toEqual(['OFF', 'MIRROR', 'RANDOM']);
+  expect(values[3]).toBe('lr2:S-RANDOM');
 });
 
 test('every lane option the scene model offers is listed once under every ruleset', () => {
@@ -83,6 +92,7 @@ test('battle modes carry their source and two-player play is offered under every
     'COUPLE (LR2)',
     'D-BATTLE (LR2)',
     'SP TO DP (LR2)',
+    'SP TO DP corrected (LR2)',
     'BATTLE (beatoraja)',
     'BATTLE AS (beatoraja)',
     'BATTLE (????)',

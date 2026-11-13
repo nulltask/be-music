@@ -1,3 +1,4 @@
+import { createSolidANSIFrame, placeHDXBGAFrame } from './bga-frame.ts';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -1598,4 +1599,16 @@ describe('player bga', () => {
       await rm(baseDir, { recursive: true, force: true });
     }
   });
+});
+
+test('HDX terminal BGA uses the full viewport or clips a top-centred source', () => {
+  const source = createSolidANSIFrame(320, 128, 255, 0, 0, 1);
+  const filled = placeHDXBGAFrame(source, 16, 16, 0);
+  expect([...filled.opaqueMask]).toEqual(Array(256).fill(1));
+  const original = placeHDXBGAFrame(source, 16, 16, 1);
+  expect([...original.opaqueMask.slice(0, 16)]).toEqual(Array(16).fill(1));
+  expect(original.opaqueMask[8 * 16]).toBe(0);
+  const smaller = placeHDXBGAFrame(createSolidANSIFrame(160, 80, 255, 0, 0, 1), 16, 16, 2);
+  expect([...smaller.opaqueMask.slice(0, 16)]).toEqual([0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0]);
+  expect(smaller.opaqueMask[4 * 16 + 4]).toBe(0);
 });

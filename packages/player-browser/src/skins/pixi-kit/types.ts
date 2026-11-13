@@ -13,6 +13,7 @@ import type {
   BeMusicSelectFrame,
   BeMusicSelectLayout,
   BeMusicSkin,
+  BeMusicSkinSettingValues,
   LibraryChart,
 } from '@be-music/player-skin-sdk';
 import type { ChildPool } from './pools.ts';
@@ -44,6 +45,8 @@ export interface PixiChromeContext {
   overlayLayerPool: ChildPool;
   runtime: BeMusicGameplayRuntime;
   layout: BeMusicGameplayLayout;
+  /** The player's values for the skin's settings. */
+  settings: BeMusicSkinSettingValues;
 }
 
 export interface PixiGameplaySkin {

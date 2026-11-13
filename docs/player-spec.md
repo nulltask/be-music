@@ -134,6 +134,12 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 | `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOCOLORS`, `#SEEKxx`, `#MATERIALSBMP`, `#MATERIALSWAV` | Not executed; kept in `metadata.extras` for lossless round trips. Follow-ups: [#848](https://github.com/nulltask/be-music/issues/848) (`#ExtChr`, `#CHARFILE`), [#849](https://github.com/nulltask/be-music/issues/849) (`#SEEKxx`, `#VIDEOCOLORS`). `#CDDA` and the Materials commands stay unsupported (no audio CDs or executable-relative folders in Be-Music). See [historical commands](./research/historical-bms-commands.md) for origin, use and rationale.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `#MATERIALS`, `#DIVIDEPROP`                                                                  | Kept in `bms`, not executed. `<folder>` Materials references are not resolved; `#DIVIDEPROP` has nothing to change because positions are exact fractions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
+### HDX BGA placement
+
+An initial `#OPTION charatbeatHDX:BGAMODE n` fills the BGA viewport with `0`, draws at source size with `1`, and draws at 80% with `2`. Modes 1 and 2 align the image to the top centre. Each skin BGA target and the terminal ANSI or Kitty viewport represents a 256×256 logical canvas. The player crops `#BGA` subregions before placement and clips to the viewport. A skin that paints the BGA itself receives `frame.bga.bgaMode`.
+
+NONSTOP uses the stage's declaration, including each individual stack during a browser crossfade. Replays carry the effective mode in version 4 of the display program. A6 declarations are diagnosed. Placement does not change chart fingerprints or record eligibility. [First-party reference findings](./research/chart-authored-options.md#charatbeathdx-confirmed-first-party-contract)
+
 ## Execution flow
 
 player executes the score in the following order:
@@ -294,7 +300,7 @@ switch the beatoraja ruleset between its 5 KEY and 7 KEY judge windows. The dete
 [BMS spec — Player-Specific Behavior](./bms-spec.md#player-specific-behavior). Only `.pms` names a mode; every other
 extension leaves the decision to the lanes in use, so a `.bme` chart without a 6 / 7 key column is `5 KEY SP` /
 `5 KEY DP`, as in beatoraja.
-The decision is drawn as a flowchart in [README — Automatic lane mode determination](../README.md#automatic-lane-mode-determination-and-input-assignment).
+The decision is drawn as a flowchart in [`@be-music/chart-model` — Automatic lane mode determination](../packages/chart-model/README.md#automatic-lane-mode-determination).
 The main modes the current implementation determines automatically are as follows.
 
 - `5 KEY SP`
@@ -563,7 +569,7 @@ Empty POOR mirrors LR2's phantom-press behaviour:
 - Increment `summary.emptyPoor`, and do NOT touch the note-judgment counters (`perfect` / `great` / `good` / `bad` / `poor`) — no note was consumed. Whether a player's POOR counter displays the two summed is a presentation choice; LR2's does (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch).
 - Do NOT change EX-SCORE or the score.
 - Cut the combo only where the ruleset says to (`comboBreaksOnEmptyPoor`): beatoraja's five-key and PMS rules do, LR2 and That-Which-Must-Not-Be-Named do not.
-- Apply `EMPTY_POOR` to the gauge — the delta lives in the ruleset's gauge table ([`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)). Under `lr2`: GROOVE `-2`, HARD `-2` (subject to the TOTAL multiplier), EASY `-1.6`, DEATH `-10`. Nearly harmless on GROOVE / EASY; meaningful drain on HARD / DEATH.
+- Apply `EMPTY_POOR` to the gauge — the delta lives in the ruleset's gauge table ([`definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)). Under `lr2`: GROOVE `-2`, HARD `-2` (subject to the TOTAL multiplier), EASY `-1.6`, DEATH `0`. Nearly harmless on GROOVE / EASY; a drain on HARD.
 - Trigger POOR BGA (`trigger-poor-bga`).
 - Flash the judge display as `POOR` for 0.6 s (`publishJudgeCombo('POOR', combo)`). The LR2 spec separates op 246 (1P empty POOR) / 266 (2P empty POOR) from op 245 / 265 (missed POOR), but both NOWJUDGE indices currently resolve to the same `'poor'` skin slot in this implementation, so the rendered sprite is identical.
 
@@ -651,7 +657,11 @@ split.
   keeps judging to the end of the chart on a dead gauge. The replay records the flag, so re-simulations stop at the
   same judgment; logs from before it existed keep judging to the end.
 - A course stage (`PlayerOptions.course`) runs on the ruleset's course gauge instead, starting from the value the
-  previous stage left. See [Courses and dan certification](./course.md#playing-a-course-stage).
+  previous stage left. See [Courses and dan certification](./course.md#playing-a-course-stage). Under `lr2` a
+  GROOVE or EASY pick still holds mine damage at `2%` on the course gauge, as LR2 does for those picks in a course
+  (OpenLR2 `LR2f.cpp` L2054-L2056); a judgment below `2%` still fails the stage.
+- Under `lr2` TOTAL is an integer, as LR2 keeps it: `#TOTAL` and the default TOTAL are truncated, and a value below
+  `1` takes the default (OpenLR2 `LR2f.cpp` L26299, L27566-L27579).
 - The tables live in [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)
   and are applied through `RulesetGauge`. The shared engine is the authority for final score and summary values;
   browser scenes mirror `summary.gauge`.
@@ -691,12 +701,15 @@ The following deltas describe the `lr2` ruleset's `GROOVE` gauge. `HARD`, `DEATH
 
 The value after gauge update is clamped to the current gauge type's min/max range.
 
+Be-Music calculates gauges with double-precision arithmetic. beatoraja uses single-precision gauge values, and LR2 uses single precision for the per-note GROOVE gain. Rounding can change the clear verdict when the gauge is close to a threshold. [beatoraja GrooveGauge](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GrooveGauge.java#L176-L240) · [OpenLR2 gain calculation](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27658-L27660)
+
 The `HARD` / `EASY` variants follow the LR2 values (beatoraja `GaugeProperty`'s `HARD_LR2` / `EASY_LR2`). `DEATH` follows LR2 itself (OpenLR2 `LR2f.cpp` L27673-L27680, LR2body.exe `ParseBMSFile`), not beatoraja's `HAZARD_LR2`.
 
 - `HARD`: recovery `PGREAT/GREAT +0.1` / `GOOD +0.05` (TOTAL-independent); damage `BAD -6` / `missed POOR -10` / `empty POOR -2`. Damage is multiplied by lr2oraja's `MODIFY_DAMAGE`, the larger of a `#TOTAL` factor (`×1.0` at `TOTAL ≥ 240` up to `×10` below `112`) and a note-count factor (`×10` at 20 notes or fewer down to `×1.0` from 1000 notes), and softened by `×0.6` while the gauge is under `32%` (lr2oraja rounds the gauge down to an even percent before
   the comparison, so "display 30 %" is internal 32 %).
 - `EASY`: gains are `1.2×` GROOVE, damage is `0.8×` GROOVE (`BAD -3.2` / `POOR -4.8` / `empty POOR -1.6`). The clear threshold stays at `80%`, same as GROOVE.
 - `DEATH`: no recovery (`PGREAT` / `GREAT` / `GOOD` `0`); `BAD` / missed `POOR` are `-100` (instant death); an `empty POOR` costs nothing (`0`). beatoraja's `HAZARD` keeps its own `+0.15` / `+0.06` recovery and `empty POOR -10`.
+- `DEATH` (LR2's HAZARD) also needs `80%` or more at the end of a single chart to clear, as LR2's CheckClear checks it like GROOVE ([L1842-L1862](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1842-L1862)): a mine can leave a surviving run FAILED, and a clear earns NORMAL. `DEATH-CORRECTED` (**DEATH corrected** in the Options dialog) is the same gauge without that border: it clears by surviving. Under beatoraja and ???? rules it reads as their `DEATH`, and a course plays both on the same course gauge ([#1082](https://github.com/nulltask/be-music/issues/1082)).
 - `HARD` / `DEATH` collapse to `0%` (FAILED, no recovery) the moment they drop below `2%`. Raw deltas such as mine damage bypass the guts softening and the TOTAL multiplier.
 
 ## Long Note

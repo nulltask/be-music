@@ -31,6 +31,7 @@ export const PLAYER_APP_TEMPLATE = html`
   <div class="shell empty">
     <div id="player-service-header" class="player-service-header"></div>
     <main id="main" class="player-main">
+      <div id="chart-diagnostics" class="chart-diagnostics"></div>
       <div id="auxiliary-panels" class="auxiliary-panels"></div>
       <!-- The quick options panel, at the bottom right on the select and play screens. \`ui/options/quick-options.ts\`. -->
       <div id="quick-options" class="quick-options-dock" hidden></div>
@@ -299,6 +300,18 @@ export const PLAYER_APP_TEMPLATE = html`
         id="random-mix-dialog"
         aria-labelledby="random-mix-dialog-title"
         aria-describedby="random-mix-dialog-hint"
+      ></dialog>
+      <!--
+      The RANDOM MIX save dialog: once a RANDOM MIX run is over and its result
+      left, it asks whether to keep the run's course, named by when it ended.
+      Lit renders into the empty dialog (\`promptRandomMixSave\`,
+      ui/random-mix-save-dialog.ts).
+    -->
+      <dialog
+        class="dialog account-dialog"
+        id="random-mix-save-dialog"
+        aria-labelledby="random-mix-save-dialog-title"
+        aria-describedby="random-mix-save-dialog-hint"
       ></dialog>
       <!--
       A dropped replay (\`*.bmplay.json\`) whose chart is not loaded, or a course

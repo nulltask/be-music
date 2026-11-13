@@ -34,6 +34,7 @@ export * from './settings.ts';
 export * from './judge-timing.ts';
 export * from './stage.ts';
 export * from './cabinet.ts';
+export * from './song-info.ts';
 export * from './layout.ts';
 export * from './touch-layout.ts';
 export * from './portrait.ts';

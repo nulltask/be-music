@@ -24,11 +24,12 @@ export function parseChartOptionProgram(raw: unknown): ChartOptionProgram {
   const program = expectRecord(raw, 'chart.chartOptions');
   if (Object.keys(program).some((key) => !['version', 'initial', 'cues'].includes(key)))
     throw new ReplayParseError('chart.chartOptions: unknown program field');
-  if (program.version !== 1 && program.version !== 2 && program.version !== 3)
-    throw new ReplayParseError('chart.chartOptions.version: expected 1, 2 or 3');
+  if (program.version !== 1 && program.version !== 2 && program.version !== 3 && program.version !== 4)
+    throw new ReplayParseError('chart.chartOptions.version: expected 1, 2, 3 or 4');
   const version = program.version;
-  const visualFields = chartVisualOptionFieldsOf(version);
-  const fields: readonly string[] = ['hiSpeed', ...visualFields];
+  const visualVersion = version === 4 ? 3 : version;
+  const visualFields = chartVisualOptionFieldsOf(visualVersion);
+  const fields: readonly string[] = ['hiSpeed', ...visualFields, ...(version === 4 ? ['bgaMode'] : [])];
   const state = (rawState: unknown): ChartOptionState => {
     const value = expectRecord(rawState, 'chart.chartOptions state');
     if (Object.keys(value).some((key) => !fields.includes(key)))
@@ -44,10 +45,15 @@ export function parseChartOptionProgram(raw: unknown): ChartOptionProgram {
         throw new ReplayParseError('chart.chartOptions.hiSpeed: expected 0.25..100');
       parsed.hiSpeed = value.hiSpeed;
     }
+    if (value.bgaMode !== undefined) {
+      if (value.bgaMode !== 0 && value.bgaMode !== 1 && value.bgaMode !== 2)
+        throw new ReplayParseError('chart.chartOptions.bgaMode: expected 0, 1 or 2');
+      parsed.bgaMode = value.bgaMode;
+    }
     for (const field of visualFields) {
       const fieldValue = value[field];
       if (fieldValue === undefined) continue;
-      if (version === 1 || !isChartVisualOptionValue(field, fieldValue, version))
+      if (visualVersion === 1 || !isChartVisualOptionValue(field, fieldValue, visualVersion))
         throw new ReplayParseError(`chart.chartOptions.${field}: unknown value`);
       (parsed as Record<string, unknown>)[field] = fieldValue;
     }
@@ -87,12 +93,13 @@ export function shiftChartOptionProgram(
   return { version: program.version, initial: startUs === 0 ? seed : {}, cues };
 }
 
-/** Parse a recorded chart gameplay program (#844) strictly: version 1, known fields and values only. */
+/** Parse a recorded chart gameplay program strictly. Version 2 carries the authored base speed. */
 export function parseChartPlayOptionProgram(raw: unknown): ChartPlayOptionProgram {
   const program = expectRecord(raw, 'chart.chartPlayOptions');
   if (Object.keys(program).some((key) => key !== 'version' && key !== 'options'))
     throw new ReplayParseError('chart.chartPlayOptions: unknown program field');
-  if (program.version !== 1) throw new ReplayParseError('chart.chartPlayOptions.version: expected 1');
+  const { version } = program;
+  if (version !== 1 && version !== 2) throw new ReplayParseError('chart.chartPlayOptions.version: expected 1 or 2');
   const options = expectRecord(program.options, 'chart.chartPlayOptions.options');
   const parsed: ChartPlayOptions = {};
   for (const [key, value] of Object.entries(options)) {
@@ -102,9 +109,13 @@ export function parseChartPlayOptionProgram(raw: unknown): ChartPlayOptionProgra
       parsed.judge = value as ChartPlayOptions['judge'];
     else if (key === 'hellJudge' && value === true) parsed.hellJudge = true;
     else if (key === 'addMine' && value === true) parsed.addMine = true;
+    else if (key === 'baseSpeed' && version === 2 && (value === 1.2 || value === 1.5 || value === 2))
+      parsed.baseSpeed = value;
     else if (key === 'notes' && (CHART_NOTES_OPTIONS as readonly unknown[]).includes(value))
       parsed.notes = value as ChartPlayOptions['notes'];
     else throw new ReplayParseError(`chart.chartPlayOptions.options.${key}: unsupported value`);
   }
-  return { version: 1, options: parsed };
+  if (version === 2 && parsed.baseSpeed === undefined)
+    throw new ReplayParseError('chart.chartPlayOptions.options.baseSpeed: required in version 2');
+  return { version, options: parsed };
 }

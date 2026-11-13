@@ -1,5 +1,15 @@
 # @be-music/app-leaderboard
 
+## 0.5.6
+
+### Patch Changes
+
+- a15f307: Show DEATH corrected, and explain the HAZARD clear lamps.
+  
+  - Document the FULL COMBO lamp awarded by the beatoraja HAZARD gauge for new score submissions.
+  - Show DEATH corrected in play results and explain the clear lamps for LR2 DEATH and beatoraja HAZARD.
+- Updated dependencies: `@be-music/chart-model@0.11.0`, `@be-music/player-engine@0.18.0`
+
 ## 0.5.5
 
 ### Patch Changes

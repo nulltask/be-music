@@ -5,11 +5,14 @@ import {
   renderBuiltInChrome,
   resolveLaneGeometry,
   resolveBeMusicLayout,
+  resolveJudgeDetails,
+  resolveJudgeOffsetY,
   collectBGATargets,
   type LaneGeometryContext,
   type BeMusicLayoutContext,
   type BGATargetsContext,
   resolveSkinlessGameplayChromeRuntime,
+  resolveSongInfoRuntime,
   type BuiltInChromeContext,
   type PlayChromeContext,
   type SkinlessGameplayChromeRuntime,
@@ -168,4 +171,68 @@ test('a video changes the monitor and target width together while keeping their 
   expect(portrait.h).toBe(wide.h);
   expect(portrait.w / portrait.h).toBeCloseTo(900 / 1600);
   expect(portrait.x + portrait.w / 2).toBeCloseTo(wide.x + wide.w / 2);
+});
+
+test("shows a NONSTOP stage's song, crossfading from the previous stage's as its window starts", () => {
+  const base = chromeContext();
+  const ctx = {
+    ...base,
+    play: { ...base.play, chart: { title: 'Course', artist: 'Course artist', genre: 'Mix' } },
+    options: {
+      nonstop: {
+        stages: [
+          { windowStart: 0, songInfo: { title: 'A', artist: 'Artist A', genre: 'Genre A' } },
+          { windowStart: 30, songInfo: { artist: 'Artist B' } },
+        ],
+      },
+    },
+  } as unknown as PlayChromeContext;
+  expect(resolveSongInfoRuntime(ctx, 10)).toEqual({ chartTitle: 'A', chartArtist: 'Artist A', chartGenre: 'Genre A' });
+  // Stage 2 names no title: the stitched chart's (the course's) stands in.
+  expect(resolveSongInfoRuntime(ctx, 30.3)).toEqual({
+    chartTitle: 'Course',
+    chartArtist: 'Artist B',
+    chartGenre: undefined,
+    songInfoFade: { chartTitle: 'A', chartArtist: 'Artist A', chartGenre: 'Genre A', progress: expect.closeTo(0.5) },
+  });
+  expect(resolveSongInfoRuntime(ctx, 40).songInfoFade).toBeUndefined();
+  // Without NONSTOP, the chart's own song.
+  expect(resolveSongInfoRuntime({ ...ctx, options: {} } as PlayChromeContext, 30.3)).toEqual({
+    chartTitle: 'Course',
+    chartArtist: 'Course artist',
+    chartGenre: 'Mix',
+  });
+});
+
+test('the judgment position is a share of the lanes’ height, down for a positive value', () => {
+  expect(resolveJudgeOffsetY(0, 40, 440)).toBe(0);
+  expect(resolveJudgeOffsetY(25, 40, 440)).toBe(100);
+  expect(resolveJudgeOffsetY(-30, 40, 440)).toBe(-120);
+});
+
+test('the judge detail follows the option: off, the plate’s own timing, or the keys’ and the scratch’s apart', () => {
+  const timings = {
+    last: { judge: 'GREAT' as const, deltaMs: -12, until: 10 },
+    keys: { judge: 'GREAT' as const, deltaMs: -12, until: 10 },
+    scratch: { judge: 'GOOD' as const, deltaMs: 30, until: 9.8 },
+  };
+  expect(resolveJudgeDetails({ judgeDetail: 'OFF', judgeDetailSplit: false }, timings, 9.5)).toEqual([]);
+  expect(resolveJudgeDetails(undefined, timings, 9.5)).toEqual([]);
+  expect(resolveJudgeDetails({ judgeDetail: 'FAST_SLOW', judgeDetailSplit: false }, timings, 9.5)).toEqual([
+    { text: 'FAST', tone: 'fast' },
+  ]);
+  expect(resolveJudgeDetails({ judgeDetail: 'MS', judgeDetailSplit: false }, timings, 9.5)).toEqual([
+    { text: '-12 ms', tone: 'fast' },
+  ]);
+  // Apart: the scratch's first, then the keys', each while it still shows.
+  expect(resolveJudgeDetails({ judgeDetail: 'FAST_SLOW', judgeDetailSplit: true }, timings, 9.5)).toEqual([
+    { text: 'SLOW', tone: 'slow', lane: 'scratch' },
+    { text: 'FAST', tone: 'fast', lane: 'keys' },
+  ]);
+  expect(resolveJudgeDetails({ judgeDetail: 'FAST_SLOW', judgeDetailSplit: true }, timings, 9.9)).toEqual([
+    { text: 'FAST', tone: 'fast', lane: 'keys' },
+  ]);
+  // An untimed judgment on the plate (a miss) shows no detail of its own.
+  expect(resolveJudgeDetails({ judgeDetail: 'MS', judgeDetailSplit: false }, { keys: timings.keys }, 9.5)).toEqual([]);
+  expect(resolveJudgeDetails({ judgeDetail: 'MS', judgeDetailSplit: false }, undefined, 9.5)).toEqual([]);
 });

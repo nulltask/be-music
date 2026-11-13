@@ -83,6 +83,19 @@ describe('resolvePlayfieldParts', () => {
     expect(parts.bga.rect).toEqual({ x: 724, y: 8, w: 106, h: 106 });
   });
 
+  it('moves the judgment, its combo and its rect by the layout’s judgment offset', () => {
+    const input = frame();
+    input.layout.playfield.judgeOffsetY = -40;
+    const base = resolvePlayfieldParts(frame());
+    const moved = resolvePlayfieldParts(input);
+    expect(moved.judgmentDisplay.data.y).toBe(base.judgmentDisplay.data.y - 40);
+    expect(moved.judgmentDisplay.rect).toEqual({
+      ...base.judgmentDisplay.rect,
+      y: base.judgmentDisplay.rect.y - 40,
+    });
+    expect(moved.judgeLine).toEqual(base.judgeLine);
+  });
+
   it('gives each part only the stage rect it draws in', () => {
     const parts = resolvePlayfieldParts(frame());
     expect(parts.stage).toEqual({ width: 854, height: 480 });
@@ -92,7 +105,7 @@ describe('resolvePlayfieldParts', () => {
     expect(parts.laneCovers.rect).toEqual(parts.lanes.rect);
     expect(parts.judgeLine.rect).toEqual({ x: 20, y: 464, w: 320, h: 2 });
     expect(parts.bombs.rect).toEqual({ x: 20, y: 438, w: 320, h: 52 });
-    expect(parts.judgmentDisplay.rect).toEqual({ x: 20, y: 324, w: 320, h: 80 });
+    expect(parts.judgmentDisplay.rect).toEqual({ x: 20, y: 308, w: 320, h: 96 });
   });
 
   it('draws the judge line once per lane run', () => {

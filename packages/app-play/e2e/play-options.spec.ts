@@ -190,7 +190,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     // beatoraja's SPIRAL and scroll REMOVE under LR2 rules: options that only transform the chart or the view (#774).
     await player.setOption(['Play options'], 'Judgment windows', 'LR2');
     await player.setOption(['Play options'], 'Random 1P', 'SPIRAL (beatoraja)');
-    await player.setOption(['Play options'], 'Scroll (beatoraja)', 'REMOVE');
+    await player.setOption(['Play options'], 'Scroll', 'REMOVE (beatoraja)');
     await player.setOption(['Play options'], 'Auto play', true);
     await player.browseTo(SONGS, 'Fixture A');
     await player.key('Enter');
@@ -202,7 +202,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     // Switching rules keeps both choices.
     await player.setOption(['Play options'], 'Judgment windows', '????');
     expect(await player.readOption(['Play options'], 'Random 1P')).toBe('SPIRAL (beatoraja)');
-    expect(await player.readOption(['Play options'], 'Scroll (beatoraja)')).toBe('REMOVE');
+    expect(await player.readOption(['Play options'], 'Scroll')).toBe('REMOVE (beatoraja)');
   });
 }
 
@@ -210,7 +210,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
   test(`source seeds and previous arrangements work for fresh input on ${skin}`, async ({ player }) => {
     await openWithLibrary(player, { 'be-music.built-in-skin': skin });
     await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
-    await player.setOption(['Play options'], 'Random 1P', 'RANDOM (beatoraja)');
+    await player.setOption(['Play options'], 'Random 1P', 'RANDOM');
     await player.setOption(['Play options'], 'Seed 1P (-1=random)', '9223372036854775807');
     await player.setOption(['Play options'], 'Auto play', true);
     await player.browseTo(SONGS, 'Fixture A');
@@ -660,7 +660,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
       '#TITLE Scroll REMOVE\n#BPM 240\n#BPM01 480\n#STOP01 192\n#00111:01\n#00108:01\n#00209:01\n#00312:01',
     );
     await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
-    await player.setOption(['Play options'], 'Scroll (beatoraja)', 'REMOVE');
+    await player.setOption(['Play options'], 'Scroll', 'REMOVE (beatoraja)');
     await player.setOption(['Play options'], 'Auto play', true);
     await player.cursorTo((bar) => bar.title === 'Scroll REMOVE', 'scroll chart');
     await player.key('Enter');
@@ -671,7 +671,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     expect(replay?.play.options?.scrollModifier).toBe('REMOVE');
     expect(replay?.chart.notes.map((note) => note.timeUs)).toEqual([1000000, 2500000]);
     await player.leaveResult();
-    await player.setOption(['Play options'], 'Scroll (beatoraja)', 'OFF');
+    await player.setOption(['Play options'], 'Scroll', 'OFF');
     await player.dropText('scroll.bmplay.json', JSON.stringify(replay));
     await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'scroll REMOVE replay');
     await player.waitForResult(1);
@@ -686,7 +686,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
       '#TITLE Scroll ADD\n#BPM 240\n#BPM01 480\n#STOP01 192\n#00111:01\n#00108:01\n#00209:01\n#00312:01',
     );
     await player.setOption(['Play options'], 'Judgment windows', 'beatoraja');
-    await player.setOption(['Play options'], 'Scroll (beatoraja)', 'ADD');
+    await player.setOption(['Play options'], 'Scroll', 'ADD (beatoraja)');
     await player.setOption(['Play options'], 'Scroll section lines', 1);
     await player.setOption(['Play options'], 'Scroll rate', 1);
     await player.setOption(['Play options'], 'Auto play', true);
@@ -705,7 +705,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     expect(replay?.chart.notes.map((note) => note.timeUs)).toEqual([1000000, 2500000]);
     await player.leaveResult();
     await player.setOption(['Play options'], 'Scroll rate', 0);
-    await player.setOption(['Play options'], 'Scroll (beatoraja)', 'OFF');
+    await player.setOption(['Play options'], 'Scroll', 'OFF');
     await player.dropText('scroll-add.bmplay.json', JSON.stringify(replay));
     await player.waitFor((state) => state.scene.kind === 'play' && state.play?.replay === true, 'scroll ADD replay');
     await player.waitForResult(1);
@@ -1001,8 +1001,8 @@ test('That-Which-Must-Not-Be-Named 2P PLAY with M-RAN mirrors one player of a sh
   await player.dropText('m-ran.bme', `#TITLE ${title}\n#BPM 240\n#00111:01\n#00112:0001\n#00113:000001`);
   await player.setOption(['Play options'], 'Judgment windows', '????');
   await player.setOption(['Play options'], 'Battle', '2P PLAY (????)');
-  await player.setOption(['Play options'], 'Random 1P', 'RANDOM (????)');
-  await player.setOption(['Play options'], 'Random 2P', 'RANDOM (????)');
+  await player.setOption(['Play options'], 'Random 1P', 'RANDOM');
+  await player.setOption(['Play options'], 'Random 2P', 'RANDOM');
   await player.setOption(['Play options'], 'M-RAN 2P', true);
   await player.setOption(['Play options'], 'Auto play', true);
   await player.cursorTo((bar) => bar.title === title, 'M-RAN chart');

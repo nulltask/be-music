@@ -336,6 +336,30 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       await playerWebCoreAPI.computeSHA256Hex(BENCH_BYTES);
     },
   });
+  define('player-browser.parsedChartPathKind', {
+    run: () => {
+      playerWebCoreAPI.parsedChartPathKind('Songs/Bench/main.bmson');
+      playerWebCoreAPI.parsedChartPathKind('Songs/Bench/main.pms');
+    },
+  });
+  define('player-browser.parsedChartCacheKey', {
+    run: () => {
+      playerWebCoreAPI.parsedChartCacheKey('0'.repeat(64), 'Songs/Bench/main.bms');
+    },
+  });
+  define('player-browser.parseChartThroughCache', {
+    run: async () => {
+      const entries = new Map<string, Awaited<ReturnType<typeof playerWebCoreAPI.parseChartThroughCache>>>();
+      const cache = {
+        get: async (key: string) => entries.get(key),
+        set: async (key: string, value: Awaited<ReturnType<typeof playerWebCoreAPI.parseChartThroughCache>>) => {
+          entries.set(key, value);
+        },
+      };
+      await playerWebCoreAPI.parseChartThroughCache({ path: 'Songs/Bench/main.bms', bytes: BENCH_BYTES }, cache);
+      await playerWebCoreAPI.parseChartThroughCache({ path: 'Songs/Bench/main.bms', bytes: BENCH_BYTES }, cache);
+    },
+  });
   define('player-browser.createAudioService', {
     run: async () => {
       const service = playerWebCoreAPI.createAudioService({ createContext: () => BENCH_SYSTEM_AUDIO_CONTEXT });
@@ -658,6 +682,12 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     run: async () => {
       // The bench chart has no images, so the source is walked without decoding anything.
       await playerWebCoreAPI.loadBeatorajaChartImages(BENCH_SONG, BENCH_SOURCE);
+    },
+  });
+  define('player-browser.loadBeatorajaChartImage', {
+    run: async () => {
+      // A path the bench source does not hold: the lookup misses without decoding anything.
+      await playerWebCoreAPI.loadBeatorajaChartImage(BENCH_SONG.chartPath, 'back.png', BENCH_SOURCE);
     },
   });
   define('player-browser.resolveBeatorajaChartImage', {
@@ -1001,6 +1031,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.resolveChartAudioAsset', {
     run: () => {
       playerWebCoreAPI.resolveChartAudioAsset(BENCH_SOURCE, BENCH_SONG.chartPath, 'kick.wav');
+    },
+  });
+  define('player-browser.resolveChartAudioAssetCandidates', {
+    run: () => {
+      playerWebCoreAPI.resolveChartAudioAssetCandidates(BENCH_SOURCE, BENCH_SONG.chartPath, 'kick.wav');
     },
   });
   define('player-browser.resolveChartBGAAsset', {

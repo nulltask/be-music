@@ -83,7 +83,8 @@ export function browseEntryBadge(entry: LibraryEntry): string {
   return entry.chart.playLevel !== undefined ? String(entry.chart.playLevel) : '-';
 }
 
-const COURSE_KIND_LABELS = { grade: 'DAN', expert: 'COURSE', nonstop: 'NONSTOP' } as const;
+/** How a select card and a course result name a course's kind. */
+export const COURSE_KIND_LABELS = { grade: 'DAN', expert: 'COURSE', nonstop: 'NONSTOP' } as const;
 
 /**
  * What a select card shows for a focused course bar in place of a chart: the course's name, a line naming its kind and

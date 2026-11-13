@@ -952,6 +952,20 @@ describe('SelectSession folder reload', () => {
   });
 });
 
+describe('SelectSession LR2 mania options', () => {
+  it('asks the host for the mania options on LR2’s F2 and leaves the key alone without a host that shows them', () => {
+    const maniaOptions = vi.fn();
+    const reload = vi.fn();
+    expect(createSession({ on: { maniaOptions } }).key('F2')).toBe(true);
+    expect(maniaOptions).toHaveBeenCalledTimes(1);
+    expect(createSession().key('F2')).toBe(false);
+    // beatoraja's F2 stays the folder reload.
+    expect(createSession({ policy: SELECT_POLICIES.beatoraja, on: { maniaOptions, reload } }).key('F2')).toBe(true);
+    expect(maniaOptions).toHaveBeenCalledTimes(1);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('SelectSession LR2 held keys', () => {
   const up = (session: SelectSession, code: string, timeStamp: number) =>
     session.handleKey({ ...keyEvent(code, code, timeStamp), type: 'up' });

@@ -46,6 +46,12 @@ const SEEK_REBUILD_CHART = parseChart(
 const SEEK_REBUILD_SECONDS = 64 * 1.6;
 
 export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
+  define('player-engine.resolveGuideSound', {
+    run: () => {
+      playerAPI.resolveGuideSound('GREAT');
+      playerAPI.resolveGuideSound('POOR', 'empty');
+    },
+  });
   define('player-engine.resolveChartRulesetFacts', {
     run: (fixtures) => {
       playerAPI.resolveChartRulesetFacts(fixtures.sampleBmsJSON);
@@ -81,6 +87,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.lanes.isOnePlayerBattleMode', {
     run() {
       lanesAPI.isOnePlayerBattleMode('beatoraja:BATTLE');
+    },
+  });
+  define('player-engine.lanes.isSPToDPBattleMode', {
+    run() {
+      lanesAPI.isSPToDPBattleMode('SP-TO-DP-CORRECTED');
     },
   });
   define('player-engine.lanes.resolveEffectiveBattleMode', {
@@ -215,6 +226,13 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.course.parseLR2NonstopConnections', {
     run: () => {
       courseAPI.parseLR2NonstopConnections(benchNonstopHeader);
+    },
+  });
+  define('player-engine.course.resolveNonstopSongInfoState', {
+    run: () => {
+      const stages = [{ windowStart: 0 }, { windowStart: 30 }, { windowStart: 60 }, { windowStart: 90 }];
+      courseAPI.resolveNonstopSongInfoState(stages, 30.2);
+      courseAPI.resolveNonstopSongInfoState(stages, 75);
     },
   });
   define('player-engine.course.resolveNonstopLastMeasure', {
@@ -675,6 +693,14 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  define('player-engine.course.hasRandomMixFirstStage', {
+    run: () => {
+      courseAPI.hasRandomMixFirstStage(benchMixPool, {
+        settings: { ...benchMixSettings, bpmRange: 20, maxBPM: 160 },
+        bpmOf: (chart) => ({ min: chart.minBPM, max: chart.maxBPM }),
+      });
+    },
+  });
   define('player-engine.course.createRandomMixCourse', {
     run: () => {
       courseAPI.createRandomMixCourse(
@@ -813,6 +839,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.replay.resolveReplayJudgmentTimeline', {
     run: () => {
       replayAPI.resolveReplayJudgmentTimeline(BENCH_REPLAY, { ruleset: 'lr2' });
+    },
+  });
+  define('player-engine.replay.resolveReplayGaugeHistories', {
+    run: () => {
+      replayAPI.resolveReplayGaugeHistories(BENCH_REPLAY, { ruleset: 'lr2' });
     },
   });
   define('player-engine.replay.simulateReplayRulesets', {
@@ -1031,6 +1062,22 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       recordsAPI.resolveReplayRecordPolicy(benchAssistedReplay);
     },
   });
+  const benchPlannedPlay = {
+    judgeRuleset: 'beatoraja' as const,
+    randomLane: { p1: 'H-RANDOM' },
+    autoScratch1P: true,
+    options: { bpmGuide: true },
+  };
+  define('player-engine.records.classifyPlannedAssists', {
+    run: () => {
+      recordsAPI.classifyPlannedAssists(benchPlannedPlay);
+    },
+  });
+  define('player-engine.records.resolvePlannedRecordPolicy', {
+    run: () => {
+      recordsAPI.resolvePlannedRecordPolicy(benchPlannedPlay);
+    },
+  });
   define('player-engine.records.applyRecordPolicyLamp', {
     run: () => {
       recordsAPI.applyRecordPolicyLamp('HARD', benchRecordPolicy);
@@ -1088,12 +1135,12 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   });
   define('player-engine.ruleset.optionValueName', {
     run() {
-      rulesetAPI.optionValueName('lr2:RANDOM');
+      rulesetAPI.optionValueName('lr2:S-RANDOM');
     },
   });
   define('player-engine.ruleset.resolveOptionSource', {
     run() {
-      rulesetAPI.resolveOptionSource('RANDOM', 'beatoraja');
+      rulesetAPI.resolveOptionSource('S-RANDOM', 'beatoraja');
     },
   });
   define('player-engine.ruleset.qualifyOptionValue', {
@@ -1104,6 +1151,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.ruleset.migrateOptionValue', {
     run() {
       rulesetAPI.migrateOptionValue('BATTLE', 'beatoraja');
+    },
+  });
+  define('player-engine.ruleset.canonicalOptionValue', {
+    run() {
+      rulesetAPI.canonicalOptionValue('____:S-RANDOM');
+    },
+  });
+  define('player-engine.ruleset.optionValueSources', {
+    run() {
+      rulesetAPI.optionValueSources('lr2:S-RANDOM');
     },
   });
   define('player-engine.ruleset.isKnownOptionSource', {

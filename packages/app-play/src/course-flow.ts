@@ -28,6 +28,7 @@ import {
 } from '@be-music/player-scene-model';
 import { createDrawnRandomMixEntry } from '@be-music/player-browser/collection';
 import type { RandomMixDrawnStage } from './random-mix-draw.ts';
+import type { RandomMixRun } from './random-mix-save.ts';
 import { EMPTY_COURSE_STAGE_HISTORY, type CourseStageHistory } from './course-result.ts';
 import type { NonstopPlayFailure } from './nonstop-course.ts';
 import { courseRunKeepsRecord, courseRunRecordPlay, type RecordPlay } from '@be-music/player-engine/records';
@@ -74,10 +75,12 @@ export interface ActiveCourse {
   /** Set on an endless RANDOM MIX: its stages are drawn as the run reaches them. */
   endless?: EndlessRandomMix;
   /**
-   * Set on a RANDOM MIX run too long to be kept as a course (more stages than a course file holds, or endless): no bar
-   * lists it, so its run keeps no course record and saves into no replay slot.
+   * Set on a RANDOM MIX run not kept as a course (an endless one): no bar lists it, so its run keeps no course record
+   * and saves into no replay slot.
    */
   unkept?: true;
+  /** Set on a RANDOM MIX run: what it was started with, for the save dialog once it is over. */
+  randomMix?: RandomMixRun;
 }
 
 /** The draw an endless RANDOM MIX takes its stages from, and the stages drawn so far. */

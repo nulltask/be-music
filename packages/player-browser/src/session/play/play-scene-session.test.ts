@@ -2,7 +2,12 @@ import { createEmptyJSON } from '@be-music/chart-source';
 import { createPlayerInputSignalBus, type PlayerInputCommand } from '@be-music/player-engine/signals';
 import { DEFAULT_PLAY_OPTIONS, type LibraryChart } from '@be-music/player-scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
-import { PlaySceneSession, resolveFrameScoreTargets, resolvePlayStage } from './play-scene-session.ts';
+import {
+  PlaySceneSession,
+  resolveFixedScoreTargets,
+  resolveFrameScoreTargets,
+  resolvePlayStage,
+} from './play-scene-session.ts';
 import { PlaySession } from './play-session.ts';
 
 const CHART: LibraryChart = {
@@ -123,6 +128,77 @@ describe('PlaySceneSession', () => {
         play0(),
       ),
     ).toEqual({ targetEXScore: 4, targetPaceEXScore: 2, targetLabel: 'X' });
+  });
+
+  test('resolveFixedScoreTargets names the picked target unless the host names one', () => {
+    // 1000 notes: AAA is 1778, and the next rank above a best of 1800 is AAA+ at 1852.
+    expect(resolveFixedScoreTargets({ bestEXScore: 1800 }, 'RATE_AAA', 1000)).toEqual({
+      bestEXScore: 1800,
+      targetEXScore: 1778,
+      targetLabel: 'RANK AAA',
+    });
+    expect(resolveFixedScoreTargets({ bestEXScore: 1800 }, 'RANK_NEXT', 1000)).toMatchObject({
+      targetEXScore: 1852,
+      targetLabel: 'NEXT RANK',
+    });
+    expect(resolveFixedScoreTargets(undefined, 'MAX', 1000)).toEqual({ targetEXScore: 2000, targetLabel: 'MAX' });
+    // A host's own target stays, and a chart without notes has none.
+    const host = { targetEXScore: 5, targetLabel: 'HOST' };
+    expect(resolveFixedScoreTargets(host, 'MAX', 1000)).toBe(host);
+    const empty = { bestEXScore: 0 };
+    expect(resolveFixedScoreTargets(empty, 'MAX', 0)).toBe(empty);
+    // A score rate takes its rate; a ranking target shows once its score is known.
+    expect(resolveFixedScoreTargets(undefined, 'SCORE_RATE', 1000, { rate: 85.5 })).toEqual({
+      targetEXScore: 1710,
+      targetLabel: 'SCORE RATE 85.5%',
+    });
+    expect(resolveFixedScoreTargets(empty, 'IR_RANK_1', 1000)).toBe(empty);
+    expect(resolveFixedScoreTargets(empty, 'IR_RANK_1', 1000, { rankingEXScore: 1987 })).toEqual({
+      bestEXScore: 0,
+      targetEXScore: 1987,
+      targetLabel: 'IR RANK 1',
+    });
+  });
+
+  test('a ranking target asks the host once and shows from when its score arrives', async () => {
+    const play = new PlaySession();
+    play.score.total = 1000;
+    const rankingTarget = vi.fn(async () => 1987);
+    const session = new PlaySceneSession(play, {
+      chart: CHART,
+      playOptions: { ...DEFAULT_PLAY_OPTIONS, scoreTarget: 'IR_RANK_5' },
+      rankingTarget,
+    });
+    expect(session.frame(10).scoreTargets).toBeUndefined();
+    expect(rankingTarget).toHaveBeenCalledWith({ kind: 'RANK', value: 5, label: 'IR RANK 5' });
+    await Promise.resolve();
+    expect(session.frame(20).scoreTargets).toEqual({ targetEXScore: 1987, targetLabel: 'IR RANK 5' });
+    session.frame(30);
+    expect(rankingTarget).toHaveBeenCalledTimes(1);
+    // A ranking with no score for it, or no host to ask, leaves the target out.
+    const none = new PlaySceneSession(play, {
+      chart: CHART,
+      playOptions: { ...DEFAULT_PLAY_OPTIONS, scoreTarget: 'IR_NEXT_1' },
+      rankingTarget: async () => undefined,
+    });
+    none.frame(10);
+    await Promise.resolve();
+    expect(none.frame(20).scoreTargets).toBeUndefined();
+  });
+
+  test('a running play follows its display options at once, and no other option', () => {
+    const { session } = createSceneSession();
+    expect(session.frame(0).playOptions.judgeDisplay).toBe('SKIN');
+    session.dispatch({ type: 'display-options', values: { judgeDisplay: 'OFF', laneBrightness: 30, lr2Tornado: 50 } });
+    expect(session.frame(1).playOptions).toMatchObject({ judgeDisplay: 'OFF', laneBrightness: 30, lr2Tornado: 50 });
+    // What shapes the chart or the judgment stays as the play started, even when it is handed over.
+    session.dispatch({ type: 'display-options', values: { random1P: 'MIRROR', lr2Gambol: 2, showJudgeArea: true } });
+    const options = session.frame(2).playOptions;
+    expect(options.showJudgeArea).toBe(true);
+    expect(options.random1P).toBe(DEFAULT_PLAY_OPTIONS.random1P);
+    expect(options.lr2Gambol).toBe(0);
+    // The options the play started with are not written to.
+    expect(DEFAULT_PLAY_OPTIONS.judgeDisplay).toBe('SKIN');
   });
 
   test('reports the load progress while the play loads', () => {

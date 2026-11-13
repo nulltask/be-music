@@ -19,9 +19,13 @@ describe('wantsFirstRunResolutionDetect', () => {
     ).toBe(false);
   });
 
-  it('has nothing to choose on a 1× display', () => {
-    expect(wantsFirstRunResolutionDetect({ stored: undefined, search: '', devicePixelRatio: 1 })).toBe(false);
-    expect(wantsFirstRunResolutionDetect({ stored: undefined, search: '', devicePixelRatio: 0 })).toBe(false);
+  it('benchmarks a 1× display too, which can drop below 1× for a weak GPU', () => {
+    expect(wantsFirstRunResolutionDetect({ stored: undefined, search: '', devicePixelRatio: 1 })).toBe(true);
+    expect(wantsFirstRunResolutionDetect({ stored: undefined, search: '', devicePixelRatio: 0 })).toBe(true);
+  });
+
+  it('has nothing to choose on a display at the lowest step', () => {
+    expect(wantsFirstRunResolutionDetect({ stored: undefined, search: '', devicePixelRatio: 0.5 })).toBe(false);
   });
 });
 
