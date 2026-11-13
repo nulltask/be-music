@@ -112,8 +112,8 @@ interface MutableNote {
  * Resolves the judged notes.
  *
  * Each lane and position holds at most one judged note, as in beatoraja, whose timeline keeps one note per lane: a
- * long note wins over a tap, and otherwise the first note in event order (lowest object ID; for bmson, the first sound
- * channel) is kept. The others are returned in `shadowedNotes` when their keysound differs from the kept note's.
+ * later BMS normal-channel object replaces an earlier one before long-note pairing. Dedicated long notes take
+ * precedence over taps at their start. bmson layers notes from different sound channels.
  */
 export function resolveJudgedNotes(
   context: ResolvedNoteContext,
@@ -174,7 +174,8 @@ function resolveMutableJudgedNotes(
   }
 
   const bmsLongNoteMode = resolveBMSLongNoteMode(json);
-  const withLNOBJ = applyLNOBJLongNotes(json, notes, timing, bmsLongNoteMode);
+  const normalObjects = json.sourceFormat === 'bms' ? selectBMSNormalObjects(notes) : notes;
+  const withLNOBJ = applyLNOBJLongNotes(json, normalObjects, timing, bmsLongNoteMode);
   appendLNTypeLongNotes(context, withLNOBJ, bmsLongNoteMode);
   withLNOBJ.sort(compareNotes);
   const shadowed = collapseSamePositionNotes(withLNOBJ, json.sourceFormat === 'bmson', droppedStackedNotes);
@@ -329,8 +330,8 @@ function freezeJudgedNote(note: MutableNote, idBase: 36 | 62, allowLongKeys: boo
  * Long notes are resolved first, so a `5x` / `6x` or `#LNOBJ` long note and a tap on its start compete here and the
  * long note wins — beatoraja also replaces a tap at a `5x` start with the long note. bmson keeps the first sound
  * channel's note whatever its length and layers only notes of the same length onto it. Between notes of the same kind the
- * first in sort order wins: beatoraja keeps the later line of a BMS file, but the IR no longer records line order, so
- * the lowest object ID stands in; for bmson this is the first sound channel, which is the note beatoraja judges.
+ * first in sort order wins. For BMS normal-channel objects with recorded line order, replacements were already
+ * applied before pairing. For bmson the first sound channel is the note beatoraja judges.
  */
 function collapseSamePositionNotes(
   notes: MutableNote[],
@@ -404,6 +405,27 @@ function compareNotes(left: MutableNote, right: MutableNote): number {
     return left.event.value < right.event.value ? -1 : 1;
   }
   return 0;
+}
+
+/** Apply normal-channel replacement before pairing LNOBJ. Older IR without line order keeps its legacy behavior. */
+function selectBMSNormalObjects(notes: MutableNote[]): MutableNote[] {
+  if (!notes.some((note) => note.event.bmsLineOrder !== undefined)) return notes;
+  const selected: MutableNote[] = [];
+  let index = 0;
+  while (index < notes.length) {
+    const start = index;
+    const first = notes[index++]!;
+    let winner = first;
+    while (index < notes.length) {
+      const candidate = notes[index]!;
+      if (candidate.beat !== first.beat || candidate.channel !== first.channel) break;
+      if ((candidate.event.bmsLineOrder ?? -1) > (winner.event.bmsLineOrder ?? -1)) winner = candidate;
+      index += 1;
+    }
+    if (winner.event.bmsLineOrder !== undefined) selected.push(winner);
+    else for (let at = start; at < index; at += 1) selected.push(notes[at]!);
+  }
+  return selected;
 }
 
 /** Turns `#LNOBJ` starts into long notes and drops their end objects. Returns the kept notes. */

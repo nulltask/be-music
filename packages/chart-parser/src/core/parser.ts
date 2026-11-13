@@ -11,7 +11,6 @@ import { normalizeASCIIBase36Code } from '@be-music/shared-utils/core';
 import { buildBMSObjectLineEntry, upsertMeasureLength } from './event-utils.ts';
 import type { BmsonDocument } from './bmson.ts';
 import {
-  createControlFlowObjectEntry,
   resolveControlFlow,
   resolveControlFlowAliasDirective,
   type ControlFlowCaptureFrameType,
@@ -61,6 +60,7 @@ export function parseBMS(input: string): BeMusicJSON {
     json.bms.base = 62;
   }
 
+  const firstNormalObjectLines = new Map<number, { order: number; events: BeMusicJSON['events'] }>();
   forEachLine(input, (rawLine) => {
     const line = rawLine.trim();
     if (!line.startsWith('#')) {
@@ -70,39 +70,40 @@ export function parseBMS(input: string): BeMusicJSON {
     const second = line.charCodeAt(1);
     const startsWithMeasure = second >= 0x30 && second <= 0x39;
     if (startsWithMeasure) {
-      const objectLine = parseObjectDataLine(line);
-      if (!objectLine) {
+      const bmsLineOrder = json.preservation.bms.sourceLines.length;
+      const parsedLine = parseObjectDataLine(line);
+      if (!parsedLine) {
         return;
       }
-      const { measure, channel, data } = objectLine;
+      const { measure, channel, data } = parsedLine;
+      const objectLine = buildBMSObjectLineEntry(measure, channel, data, base);
+      if (!objectLine) return;
+      const entry = { kind: 'object' as const, ...objectLine };
+      json.preservation.bms.sourceLines.push(entry);
+      const events =
+        controlFlowCaptureStack.length > 0
+          ? entry.events
+          : entry.events.map((event) => ({ ...event, position: [...event.position] as typeof event.position }));
+      if (channel[0] === '1' || channel[0] === '2') {
+        const key = measure * 1296 + Number.parseInt(channel, 36);
+        const first = firstNormalObjectLines.get(key);
+        const copies = events === entry.events ? events : [...entry.events, ...events];
+        if (first) {
+          for (const event of first.events) event.bmsLineOrder = first.order;
+          first.events = [];
+          for (const event of copies) event.bmsLineOrder = bmsLineOrder;
+        } else {
+          firstNormalObjectLines.set(key, { order: bmsLineOrder, events: copies });
+        }
+      }
       if (controlFlowCaptureStack.length > 0) {
-        const controlFlowObject = createControlFlowObjectEntry(measure, channel, data, base);
-        if (controlFlowObject) {
-          json.bms.controlFlow.push(controlFlowObject);
-          json.preservation.bms.sourceLines.push(controlFlowObject);
-        }
+        json.bms.controlFlow.push(entry);
       } else {
-        // Tokenized once: the preserved line and the chart's events come from the same entry.
-        const objectLine = buildBMSObjectLineEntry(measure, channel, data, base);
-        if (objectLine) {
-          json.preservation.bms.objectLines.push(objectLine);
-          json.preservation.bms.sourceLines.push({
-            kind: 'object',
-            ...objectLine,
-          });
-          if (objectLine.measureLength !== undefined) {
-            upsertMeasureLength(json, measure, objectLine.measureLength, measureByIndex);
-          }
-          for (const event of objectLine.events) {
-            // A copy per event: the chart's events must not alias the preserved line's.
-            json.events.push({
-              measure,
-              channel,
-              position: [event.position[0], event.position[1]],
-              value: event.value,
-            });
-          }
+        json.preservation.bms.objectLines.push(objectLine);
+        if (objectLine.measureLength !== undefined) {
+          upsertMeasureLength(json, measure, objectLine.measureLength, measureByIndex);
         }
+        for (const event of events) json.events.push(event);
       }
       return;
     }
