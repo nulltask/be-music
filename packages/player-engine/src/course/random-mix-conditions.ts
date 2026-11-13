@@ -349,7 +349,11 @@ export function createRandomMixCourse(
     options.defaultConnection !== undefined ? { defaultConnection: options.defaultConnection } : {},
   );
   // `finishCourseDraft` gives the default only after LR2's five course-maker stages; a draw has it after every one.
-  if (course?.kind === 'nonstop')
-    course.connections = Array.from({ length: stages.length - 1 }, () => options.defaultConnection ?? 'fade');
+  if (course?.kind === 'nonstop') {
+    const connection = options.defaultConnection ?? 'fade';
+    const connections: NonstopConnection[] = [];
+    for (let index = 1; index < stages.length; index += 1) connections.push(connection);
+    course.connections = connections;
+  }
   return course;
 }

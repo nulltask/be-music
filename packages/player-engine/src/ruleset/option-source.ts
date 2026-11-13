@@ -36,16 +36,17 @@ const SHARED_OPTION_SOURCES: Readonly<Partial<Record<QualifiedOptionName, Partia
  * RANDOM alike (one chart-wide shuffle of the keys), so it is one bare RANDOM; AC's S-RANDOM is LR2's. Settings and
  * replays that hold the old values keep working.
  */
-const MERGED_OPTION_VALUES: Readonly<Record<string, string>> = {
-  'lr2:RANDOM': 'RANDOM',
-  'beatoraja:RANDOM': 'RANDOM',
-  '____:RANDOM': 'RANDOM',
-  '____:S-RANDOM': 'lr2:S-RANDOM',
-};
+const MERGED_OPTION_VALUES: ReadonlyMap<string, string> = new Map([
+  ['lr2:RANDOM', 'RANDOM'],
+  ['beatoraja:RANDOM', 'RANDOM'],
+  ['____:RANDOM', 'RANDOM'],
+  ['____:S-RANDOM', 'lr2:S-RANDOM'],
+]);
 
 /** The value `value` reads as now: a merged qualified value becomes its current value; any other stays as it is. */
 export function canonicalOptionValue(value: string): string {
-  return Object.hasOwn(MERGED_OPTION_VALUES, value) ? MERGED_OPTION_VALUES[value]! : value;
+  // Only a qualified value can be a merged one, and most values are bare.
+  return value.includes(':') ? (MERGED_OPTION_VALUES.get(value) ?? value) : value;
 }
 
 /** A name {@link QUALIFIED_OPTION_SOURCES} lists. */

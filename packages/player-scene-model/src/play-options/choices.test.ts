@@ -32,6 +32,15 @@ describe('DEFAULT_PLAY_OPTIONS', () => {
     expect(DEFAULT_PLAY_OPTIONS.gauge2P).toBe('GROOVE');
   });
 
+  test('holds values that resolve to themselves, so resolving the options can skip a stored default', () => {
+    for (const key of Object.keys(DEFAULT_PLAY_OPTIONS) as (keyof PlayOptions)[]) {
+      const resolved = resolvePlayOptionValue(key, DEFAULT_PLAY_OPTIONS[key]);
+      // An option that keeps nothing by default (a seed) resolves to nothing and stays at its default too.
+      if (resolved !== undefined) expect(resolved, key).toBe(DEFAULT_PLAY_OPTIONS[key]);
+    }
+    expect(resolvePlayOptions({ ...DEFAULT_PLAY_OPTIONS })).toEqual(resolvePlayOptions());
+  });
+
   test('offers a value of each option with choices among them', () => {
     for (const [key, choices] of Object.entries(PLAY_OPTION_CHOICES)) {
       expect(choices).toContain(DEFAULT_PLAY_OPTIONS[key as keyof PlayOptions]);
