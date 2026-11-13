@@ -311,7 +311,7 @@ A full example:
 - `preview`: value of `#PREVIEW`
 - `lnType`: value of `#LNTYPE`
 - `lnMode`: value of `#LNMODE` (`1` = LN, `2` = CN, `3` = HCN); only positive values are kept
-- `lnObjs`: Array holding multiple `#LNOBJ` declarations in declaration order (2 digit base36)
+- `lnObjs`: Array of `#LNOBJ` declarations in declaration order. Playback uses only the final ID after resolving the selected branches.
 - `volWAV`: value of `#VOLWAV`
 - `defExRank`: value of `#DEFEXRANK`
 - `exRank`: Map of `#EXRANKxx`

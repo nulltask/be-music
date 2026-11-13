@@ -39,7 +39,7 @@ export function resolveHeaderCommandAlias(
 }
 
 /** Header commands whose lines add up instead of replacing each other, so file order never makes one override another. */
-const REPEATABLE_HEADER_COMMANDS: ReadonlySet<string> = new Set(['STP', 'WAVCMD', 'LNOBJ', 'OPTION']);
+const REPEATABLE_HEADER_COMMANDS: ReadonlySet<string> = new Set(['STP', 'WAVCMD', 'OPTION']);
 
 /**
  * Which definition a header line sets, for the file-order rule: the command, plus the normalized object key of an

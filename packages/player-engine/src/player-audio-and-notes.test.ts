@@ -422,7 +422,7 @@ describe('player', () => {
     expect(notes[1].endBeat).toBeUndefined();
   });
 
-  test('player: derives long-note end beat from multiple #LNOBJ declarations', () => {
+  test('player: uses only the last #LNOBJ as a long-note end', () => {
     const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.bms.lnObjs = ['AA', 'BB'];
@@ -433,7 +433,8 @@ describe('player', () => {
     json.events = [startA, endA, startB, endB];
 
     const notes = extractPlayableNotes(json);
-    expect(notes.find((note) => note.event === startA)?.endBeat).toBeCloseTo(1, 6);
+    expect(notes.find((note) => note.event === startA)?.endBeat).toBeUndefined();
+    expect(notes.find((note) => note.event === endA)).toBeDefined();
     expect(notes.find((note) => note.event === startB)?.endBeat).toBeCloseTo(1, 6);
   });
 
