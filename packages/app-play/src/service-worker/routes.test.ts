@@ -18,6 +18,8 @@ const ORIGIN = 'https://play.be-music.app';
 const PRECACHED = new Set([
   '/',
   '/favicon.svg',
+  '/favicon.svg?v=abcd',
+  '/manifest.webmanifest?v=abcd',
   '/manifest.webmanifest',
   '/icons/icon-192.png',
   '/acknowledgements.json',
@@ -97,6 +99,12 @@ describe('routeRequest', () => {
     expect(route(get('/acknowledgements.json'))).toBe('precached');
     expect(route(get('/ffmpeg-core/ffmpeg-core.js'))).toBe('ffmpeg-core');
     expect(route(get('/ffmpeg-core/ffmpeg-core.wasm'))).toBe('ffmpeg-core');
+  });
+
+  test('serves the exact versioned icon and manifest URLs offline', () => {
+    expect(route(get('/favicon.svg?v=abcd'))).toBe('precached');
+    expect(route(get('/manifest.webmanifest?v=abcd', { destination: 'manifest' }))).toBe('precached');
+    expect(route(get('/manifest.webmanifest?v=newer'))).toBe('network');
   });
 
   test('sends an unlisted file, or a precached one with a query, to the network', () => {

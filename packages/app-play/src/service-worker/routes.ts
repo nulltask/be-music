@@ -126,7 +126,7 @@ export function routeRequest(request: RequestFacts, origin: string, precached: R
   }
   if (pathname.startsWith('/assets/')) return 'hashed-asset';
   if (pathname.startsWith('/ffmpeg-core/')) return url.search === '' ? 'ffmpeg-core' : 'network';
-  if (url.search === '' && precached.has(pathname)) return 'precached';
+  if (precached.has(pathname + url.search)) return 'precached';
   return 'network';
 }
 

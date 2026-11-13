@@ -9,6 +9,7 @@ import {
   precacheURL,
   precacheVersion,
   selectPrecacheFiles,
+  versionedPWAURL,
 } from './service-worker-plugin.ts';
 
 describe('selectPrecacheFiles', () => {
@@ -87,6 +88,15 @@ describe('precacheVersion', () => {
     expect(precacheVersion([...files].reverse())).toBe(version);
     expect(precacheVersion([files[0], ['favicon.svg', new Uint8Array([1, 2, 4])]])).not.toBe(version);
     expect(precacheVersion([files[0], ['favicon2.svg', files[1][1]]])).not.toBe(version);
+  });
+});
+
+describe('versionedPWAURL', () => {
+  test('uses a stable URL for the same bytes and a new URL when the asset changes', () => {
+    const first = versionedPWAURL('/favicon.svg', 'before');
+    expect(first).toMatch(/^\/favicon\.svg\?v=[0-9a-f]{16}$/);
+    expect(versionedPWAURL('/favicon.svg', new TextEncoder().encode('before'))).toBe(first);
+    expect(versionedPWAURL('/favicon.svg', 'after')).not.toBe(first);
   });
 });
 
