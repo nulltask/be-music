@@ -284,6 +284,8 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     randomSeed2P: '-1',
     randomFixedLane1P: 0,
     randomFixedLane2P: 0,
+    lr2RandomScratch1P: false,
+    lr2RandomScratch2P: false,
     random2P: 'OFF',
     dpFlip: false,
     bpmGuide: false,

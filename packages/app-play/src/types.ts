@@ -232,6 +232,8 @@ export interface PlayerGUIState extends PlayTempoSettings {
   randomSeed2P: string;
   randomFixedLane1P: number;
   randomFixedLane2P: number;
+  lr2RandomScratch1P: boolean;
+  lr2RandomScratch2P: boolean;
   random1P: PlayOptions['random1P'];
   /** 2P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
   random2P: PlayOptions['random1P'];

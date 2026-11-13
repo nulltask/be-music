@@ -72,6 +72,11 @@ export const OPTIONS_HELP_JA = html`
         <dd>DP や 2 人プレイでの 2P 側のレーンのオプション。Random 1P と同じ一覧から選びます。</dd>
         <dt>H-RANDOM threshold BPM (beatoraja)</dt>
         <dd>H-RANDOM、ALL-SCR、7-to-9 のスクラッチで、連打とみなす 16 分音符の BPM。</dd>
+        <dt>Include scratch 1P / 2P (LR2)</dt>
+        <dd>
+          5・7・10・14 KEY で、その側の MIRROR、RANDOM、LR2 S-RANDOM、SCATTER、LR2 CONVERGE
+          の配置にスクラッチを含めます。
+        </dd>
         <dt>Fixed key 1P (LR2; 0=default)</dt>
         <dd>LR2 の CONVERGE で 1P 側のノーツを集めるレーン。0 はモードの既定。</dd>
         <dt>Fixed key 2P (LR2; 0=default)</dt>

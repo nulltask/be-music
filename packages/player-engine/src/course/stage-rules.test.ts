@@ -108,6 +108,17 @@ describe('resolveCourseStagePlaySettings', () => {
     tempo: 0.9,
   };
 
+  test('grade_random keeps the plain lane option without the scratch-inclusive variant', () => {
+    const definition = parseBeatorajaCourseData({ hash: [{ md5: MD5_A }], constraint: ['RANDOM'] })!;
+    const selected = { ...picks, lr2RandomScratch1P: true, lr2RandomScratch2P: false };
+    expect(resolveCourseStagePlaySettings(definition, selected)).toMatchObject({
+      random1P: 'RANDOM',
+      lr2RandomScratch1P: false,
+      lr2RandomScratch2P: false,
+    });
+    expect(resolveCourseStagePlaySettings({ ...definition, constraints: [] }, selected)).toEqual(selected);
+  });
+
   test('resets an LR2 GRADE course’s stage to what LR2 allows, lane options included', () => {
     const definition = parseLR2CourseFile(
       `<courselist><course><title>Dan</title><type>2</type><hash>${'0'.repeat(10)}2${'0'.repeat(21)}${MD5_A}</hash></course></courselist>`,

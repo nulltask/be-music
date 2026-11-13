@@ -152,6 +152,8 @@ export interface PlayChartContext {
       | 'randomSeed2P'
       | 'randomFixedLane1P'
       | 'randomFixedLane2P'
+      | 'lr2RandomScratch1P'
+      | 'lr2RandomScratch2P'
       | 'hRandomThresholdBPM'
       | 'random1P'
       | 'random2P'
@@ -377,6 +379,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       random2P: ctx.options.random2P,
       randomFixedLane1P: ctx.options.randomFixedLane1P,
       randomFixedLane2P: ctx.options.randomFixedLane2P,
+      lr2RandomScratch1P: ctx.options.lr2RandomScratch1P,
+      lr2RandomScratch2P: ctx.options.lr2RandomScratch2P,
       mRan1P: ctx.options.mRan1P,
       mRan2P: ctx.options.mRan2P,
       mineModifier: ctx.options.mineModifier,
@@ -422,7 +426,9 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       longNoteRate: arrangement?.play.longNoteRate ?? ctx.options.longNoteRate,
       judgeRuleset: arrangement?.play.judgeRuleset ?? ctx.options.judgeRuleset,
       battleMode: arrangement ? (arrangement.play.battleMode ?? 'OFF') : ctx.options.battleMode,
-      dBattleScratch: arrangement ? (arrangement.play.dBattleScratch ?? false) : ctx.options.dBattleScratch,
+      dBattleScratch: arrangement
+        ? (arrangement.play.dBattleScratch ?? false)
+        : ctx.options.dBattleScratch || lanes.lr2RandomScratch1P || lanes.lr2RandomScratch2P,
       practice: arrangement ? undefined : ctx.options.practiceRange,
       autoScratch1P: arrangement
         ? (arrangement.play.battleAssist1P ?? arrangement.play.autoScratch1P ?? arrangement.play.autoScratch)
@@ -563,11 +569,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       const mode = side === '1P' ? lanes.random1P : lanes.random2P;
       return mode === 'RANDOM_PLAYABLE' ? Math.random : createBeatorajaLaneRandom(resolvedSeed);
     };
-    // RANDOM / MIRROR / S-RANDOM — shuffle the 1P / 2P keyboard lanes independently. Scratch (channels 16 /
-    // 26) and the 24 / 48 KEY wheel never move (`resolveLaneOptionChannels`). Per LR2 convention, the shuffle is drawn at chart-prepare time so a single play session has a
-    // stable arrangement (F5-restart re-rolls it). Mine channels are included in the same shuffle pass so a mine on
-    // lane 4 lands wherever the shuffle moved lane 4 — keeping the mine's visual relationship to the surrounding chord
-    // intact.
+    // Arrange each side independently at chart preparation. LR2 can include the scratch in its draw.
     const battleRandom =
       lanes.random1P === 'SYNCHRONIZE-RANDOM' || lanes.random1P === 'SYMMETRY-RANDOM' ? lanes.random1P : undefined;
     // Two players with the same lane option play one arrangement: LR2 copies 1P's lanes after shuffling them
@@ -592,15 +594,21 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         ctx.mineNotes,
         ctx.invisibleNotes,
       );
-    const hasLR2DoubleRandom =
-      playVariant === '14' &&
-      [lanes.random1P, lanes.random2P].some((mode) =>
-        usesLR2DoubleRandom(mode ?? 'OFF', ctx.options.judgeRuleset ?? 'lr2'),
+    const usesLR2Sort = [
+      { mode: lanes.random1P, includeScratch: lanes.lr2RandomScratch1P },
+      { mode: lanes.random2P, includeScratch: lanes.lr2RandomScratch2P },
+    ].some(({ mode, includeScratch }) => {
+      const ruleset = ctx.options.judgeRuleset ?? 'lr2';
+      const selectedMode = mode ?? 'OFF';
+      return (
+        (playVariant === '14' && usesLR2DoubleRandom(selectedMode, ruleset)) ||
+        (includeScratch === true &&
+          usesLR2Scratch(selectedMode, playVariant, ruleset) &&
+          ['S-RANDOM', 'SCATTER', 'CONVERGE'].includes(resolveOptionSource(selectedMode, ruleset).name))
       );
-    const lr2Objects = hasLR2DoubleRandom
-      ? collectLR2SortObjects(resolvedPlay, ctx.options.course !== undefined)
-      : undefined;
-    const sourceChannels = hasLR2DoubleRandom
+    });
+    const lr2Objects = usesLR2Sort ? collectLR2SortObjects(resolvedPlay, ctx.options.course !== undefined) : undefined;
+    const sourceChannels = usesLR2Sort
       ? new Map([...ctx.notes, ...ctx.mineNotes, ...ctx.invisibleNotes].map((note) => [note, note.channel]))
       : undefined;
     applyRandomMode(
@@ -612,6 +620,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         ruleset: ctx.options.judgeRuleset ?? 'lr2',
         hRandomThresholdBPM: ctx.options.hRandomThresholdBPM,
         fixedLane: lanes.randomFixedLane1P,
+        lr2RandomScratch: lanes.lr2RandomScratch1P,
+        lr2ScratchSourceVariant: prepared.battleSourceVariant,
         scratch: playVariant === '9' ? undefined : '16',
         scratchLanes:
           playVariant === '9'
@@ -639,6 +649,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         ruleset: ctx.options.judgeRuleset ?? 'lr2',
         hRandomThresholdBPM: ctx.options.hRandomThresholdBPM,
         fixedLane: lanes.randomFixedLane2P,
+        lr2RandomScratch: lanes.lr2RandomScratch2P,
+        lr2ScratchSourceVariant: prepared.battleSourceVariant,
         scratch: playVariant === '9' ? undefined : '26',
         scratchLanes:
           playVariant === '9'
@@ -1021,6 +1033,17 @@ function usesLR2DoubleRandom(mode: string, ruleset: RulesetId): boolean {
   );
 }
 
+function usesLR2Scratch(mode: RandomMode, variant: ChartPlayVariant | undefined, ruleset: RulesetId): boolean {
+  if (variant !== '5' && variant !== '7' && variant !== '10' && variant !== '14') return false;
+  const { name, source } = resolveOptionSource(mode, ruleset);
+  return (
+    name === 'MIRROR' ||
+    name === 'RANDOM' ||
+    name === 'SCATTER' ||
+    (source === 'lr2' && (name === 'S-RANDOM' || name === 'CONVERGE'))
+  );
+}
+
 export function applyRandomMode(
   notes: Array<{ channel: string }>,
   allLanes: readonly string[],
@@ -1030,6 +1053,8 @@ export function applyRandomMode(
     ruleset?: RulesetId;
     hRandomThresholdBPM?: number;
     fixedLane?: number;
+    lr2RandomScratch?: boolean;
+    lr2ScratchSourceVariant?: ChartPlayVariant;
     scratch?: string;
     scratchLanes?: readonly string[];
     doublePlay?: boolean;
@@ -1064,6 +1089,10 @@ export function applyRandomMode(
   if (mode === 'S-RANDOM-EX' && allLanes.length > 0 && (options.scratchLanes?.length ?? 0) === 0)
     throw new RangeError('S-RANDOM-EX requires scratch lanes.');
   if (mode === 'OFF' || allLanes.length === 0) return;
+  const includeScratch =
+    options.lr2RandomScratch === true &&
+    options.scratch !== undefined &&
+    usesLR2Scratch(selectedMode, options.playVariant, options.ruleset ?? 'lr2');
   if (
     mode === 'S-RANDOM' ||
     mode === 'SCATTER' ||
@@ -1085,10 +1114,17 @@ export function applyRandomMode(
       ),
     ];
     const lr2Double =
-      options.playVariant === '14' &&
       options.scratch !== undefined &&
-      usesLR2DoubleRandom(selectedMode, options.ruleset ?? 'lr2')
-        ? { scratch: options.scratch, flipped: options.flipped, objects: options.lr2Objects }
+      (includeScratch || (options.playVariant === '14' && usesLR2DoubleRandom(selectedMode, options.ruleset ?? 'lr2')))
+        ? {
+            scratch: options.scratch,
+            flipped: options.flipped,
+            objects: options.lr2Objects,
+            includeScratch,
+            avoidFarKeys:
+              (includeScratch ? (options.lr2ScratchSourceVariant ?? options.playVariant) : options.playVariant) ===
+              '14',
+          }
         : undefined;
     const timedNotes = entries.map(({ note, kind }) => {
       const timed = note as {
@@ -1129,6 +1165,7 @@ export function applyRandomMode(
             doublePlay: options.doublePlay,
             flipped: options.flipped,
             correctedNineKey: mode === 'SCATTER-CORRECTED',
+            lr2Scratch: includeScratch ? lr2Double : undefined,
           })
         : mode === 'S-RANDOM-EX'
           ? randomizeSRandomNotes(timedNotes, [...allLanes, ...options.scratchLanes!], {
@@ -1157,8 +1194,9 @@ export function applyRandomMode(
                         thresholdBPM: options.hRandomThresholdBPM,
                       })
                     : randomizeLR2ConvergeNotes(timedNotes, allLanes, {
-                        target:
-                          mode === 'CONVERGE' && options.side === '2P'
+                        target: includeScratch
+                          ? (allLanes[(options.fixedLane ?? 0) - 1] ?? options.scratch!)
+                          : mode === 'CONVERGE' && options.side === '2P'
                             ? resolveLR2SecondSideConvergeTarget(allLanes, options.fixedLane ?? 0)
                             : (allLanes[(options.fixedLane ?? 0) - 1] ?? options.scratch ?? allLanes[4]!),
                         scratch: options.scratch,
@@ -1192,7 +1230,11 @@ export function applyRandomMode(
   }
   if (mode === 'RANDOM-EX' && (options.scratchLanes?.length ?? 0) === 0)
     throw new RangeError('RANDOM-EX requires scratch lanes.');
-  const domainLanes = mode === 'RANDOM-EX' ? [...allLanes, ...options.scratchLanes!] : allLanes;
+  const domainLanes = includeScratch
+    ? [options.scratch!, ...allLanes]
+    : mode === 'RANDOM-EX'
+      ? [...allLanes, ...options.scratchLanes!]
+      : allLanes;
   if (domainLanes.length < 2) return;
 
   const remapAll = (map: Map<string, string>): void => {
@@ -1228,6 +1270,23 @@ export function applyRandomMode(
       map.set(domainLanes[source]!, domainLanes[lane]!);
     }
     remapAll(map);
+    return;
+  }
+
+  if (mode === 'RANDOM' && includeScratch) {
+    // LR2 shuffles scratch (slot 0) and the keys in source-lane order.
+    const destinations = [...domainLanes];
+    for (let source = 0; source < destinations.length - 1; source++) {
+      const other = source + drawLaneRandomIndex(destinations.length - source, rng);
+      [destinations[source], destinations[other]] = [destinations[other]!, destinations[source]!];
+    }
+    const scratchSource = destinations.indexOf(options.scratch!);
+    const fixed = options.fixedLane ?? 0;
+    // The native randFix check is on the 1P table and scans only key slots for the scratch destination.
+    if (options.side !== '2P' && fixed > 0 && fixed < destinations.length && scratchSource > 0) {
+      [destinations[fixed], destinations[scratchSource]] = [destinations[scratchSource]!, destinations[fixed]!];
+    }
+    remapAll(new Map(domainLanes.map((lane, index) => [lane, destinations[index]!])));
     return;
   }
 

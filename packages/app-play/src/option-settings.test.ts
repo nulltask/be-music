@@ -131,6 +131,8 @@ describe('captureOptionSettings', () => {
       randomSeed2P: '-1',
       randomFixedLane1P: 0,
       randomFixedLane2P: 0,
+      lr2RandomScratch1P: false,
+      lr2RandomScratch2P: false,
       random2P: 'MIRROR',
       dpFlip: true,
       bpmGuide: true,
@@ -301,8 +303,14 @@ test('persists and validates the H-RANDOM source configuration', () => {
   ).toMatchObject({ random1P: 'H-RANDOM', hRandomThresholdBPM: 300 });
 });
 
-test('persists per-side LR2 CONVERGE targets', () => {
-  const settings = { random1P: 'lr2:CONVERGE', randomFixedLane1P: 3, randomFixedLane2P: 7 };
+test('persists per-side LR2 CONVERGE targets and scratch inclusion', () => {
+  const settings = {
+    random1P: 'lr2:CONVERGE',
+    randomFixedLane1P: 3,
+    randomFixedLane2P: 7,
+    lr2RandomScratch1P: true,
+    lr2RandomScratch2P: false,
+  };
   expect(parseOptionSettingsDocument(JSON.stringify({ version: 0, updatedAt: 1, settings }))?.settings).toMatchObject(
     settings,
   );

@@ -388,3 +388,13 @@ describe('applyRecordPolicyLamp', () => {
     expect(applyRecordPolicyLamp('HARD', {})).toBe('HARD');
   });
 });
+
+test.each(['MIRROR', 'RANDOM', 'lr2:S-RANDOM', 'SCATTER', 'lr2:CONVERGE'] as const)(
+  'LR2 scratch inclusion keeps the record policy of %s',
+  (mode) => {
+    const play = { judgeRuleset: 'lr2' as const, randomLane: { p1: mode } };
+    expect(resolveReplayRecordPolicy(replay({ ...play, options: { lr2RandomScratch1P: true } }))).toEqual(
+      resolveReplayRecordPolicy(replay(play)),
+    );
+  },
+);
