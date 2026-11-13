@@ -624,7 +624,7 @@ LR2 との違いは次のとおりで、いずれも小さなものです。
 
 ## ゲージオートシフト
 
-どのルールでも、Options ダイアログ の **Gauge auto-shift** で **NONE**（既定）、**CONTINUE**、**SURVIVAL TO GROOVE**、**BEST CLEAR**、**SELECT TO UNDER** を選びます。**Lowest auto-shift gauge** は後の 2 つに適用します。方式は beatoraja 0.8.9 の `BMSPlayer` に従い、各ルールは自分のゲージに、自分のゲージの並びに沿って適用します（[#933](https://github.com/nulltask/be-music/issues/933)）。
+どのルールでも、Options ダイアログ の **Gauge auto-shift** で **NONE**（既定）、**CONTINUE**、**SURVIVAL TO GROOVE**、**BEST CLEAR**、**SELECT TO UNDER** を選びます。**Lowest auto-shift gauge** は後の 2 つに適用します。切り替え方式と beatoraja のゲージ順は beatoraja 0.8.9 に由来します。LR2・AC では Be-Music の拡張として、下表のゲージ順に同じ方式を適用します。これにより、各ルールで共通の操作ができ、リプレイでも切り替えを再現できます（[#933](https://github.com/nulltask/be-music/issues/933)）。
 
 | ルール       | 単曲（緩い順）                                   | 段位コース                     | EXPERT / NONSTOP コース                        |
 | ------------ | ------------------------------------------------ | ------------------------------ | ---------------------------------------------- |
@@ -650,7 +650,7 @@ flowchart LR
 
 リプレイには `play.gaugeAutoShift` と `play.bottomShiftableGauge` を記録します。NONE では `play.endOnFailure` も記録し、ほかの方式では最後まで判定を続けます。結果の `gauge.type` はプレイ終了時のゲージを示します。BEST CLEAR と SELECT TO UNDER では `gauge.values` に並行するすべてのゲージの値を保持し、コースのステージの `play.course.carryIn.gauges` に引き継いだコースのゲージを保持します。2 人プレイでは両プレイヤーのゲージがそれぞれ切り替わります。beatoraja スキンのゲージオートシフト（78）と最低シフトゲージ（341）のボタンは選択肢を参照元の順で巡回します。Native スキンのプレイ設定パネルには方式・最低ゲージ・実効ゲージを表示します。方式から入力アシストを推測しません。シフト後のクリアの順位付けは Leaderboard 側で決めます。
 
-参照元：beatoraja 0.8.9 の [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java#L641-L674)、[`GrooveGauge`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GrooveGauge.java)、[`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java)。対応 Issue は [#729](https://github.com/nulltask/be-music/issues/729)、[#730](https://github.com/nulltask/be-music/issues/730)、[#731](https://github.com/nulltask/be-music/issues/731)、[#732](https://github.com/nulltask/be-music/issues/732) です。
+参照元：beatoraja 0.8.9 の [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java#L600-L633)、[`GrooveGauge`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GrooveGauge.java)、[`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java)。対応 Issue は [#729](https://github.com/nulltask/be-music/issues/729)、[#730](https://github.com/nulltask/be-music/issues/730)、[#731](https://github.com/nulltask/be-music/issues/731)、[#732](https://github.com/nulltask/be-music/issues/732) です。
 
 ## DEATH corrected
 
