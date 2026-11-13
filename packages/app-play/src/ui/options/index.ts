@@ -79,10 +79,11 @@ import { detectRenderResolution, scheduleFirstRunResolutionDetect } from './rend
 import { applyBeatorajaSkinSwitchIfActive, rebuildBeatorajaSkinPickers } from './skin-pickers.ts';
 import { buildSkinFolder, rebuildLR2ThemePicker, rebuildSkinFamilyPicker, rebuildSkinSettingsFolder } from './skin.ts';
 import { OptionHelp } from './help.ts';
+import { OptionSearch } from './search.ts';
 import { buildKeyConfigFolder } from './keys.ts';
 import { relabelOptions } from './labels.ts';
 import { buildTempoFolder } from './tempo.ts';
-import { onPlayerLangChange, playerLang } from '../../player-copy.ts';
+import { onPlayerLangChange, playerLang, playerText } from '../../player-copy.ts';
 import { describeRecordConsequence } from '../../services/record-consequence.ts';
 import { releaseFocusOnClose } from '../dialog-focus.ts';
 /**
@@ -442,10 +443,23 @@ export class OptionsDialog {
     this.gui = gui;
     // Help's own text for each control, beside it; rows made since the last opening (a theme's pickers) get theirs too.
     const help = new OptionHelp(dialog, playerLang);
+    const search = new OptionSearch(
+      dialog,
+      body,
+      (row) => help.text(row),
+      () => playerText().shell.optionsSearchEmpty,
+    );
     gui.on('fold', (event) => {
       if (event.expanded) {
         help.attach();
         relabelOptions(gui, playerLang());
+        // The search field is the dialog's first control, so opening focuses it: type to find an option. A touch
+        // screen would raise its keyboard over the dialog, so there the focus goes to the selected tab.
+        if (matchMedia('(pointer: coarse)').matches) {
+          dialog.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus();
+        }
+      } else {
+        search.clear();
       }
       // The select screen's keys change options too, so the row is read again as the dialog opens.
       if (event.expanded) this.refreshRecordConsequence();

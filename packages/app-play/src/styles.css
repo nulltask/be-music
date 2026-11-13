@@ -145,18 +145,83 @@ textarea {
  * sections, with the folders inside them as sections of their own. The panel scrolls.
  */
 .options-dialog > div {
-  height: min(85dvh, 760px);
+  height: min(90dvh, 880px);
 }
-/* Wide enough for every tab bar on one line, in English and Japanese (the widest needs about 690 px). */
+/*
+ * Wide enough for every tab bar on one line, in English and Japanese (the widest needs about 690 px), and for a
+ * slider beside its label.
+ */
 @media (min-width: 40rem) {
   .options-dialog > div {
-    max-width: 720px;
+    max-width: 860px;
   }
+}
+/* The title with the search field beside it, clear of the close button. */
+.options-dialog > div > header {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-right: 36px;
+}
+.options-search {
+  width: min(55%, 280px);
+  flex: none;
+}
+.options-body,
+.options-search-results {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.options-body[hidden],
+.options-search-results[hidden] {
+  display: none;
 }
 .options-body {
   display: flex;
-  min-height: 0;
   flex-direction: column;
+  /* The rows lay themselves out by the dialog's width, not the window's (`@container options`). */
+  container: options / inline-size;
+  --options-control-width: min(55%, 260px);
+}
+/* What the search found, in place of the tabs (ui/options/search.ts): each option's name over where it sits. */
+.options-search-results {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.options-search-results > ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.options-search-results button {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md, 0.5rem);
+  text-align: start;
+}
+.options-search-results button:hover,
+.options-search-results button:focus-visible {
+  background: var(--accent);
+  outline: none;
+}
+.options-search-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.options-search-path,
+.options-search-empty {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+.options-search-empty {
+  padding: 8px 12px;
 }
 .options-body > .options-tabs {
   min-height: 0;
@@ -180,6 +245,25 @@ textarea {
 }
 .options-tabs > [role='tablist'] > [role='tab'] {
   flex: 0 0 auto;
+  color: var(--muted-foreground);
+}
+/* The tab showing stands out from the others: filled, in the foreground colour. */
+.options-tabs > [role='tablist'] > [role='tab'][aria-selected='true'] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.options-tabs > [role='tablist'] > [role='tab']:not([aria-selected='true']):hover {
+  color: var(--foreground);
+}
+/* The pages of a tab stay in reach while their rows scroll under them. */
+.options-tab-panel .options-tabs > [role='tablist'] {
+  position: sticky;
+  /* The panel's top padding is inside its scrolling area: the bar goes up to the panel's edge. */
+  top: -12px;
+  z-index: 1;
+  /* Across the panel, so no row shows beside the bar as it scrolls under. */
+  width: 100%;
+  box-shadow: 0 0 0 6px var(--card);
 }
 .options-body > .options-tabs > [role='tabpanel'] {
   min-height: 0;
@@ -249,6 +333,22 @@ textarea {
 /* A row: the label and its control side by side; a slider puts its number by the label and the track under them. */
 .options-row {
   gap: 12px;
+  border-radius: 4px;
+}
+/* The row under the pointer, so a label is read with its own control across the dialog's width. */
+@media (hover: hover) {
+  .options-row[data-option-label]:hover {
+    background: color-mix(in oklab, var(--foreground) 5%, transparent);
+    box-shadow: 0 0 0 5px color-mix(in oklab, var(--foreground) 5%, transparent);
+  }
+}
+/* The row a search result led to (`OptionSearch.reveal`), marked for a moment. */
+.options-row[data-search-hit] {
+  background: color-mix(in oklab, var(--primary) 18%, transparent);
+  box-shadow: 0 0 0 5px color-mix(in oklab, var(--primary) 18%, transparent);
+  transition:
+    background 300ms ease-out,
+    box-shadow 300ms ease-out;
 }
 /* The Camera tab's preview (ui/options/bga-camera.ts): the camera as the BGA frame shows it, mirrored or not. */
 .options-camera-preview {
@@ -462,7 +562,7 @@ textarea {
 .options-row > .options-select,
 .options-row > .options-text,
 .options-row[data-orientation='horizontal'] > .options-number {
-  width: min(55%, 260px);
+  width: var(--options-control-width);
   flex: none;
 }
 .options-slider-row {
@@ -482,6 +582,34 @@ textarea {
 }
 .options-range {
   width: 100%;
+}
+/* On a phone the labels get a little more of the row, so fewer of them wrap. */
+@container options (max-width: 420px) {
+  .options-body {
+    --options-control-width: 46%;
+  }
+}
+/* In a wide dialog a slider takes one line: its label, the track, then the number, in the other controls' column. */
+@container options (min-width: 600px) {
+  .options-body {
+    --options-control-width: min(55%, 320px);
+  }
+  .options-slider-row:has(> .options-range) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) calc(var(--options-control-width) - 5.5rem - 12px) 5.5rem;
+    align-items: center;
+    column-gap: 12px;
+  }
+  .options-slider-row:has(> .options-range) > .options-slider-head {
+    display: contents;
+  }
+  .options-slider-row:has(> .options-range) > .options-slider-head > .options-number {
+    width: auto;
+    grid-area: 1 / 3;
+  }
+  .options-slider-row > .options-range {
+    grid-area: 1 / 2;
+  }
 }
 .options-monitor {
   min-height: 0;
