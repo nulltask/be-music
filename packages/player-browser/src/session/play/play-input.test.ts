@@ -135,10 +135,27 @@ describe('play adjustment keys', () => {
     expect(play.playState).toBe(state);
   });
 
+  test.each(['Numpad0', 'Digit0'])('%s switches floating hi-speed', (code) => {
+    const play = new PlaySession();
+    handleSharedEngineExitKey(play, key(code));
+    expect(play.playState.view.hiSpeed.floating).toBeDefined();
+    handleSharedEngineExitKey(play, key(code));
+    expect(play.playState.view.hiSpeed.floating).toBeUndefined();
+  });
+
+  test('a lane bound to the number-row 0 takes precedence over floating hi-speed', () => {
+    const play = new PlaySession();
+    play.preparedChart = { laneBindings: [{ inputTokens: ['0'] }] } as unknown as typeof play.preparedChart;
+    handleSharedEngineExitKey(play, key('Digit0'));
+    expect(play.playState.view.hiSpeed.floating).toBeUndefined();
+    handleSharedEngineExitKey(play, key('Numpad0'));
+    expect(play.playState.view.hiSpeed.floating).toBeDefined();
+  });
+
   test('held one-shot keys do not pause, restart or switch floating mode', () => {
     const play = new PlaySession();
     const restart = vi.spyOn(play, 'requestRestart');
-    for (const name of ['Pause', 'Tab', 'F5', 'Numpad0']) {
+    for (const name of ['Pause', 'Tab', 'F5', 'Numpad0', 'Digit0']) {
       handleSharedEngineExitKey(play, key(name, { repeat: true }));
     }
     expect(play.paused).toBe(false);

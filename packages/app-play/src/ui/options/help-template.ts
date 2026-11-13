@@ -367,8 +367,8 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Ignores cover and LIFT changes during play; Enter twice restores the floating green number.</dd>
           <dt>FLOATING HI-SPEED (AC 32 measured)</dt>
           <dd>
-            Keeps the green number while the covers move, by changing the hi-speed with them; Numpad 0 switches it
-            during play.
+            Keeps the green number while the covers move, by changing the hi-speed with them; 0 on the number row or
+            numpad switches it during play.
           </dd>
           <dt>Floating speed</dt>
           <dd>

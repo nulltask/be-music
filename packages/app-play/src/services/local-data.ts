@@ -30,10 +30,10 @@ const LOCAL_STORAGE_KEYS: Readonly<Record<string, string>> = {
 const DATABASES: Readonly<Record<string, { description: string; stores: Readonly<Record<string, string>> }>> = {
   'be-music': { description: 'Courses you made', stores: { courses: 'Saved courses' } },
   'be-music-replays': {
-    description: 'Replay slots',
+    description: 'Replay history and slots',
     stores: {
-      replaySlots: 'What each slot holds',
-      replaySlotData: 'Each slot’s replay, gzip-compressed',
+      replaySlots: 'Replay history and slot selections',
+      replaySlotData: 'Replay files, gzip-compressed',
       meta: 'Storage revision',
     },
   },

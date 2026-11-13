@@ -302,7 +302,7 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
       return;
     }
   }
-  // Numpad 0 switches FLOATING HI-SPEED, whatever the judge rules (#774).
+  // Either 0 key switches FLOATING HI-SPEED, whatever the judge rules (#774).
   if (actions.is('play.floating-hi-speed', event)) {
     event.preventDefault();
     changePlayView(ctx, {

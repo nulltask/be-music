@@ -9,11 +9,13 @@ import {
   decompressReplayText,
   normalizeReplayAutoSaveRules,
   parseReplaySlotRecord,
-  planReplaySlotEviction,
+  planReplayHistoryEviction,
+  parseReplayHistoryRecord,
   qualifiesReplayAutoSave,
   replaySlotKey,
   ReplaySlotStore,
   resolveReplayAutoSaveSlots,
+  type ReplayHistoryRecord,
   type ReplaySlotBackend,
   type ReplaySlotRecord,
   type ReplaySlotTarget,
@@ -141,27 +143,19 @@ describe('auto-save rules', () => {
   });
 });
 
-describe('planReplaySlotEviction', () => {
-  test('removes nothing while the budget holds', () => {
-    expect(planReplaySlotEviction([record('a', 40, 0.5)], record('b', 60, 0.1), 100)).toEqual([]);
+describe('planReplayHistoryEviction', () => {
+  const entry = (key: string, size: number, age: number, slots: number[] = []): ReplayHistoryRecord => ({
+    ...record(key, size, 0.5, `2026-10-26T00:00:0${age}.000Z`),
+    slots,
   });
 
-  test('removes the lowest EX rates first, the older save first on a tie', () => {
-    const records = [
-      record('a', 40, 0.9),
-      record('b', 40, 0.2, '2026-10-02T00:00:00.000Z'),
-      record('c', 40, 0.2, '2026-10-01T00:00:00.000Z'),
-    ];
-    expect(planReplaySlotEviction(records, record('d', 40, 0.8), 100)?.map((entry) => entry.key)).toEqual(['c', 'b']);
-  });
-
-  test('does not count the replay a slot replaces', () => {
-    expect(planReplaySlotEviction([record('a', 90, 0.1)], record('a', 90, 0.5), 100)).toEqual([]);
-  });
-
-  test('refuses a replay that would be the worst left over the budget, or that is larger than it', () => {
-    expect(planReplaySlotEviction([record('a', 60, 0.9)], record('b', 60, 0.1), 100)).toBeUndefined();
-    expect(planReplaySlotEviction([], record('b', 101, 1), 100)).toBeUndefined();
+  test('removes oldest unselected entries first, preserving slots', () => {
+    const selected = entry('selected', 40, 0, [0]);
+    const oldest = entry('oldest', 20, 1);
+    const latest = entry('latest', 30, 2);
+    expect(planReplayHistoryEviction([latest, selected, oldest], 30, 100)).toEqual([oldest]);
+    expect(planReplayHistoryEviction([latest, selected, oldest], 10, 100)).toEqual([]);
+    expect(planReplayHistoryEviction([latest, selected, oldest], 70, 100)).toBeUndefined();
   });
 });
 
@@ -190,7 +184,7 @@ describe('ReplaySlotStore', () => {
     const store = new ReplaySlotStore({ backend, now: () => new Date('2026-10-26T04:00:00.000Z') });
     await store.load();
     expect(store.exists(CHART)).toEqual([false, false, false, false]);
-    const outcome = await store.save(CHART, 1, { kind: 'chart', replay: replay() }, score(150), 'Fixture A');
+    const outcome = await store.save(CHART, [1], { kind: 'chart', replay: replay() }, score(150), 'Fixture A');
     expect(outcome).toMatchObject({ saved: true, evicted: [] });
     expect(store.exists(CHART)).toEqual([false, true, false, false]);
     expect(store.slots(CHART)[1]).toMatchObject({
@@ -211,39 +205,86 @@ describe('ReplaySlotStore', () => {
   test('keeps a course run in a slot of its course', async () => {
     const store = new ReplaySlotStore({ backend: createMemoryReplaySlotBackend() });
     const course: ReplaySlotTarget = { kind: 'course', id: 'bmcourse0:cc' };
-    await store.save(course, 3, { kind: 'course', replay: courseLog() }, score(10), 'FIX GRADE');
+    await store.save(course, [3], { kind: 'course', replay: courseLog() }, score(10), 'FIX GRADE');
     expect(store.exists(course)).toEqual([false, false, false, true]);
     expect(await store.read(course, 3)).toEqual({ kind: 'course', replay: courseLog() });
   });
 
-  test('makes room by removing the worst-scoring replays, and refuses one that would be the worst', async () => {
+  test('retains replaced replays until the history budget needs room and keeps selected entries', async () => {
     const backend = createMemoryReplaySlotBackend();
-    const probe = (await compressReplayText(JSON.stringify(replay()))).size;
-    const store = new ReplaySlotStore({ backend, budgetBytes: probe * 2 });
-    await store.save(CHART, 0, { kind: 'chart', replay: replay() }, score(100), 'A');
-    await store.save(CHART, 1, { kind: 'chart', replay: replay() }, score(50), 'A');
-    const changes: number[] = [];
-    store.subscribe(() => changes.push(store.totalBytes));
-    const kept = await store.save(OTHER, 0, { kind: 'chart', replay: replay() }, score(180), 'B');
-    expect(kept.saved && kept.evicted.map((entry) => entry.key)).toEqual([replaySlotKey(CHART, 1)]);
-    expect(store.exists(CHART)).toEqual([true, false, false, false]);
-    expect(backend.data.has(replaySlotKey(CHART, 1))).toBe(false);
-    expect(changes).toHaveLength(1);
-    expect(await store.save(OTHER, 1, { kind: 'chart', replay: replay() }, score(10), 'B')).toEqual({
-      saved: false,
-      reason: 'budget',
-    });
-    expect(store.exists(OTHER)).toEqual([true, false, false, false]);
+    const payload = { kind: 'chart' as const, replay: replay() };
+    const probe = new ReplaySlotStore({ backend });
+    await probe.save(CHART, [0], payload, score(100), 'First');
+    const store = new ReplaySlotStore({ backend, budgetBytes: probe.totalBytes * 2 });
+    const first = probe.history()[0]!;
+    await store.save(CHART, [0, 1], payload, score(50), 'Second');
+    expect(
+      store
+        .history(CHART)
+        .map((entry) => entry.title)
+        .sort(),
+    ).toEqual(['First', 'Second']);
+    expect(await store.readHistoryText(first.key)).toBeDefined();
+    expect(store.slots(CHART)[0]?.key).toBe(store.slots(CHART)[1]?.key);
+    expect(backend.data.size).toBe(2);
+    const kept = await store.save(OTHER, [], payload, score(10), 'Third');
+    expect(kept.saved && kept.evicted.map((entry) => entry.key)).toEqual([first.key]);
+    expect(store.exists(CHART)).toEqual([true, true, false, false]);
+    expect(store.exists(OTHER)).toEqual([false, false, false, false]);
+    expect(backend.data.has(first.key)).toBe(false);
+  });
+
+  test('reads legacy slot metadata using its original data key', async () => {
+    const backend = createMemoryReplaySlotBackend();
+    const stored = record(replaySlotKey(CHART, 0), 10, 0.5);
+    const parsed = parseReplayHistoryRecord(stored);
+    expect(parsed).toMatchObject({ key: stored.key, slots: [0] });
+    expect(parseReplayHistoryRecord({ ...parsed, slots: [4] })).toBeUndefined();
+    const store = new ReplaySlotStore({ backend: { ...backend, listRecords: async () => [stored] } });
+    backend.data.set(stored.key, await compressReplayText(JSON.stringify(replay())));
+    await store.load();
+    expect(store.history(CHART)).toEqual([parsed]);
+    expect(await store.read(CHART, 0)).toEqual({ kind: 'chart', replay: replay() });
+  });
+
+  test('refreshes selections before writing when two open stores share the backend', async () => {
+    const memory = createMemoryReplaySlotBackend();
+    let queue: Promise<unknown> = Promise.resolve();
+    const backend: ReplaySlotBackend = {
+      ...memory,
+      exclusive: (action) => {
+        const pending = queue.then(action);
+        queue = pending.catch(() => undefined);
+        return pending;
+      },
+    };
+    const first = new ReplaySlotStore({ backend });
+    const second = new ReplaySlotStore({ backend });
+    await Promise.all([first.load(), second.load()]);
+    const payload = { kind: 'chart' as const, replay: replay() };
+    await Promise.all([
+      first.save(CHART, [0, 1], payload, score(100), 'First'),
+      second.save(CHART, [0], payload, score(110), 'Second'),
+    ]);
+    const reloaded = new ReplaySlotStore({ backend });
+    await reloaded.load();
+    expect(
+      reloaded
+        .slots(CHART)
+        .slice(0, 2)
+        .map((entry) => entry?.title),
+    ).toEqual(['Second', 'First']);
+    expect(reloaded.history(CHART)).toHaveLength(2);
   });
 
   test('leaves every slot as it was when the browser refuses the write', async () => {
     const backend = createMemoryReplaySlotBackend();
     const store = new ReplaySlotStore({ backend });
-    await store.save(CHART, 0, { kind: 'chart', replay: replay('Old') }, score(10), 'Old');
+    await store.save(CHART, [0], { kind: 'chart', replay: replay('Old') }, score(10), 'Old');
     const quota = new DOMException('full', 'QuotaExceededError');
     const failing: ReplaySlotBackend = { ...backend, write: () => Promise.reject(quota) };
     const refused = new ReplaySlotStore({ backend: failing });
-    const outcome = await refused.save(CHART, 0, { kind: 'chart', replay: replay('New') }, score(90), 'New');
+    const outcome = await refused.save(CHART, [0], { kind: 'chart', replay: replay('New') }, score(90), 'New');
     expect(outcome).toEqual({ saved: false, reason: 'storage', error: quota });
     expect(refused.slots(CHART)[0]?.title).toBe('Old');
   });
@@ -265,11 +306,17 @@ describe('ReplaySlotStore', () => {
     expect(refused.exists(CHART)).toEqual([false, false, false, false]);
   });
 
-  test('empties a slot', async () => {
+  test('empties a slot while retaining history, then deletes the replay and clears its remaining slot', async () => {
     const store = new ReplaySlotStore({ backend: createMemoryReplaySlotBackend() });
-    await store.save(CHART, 2, { kind: 'chart', replay: replay() }, score(10), 'A');
+    await store.save(CHART, [1, 2], { kind: 'chart', replay: replay() }, score(10), 'A');
     await store.remove(CHART, 2);
+    expect(store.exists(CHART)).toEqual([false, true, false, false]);
+    const entry = store.history(CHART)[0]!;
+    expect(entry.slots).toEqual([1]);
+    await store.removeHistory(entry.key);
     expect(store.exists(CHART)).toEqual([false, false, false, false]);
+    expect(store.history(CHART)).toEqual([]);
+    expect(await store.readHistoryText(entry.key)).toBeUndefined();
   });
 
   test('has no slot when the backend cannot list them', async () => {

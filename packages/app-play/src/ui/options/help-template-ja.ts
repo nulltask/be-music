@@ -343,7 +343,8 @@ export const OPTIONS_HELP_JA = html`
         <dd>プレイ中のカバーと LIFT の変更を受け付けません。Enter 2 回でフローティングの緑数字に戻します。</dd>
         <dt>FLOATING HI-SPEED (AC 32 measured)</dt>
         <dd>
-          カバーを動かしても、ハイスピードを合わせて変えて緑数字を保ちます。プレイ中はテンキーの 0 で切り替えます。
+          カバーを動かしても、ハイスピードを合わせて変えて緑数字を保ちます。プレイ中は上段またはテンキーの 0
+          で切り替えます。
         </dd>
         <dt>Floating speed</dt>
         <dd>

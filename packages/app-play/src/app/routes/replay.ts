@@ -9,6 +9,7 @@ import { playerText } from '../../player-copy.ts';
 import type { BrowserDroppedFile } from '@be-music/player-browser/collection';
 import {
   COURSE_REPLAY_FILE_SUFFIX,
+  REPLAY_FILE_SUFFIX,
   parseCourseReplay,
   parseReplay,
   type BeMusicCourseReplay,
@@ -16,6 +17,7 @@ import {
 } from '@be-music/player-engine/replay';
 import type { LibraryChart, LibraryCourse, LibraryEntry } from '@be-music/player-scene-model';
 import { courseFromReplay, describeCourseReplayStage, matchCourseReplayCharts } from '../../course-flow.ts';
+import type { ReplayHistoryRecord } from '../../services/replay-slots.ts';
 import type { ReplaySlotService } from '../../services/replay-slot-service.ts';
 import type { LibraryService } from '../../services/library.ts';
 import type { RecordsService } from '../../services/records.ts';
@@ -85,7 +87,7 @@ export class ReplayRoute {
    * title + artist match. When no match (or the chart's `#RANDOM` roll differs so the resolved notes can't be
    * re-aligned), the failure lands in the status row instead of throwing — a bad drop must never wedge the UI.
    */
-  public async startReplayReplayFromFile(file: BrowserDroppedFile): Promise<void> {
+  public async startReplayReplayFromFile(file: Pick<BrowserDroppedFile, 'name' | 'text'>): Promise<void> {
     if (file.name.toLowerCase().endsWith(COURSE_REPLAY_FILE_SUFFIX)) {
       await this.startCourseReplayFromFile(file);
       return;
@@ -117,6 +119,23 @@ export class ReplayRoute {
       this.setStatus(playerText().replay.failed((error as Error).message));
       await this.showSelect();
     }
+  }
+
+  /** Opens a history entry through the same chart matching and playback as a dropped replay. */
+  public async startReplayFromHistory(record: ReplayHistoryRecord): Promise<void> {
+    let text: string | undefined;
+    try {
+      text = await this.replaySlots.store.readHistoryText(record.key);
+    } catch (error) {
+      gamereplay.warn('replay history read failed', error);
+    }
+    if (text === undefined) {
+      this.setStatus(playerText().replay.historyUnreadable);
+      return;
+    }
+
+    const suffix = record.target.kind === 'course' ? COURSE_REPLAY_FILE_SUFFIX : REPLAY_FILE_SUFFIX;
+    await this.startReplayReplayFromFile({ name: `history${suffix}`, text: async () => text });
   }
 
   /**
@@ -162,7 +181,7 @@ export class ReplayRoute {
    * starts. The log's source does not matter here: a course replay from elsewhere (the Leaderboard) plays the same way
    * through {@link startCourseReplayFromLog}.
    */
-  public async startCourseReplayFromFile(file: BrowserDroppedFile): Promise<void> {
+  public async startCourseReplayFromFile(file: Pick<BrowserDroppedFile, 'text'>): Promise<void> {
     let courseLog: BeMusicCourseReplay;
     try {
       courseLog = parseCourseReplay(await file.text());

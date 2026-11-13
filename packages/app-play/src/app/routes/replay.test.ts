@@ -1,4 +1,4 @@
-import type { ReplaySlotStore } from '../../services/replay-slots.ts';
+import type { ReplayHistoryRecord, ReplaySlotStore } from '../../services/replay-slots.ts';
 import { createEmptyJSON } from '@be-music/chart-source';
 import type { BrowserDroppedFile, BrowserChartCollection } from '@be-music/player-browser/collection';
 import {
@@ -78,6 +78,7 @@ function harness() {
       targetOf: vi.fn((entry: { kind: string }) => ({ kind: entry.kind as 'chart' | 'course', id: 'bmfp0:a' })),
       store: {
         exists: vi.fn(() => [false, true, false, false]),
+        readHistoryText: vi.fn<ReplaySlotStore['readHistoryText']>(async () => '{}'),
         read: vi.fn<ReplaySlotStore['read']>(async () => ({ kind: 'chart', replay: replay({}, 'manual') })),
       } as unknown as ReplaySlotStore,
     },
@@ -88,7 +89,38 @@ function harness() {
   return { route: new ReplayRoute(deps), deps, charts };
 }
 
+const historyEntry: ReplayHistoryRecord = {
+  version: 0,
+  key: 'history:fixture',
+  target: { kind: 'chart', id: 'bmfp0:a' },
+  slots: [],
+  savedAt: '2026-10-26T00:00:00.000Z',
+  size: 100,
+  title: 'a',
+  exScore: 0,
+  exRate: 0,
+  lamp: 'FAILED',
+};
+
 describe('ReplayRoute', () => {
+  test('plays an unselected history entry on its recorded chart', async () => {
+    const h = harness();
+    const log = replay({ sha256: 'sha-b' }, 'manual');
+    vi.mocked(parseReplay).mockReturnValueOnce(log);
+    await h.route.startReplayFromHistory(historyEntry);
+    expect(h.deps.replaySlots.store.readHistoryText).toHaveBeenCalledWith(historyEntry.key);
+    expect(h.deps.replaySlots.store.read).not.toHaveBeenCalled();
+    expect(h.deps.playChart).toHaveBeenCalledWith(h.charts[1], { autoPlay: false, replay: log });
+  });
+
+  test('reports when a history entry cannot be read', async () => {
+    const h = harness();
+    vi.mocked(h.deps.replaySlots.store.readHistoryText).mockResolvedValueOnce(undefined);
+    await h.route.startReplayFromHistory(historyEntry);
+    expect(h.deps.setStatus).toHaveBeenCalledWith('Could not read this replay.');
+    expect(h.deps.playChart).not.toHaveBeenCalled();
+  });
+
   test('a replay plays back on its chart, with the mode it was recorded in', async () => {
     const h = harness();
     const log = replay({ sha256: 'SHA-B' });

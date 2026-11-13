@@ -63,10 +63,29 @@ describe('ResultReplaySlots', () => {
   });
 
   test('auto-saves into the slots whose rule the play meets against the record before it', async () => {
-    const { slots: result, report } = slots();
+    const { slots: result, store, report } = slots();
     await result.autoSave(['clear-update', 'never', 'miss-count-update-or-equal', 'max-combo-update']);
     expect(result.states()).toEqual(['saved', 'none', 'saved', 'none']);
+    expect(store.history(CHART)).toHaveLength(1);
     expect(report).toHaveBeenCalledWith('Auto-saved the replay to replay slot 1');
+  });
+
+  test('keeps one history replay when all rules are disabled and lets multiple slots select it', async () => {
+    const { slots: result, store } = slots();
+    await result.autoSave(['never', 'never', 'never', 'never']);
+    expect(result.states()).toEqual(['none', 'none', 'none', 'none']);
+    expect(store.history(CHART)).toHaveLength(1);
+    await Promise.all([result.save(0), result.save(1)]);
+    expect(store.history(CHART)).toHaveLength(1);
+    expect(store.slots(CHART)[0]?.key).toBe(store.slots(CHART)[1]?.key);
+  });
+
+  test('keeps a history-only run without applying slot rules', async () => {
+    const { slots: result, store } = slots({ ...SAVE, historyOnly: true });
+    await result.autoSave(['always', 'always', 'always', 'always']);
+    expect(store.history(CHART)).toHaveLength(1);
+    expect(result.states()).toEqual(['none', 'none', 'none', 'none']);
+    expect(await result.save(0)).toBeUndefined();
   });
 
   test('saves nothing from a result that cannot be saved, and says so when asked by hand', async () => {
@@ -84,7 +103,7 @@ describe('describeReplaySlotSave', () => {
   test('names the slot, the replays removed for room and why a save failed', () => {
     const record = { key: 'k', slot: 0 } as never;
     expect(describeReplaySlotSave(0, { saved: true, record, evicted: [record, record] }, false)).toBe(
-      'Saved the replay to replay slot 1 (removed 2 lower-scoring replays to make room)',
+      'Saved the replay to replay slot 1 (removed 2 older replays to make room)',
     );
     expect(describeReplaySlotSave(1, { saved: false, reason: 'budget' }, false)).toContain('size limit');
     expect(describeReplaySlotSave(1, { saved: false, reason: 'storage' }, true)).toContain('storage is full');

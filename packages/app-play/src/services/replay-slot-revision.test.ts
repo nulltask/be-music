@@ -23,8 +23,16 @@ const good = record(0);
 const other = record(1);
 
 describe('replay slot storage revision', () => {
-  test('starts at revision 0', () => {
-    expect(REPLAY_SLOT_STORAGE_REVISION).toBe(0);
+  test('migrates legacy slots to history without moving their data keys', () => {
+    expect(REPLAY_SLOT_STORAGE_REVISION).toBe(1);
+    const { slot, ...metadata } = good;
+    expect(
+      planReplaySlotRevision({
+        storedRevision: 0,
+        records: [{ key: good.key, value: good }],
+        dataKeys: [good.key],
+      }),
+    ).toEqual({ revision: 1, remove: [], put: [{ ...metadata, slots: [slot] }] });
   });
 
   test('at revision 0, clears what no longer reads as a slot record, with its replay, and stores the revision', () => {
@@ -58,7 +66,8 @@ describe('replay slot storage revision', () => {
       1: (value: unknown) => ({ ...(value as object), version: 0 }),
       2: (value: unknown) => ({ ...(value as object), title: `${(value as { title: string }).title} (2)` }),
     };
-    const old = { ...good, version: 0 };
+    const { slot, ...metadata } = good;
+    const old = { ...metadata, slots: [slot] };
     expect(
       planReplaySlotRevision({
         storedRevision: 0,
@@ -67,7 +76,7 @@ describe('replay slot storage revision', () => {
         dataKeys: [good.key],
         migrations,
       }),
-    ).toEqual({ remove: [], put: [{ ...good, title: 'Chart (2)' }], revision: 2 });
+    ).toEqual({ remove: [], put: [{ ...old, title: 'Chart (2)' }], revision: 2 });
     // From revision 1, only the step to 2 runs.
     expect(
       planReplaySlotRevision({
@@ -77,7 +86,7 @@ describe('replay slot storage revision', () => {
         dataKeys: [good.key],
         migrations,
       }).put,
-    ).toEqual([{ ...good, title: 'Chart (2)' }]);
+    ).toEqual([{ ...old, title: 'Chart (2)' }]);
   });
 
   test('a migration that drops a record removes it with its replay', () => {

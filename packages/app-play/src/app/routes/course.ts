@@ -523,10 +523,11 @@ export class CourseRoute {
     let replaySlots: ResultReplaySlots | undefined;
     if (courseLog !== undefined && replay) {
       // A course replay shows its course's replay slots and saves into none, as a single replay does.
-      replaySlots = this.courseReplaySlots(courseLog, result, undefined);
+      replaySlots = this.courseReplaySlots(courseLog, result, undefined, true);
     }
     if (courseLog !== undefined && !replay && active.unkept === true) {
-      // A RANDOM MIX run no bar lists keeps no course record and no replay slot; it is saved and ranked as any run.
+      // A RANDOM MIX run keeps history even though it has no persistent select bar.
+      replaySlots = this.courseReplaySlots(courseLog, result, undefined);
       this.replayAutoSave.saveCourse(courseLog);
       this.leaderboard.maybeSubmitCourse(courseLog, run.stages);
     } else if (courseLog !== undefined && !replay) {
