@@ -58,9 +58,9 @@ function lampLight(lamp: BeMusicClearLamp, nowMs: number, phase: number, still: 
 
 /** The halo around a lamp's bar, widest and faintest first: [width, alpha], centred on the bar. */
 const LAMP_HALO: ReadonlyArray<readonly [width: number, alpha: number]> = [
-  [19, 0.06],
-  [13, 0.1],
-  [8, 0.2],
+  [15, 0.07],
+  [11, 0.11],
+  [7, 0.2],
 ];
 /** The light the lamp spills into its bar, nearest first: [width, alpha] steps running right from the lamp. */
 const LAMP_SPILL: ReadonlyArray<readonly [width: number, alpha: number]> = [
