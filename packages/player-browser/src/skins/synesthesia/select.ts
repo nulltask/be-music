@@ -51,6 +51,7 @@ import {
   type BeMusicSelectLayout,
   type LibraryEntry,
   type LibraryChart,
+  describeBestRecord,
   describeCourseCard,
   formatPlayVariantLabel,
   resolveChartStats,
@@ -62,6 +63,8 @@ import {
   browseEntryBadge,
   browseEntryCount,
   browseEntryTitle,
+  type BeMusicChartBestRecord,
+  type BestRecordSummary,
 } from '@be-music/player-skin-sdk';
 import {
   addHitArea,
@@ -72,6 +75,7 @@ import {
   fadeChildrenFrom,
 } from '../pixi-kit/index.ts';
 import { addSynesthesiaText } from './figures.ts';
+import { drawBarLamp, drawBestRecordPanel, LampLights } from './select-record.ts';
 import {
   recordLaunchHandoff,
   resolveDecideLayout,
@@ -94,13 +98,17 @@ const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 92, listBottomInset: 
  * The portrait list: full width under the focused-song card and the search bar, with taller rows (two lines each, and
  * a thumb's height to tap).
  */
-const PORTRAIT_LAYOUT: BeMusicSelectLayout = { listX: 16, listTop: 422, listBottomInset: 34, rowHeight: 36 };
+const PORTRAIT_LAYOUT: BeMusicSelectLayout = { listX: 16, listTop: 456, listBottomInset: 34, rowHeight: 36 };
 /** The focused-song card on the portrait stage. */
-const PORTRAIT_CARD = { x: 12, y: 52, w: 456, h: 314 } as const;
+const PORTRAIT_CARD = { x: 12, y: 52, w: 456, h: 348 } as const;
+/** The tallest a banner is drawn on the landscape card, which holds the best record above it. */
+const BANNER_MAX_H = 64;
 /** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
 const ROW_BPM_W = 76;
 const ROW_LENGTH_W = 30;
 const ROW_NOTES_W = 84;
+/** The DJ Rank column of a song row, left of the note count. */
+const ROW_RANK_W = 24;
 /**
  * The widest a folder or course row's count may run (`12 charts`, `4 stages · 1 missing`): such a row has no fact
  * columns, so its count takes what it needs up to this and the title gets the rest.
@@ -311,6 +319,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   private lastTickMs: number | undefined;
   private effects: PixiSelectFrame['effects'] = 'full';
   private activeCard: { x: number; y: number; w: number; h: number } | undefined;
+  /** This rebuild's clear lamps, blinking and cycling in `tick`. */
+  private readonly lampLights = new LampLights();
 
   public constructor() {
     this.backLayer.label = 'synesthesia-select/space';
@@ -326,6 +336,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         : input;
     this.ensureBuilt(frame.designWidth, frame.designHeight);
     this.activeCard = undefined;
+    this.lampLights.reset();
     this.glass.clear();
     const portrait = frame.designHeight > frame.designWidth;
     let needsFrame = portrait ? this.renderPortraitChrome(frame) : this.renderChrome(frame);
@@ -347,8 +358,10 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     this.cursorChangedAt = frame.cursorChangedAt;
     if (frame.launchAt !== undefined) {
       this.renderOutro(frame);
+      this.lampLights.settle();
       return true;
     }
+    this.lampLights.settle();
     return needsFrame;
   }
 
@@ -376,6 +389,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     launchAt?: number,
     audio?: BeMusicAudioFrame,
   ): void {
+    this.lampLights.tick(nowMs, this.effects === 'off');
     // Ambient motion: frozen with effects off, half speed when reduced.
     const rate = this.effects === 'off' ? 0 : this.effects === 'reduced' ? 0.5 : 1;
     // The BGM / chart preview drives the space: dust speeds with loudness, the floor swells on the bass,
@@ -683,9 +697,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
     // Info panel.
     const banner = chartEntry ? frame.chartImage(chartEntry, 'banner') : undefined;
-    const bannerHeight = banner ? Math.min(72, (258 * banner.height) / banner.width) : 0;
+    const bannerHeight = banner ? Math.min(BANNER_MAX_H, (258 * banner.height) / banner.width) : 0;
     // Match the 14 px gap above the banner, including short or unusually tall source images.
-    framePanel(chrome, 14, 56, 290, banner ? 312 + bannerHeight : 306, accent);
+    framePanel(chrome, 14, 56, 290, banner ? 322 + bannerHeight : 316, accent);
     // The genre heads the card, in the accent light, where a fixed caption used to sit.
     const genre = chartEntry?.genre?.trim() || (chartEntry ? '----' : undefined);
     const slide = 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS));
@@ -730,11 +744,11 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       [202, 86, 'LEVEL', playLevel, SYN_AMBER],
     ];
     for (const [x, w, label, value, fill] of stats) {
-      chrome.rect(x, 150, w, 50).fill({ color: SYN_VOID, alpha: 0.5 });
-      chrome.rect(x, 150, w, 50).stroke({ color: accent, width: 1, alpha: 0.25 });
-      drawReticle(chrome, x, 150, w, 50, SYN_MIST, 0.6, { arm: 5, width: 1 });
-      addText(label, x + 10, 158, labelStyle());
-      addText(value, x + 10, 174, {
+      chrome.rect(x, 146, w, 44).fill({ color: SYN_VOID, alpha: 0.5 });
+      chrome.rect(x, 146, w, 44).stroke({ color: accent, width: 1, alpha: 0.25 });
+      drawReticle(chrome, x, 146, w, 44, SYN_MIST, 0.6, { arm: 5, width: 1 });
+      addText(label, x + 10, 154, labelStyle());
+      addText(value, x + 10, 168, {
         size: 14,
         fill,
         fontFamily: SYN_DISPLAY_FONT,
@@ -744,12 +758,12 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     }
 
     // The judge rank (#RANK / #DEFEXRANK) under the stat chips.
-    drawDifficulty(chrome, addText, chartEntry, 30, 224);
-    drawJudgeRank(addText, chartEntry, 30, 250);
+    drawDifficulty(chrome, addText, chartEntry, 30, 206);
+    drawJudgeRank(addText, chartEntry, 30, 226);
 
     // The file name and the list position share the row under the judge rank.
     if (chartEntry?.fileLabel) {
-      addText(chartEntry.fileLabel, 30, 276, {
+      addText(chartEntry.fileLabel, 30, 246, {
         size: 9,
         weight: '300',
         fill: SYN_DIM,
@@ -759,13 +773,25 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         maxWidth: 200,
       });
     }
-    addText(position, 288, 276, { size: 9, fill: SYN_MIST, fontFamily: SYN_DISPLAY_FONT, anchorX: 1, anchorY: 0.5 });
+    addText(position, 288, 246, { size: 9, fill: SYN_MIST, fontFamily: SYN_DISPLAY_FONT, anchorX: 1, anchorY: 0.5 });
+
+    // The player's best on the focused chart or course: lamp, score, DJ Rank. Nothing on a folder.
+    if (chartEntry !== undefined || frame.focusedCourse !== undefined) {
+      drawBestRecordPanel(chrome, layer, addText, this.lampLights, focusedBestRecord(frame), {
+        x: 30,
+        y: 258,
+        w: 258,
+        accent,
+        nowMs: frame.nowMs,
+        still: frame.effects === 'off',
+      });
+    }
 
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline).
-    chrome.rect(26, 300, 170, 40).fill({ color: accent, alpha: 0.16 });
-    chrome.rect(30, 304, 162, 32).fill({ color: accent, alpha: 0.88 });
-    drawReticle(chrome, 26, 300, 170, 40, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
-    addText('PLAY', 111, 320, {
+    chrome.rect(26, 310, 170, 40).fill({ color: accent, alpha: 0.16 });
+    chrome.rect(30, 314, 162, 32).fill({ color: accent, alpha: 0.88 });
+    drawReticle(chrome, 26, 310, 170, 40, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
+    addText('PLAY', 111, 330, {
       size: 14,
       fill: SYN_VOID,
       fontFamily: SYN_DISPLAY_FONT,
@@ -774,10 +800,10 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorY: 0.5,
     });
     // AUTO's right edge sits on the content column's (288), like the LEVEL chip above it.
-    drawSecondaryButton(chrome, addText, 'AUTO', 202, 307, 86, 26, 9, true);
-    addHitArea(26, 300, 172, 40, 'pointer', frame.actions.play);
-    addHitArea(200, 304, 90, 32, 'pointer', frame.actions.autoPlay);
-    this.drawBanner(frame, 30, 354, 258, 72);
+    drawSecondaryButton(chrome, addText, 'AUTO', 202, 317, 86, 26, 9, true);
+    addHitArea(26, 310, 172, 40, 'pointer', frame.actions.play);
+    addHitArea(200, 314, 90, 32, 'pointer', frame.actions.autoPlay);
+    this.drawBanner(frame, 30, 364, 258, BANNER_MAX_H);
 
     // Search and library.
     framePanel(chrome, 322, 54, designWidth - 336, 30, accent);
@@ -953,8 +979,21 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       });
     }
 
+    // The player's best on the focused chart or course: lamp, score, DJ Rank. Nothing on a folder.
+    if (chartEntry !== undefined || frame.focusedCourse !== undefined) {
+      drawBestRecordPanel(chrome, frame.layer, addText, this.lampLights, focusedBestRecord(frame), {
+        x: left,
+        y: card.y + 194,
+        w: innerW,
+        accent,
+        nowMs: frame.nowMs,
+        still: frame.effects === 'off',
+        size: 10,
+      });
+    }
+
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline), thumb-sized.
-    const buttonY = card.y + 212;
+    const buttonY = card.y + 246;
     const playW = Math.round(innerW * 0.62);
     chrome.rect(left - 4, buttonY - 4, playW + 8, 44).fill({ color: accent, alpha: 0.16 });
     chrome.rect(left, buttonY, playW, 36).fill({ color: accent, alpha: 0.88 });
@@ -975,7 +1014,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
     const banner = chartEntry ? frame.chartImage(chartEntry, 'banner') : undefined;
     const bannerHeight = banner ? Math.min(48, (innerW * banner.height) / banner.width) : 0;
-    this.drawBanner(frame, left, card.y + 252 + (card.h - 252 - bannerHeight) / 2, innerW, 48);
+    this.drawBanner(frame, left, card.y + 286 + (card.h - 286 - bannerHeight) / 2, innerW, 48);
 
     // Search.
     const searchY = card.y + card.h + 10;
@@ -1062,6 +1101,18 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const orbColor = chartEntry ? levelColor(Math.min(1, Number.parseFloat(level) / 12 || 0)) : SYN_MIST;
     row.circle(rowX + 18, midY, 12).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
     frame.layer.addChild(row);
+    // The best clear lamp lights the bar's leading edge, rippling down the list.
+    drawBarLamp(
+      frame.layer,
+      this.lampLights,
+      entryBestRecord(frame, entry)?.lamp,
+      rowX + 1,
+      y + 2,
+      rowH - 4,
+      entryIndex * 0.07,
+      frame.nowMs,
+      frame.effects === 'off',
+    );
     addSynesthesiaText(frame.layer, level, rowX + 18, midY, {
       size: 10,
       fill: SYN_WHITE,
@@ -1164,11 +1215,24 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     } else {
       row.rect(rowX, y, rowW, rowHeight - 4).stroke({ color: accent, width: 1, alpha: 0.16 });
     }
+    const record = entryBestRecord(frame, entry);
     // Level as a glowing orb on the leading edge.
     const level = browseEntryBadge(entry);
     const orbColor = chartEntry ? levelColor(Math.min(1, Number.parseFloat(level) / 12 || 0)) : SYN_MIST;
     row.circle(rowX + 16, y + (rowHeight - 4) / 2, 9).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
     frame.layer.addChild(row);
+    // The best clear lamp lights the bar's leading edge, rippling down the list.
+    drawBarLamp(
+      frame.layer,
+      this.lampLights,
+      record?.lamp,
+      rowX + 1,
+      y + 2,
+      rowHeight - 8,
+      entryIndex * 0.07,
+      frame.nowMs,
+      frame.effects === 'off',
+    );
     const midY = y + (rowHeight - 4) / 2;
     addSynesthesiaText(frame.layer, level, rowX + 16, midY, {
       size: level.length > 2 ? 7 : 9,
@@ -1215,6 +1279,15 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         maxWidth: ROW_NOTES_W - 48,
       });
       factsLeft -= ROW_NOTES_W + 8;
+      // The DJ Rank of the best EX score, in its own column so the ranks line up down the list.
+      const rank = chartEntry ? describeBestRecord(record, chartEntry.totalNotes)?.rank : undefined;
+      if (rank !== undefined) {
+        addSynesthesiaText(frame.layer, rank, factsLeft, midY, {
+          ...factStyle(rank === 'AAA' ? SYN_AMBER : ink),
+          maxWidth: ROW_RANK_W,
+        });
+      }
+      factsLeft -= ROW_RANK_W + 8;
       // Gimmick tags glow as small outlined capsules in the accent light.
       for (let index = facts.tags.length - 1; index >= 0; index -= 1) {
         const tag = facts.tags[index]!;
@@ -1267,6 +1340,23 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     }
     return slide > 0 || intro > 0;
   }
+}
+
+/** The player's best record on a bar's chart or course, when the host keeps one. */
+function entryBestRecord(frame: PixiSelectFrame, entry: LibraryEntry): BeMusicChartBestRecord | undefined {
+  if (entry.kind === 'chart') return frame.chartBestRecord(entry.chart);
+  if (entry.kind === 'course') return frame.courseBestRecord?.(entry.course);
+  return undefined;
+}
+
+/** The best record on the focused chart (with its rate and DJ Rank) or course, as the info card shows it. */
+function focusedBestRecord(frame: PixiSelectFrame): BestRecordSummary | undefined {
+  if (frame.focusedChart !== undefined) {
+    return describeBestRecord(frame.chartBestRecord(frame.focusedChart), frame.focusedChart.totalNotes);
+  }
+  return frame.focusedCourse !== undefined
+    ? describeBestRecord(frame.courseBestRecord?.(frame.focusedCourse))
+    : undefined;
 }
 
 /** Level light for `ratio` (0..1): electric blue for easy charts through magenta to ember for the hardest. */

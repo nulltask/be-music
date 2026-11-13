@@ -1,11 +1,15 @@
 import {
+  CLEAR_LAMP_SHORT_LABELS,
+  describeBestRecord,
   describeCourseCard,
   describeDanRanks,
   formatPlayVariantLabel,
   resolveStageOrientation,
   resolveChartRowFacts,
   resolveChartStats,
+  resolveClearLampLight,
   type BeMusicSelectLayout,
+  type BestRecordSummary,
   type LibraryEntry,
   type LibraryCourse,
   type LibraryFolder,
@@ -14,7 +18,7 @@ import {
   selectListRows,
 } from '@be-music/player-skin-sdk';
 import { PORTRAIT_SELECT_LAYOUT, README_CHIP, resolvePortraitSelectCard } from './layout.ts';
-import { ACCENT, INK, LINE, MUTED, PANEL, TEXT, stat, text } from './theme.ts';
+import { ACCENT, INK, LINE, MUTED, PANEL, TEXT, css, stat, text } from './theme.ts';
 
 /** Where the song list sits; the player uses the same numbers to tell which row was clicked. */
 export const SELECT_LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 92, listBottomInset: 28, rowHeight: 28 };
@@ -24,6 +28,8 @@ export const SELECT_OUTRO_MS = 300;
 
 const MARGIN = 16;
 const PANEL_W = 290;
+/** The landscape card's height: the chart's facts, the player's best on it, then PLAY and AUTO. */
+const PANEL_H = 348;
 
 /**
  * The select screen. Landscape: the focused chart's card and buttons on the left, the song list on the right. Portrait
@@ -92,7 +98,7 @@ function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFram
   const x = MARGIN;
   const y = 56;
   ctx.fillStyle = PANEL;
-  ctx.fillRect(x, y, PANEL_W, 300);
+  ctx.fillRect(x, y, PANEL_W, PANEL_H);
   if (!chartEntry) {
     if (frame.focusedCourse !== undefined) {
       drawCourse(ctx, frame, frame.focusedCourse, x + 16, y, PANEL_W - 32);
@@ -125,16 +131,59 @@ function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFram
   stat(ctx, 'NOTES', facts.notes, x + 16, y + 140, narrow);
   stat(ctx, 'LENGTH', facts.length, x + 110, y + 140, { maxWidth: 72, nowMs });
   stat(ctx, 'GIMMICKS', facts.tags.join(' ') || '-', x + 190, y + 140, wide);
-  // The judge rank (#RANK / #DEFEXRANK) on a third row.
+  // The judge rank (#RANK / #DEFEXRANK) on a third row, beside the player's best DJ Rank and lamp; their EX score and
+  // rate, BP and play count on a fourth.
   stat(ctx, 'JUDGE', resolveChartStats(chartEntry).judgeRank, x + 16, y + 188, narrow);
+  const record = describeBestRecord(frame.chartBestRecord(chartEntry), chartEntry.totalNotes);
+  stat(ctx, 'RANK', record?.rank ?? '-', x + 110, y + 188, { maxWidth: 72, nowMs });
+  // A touch wider than the column, so FULL COMBO fits squeezed instead of scrolling.
+  lampStat(ctx, frame, record, x + 190, y + 188, { maxWidth: 88, nowMs });
+  stat(ctx, 'EX SCORE', describeExScore(record), x + 16, y + 236, narrow);
+  stat(ctx, 'BP', record?.missCount !== undefined ? String(record.missCount) : '-', x + 110, y + 236, {
+    maxWidth: 72,
+    nowMs,
+  });
+  stat(ctx, 'PLAYS', String(record?.playCount ?? 0), x + 190, y + 236, wide);
 
   drawCardButtons(ctx, frame, x, y);
 }
 
 /** PLAY and AUTO along the foot of the landscape card at (`x`, `y`). */
 function drawCardButtons(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFrame, x: number, y: number): void {
-  button(ctx, frame, 'PLAY', x + 16, y + 236, 160, frame.actions.play, true);
-  button(ctx, frame, 'AUTO', x + 186, y + 236, 88, frame.actions.autoPlay, false);
+  button(ctx, frame, 'PLAY', x + 16, y + PANEL_H - 64, 160, frame.actions.play, true);
+  button(ctx, frame, 'AUTO', x + 186, y + PANEL_H - 64, 88, frame.actions.autoPlay, false);
+}
+
+/**
+ * The player's best lamp as a fact (`CLEAR` over `HARD`), in its lamp's colour: FAILED blinks and a full combo
+ * cycles its hues (`resolveClearLampLight`). `NO PLAY` in grey without a record.
+ */
+function lampStat(
+  ctx: CanvasRenderingContext2D,
+  frame: BeMusicSelectFrame,
+  record: BestRecordSummary | undefined,
+  x: number,
+  y: number,
+  options: { maxWidth: number; nowMs: number; labelSize?: number },
+): void {
+  text(ctx, 'CLEAR', x, y, { size: options.labelSize ?? 9, color: MUTED, weight: 700 });
+  const lamp = record?.lamp ?? 'NO_PLAY';
+  if (lamp === 'NO_PLAY') {
+    text(ctx, 'NO PLAY', x, y + 16, { size: 16, color: MUTED, maxWidth: options.maxWidth });
+    return;
+  }
+  const light = resolveClearLampLight(lamp, frame.nowMs);
+  // The alpha goes on `globalAlpha` and back, not through `save` / `restore`, which would undo the font `text` keeps.
+  const base = ctx.globalAlpha;
+  ctx.globalAlpha = base * light.alpha;
+  text(ctx, CLEAR_LAMP_SHORT_LABELS[lamp], x, y + 16, { size: 16, color: css(light.color), ...options });
+  ctx.globalAlpha = base;
+}
+
+/** The best EX score and its rate (`1708 85.40%`), `-` without one. */
+function describeExScore(record: BestRecordSummary | undefined): string {
+  if (record?.exScore === undefined) return '-';
+  return record.rateLabel !== undefined ? `${record.exScore} ${record.rateLabel}` : String(record.exScore);
 }
 
 /** README: a small button that opens the chart's README, muted and without a hit area on a chart that has none. */
@@ -166,7 +215,7 @@ function drawPortraitCard(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFra
     card,
     factColumns: [c0, c1, c2],
     factWidth,
-    factRows: [r0, r1],
+    factRows: [r0, r1, r2],
     play,
     auto,
     readme,
@@ -218,6 +267,11 @@ function drawPortraitCard(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFra
   stat(ctx, 'NOTES', facts.notes, c0, r1, fit);
   stat(ctx, 'LENGTH', facts.length, c1, r1, fit);
   stat(ctx, 'GIMMICKS', facts.tags.join(' ') || '-', c2, r1, fit);
+  // The player's best on the chart: lamp, DJ Rank, and the best EX score and its rate.
+  const record = describeBestRecord(frame.chartBestRecord(chartEntry), chartEntry.totalNotes);
+  lampStat(ctx, frame, record, c0, r2, fit);
+  stat(ctx, 'RANK', record?.rank ?? '-', c1, r2, fit);
+  stat(ctx, 'EX SCORE', describeExScore(record), c2, r2, fit);
 
   button(ctx, frame, 'PLAY', play.x, play.y, play.w, frame.actions.play, true, play.h);
   button(ctx, frame, 'AUTO', auto.x, auto.y, auto.w, frame.actions.autoPlay, false, auto.h);
@@ -292,6 +346,15 @@ function drawList(
     ctx.globalAlpha *= alpha;
     ctx.fillStyle = selected ? ACCENT : index % 2 === 0 ? PANEL : INK;
     ctx.fillRect(listX, y, rowW, rowHeight - 2);
+    // The best clear lamp as a bar of colour along the row's leading edge, rippling down the list.
+    const lamp = entryLamp(frame, entry);
+    if (lamp !== undefined && lamp !== 'NO_PLAY') {
+      const light = resolveClearLampLight(lamp, frame.nowMs, index * 0.07);
+      ctx.globalAlpha *= light.alpha;
+      ctx.fillStyle = css(light.color);
+      ctx.fillRect(listX, y, 4, rowHeight - 2);
+      ctx.globalAlpha /= light.alpha || 1;
+    }
     drawEntry(ctx, entry, listX, y + (rowHeight - 2) / 2, rowW, selected ? frame.nowMs : undefined);
     ctx.restore();
   }
@@ -364,6 +427,13 @@ function drawPortraitRow(
     maxWidth: textW,
     nowMs,
   });
+}
+
+/** The player's best lamp on a bar's chart or course, when the host keeps one. */
+function entryLamp(frame: BeMusicSelectFrame, entry: LibraryEntry): BestRecordSummary['lamp'] | undefined {
+  if (entry.kind === 'chart') return frame.chartBestRecord(entry.chart)?.lamp;
+  if (entry.kind === 'course') return frame.courseBestRecord?.(entry.course)?.lamp;
+  return undefined;
 }
 
 /** A folder bar's size: its charts, or its courses for a course folder. */
