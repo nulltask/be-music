@@ -264,51 +264,24 @@ A [PRACTICE](./play-options.md#practice) play records no replay either: the engi
 
 ## Replay slots
 
-The browser player keeps up to four replays per chart and four per course in the browser, as beatoraja keeps four
-replay files per chart and per course (`PlayDataAccessor`). A result screen saves its play into a slot; the select
-screen replays one. A replay played from a slot plays as a dropped one does: no record is kept and nothing is ranked.
+Be-Music saves completed manual plays and course runs in local replay history. A chart or course has four slots that can each select one replay from that history. Several slots can select the same replay.
 
 ```mermaid
 flowchart LR
-  result[Result screen] -->|"keys 1-4 · replay buttons · card · auto-save rules"| store[(IndexedDB)]
-  store -->|"slot states"| select[Select screen]
-  select -->|"V · replay buttons · card"| replay[Replay]
+  result[Result screen] --> history[(Replay history)]
+  result -->|"Rules or keys 1–4"| slots[Slot selections]
+  history --> slots
+  history --> select[Select screen]
+  slots --> select
+  select --> replay[Replay or download]
 ```
 
-- **What a slot holds.** A chart's slots are keyed by its chart fingerprint (`chart.chartFingerprint`; `sha256:<file
-  hash>` for a chart that cannot be fingerprinted), a course's by its course fingerprint
-  (`computeCourseReplayFingerprint`; a NONSTOP course's includes its connections and placement). A slot holds the
-  replay as its `.bmplay.json` / `.bmcourse.json` text, gzip-compressed, in the `replaySlotData` store of the
-  `be-music-replays` IndexedDB database (apart from the player's `be-music` one), next to a small record in `replaySlots` (the title, the EX score and rate, the lamp, the size and
-  when it was saved), so the screens list the slots without reading a replay. Saving into a slot replaces what it held.
-- **Storage revision.** What `be-music-replays` holds is versioned by a storage revision, kept in its `meta` store and
-  separate from the IndexedDB version. The first use on a page brings the stored slots to the build's revision. It is
-  0 for now: revision 0 may change its shape without a migration, and a stored slot that no longer reads as a slot
-  record is cleared with its replay. From revision 1 on, each bump comes with a migration step from the revision before
-  it, and stored slots are migrated step by step; a slot a step drops, or one from a newer revision that does not read,
-  is cleared. A replay without its record is cleared either way.
-- **What can be saved.** As beatoraja's `MusicResult` / `CourseResult` save only a PLAY whose score may be kept: a live
-  play (not AUTO, not a replay, not practice) whose best record counts, or a course run (EXPERT, GRADE or NONSTOP) that
-  keeps a course record. A course stage's own result saves nothing: the course is saved as one run. A result that
-  cannot be saved still shows which slots hold a replay.
-- **Saving by hand.** Keys 1-4 on the result screen (beatoraja's `ControlKeys.NUM1`-`NUM4`), a beatoraja result skin's
-  replay buttons (19, 316-318) or the replay-slot card save into slot 1-4, once input is open and before the screen
-  starts to leave. Each slot takes one save per result (beatoraja's `ReplayStatus.SAVED`).
-- **Auto-save rules.** Options → Library & records → **Replay slots** gives each slot a rule, applied as the result
-  opens against the best record as it was before the play (beatoraja's `ReplayAutoSaveConstraint`): never, a better (or
-  equal) EX score, fewer (or as few) BP, a better (or equal) max combo, a better (or equal) clear lamp, any of these
-  better, or always. A first play counts as an update of each kind, as beatoraja reads an empty score. beatoraja ships
-  every slot as never; Be-Music saves by default so every slot keeps something by itself: slot 1 on a better EX score,
-  slot 2 on a better clear lamp, slot 3 on fewer BP and slot 4 always (the latest play). The "Auto-save play history"
-  download is separate and unchanged.
-- **Size limit.** Every slot shares a budget of 500 MB of compressed replays. A save past it removes the replays with
-  the lowest EX rate (EX score over its maximum) first, the older save first on a tie; a replay that would itself be the
-  lowest left over the budget is not saved, and the status line says so. A write the browser refuses (its quota,
-  blocked storage) leaves every slot as it was and says so too.
-- **Replaying.** On a beatoraja select skin the cursor picks the first slot holding a replay of the bar (beatoraja's
-  `RESET_REPLAY`); 4 or the 6th lane key (F) step to the next one (`NEXT_REPLAY`), the 7th lane key (V) replays it
-  (`REPLAY`, which plays the bar normally when no slot holds a replay), and the skin's replay buttons replay their own
-  slot. On the other families the replay-slot card lists the bar's replays with Replay, Download and Delete.
+- **Browsing history.** Open Replay history on the select screen to scroll through the selected chart's or course's replays, newest first. Enable **Show all charts and courses** to browse the entire history. Each entry can be replayed, downloaded as `.bmplay.json` or `.bmcourse.json`, or deleted. Playback needs the original chart or all the course's stage charts loaded and leaves scores and ranking untouched.
+- **What gets saved.** A completed manual play with a recorded replay enters history even if it does not keep a best record. A course enters history as a single run. AUTO, replay playback and practice are excluded. The **Auto-save play history** setting controls automatic file downloads.
+- **Slot rules.** Options → Library & records → **Replay slots** gives each slot a rule. When an eligible result opens, the player compares it with the pre-play best record using beatoraja's `ReplayAutoSaveConstraint` behavior. The defaults select an EX score improvement, a clear lamp improvement, fewer BP and the latest eligible play. The result card, number keys 1–4 and beatoraja's replay buttons can assign the current eligible replay by hand. Clearing a slot keeps the replay in history. Deleting a history entry clears its slot selections.
+- **Storage and migration.** The `be-music-replays` IndexedDB database stores metadata and slot selections in `replaySlots` and gzip-compressed files in `replaySlotData`. Metadata uses the chart or course fingerprint, including connections and placement for NONSTOP. Storage revision 1 converts each existing slot to a history entry with its existing selection and data key.
+- **Size limit.** The history budget is 500 MiB of compressed replay data. The browser player evicts the oldest unselected entries to make room. If there is insufficient room or storage refuses a write, the status line reports the failure.
+- **Skin controls.** Beatoraja select skins pick the first occupied slot when the bar changes. Use 4 or the sixth lane key (F) to switch slots, V to replay the selected slot, or a skin replay button to replay its slot. Other select skins offer slot controls in the replay panel. Every select skin offers the history panel.
 - **Sounds.** Neither LR2 nor beatoraja plays a sound for saving a replay, so a save plays none. A beatoraja theme's
   `resultclose` / `course_close` sound plays as a result starts to fade out ([player-web.md](./player-web.md#the-result-screen)).
 

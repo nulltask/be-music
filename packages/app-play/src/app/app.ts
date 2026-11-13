@@ -276,6 +276,7 @@ export class PlayerWebApp {
   private readonly replaySlotsPanel = new ReplaySlotsPanel({
     service: this.replaySlots,
     replay: (slot) => this.selectView?.replay(slot),
+    replayHistory: (record) => void this.replayRoute.startReplayFromHistory(record),
     setStatus: (text) => this.status.set(text),
   });
   /**
@@ -422,7 +423,8 @@ export class PlayerWebApp {
       playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       showResult: (data, mode) => this.resultRoute.showResult(data, mode),
       showBeatorajaResult: (data, options) => this.resultRoute.showBeatorajaResult(data, options),
-      courseReplaySlots: (courseLog, native, kept) => this.resultRoute.courseReplaySlots(courseLog, native, kept),
+      courseReplaySlots: (courseLog, native, kept, fromReplay) =>
+        this.resultRoute.courseReplaySlots(courseLog, native, kept, fromReplay),
       unlockReplayOptions: () => this.unlockReplayOptions(),
       onRunResult: (course) => this.courseRoute.noteNonstopResult(course),
     });
@@ -445,7 +447,8 @@ export class PlayerWebApp {
       playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       showResult: (data, mode) => this.resultRoute.showResult(data, mode),
       showBeatorajaResult: (data, options) => this.resultRoute.showBeatorajaResult(data, options),
-      courseReplaySlots: (courseLog, native, kept) => this.resultRoute.courseReplaySlots(courseLog, native, kept),
+      courseReplaySlots: (courseLog, native, kept, fromReplay) =>
+        this.resultRoute.courseReplaySlots(courseLog, native, kept, fromReplay),
       unlockReplayOptions: () => this.unlockReplayOptions(),
     });
     this.optionsDialog = new OptionsDialog(this.optionsDialogDeps());

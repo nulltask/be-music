@@ -2800,6 +2800,24 @@ html.touch-first .search-input.search-inline:focus {
   padding: 0;
   list-style: none;
 }
+.replay-history-scope {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-block: 8px;
+}
+.replay-history-list {
+  max-height: min(280px, 35dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-inline-end: 6px;
+}
+.replay-history-list .replay-slots-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.replay-history-list .replay-slots-name {
+  overflow-wrap: anywhere;
+}
 .replay-slots-row {
   display: grid;
   grid-template-columns: auto 1fr auto;

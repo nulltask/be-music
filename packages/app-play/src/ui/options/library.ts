@@ -58,9 +58,7 @@ export function buildLibraryFolder(
     .on('change', ({ value }) => {
       this.guiState.autoSaveReplay = value;
     });
-  // The replay slots' auto-save rules (beatoraja's `autosavereplay`): a result saves into each slot whose rule its play
-  // meets against the best record before it (by default the best EX score, lamp and BP, and the latest play). Saving by
-  // hand (keys 1-4, the replay-slot card) works whatever they say.
+  // Slots select a replay from history when its result meets the rule or the player assigns it by hand.
   const slots = addFolder(library, OPTION_FOLDERS.replaySlots);
   for (const slot of [1, 2, 3, 4] as const) {
     selectBinding(slots, this.guiState, `replaySlotAutoSave${slot}`, `Slot ${slot} auto-save`, REPLAY_AUTO_SAVE_LABELS);

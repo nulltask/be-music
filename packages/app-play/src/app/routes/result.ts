@@ -204,16 +204,15 @@ export class ResultRoute {
     if (await this.router.leave({ continuesRun: true })) next();
   }
 
-  /**
-   * A single play's replay slots: the slots of its chart, which a live play whose record counts (`kept`, the record it
-   * had before) can be saved into, as beatoraja's `MusicResult` saves only a PLAY whose score may be kept. A replay's
-   * result shows the slots of the chart it replays, and saves nothing.
-   */
+  /** Keeps a finished manual replay and updates slots when the play is eligible for a record. */
   private playReplaySlots(data: PlayResult, kept: { previous: BestRecord | undefined } | undefined): ResultReplaySlots {
     const replay = data.replay ?? this.lastPlay()?.overrides.replay;
     const target = replay !== undefined ? replaySlotTargetOfReplay(replay) : undefined;
     const save =
-      kept !== undefined && data.replay !== undefined && data.practice !== true
+      data.replay !== undefined &&
+      data.practice !== true &&
+      data.fromReplay !== true &&
+      data.replay.play.mode !== 'auto'
         ? {
             payload: { kind: 'chart' as const, replay: data.replay },
             score: {
@@ -221,30 +220,30 @@ export class ResultRoute {
               noteCount: data.replay.results?.native?.noteCount ?? data.score.total,
             },
             title: data.chart.title,
-            previous: kept.previous,
+            previous: kept?.previous,
+            ...(kept === undefined ? { historyOnly: true } : {}),
           }
         : undefined;
     return this.openReplaySlots(target, save);
   }
 
-  /**
-   * A course run's replay slots (an EXPERT / GRADE course or a NONSTOP run): the slots of its course, by its course
-   * fingerprint, which the run can be saved into when it kept a record (`kept`: what it recorded, and the record before).
-   */
+  /** Keeps a course replay as one history entry. Playback only reads the existing selections. */
   public courseReplaySlots(
     courseLog: BeMusicCourseReplay,
     native: ReplayCourseResult,
     kept: { play: RecordPlay; previous: BestRecord | undefined } | undefined,
+    fromReplay = false,
   ): ResultReplaySlots {
     const fingerprint = computeCourseReplayFingerprint(courseLog);
     const target = fingerprint !== undefined ? { kind: 'course' as const, id: fingerprint } : undefined;
     const save =
-      kept !== undefined
+      !fromReplay && courseLog.stages.some((stage) => stage.played && stage.replay.play.mode !== 'auto')
         ? {
             payload: { kind: 'course' as const, replay: courseLog },
-            score: { ...kept.play, noteCount: native.noteCount },
+            score: { ...(kept?.play ?? native), noteCount: native.noteCount },
             title: courseLog.course.name,
-            previous: kept.previous,
+            previous: kept?.previous,
+            ...(kept === undefined ? { historyOnly: true } : {}),
           }
         : undefined;
     return this.openReplaySlots(target, save);

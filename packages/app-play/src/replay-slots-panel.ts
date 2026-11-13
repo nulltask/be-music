@@ -1,36 +1,31 @@
 import './ui/collapsible-panel.ts';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
-// The replay slots' DOM card, for the skins without a replay-slot UI of their own (the built-in, Native and LR2 ones; a
-// beatoraja skin draws its slots and buttons itself): on a result screen it saves the play into a slot, as keys 1-4 do,
-// and on the select screen it replays, downloads or deletes the replays of the chart or course under the cursor.
-
 import { downloadBlob } from '@be-music/player-browser/recording';
-import { playerLang, playerText } from './player-copy.ts';
+import { onPlayerLangChange, playerLang, playerText } from './player-copy.ts';
 import { skeletonGroupTemplate, skeletonTemplate } from '@be-music/service-web-theme/client';
 import { REPLAY_SLOT_COUNT, type LibraryEntry } from '@be-music/player-scene-model';
-import type { ReplaySlotRecord, ReplaySlotTarget } from './services/replay-slots.ts';
+import type { ReplayHistoryRecord, ReplaySlotRecord, ReplaySlotTarget } from './services/replay-slots.ts';
 import type { ReplaySlotService, ResultReplaySlots } from './services/replay-slot-service.ts';
 
 /** What the card shows. */
 type PanelMode =
   | { readonly kind: 'hidden' }
   | { readonly kind: 'result'; readonly slots: ResultReplaySlots }
-  | {
-      readonly kind: 'select';
-      readonly entry: Exclude<LibraryEntry, { kind: 'folder' }>;
-      readonly target: ReplaySlotTarget;
-    };
+  | { readonly kind: 'select'; readonly target?: ReplaySlotTarget; readonly showSlots: boolean };
 
 export interface ReplaySlotsPanelOptions {
   readonly service: ReplaySlotService;
   /** Replays slot `slot` of the bar under the cursor (`SelectScene.replay`). */
   readonly replay: (slot: number) => void;
+  readonly replayHistory: (record: ReplayHistoryRecord) => void;
   readonly setStatus: (text: string) => void;
 }
 
 /** What a slot's record says on the card: its EX score and rate, its lamp and when it was saved. */
-export function describeReplaySlotRecord(record: ReplaySlotRecord): string {
+export function describeReplaySlotRecord(
+  record: Pick<ReplayHistoryRecord, 'exRate' | 'exScore' | 'lamp' | 'savedAt'>,
+): string {
   const rate = (record.exRate * 100).toFixed(2);
   const savedAt = new Date(record.savedAt);
   const date = Number.isNaN(savedAt.getTime()) ? record.savedAt : savedAt.toLocaleString();
@@ -44,6 +39,9 @@ export class ReplaySlotsPanel {
   private expanded = true;
   private mode: PanelMode = { kind: 'hidden' };
   private readonly unsubscribe: () => void;
+  private readonly unsubscribeLanguage: () => void;
+  private historyOpen = false;
+  private showAllHistory = false;
   private unsubscribeResult: (() => void) | undefined;
 
   public constructor(options: ReplaySlotsPanelOptions) {
@@ -51,9 +49,10 @@ export class ReplaySlotsPanel {
     this.card = document.createElement('aside');
     this.card.className = 'replay-slots-card';
     this.card.hidden = true;
-    this.card.setAttribute('aria-label', 'Replay slots');
+
     document.querySelector('#auxiliary-panels')!.append(this.card);
     this.unsubscribe = options.service.store.subscribe(() => this.render());
+    this.unsubscribeLanguage = onPlayerLangChange(() => this.render());
   }
 
   /** Shows a result screen's slots, to save the play into. */
@@ -62,14 +61,10 @@ export class ReplaySlotsPanel {
     this.unsubscribeResult = slots.subscribe(() => this.render());
   }
 
-  /** Shows the replays of the bar under the cursor; nothing for a folder or a bar without a slot target. */
-  public showSelect(entry: LibraryEntry | undefined): void {
+  /** Shows history on every select skin, with slot controls on skins that do not draw their own. */
+  public showSelect(entry: LibraryEntry | undefined, showSlots = true): void {
     const target = entry !== undefined && entry.kind !== 'folder' ? this.options.service.targetOf(entry) : undefined;
-    this.setMode(
-      entry !== undefined && entry.kind !== 'folder' && target !== undefined
-        ? { kind: 'select', entry, target }
-        : { kind: 'hidden' },
-    );
+    this.setMode({ kind: 'select', ...(target === undefined ? {} : { target }), showSlots });
   }
 
   public hide(): void {
@@ -78,6 +73,7 @@ export class ReplaySlotsPanel {
 
   public dispose(): void {
     this.unsubscribe();
+    this.unsubscribeLanguage();
     this.unsubscribeResult?.();
     render(nothing, this.card);
     this.card.remove();
@@ -86,8 +82,16 @@ export class ReplaySlotsPanel {
   private setMode(mode: PanelMode): void {
     this.unsubscribeResult?.();
     this.unsubscribeResult = undefined;
+    if (mode.kind !== this.mode.kind) this.expanded = mode.kind === 'result';
+    if (
+      mode.kind === 'select' &&
+      this.mode.kind === 'select' &&
+      !this.showAllHistory &&
+      (mode.target?.kind !== this.mode.target?.kind || mode.target?.id !== this.mode.target?.id)
+    ) {
+      this.card.querySelector('.replay-history-list')?.scrollTo(0, 0);
+    }
     this.mode = mode;
-    this.expanded = true;
     this.render();
   }
 
@@ -98,7 +102,7 @@ export class ReplaySlotsPanel {
       return;
     }
     if (mode.kind === 'select') {
-      this.renderSelect(mode.target);
+      this.renderSelect(mode.target, mode.showSlots);
       return;
     }
     this.card.hidden = true;
@@ -110,6 +114,7 @@ export class ReplaySlotsPanel {
     const records = slots.slots();
     const copy = playerText().replay;
     this.card.dataset.mode = 'result';
+    this.card.setAttribute('aria-label', copy.slotsTitle);
     render(
       html`
         <be-music-collapsible-panel
@@ -169,38 +174,117 @@ export class ReplaySlotsPanel {
     this.card.hidden = false;
   }
 
-  private renderSelect(target: ReplaySlotTarget): void {
-    const records = this.options.service.store.slots(target).filter((record) => record !== undefined);
-    if (records.length === 0) {
-      this.card.hidden = true;
-      render(nothing, this.card);
-      return;
-    }
+  private renderSelect(target: ReplaySlotTarget | undefined, showSlots: boolean): void {
+    const store = this.options.service.store;
+    const records = showSlots ? store.slots(target).filter((record) => record !== undefined) : [];
+    const copy = playerText().replay;
+    const all = this.showAllHistory || target === undefined;
+    const history = this.expanded && this.historyOpen ? store.history(all ? undefined : target) : [];
     this.card.dataset.mode = 'select';
+    this.card.setAttribute('aria-label', copy.historyTitle);
     render(
       html`
         <be-music-collapsible-panel
           position="inline"
-          .heading=${playerText().replay.slotsTitle}
+          .heading=${showSlots ? copy.slotsAndHistory : copy.historyTitle}
           .open=${this.expanded}
           @panel-toggle=${(event: CustomEvent<{ open: boolean }>) => {
             this.expanded = event.detail.open;
+            this.render();
           }}
         >
           <div class="replay-slots-content">
-            <ol class="replay-slots-list">
-              ${repeat(
-                records,
-                (record) => record.slot,
-                (record) => this.selectRow(target, record),
-              )}
-            </ol>
+            ${
+              records.length > 0 && target !== undefined
+                ? html`<ol class="replay-slots-list">
+                    ${repeat(
+                      records,
+                      (record) => record.slot,
+                      (record) => this.selectRow(target, record),
+                    )}
+                  </ol>`
+                : nothing
+            }
+            <details
+              .open=${this.historyOpen}
+              @toggle=${(event: Event) => {
+                const open = (event.currentTarget as HTMLDetailsElement).open;
+                if (open === this.historyOpen) return;
+                this.historyOpen = open;
+                this.render();
+              }}
+            >
+              <summary>${copy.historyTitle}</summary>
+              ${
+                this.expanded && this.historyOpen
+                  ? html`<label class="replay-history-scope">
+                        <input
+                          type="checkbox"
+                          .checked=${all}
+                          ?disabled=${target === undefined}
+                          @change=${(event: Event) => {
+                            this.showAllHistory = (event.currentTarget as HTMLInputElement).checked;
+                            this.card.querySelector('.replay-history-list')?.scrollTo(0, 0);
+                            this.render();
+                          }}
+                        />
+                        ${copy.allHistory}
+                      </label>
+                      ${
+                        history.length > 0
+                          ? html`<ol
+                              class="replay-slots-list replay-history-list"
+                              tabindex="0"
+                              aria-label=${copy.historyTitle}
+                            >
+                              ${repeat(
+                                history,
+                                (record) => record.key,
+                                (record) => this.historyRow(record),
+                              )}
+                            </ol>`
+                          : html`<p>${store.loaded ? copy.emptyHistory : copy.loadingHistory}</p>`
+                      }`
+                  : nothing
+              }
+            </details>
           </div>
         </be-music-collapsible-panel>
       `,
       this.card,
     );
     this.card.hidden = false;
+  }
+
+  private historyRow(record: ReplayHistoryRecord): TemplateResult {
+    const copy = playerText().replay;
+    return html`<li class="replay-slots-row">
+      <span class="replay-slots-name">${record.title}</span>
+      <span class="replay-slots-detail">${describeReplaySlotRecord(record)}</span>
+      <span class="replay-slots-actions">
+        <button class="btn" type="button" data-size="sm" @click=${() => this.options.replayHistory(record)}>
+          ${copy.replay}
+        </button>
+        <button
+          class="btn"
+          type="button"
+          data-size="sm"
+          data-variant="outline"
+          @click=${() => void this.download(record)}
+        >
+          ${copy.download}
+        </button>
+        <button
+          class="btn"
+          type="button"
+          data-size="sm"
+          data-variant="outline"
+          @click=${() => void this.removeHistory(record)}
+        >
+          ${copy.delete}
+        </button>
+      </span>
+    </li>`;
   }
 
   private selectRow(target: ReplaySlotTarget, record: ReplaySlotRecord): TemplateResult {
@@ -223,7 +307,7 @@ export class ReplaySlotsPanel {
           type="button"
           data-size="sm"
           data-variant="outline"
-          @click=${() => void this.download(target, record)}
+          @click=${() => void this.download(record, record.slot)}
         >
           ${copy.download}
         </button>
@@ -234,27 +318,38 @@ export class ReplaySlotsPanel {
           data-variant="outline"
           @click=${() => void this.remove(target, record)}
         >
-          ${copy.delete}
+          ${copy.clearSlot}
         </button>
       </span>
     </li>`;
   }
 
-  /** Offers a slot's replay as the file it was saved as. */
-  private async download(target: ReplaySlotTarget, record: ReplaySlotRecord): Promise<void> {
-    const text = await this.options.service.store.readText(target, record.slot).catch(() => undefined);
+  private async download(record: ReplayHistoryRecord | ReplaySlotRecord, slot?: number): Promise<void> {
+    const text = await this.options.service.store.readHistoryText(record.key).catch(() => undefined);
     if (text === undefined) {
-      this.options.setStatus(playerText().replay.slotUnreadable(record.slot + 1));
+      this.options.setStatus(playerText().replay.historyUnreadable);
       return;
     }
     const stem = record.title.normalize('NFKC').replace(/[\\/:*?"<>|\s]+/g, '_') || 'replay';
-    const extension = target.kind === 'chart' ? 'bmplay.json' : 'bmcourse.json';
-    downloadBlob(new Blob([text], { type: 'application/json' }), `${stem}-slot${record.slot + 1}.${extension}`);
+    const extension = record.target.kind === 'chart' ? 'bmplay.json' : 'bmcourse.json';
+    const suffix = slot === undefined ? record.savedAt.replace(/[^0-9]/g, '') : `slot${slot + 1}`;
+    downloadBlob(new Blob([text], { type: 'application/json' }), `${stem}-${suffix}.${extension}`);
+  }
+
+  private async removeHistory(record: ReplayHistoryRecord): Promise<void> {
+    const copy = playerText().replay;
+    if (!window.confirm(copy.confirmDeleteHistory(record.title))) return;
+    try {
+      await this.options.service.store.removeHistory(record.key);
+      this.options.setStatus(copy.historyDeleted);
+    } catch {
+      this.options.setStatus(copy.historyNotDeleted);
+    }
   }
 
   /** Empties a slot, once the player confirms. */
   private async remove(target: ReplaySlotTarget, record: ReplaySlotRecord): Promise<void> {
-    if (!window.confirm(`Delete the replay in slot ${record.slot + 1} of "${record.title}"?`)) return;
+    if (!window.confirm(playerText().replay.confirmClearSlot(record.slot + 1, record.title))) return;
     try {
       await this.options.service.store.remove(target, record.slot);
       this.options.setStatus(playerText().replay.slotDeleted(record.slot + 1));

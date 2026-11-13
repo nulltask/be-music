@@ -74,6 +74,7 @@ interface FakeSelect {
   readonly setLibrary: ReturnType<typeof vi.fn<(library: BrowserChartCollection) => void>>;
   readonly restore: ReturnType<typeof vi.fn<(snapshot: BrowseSnapshot) => void>>;
   readonly snapshot: ReturnType<typeof vi.fn<() => BrowseSnapshot>>;
+  readonly focused: ReturnType<typeof vi.fn<SelectScene['focused']>>;
   readonly dispose: ReturnType<typeof vi.fn<() => void>>;
 }
 
@@ -87,6 +88,7 @@ function fakeSelect(kit: SelectSceneKit, options: SelectSceneOptions): FakeSelec
     setLibrary: vi.fn(),
     restore: vi.fn(),
     snapshot: vi.fn(() => ({ folderPath: [`left on ${kit.family}`] }) as unknown as BrowseSnapshot),
+    focused: vi.fn(() => undefined),
     dispose: vi.fn(),
   };
 }
