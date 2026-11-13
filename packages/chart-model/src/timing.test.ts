@@ -185,7 +185,7 @@ describe('LR2 negative-BPM reversal', () => {
     expect(mirrorBeatAtTempoReversal(reversal, 5, 10)).toBe(10); // before the reversal: unchanged
     expect(mirrorBeatAtTempoReversal(reversal, 7.38, 16)).toBe(16); // exactly at it: not mirrored yet
     expect(mirrorBeatAtTempoReversal(reversal, 9, 17.5)).toBeCloseTo(14.5, 9); // 1.5 beats past → 1.5 beats back
-    expect(mirrorBeatAtTempoReversal(reversal, 60, 40)).toBe(0); // pinned at the chart head (documented deviation)
+    expect(mirrorBeatAtTempoReversal(reversal, 60, 40)).toBe(-8); // keeps rewinding before the chart head
     expect(mirrorBeatAtTempoReversal(undefined, 60, 40)).toBe(40); // no reversal armed
   });
 

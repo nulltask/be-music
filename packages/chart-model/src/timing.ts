@@ -43,8 +43,7 @@ export interface TempoReversalPoint {
  * 0x406d81), so the chart recedes exactly as fast as the forward beat advances through the post-reversal tempo map —
  * at the |BPM| of the negative value, following later tempo changes, and pausing during post-reversal STOPs.
  *
- * Returns `beat` unchanged at or before the reversal. Past it the mirrored beat pins at the chart head instead of
- * receding into negative positions (a documented deviation — see docs/bms-spec.md "Negative BPM").
+ * Returns `beat` unchanged at or before the reversal. Past it the mirrored beat can recede into negative chart positions.
  */
 export function mirrorBeatAtTempoReversal(
   reversal: TempoReversalPoint | undefined,
@@ -54,7 +53,7 @@ export function mirrorBeatAtTempoReversal(
   if (reversal === undefined || seconds <= reversal.seconds) {
     return beat;
   }
-  return Math.max(0, reversal.beat * 2 - beat);
+  return reversal.beat * 2 - beat;
 }
 
 /**
