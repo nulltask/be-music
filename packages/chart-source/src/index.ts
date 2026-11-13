@@ -97,6 +97,8 @@ export interface BeMusicEvent {
   channel: string;
   position: BeMusicPosition;
   value: string;
+  /** Relative BMS source line order for objects on normal note channels. */
+  bmsLineOrder?: number;
   bmson?: BmsonEventExtensions;
 }
 
@@ -852,6 +854,7 @@ function cloneEvent(event: BeMusicEvent): BeMusicEvent {
     channel: event.channel,
     position: [event.position[0], event.position[1]],
     value: event.value,
+    ...(event.bmsLineOrder !== undefined ? { bmsLineOrder: event.bmsLineOrder } : {}),
     bmson: event.bmson ? { ...event.bmson, ...copyExtras(event.bmson) } : undefined,
   };
 }

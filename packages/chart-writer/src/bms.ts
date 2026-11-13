@@ -376,12 +376,17 @@ function pushEventLines(
     const { measure, channel, events } = group;
     const resolution = chooseResolution(events, maxResolution);
     const cells = Array.from({ length: resolution }, () => '00');
+    const lineOrder = new Map<number, number>();
 
     for (const event of events) {
       const { numerator, denominator } = resolveEventFraction(event);
       const scaled = Math.round((numerator * resolution) / denominator);
       const index = Math.min(resolution - 1, Math.max(0, scaled));
-      cells[index] = normalizeObjectKey(event.value, base);
+      const order = event.bmsLineOrder ?? -1;
+      if (order >= (lineOrder.get(index) ?? -1)) {
+        cells[index] = normalizeObjectKey(event.value, base);
+        if (order >= 0) lineOrder.set(index, order);
+      }
     }
 
     lines.push(`#${toMeasure(measure)}${channel}:${cells.join('')}`);
@@ -567,6 +572,7 @@ function groupEvents(events: BeMusicEvent[], base: 36 | 62 = 36): GroupedEventLi
       channel,
       position: [numerator, denominator],
       value: normalizeObjectKey(event.value, base),
+      ...(event.bmsLineOrder !== undefined ? { bmsLineOrder: event.bmsLineOrder } : {}),
     });
     groupedByChannel.set(channel, slot);
   }

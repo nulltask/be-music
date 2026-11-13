@@ -7,7 +7,7 @@ import {
   normalizeChannel,
   normalizeObjectKey,
 } from '@be-music/chart-source';
-import { buildBMSObjectLineEntry, sortAndNormalizeEvents, upsertMeasureLength } from './event-utils.ts';
+import { sortAndNormalizeEvents, upsertMeasureLength } from './event-utils.ts';
 
 type ControlFlowCommand = BMSControlFlowCommand;
 
@@ -96,24 +96,6 @@ export function updateControlFlowCaptureStack(stack: ControlFlowCaptureFrameType
   }
 }
 
-export function createControlFlowObjectEntry(
-  measure: number,
-  channel: string,
-  data: string,
-  base: 36 | 62 = 36,
-): Extract<BMSControlFlowEntry, { kind: 'object' }> | undefined {
-  // Same line interpretation as the strict parse path — `buildBMSObjectLineEntry` owns the rule so captured
-  // control-flow bodies can never drift from regular object lines.
-  const entry = buildBMSObjectLineEntry(measure, channel, data, base);
-  if (!entry) {
-    return undefined;
-  }
-  return {
-    kind: 'object',
-    ...entry,
-  };
-}
-
 /**
  * Maps real-world control-flow spelling variants onto their canonical commands: `#END IF` / bare `#END` → `#ENDIF`,
  * `#ELSE IF n` → `#ELSEIF n`. hitkey's command memo records these misspellings in released charts; without the
@@ -200,6 +182,7 @@ function applyActiveControlFlowEntry(
         channel: normalizeChannel(entry.channel),
         position: event.position,
         value: normalizeObjectKey(event.value, replayBase),
+        ...(event.bmsLineOrder !== undefined ? { bmsLineOrder: event.bmsLineOrder } : {}),
         ...(event.bmson ? { bmson: event.bmson } : {}),
       });
     }

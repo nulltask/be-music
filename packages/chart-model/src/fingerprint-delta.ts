@@ -362,6 +362,7 @@ function replayEntries(
         channel,
         position: event.position,
         value: normalizeObjectKey(event.value, base),
+        ...(event.bmsLineOrder !== undefined ? { bmsLineOrder: event.bmsLineOrder } : {}),
         ...(event.bmson ? { bmson: event.bmson } : {}),
       };
       const list = added.get(bucket);

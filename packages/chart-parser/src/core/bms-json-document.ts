@@ -711,6 +711,7 @@ function normalizeBMSObjectLineEntry(input: unknown): BMSObjectLineEntry | undef
       channel,
       position: event.position,
       value: event.value,
+      ...(event.bmsLineOrder !== undefined ? { bmsLineOrder: event.bmsLineOrder } : {}),
       ...(event.bmson ? { bmson: event.bmson } : {}),
     }));
 

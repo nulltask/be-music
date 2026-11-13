@@ -486,6 +486,7 @@ function sameLaneEvents(left: ReadonlyArray<BeMusicEvent>, right: ReadonlyArray<
       a.measure !== b.measure ||
       a.channel !== b.channel ||
       a.value !== b.value ||
+      a.bmsLineOrder !== b.bmsLineOrder ||
       a.position.length !== b.position.length ||
       a.position.some((part, at) => part !== b.position[at]) ||
       (a.bmson === undefined) !== (b.bmson === undefined) ||

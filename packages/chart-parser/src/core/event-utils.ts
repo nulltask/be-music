@@ -187,6 +187,9 @@ function normalizeRawEvent(
     channel,
     position,
     value,
+    ...(typeof raw.bmsLineOrder === 'number' && Number.isSafeInteger(raw.bmsLineOrder) && raw.bmsLineOrder >= 0
+      ? { bmsLineOrder: raw.bmsLineOrder }
+      : {}),
     ...(bmson ? { bmson } : {}),
   };
 }
