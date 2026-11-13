@@ -607,12 +607,12 @@ describe('player', () => {
     expect(timed.invisibleNotes.map((note) => note.channel)).toEqual(['1E']);
   });
 
-  test('player: two notes on one lane and position become one judged note; the other keysound is shadowed', () => {
+  test('player: later normal-channel object replaces the earlier object and its keysound', () => {
     const json = parseChart(['#BPM 120', '#WAV01 a.wav', '#WAV02 b.wav', '#00111:01', '#00111:02', ''].join('\n'));
 
     const timed = extractTimedNotes(json);
-    expect(timed.playableNotes.map((note) => [note.channel, note.event.value])).toEqual([['11', '01']]);
-    expect(timed.shadowedNotes.map((note) => [note.channel, note.event.value])).toEqual([['11', '02']]);
+    expect(timed.playableNotes.map((note) => [note.channel, note.event.value])).toEqual([['11', '02']]);
+    expect(timed.shadowedNotes).toEqual([]);
     expect(extractPlayableNotes(json)).toHaveLength(1);
   });
 
@@ -621,13 +621,13 @@ describe('player', () => {
 
     const timed = extractTimedNotes(json);
     expect(timed.playableNotes.map((note) => note.event.position)).toEqual([
-      [0, 2],
+      [0, 1],
       [1, 2],
     ]);
     expect(timed.shadowedNotes).toEqual([]);
   });
 
-  test('player: a long note wins over a tap on the same lane and position (5x and #LNOBJ)', () => {
+  test('player: dedicated LN starts keep the competing sound, while LNOBJ pairs after normal-channel replacement', () => {
     const legacy = parseChart(
       ['#BPM 120', '#WAV01 a.wav', '#WAV02 b.wav', '#00111:02', '#00151:01', '#00251:01', ''].join('\n'),
     );
@@ -643,8 +643,8 @@ describe('player', () => {
     const lnobjTimed = extractTimedNotes(lnobj);
     expect(lnobjTimed.playableNotes).toHaveLength(1);
     expect(lnobjTimed.playableNotes[0]?.endBeat).toBeCloseTo(8, 6);
-    expect(lnobjTimed.shadowedNotes).toHaveLength(1);
-    expect(lnobjTimed.shadowedNotes[0]?.event.value).not.toBe(lnobjTimed.playableNotes[0]?.event.value);
+    expect(lnobjTimed.playableNotes[0]?.event.value).toBe('02');
+    expect(lnobjTimed.shadowedNotes).toEqual([]);
   });
 
   test('player: layered bmson notes on one x and y are one judged note, the first sound channel', () => {
