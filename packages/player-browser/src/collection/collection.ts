@@ -648,20 +648,6 @@ function resolveChartAssetKeyInFolder(
   return undefined;
 }
 
-/**
- * Audio-asset variant of `resolveChartAsset` that walks codec substitutions when the chart's declared file isn't
- * present.
- *
- * BMS charts almost always declare `#WAVxx test.wav`, but real-world archives ship the audio as `.opus` / `.ogg` /
- * `.mp3` to save space. Mirrors the `packages/player-engine` audio loader's "try the alternative codecs before giving up"
- * behavior, with the order tweaked for the browser case:
- *
- * - 1. `.opus` (highest compression-to-quality ratio) 2. `.ogg` (broadly supported, small) 3. `.mp3` (universal,
- *   slightly larger) 4. `.wav` (always-correct fallback) 5. the original path verbatim (covers `.flac` / `.oga` / etc.)
- *
- * Case is handled by `resolveChartAsset` itself (case-insensitive lookup), so this list no longer needs explicit
- * upper-case duplicates — `kick.OPUS` and `kick.opus` both resolve through the lower-cased extension variant.
- */
 export interface ResolveChartAudioAssetOptions {
   /**
    * BMS spec — `#PATH_WAV <prefix>` declares a directory the chart's WAVs live under. The resolver tries each codec
@@ -673,6 +659,7 @@ export interface ResolveChartAudioAssetOptions {
   excludedEntries?: ReadonlySet<BrowserAssetEntry>;
 }
 
+/** Try the authored name, then alternate audio extensions, in the chart folder before its parent. */
 export function resolveChartAudioAsset(
   source: BrowserAssetSource,
   chartPath: string,
@@ -784,20 +771,11 @@ function joinPathWAVPrefix(prefix: string | undefined, samplePath: string): stri
 function audioFallbackPaths(path: string): string[] {
   const lastSlash = path.lastIndexOf('/');
   const dotIndex = path.lastIndexOf('.');
-  // bmson 1.0.0 spec — "A file extension may be omitted. If file extension is omitted, then the implementation should
-  // search for compatible sound file with that name." The previous shape returned just `[path]` for extensionless
-  // inputs, which skipped the codec walk entirely and broke any bmson chart that authors `sound_channels[].name`
-  // without a dot. We now walk the same fallback list for both cases — the only difference is whether `path` is the
-  // bare base or the already-suffixed variant we strip back to one.
-  const hasExtension = dotIndex >= 0 && dotIndex >= lastSlash;
-  const base = hasExtension ? path.slice(0, dotIndex) : path;
-  // Order is "most-likely-shipped first" so the case-insensitive file lookup short-circuits fast on the common archive
-  // formats. `.m4a` (AAC) is included to match the spec example ("Try piano.wav, piano.ogg, piano.m4a, …").
-  const candidates = [`${base}.opus`, `${base}.ogg`, `${base}.mp3`, `${base}.wav`, `${base}.m4a`];
-  if (!candidates.includes(path)) {
-    candidates.push(path);
-  }
-  return candidates;
+  // bmson permits extensionless names, which get the same fallback list.
+  const base = dotIndex > lastSlash ? path.slice(0, dotIndex) : path;
+  const alternatives = [`${base}.opus`, `${base}.ogg`, `${base}.mp3`, `${base}.wav`, `${base}.m4a`];
+  const authored = path.toLowerCase();
+  return [path, ...alternatives.filter((candidate) => candidate.toLowerCase() !== authored)];
 }
 
 /**

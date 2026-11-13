@@ -47,7 +47,7 @@ async function load(
   return { samples, decode };
 }
 
-test.each(['kick.wav', 'kick', 'kick.m4a'])('decode failure advances through codecs for %s', async (path) => {
+test.each(['kick.wav', 'kick', 'kick.ogg'])('decode failure advances through codecs for %s', async (path) => {
   const { samples, decode } = await load(
     {
       'Song/kick.opus': encode('broken'),
@@ -59,13 +59,23 @@ test.each(['kick.wav', 'kick', 'kick.m4a'])('decode failure advances through cod
   expect(decode).toHaveBeenCalledTimes(2);
 });
 
-test('a successful first codec retains the existing priority and avoids decoding alternates', async () => {
+test('a playable authored WAV takes precedence over Opus', async () => {
   const { samples, decode } = await load({
     'Song/kick.opus': encode('Opus'),
     'Song/kick.wav': encode('WAV'),
   });
-  expect(samples.get('kick.wav')).toMatchObject({ label: 'Opus' });
+  expect(samples.get('kick.wav')).toMatchObject({ label: 'WAV' });
   expect(decode).toHaveBeenCalledTimes(1);
+});
+
+test('a rejected authored WAV falls back to Opus before Ogg', async () => {
+  const { samples, decode } = await load({
+    'Song/kick.wav': encode('broken'),
+    'Song/kick.opus': encode('Opus'),
+    'Song/kick.ogg': encode('Ogg'),
+  });
+  expect(samples.get('kick.wav')).toMatchObject({ label: 'Opus' });
+  expect(decode).toHaveBeenCalledTimes(2);
 });
 
 test('PATH_WAV and backslashes survive retry and missing-prefix fallback', async () => {
@@ -86,17 +96,17 @@ test('the same asset reached through several codec or folder aliases is decoded 
   const { samples, decode } = await load({
     'kick.opus': broken,
     'Song/kick.ogg': broken,
-    'Song/kick.wav': encode('WAV'),
+    'Song/kick.m4a': encode('AAC'),
   });
-  expect(samples.get('kick.wav')).toMatchObject({ label: 'WAV' });
+  expect(samples.get('kick.wav')).toMatchObject({ label: 'AAC' });
   expect(decode).toHaveBeenCalledTimes(2);
 });
 
 test('cancellation during a rejected decode skips all remaining candidates', async () => {
   const { samples, decode } = await load(
     {
-      'Song/kick.opus': encode('broken'),
-      'Song/kick.wav': encode('WAV'),
+      'Song/kick.wav': encode('broken'),
+      'Song/kick.opus': encode('Opus'),
     },
     'kick.wav',
     undefined,
@@ -108,13 +118,13 @@ test('cancellation during a rejected decode skips all remaining candidates', asy
 
 test('a failed lazy-file read advances to the playable codec', async () => {
   const unreadable = {
-    name: 'kick.opus',
+    name: 'kick.wav',
     arrayBuffer: async () => {
       throw new Error('unreadable file');
     },
   } as unknown as File;
-  const { samples, decode } = await load({ 'Song/kick.opus': unreadable, 'Song/kick.wav': encode('WAV') });
-  expect(samples.get('kick.wav')).toMatchObject({ label: 'WAV' });
+  const { samples, decode } = await load({ 'Song/kick.wav': unreadable, 'Song/kick.opus': encode('Opus') });
+  expect(samples.get('kick.wav')).toMatchObject({ label: 'Opus' });
   expect(decode).toHaveBeenCalledTimes(1);
 });
 
