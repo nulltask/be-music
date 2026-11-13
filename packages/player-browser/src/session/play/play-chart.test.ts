@@ -844,12 +844,31 @@ test.each([
   }
 });
 
-test.each(['10', '14'] as const)('the shared S-RANDOM choice keeps AC placement in %s KEY', (playVariant) => {
-  const scratch = '16';
-  const notes = notesOn([scratch, '11'], 1);
-  const lanes = resolveLaneOptionChannels('1P', playVariant);
-  applyRandomMode(notes, lanes, 'lr2:S-RANDOM', () => 0.95, { ruleset: '____', scratch, playVariant });
-  expect(channelsOf(notes)).toEqual([scratch, lanes.at(-1)]);
+test.each([
+  ['lr2', 'lr2:S-RANDOM'],
+  ['beatoraja', 'lr2:S-RANDOM'],
+  ['____', 'lr2:S-RANDOM'],
+  ['____', 'S-RANDOM'],
+] as const)('%s judging runs LR2 14 KEY scratch avoidance for %s', (ruleset, mode) => {
+  const json = parseChart('#BPM 120\n#PLAYER 3\n#00116:01\n#00111:01\n#00219:01\n#00229:01', 'bms');
+  const entry: LibraryChart = {
+    id: 'scratch-order',
+    sourceId: 'scratch-order',
+    sourceLabel: 'Scratch order',
+    sourceKind: 'directory',
+    chartPath: 'scratch-order.bms',
+    directoryLabel: '',
+    fileLabel: 'scratch-order.bms',
+    title: 'Scratch order',
+    totalNotes: 4,
+    chart: json,
+  };
+  const play = new PlaySession({ judgeRuleset: ruleset, random1P: mode, randomSeed1P: '48' });
+  play.chart = entry;
+  prepareChart(play, entry);
+  expect(play.resolvedPlayChart?.playVariant).toBe('14');
+  expect(play.notes.find((note) => note.event.channel === '11')?.channel).toBe('11');
+  expect(play.notes.find((note) => note.event.channel === '16')?.channel).toBe('16');
 });
 
 test('10 KEY LR2 S-RANDOM still permits a far draw with a scratch on a bar line', () => {
