@@ -2935,6 +2935,30 @@ html.touch-first .search-input.search-inline:focus {
   padding: 0;
   list-style: none;
 }
+.replay-history > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  cursor: pointer;
+  list-style: none;
+}
+.replay-history > summary::-webkit-details-marker {
+  display: none;
+}
+.replay-history > summary::before {
+  content: '';
+  display: block;
+  flex: none;
+  width: 0.5em;
+  height: 0.5em;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(-45deg);
+}
+.replay-history[open] > summary::before {
+  transform: rotate(45deg);
+}
 .replay-history-scope {
   display: flex;
   align-items: center;

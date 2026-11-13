@@ -59,10 +59,15 @@ test('a play saved to a slot on the built-in result replays from the card on the
   await player.waitFor((current) => current.scene.kind === 'select', 'the select screen');
 
   await card.getByText('Replay slots and history', { exact: true }).click();
-  await card
-    .locator('summary')
-    .filter({ hasText: /^Replay history$/ })
-    .click();
+  const disclosure = card.locator('.replay-history');
+  const summary = disclosure.locator('summary');
+  const chevron = () => summary.evaluate((element) => getComputedStyle(element, '::before').transform);
+  await expect(disclosure).not.toHaveAttribute('open');
+  const closedChevron = await chevron();
+  expect(closedChevron).not.toBe('none');
+  await summary.click();
+  await expect(disclosure).toHaveAttribute('open', '');
+  expect(await chevron()).not.toBe(closedChevron);
   const history = card.locator('.replay-history-list');
   await expect(history.locator('li')).toHaveCount(1);
   await expect(history.locator('li')).toContainText('Fixture A');

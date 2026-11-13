@@ -206,6 +206,7 @@ export class ReplaySlotsPanel {
                 : nothing
             }
             <details
+              class="replay-history"
               .open=${this.historyOpen}
               @toggle=${(event: Event) => {
                 const open = (event.currentTarget as HTMLDetailsElement).open;
