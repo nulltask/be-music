@@ -12,6 +12,7 @@ import { synesthesiaResultSkin } from './result.ts';
 import { synesthesiaSelectSkin } from './select.ts';
 import { BE_MUSIC_SKIN_API_VERSION, cabinetStage, tallStage, type BeMusicSkin } from '@be-music/player-skin-sdk';
 import { definePixiSkin } from '../pixi-kit/index.ts';
+import { JUDGMENT_PARTICLES_SETTING } from './burst-budget.ts';
 import { FROSTED_GLASS_SETTING } from './glass.ts';
 
 /**
@@ -32,7 +33,7 @@ export const synesthesiaSkin: BeMusicSkin = definePixiSkin({
   fontLoads: ['400 16px "Orbitron"', '500 16px "Orbitron"', '300 12px "M PLUS 1p"', '500 12px "M PLUS 1p"'],
   stage: cabinetStage,
   portraitStage: tallStage,
-  settings: [FROSTED_GLASS_SETTING],
+  settings: [FROSTED_GLASS_SETTING, JUDGMENT_PARTICLES_SETTING],
   gameplay: {
     renderChrome: renderSynesthesiaChrome,
     renderLanes: renderSynesthesiaLanes,

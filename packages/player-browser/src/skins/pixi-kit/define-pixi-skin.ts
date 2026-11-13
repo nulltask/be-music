@@ -292,6 +292,7 @@ class GameplayScreen {
         combo,
         effects,
         audio,
+        settings: frame.settings,
         lanes: frame.lanes,
       });
     } finally {
