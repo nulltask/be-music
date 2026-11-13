@@ -96,12 +96,12 @@ import {
 } from '@be-music/player-skin-sdk';
 import {
   addHUDNumber,
-  addHUDText,
   type ChildPool,
   type HUDTextOptions,
   type PixiChromeContext,
   pointLayerFor,
 } from '../pixi-kit/index.ts';
+import { addSynesthesiaHUDText as addHUDText } from './figures.ts';
 
 type Runtime = BeMusicGameplayRuntime;
 

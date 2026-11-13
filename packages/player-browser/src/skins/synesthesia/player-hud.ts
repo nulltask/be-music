@@ -5,7 +5,8 @@ import {
   type BeMusicRect,
 } from '@be-music/player-skin-sdk';
 import type { Container, Graphics } from 'pixi.js';
-import { addHUDNumber, addHUDText, type ChildPool } from '../pixi-kit/index.ts';
+import { addHUDNumber, type ChildPool } from '../pixi-kit/index.ts';
+import { addSynesthesiaHUDText as addHUDText } from './figures.ts';
 import { drawFrame } from './draw.ts';
 import { GROOVE } from './layout.ts';
 import { emberColor, hsvToHex } from './space.ts';

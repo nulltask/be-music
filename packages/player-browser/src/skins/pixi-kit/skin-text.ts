@@ -20,6 +20,8 @@ export interface SkinTextOptions {
   maxWidth?: number;
   /** `false` clips an overflowing text at its start instead of scrolling it (e.g. unfocused list rows). */
   marquee?: boolean;
+  /** Squeezes further when at most the final two characters would scroll. */
+  squeezeShortOverflow?: boolean;
   skewX?: number;
   alpha?: number;
   stroke?: { color: number; width: number; alignment?: number; join?: 'round' | 'bevel' | 'miter' };
@@ -50,6 +52,7 @@ export function addSkinText(layer: Container, text: string, x: number, y: number
       anchorX: options.anchorX ?? 0,
       anchorY: options.anchorY ?? 0,
       scroll: options.marquee,
+      squeezeShortOverflow: options.squeezeShortOverflow,
     });
   }
   return node;
