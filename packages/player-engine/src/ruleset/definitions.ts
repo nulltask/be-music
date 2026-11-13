@@ -90,7 +90,7 @@ export type LongNoteStyle =
  *
  * - `'press-ahead-or-hold'` — LR2beta3: strict GREAT reach ahead of the line on key-down, or held crossing;
  *   passed mines retire immediately and hits count as POOR without changing combo or EX-SCORE.
- * - `'press-or-hold'` — the historical provisional That-Which-Must-Not-Be-Named model: the lane's key is held as the mine crosses the judge line, or
+ * - `'press-or-hold'` — Be-Music's BMS compatibility extension for the AC ruleset: the lane's key is held as the mine crosses the judge line, or
  *   pressed while the mine is inside the PGREAT window.
  * - `'hold'` — beatoraja (`JudgeManager` L244): the key is down at the moment the mine crosses the line; a press
  *   shortly before or after does nothing.
@@ -1232,7 +1232,7 @@ function resolveRulesetTables(
     headBadSkipsTail: true,
     scratchHoldsBySource: false,
     comboBreaksOnEmptyPoor: false,
-    // That-Which-Must-Not-Be-Named has no mines; LR2's model stands in until there is evidence otherwise.
+    // AC has no mines. Keep Be-Music's BMS compatibility extension for existing charts and replays.
     mineTrigger: 'press-or-hold',
     hcnTick: { heldJudge: 0, heldRate: 1, releasedJudge: 5, releasedRate: 1 },
     gauge: initialGauge,

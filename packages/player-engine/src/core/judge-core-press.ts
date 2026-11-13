@@ -309,10 +309,9 @@ export function handleLanePress(
     pressesLongNote = true;
   }
 
-  // Mines — record the press instant (when the mine crossing is settled later, the lane is asked whether it was down
-  // then), then settle the mines on these lanes: under LR2's model (`mineTrigger: 'press-or-hold'`) the press itself
-  // counts as "key ON" and detonates any mine inside the PGREAT window; under beatoraja's (`'hold'`) only a key down as
-  // a mine crosses counts. Detonation never consumes the press: the regular note judgment below still runs.
+  // Record the press before settling any crossings. LR2 also accepts an early GREAT press, the Be-Music AC
+  // extension accepts a press on either side within PGREAT, and beatoraja only checks the held key at crossing.
+  // Detonation never consumes the press, so regular note judgment still runs.
   for (const channel of candidateChannels) {
     recordLaneDown(laneHoldHistory(state, channel), tokens, nowMs);
   }

@@ -465,6 +465,7 @@ describe('judge core', () => {
 
     test.each([
       ['lr2', 1],
+      ['____', 1],
       ['beatoraja', 0],
     ] as const)('%s: a tap pressed and released just before the crossing detonates %i time(s)', (ruleset, hits) => {
       // Down 3 ms before the mine, up 1 ms before it. LR2 detonates on a press inside ahead-only GREAT; beatoraja only when the
@@ -477,7 +478,7 @@ describe('judge core', () => {
       ).toEqual([hits, hits, hits]);
     });
 
-    test.each(['lr2', 'beatoraja'] as const)(
+    test.each(['lr2', 'beatoraja', '____'] as const)(
       '%s: a key let go in the frame right after the crossing detonates',
       (r) => {
         expect(
@@ -495,6 +496,15 @@ describe('judge core', () => {
         mineHits(ruleset, [
           [2500, 'down'],
           [2600, 'up'],
+        ]),
+      ).toEqual([1, 1, 1]);
+    });
+
+    test('the AC extension detonates on a late press inside PGREAT', () => {
+      expect(
+        mineHits('____', [
+          [2503, 'down'],
+          [2505, 'up'],
         ]),
       ).toEqual([1, 1, 1]);
     });
