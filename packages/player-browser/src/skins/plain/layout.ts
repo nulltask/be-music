@@ -25,9 +25,9 @@ export const README_CHIP = { w: 56, h: 18 } as const;
  */
 export const PORTRAIT_SELECT_LAYOUT: BeMusicSelectLayout = {
   listX: MARGIN,
-  listTop: 350,
+  listTop: 394,
   listBottomInset: 30,
-  rowHeight: 40,
+  rowHeight: 38,
 };
 
 /** The focused-song card on the portrait select screen and what sits in it. */
@@ -36,8 +36,8 @@ export interface PortraitSelectCard {
   /** Left edges of the three fact columns, and the width a value may take in one. */
   factColumns: readonly [number, number, number];
   factWidth: number;
-  /** Tops of the two fact rows (the label line; the value sits 16 px under it). */
-  factRows: readonly [number, number];
+  /** Tops of the three fact rows (the label line; the value sits 16 px under it): the chart's two, then the player's best. */
+  factRows: readonly [number, number, number];
   play: BeMusicRect;
   auto: BeMusicRect;
   readme: BeMusicRect;
@@ -45,8 +45,9 @@ export interface PortraitSelectCard {
 
 /**
  * The focused-song card for a portrait select screen `width` wide: across the top, from under the header down to the
- * list ({@link PORTRAIT_SELECT_LAYOUT}`.listTop`). Genre, title and artist on top, then two rows of three facts, then
- * PLAY and AUTO side by side along its foot, and a small README at its top right, on the genre line.
+ * list ({@link PORTRAIT_SELECT_LAYOUT}`.listTop`). Genre, title and artist on top, then two rows of three facts and a
+ * row of the player's best on the chart, then PLAY and AUTO side by side along its foot, and a small README at its top
+ * right, on the genre line.
  */
 export function resolvePortraitSelectCard(width: number): PortraitSelectCard {
   const top = 44;
@@ -62,7 +63,7 @@ export function resolvePortraitSelectCard(width: number): PortraitSelectCard {
     card,
     factColumns: [left, left + column, left + 2 * column],
     factWidth: column - 12,
-    factRows: [card.y + 96, card.y + 140],
+    factRows: [card.y + 96, card.y + 140, card.y + 184],
     play: { x: left, y: buttonY, w: playW, h: buttonH },
     auto: { x: left + playW + gap, y: buttonY, w: inner - playW - gap, h: buttonH },
     readme: { x: left + inner - README_CHIP.w, y: card.y + 11, ...README_CHIP },
