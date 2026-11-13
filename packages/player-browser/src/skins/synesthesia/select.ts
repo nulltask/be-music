@@ -107,6 +107,14 @@ const BANNER_MAX_H = 64;
 const ROW_BPM_W = 76;
 const ROW_LENGTH_W = 30;
 const ROW_NOTES_W = 84;
+/**
+ * Where a row's level orb and title start from its left edge, landscape and portrait: clear of the clear lamp and its
+ * glow along the edge.
+ */
+const ROW_LEVEL_X = 22;
+const ROW_TITLE_X = 40;
+const PORTRAIT_ROW_LEVEL_X = 25;
+const PORTRAIT_ROW_TITLE_X = 45;
 /** The DJ Rank column of a song row, left of the note count. */
 const ROW_RANK_W = 24;
 /**
@@ -1099,7 +1107,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const midY = y + rowH / 2;
     const level = browseEntryBadge(entry);
     const orbColor = chartEntry ? levelColor(Math.min(1, Number.parseFloat(level) / 12 || 0)) : SYN_MIST;
-    row.circle(rowX + 18, midY, 12).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
+    row.circle(rowX + PORTRAIT_ROW_LEVEL_X, midY, 12).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
     frame.layer.addChild(row);
     // The best clear lamp lights the bar's leading edge, rippling down the list.
     drawBarLamp(
@@ -1113,7 +1121,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       frame.nowMs,
       frame.effects === 'off',
     );
-    addSynesthesiaText(frame.layer, level, rowX + 18, midY, {
+    addSynesthesiaText(frame.layer, level, rowX + PORTRAIT_ROW_LEVEL_X, midY, {
       size: 10,
       fill: SYN_WHITE,
       fontFamily: SYN_DISPLAY_FONT,
@@ -1151,7 +1159,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       const countNode = addSynesthesiaText(frame.layer, count, factsRight, midY, factStyle(SYN_MIST, ROW_COUNT_MAX_W));
       factsW = count ? Math.max(factsW, Math.min(ROW_COUNT_MAX_W, countNode.width)) : factsW;
     }
-    const textX = rowX + 38;
+    const textX = rowX + PORTRAIT_ROW_TITLE_X;
     const textW = Math.max(24, factsRight - factsW - 10 - textX);
     const artist = chartEntry?.artist?.trim();
     const title = addSynesthesiaText(frame.layer, browseEntryTitle(entry), textX, artist ? midY - 7 : midY, {
@@ -1219,7 +1227,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     // Level as a glowing orb on the leading edge.
     const level = browseEntryBadge(entry);
     const orbColor = chartEntry ? levelColor(Math.min(1, Number.parseFloat(level) / 12 || 0)) : SYN_MIST;
-    row.circle(rowX + 16, y + (rowHeight - 4) / 2, 9).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
+    row.circle(rowX + ROW_LEVEL_X, y + (rowHeight - 4) / 2, 9).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
     frame.layer.addChild(row);
     // The best clear lamp lights the bar's leading edge, rippling down the list.
     drawBarLamp(
@@ -1234,7 +1242,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       frame.effects === 'off',
     );
     const midY = y + (rowHeight - 4) / 2;
-    addSynesthesiaText(frame.layer, level, rowX + 16, midY, {
+    addSynesthesiaText(frame.layer, level, rowX + ROW_LEVEL_X, midY, {
       size: level.length > 2 ? 7 : 9,
       fill: SYN_WHITE,
       fontFamily: SYN_DISPLAY_FONT,
@@ -1310,14 +1318,14 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       }
       factsLeft -= 6;
     }
-    const title = addSynesthesiaText(frame.layer, browseEntryTitle(entry), rowX + 34, midY, {
+    const title = addSynesthesiaText(frame.layer, browseEntryTitle(entry), rowX + ROW_TITLE_X, midY, {
       size: 11,
       weight: active ? '500' : '300',
       fill: SYN_WHITE,
       fontFamily: SYN_TEXT_FONT,
       anchorY: 0.5,
       alpha,
-      maxWidth: Math.max(24, factsLeft - rowX - 34),
+      maxWidth: Math.max(24, factsLeft - rowX - ROW_TITLE_X),
       // Only the focused row scrolls a long title; the others clip it at its start.
       marquee: active,
       ...(active ? { dropShadow: { color: accent, distance: 0, blur: 8, alpha: 0.9 } } : {}),
@@ -1325,7 +1333,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     title.label = `fallback-title[idx=${entryIndex}]`;
     // The artist trails the title in a dimmer light while there is room for it.
     const artist = chartEntry?.artist?.trim();
-    const artistX = rowX + 34 + title.width + 10;
+    const artistX = rowX + ROW_TITLE_X + title.width + 10;
     if (artist && factsLeft - artistX >= 40) {
       addSynesthesiaText(frame.layer, artist, artistX, midY, {
         size: 9,
