@@ -63,7 +63,9 @@ function without<K extends keyof ChartPlayOptions>(options: ChartPlayOptions, ..
  * note conversion (`CRAZY_OFF` does not, as in nanasigroove).
  */
 export function parseChartPlayOption(declaration: string): Patch | undefined {
-  const baseSpeed = /^774:CRA-RHS([123])$/.exec(declaration);
+  // Every declaration here is a `774:` one; the check keeps the others off the patterns below.
+  if (!declaration.startsWith('774:')) return undefined;
+  const baseSpeed = declaration.startsWith('CRA-RHS', 4) ? /^774:CRA-RHS([123])$/.exec(declaration) : null;
   if (baseSpeed !== null) {
     const rate = ([1.2, 1.5, 2] as const)[Number(baseSpeed[1]) - 1]!;
     return (options) => ({ ...options, baseSpeed: rate });

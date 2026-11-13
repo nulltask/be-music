@@ -498,15 +498,21 @@ export function isListPlayOption(key: keyof PlayOptions): boolean {
   return LIST_PLAY_OPTIONS.has(key);
 }
 
+/** Every play option's key, listed once: the options resolve on every scene and every settings change. */
+const PLAY_OPTION_KEYS = Object.keys(DEFAULT_PLAY_OPTIONS) as readonly (keyof PlayOptions)[];
+
 /**
  * Play options as stored by a host, made whole and valid: each field of `stored` that {@link resolvePlayOptionValue}
  * accepts (clamped for the numeric ones) over {@link DEFAULT_PLAY_OPTIONS}; anything else is dropped.
  */
 export function resolvePlayOptions(stored: Readonly<Partial<Record<keyof PlayOptions, unknown>>> = {}): PlayOptions {
   const options: PlayOptions = { ...DEFAULT_PLAY_OPTIONS };
-  for (const key of Object.keys(DEFAULT_PLAY_OPTIONS) as Array<keyof PlayOptions>) {
+  for (const key of PLAY_OPTION_KEYS) {
     if (!Object.hasOwn(stored, key)) continue;
-    const value = resolvePlayOptionValue(key, stored[key]);
+    const raw = stored[key];
+    // A default is valid as it stands and already in place: most stored options are their default, so skip them.
+    if (raw === options[key]) continue;
+    const value = resolvePlayOptionValue(key, raw);
     if (value !== undefined) (options as Record<keyof PlayOptions, unknown>)[key] = value;
   }
   if (options.floatingHiSpeed) {

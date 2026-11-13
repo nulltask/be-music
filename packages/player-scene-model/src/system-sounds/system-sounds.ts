@@ -171,7 +171,12 @@ export function systemSoundSetFromBeatoraja(theme: BeatorajaThemeSounds): System
     ['courseFail', fromBytes(bgm.courseFail)],
     ['resultClose', fromBytes(bgm.resultClose)],
     ['courseClose', fromBytes(bgm.courseClose)],
-    ...GUIDE_SOUND_SLOTS.map((slot): [SystemSoundSlot, SystemSound | undefined] => [slot, fromPath(paths[slot])]),
+    ['guidePG', fromPath(paths.guidePG)],
+    ['guideGR', fromPath(paths.guideGR)],
+    ['guideGD', fromPath(paths.guideGD)],
+    ['guideBD', fromPath(paths.guideBD)],
+    ['guidePR', fromPath(paths.guidePR)],
+    ['guideMS', fromPath(paths.guideMS)],
   ]);
 }
 

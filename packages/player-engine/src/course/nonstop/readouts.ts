@@ -172,15 +172,26 @@ export function resolveNonstopStageRanks(
   // Pushed stage by stage, each switch before the stage's own changes: the stable sort keeps a change after a switch at
   // the same time.
   const ranks: NonstopStageRank[] = [];
+  // Whether the ranks went in out of time order: sorting a list already in order would only cost time.
+  let unordered = false;
+  let last = Number.NEGATIVE_INFINITY;
   for (let index = 0; index < switches.length; index += 1) {
     const own = switches[index];
-    if (own !== undefined) ranks.push(own);
+    if (own !== undefined) {
+      ranks.push(own);
+      if (own.seconds < last) unordered = true;
+      last = own.seconds;
+    }
+    const changes = stages[index]?.exRankChanges;
+    if (changes === undefined || changes.length === 0) continue;
     const next = lr2 ? undefined : switches[index + 1]?.seconds;
-    for (const change of stages[index]?.exRankChanges ?? []) {
+    for (const change of changes) {
       const seconds = lr2 || own === undefined ? change.seconds : Math.max(change.seconds, own.seconds);
       if (next !== undefined && seconds >= next) continue;
       ranks.push({ seconds, rank: change.exRank, table: 'bms-exrank-change' });
+      if (seconds < last) unordered = true;
+      last = seconds;
     }
   }
-  return ranks.sort((left, right) => left.seconds - right.seconds);
+  return unordered ? ranks.sort((left, right) => left.seconds - right.seconds) : ranks;
 }

@@ -44,14 +44,14 @@ export function resolveCourseView(course: LibraryCourse, stageIndex?: number): C
       const chart = stage.chart;
       const level = typeof chart?.playLevel === 'string' ? Number.parseInt(chart.playLevel, 10) : chart?.playLevel;
       const difficulty = chart !== undefined ? resolveLibraryChartDifficultyValue(chart) : undefined;
-      return {
-        title: chart?.title ?? stage.title,
-        ...(chart?.subtitle !== undefined ? { subtitle: chart.subtitle } : {}),
-        ...(chart?.artist !== undefined ? { artist: chart.artist } : {}),
-        ...(chart?.genre !== undefined ? { genre: chart.genre } : {}),
-        ...(level !== undefined && Number.isFinite(level) ? { level } : {}),
-        ...(difficulty !== undefined && Number.isFinite(difficulty) ? { difficulty } : {}),
-      };
+      // Set field by field, in this order: a spread per optional field costs more than the fields themselves.
+      const view: CourseStageView = { title: chart?.title ?? stage.title };
+      if (chart?.subtitle !== undefined) view.subtitle = chart.subtitle;
+      if (chart?.artist !== undefined) view.artist = chart.artist;
+      if (chart?.genre !== undefined) view.genre = chart.genre;
+      if (level !== undefined && Number.isFinite(level)) view.level = level;
+      if (difficulty !== undefined && Number.isFinite(difficulty)) view.difficulty = difficulty;
+      return view;
     }),
     ...(stageIndex !== undefined ? { stageIndex } : {}),
     ...(course.definition.kind === 'nonstop'
