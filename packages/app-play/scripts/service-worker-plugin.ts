@@ -76,6 +76,11 @@ export function precacheVersion(files: ReadonlyArray<readonly [string, string | 
   return hash.digest('hex').slice(0, 16);
 }
 
+/** Versions an icon or manifest URL using the bytes the build serves. */
+export function versionedPWAURL(path: string, bytes: string | Uint8Array): string {
+  return `${path}?v=${createHash('sha256').update(bytes).digest('hex').slice(0, 16)}`;
+}
+
 /** Replaces the worker's placeholder with the manifest; the placeholder has to appear exactly once. */
 export function injectManifest(code: string, manifest: PrecacheManifest): string {
   const parts = code.split(MANIFEST_PLACEHOLDER);
@@ -167,10 +172,36 @@ export function serviceWorkerPlugin(options: ServiceWorkerPluginOptions): Plugin
           candidates.push({ fileName, references: [] });
         }
 
+        const versioned = new Map<string, string>();
+        const versionURL = (url: string): string => {
+          const file = url.slice(1);
+          const bytes = contents.get(file);
+          if (bytes === undefined) this.error(`Missing PWA asset: ${url}`);
+          const result = versionedPWAURL(url, bytes);
+          versioned.set(file, result);
+          return result;
+        };
+
+        const manifestFile = 'manifest.webmanifest';
+        const appManifest = JSON.parse(String(contents.get(manifestFile))) as { icons: { src: string }[] };
+        for (const icon of appManifest.icons) icon.src = versionURL(icon.src);
+        const appManifestJSON = JSON.stringify(appManifest, null, 2) + '\n';
+        contents.set(manifestFile, appManifestJSON);
+        this.emitFile({ type: 'asset', fileName: manifestFile, source: appManifestJSON });
+        for (const page of ['index.html', ...options.excludedPages]) {
+          const output = bundle[page];
+          if (output?.type !== 'asset' || typeof output.source !== 'string') continue;
+          output.source = output.source.replace(
+            /(<link\b[^>]*\brel="(?:icon|apple-touch-icon|manifest)"[^>]*\bhref=")(\/[^"]+)"/g,
+            (_match, prefix: string, url: string) => `${prefix}${versionURL(url)}"`,
+          );
+          contents.set(page, output.source);
+        }
+
         const files = selectPrecacheFiles(candidates, options.excludedPages);
         const manifest: PrecacheManifest = {
           version: precacheVersion(files.map((name) => [name, contents.get(name) ?? ''] as const)),
-          urls: files.map(precacheURL),
+          urls: files.map((name) => versioned.get(name) ?? precacheURL(name)),
           ffmpegCoreVersion: options.ffmpegCoreVersion,
           fontStylesheets: findFontStylesheets(String(contents.get('index.html') ?? '')),
         };
