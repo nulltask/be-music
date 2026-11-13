@@ -178,6 +178,16 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       ]);
     },
   });
+  define('player-skin-sdk.describeBestRecord', {
+    run: () => {
+      skinSdkAPI.describeBestRecord({ lamp: 'HARD', exScore: 1650, maxCombo: 812, missCount: 14, playCount: 9 }, 1000);
+    },
+  });
+  define('player-skin-sdk.resolveClearLampLight', {
+    run: () => {
+      skinSdkAPI.resolveClearLampLight('FULL_COMBO', 1234, 0.25);
+    },
+  });
   define('player-skin-sdk.comboTier', {
     run: () => {
       skinSdkAPI.comboTier(120);
