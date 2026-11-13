@@ -1,5 +1,12 @@
-import type { Container } from 'pixi.js';
-import { addSkinNumber, addSkinText, type SkinTextOptions } from '../pixi-kit/index.ts';
+import type { Container, Text } from 'pixi.js';
+import {
+  addHUDText,
+  addSkinNumber,
+  addSkinText,
+  type ChildPool,
+  type HUDTextOptions,
+  type SkinTextOptions,
+} from '../pixi-kit/index.ts';
 import { SYN_DISPLAY_FONT } from './style.ts';
 
 const DIGIT = /\d/u;
@@ -18,5 +25,16 @@ export function addSynesthesiaText(
 ): Container {
   return options.fontFamily === SYN_DISPLAY_FONT && DIGIT.test(text)
     ? addSkinNumber(layer, text, x, y, options)
-    : addSkinText(layer, text, x, y, options);
+    : addSkinText(layer, text, x, y, { ...options, squeezeShortOverflow: true });
+}
+
+export function addSynesthesiaHUDText(
+  layer: Container,
+  text: string,
+  x: number,
+  y: number,
+  options: HUDTextOptions = {},
+  pool?: ChildPool,
+): Text {
+  return addHUDText(layer, text, x, y, { ...options, squeezeShortOverflow: true }, pool);
 }

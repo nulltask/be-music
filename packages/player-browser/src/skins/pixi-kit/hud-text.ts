@@ -25,6 +25,8 @@ export interface HUDTextOptions {
   maxWidth?: number;
   /** `false` clips an overflowing text at its start instead of scrolling it. */
   marquee?: boolean;
+  /** Squeezes further when at most the final two characters would scroll. */
+  squeezeShortOverflow?: boolean;
   /** Horizontal skew in radians (negative leans the glyph tops right, like italic). */
   skewX?: number;
   rotation?: number;
@@ -76,6 +78,7 @@ export function addHUDText(
       anchorY: opts.anchorY ?? 0,
       scale: opts.scale,
       scroll: opts.marquee,
+      squeezeShortOverflow: opts.squeezeShortOverflow,
     });
   } else {
     stopMarquee(node);
