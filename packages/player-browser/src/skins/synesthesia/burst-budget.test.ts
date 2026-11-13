@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { BURST_FRAME_BUDGET, BURST_SKIRT_FRAME_BUDGET, burstGrainCount } from './burst-budget.ts';
+import {
+  BURST_FRAME_BUDGET,
+  BURST_SKIRT_FRAME_BUDGET,
+  burstGrainCount,
+  judgmentParticleMultiplier,
+} from './burst-budget.ts';
 
 describe('burstGrainCount', () => {
   it('draws the full tier-scaled burst while few bombs overlap', () => {
@@ -21,5 +26,23 @@ describe('burstGrainCount', () => {
   it('never goes negative', () => {
     expect(burstGrainCount(170, 24, 0, 0, 3)).toBe(0);
     expect(burstGrainCount(170, 24, 0, 1, 0)).toBe(170);
+  });
+});
+
+describe('judgmentParticleMultiplier', () => {
+  it.each([
+    [undefined, 1],
+    [{ judgmentParticles: 'normal' }, 1],
+    [{ judgmentParticles: 'more' }, 1.5],
+    [{ judgmentParticles: 'most' }, 2],
+    [{ judgmentParticles: 'unknown' }, 1],
+  ] as const)('resolves the density for %j', (settings, multiplier) => {
+    expect(judgmentParticleMultiplier(settings)).toBe(multiplier);
+  });
+
+  it.each([1, 1.5, 2])('scales individual hits and dense passages by %s', (multiplier) => {
+    expect(burstGrainCount(170, 24, 4, multiplier, 1, BURST_FRAME_BUDGET * multiplier)).toBe(266 * multiplier);
+    expect(burstGrainCount(170, 24, 4, multiplier, 8, BURST_FRAME_BUDGET * multiplier)).toBe(120 * multiplier);
+    expect(burstGrainCount(140, 16, 4, multiplier, 8, BURST_SKIRT_FRAME_BUDGET * multiplier)).toBe(90 * multiplier);
   });
 });

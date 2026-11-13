@@ -132,6 +132,7 @@ export interface PixiBombsContext {
   lanes?: readonly BeMusicLaneFrame[];
   /** Current combo — lets skins escalate hit effects as a run builds. */
   combo?: number;
+  settings?: BeMusicSkinSettingValues;
   effects?: BeMusicEffectLevel;
   audio?: BeMusicAudioFrame;
 }

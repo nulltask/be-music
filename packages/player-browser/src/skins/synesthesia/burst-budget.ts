@@ -1,8 +1,33 @@
+import type { BeMusicSkinChoiceSetting, BeMusicSkinSettingValues } from '@be-music/player-skin-sdk';
+
 /**
  * Spark budget for Synesthesia bombs. A lone hit throws its full burst; when many hits overlap, the frame's total grain
  * count is capped and shared between them, so a dense chord or a chart's busiest passage costs about as much to draw
  * as a few hits — the overlapping additive light reads just as full either way.
  */
+
+export const JUDGMENT_PARTICLES_SETTING = {
+  kind: 'choice',
+  id: 'judgmentParticles',
+  label: 'Judgment particles',
+  options: [
+    { value: 'normal', label: '通常' },
+    { value: 'more', label: 'マシ' },
+    { value: 'most', label: 'マシマシ' },
+  ],
+  default: 'normal',
+} satisfies BeMusicSkinChoiceSetting;
+
+export function judgmentParticleMultiplier(settings: BeMusicSkinSettingValues | undefined): number {
+  switch (settings?.[JUDGMENT_PARTICLES_SETTING.id]) {
+    case 'more':
+      return 1.5;
+    case 'most':
+      return 2;
+    default:
+      return 1;
+  }
+}
 
 /** Most spark grains drawn across every live bomb in one frame. */
 export const BURST_FRAME_BUDGET = 960;
