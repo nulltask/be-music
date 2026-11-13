@@ -2779,6 +2779,13 @@ html.touch-first .search-input.search-inline:focus {
 .replay-slots-card[hidden] {
   display: none;
 }
+/* Keep the collapsed history control away from the skin's central buttons. */
+.replay-slots-card[data-mode='select']:has(be-music-collapsible-panel:not([open])) {
+  align-self: flex-start;
+  width: fit-content;
+  max-width: calc(100% - 16px);
+  margin-inline-start: 8px;
+}
 /* The card pads its own sides; Basecoat's card header would indent the heading past the slot rows. */
 .replay-slots-card > header {
   padding-inline: 0;
