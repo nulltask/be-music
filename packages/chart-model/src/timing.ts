@@ -210,7 +210,7 @@ export interface TempoChange {
 
 /**
  * The BPM changes of a chart, in chart order: channel `03` read as hex (always positive), channel `08` through
- * `#BPMxx`. Zero and undefined `#BPMxx` references are ignored; a negative `#BPMxx` is kept with its sign, since the
+ * `#BPMxx`. Zero `#BPMxx` references are ignored. Undefined BMS slots use -1, and negative values keep their sign, since the
  * engine plays it as LR2's reverse scroll. Several at one position all appear; the last one wins. Not part of the
  * package API (the chart fingerprint reads exact positions from the events).
  */
@@ -229,13 +229,9 @@ export function collectTempoChanges(json: BeMusicJSON, sortedEvents: ReadonlyArr
       }
       continue;
     }
-    const bpm = json.resources.bpm[normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson')];
-    if (typeof bpm !== 'number' || !Number.isFinite(bpm) || bpm === 0) {
-      // Zero and undefined slot references stay dropped (previous tempo continues). Real LR2 degenerates on both —
-      // a zero slot puts +inf into its precomputed table and an undefined slot hits its -1.0 sentinel (behaving
-      // like `#BPMxx -1`) — so neither is worth reproducing; see docs/bms-spec.md.
-      continue;
-    }
+    const key = normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson');
+    const bpm = json.resources.bpm[key] ?? (json.sourceFormat === 'bms' ? -1 : undefined);
+    if (typeof bpm !== 'number' || !Number.isFinite(bpm) || bpm === 0) continue;
     changes.push({ event, bpm });
   }
   return changes;
