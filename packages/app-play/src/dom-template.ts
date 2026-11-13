@@ -507,7 +507,19 @@ export const PLAYER_APP_TEMPLATE = html`
         <div>
           <header>
             <h2 id="options-modal-title">${localized('options')}</h2>
+            <!-- Finds an option by its name, place, choices or help. \`ui/options/search.ts\`. -->
+            <input
+              class="input options-search"
+              id="options-search"
+              type="search"
+              placeholder=${localized('optionsSearch')}
+              aria-label=${localized('optionsSearch')}
+              aria-controls="options-search-results"
+              autocomplete="off"
+              spellcheck="false"
+            />
           </header>
+          <div id="options-search-results" class="options-search-results" hidden></div>
           <section id="options-modal-body" class="options-body"></section>
           <button type="button" id="options-modal-close" aria-label=${localized('close')}>
             <svg

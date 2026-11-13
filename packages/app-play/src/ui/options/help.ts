@@ -215,6 +215,17 @@ export class OptionHelp {
     }
   }
 
+  /** The help of the control in `row` as plain text, in the language Help shows; empty when Help has none for it. */
+  public text(row: HTMLElement): string {
+    const section = optionHelpSection(folderTitles(row, this.root), this.entries('en').sections);
+    const key = entryKey(section, row.dataset.optionLabel ?? '');
+    const description = this.entries(this.language()).entries.get(key) ?? this.entries('en').entries.get(key);
+    if (description === undefined) return '';
+    const holder = document.createElement('template');
+    holder.innerHTML = description;
+    return holder.content.textContent ?? '';
+  }
+
   private entries(lang: string): OptionHelpEntries {
     let entries = this.cache.get(lang);
     if (entries === undefined) {
