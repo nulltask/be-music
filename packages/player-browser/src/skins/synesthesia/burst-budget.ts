@@ -21,11 +21,11 @@ export const JUDGMENT_PARTICLES_SETTING = {
 export function judgmentParticleMultiplier(settings: BeMusicSkinSettingValues | undefined): number {
   switch (settings?.[JUDGMENT_PARTICLES_SETTING.id]) {
     case 'more':
-      return 1.5;
+      return 5;
     case 'most':
-      return 2;
+      return 10;
     default:
-      return 1;
+      return 2;
   }
 }
 
