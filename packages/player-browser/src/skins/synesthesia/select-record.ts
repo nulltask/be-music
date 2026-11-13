@@ -9,6 +9,9 @@ import type { SkinTextOptions } from '../pixi-kit/index.ts';
 import { drawReticle } from './draw.ts';
 import { SYN_AMBER, SYN_DIM, SYN_DISPLAY_FONT, SYN_MIST, SYN_VOID, SYN_WHITE } from './style.ts';
 
+/** How long a lit lamp takes to breathe in and out once. */
+const LAMP_BREATH_MS = 2400;
+
 type AddText = (text: string, x: number, y: number, options?: SkinTextOptions) => Container;
 
 /**
@@ -40,8 +43,10 @@ export class LampLights {
     for (const entry of this.lamps) {
       if (entry.node.destroyed) continue;
       const light = lampLight(entry.lamp, nowMs, entry.phase, still);
+      // The lit lamps breathe gently, rippling down the list with their phase.
+      const breath = still ? 1 : 0.86 + 0.14 * Math.sin((nowMs / LAMP_BREATH_MS + entry.phase) * Math.PI * 2);
       entry.node.tint = light.color;
-      entry.node.alpha = entry.base * light.alpha;
+      entry.node.alpha = entry.base * light.alpha * breath;
     }
   }
 }
@@ -51,9 +56,24 @@ function lampLight(lamp: BeMusicClearLamp, nowMs: number, phase: number, still: 
   return still ? { color: CLEAR_LAMP_COLORS[lamp], alpha: 1 } : resolveClearLampLight(lamp, nowMs, phase);
 }
 
+/** The halo around a lamp's bar, widest and faintest first: [width, alpha], centred on the bar. */
+const LAMP_HALO: ReadonlyArray<readonly [width: number, alpha: number]> = [
+  [19, 0.06],
+  [13, 0.1],
+  [8, 0.2],
+];
+/** The light the lamp spills into its bar, nearest first: [width, alpha] steps running right from the lamp. */
+const LAMP_SPILL: ReadonlyArray<readonly [width: number, alpha: number]> = [
+  [6, 0.16],
+  [8, 0.09],
+  [10, 0.045],
+  [14, 0.018],
+];
+
 /**
- * A select bar's clear lamp: a slim upright bar of light at (`x`, `y`) with a soft halo, added to `layer` and lit by
- * `lights`. Nothing for `NO_PLAY` or no record.
+ * A select bar's clear lamp: a slim upright bar of light at (`x`, `y`), added to `layer` and lit by `lights`. It glows:
+ * a soft halo round the bar and a wash of its light spilling into the bar, all added to what is under it. Nothing for
+ * `NO_PLAY` or no record.
  */
 export function drawBarLamp(
   layer: Container,
@@ -69,7 +89,16 @@ export function drawBarLamp(
   if (lamp === undefined || lamp === 'NO_PLAY') return;
   const node = new Graphics();
   node.label = `synesthesia-select/lamp[${lamp}]`;
-  node.rect(x - 2, y, 7, h).fill({ color: SYN_WHITE, alpha: 0.22 });
+  node.blendMode = 'add';
+  const centre = x + 1.5;
+  for (const [width, alpha] of LAMP_HALO) {
+    node.rect(centre - width / 2, y - 1, width, h + 2).fill({ color: SYN_WHITE, alpha });
+  }
+  let spillX = x + 3;
+  for (const [width, alpha] of LAMP_SPILL) {
+    node.rect(spillX, y, width, h).fill({ color: SYN_WHITE, alpha });
+    spillX += width;
+  }
   node.rect(x, y, 3, h).fill({ color: SYN_WHITE, alpha: 1 });
   layer.addChild(node);
   lights.add(node, lamp, phase, nowMs, still);
