@@ -435,8 +435,9 @@ flowchart TD
 - LR2 ルールセットは lr2oraja に従い、OpenLR2 の書き起こしと相互検証しています。両者が食い違う LN 頭の
   見逃し POOR 閾値は lr2oraja の挙動を採用しています。DEATH ゲージは lr2oraja の beatoraja 由来の `HAZARD_LR2` 表では
   なく LR2 本体に従います（回復なし、空 POOR は減少なし）。
-- 名前を言ってはいけないあのゲームの内部仕様は非公開です。判定幅・ゲージ表・DJ LEVEL 境界は現在のコミュニティ実測の合意値であり、
-  空 POOR 窓と CN 終端窓は未測定のため beatoraja の値を代用、HCN のゲージ tick は実測されている
+- 名前を言ってはいけないあのゲームの内部仕様は非公開です。判定幅・ゲージ表・DJ LEVEL 境界は現在のコミュニティ実測の合意値です [C]。
+  空 POOR 窓と CN 終端窓は未測定の暫定値で、beatoraja のミス窓と SEVENKEYS のロングノート終端窓を借りています。これは beatoraja の根拠 [V] で、
+  このゲームの根拠ではありません（[#1189](https://github.com/nulltask/be-music/issues/1189)）。HCN のゲージ tick は実測されている
   16 分音符間隔の代わりに固定 200 ms を使用しています。「ほぼ一致」は期待できますが、ビット単位の
   完全一致は保証されません。
 - beatoraja は FIVEKEYS、SEVENKEYS、PMS、KEYBOARD のゲージ表とモード別のデフォルト TOTAL を使います。エンジンのフレームは PMS の最大値 120 を含む実際の範囲を持ち、リプレイの `gauge.final` と結果のゲージはその最大値に対する百分率です。PMS の「1 ノートにつき空 POOR 1 回」規則は未対応です。

@@ -416,7 +416,8 @@ function resolveBeatorajaWindowTables(chart: RulesetChartFacts, judgeRankOverrid
   return { note, scratch, longNoteEnd, longScratchEnd };
 }
 
-// That-Which-Must-Not-Be-Named community-consensus windows (https://iidx.org): PG ±1F / GR ±2F / GD ±7F / BD ±15F at 60 fps.
+// That-Which-Must-Not-Be-Named community-consensus windows [C] (https://iidx.org): PG ±1F / GR ±2F / GD ±7F / BD ±15F at 60 fps. Only these
+// ordinary-note windows rest on evidence about the game itself.
 const _____NOTE: JudgeWindowSetUs = {
   judges: [
     [-16667, 16667],
@@ -424,12 +425,14 @@ const _____NOTE: JudgeWindowSetUs = {
     [-116667, 116667],
     [-250000, 250000],
   ],
-  // The That-Which-Must-Not-Be-Named empty-POOR window has never been measured precisely; beatoraja's MS window (late 150 ms /
-  // early 500 ms) is used as the stand-in.
+  // Provisional (#1189): the That-Which-Must-Not-Be-Named empty-POOR window has never been measured precisely. beatoraja's MS window
+  // (late 150 ms / early 500 ms, `JudgeProperty` SEVENKEYS [V]) is borrowed as a donor value: evidence of beatoraja,
+  // not of this game.
   ms: [-150000, 500000],
 };
-// That-Which-Must-Not-Be-Named CN release windows are "significantly wider" but unmeasured — beatoraja's SEVENKEYS long-note end
-// windows are used as the stand-in.
+// Provisional (#1189): That-Which-Must-Not-Be-Named CN release windows are "significantly wider" but unmeasured. beatoraja's SEVENKEYS
+// long-note end windows (`JudgeProperty` [V]) are borrowed as donor values, unscaled: evidence of beatoraja, not of this
+// game. `judge.test.ts` pins them to the donor, so a later measured value replaces them deliberately.
 const _____LN_END: JudgeWindowSetUs = {
   judges: [
     [-120000, 120000],

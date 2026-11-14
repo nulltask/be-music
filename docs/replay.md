@@ -466,7 +466,8 @@ flowchart TD
   missed-POOR threshold for LN heads, the lr2oraja behavior is used. The DEATH gauge follows LR2 itself (no recovery,
   an empty POOR costs nothing), not lr2oraja's beatoraja-derived `HAZARD_LR2` table.
 - That-Which-Must-Not-Be-Named internals are not public. The judge windows, gauge tables, and DJ LEVEL boundaries are current community
-  consensus; the empty-POOR window and CN release windows are unmeasured and use beatoraja's values as stand-ins,
+  consensus [C]; the empty-POOR window and CN release windows are unmeasured and provisional: they borrow beatoraja's
+  miss window and SEVENKEYS long-note end windows, which are evidence of beatoraja [V], not of this game ([#1189](https://github.com/nulltask/be-music/issues/1189)),
   and the HCN gauge tick uses a fixed 200 ms interval instead of That-Which-Must-Not-Be-Named's measured 16th-note interval. Expect
   close — not bit-exact — reproduction.
 - beatoraja uses separate FIVEKEYS, SEVENKEYS, PMS and KEYBOARD gauge tables and mode-specific default TOTAL. Engine frames carry raw gauge bounds, including PMS maximum 120; replay `gauge.final` and result gauges are percentages of that maximum. PMS's one-empty-POOR-per-note rule remains unmodeled.
