@@ -57,6 +57,9 @@ export class DropTarget {
 
   private readonly options: DropTargetOptions;
   private folderBusy = false;
+  private savedFolders: RememberedFolder[] = [];
+  private folderWrites = Promise.resolve();
+  private savedFoldersReady: Promise<void> | undefined;
   private reconnectFolders: RememberedFolder[] = [];
 
   public constructor(options: DropTargetOptions) {
@@ -79,9 +82,7 @@ export class DropTarget {
       }
       const folder = await picker;
       await this.loadFolder(folder);
-      await storedFolders([folder]);
-      this.reconnectFolders = [];
-      this.renderReconnect();
+      await this.rememberLoadedFolders([folder]);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) this.reportFolderError(error);
     } finally {
@@ -93,7 +94,7 @@ export class DropTarget {
     if (!globalThis.indexedDB || this.folderBusy) return;
     this.folderBusy = true;
     try {
-      this.reconnectFolders = await storedFolders();
+      await this.readSavedFolders();
       for (const folder of [...this.reconnectFolders]) {
         try {
           if ((await folder.queryPermission({ mode: 'read' })) === 'granted') {
@@ -109,6 +110,7 @@ export class DropTarget {
       this.reportFolderError(error);
     } finally {
       this.folderBusy = false;
+      this.renderFolderManager();
     }
   }
 
@@ -125,6 +127,119 @@ export class DropTarget {
         root,
       );
     }
+  }
+
+  private renderFolderManager(): void {
+    const root = document.querySelector<HTMLElement>('[data-remembered-folder-manager]');
+    if (!root || !globalThis.indexedDB) return;
+    const canPick = 'showDirectoryPicker' in window;
+    if (!canPick && this.savedFolders.length === 0) return;
+    render(
+      html`
+        <details>
+          <summary>${localized('savedFolders')}</summary>
+          <p>${localized('savedFoldersHint')}</p>
+          <ul class="remembered-folder-list">
+            ${this.savedFolders.map(
+              (folder) => html`
+                <li>
+                  <span>${folder.name}</span>
+                  <button
+                    type="button"
+                    class="btn"
+                    ?disabled=${!canPick}
+                    aria-label=${localized(() => playerText().shell.changeSavedFolder(folder.name))}
+                    @click=${() => void this.editSavedFolder(folder, true)}
+                  >
+                    ${localized('changeFolder')}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn"
+                    aria-label=${localized(() => playerText().shell.removeSavedFolder(folder.name))}
+                    @click=${() => void this.editSavedFolder(folder, false)}
+                  >
+                    ${localized('removeFolder')}
+                  </button>
+                </li>
+              `,
+            )}
+          </ul>
+          <button
+            type="button"
+            class="btn"
+            ?disabled=${!canPick}
+            @click=${() => void this.editSavedFolder(undefined, true)}
+          >
+            ${localized('addFolder')}
+          </button>
+        </details>
+      `,
+      root,
+    );
+  }
+
+  private async editSavedFolder(previous: RememberedFolder | undefined, pick: boolean): Promise<void> {
+    if (this.folderBusy) return;
+    this.folderBusy = true;
+    try {
+      const folder = pick ? await pickRememberedFolder() : undefined;
+      if (pick && !folder) return;
+      await this.updateSavedFolders(async (saved) => {
+        if (folder) {
+          for (const existing of saved) {
+            if (await existing.isSameEntry(folder)) {
+              return existing === previous ? saved : saved.filter((item) => item !== previous);
+            }
+          }
+        }
+        if (previous) return saved.flatMap((item) => (item === previous ? (folder ? [folder] : []) : [item]));
+        return folder ? [...saved, folder] : saved;
+      });
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) this.reportFolderError(error);
+    } finally {
+      this.folderBusy = false;
+    }
+  }
+
+  private readSavedFolders(): Promise<void> {
+    return (this.savedFoldersReady ??= storedFolders()
+      .then((folders) => {
+        this.savedFolders = folders;
+        this.reconnectFolders = [...folders];
+      })
+      .catch((error: unknown) => {
+        this.savedFoldersReady = undefined;
+        throw error;
+      }));
+  }
+
+  private updateSavedFolders(
+    update: (saved: readonly RememberedFolder[]) => Promise<readonly RememberedFolder[]>,
+  ): Promise<void> {
+    const write = this.folderWrites.then(async () => {
+      await this.readSavedFolders();
+      const next = await update(this.savedFolders);
+      this.savedFolders = await storedFolders(next);
+      this.reconnectFolders = this.reconnectFolders.filter((folder) => this.savedFolders.includes(folder));
+      this.renderReconnect();
+      this.renderFolderManager();
+    });
+    this.folderWrites = write.catch(() => undefined);
+    return write;
+  }
+
+  private rememberLoadedFolders(folders: readonly RememberedFolder[]): Promise<void> {
+    return this.updateSavedFolders(async (saved) => {
+      const next = [...saved];
+      for (const folder of folders) {
+        let index = 0;
+        while (index < next.length && !(await folder.isSameEntry(next[index]!))) index += 1;
+        next[index] = folder;
+      }
+      return next;
+    });
   }
 
   private async reconnectFolder(folder: RememberedFolder): Promise<void> {
@@ -281,9 +396,7 @@ export class DropTarget {
       const handles = await folders;
       if (handles.length > 0) {
         try {
-          await storedFolders(handles);
-          this.reconnectFolders = [];
-          this.renderReconnect();
+          await this.rememberLoadedFolders(handles);
         } catch (error) {
           this.reportFolderError(error);
         }

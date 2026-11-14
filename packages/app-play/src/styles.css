@@ -177,6 +177,20 @@ textarea {
 .options-search-results[hidden] {
   display: none;
 }
+.remembered-folder-list {
+  max-block-size: 20dvh;
+  overflow: auto;
+}
+.remembered-folder-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.remembered-folder-list li > span {
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
 .options-body {
   display: flex;
   flex-direction: column;
