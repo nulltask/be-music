@@ -14,6 +14,14 @@ const JUDGE_TIMING_AUTO_ADJUST_LABELS: Readonly<
   'LR2-SILENT': ' · AUTO (LR2 SILENT)',
 };
 
+/** A gauge pick as the Options dialog names it: `lr2:HARD` as `HARD (LR2)`, a bare gauge as it is. */
+function gaugeLabel(pick: string): string {
+  const colon = pick.indexOf(':');
+  if (colon < 0) return pick;
+  const source = pick.slice(0, colon);
+  return `${pick.slice(colon + 1)} (${source === 'lr2' ? 'LR2' : source === '____' ? '????' : source})`;
+}
+
 export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData> {
   static override styles: CSSResultGroup = [
     structureStyles,
@@ -74,7 +82,7 @@ export class BeMusicPlaySettingsElement extends DataElement<BeMusicSettingsData>
                   : o.bottomShiftableGauge
               : '—',
           ],
-          ['Gauge 1P / 2P', `${o.gauge1P} / ${o.gauge2P}`],
+          ['Gauge 1P / 2P', `${gaugeLabel(o.gauge1P)} / ${gaugeLabel(o.gauge2P)}`],
           ['Long notes', o.longNoteModifier === 'LEGACY' ? 'LEGACY NOTE' : o.longNoteModifier.replaceAll('_', ' ')],
           ['LN add rate', o.longNoteModifier.startsWith('ADD_') ? `${Math.round(o.longNoteRate * 1000) / 10}%` : '—'],
           ['Auto scratch', `1P ${o.autoScratch1P ? 'ON' : 'OFF'} / 2P ${o.autoScratch2P ? 'ON' : 'OFF'}`],

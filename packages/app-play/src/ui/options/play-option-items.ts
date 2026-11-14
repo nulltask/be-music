@@ -1,7 +1,12 @@
 import {
   optionValueSources,
+  qualifyGaugePick,
+  resolveGaugeTypes,
   resolvePracticeGaugeTypes,
+  splitGaugePick,
   splitOptionSource,
+  type GaugePick,
+  type GaugeType,
   type RulesetId,
 } from '@be-music/player-engine/ruleset';
 import {
@@ -125,6 +130,53 @@ export function battleModeItems(ruleset: RulesetId): PlayOptionItem<PlayOptions[
     { text: 'CHART HEADER', value: 'AUTO' },
     ...sourceOrder(ruleset).flatMap((source) => groups[source]),
   ];
+}
+
+/** A gauge's name as its source spells it: beatoraja's and AC's GROOVE is NORMAL, beatoraja's DEATH its HAZARD. */
+function gaugeName(source: RulesetId, type: GaugeType): string {
+  if (type === 'ASSIST-EASY') return source === '____' ? 'ASSISTED EASY' : 'ASSIST EASY';
+  if (type === 'DEATH' && source === 'beatoraja') return 'HAZARD';
+  if (type === 'GROOVE' && source !== 'lr2') return 'NORMAL';
+  return formatGaugeLabel(type) ?? type;
+}
+
+/**
+ * The Options dialog's gauges under `ruleset`, grouped by source like the lane options (ADR 0019, #1171): the judge
+ * ruleset's own gauges as bare values, then each other source's gauges as qualified picks named with their source, so
+ * `lr2:HARD` reads `HARD (LR2)` under beatoraja. A qualified pick keeps its source's gauge whichever ruleset judges.
+ *
+ * `selected` are the picks the dialog holds. One qualified with the judge ruleset itself (`lr2:HARD` under LR2, kept
+ * across a ruleset change) plays as the bare gauge does, so it is listed after the own gauges only while it is selected.
+ */
+export function gaugeItems(ruleset: RulesetId, selected: readonly GaugePick[] = []): PlayOptionItem<GaugePick>[] {
+  const qualified = (source: RulesetId, type: GaugeType): PlayOptionItem<GaugePick> => ({
+    text: `${gaugeName(source, type)} (${SOURCE_LABELS[source]})`,
+    value: qualifyGaugePick(source, type),
+  });
+  const kept = resolveGaugeTypes(ruleset).filter((type) =>
+    selected.some((pick) => {
+      const parts = splitGaugePick(pick);
+      return parts?.source === ruleset && parts.type === type;
+    }),
+  );
+  return [
+    ...resolveGaugeTypes(ruleset).map((type) => ({ text: gaugeName(ruleset, type), value: type })),
+    ...kept.map((type) => qualified(ruleset, type)),
+    ...sourceOrder(ruleset)
+      .slice(1)
+      .flatMap((source) => resolveGaugeTypes(source).map((type) => qualified(source, type))),
+  ];
+}
+
+/** {@link gaugeItems} for the dialog's state, as a select's label-to-value choices. */
+export function gaugeChoices(state: {
+  judgeRuleset: RulesetId;
+  gauge: GaugePick;
+  gauge2P: GaugePick;
+}): Record<string, GaugePick> {
+  return Object.fromEntries(
+    gaugeItems(state.judgeRuleset, [state.gauge, state.gauge2P]).map((item) => [item.text, item.value]),
+  );
 }
 
 /** How the Options dialog spells each PRACTICE gauge id. */

@@ -1,4 +1,4 @@
-import type { GaugeType } from '../ruleset/gauge-type.ts';
+import { qualifyGaugePick, splitGaugePick, type GaugePick } from '../ruleset/gauge-type.ts';
 import type { ReplayCourseStage } from '../replay/format.ts';
 import type { CourseConstraint, CourseDefinition } from './definition.ts';
 import { optionValueName, type QualifiedOptionValue } from '../ruleset/option-source.ts';
@@ -97,7 +97,8 @@ export function isLR2GradeCourse(definition: Pick<CourseDefinition, 'kind' | 'so
 
 /** The play settings LR2 resets when a GRADE course starts. */
 export interface LR2GradeResetSettings {
-  gauge: GaugeType;
+  /** The gauge pick, bare or qualified with its source (`lr2:EASY`). */
+  gauge: GaugePick;
   /** Each side's lane cover, as the select screen names it. */
   hiddenSudden1P: 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
   hiddenSudden2P: 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
@@ -110,8 +111,9 @@ export interface LR2GradeResetSettings {
 
 /**
  * The settings an LR2 GRADE course plays its stages with (OpenLR2 `Main.cpp` M1124-M1170, which LR2 applies when the
- * course starts): EASY and G.ATTACK gauge picks play on GROOVE; HIDDEN / SUDDEN, the assists (auto
- * scratch), DP FLIP and the play tempo (LR2's pitch) are turned off. A course that is not an LR2 GRADE course
+ * course starts): EASY and G.ATTACK gauge picks play on GROOVE, a source-qualified one on its own source's
+ * (`beatoraja:EASY` on `beatoraja:GROOVE`; the reset reads the gauge type, a Be-Music choice no reference defines);
+ * HIDDEN / SUDDEN, the assists (auto scratch), DP FLIP and the play tempo (LR2's pitch) are turned off. A course that is not an LR2 GRADE course
  * ({@link isLR2GradeCourse}) keeps the settings. The lane options are reset by the course's `grade` constraint
  * ({@link resolveCourseLaneOptions}). LR2 writes the resets into its config; a host applies them to the course's
  * stages only, so the player's own settings come back afterwards.
@@ -122,9 +124,11 @@ export function resolveLR2GradeCoursePlaySettings<T extends LR2GradeResetSetting
 ): T {
   // Spread over `settings` so the other fields a host carries along pass through.
   if (!isLR2GradeCourse(definition)) return settings;
+  const pick = splitGaugePick(settings.gauge);
+  const reset = pick?.type === 'EASY' || pick?.type === 'G-ATTACK';
   return {
     ...settings,
-    gauge: settings.gauge === 'EASY' || settings.gauge === 'G-ATTACK' ? 'GROOVE' : settings.gauge,
+    gauge: !reset ? settings.gauge : pick.source === undefined ? 'GROOVE' : qualifyGaugePick(pick.source, 'GROOVE'),
     hiddenSudden1P: 'OFF',
     hiddenSudden2P: 'OFF',
     autoScratch1P: false,

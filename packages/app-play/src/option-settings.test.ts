@@ -77,6 +77,28 @@ describe('writeOptionSettings', () => {
   });
 });
 
+describe('source-qualified gauge (ADR 0019, #1171)', () => {
+  test('saves and restores a qualified gauge, and drops one its source does not define', () => {
+    const document = parseOptionSettingsDocument(
+      JSON.stringify({
+        version: 0,
+        updatedAt: 1,
+        settings: { gauge: 'lr2:HARD', gauge2P: 'beatoraja:EX-HARD' },
+      }),
+    );
+    expect(document?.settings).toMatchObject({ gauge: 'lr2:HARD', gauge2P: 'beatoraja:EX-HARD' });
+    const state = { gauge: 'GROOVE', gauge2P: 'GROOVE' } as PlayerGUIState;
+    overlayOptionSettings(state, document!.settings);
+    expect(state).toMatchObject({ gauge: 'lr2:HARD', gauge2P: 'beatoraja:EX-HARD' });
+
+    const refused = parseOptionSettingsDocument(
+      JSON.stringify({ version: 0, updatedAt: 1, settings: { gauge: 'lr2:EX-HARD', gauge2P: '____:DEATH' } }),
+    );
+    expect(refused?.settings.gauge).toBeUndefined();
+    expect(refused?.settings.gauge2P).toBeUndefined();
+  });
+});
+
 describe('overlayOptionSettings', () => {
   test('replaces only the fields the document has', () => {
     const state = { gauge: 'GROOVE', autoPlay: false, peakGain: false } as PlayerGUIState;

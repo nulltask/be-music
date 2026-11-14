@@ -9,7 +9,7 @@ import type {
   PlayOptions,
   RandomMode,
 } from '@be-music/player-scene-model';
-import type { GaugeType } from '@be-music/player-engine/ruleset';
+import type { GaugePick } from '@be-music/player-engine/ruleset';
 
 /**
  * Per-session gameplay tweaks the player picks on the select screen (`PlayOptions` of `@be-music/player-scene-model`):
@@ -38,8 +38,12 @@ export type BeMusicHiddenSudden = HiddenSuddenMode;
 /** Allowed values for {@link BeMusicPlayOptions.random1P} / `random2P`. */
 export type BeMusicRandomMode = RandomMode;
 
-/** Allowed values for {@link BeMusicPlayOptions.gauge1P} / `gauge2P`: the gauge type of `@be-music/player-engine/ruleset`. */
-export type BeMusicGaugeType = GaugeType;
+/**
+ * Allowed values for {@link BeMusicPlayOptions.gauge1P} / `gauge2P`: the gauge pick of `@be-music/player-engine/ruleset`.
+ * A bare gauge type (`HARD`) is the judge ruleset's own; one qualified with its source (`lr2:HARD`, `beatoraja:EX-HARD`)
+ * keeps that source's gauge under every judge ruleset.
+ */
+export type BeMusicGaugeType = GaugePick;
 
 /** Allowed values for {@link BeMusicPlayOptions.bga}. */
 export type BeMusicBGAMode = BGAMode;

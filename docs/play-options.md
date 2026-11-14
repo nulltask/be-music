@@ -23,7 +23,7 @@ flowchart LR
   q -->|"S-RANDOM"| rules["The judge ruleset's own"]
 ```
 
-The rest stays with the ruleset. Judge rules are what the ruleset is: windows, gauges, note selection, long-note style, mine trigger and score. LN MODE, CUSTOM JUDGE, LR2's [GAMBOL](#gambol), the gauge types the Options dialog offers and the judgment algorithm also remain ruleset-bound. The engine, replays and the terminal player's `--gauge` also take a gauge qualified with its source (`lr2:HARD`), which keeps that source's gauge, auto-shift ladder and course gauges under any judge ruleset ([ADR 0019](./adr/0019-source-qualified-option-values.md), [#1171](https://github.com/nulltask/be-music/issues/1171)); the dialog does not offer it yet. [PRACTICE](#practice) and [gauge auto-shift](#gauge-auto-shift) are offered under every ruleset and read under it: PRACTICE lists the ruleset's own gauges, and auto-shift shifts along the ruleset's own gauge ladder ([#933](https://github.com/nulltask/be-music/issues/933)). How records treat a play that mixes sources is described in [Assist and record policy](#assist-and-record-policy). Tracked in [#774](https://github.com/nulltask/be-music/issues/774).
+The rest stays with the ruleset. Judge rules are what the ruleset is: windows, gauges, note selection, long-note style, mine trigger and score. LN MODE, CUSTOM JUDGE, LR2's [GAMBOL](#gambol) and the judgment algorithm also remain ruleset-bound. A bare gauge (`HARD`) is the ruleset's own, too. A gauge qualified with its source (`lr2:HARD`) keeps that source's gauge, auto-shift ladder and course gauges under any judge ruleset ([ADR 0019](./adr/0019-source-qualified-option-values.md), [#1171](https://github.com/nulltask/be-music/issues/1171)); see [Gauges of another source](#gauges-of-another-source). [PRACTICE](#practice) and [gauge auto-shift](#gauge-auto-shift) are offered under every ruleset and read under it: PRACTICE lists the ruleset's own gauges, and auto-shift shifts along the ruleset's own gauge ladder ([#933](https://github.com/nulltask/be-music/issues/933)). How records treat a play that mixes sources is described in [Assist and record policy](#assist-and-record-policy). Tracked in [#774](https://github.com/nulltask/be-music/issues/774).
 
 ## Assist and record policy
 
@@ -260,7 +260,7 @@ Source: AC 34 [assist options](https://p.eagate.573.jp/game/2dx/34/howto/play/op
 
 Choose **Judgment windows → beatoraja / ????** at the top of the Options dialog's Play options, then **Play options → Gauge → EX-HARD**. EX-HARD is an independent survival gauge, not AUTO SCRATCH or another input assist. The gauge starts at 100 and fails at zero, without HARD's low-life damage reduction. The existing source tables retain beatoraja's mode-specific damage and recovery and AC's separate values. beatoraja's **HAZARD** remains a different choice (the replay's existing `DEATH` key); old AC replays with that key retain their former interpretation.
 
-LR2 beta3 has no EX-HARD choice: its menu keeps GROOVE / HARD / DEATH / EASY (and P.ATTACK / G.ATTACK), and requesting EX-HARD directly with LR2 rules fails explicitly. Changing to a ruleset that does not support the selected gauge restores its normal gauge. LR2 skin buttons keep their original cells and cycle (GROOVE, HARD, DEATH, EASY, P.ATTACK, G.ATTACK); when that skin displays a play using EX-HARD from another ruleset, its survival gauge uses the red presentation. Choose EX-HARD in the Options dialog. Replays store `play.gauge: "EX-HARD"` and the source gauge result name; course conversion uses EXHARDCLASS for beatoraja / AC.
+LR2 beta3 has no EX-HARD choice: its menu keeps GROOVE / HARD / DEATH / EASY (and P.ATTACK / G.ATTACK), and requesting EX-HARD directly with LR2 rules fails explicitly. Changing to a ruleset that does not support the selected gauge restores its normal gauge; to keep beatoraja's or AC's EX-HARD under any ruleset, including LR2, choose **EX-HARD (beatoraja)** or **EX-HARD (????)** ([Gauges of another source](#gauges-of-another-source)). LR2 skin buttons keep their original cells and cycle (GROOVE, HARD, DEATH, EASY, P.ATTACK, G.ATTACK); when that skin displays a play using EX-HARD from another ruleset, its survival gauge uses the red presentation. Choose EX-HARD in the Options dialog. Replays store `play.gauge: "EX-HARD"` and the source gauge result name; course conversion uses EXHARDCLASS for beatoraja / AC.
 
 Sources: beatoraja 0.8.9 [`GaugeProperty`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GaugeProperty.java), AC 34 [gauge options](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html). Tracked in [#726](https://github.com/nulltask/be-music/issues/726).
 
@@ -268,9 +268,30 @@ Sources: beatoraja 0.8.9 [`GaugeProperty`](https://github.com/exch-bms2/beatoraj
 
 With beatoraja rules, the Options dialog offers **Gauge → ASSIST EASY**; with ???? rules, it offers **ASSISTED EASY**. Both select a gentler recovery gauge, independently of AUTO SCRATCH and long-note modifiers. The replay's selected gauge is `ASSIST-EASY`; the effective result retains the source name `ASSIST-EASY` or `ASSISTED-EASY`. No input-assist switch is inferred from the gauge name.
 
-The existing beatoraja tables retain their mode-specific recovery, damage and clear border: 60 for seven-key play and 50 for five-key play. AC uses its own recovery/damage and a clear border of 60. LR2 beta3 has neither option and rejects a direct request. A beatoraja / AC course converts this recovery choice to CLASS, as the source course gauge conversion does. LR2 skins keep the original EASY sprite cell and normal gauge presentation while their text readout keeps the selected name.
+The existing beatoraja tables retain their mode-specific recovery, damage and clear border: 60 for seven-key play and 50 for five-key play. AC uses its own recovery/damage and a clear border of 60. LR2 beta3 has neither option and rejects a direct request; under LR2 rules the dialog offers them as **ASSIST EASY (beatoraja)** and **ASSISTED EASY (????)**, which keep their source's gauge ([Gauges of another source](#gauges-of-another-source)). A beatoraja / AC course converts this recovery choice to CLASS, as the source course gauge conversion does. LR2 skins keep the original EASY sprite cell and normal gauge presentation while their text readout keeps the selected name.
 
 Sources: beatoraja 0.8.9 [`GaugeProperty`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GaugeProperty.java), AC 34 [ASSISTED EASY](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html). Tracked in [#725](https://github.com/nulltask/be-music/issues/725).
+
+## Gauges of another source
+
+The Options dialog's **Gauge** and **Gauge 2P** list the judge ruleset's own gauges first, then the other sources' gauges, each named with its source: **HARD (LR2)**, **EX-HARD (beatoraja)**, **ASSISTED EASY (????)**. An own gauge is stored bare (`HARD`) and one of another source qualified (`lr2:HARD`). A qualified gauge plays on its source's gauge table, auto-shift ladder, fallback and course gauges whichever ruleset judges; what stays with the judge ruleset is listed in [ADR 0019](./adr/0019-source-qualified-option-values.md).
+
+```mermaid
+flowchart LR
+  change["Judgment windows changes"] --> kind{"Gauge qualified?"}
+  kind -->|"lr2:HARD"| keep["Kept as it is"]
+  kind -->|"HARD"| offered{"New ruleset has it?"}
+  offered -->|"yes"| own["Kept, now the new ruleset's"]
+  offered -->|"no"| groove["GROOVE / NORMAL"]
+```
+
+- **Changing the ruleset.** A qualified gauge stays selected: it does not depend on the ruleset. A bare gauge stays while the new ruleset has a gauge of that name, and becomes that ruleset's; otherwise it returns to the normal gauge, as before. A gauge qualified with the ruleset that now judges (`lr2:HARD` under LR2) plays exactly as the bare one, and the list keeps showing it as **HARD (LR2)** while it is selected.
+- **Settings and replays.** The saved settings hold the pick as selected, and bare values from older settings keep their meaning. A replay records it as `play.gauge` / `play.gauge2P`.
+- **Skins.** An LR2 skin's gauge button and the option-panel keys keep LR2's own cells and cycle. They show a qualified gauge by its gauge type (`beatoraja:EX-HARD` reads EX-HARD, on the HARD cell) and step on from it to a bare gauge, which is the judge ruleset's own. Pick another source's gauge in the Options dialog.
+- **LR2 GRADE courses.** LR2's reset of EASY and G.ATTACK to GROOVE reads the gauge type and keeps the source, so `beatoraja:EASY` plays the course on `beatoraja:GROOVE`. No reference defines this combination; it is a Be-Music choice.
+- **Play option notice.** When a chart cannot be prepared with the selected options, the notice also names a gauge that is not the judge ruleset's own, as `Gauge: HARD (LR2)`.
+
+Tracked in [#1171](https://github.com/nulltask/be-music/issues/1171).
 
 ## Chart-selected gauge
 

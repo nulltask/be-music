@@ -3,7 +3,7 @@
 // and the next visit still restores it (`option-settings-sync.ts`).
 
 import type { TunableCompressor } from '@be-music/player-browser/audio';
-import { isGaugeType, isRulesetId, migrateOptionValue, type RulesetId } from '@be-music/player-engine/ruleset';
+import { isGaugePick, isRulesetId, migrateOptionValue, type RulesetId } from '@be-music/player-engine/ruleset';
 import {
   DIFFICULTY_FILTER_CYCLE,
   KEYS_FILTER_CYCLE,
@@ -449,7 +449,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'ghostMode', oneOf(raw.ghostMode, GHOST_MODES));
   assign(settings, 'nonstopPlacement', oneOf(raw.nonstopPlacement, ['intended', 'lr2'] as const));
   assign(settings, 'judgeRuleset', isRulesetId(raw.judgeRuleset) ? raw.judgeRuleset : undefined);
-  assign(settings, 'gauge', isGaugeType(raw.gauge) ? raw.gauge : undefined);
+  assign(settings, 'gauge', isGaugePick(raw.gauge) ? raw.gauge : undefined);
   assign(settings, 'hRandomThresholdBPM', resolvePlayOptionValue('hRandomThresholdBPM', raw.hRandomThresholdBPM));
   for (const key of [
     'randomFixedLane1P',

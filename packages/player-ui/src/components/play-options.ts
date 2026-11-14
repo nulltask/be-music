@@ -11,6 +11,14 @@ const OPTIONS = [
   ['keysFilter', 'Key mode'],
   ['difficultyFilter', 'Difficulty'],
 ] as const;
+/**
+ * `choices` with the selected value added when it is not one of them, so the select shows what is selected: a
+ * source-qualified gauge (`lr2:HARD`) picked in the Options dialog is off the cycle the skin offers.
+ */
+function withCurrent<T>(choices: readonly T[], current: T | undefined): readonly T[] {
+  return current === undefined || choices.includes(current) ? choices : [...choices, current];
+}
+
 export class BeMusicPlayOptionsElement extends BeMusicElement {
   static override properties: PropertyDeclarations = {
     options: { attribute: false },
@@ -54,7 +62,7 @@ export class BeMusicPlayOptionsElement extends BeMusicElement {
               if (value !== undefined) this.emit('play-option-change', { key, value } as BeMusicPlayOptionChange);
             }}
           >
-            ${(this.choices?.[key] ?? []).map((value) => html`<option .value=${String(value)} .selected=${value === this.options?.[key]}>${value}</option>`)}
+            ${withCurrent(this.choices?.[key] ?? [], this.options?.[key]).map((value) => html`<option .value=${String(value)} .selected=${value === this.options?.[key]}>${value}</option>`)}
           </select></label
         >`,
     )}`;

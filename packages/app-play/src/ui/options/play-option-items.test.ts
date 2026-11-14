@@ -3,6 +3,8 @@ import { resolveRandomModes } from '@be-music/player-scene-model';
 import {
   battleModeItems,
   bottomShiftableGaugeItems,
+  gaugeChoices,
+  gaugeItems,
   laneOptionItems,
   laneOptionSource,
   menuLaneCovers,
@@ -123,4 +125,85 @@ test('turns the menu covers into a cover-set that leaves the LIFT alone', () => 
   ]);
   expect(hidden[0]).not.toHaveProperty('lift');
   expect(hidden[0]).not.toHaveProperty('liftOn');
+});
+
+test('the gauges list the judge ruleset’s own first, then the other sources’ as qualified picks (ADR 0019, #1171)', () => {
+  expect(gaugeItems('lr2')).toEqual([
+    { text: 'GROOVE', value: 'GROOVE' },
+    { text: 'HARD', value: 'HARD' },
+    { text: 'DEATH', value: 'DEATH' },
+    { text: 'EASY', value: 'EASY' },
+    { text: 'P.ATTACK', value: 'P-ATTACK' },
+    { text: 'G.ATTACK', value: 'G-ATTACK' },
+    { text: 'DEATH corrected', value: 'DEATH-CORRECTED' },
+    { text: 'NORMAL (beatoraja)', value: 'beatoraja:GROOVE' },
+    { text: 'HARD (beatoraja)', value: 'beatoraja:HARD' },
+    { text: 'EX-HARD (beatoraja)', value: 'beatoraja:EX-HARD' },
+    { text: 'HAZARD (beatoraja)', value: 'beatoraja:DEATH' },
+    { text: 'EASY (beatoraja)', value: 'beatoraja:EASY' },
+    { text: 'ASSIST EASY (beatoraja)', value: 'beatoraja:ASSIST-EASY' },
+    { text: 'NORMAL (????)', value: '____:GROOVE' },
+    { text: 'HARD (????)', value: '____:HARD' },
+    { text: 'EX-HARD (????)', value: '____:EX-HARD' },
+    { text: 'EASY (????)', value: '____:EASY' },
+    { text: 'ASSISTED EASY (????)', value: '____:ASSIST-EASY' },
+  ]);
+  expect(gaugeItems('beatoraja').map((item) => item.text)).toEqual([
+    'NORMAL',
+    'HARD',
+    'EX-HARD',
+    'HAZARD',
+    'EASY',
+    'ASSIST EASY',
+    'GROOVE (LR2)',
+    'HARD (LR2)',
+    'DEATH (LR2)',
+    'EASY (LR2)',
+    'P.ATTACK (LR2)',
+    'G.ATTACK (LR2)',
+    'DEATH corrected (LR2)',
+    'NORMAL (????)',
+    'HARD (????)',
+    'EX-HARD (????)',
+    'EASY (????)',
+    'ASSISTED EASY (????)',
+  ]);
+  expect(gaugeItems('____').map((item) => item.value)).toEqual([
+    'GROOVE',
+    'HARD',
+    'EX-HARD',
+    'EASY',
+    'ASSIST-EASY',
+    'lr2:GROOVE',
+    'lr2:HARD',
+    'lr2:DEATH',
+    'lr2:EASY',
+    'lr2:P-ATTACK',
+    'lr2:G-ATTACK',
+    'lr2:DEATH-CORRECTED',
+    'beatoraja:GROOVE',
+    'beatoraja:HARD',
+    'beatoraja:EX-HARD',
+    'beatoraja:DEATH',
+    'beatoraja:EASY',
+    'beatoraja:ASSIST-EASY',
+  ]);
+});
+
+test('a pick qualified with the judge ruleset is listed while it is selected', () => {
+  // `lr2:HARD` kept across a change to LR2: the select still has an item for it, after LR2's own gauges.
+  const items = gaugeItems('lr2', ['lr2:HARD', 'GROOVE']);
+  expect(items.slice(6, 9)).toEqual([
+    { text: 'DEATH corrected', value: 'DEATH-CORRECTED' },
+    { text: 'HARD (LR2)', value: 'lr2:HARD' },
+    { text: 'NORMAL (beatoraja)', value: 'beatoraja:GROOVE' },
+  ]);
+  expect(items).toHaveLength(gaugeItems('lr2').length + 1);
+  // Another source's pick is in the list already.
+  expect(gaugeItems('lr2', ['beatoraja:HARD'])).toEqual(gaugeItems('lr2'));
+  expect(gaugeChoices({ judgeRuleset: 'beatoraja', gauge: 'beatoraja:EX-HARD', gauge2P: 'lr2:HARD' })).toMatchObject({
+    'EX-HARD': 'EX-HARD',
+    'EX-HARD (beatoraja)': 'beatoraja:EX-HARD',
+    'HARD (LR2)': 'lr2:HARD',
+  });
 });
