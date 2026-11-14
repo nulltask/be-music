@@ -1103,7 +1103,7 @@
               "great": 0,
               "good": 0,
               "bad": 0,
-              "poor": 0,
+              "poor": 2,
               "emptyPoor": 0
             },
             "fast": 0,
@@ -1116,7 +1116,8 @@
               "type": "NORMAL",
               "final": 100,
               "cleared": true
-            }
+            },
+            "minePoor": 2
           },
           "engine": {
             "lr2": {
@@ -1180,7 +1181,7 @@
               "great": 0,
               "good": 0,
               "bad": 0,
-              "poor": 0,
+              "poor": 2,
               "emptyPoor": 0,
               "exScore": 202,
               "score": 202,
@@ -1196,7 +1197,8 @@
                 "type": "NORMAL",
                 "survival": false,
                 "failedMidPlay": false
-              }
+              },
+              "minePoor": 2
             }
           }
         },
@@ -1255,7 +1257,7 @@
               "great": 19,
               "good": 17,
               "bad": 9,
-              "poor": 12,
+              "poor": 14,
               "emptyPoor": 0
             },
             "fast": 19,
@@ -1268,7 +1270,8 @@
               "type": "NORMAL",
               "final": 100,
               "cleared": true
-            }
+            },
+            "minePoor": 2
           },
           "engine": {
             "lr2": {
@@ -1332,7 +1335,7 @@
               "great": 19,
               "good": 17,
               "bad": 9,
-              "poor": 12,
+              "poor": 14,
               "emptyPoor": 0,
               "exScore": 103,
               "score": 103,
@@ -1348,7 +1351,8 @@
                 "type": "NORMAL",
                 "survival": false,
                 "failedMidPlay": false
-              }
+              },
+              "minePoor": 2
             }
           }
         }
@@ -1833,7 +1837,7 @@
               "great": 0,
               "good": 0,
               "bad": 0,
-              "poor": 0,
+              "poor": 2,
               "emptyPoor": 0
             },
             "fast": 0,
@@ -1846,7 +1850,8 @@
               "type": "NORMAL",
               "final": 100,
               "cleared": true
-            }
+            },
+            "minePoor": 2
           },
           "engine": {
             "lr2": {
@@ -1910,7 +1915,7 @@
               "great": 0,
               "good": 0,
               "bad": 0,
-              "poor": 0,
+              "poor": 2,
               "emptyPoor": 0,
               "exScore": 202,
               "score": 202,
@@ -1926,7 +1931,8 @@
                 "type": "NORMAL",
                 "survival": false,
                 "failedMidPlay": false
-              }
+              },
+              "minePoor": 2
             }
           }
         },
@@ -1985,7 +1991,7 @@
               "great": 19,
               "good": 17,
               "bad": 9,
-              "poor": 12,
+              "poor": 14,
               "emptyPoor": 0
             },
             "fast": 19,
@@ -1998,7 +2004,8 @@
               "type": "NORMAL",
               "final": 100,
               "cleared": true
-            }
+            },
+            "minePoor": 2
           },
           "engine": {
             "lr2": {
@@ -2062,7 +2069,7 @@
               "great": 19,
               "good": 17,
               "bad": 9,
-              "poor": 12,
+              "poor": 14,
               "emptyPoor": 0,
               "exScore": 103,
               "score": 103,
@@ -2078,7 +2085,8 @@
                 "type": "NORMAL",
                 "survival": false,
                 "failedMidPlay": false
-              }
+              },
+              "minePoor": 2
             }
           }
         }

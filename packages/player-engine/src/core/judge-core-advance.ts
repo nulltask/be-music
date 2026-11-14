@@ -1,6 +1,6 @@
 import type { BeMusicEvent } from '@be-music/chart-source';
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
-import { judgeWindowLateReachUs, pgreatWindowReachUs } from '../ruleset/judge.ts';
+import { judgeWindowLateReachUs } from '../ruleset/judge.ts';
 import { addHCNPassing, HCNTickCounter, isChargeLongNoteMode } from '../ruleset/long-note.ts';
 import {
   combineLongNoteJudges,
@@ -143,7 +143,7 @@ function detonateLandmine(
     });
   }
   // LR2beta3 counts one POOR without applying an ordinary POOR judgment: no combo break or judge gauge damage.
-  // beatoraja and the provisional That-Which-Must-Not-Be-Named model remain gauge-only. Raw damage bypasses guts and TOTAL modifiers.
+  // That-Which-Must-Not-Be-Named imports that policy (#1169); beatoraja stays gauge-only. Raw damage bypasses guts and TOTAL modifiers.
   if (config.ruleset.mineTrigger === 'press-ahead-or-hold') {
     state.summary.poor += 1;
     state.summary.minePoor = (state.summary.minePoor ?? 0) + 1;
@@ -167,8 +167,8 @@ function detonateLandmine(
 const LANDMINE_SCAN_AHEAD_US = 1_000_000;
 
 /**
- * Held mines detonate at crossing, then retire. The provisional That-Which-Must-Not-Be-Named model also checks PGREAT entry and waits
- * for its late window to close; LR2beta3 has neither extra phase. The same timed events run in the simulator.
+ * Held mines detonate at crossing, then retire: no ruleset has a late window. The same timed events run in the
+ * simulator.
  */
 export function processLandminePassage(
   state: JudgeCoreState,
@@ -179,10 +179,9 @@ export function processLandminePassage(
   const { config } = state;
   const landmineNotes = config.landmineNotes;
   const reversalSeconds = config.reversalSeconds;
-  const pressDetonates = config.ruleset.mineTrigger === 'press-or-hold';
   const nowUs = toJudgeUs(nowSec);
   // Allocated only once a check falls due: most frames have none.
-  let due: Array<{ atUs: number; landmine: TimedLandmineNote; phase: 1 | 2 | 3 }> | undefined;
+  let due: Array<{ atUs: number; landmine: TimedLandmineNote; phase: 2 | 3 }> | undefined;
   for (let index = state.landmineExpireCursor; index < landmineNotes.length; index += 1) {
     const landmine = landmineNotes[index]!;
     if (reversalSeconds !== undefined && landmine.seconds >= reversalSeconds) {
@@ -196,19 +195,12 @@ export function processLandminePassage(
     if (landmine.judged) {
       continue;
     }
-    // Reach form keeps the early / late legs separate — nothing guarantees a ruleset's window table is symmetric.
-    const [pgreatLateUs, pgreatEarlyUs] = pgreatWindowReachUs(windowTablesAt(config, landmine.seconds).note);
-    const phase = state.landminePhases.get(landmine) ?? 0;
-    if (pressDetonates && phase < 1 && mineUs - pgreatEarlyUs < nowUs) {
-      (due ??= []).push({ atUs: mineUs - pgreatEarlyUs, landmine, phase: 1 });
-    }
-    if (phase < 2 && mineUs < nowUs) {
-      (due ??= []).push({ atUs: mineUs, landmine, phase: 2 });
-    }
-    // LR2beta3 and hold-only settle at crossing; only the provisional That-Which-Must-Not-Be-Named model keeps a late window.
-    const settleUs = pressDetonates ? mineUs + pgreatLateUs : mineUs;
-    if (settleUs < nowUs) {
-      (due ??= []).push({ atUs: settleUs, landmine, phase: 3 });
+    // The crossing check (2) runs before the mine retires (3), both at the crossing.
+    if (mineUs < nowUs) {
+      if ((state.landminePhases.get(landmine) ?? 0) < 2) {
+        (due ??= []).push({ atUs: mineUs, landmine, phase: 2 });
+      }
+      (due ??= []).push({ atUs: mineUs, landmine, phase: 3 });
     }
   }
   if (due !== undefined) {
@@ -239,8 +231,8 @@ export function processLandminePassage(
 }
 
 /**
- * LR2beta3 key-down detonates only ahead of the line, strictly inside GREAT. The provisional That-Which-Must-Not-Be-Named model keeps
- * its historical symmetric PGREAT window. Detonation never consumes the press: note judgment still runs.
+ * LR2beta3 key-down detonates only ahead of the line, strictly inside GREAT; That-Which-Must-Not-Be-Named imports the rule on its own
+ * GREAT window. Detonation never consumes the press: note judgment still runs.
  */
 export function detonateLandminesOnPress(
   state: JudgeCoreState,
@@ -273,12 +265,7 @@ export function detonateLandminesOnPress(
       continue;
     }
     // Read the window in force at the press (`#EXRANK` can change it).
-    const [pgreatLateUs, pgreatEarlyUs] = pgreatWindowReachUs(windowTablesAt(config, nowSec).note);
-    const hit =
-      config.ruleset.mineTrigger === 'press-ahead-or-hold'
-        ? mineUs >= nowUs && mineUs - nowUs < windowTablesAt(config, nowSec).note.judges[1][1]
-        : mineUs - pgreatEarlyUs <= nowUs && nowUs - mineUs <= pgreatLateUs;
-    if (hit) {
+    if (mineUs >= nowUs && mineUs - nowUs < windowTablesAt(config, nowSec).note.judges[1][1]) {
       detonateLandmine(state, landmine, nowSec, emit);
     }
   }
@@ -956,7 +943,6 @@ export function nextTimedJudgmentUs(state: JudgeCoreState, afterUs: number): num
     const deadlineUs = resolveMissDeadlineUs(config, note);
     if (deadlineUs < reversalUs) consider(deadlineUs);
   }
-  const pressDetonates = config.ruleset.mineTrigger === 'press-or-hold';
   const landmineNotes = config.landmineNotes;
   for (let index = state.landmineExpireCursor; index < landmineNotes.length; index += 1) {
     const landmine = landmineNotes[index]!;
@@ -967,11 +953,7 @@ export function nextTimedJudgmentUs(state: JudgeCoreState, afterUs: number): num
     if (landmine.judged) {
       continue;
     }
-    const [pgreatLateUs, pgreatEarlyUs] = pgreatWindowReachUs(windowTablesAt(config, landmine.seconds).note);
-    const phase = state.landminePhases.get(landmine) ?? 0;
-    if (pressDetonates && phase < 1) consider(mineUs - pgreatEarlyUs);
-    if (phase < 2) consider(mineUs);
-    consider(pressDetonates ? mineUs + pgreatLateUs : mineUs);
+    consider(mineUs);
   }
   return next;
 }

@@ -98,8 +98,8 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] `#PLAYER=4` (BATTLE) is retained. Explicit CHART HEADER selects TWO-PLAYER under LR2: copy SP or preserve authored double-side banks. See [ADR 0028](./adr/0028-player-header-selection.md) for precedence, corpus evidence and replay policy.
 - [x] Interpret channel `D1-D9` (mine)
 - [x] Interpret channel `E1-E9` (mine)
-- [x] Detonate LR2beta3 mines on a key-down strictly inside ahead-only GREAT, or a held crossing; retain hold-only beatoraja and the provisional That-Which-Must-Not-Be-Named symmetric-PGREAT model.
-- [x] Apply mine damage directly, preserving combo and EX-SCORE. LR2 also counts one POOR/BP per hit; beatoraja and provisional That-Which-Must-Not-Be-Named keep gauge-only accounting.
+- [x] Detonate LR2beta3 mines on a key-down strictly inside ahead-only GREAT, or a held crossing; retain hold-only beatoraja, and import LR2's policy under That-Which-Must-Not-Be-Named, which has no mines.
+- [x] Apply mine damage directly, preserving combo and EX-SCORE. LR2, and That-Which-Must-Not-Be-Named with it, also counts one POOR/BP per hit; beatoraja keeps gauge-only accounting.
 - [x] Fall back to a default damage of `4%` when the mine object value is not a two-character upper-case base36 ID or is `00` (under `#BASE 62`, lower-case values also take this default)
 - [x] When `#WAV00` is defined, use it as the landmine explosion sound on manual mine hit
 - [x] Exclude landmines from the number of target notes for `TOTAL` / `EX-SCORE`
