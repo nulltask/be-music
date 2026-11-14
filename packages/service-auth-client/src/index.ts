@@ -1,5 +1,5 @@
 import * as oauth from 'oauth4webapi';
-import { EncryptJWT, jwtDecrypt, jwtVerify, createRemoteJWKSet } from 'jose';
+import { EncryptJWT, jwtDecrypt, jwtVerify, createRemoteJWKSet, customFetch } from 'jose';
 import { applySocialSignInMethod } from './social-sign-in.ts';
 
 /** One relying party. Cookies never leave PUBLIC_ORIGIN; the issuer may be on an unrelated domain. */
@@ -11,6 +11,17 @@ export interface OIDCEnv {
   SESSION_SECRET: string;
   /** The resource this service calls on behalf of its user. */
   API_AUDIENCE: string;
+  /**
+   * The Worker that runs the issuer, if this one has a Service Binding to it. Discovery, token and JWKS requests to
+   * the issuer's origin then go through the binding instead of the public network, so they still work when the
+   * issuer's host is behind Cloudflare Access (docs/services.md section 2). Without it they use `fetch`.
+   */
+  ACCOUNTS?: IssuerFetcher;
+}
+
+/** The part of a Service Binding (`Fetcher`) the relying party uses. */
+export interface IssuerFetcher {
+  fetch(request: Request): Promise<Response>;
 }
 
 export interface Identity {
@@ -44,19 +55,29 @@ function validateEnv(env: OIDCEnv): void {
     throw new Error('Invalid relying-party configuration');
   }
 }
+/** Fetch requests to the issuer's origin through `ACCOUNTS` when it is bound; anything else uses `fetch`. */
+function issuerFetch(env: Pick<OIDCEnv, 'AUTH_ISSUER' | 'ACCOUNTS'>) {
+  const binding = env.ACCOUNTS;
+  const origin = new URL(env.AUTH_ISSUER).origin;
+  return (url: string, init: RequestInit): Promise<Response> =>
+    binding && new URL(url).origin === origin ? binding.fetch(new Request(url, init)) : fetch(url, init);
+}
 async function server(env: OIDCEnv): Promise<oauth.AuthorizationServer> {
   validateEnv(env);
   const cached = servers.get(env.AUTH_ISSUER);
   if (cached) return cached;
   const issuer = new URL(env.AUTH_ISSUER);
-  const metadata = await oauth.processDiscoveryResponse(issuer, await oauth.discoveryRequest(issuer));
+  const metadata = await oauth.processDiscoveryResponse(
+    issuer,
+    await oauth.discoveryRequest(issuer, { [oauth.customFetch]: issuerFetch(env) }),
+  );
   servers.set(env.AUTH_ISSUER, metadata);
   return metadata;
 }
-function keys(url: string) {
+function keys(env: OIDCEnv, url: string) {
   let result = keySets.get(url);
   if (!result) {
-    result = createRemoteJWKSet(new URL(url));
+    result = createRemoteJWKSet(new URL(url), { [customFetch]: issuerFetch(env) });
     keySets.set(url, result);
   }
   return result;
@@ -151,7 +172,9 @@ function identityFromClaims(
 export async function verifyAccess(request: Request, env: OIDCEnv): Promise<Identity | null> {
   if (!/^Bearer /i.test(request.headers.get('authorization') ?? '')) return null;
   try {
-    const claims = await oauth.validateJwtAccessToken(await server(env), request, env.API_AUDIENCE);
+    const claims = await oauth.validateJwtAccessToken(await server(env), request, env.API_AUDIENCE, {
+      [oauth.customFetch]: issuerFetch(env),
+    });
     const scopes = typeof claims.scope === 'string' ? claims.scope.split(' ') : [];
     if (!scopes.includes('be-music:api')) return null;
     return identityFromClaims(claims, env.AUTH_ISSUER);
@@ -298,14 +321,14 @@ export async function handleAuth(request: Request, env: OIDCEnv): Promise<Respon
         params,
         `${env.PUBLIC_ORIGIN}/api/auth/callback`,
         transaction.verifier,
-        { additionalParameters: { resource: env.API_AUDIENCE } },
+        { additionalParameters: { resource: env.API_AUDIENCE }, [oauth.customFetch]: issuerFetch(env) },
       );
       const tokens = await oauth.processAuthorizationCodeResponse(as, client, tokenResponse, {
         expectedNonce: transaction.nonce,
         requireIdToken: true,
       });
       if (!tokens.id_token || !as.jwks_uri) throw new Error('Missing identity token');
-      const verified = await jwtVerify(tokens.id_token, keys(as.jwks_uri), {
+      const verified = await jwtVerify(tokens.id_token, keys(env, as.jwks_uri), {
         issuer: env.AUTH_ISSUER,
         audience: env.OIDC_CLIENT_ID,
         algorithms: ['RS256'],

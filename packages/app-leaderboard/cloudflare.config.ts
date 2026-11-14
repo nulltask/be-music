@@ -45,7 +45,8 @@ export default defineConfig(({ mode }) => {
         BLOBS: bindings.r2({ name: `leaderboard${suffix}` }),
         SUBMIT_LIMITER: bindings.rateLimit({ namespace: preview ? '2001' : '1001', simple: { limit: 10, period: 60 } }),
         RIVAL_LIMIT: bindings.text('100'),
-        // Accounts runs in the Dashboard Worker (ADR 0039).
+        // Accounts runs in the Dashboard Worker (ADR 0039). Sign-in and token verification reach the issuer through it,
+        // not the public network, so they work while the preview hosts are behind Cloudflare Access.
         ACCOUNTS: bindings.worker({ worker: `dashboard${suffix}` }),
         AUTH_ISSUER: bindings.text(`https://${site}/api/auth`),
         PUBLIC_ORIGIN: bindings.text(`https://leaderboard.${site}`),
