@@ -40,7 +40,6 @@ import {
   formatTimeline,
   formatTotal,
   TIMELINE_TYPES,
-  usesInferredLongNoteType,
   type ChartItems,
   type FlatItems,
   type FpTime,
@@ -155,7 +154,7 @@ export function buildChartModel(json: BeMusicJSON, extension: LaneModeExtension)
       timeKeys: new Set(),
       hulls: new Map(),
     };
-    collectStaticKeys(model, entries, context.base, usesInferredLongNoteType(json));
+    collectStaticKeys(model, entries, context.base);
     if (
       segment.root &&
       countOutcomePaths(segment.root, FINGERPRINT_FACTOR_OUTCOME_LIMIT) <= FINGERPRINT_FACTOR_OUTCOME_LIMIT
@@ -333,12 +332,7 @@ function resolvePairingStreams(
 }
 
 /** Definitions a segment sets and uses, from every line it holds (whatever the outcome). */
-function collectStaticKeys(
-  model: SegmentModel,
-  entries: ReadonlyArray<BMSControlFlowEntry>,
-  base: 36 | 62,
-  inferredLNType: boolean,
-): void {
+function collectStaticKeys(model: SegmentModel, entries: ReadonlyArray<BMSControlFlowEntry>, base: 36 | 62): void {
   for (let index = model.start; index < model.end; index += 1) {
     const entry = entries[index]!;
     if (entry.kind === 'header') {
@@ -391,10 +385,6 @@ function collectStaticKeys(
     }
     if (bucket.startsWith('lane:')) {
       model.uses.add('D:LN');
-      const side = channel.charCodeAt(0);
-      if (inferredLNType && (side === 0x35 || side === 0x36)) {
-        model.sets.add('D:LNTYPE?');
-      }
       // A lane keeps one judged note per position, so notes of two segments at one position compete.
       for (const event of entry.events) {
         model.timeKeys.add(`${bucket}|${timeKey(eventTime({ ...event, measure: entry.measure }))}`);
@@ -421,9 +411,6 @@ function collectStaticKeys(
         model.timeKeys.add(`${bucket}|${timeKey(eventTime({ ...event, measure: entry.measure }))}`);
       }
     }
-  }
-  if (model.sets.has('D:LNTYPE?')) {
-    model.uses.add('D:LNTYPE?');
   }
 }
 

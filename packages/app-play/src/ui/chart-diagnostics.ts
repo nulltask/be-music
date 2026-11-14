@@ -48,7 +48,7 @@ export function createChartDiagnosticsPanel(root: HTMLElement) {
         diagnostics = [];
       } else {
         diagnostics =
-          cache.get(chart) ?? resolveChart(chart, { chartPath, inferBmsLNTypeWhenMissing: true }).diagnostics;
+          cache.get(chart) ?? resolveChart(chart, { chartPath, inferBmsLNTypeWhenMissing: false }).diagnostics;
         cache.set(chart, diagnostics);
       }
       update();

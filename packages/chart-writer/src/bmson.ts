@@ -846,7 +846,7 @@ function resolveBMSLongNotesForBmsonOutput(json: BeMusicJSON): BMSLongNotesForBm
   const lnobj = resolveLNOBJLongNotes(json);
   const startToEndBeat = new Map(lnobj.startToEndBeat);
   const endEvents = new Set(lnobj.endEvents);
-  const legacy = resolveBMSLongNotes(json, { inferLNTypeWhenMissing: true });
+  const legacy = resolveBMSLongNotes(json);
   for (const note of legacy.notes) {
     if (note.endBeat !== undefined) {
       startToEndBeat.set(note.event, note.endBeat);

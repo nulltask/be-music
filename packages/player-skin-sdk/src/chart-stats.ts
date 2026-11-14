@@ -44,7 +44,7 @@ function computeChartStats(chart: BeMusicJSON, fallbackBPM: number | undefined):
   let rankChanges = false;
   try {
     // The song list sees the chart before any `#RANDOM` draw: only its unconditional content counts.
-    const resolved = resolveChart(chart, { inferBmsLNTypeWhenMissing: true });
+    const resolved = resolveChart(chart, { inferBmsLNTypeWhenMissing: false });
     for (const note of resolved.notes) {
       lengthSeconds = Math.max(lengthSeconds, note.endSeconds ?? note.seconds);
       // A FREE ZONE note's fixed tail is not a long note.
