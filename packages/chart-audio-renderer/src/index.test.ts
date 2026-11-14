@@ -674,7 +674,7 @@ describe('chart-audio-renderer', () => {
     expect(triggers.some((trigger) => trigger.event === orphan)).toBe(true);
   });
 
-  test('audio-renderer: accepts multiple #LNOBJ declarations for end suppression', () => {
+  test('audio-renderer: suppresses only the last #LNOBJ end ID', () => {
     const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.bms.lnObjs = ['AA', 'BB'];
@@ -691,7 +691,7 @@ describe('chart-audio-renderer', () => {
     const triggers = collectSampleTriggers(json);
     expect(triggers.some((trigger) => trigger.event === startA)).toBe(true);
     expect(triggers.some((trigger) => trigger.event === startB)).toBe(true);
-    expect(triggers.some((trigger) => trigger.event === endA)).toBe(false);
+    expect(triggers.some((trigger) => trigger.event === endA)).toBe(true);
     expect(triggers.some((trigger) => trigger.event === endB)).toBe(false);
   });
 

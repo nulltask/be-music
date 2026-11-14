@@ -311,7 +311,7 @@ classDiagram
 - `preview`: `#PREVIEW` の値
 - `lnType`: `#LNTYPE` の値
 - `lnMode`: `#LNMODE` の値（`1` = LN、`2` = CN、`3` = HCN）。正の値だけを保持
-- `lnObjs`: 複数 `#LNOBJ` 宣言を宣言順で保持した配列 (2桁 base36)
+- `lnObjs`: `#LNOBJ` 宣言を宣言順で保持した配列。再生では選択された分岐を解決した後、最後の ID だけを終端として使う。
 - `volWAV`: `#VOLWAV` の値
 - `defExRank`: `#DEFEXRANK` の値
 - `exRank`: `#EXRANKxx` のマップ

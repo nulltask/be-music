@@ -718,7 +718,7 @@ describe('chart', () => {
     expect(endEvents.has(invisibleLNOBJ)).toBe(false);
   });
 
-  test('resolveLNOBJLongNotes accepts multiple LNOBJ declarations', () => {
+  test('resolveLNOBJLongNotes uses the last declaration', () => {
     const json = createEmptyJSON('bms');
     json.bms.lnObjs = ['AA', 'BB'];
     const startA: BeMusicEvent = { measure: 0, channel: '11', position: [0, 1], value: '01' };
@@ -728,9 +728,9 @@ describe('chart', () => {
     json.events = [startA, endA, startB, endB];
 
     const resolved = resolveLNOBJLongNotes(json);
-    expect(resolved.endEvents.has(endA)).toBe(true);
+    expect(resolved.endEvents.has(endA)).toBe(false);
     expect(resolved.endEvents.has(endB)).toBe(true);
-    expect(resolved.startToEndBeat.get(startA)).toBeCloseTo(1, 6);
+    expect(resolved.startToEndBeat.has(startA)).toBe(false);
     expect(resolved.startToEndBeat.get(startB)).toBeCloseTo(1, 6);
   });
 
