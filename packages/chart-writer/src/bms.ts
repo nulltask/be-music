@@ -699,6 +699,9 @@ function convertChartForBMSOutput(json: BeMusicJSON, report?: ChartExportDiagnos
   const chartLNType = json.bmson.info.lnType;
   const endPositionResolver = createBMSPositionResolver(json);
   let changed = false;
+  // Mines whose damage BMS cannot hold as it is: a base-36 pair is a whole number from 1 to 1295.
+  let adjustedMines = 0;
+  let defaultedMines = 0;
 
   for (const event of json.events) {
     const channel = normalizeChannel(event.channel);
@@ -722,6 +725,8 @@ function convertChartForBMSOutput(json: BeMusicJSON, report?: ChartExportDiagnos
       if (hasDamage || isBmsonSource) {
         mineSample ??= json.resources.wav[normalizeObjectKey(event.value, resolveBMSBase(json))];
         const value = Math.min(MAX_BMS_MINE_DAMAGE, Math.max(1, Math.round(hasDamage ? damage : DEFAULT_MINE_DAMAGE)));
+        if (!hasDamage) defaultedMines += 1;
+        else if (value !== damage) adjustedMines += 1;
         events.push({ measure: event.measure, position: event.position, channel, value: intToBase36(value, 2) });
         changed = true;
         continue;
@@ -734,12 +739,30 @@ function convertChartForBMSOutput(json: BeMusicJSON, report?: ChartExportDiagnos
     return json;
   }
 
+  if (adjustedMines > 0)
+    report?.({
+      code: 'mine-damage',
+      message: `${adjustedMines} mine(s) have a damage BMS cannot hold; each was rounded to a whole number from 1 to ${MAX_BMS_MINE_DAMAGE} (a damage of 0 becomes 1).`,
+    });
+  if (defaultedMines > 0)
+    report?.({
+      code: 'mine-damage',
+      message: `${defaultedMines} mine(s) have no damage; each was written with the default ${DEFAULT_MINE_DAMAGE}.`,
+    });
+
   const bms = { ...json.bms };
   if (longNoteTypes.length > 0 && bms.lnType === undefined) {
     bms.lnType = 1;
   }
   if (bms.lnMode === undefined) {
     const uniformType = longNoteTypes.length > 0 && longNoteTypes.every((type) => type === longNoteTypes[0]);
+    // `#LNMODE` is one mode for the whole chart: long notes of different types all take the chart's.
+    if (longNoteTypes.length > 0 && !uniformType)
+      report?.({
+        code: 'long-note-mode',
+        message:
+          'The long notes have different types (LN, CN, HCN), which BMS cannot mark per note; every long note takes the chart-wide mode.',
+      });
     const lnMode = uniformType ? longNoteTypes[0] : chartLNType;
     if (typeof lnMode === 'number' && BMSON_LONG_NOTE_TYPES.has(lnMode)) {
       bms.lnMode = lnMode;
@@ -751,6 +774,13 @@ function convertChartForBMSOutput(json: BeMusicJSON, report?: ChartExportDiagnos
     if (bms.defExRank === undefined && typeof judgeRank === 'number' && Number.isFinite(judgeRank) && judgeRank > 0) {
       bms.defExRank = judgeRank;
     }
+    const total = json.bmson.info.total ?? json.metadata.total;
+    // bmson's default is 100 % of the player's default TOTAL, which is what a BMS chart without `#TOTAL` gets.
+    if (typeof total === 'number' && Number.isFinite(total) && total !== 100)
+      report?.({
+        code: 'total',
+        message: `bmson total ${total} is a percentage of the player's default TOTAL, which BMS #TOTAL cannot express; no #TOTAL is written and the player's default applies.`,
+      });
     delete metadata.rank;
     delete metadata.total;
   }
