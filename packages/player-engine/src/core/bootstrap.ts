@@ -182,6 +182,7 @@ export function createInitialPlayerSummary(
     // Ruleset-scoped gauge id (`GROOVE` / `NORMAL` / `HARD` / `EX-HARD` / …) so consumers can label the run's
     // clear lamp without inferring from the threshold, which collides between line-ups.
     type: gauge.spec.id,
+    ...(ruleset.gaugeSource !== ruleset.rulesetId ? { source: ruleset.gaugeSource } : {}),
     survival: gauge.spec.survival,
     failedMidPlay: gauge.failedMidPlay,
     ...(gauge.values ? { values: gauge.values } : {}),

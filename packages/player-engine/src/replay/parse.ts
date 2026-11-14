@@ -1,6 +1,6 @@
 import type { RandomDraw } from '@be-music/chart-model';
 import type { ReplayRecorderInfo, ReplayRulesetResult } from './format.ts';
-import { RULESET_IDS } from '../ruleset/definitions.ts';
+import { isRulesetId, RULESET_IDS } from '../ruleset/definitions.ts';
 import { resolveGaugeShiftLadder } from '../ruleset/gauge-shift.ts';
 
 /** Structural problem in a serialized replay (or course replay), with the field path in the message. */
@@ -63,6 +63,11 @@ export function parseResults(
     if (gauge.values !== undefined)
       result.gauge.values = parseGaugeValues(gauge.values, `${prefix}.${key}.gauge.values`);
     if (gauge.failedMidPlay !== undefined) result.gauge.failedMidPlay = gauge.failedMidPlay === true;
+    if (gauge.source !== undefined) {
+      if (!isRulesetId(gauge.source))
+        throw new ReplayParseError(`${prefix}.${key}.gauge.source: expected lr2, beatoraja or ____`);
+      result.gauge.source = gauge.source;
+    }
     const score = optionalFiniteNumber(record.score, `${prefix}.${key}.score`);
     if (score !== undefined) result.score = score;
     const djLevel = optionalString(record.djLevel, `${prefix}.${key}.djLevel`);

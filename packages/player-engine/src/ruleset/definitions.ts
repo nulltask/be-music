@@ -197,6 +197,12 @@ export interface RulesetConfig {
   mineTrigger: MineTrigger;
   /** HCN tick deltas as `[heldJudgeIndex, heldRate, releasedJudgeIndex, releasedRate]` (beatoraja model). */
   hcnTick: { heldJudge: number; heldRate: number; releasedJudge: number; releasedRate: number };
+  /**
+   * The source whose gauges the play runs on: the judge ruleset itself, or another one when the gauge pick names it
+   * (`lr2:HARD` under beatoraja judging, #1171). The gauge table, its TOTAL reading, the auto-shift ladder and
+   * fallback, and the course gauges are that source's; every other field stays the judge ruleset's.
+   */
+  gaugeSource: RulesetId;
   gauge: GaugeSpec;
   /** SURVIVAL TO GROOVE tracks NORMAL from chart start, never on course class gauges. */
   gaugeFallback?: GaugeSpec;
@@ -837,6 +843,30 @@ function countRulesetNotes(chart: RulesetChartFacts, style: LongNoteStyle): numb
 }
 
 /**
+ * One source's single-play gauges for a play another ruleset judges: its TOTAL reading and its gauge table, both over
+ * `noteCount` judgments. `baseNoteCount` is the note-object count That-Which-Must-Not-Be-Named's reported TOTAL follows.
+ */
+function resolveSourceGauges(
+  source: RulesetId,
+  chart: RulesetChartFacts,
+  baseNoteCount: number,
+  noteCount: number,
+): { effectiveTotal: number; gaugeOf: (id: string) => GaugeSpec } {
+  if (source === 'lr2') {
+    const effectiveTotal = resolveEffectiveTotal('lr2', chart, noteCount);
+    return { effectiveTotal, gaugeOf: (id) => resolveLR2Gauge(id, effectiveTotal, noteCount) };
+  }
+  if (source === 'beatoraja') {
+    const effectiveTotal = resolveEffectiveTotal('beatoraja', chart, noteCount);
+    return { effectiveTotal, gaugeOf: (id) => resolveBeatorajaGauge(id, effectiveTotal, noteCount, chart.laneMode) };
+  }
+  return {
+    effectiveTotal: resolveEffectiveTotal('____', chart, baseNoteCount),
+    gaugeOf: (id) => resolve____Gauge(id, noteCount),
+  };
+}
+
+/**
  * The TOTAL a ruleset falls back to when the chart names none: LR2's note-count curve for `lr2`, beatoraja's formula
  * for `beatoraja`. The `____` gauge never reads TOTAL (its recovery comes from {@link resolve____GaugeUnit}), so its
  * reported TOTAL follows the `lr2` curve.
@@ -987,27 +1017,31 @@ function resolveRulesetTables(
   options: ResolveRulesetOptions,
 ): RulesetConfig {
   const baseNotes = countBaseNotes(chart.notes);
-  const { course } = options;
-  const selectedGauge = options.selectedGauge ?? 'GROOVE';
+  const { course, practice } = options;
+  // A qualified pick (`lr2:HARD`) keeps its source's gauges under this ruleset's judging; a bare one is the ruleset's
+  // own (ADR 0019, #1171). PRACTICE names a gauge of the judge ruleset's own PRACTICE list.
+  const pickedGauge = options.selectedGauge ?? 'GROOVE';
+  const pickedSource = pickedGauge.slice(0, Math.max(0, pickedGauge.indexOf(':')));
+  const selectedGauge = isRulesetId(pickedSource) ? pickedGauge.slice(pickedSource.length + 1) : pickedGauge;
+  const gaugeSource = practice === undefined && isRulesetId(pickedSource) ? pickedSource : rulesetId;
   if (
-    rulesetId !== 'lr2' &&
+    gaugeSource !== 'lr2' &&
     (['P-ATTACK', 'G-ATTACK'].includes(selectedGauge) || ['P-ATTACK', 'G-ATTACK'].includes(options.gauge ?? ''))
   )
     throw new RangeError('Attack gauges are available only for LR2.');
-  if (rulesetId === 'lr2' && (selectedGauge === 'EX-HARD' || selectedGauge === 'ASSIST-EASY')) {
+  if (gaugeSource === 'lr2' && (selectedGauge === 'EX-HARD' || selectedGauge === 'ASSIST-EASY')) {
     throw new RangeError(`LR2 beta3 has no ${selectedGauge} gauge.`);
   }
   const gaugeId =
     options.gauge ??
     (course === undefined
-      ? resolveDefaultGaugeId(rulesetId, selectedGauge)
-      : resolveCourseGaugeId(rulesetId, course.kind, selectedGauge));
+      ? resolveDefaultGaugeId(gaugeSource, selectedGauge)
+      : resolveCourseGaugeId(gaugeSource, course.kind, selectedGauge));
   const overrideBadMs = options.judgeWindowOverrideMs;
   if (options.customJudge !== undefined && rulesetId !== 'beatoraja')
     throw new RangeError('CUSTOM JUDGE is available only for beatoraja.');
   const gambol = options.lr2Gambol;
   if (gambol !== undefined && rulesetId !== 'lr2') throw new RangeError('GAMBOL is available only for LR2.');
-  const { practice } = options;
   if (practice !== undefined && course !== undefined) throw new RangeError('PRACTICE plays a single chart.');
   if (practice !== undefined && !isPracticeGaugeType(practice.gauge, rulesetId))
     throw new RangeError(`PRACTICE under ${rulesetId} rules has no ${String(practice.gauge)} gauge.`);
@@ -1016,28 +1050,47 @@ function resolveRulesetTables(
   // A course gauge starts from the value its own id carried in (auto-shift carries every ladder gauge's), else from the
   // value the played gauge carried.
   // LR2 keeps a GROOVE or EASY pick's mine damage at 2 % on its course gauge too (#1082).
-  const courseMineFloor = rulesetId === 'lr2' && ['GROOVE', 'EASY'].includes(selectedGauge) ? 2 : undefined;
-  const courseGaugeOf = (id: string, total: number, stage: RulesetCourseOptions): GaugeSpec => {
+  const courseMineFloor = gaugeSource === 'lr2' && ['GROOVE', 'EASY'].includes(selectedGauge) ? 2 : undefined;
+  // `notes` is the count LR2's HARD damage scales by: the judgments the judge ruleset issues.
+  const courseGaugeOf = (id: string, total: number, stage: RulesetCourseOptions, notes = baseNotes): GaugeSpec => {
     const spec = resolveCourseGauge(
-      rulesetId,
+      gaugeSource,
       id,
       { ...stage, initialGauge: stage.initialGauges?.[id] ?? stage.initialGauge },
       chart.laneMode,
-      resolveLR2HardDamageMultiplier(total, baseNotes),
+      resolveLR2HardDamageMultiplier(total, notes),
     );
     return courseMineFloor === undefined ? spec : { ...spec, mineFloor: courseMineFloor };
   };
-  const courseGauge = (total: number): GaugeSpec | undefined =>
-    course === undefined ? undefined : courseGaugeOf(gaugeId, total, course);
-  // Gauge auto-shift's parallel gauges; `singleGaugeOf` builds a single-play gauge of the ruleset by id.
+  const courseGauge = (total: number, notes = baseNotes): GaugeSpec | undefined =>
+    course === undefined ? undefined : courseGaugeOf(gaugeId, total, course, notes);
+  // Gauge auto-shift's parallel gauges; `singleGaugeOf` builds a single-play gauge of the gauge's source by id.
   const shiftGauges = (
     initialGauge: GaugeSpec,
     total: number,
     singleGaugeOf: (id: string) => GaugeSpec,
+    notes = baseNotes,
   ): Pick<RulesetConfig, 'gaugeBank' | 'gaugeFallback'> =>
-    resolveGaugeShift(rulesetId, options, initialGauge, (id) =>
-      course === undefined ? singleGaugeOf(id) : courseGaugeOf(id, total, course),
+    resolveGaugeShift(gaugeSource, options, initialGauge, (id) =>
+      course === undefined ? singleGaugeOf(id) : courseGaugeOf(id, total, course, notes),
     );
+  // Another source's gauges under this ruleset's judging: the source's own tables and TOTAL reading, over the number of
+  // judgments this ruleset issues (`notes`), so a play of PGREATs still recovers the source's TOTAL.
+  const borrowedGauges = (
+    notes: number,
+  ):
+    | (Pick<RulesetConfig, 'gauge' | 'gaugeBank' | 'gaugeFallback' | 'effectiveTotal'> & { gaugeSource: RulesetId })
+    | undefined => {
+    if (gaugeSource === rulesetId) return undefined;
+    const source = resolveSourceGauges(gaugeSource, chart, baseNotes, notes);
+    const gauge = courseGauge(source.effectiveTotal, notes) ?? source.gaugeOf(gaugeId);
+    return {
+      gaugeSource,
+      gauge,
+      ...shiftGauges(gauge, source.effectiveTotal, source.gaugeOf, notes),
+      effectiveTotal: source.effectiveTotal,
+    };
+  };
 
   if (rulesetId === 'lr2') {
     const noteCount = countRulesetNotes(chart, 'ln');
@@ -1119,10 +1172,12 @@ function resolveRulesetTables(
       comboBreaksOnEmptyPoor: false,
       mineTrigger: 'press-ahead-or-hold',
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
+      gaugeSource,
       gauge: initialGauge,
       ...shiftGauges(initialGauge, effectiveTotal, (id) => resolveLR2Gauge(id, effectiveTotal, baseNotes)),
       noteCount,
       effectiveTotal,
+      ...borrowedGauges(noteCount),
       moneyScore: true,
       emptyPoorCountsInPoorDisplay: true,
     };
@@ -1198,12 +1253,14 @@ function resolveRulesetTables(
       comboBreaksOnEmptyPoor,
       mineTrigger: 'hold',
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
+      gaugeSource,
       gauge: initialGauge,
       ...shiftGauges(initialGauge, effectiveTotal, (id) =>
         resolveBeatorajaGauge(id, effectiveTotal, noteCount, chart.laneMode),
       ),
       noteCount,
       effectiveTotal,
+      ...borrowedGauges(noteCount),
       moneyScore: false,
       emptyPoorCountsInPoorDisplay: false,
     };
@@ -1235,10 +1292,12 @@ function resolveRulesetTables(
     // AC has no mines. Keep Be-Music's BMS compatibility extension for existing charts and replays.
     mineTrigger: 'press-or-hold',
     hcnTick: { heldJudge: 0, heldRate: 1, releasedJudge: 5, releasedRate: 1 },
+    gaugeSource,
     gauge: initialGauge,
     ...shiftGauges(initialGauge, effectiveTotal, (id) => resolve____Gauge(id, noteCount)),
     noteCount,
     effectiveTotal,
+    ...borrowedGauges(noteCount),
     moneyScore: false,
     emptyPoorCountsInPoorDisplay: false,
   };

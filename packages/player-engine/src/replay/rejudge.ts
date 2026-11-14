@@ -5,7 +5,7 @@
  * {@link simulateReplay} stays the plain simulator: it judges whatever it is given. These wrappers decide first whether
  * the replay can be judged under the target at all, and never synthesize inputs the played run did not record.
  */
-import { resolveGaugeTypes, type GaugeType } from '../ruleset/gauge-type.ts';
+import { resolveGaugeTypes, splitGaugePick, type GaugePick, type GaugeType } from '../ruleset/gauge-type.ts';
 import { isCourseStageFailed } from '../ruleset/course.ts';
 import type { RulesetId } from '../ruleset/index.ts';
 import { simulateCourseReplay, type BeMusicCourseReplay, type ReplayCourseResult } from './course.ts';
@@ -16,7 +16,8 @@ import { simulateReplay, type SimulateReplayOptions } from './simulate.ts';
  * Why a replay is not simulated under a ruleset:
  *
  * - `gauge` — the replay's bare gauge is not one the ruleset defines (`P-ATTACK` under beatoraja, `EX-HARD` under LR2,
- *   `DEATH` under AC outside a course). It is never mapped to a lookalike.
+ *   `DEATH` under AC outside a course). It is never mapped to a lookalike. A qualified gauge (`lr2:P-ATTACK`) is its
+ *   source's under every ruleset, so it is never a reason (#1171).
  * - `custom-judge` — CUSTOM JUDGE stays beatoraja's (#933): it has no reading under another ruleset.
  *
  * Gauge auto-shift is carried under every ruleset, along the target's own gauge ladder (`resolveGaugeShiftLadder`), so
@@ -53,7 +54,11 @@ function playedRuleset(replay: BeMusicReplay): RulesetId {
  * Whether `ruleset` defines the bare gauge pick `gauge`. A course stage plays the pick on the ruleset's course gauges,
  * which take every pick but the attack gauges outside LR2 and EX-HARD or ASSIST EASY under LR2 (`resolveCourseGaugeId`).
  */
-function definesGauge(ruleset: RulesetId, gauge: GaugeType, courseStage: boolean): boolean {
+function definesGauge(ruleset: RulesetId, pick: GaugePick, courseStage: boolean): boolean {
+  const parts = splitGaugePick(pick);
+  // A qualified gauge keeps its source's reading under every ruleset (carried, ADR 0019).
+  if (parts?.source !== undefined) return true;
+  const gauge = parts?.type ?? (pick as GaugeType);
   if (!courseStage) return resolveGaugeTypes(ruleset).includes(gauge);
   return ruleset === 'lr2'
     ? gauge !== 'EX-HARD' && gauge !== 'ASSIST-EASY'

@@ -77,7 +77,7 @@ import type { PlayerGaugeSummary } from '@be-music/player-engine/signals';
 import {
   createEmptyScore,
   resolveOptionSource,
-  type GaugeType,
+  type GaugePick,
   type RulesetId,
   type ScoreSummary,
 } from '@be-music/player-engine/ruleset';
@@ -254,7 +254,7 @@ export interface PlayChartContext {
   displayedScore: number;
   chartEnded: boolean;
   /** The gauge the run plays on (a replay's recorded pick wins). */
-  resolveSelectedGauge(): GaugeType;
+  resolveSelectedGauge(): GaugePick;
 }
 
 export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): void {

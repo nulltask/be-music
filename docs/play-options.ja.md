@@ -23,7 +23,7 @@ flowchart LR
   q -->|"S-RANDOM"| rules["判定ルール自身のもの"]
 ```
 
-それ以外はルールに従います。判定ルール（判定幅・ゲージ・判定対象ノートの選び方・ロングノートの種類・地雷の発動・スコア）はルールそのものです。LN MODE、CUSTOM JUDGE、LR2 の [GAMBOL](#gambol)、ゲージの種類、判定アルゴリズムもルールに従います。[PRACTICE](#practice) と[ゲージオートシフト](#ゲージオートシフト)はどのルールでも使え、そのルールで読みます。PRACTICE はそのルールのゲージを並べ、自動切り替えはそのルールのゲージの並びに沿って切り替えます（[#933](https://github.com/nulltask/be-music/issues/933)）。参照元が混ざったプレイを記録でどう扱うかは[アシストと記録の方針](#アシストと記録の方針)で説明します。[#774](https://github.com/nulltask/be-music/issues/774) で管理しています。
+それ以外はルールに従います。判定ルール（判定幅・ゲージ・判定対象ノートの選び方・ロングノートの種類・地雷の発動・スコア）はルールそのものです。LN MODE、CUSTOM JUDGE、LR2 の [GAMBOL](#gambol)、Options ダイアログに並ぶゲージの種類、判定アルゴリズムもルールに従います。エンジン、リプレイ、ターミナル版の `--gauge` は、参照元を付けたゲージ（`lr2:HARD`）も受け付けます。このゲージは、どの判定ルールでもその参照元のゲージ・オートシフトのラダー・コースゲージを使います（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)、[#1171](https://github.com/nulltask/be-music/issues/1171)）。ダイアログにはまだ出していません。[PRACTICE](#practice) と[ゲージオートシフト](#ゲージオートシフト)はどのルールでも使え、そのルールで読みます。PRACTICE はそのルールのゲージを並べ、自動切り替えはそのルールのゲージの並びに沿って切り替えます（[#933](https://github.com/nulltask/be-music/issues/933)）。参照元が混ざったプレイを記録でどう扱うかは[アシストと記録の方針](#アシストと記録の方針)で説明します。[#774](https://github.com/nulltask/be-music/issues/774) で管理しています。
 
 ## アシストと記録の方針
 

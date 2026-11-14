@@ -163,6 +163,7 @@ export function recordPlayFromSummary(summary: RecordPlaySummary, maxCombo: numb
       cleared: summary.gauge?.cleared ?? false,
       score: summary,
       ...(summary.gauge?.type !== undefined ? { gauge: summary.gauge.type } : {}),
+      ...(summary.gauge?.source !== undefined ? { gaugeSource: summary.gauge.source } : {}),
       ...(ruleset !== undefined ? { ruleset } : {}),
     }),
     exScore: summary.exScore,

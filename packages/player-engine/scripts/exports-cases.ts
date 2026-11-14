@@ -1325,6 +1325,31 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.resolveGaugeTypes('beatoraja');
     },
   });
+  define('player-engine.ruleset.splitGaugePick', {
+    run() {
+      rulesetAPI.splitGaugePick('lr2:HARD');
+    },
+  });
+  define('player-engine.ruleset.isGaugePick', {
+    run() {
+      rulesetAPI.isGaugePick('beatoraja:EX-HARD');
+    },
+  });
+  define('player-engine.ruleset.gaugePickType', {
+    run() {
+      rulesetAPI.gaugePickType('lr2:HARD');
+    },
+  });
+  define('player-engine.ruleset.resolveGaugePickSource', {
+    run() {
+      rulesetAPI.resolveGaugePickSource('HARD', 'beatoraja');
+    },
+  });
+  define('player-engine.ruleset.qualifyGaugePick', {
+    run() {
+      rulesetAPI.qualifyGaugePick('lr2', 'HARD');
+    },
+  });
   define('player-engine.ruleset.isGaugeType', {
     run: () => {
       rulesetAPI.isGaugeType('DEATH');
