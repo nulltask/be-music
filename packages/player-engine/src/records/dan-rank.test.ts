@@ -11,6 +11,11 @@ import {
 } from './dan-rank.ts';
 
 describe('resolveCourseDanRank', () => {
+  it('uses the documented marker precedence for ambiguous custom course names', () => {
+    expect(resolveCourseDanRank('Custom 七段 / 皆伝')).toBe('kaiden');
+    expect(resolveCourseDanRank('Custom 十級 / 七段')).toBe('dan-7');
+  });
+
   it('reads the kyu and dan ranks of Japanese course names', () => {
     expect(resolveCourseDanRank('十級')).toBe('kyu-10');
     expect(resolveCourseDanRank('段位認定 七級')).toBe('kyu-7');

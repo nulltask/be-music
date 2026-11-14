@@ -102,8 +102,11 @@ export function resolveLNOBJLongNotes(json: BeMusicJSON): LNOBJLongNoteResolutio
   }
 
   const idBase = resolveBMSBase(json);
-  const lnObjValues = resolveLNOBJValues(json, idBase);
-  if (lnObjValues.size === 0) {
+  let lastLNOBJ: string | undefined;
+  for (const value of json.bms.lnObjs ?? []) {
+    if (typeof value === 'string' && value.length > 0) lastLNOBJ = value;
+  }
+  if (lastLNOBJ === undefined) {
     return {
       startToEndBeat: new Map(),
       startToEndEvent: new Map(),
@@ -111,6 +114,7 @@ export function resolveLNOBJLongNotes(json: BeMusicJSON): LNOBJLongNoteResolutio
     };
   }
 
+  const lnObjValue = normalizeObjectKey(lastLNOBJ, idBase);
   const beatResolver = createBeatResolver(json);
   const preparedEvents = prepareNormalizedChartEvents(json.events);
   const legacyLongNoteTicks = collectLegacyLongNoteTickKeysFromPreparedEvents(preparedEvents);
@@ -132,7 +136,7 @@ export function resolveLNOBJLongNotes(json: BeMusicJSON): LNOBJLongNoteResolutio
 
     const beat = beatResolver.eventToBeat(event);
     const normalizedValue = normalizeObjectKey(event.value, idBase);
-    if (lnObjValues.has(normalizedValue)) {
+    if (normalizedValue === lnObjValue) {
       const start = pendingStartByChannel.get(normalizedChannel);
       if (start && beat > start.beat) {
         startToEndBeat.set(start.event, beat);
@@ -182,16 +186,6 @@ function resolveBMSLongNotesType1(
   }
 
   return { notes, suppressedTriggerEvents };
-}
-
-function resolveLNOBJValues(json: BeMusicJSON, base: 36 | 62 = 36): Set<string> {
-  const values = new Set<string>();
-  for (const candidate of json.bms.lnObjs ?? []) {
-    if (typeof candidate === 'string' && candidate.length > 0) {
-      values.add(normalizeObjectKey(candidate, base));
-    }
-  }
-  return values;
 }
 
 function prepareNormalizedChartEvents(events: ReadonlyArray<BeMusicEvent>): NormalizedChartEvent[] {

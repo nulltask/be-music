@@ -102,8 +102,9 @@ describe('player cli', () => {
     expect(resolvePlayModeFromArgs(parsed)).toBe('auto-scratch');
   });
 
-  test('cli: keeps BMS LN type auto-detection enabled by default and lets the user disable it', () => {
-    expect(parseArgs(['chart.bms']).inferBmsLNTypeWhenMissing).toBe(true);
+  test('cli: defaults to Type 1 and allows explicit BMS LN type inference', () => {
+    expect(parseArgs(['chart.bms']).inferBmsLNTypeWhenMissing).toBe(false);
+    expect(parseArgs(['chart.bms', '--ln-type-auto']).inferBmsLNTypeWhenMissing).toBe(true);
   });
 
   test('parses --ruleset and --gauge, and rejects unknown values', () => {

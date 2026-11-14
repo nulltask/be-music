@@ -486,7 +486,7 @@ MIRROR はスクラッチと外端の鍵盤を入れ替えます。1P の RANDOM
 
 どのルールでも **Random 1P / Random 2P → CONVERGE (LR2)**（`lr2:CONVERGE`）を選び、**Fixed key 1P / Fixed key 2P (LR2; 0=default)** で集める先のレーンを選びます。1〜9 は鍵盤を、0 はモードの既定値（スクラッチ、9 鍵盤の譜面では鍵盤 5）を選びます。LR2 beta3 に従い、各ノートはまず集める先のレーンを試し、同じタイムラインのノートや押しているロングノート（終点まで）がすでにある場合は、空いている鍵盤レーンからランダムに選びます。[スクラッチを含める設定](#スクラッチを含めるlr2)がオフの場合、スクラッチのノートは元のレーンに残ります。2P 側では LR2 が固定鍵盤に 2P の開始レーンを足す（[L27374-L27380](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27374-L27380)）ため、CONVERGE (LR2) は 2P の集める先を 1 レーン右にずらします。0 はスクラッチではなく鍵盤 1、鍵盤 n は鍵盤 n + 1 になり、最後の鍵盤は鍵盤の外を指して、そのノートは叩けません（10 鍵盤では `28`、チャンネルの無い 14 鍵盤では `2A`）。**CONVERGE corrected (LR2)**（`CONVERGE-CORRECTED`）は 2P でも 1P と同じく選んだ鍵盤に集め、9 鍵盤の譜面の抽選も 9 鍵の中だけにします（[#1083](https://github.com/nulltask/be-music/issues/1083)）。記録の扱いは CONVERGE と同じです。LR2 の CONVERGE は 5・7・9・10・14 鍵盤の譜面で使え、それ以外の譜面では明示的にエラーにします。LR2 beta3 は CONVERGE でスコアを保存しません（`CheckScoreSaveConditon`）。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
-14 KEY の LR2 S-RANDOM と CONVERGE では、並べ替え後にスクラッチが先に処理されると、その側の遠い鍵盤（1P の 4〜7、2P の 1〜4）に回避の印が付きます。印の付いた鍵盤は抽選範囲のすべてに印が付いた場合に選べます。CONVERGE の固定先にも同じ条件を適用します。AC 判定ルールで共有の S-RANDOM を使う場合は従来の配置を使います。配置可能なレーンがなく再抽選が終わらない場合、Be-Music は譜面準備をエラーにします。[検証結果と実装範囲](./research/lr2-14key-scratch-avoidance.ja.md)
+14 KEY の LR2 S-RANDOM と CONVERGE では、並べ替え後にスクラッチが先に処理されると、その側の遠い鍵盤（1P の 4〜7、2P の 1〜4）に回避の印が付きます。印の付いた鍵盤は抽選範囲のすべてに印が付いた場合に選べます。CONVERGE の固定先にも同じ条件を適用します。共有の S-RANDOM はどの判定ルールでも LR2 の配置を使います。旧値 `____:S-RANDOM` も同じオプションを指します。記録済みリプレイでは保存済みのノート配置を使います。配置可能なレーンがなく再抽選が終わらない場合、Be-Music は譜面準備をエラーにします。[検証結果と実装範囲](./research/lr2-14key-scratch-avoidance.ja.md)
 
 **CONVERGE (beatoraja)**（`beatoraja:CONVERGE`）は、beatoraja 0.8.9 の別の PMS 用配置（`Random.OPTION_PMS`、`ConvergeRandomizer`）で、PMS 以外の譜面では明示的にエラーにします。H-RANDOM のしきい値を過ぎた空きレーンのうち、現在の連続回数が最も多いレーンにノートを置き、しきい値の 2 倍を超えて空いたレーンの連続回数はリセットします。その側のシードを使い、beatoraja はこれを LIGHT_ASSIST とします。AC に CONVERGE はありません。古いリプレイや設定にある参照元のない `CONVERGE` は判定ルール自身のものです。リプレイは選択を `play.randomLane` と `play.options` に、LR2 の集める先を `play.options.randomFixedLane1P` / `randomFixedLane2P` に、各ノートの最終的なレーンとともに記録します。
 
@@ -624,7 +624,7 @@ LR2 との違いは次のとおりで、いずれも小さなものです。
 
 ## ゲージオートシフト
 
-どのルールでも、Options ダイアログ の **Gauge auto-shift** で **NONE**（既定）、**CONTINUE**、**SURVIVAL TO GROOVE**、**BEST CLEAR**、**SELECT TO UNDER** を選びます。**Lowest auto-shift gauge** は後の 2 つに適用します。方式は beatoraja 0.8.9 の `BMSPlayer` に従い、各ルールは自分のゲージに、自分のゲージの並びに沿って適用します（[#933](https://github.com/nulltask/be-music/issues/933)）。
+どのルールでも、Options ダイアログ の **Gauge auto-shift** で **NONE**（既定）、**CONTINUE**、**SURVIVAL TO GROOVE**、**BEST CLEAR**、**SELECT TO UNDER** を選びます。**Lowest auto-shift gauge** は後の 2 つに適用します。切り替え方式と beatoraja のゲージ順は beatoraja 0.8.9 に由来します。LR2・AC では Be-Music の拡張として、下表のゲージ順に同じ方式を適用します。これにより、各ルールで共通の操作ができ、リプレイでも切り替えを再現できます（[#933](https://github.com/nulltask/be-music/issues/933)）。
 
 | ルール       | 単曲（緩い順）                                   | 段位コース                     | EXPERT / NONSTOP コース                        |
 | ------------ | ------------------------------------------------ | ------------------------------ | ---------------------------------------------- |
@@ -650,7 +650,7 @@ flowchart LR
 
 リプレイには `play.gaugeAutoShift` と `play.bottomShiftableGauge` を記録します。NONE では `play.endOnFailure` も記録し、ほかの方式では最後まで判定を続けます。結果の `gauge.type` はプレイ終了時のゲージを示します。BEST CLEAR と SELECT TO UNDER では `gauge.values` に並行するすべてのゲージの値を保持し、コースのステージの `play.course.carryIn.gauges` に引き継いだコースのゲージを保持します。2 人プレイでは両プレイヤーのゲージがそれぞれ切り替わります。beatoraja スキンのゲージオートシフト（78）と最低シフトゲージ（341）のボタンは選択肢を参照元の順で巡回します。Native スキンのプレイ設定パネルには方式・最低ゲージ・実効ゲージを表示します。方式から入力アシストを推測しません。シフト後のクリアの順位付けは Leaderboard 側で決めます。
 
-参照元：beatoraja 0.8.9 の [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java#L641-L674)、[`GrooveGauge`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GrooveGauge.java)、[`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java)。対応 Issue は [#729](https://github.com/nulltask/be-music/issues/729)、[#730](https://github.com/nulltask/be-music/issues/730)、[#731](https://github.com/nulltask/be-music/issues/731)、[#732](https://github.com/nulltask/be-music/issues/732) です。
+参照元：beatoraja 0.8.9 の [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java#L600-L633)、[`GrooveGauge`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GrooveGauge.java)、[`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java)。対応 Issue は [#729](https://github.com/nulltask/be-music/issues/729)、[#730](https://github.com/nulltask/be-music/issues/730)、[#731](https://github.com/nulltask/be-music/issues/731)、[#732](https://github.com/nulltask/be-music/issues/732) です。
 
 ## DEATH corrected
 

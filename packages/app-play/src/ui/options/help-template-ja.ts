@@ -107,8 +107,8 @@ export const OPTIONS_HELP_JA = html`
         <dt>Gauge auto-shift</dt>
         <dd>
           ゲージが尽きたときの扱い。NONE、CONTINUE、SURVIVAL TO GROOVE、BEST CLEAR、SELECT TO UNDER (beatoraja
-          の方式)。ルールごとに自分のゲージの並びで切り替えます。たとえば LR2 では HAZARD から HARD、GROOVE、EASY
-          の順です。
+          の方式)。LR2・AC では Be-Music の拡張として、各ルールのゲージ順に適用します。たとえば LR2 の難しい順は
+          HAZARD、HARD、GROOVE、EASY です。
         </dd>
         <dt>Lowest auto-shift gauge</dt>
         <dd>

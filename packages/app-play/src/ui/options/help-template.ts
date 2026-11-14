@@ -115,8 +115,8 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dt>Gauge auto-shift</dt>
           <dd>
             What happens when the gauge would fail: NONE, CONTINUE, SURVIVAL TO GROOVE, BEST CLEAR or SELECT TO UNDER
-            (beatoraja's policies). Each ruleset shifts along its own gauges, for example LR2 from HAZARD to HARD,
-            GROOVE and EASY.
+            (beatoraja's policies). Be-Music extends these policies to LR2 and AC using their gauge orders. For example,
+            under LR2 the order from hardest to easiest is HAZARD, HARD, GROOVE and EASY.
           </dd>
           <dt>Lowest auto-shift gauge</dt>
           <dd>

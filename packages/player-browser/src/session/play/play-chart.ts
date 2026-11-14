@@ -393,7 +393,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   let resolvedPlay = resolveChart(resolved, {
     randomDraws,
     playVariant: playVariant,
-    inferBmsLNTypeWhenMissing: true,
+    inferBmsLNTypeWhenMissing: false,
   });
 
   // The invisible / keysound array is always prepared even when the overlay is off — so the Tweakpane toggle can flip
@@ -1027,10 +1027,7 @@ type BareRandomMode = Exclude<RandomMode, `${string}:${string}`>;
 
 function usesLR2DoubleRandom(mode: string, ruleset: RulesetId): boolean {
   const { name, source } = resolveOptionSource(mode, ruleset);
-  // AC shares the persisted S-RANDOM value, but its 14 KEY scratch rule is unverified.
-  return (
-    source === 'lr2' && (name === 'CONVERGE' || (name === 'S-RANDOM' && ruleset !== '____' && mode !== '____:S-RANDOM'))
-  );
+  return source === 'lr2' && (name === 'CONVERGE' || name === 'S-RANDOM');
 }
 
 function usesLR2Scratch(mode: RandomMode, variant: ChartPlayVariant | undefined, ruleset: RulesetId): boolean {

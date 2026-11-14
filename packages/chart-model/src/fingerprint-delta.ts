@@ -34,7 +34,6 @@ import {
   parseRational,
   parseTimeline,
   parseTotal,
-  usesInferredLongNoteType,
   type ChartItems,
   type LaneNotesCache,
   type FingerprintLength,
@@ -372,12 +371,6 @@ function replayEntries(
         added.set(bucket, [replayed]);
       }
       touched.add(bucket);
-      if (bucket.startsWith('lane:') && usesInferredLongNoteType(json)) {
-        const side = channel.charCodeAt(0);
-        if (side === 0x35 || side === 0x36) {
-          touched.add(ALL_LANES);
-        }
-      }
     }
   }
   if (touched.has(ALL_LANES)) {

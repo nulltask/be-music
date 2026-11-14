@@ -4,8 +4,8 @@ import type { GaugeShiftBottom } from './gauge-type.ts';
 
 /**
  * Gauge auto-shift ladders (#933): the gauges each ruleset's BEST CLEAR and SELECT TO UNDER choose among, gentlest
- * first. beatoraja 0.8.9's `BMSPlayer` defines the policies on its own gauge line-up; every other ruleset shifts down
- * its own line-up in the same way.
+ * first. beatoraja 0.8.9's `BMSPlayer` defines the policies on its own gauge line-up. Be-Music extends
+ * the same policies to LR2 and AC, with gauge orders and course mappings defined below.
  *
  * - beatoraja: ASSIST EASY, EASY, NORMAL, HARD, EX-HARD, HAZARD (the source's order); a course CLASS, EXCLASS,
  *   EXHARDCLASS.
