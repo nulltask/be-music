@@ -719,7 +719,7 @@ export class ChartPreviewEngine {
  */
 export function collectChartPreviewTriggers(chart: BeMusicJSON, cutoffSeconds: number): TimedSampleTrigger[] {
   if (!Number.isFinite(cutoffSeconds) || cutoffSeconds <= 0) return [];
-  const resolved = resolveChart(chart, { inferBmsLNTypeWhenMissing: true });
+  const resolved = resolveChart(chart, { inferBmsLNTypeWhenMissing: false });
   // LR2 negative-BPM reversal: the gameplay engine's event pump freezes at the reversal — nothing past it ever
   // sounds, and on the reversal tick only the BGM LR2 orders before the negative BPM does — so the select-scene
   // preview drops the same triggers.

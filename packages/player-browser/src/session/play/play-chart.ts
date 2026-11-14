@@ -393,7 +393,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   let resolvedPlay = resolveChart(resolved, {
     randomDraws,
     playVariant: playVariant,
-    inferBmsLNTypeWhenMissing: true,
+    inferBmsLNTypeWhenMissing: false,
   });
 
   // The invisible / keysound array is always prepared even when the overlay is off — so the Tweakpane toggle can flip

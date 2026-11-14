@@ -24,7 +24,6 @@ import {
   isStopChannel,
   isTempoChannel,
   mapBMSLongNoteChannelToPlayable,
-  resolveBMSLongNotes,
   resolveChartPlayVariant,
   type ChartPlayVariant,
 } from './index.ts';
@@ -395,7 +394,7 @@ export function computeChartItems(
   laneCache?: LaneNotesCache,
 ): ChartItems {
   const wants = (bucket: string): boolean => only === undefined || only.has(bucket);
-  const context = createItemContext(json, bucketed);
+  const context = createItemContext(json);
 
   // Lanes are independent once `#LNTYPE` is fixed for the whole chart, so the requested lanes resolve together.
   const lanes = new Map<string, NoteItem[]>(only === undefined ? [] : reuse!.lanes);
@@ -509,7 +508,7 @@ function lookupLaneNotes(
   return undefined;
 }
 
-function createItemContext(json: BeMusicJSON, bucketed: Map<string, BeMusicEvent[]>): ItemContext {
+function createItemContext(json: BeMusicJSON): ItemContext {
   let bmson: BmsonGeometry | undefined;
   if (json.sourceFormat === 'bmson') {
     const resolution = Math.max(1, json.bmson.info.resolution || 240);
@@ -519,36 +518,7 @@ function createItemContext(json: BeMusicJSON, bucketed: Map<string, BeMusicEvent
       lines: json.preservation.bmson.lines,
     };
   }
-  return { json, base: resolveBMSBase(json), lnType: resolveChartLongNoteType(json, bucketed), bmson };
-}
-
-/** `true` when `#LNTYPE` is not set, so the `5x` / `6x` objects of every lane decide it together. */
-export function usesInferredLongNoteType(json: BeMusicJSON): boolean {
-  return json.bms.lnType !== 1 && json.bms.lnType !== 2;
-}
-
-/** The chart's `#LNTYPE`: its own, else what Be-Music infers from every lane's `5x` / `6x` objects. */
-function resolveChartLongNoteType(json: BeMusicJSON, bucketed: Map<string, BeMusicEvent[]>): 1 | 2 {
-  if (!usesInferredLongNoteType(json)) {
-    return json.bms.lnType as 1 | 2;
-  }
-  if (json.sourceFormat !== 'bms') {
-    return DEFAULT_LONG_NOTE_TYPE;
-  }
-  const longNoteEvents: BeMusicEvent[] = [];
-  for (const [bucket, events] of bucketed) {
-    if (bucket.startsWith('lane:')) {
-      for (const event of events) {
-        if (mapBMSLongNoteChannelToPlayable(event.channel) !== undefined) {
-          longNoteEvents.push(event);
-        }
-      }
-    }
-  }
-  if (longNoteEvents.length === 0) {
-    return DEFAULT_LONG_NOTE_TYPE;
-  }
-  return resolveBMSLongNotes({ ...json, events: longNoteEvents }, { inferLNTypeWhenMissing: true }).lnType;
+  return { json, base: resolveBMSBase(json), lnType: json.bms.lnType === 2 ? 2 : DEFAULT_LONG_NOTE_TYPE, bmson };
 }
 
 /** `json` reduced to `events`, sharing everything else (the resolvers only read it). */
@@ -576,7 +546,7 @@ function noteContext(json: BeMusicJSON, freeZone: boolean): ResolvedNoteContext 
     // it and `canonicalizeItems` applies it (see `NoteItem.fz`).
     resolvePlayVariant: () => '9',
     freeZone,
-    inferBmsLNTypeWhenMissing: true,
+    inferBmsLNTypeWhenMissing: false,
   };
 }
 

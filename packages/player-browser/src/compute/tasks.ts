@@ -21,7 +21,7 @@ export function parseChartTask(input: ParseChartTaskInput): ParseChartTaskResult
   const chart = input.path.toLowerCase().endsWith('.bmson')
     ? parseBmson(decodeUTF8Text(input.bytes))
     : parseBMSBytes(input.bytes);
-  const scored = countScoredNotes(chart, { chartPath: input.path, inferBmsLNTypeWhenMissing: true });
+  const scored = countScoredNotes(chart, { chartPath: input.path, inferBmsLNTypeWhenMissing: false });
   compactChartPreservation(chart);
   const strings = new PackedEventStrings();
   const packed = packEvents(chart.events, strings);
