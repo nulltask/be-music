@@ -555,14 +555,14 @@ describe('engine fallbacks (findings A10 – A13)', () => {
     });
   });
 
-  test('keeps a negative #BPMxx with its sign and drops a zero or undefined one', () => {
+  test('keeps negative BPM and treats undefined BMS slots as -1', () => {
     // The engine plays a negative `#BPMxx` as LR2's reverse scroll, so it must not fingerprint like the positive BPM.
     const reversed = chart('#BPM01 -150', '#00208:01');
     expect(playDocument(reversed).timeline).toContainEqual({ m: '2', p: '0', type: 'bpm', v: '-150' });
     expect(playFingerprint(reversed)).not.toBe(playFingerprint(chart('#BPM01 150', '#00208:01')));
-    // A zero or undefined slot is dropped and the previous tempo continues, as in the engine.
+    // A zero slot keeps the preceding tempo. An undefined BMS slot reverses at 1 BPM.
     expect(playFingerprint(chart('#BPM01 0', '#00208:01'))).toBe(playFingerprint(chart()));
-    expect(playFingerprint(chart('#00208:01'))).toBe(playFingerprint(chart()));
+    expect(playFingerprint(chart('#00208:01'))).toBe(playFingerprint(chart('#BPM01 -1', '#00208:01')));
   });
 
   test('treats a #TOTAL of 0 or below as absent', () => {
@@ -625,7 +625,7 @@ describe('engine fallbacks (findings A10 – A13)', () => {
     expect(document(bmson({ total: 120 })).total).toEqual({ bmson: '120' });
     expect(document(bmson({})).judge).toEqual({ exRank: '100' });
     const mines = { mine_channels: [{ name: 'mine.wav', notes: [{ x: 2, y: 960 }] }] };
-    expect(document(bmson({}, mines)).mines).toEqual([{ m: '1', p: '0', lane: '12', damage: '4' }]);
+    expect(document(bmson({}, mines)).mines).toEqual([{ m: '1', p: '0', lane: '12', damage: '0' }]);
     // Adding sound channels does not move the default damage.
     const more = {
       ...mines,

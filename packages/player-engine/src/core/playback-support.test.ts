@@ -58,7 +58,7 @@ describe('createUIFramePublisher', () => {
     expect(frames[1]?.judgedNoteCount).toBe(7);
   });
 
-  test('mirrors the display beat in chart-position space past the LR2 reversal and pins it at the chart head', () => {
+  test('mirrors the display beat in chart-position space past the LR2 reversal and continues before the chart head', () => {
     const { uiSignals, frames } = createCapturingUISignals();
     const publish = createUIFramePublisher({
       uiEnabled: true,
@@ -91,7 +91,7 @@ describe('createUIFramePublisher', () => {
     expect(frames[1]?.displayBeat).toBeUndefined();
     expect(frames[2]).toMatchObject({ currentSeconds: 3, currentBeat: 5.5, displayBeat: 2.5 });
     expect(frames[3]).toMatchObject({ currentSeconds: 3.5, currentBeat: 5.5, displayBeat: 2.5 });
-    expect(frames[4]).toMatchObject({ currentSeconds: 9, displayBeat: 0 });
+    expect(frames[4]).toMatchObject({ currentSeconds: 9, displayBeat: -4 });
     // The reversal anchor rides on EVERY frame while armed — renderers freeze BGA layers against it.
     for (const frame of frames) {
       expect(frame.reversalSeconds).toBe(2);

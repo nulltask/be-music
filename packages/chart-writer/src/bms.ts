@@ -668,8 +668,6 @@ function isDedicatedBMSExtensionCommand(command: string): boolean {
   return false;
 }
 
-/** Damage a mine deals when nothing gives it one — Be-Music's player default for BMS and bmson alike. */
-const DEFAULT_MINE_DAMAGE = 4;
 /** The largest damage a two-character base-36 mine value (`ZZ`) can carry. */
 const MAX_BMS_MINE_DAMAGE = 36 * 36 - 1;
 
@@ -683,7 +681,7 @@ const MAX_BMS_MINE_DAMAGE = 36 * 36 - 1;
  *   for its start. `#LNTYPE 1` is written when the chart has no `#LNTYPE`.
  * - `#LNMODE` comes from the long notes' type (`t`, else `info.ln_type`) when they all agree, else from `info.ln_type`;
  *   per-note types that disagree with it cannot be written in BMS and are lost.
- * - A mine's object value becomes its damage in base 36 (`bmson.damage`, or Be-Music's default 4 for a bmson mine
+ * - A mine's object value becomes its damage in base 36 (`bmson.damage`, or the default 0 for a bmson mine
  *   without one), rounded to an integer and clamped to `01`..`ZZ` — `00` is no object at all, so a 0 damage mine
  *   becomes `01`. The first mine's sample becomes `#WAV00`, the BMS explosion sound, when the chart has none.
  * - bmson `judge_rank` shares `#DEFEXRANK`'s unit, so it is written as `#DEFEXRANK` (when positive) instead of an
@@ -721,7 +719,7 @@ function convertChartForBMSOutput(json: BeMusicJSON, report?: ChartExportDiagnos
       const hasDamage = typeof damage === 'number' && Number.isFinite(damage) && damage >= 0;
       if (hasDamage || isBmsonSource) {
         mineSample ??= json.resources.wav[normalizeObjectKey(event.value, resolveBMSBase(json))];
-        const value = Math.min(MAX_BMS_MINE_DAMAGE, Math.max(1, Math.round(hasDamage ? damage : DEFAULT_MINE_DAMAGE)));
+        const value = Math.min(MAX_BMS_MINE_DAMAGE, Math.max(1, Math.round(hasDamage ? damage : 0)));
         events.push({ measure: event.measure, position: event.position, channel, value: intToBase36(value, 2) });
         changed = true;
         continue;

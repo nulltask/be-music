@@ -1,3 +1,4 @@
+import { resolveLandmineDamage } from '@be-music/chart-model';
 import { collectBmsonExtraFields, type JSONFields } from '@be-music/chart-source';
 import { resolveChartLongNoteMode } from '@be-music/chart-model';
 import {
@@ -828,7 +829,6 @@ function laneExtensionChannelToPlayableChannel(channel: string): string | undefi
 
 /** BMS mines explode with `#WAV00`; their object value is the damage. */
 export const BMS_MINE_SAMPLE_KEY = '00';
-const BASE36_MINE_VALUE_PATTERN = /^[0-9A-Z]{2}$/;
 export const BMSON_LONG_NOTE_TYPES: ReadonlySet<number> = new Set([1, 2, 3]);
 
 interface BMSLongNotesForBmsonOutput {
@@ -859,24 +859,11 @@ function resolveBMSLongNotesForBmsonOutput(json: BeMusicJSON): BMSLongNotesForBm
 }
 
 /**
- * The bmson `damage` of a mine, as Be-Music's player resolves it: an authored `bmson.damage` wins; a BMS (or JSON)
- * mine's value is its damage read in base 36 (LR2 / beatoraja, no halving); otherwise `damage` is left out, which
- * deals the same default as an invalid BMS value.
+ * Preserve explicit damage and materialize the BMS fallback when converting to bmson.
  */
 function resolveMineDamageForBmsonOutput(json: BeMusicJSON, event: BeMusicEvent, idBase: 36 | 62): number | undefined {
-  const authored = event.bmson?.damage;
-  if (typeof authored === 'number' && Number.isFinite(authored) && authored >= 0) {
-    return authored;
-  }
-  if (json.sourceFormat === 'bmson') {
-    return undefined;
-  }
-  const value = normalizeObjectKey(event.value, idBase);
-  if (!BASE36_MINE_VALUE_PATTERN.test(value)) {
-    return undefined;
-  }
-  const damage = Number.parseInt(value, 36);
-  return damage > 0 ? damage : undefined;
+  if (json.sourceFormat === 'bmson') return event.bmson?.damage;
+  return resolveLandmineDamage(event, idBase, json.sourceFormat);
 }
 
 /**

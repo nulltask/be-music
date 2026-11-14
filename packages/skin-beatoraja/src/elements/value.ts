@@ -242,19 +242,16 @@ export function composeBeatorajaValueCells(
    * outside the range collapse to the nearest valid frame, mirroring upstream's
    * `SkinSourceImageSet.getImageIndex` clamp.
    *
-   * The 24-cell signed-dual-strip mode (divx % 24 == 0) ignores this argument: in upstream
-   * the dual-strip slicing produces `divx*divy/24` frames each containing a 12+12 cell row,
-   * which is a different shape than the simple `[divy][divx]` layout this composer assumes
-   * for animation. We keep the dual-strip composer single-frame for now (matches the few
-   * skins that author divx=24 with divy=1 + cycle=0).
+   * Signed strips group every 24 consecutive cells into a frame in row-major order.
    */
   frameIndex: number = 0,
 ): BeatorajaValueDigitCell[] {
   const keta = Math.max(1, Math.trunc(element.digit));
   const divx = Math.max(1, element.divx);
-  const isSignedDualStrip = divx % 24 === 0;
+  const divy = Math.max(1, element.divy);
+  const isSignedDualStrip = (divx * divy) % 24 === 0;
   // halfDivx: the per-half cell count (12 for 24-cell, divx for single-strip).
-  const halfDivx = isSignedDualStrip ? divx / 2 : divx;
+  const halfDivx = isSignedDualStrip ? 12 : divx;
 
   // Pad-mode dispatch (mirrors `JSONSkinObjectLoader.java:103-167`).
   let zeropaddingMode: number;
@@ -338,24 +335,20 @@ export function composeBeatorajaValueCells(
   }
 
   const cellW = Math.floor(element.w / divx);
-  const divy = Math.max(1, element.divy);
   const cellH = Math.floor(element.h / divy);
-  // Clamp the requested animation frame into `[0, divy-1]`. Mirrors upstream's
-  // `SkinSourceImageSet.getImageIndex` which `% length`-folds the frame index. We additionally
-  // skip frame indexing for 24-cell signed dual-strip mode — see the {@link frameIndex} doc.
-  const frame =
-    isSignedDualStrip || divy <= 1
-      ? 0
-      : Math.min(divy - 1, Math.max(0, Math.trunc(Number.isFinite(frameIndex) ? frameIndex : 0)));
-  const yWithFrame = element.y + frame * cellH;
-  return slots.map((slot) => ({
-    x: element.x + slot.cell * cellW,
-    y: yWithFrame,
-    w: cellW,
-    h: cellH,
-    cell: slot.hidden ? -1 : slot.cell,
-    hidden: slot.hidden,
-  }));
+  const frames = isSignedDualStrip ? (divx * divy) / 24 : divy;
+  const frame = Math.min(frames - 1, Math.max(0, Math.trunc(Number.isFinite(frameIndex) ? frameIndex : 0)));
+  return slots.map((slot) => {
+    const cell = isSignedDualStrip ? frame * 24 + slot.cell : frame * divx + slot.cell;
+    return {
+      x: element.x + (cell % divx) * cellW,
+      y: element.y + Math.floor(cell / divx) * cellH,
+      w: cellW,
+      h: cellH,
+      cell: slot.hidden ? -1 : slot.cell,
+      hidden: slot.hidden,
+    };
+  });
 }
 
 /**
@@ -375,7 +368,9 @@ export function composeBeatorajaValueCells(
  */
 export function valueFrameAt(element: BeatorajaValueElement, elapsedMs: number): number {
   if (element.cycle <= 0) return 0;
-  const length = Math.max(1, Math.trunc(element.divy));
+  const rows = Math.max(1, Math.trunc(element.divy));
+  const cells = Math.max(1, element.divx) * rows;
+  const length = cells % 24 === 0 ? cells / 24 : rows;
   if (length <= 1) return 0;
   if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return 0;
   // Floor-mod over the cycle window. Upstream uses Java's integer `%`; we mirror it via

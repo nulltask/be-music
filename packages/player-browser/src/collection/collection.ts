@@ -813,13 +813,17 @@ export function resolveChartBGAAsset(
   chartPath: string,
   assetPath: string,
 ): { entry: BrowserAssetEntry; path: string; key: string } | undefined {
-  // Every extension in the chart's folder before any in its parent, as LR2 does.
-  for (const folderChartPath of chartLookupFolders(chartPath)) {
-    for (const candidate of imageFallbackPaths(assetPath)) {
-      const key = resolveChartAssetKeyInFolder(source, folderChartPath, candidate);
-      const entry = key === undefined ? undefined : source.files.get(key);
-      if (key !== undefined && entry !== undefined) {
-        return { entry, path: candidate, key };
+  const primary = imageFallbackPaths(assetPath);
+  const stills = isVideoExtensionPath(assetPath)
+    ? stillImageFallbackPaths(assetPath.slice(0, assetPath.lastIndexOf('.')))
+    : [];
+  // Exhaust the video candidates across both folders before trying still images.
+  for (const paths of [primary, stills]) {
+    for (const folderChartPath of chartLookupFolders(chartPath)) {
+      for (const candidate of paths) {
+        const key = resolveChartAssetKeyInFolder(source, folderChartPath, candidate);
+        const entry = key === undefined ? undefined : source.files.get(key);
+        if (key !== undefined && entry !== undefined) return { entry, path: candidate, key };
       }
     }
   }
@@ -839,24 +843,21 @@ function imageFallbackPaths(path: string): string[] {
   if (dotIndex < 0 || dotIndex < lastSlash) {
     return [path];
   }
-  // A declared video falls back to the same name under the other video extensions (see VIDEO_FALLBACK_EXTENSIONS).
-  // Don't walk image extensions when the chart explicitly declared a video BGA — `_scualee.mpg` paired with a same-
-  // basename `_scualee.png` (cover art / static fallback frame shipped alongside the actual video) would otherwise have
-  // the resolver pick the PNG. The BGA loader only checks the declared path's extension to decide between the image vs.
-  // video pipeline, so feeding PNG bytes through the video path makes ffmpeg.wasm pick `png_pipe` and emit a 1-frame
-  // MP4 — visually a frozen still during gameplay. Returning just the original path here keeps the video reference
-  // resolving to its own file.
   if (isVideoExtensionPath(path)) {
     const videoBase = path.slice(0, dotIndex);
     const declared = path.slice(dotIndex + 1).toLowerCase();
     return [path, ...VIDEO_FALLBACK_EXTENSIONS.filter((ext) => ext !== declared).map((ext) => `${videoBase}.${ext}`)];
   }
   const base = path.slice(0, dotIndex);
-  const candidates = [`${base}.webp`, `${base}.png`, `${base}.jpg`, `${base}.jpeg`, `${base}.gif`, `${base}.bmp`];
+  const candidates = stillImageFallbackPaths(base);
   if (!candidates.includes(path)) {
     candidates.push(path);
   }
   return candidates;
+}
+
+function stillImageFallbackPaths(base: string): string[] {
+  return ['webp', 'png', 'jpg', 'jpeg', 'gif', 'bmp'].map((extension) => `${base}.${extension}`);
 }
 
 /**

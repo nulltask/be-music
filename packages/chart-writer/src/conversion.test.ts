@@ -151,12 +151,12 @@ describe('BMS → bmson conversion', () => {
     expect(mineDamages(parseBmson(JSON.stringify(output)))).toEqual(mineDamages(source));
   });
 
-  test('a mine whose value is not a damage encoding leaves `damage` out, so both sides deal the default', () => {
+  test('writes the BMS fallback explicitly for a mine with an invalid damage encoding', () => {
     // Under #BASE 62 the lower-case `0a` is not an upper-case base-36 damage; without #WAV00 the sample is silent.
     const source = bms('#BASE 62', '#BPM 120', '#WAV01 key.wav', '#00111:01', '#001D1:0a');
     const output = toBmson(source);
 
-    expect(output.mine_channels).toEqual([{ name: '', notes: [{ x: 1, y: 960 }] }]);
+    expect(output.mine_channels).toEqual([{ name: '', notes: [{ x: 1, y: 960, damage: 4 }] }]);
     expect(mineDamages(parseBmson(JSON.stringify(output)))).toEqual(mineDamages(source));
   });
 });
@@ -222,7 +222,7 @@ describe('bmson → BMS conversion', () => {
     [2.4, '02', 2],
     [2.5, '03', 3],
     [5000, 'ZZ', 1295],
-    [undefined, '04', 4],
+    [undefined, '01', 1],
   ])('a mine with `damage` %s is written as the BMS mine value %s', (damage, value, dealt) => {
     const source = bmson({
       info: { title: 'Mine', init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },

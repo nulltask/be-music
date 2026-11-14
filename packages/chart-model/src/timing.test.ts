@@ -185,7 +185,7 @@ describe('LR2 negative-BPM reversal', () => {
     expect(mirrorBeatAtTempoReversal(reversal, 5, 10)).toBe(10); // before the reversal: unchanged
     expect(mirrorBeatAtTempoReversal(reversal, 7.38, 16)).toBe(16); // exactly at it: not mirrored yet
     expect(mirrorBeatAtTempoReversal(reversal, 9, 17.5)).toBeCloseTo(14.5, 9); // 1.5 beats past → 1.5 beats back
-    expect(mirrorBeatAtTempoReversal(reversal, 60, 40)).toBe(0); // pinned at the chart head (documented deviation)
+    expect(mirrorBeatAtTempoReversal(reversal, 60, 40)).toBe(-8); // keeps rewinding before the chart head
     expect(mirrorBeatAtTempoReversal(undefined, 60, 40)).toBe(40); // no reversal armed
   });
 
@@ -213,7 +213,7 @@ describe('LR2 negative-BPM reversal', () => {
     expect(reversing.displayBPMAtBeat(6)).toBe(65);
   });
 
-  test('keeps dropping zero and undefined #BPMxx references (no reversal)', () => {
+  test('uses the LR2 -1 sentinel for undefined BMS BPM slots', () => {
     const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
     json.resources.bpm['02'] = 0;
@@ -223,9 +223,8 @@ describe('LR2 negative-BPM reversal', () => {
     ];
 
     const resolver = createTimingResolver(json);
-    expect(resolver.reversal).toBeUndefined();
-    // Both events are ignored: the previous tempo continues (real LR2 degenerates on both — documented deviation).
-    expect(resolver.bpmAtBeat(10)).toBeCloseTo(120, 9);
+    expect(resolver.reversal).toEqual({ beat: 8, seconds: 4 });
+    expect(resolver.bpmAtBeat(10)).toBe(1);
     expect(resolver.beatToSeconds(8)).toBeCloseTo(4, 9);
   });
 

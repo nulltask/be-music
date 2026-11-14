@@ -128,7 +128,8 @@
         "tempo": [
           "0 130 0",
           "8 130 3692308",
-          "16 65 7384615"
+          "16 65 7384615",
+          "20 1 11076923"
         ],
         "stops": []
       },
@@ -156,9 +157,9 @@
         "9230769 11 01",
         "10153846 11 01",
         "11076923 11 01",
-        "12000000 11 01",
-        "12923077 11 01",
-        "13846154 11 01"
+        "71076923 11 01",
+        "131076923 11 01",
+        "191076923 11 01"
       ],
       "replayChart": {
         "sourceFormat": "bms",
@@ -171,12 +172,12 @@
         "noteCount": 24,
         "headerBPM": 130,
         "bpmRange": {
-          "min": 65,
+          "min": 1,
           "max": 130
         },
         "reversalTimeUs": 7384615,
-        "chartFingerprint": "bmfp0:487ec047541d991b29d55c156204e07cc745e8fcc14d849e40aa0bbd2759c5d7",
-        "playFingerprint": "bmfp0:487ec047541d991b29d55c156204e07cc745e8fcc14d849e40aa0bbd2759c5d7",
+        "chartFingerprint": "bmfp0:3b1892c811b7921f6960371ee8af3600d73f85f1152d12c0d828168ade05d3f0",
+        "playFingerprint": "bmfp0:3b1892c811b7921f6960371ee8af3600d73f85f1152d12c0d828168ade05d3f0",
         "title": "Non-Positive BPM Changes",
         "subtitle": "Zero, negative and undefined #BPMxx slots referenced from channel 08",
         "artist": "Be-Music Dev Team",
@@ -207,9 +208,9 @@
         "9230769 11 normal",
         "10153846 11 normal",
         "11076923 11 normal",
-        "12000000 11 normal",
-        "12923077 11 normal",
-        "13846154 11 normal"
+        "71076923 11 normal",
+        "131076923 11 normal",
+        "191076923 11 normal"
       ],
       "play": {
         "missed": {
@@ -372,7 +373,7 @@
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 7
+              "emptyPoor": 4
             },
             "fast": 0,
             "slow": 0,
@@ -395,7 +396,7 @@
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 7
+              "emptyPoor": 4
             },
             "fast": 0,
             "slow": 0,
@@ -418,7 +419,7 @@
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 7
+              "emptyPoor": 4
             },
             "fast": 0,
             "slow": 0,
@@ -442,7 +443,7 @@
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 7,
+              "emptyPoor": 4,
               "exScore": 34,
               "score": 141666,
               "combo": 17,
@@ -468,7 +469,7 @@
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 7,
+              "emptyPoor": 4,
               "exScore": 34,
               "score": 34,
               "combo": 0,
@@ -495,7 +496,7 @@
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 7,
+              "emptyPoor": 4,
               "exScore": 34,
               "score": 34,
               "combo": 17,
@@ -524,7 +525,7 @@
               "good": 2,
               "bad": 2,
               "poor": 2,
-              "emptyPoor": 6
+              "emptyPoor": 3
             },
             "fast": 3,
             "slow": 3,
@@ -547,7 +548,7 @@
               "good": 2,
               "bad": 0,
               "poor": 4,
-              "emptyPoor": 8
+              "emptyPoor": 5
             },
             "fast": 3,
             "slow": 3,
@@ -570,7 +571,7 @@
               "good": 2,
               "bad": 2,
               "poor": 2,
-              "emptyPoor": 6
+              "emptyPoor": 3
             },
             "fast": 3,
             "slow": 3,
@@ -594,7 +595,7 @@
               "good": 2,
               "bad": 2,
               "poor": 2,
-              "emptyPoor": 6,
+              "emptyPoor": 3,
               "exScore": 18,
               "score": 79166,
               "combo": 1,
@@ -620,7 +621,7 @@
               "good": 2,
               "bad": 0,
               "poor": 4,
-              "emptyPoor": 8,
+              "emptyPoor": 5,
               "exScore": 18,
               "score": 18,
               "combo": 0,
@@ -647,7 +648,7 @@
               "good": 2,
               "bad": 2,
               "poor": 2,
-              "emptyPoor": 6,
+              "emptyPoor": 3,
               "exScore": 18,
               "score": 18,
               "combo": 1,
