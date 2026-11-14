@@ -77,10 +77,41 @@ flowchart LR
   `https://preview.be-music.app/api/auth/callback/discord` です。Google のリダイレクト URI は、本番が
   `https://be-music.app/api/auth/callback/google`、プレビューが
   `https://preview.be-music.app/api/auth/callback/google` です。
-- **公開範囲**: プレビューのホストは検索エンジンに載らないようにし、必要なら Cloudflare Access で保護します。
+- **公開範囲**: プレビューのホストは検索エンジンに載らないようにし、Cloudflare Access で保護します（2.1 節）。
 - **証明書**: `play.preview.be-music.app` のように `be-music.app` の 2 階層下のホストは、ゾーンのユニバーサル証明書
   （`*.be-music.app`）の対象外です。Worker のカスタムドメインはホスト名ごとに証明書を発行するので、最初のプレビューの
   ホストで確認します。
+
+### 2.1 プレビューへのアクセス
+
+プレビューを開けるのは許可した人だけです。1 つの Cloudflare Access アプリケーションが `preview.be-music.app` と
+`*.preview.be-music.app` を覆い、そのポリシーは GitHub でログインした、一覧にあるメールアドレスだけを許可します。
+本番は公開のままです。
+
+```mermaid
+flowchart LR
+  U[ブラウザー] --> A{Cloudflare Access}
+  A -->|許可| W[プレビューの Worker]
+  subgraph workers[プレビューの Worker]
+    P[play-preview] -.->|Service Binding| D[dashboard-preview]
+    L[leaderboard-preview] -.->|Service Binding| D
+  end
+```
+
+- **Worker 間の通信**は Access を通りません。リライングパーティーは Accounts（OIDC の discovery、token、JWKS）に、
+  公開ネットワークではなく Dashboard Worker への `ACCOUNTS` Service Binding で届きます（`@be-music/service-auth-client`）。
+  binding のない Worker は `fetch` を使うので、Access に止められます。別リポジトリの Donate も、プレビューのホストを
+  Access の下に入れる前に同じ binding が要ります。
+- **ほかの入り口はありません**: `play-preview`、`leaderboard-preview`、`dashboard-preview` は `workers.dev` と
+  バージョンのプレビュー URL を切っており、カスタムドメインでだけ応答します。
+- **Web アプリのマニフェスト**は資格情報つき（`crossorigin="use-credentials"`）で取得するので、Access の下でも
+  プレイヤーをインストールできます。
+- **設定方法**: `scripts/cloudflare/access.ts` がアプリケーションとポリシーを定義し、
+  `node scripts/cloudflare/access-apply.ts` がその内容を表示します。`--apply` を付けると作成または更新します。
+  `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`（Access: Apps and Policies Edit と Access: Organizations, Identity
+  Providers, and Groups Read）、`ACCESS_ALLOWED_EMAILS` を環境変数か `.env.cloudflare` から読みます。メールアドレスは
+  個人情報なのでリポジトリに置きません。それ以外の設定は秘密ではありません。初回の前に、Zero Trust
+  （Settings → Authentication）で GitHub の ID プロバイダーを一度追加します。
 
 ## 3. ログイン
 

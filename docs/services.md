@@ -77,10 +77,40 @@ flowchart LR
   `https://preview.be-music.app/api/auth/callback/discord` in preview. Google's redirect URI is
   `https://be-music.app/api/auth/callback/google` in production and
   `https://preview.be-music.app/api/auth/callback/google` in preview.
-- **Visibility**: preview hosts are kept out of search engines, and may be put behind Cloudflare Access.
+- **Visibility**: preview hosts are kept out of search engines and sit behind Cloudflare Access (section 2.1).
 - **Certificates**: hosts two levels below `be-music.app` (`play.preview.be-music.app`) are not covered by the zone's
   universal certificate (`*.be-music.app`). Worker custom domains issue one certificate per hostname; check this on the
   first preview host.
+
+### 2.1 Preview access
+
+Only allowed people can open the preview. One Cloudflare Access application covers `preview.be-music.app` and
+`*.preview.be-music.app`; its policy allows a list of email addresses, signed in with GitHub. Production stays public.
+
+```mermaid
+flowchart LR
+  U[Browser] --> A{Cloudflare Access}
+  A -->|allowed| W[Preview Workers]
+  subgraph workers[Preview Workers]
+    P[play-preview] -.->|Service Binding| D[dashboard-preview]
+    L[leaderboard-preview] -.->|Service Binding| D
+  end
+```
+
+- **Calls between Workers** never cross Access. A relying party reaches Accounts (OIDC discovery, token and JWKS)
+  through its `ACCOUNTS` Service Binding to the Dashboard Worker (`@be-music/service-auth-client`), not the public
+  network. A Worker without the binding uses `fetch`, which Access would block. Donate, in its own repository, needs
+  the same binding before its preview host can go behind Access.
+- **No other way in**: `play-preview`, `leaderboard-preview` and `dashboard-preview` turn off `workers.dev` and
+  version preview URLs, so they answer only on their custom domains.
+- **The web app manifest** is requested with credentials (`crossorigin="use-credentials"`), so the Player still
+  installs behind Access.
+- **Setting it up**: `scripts/cloudflare/access.ts` defines the application and policy, and
+  `node scripts/cloudflare/access-apply.ts` prints them; `--apply` creates or updates them. It reads
+  `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (Access: Apps and Policies Edit; Access: Organizations, Identity
+  Providers, and Groups Read) and `ACCESS_ALLOWED_EMAILS` from the environment or `.env.cloudflare`. The addresses are
+  personal data and stay out of the repository; the rest of the configuration is not secret. Add the GitHub identity
+  provider in Zero Trust (Settings → Authentication) once before the first run.
 
 ## 3. Sign-in
 
