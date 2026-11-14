@@ -221,6 +221,14 @@ function resultProgress(result: PlayResult): number | undefined {
     : undefined;
 }
 
+/**
+ * How full a result `#SRC_BARGRAPH` of `type` is, as LR2 fills it (OpenLR2 `SetObjectValue_Bargraph`, `LR2f.cpp`
+ * L6814-L6990): 1 the play's progress, 2 loading (done), 10 the EX score rate, 11 the rate over the notes judged so far,
+ * 14 the 2P player's EX score rate in a BATTLE play, 20-25 the 1P judgement counts and max combo over the notes, 26 the
+ * money score, 27 the EX score, and 30-37 the same for the 2P player. Types 12 / 13 (the best record) and 14 / 15 (the
+ * target) outside BATTLE stay undrawn: the result carries no score history and no target, and a native type never
+ * stands in for another statistic. Select-screen types (3-9) and any other are undrawn too.
+ */
 function resultBargraph(type: number, result: PlayResult): number | undefined {
   const score = result.score;
   const ratio = (value: number, max: number) => (max > 0 ? Math.max(0, Math.min(1, value / max)) : 0);
@@ -252,8 +260,16 @@ function resultBargraph(type: number, result: PlayResult): number | undefined {
       return ratio(result.maxCombo, score.total);
     case 26:
       return result.judgeRuleset === 'lr2' ? ratio(score.score, 200000) : undefined;
-    default:
+    // The best record (12 / 13) and the target (15) need score history the result does not carry.
+    case 12:
+    case 13:
+    case 15:
       return undefined;
+    default:
+      // The 2P player's counts, max combo, score and EX score (30-37 mirror 20-27).
+      return type >= 30 && type <= 37 && result.secondPlayer
+        ? resultBargraph(type - 10, result.secondPlayer)
+        : undefined;
   }
 }
 

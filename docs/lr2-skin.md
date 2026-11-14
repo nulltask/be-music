@@ -249,5 +249,5 @@ Other LR2 skins may load, but small layout differences, missing animation detail
   - The internet ranking reads nothing: numbers 92-94, and text 20's message on the result screen.
   - The pacemakers read 0: numbers 150 / 151, and 152 / 153 read the EX score. No best-record ghost or target reaches the play.
   - Text 29 reads an INSANE chart's play level where LR2 reads the ex level its database keeps.
-  - The result uses LR2 bar-graph IDs and progress slider 6. Best and target graphs are absent when the result has no corresponding data.
+  - The result fills LR2's bar-graph types with their native meanings (OpenLR2 `SetObjectValue_Bargraph` [R]): 1 progress, 2 loading, 10 / 11 the EX score rate, 20-27 the judgements, max combo, score and EX score, and 30-37 the same for the 2P player of a BATTLE play (14 too). The best-record types (12 / 13) and the target (15, and 14 outside BATTLE) stay undrawn, since the result carries no score history or target; no other statistic stands in for them. Slider 6 is the play's progress.
   - On the result screen ops 400-402 follow the chart's key mode, and the other screens light none: there is no key-config screen whose page they could follow.

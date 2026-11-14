@@ -427,6 +427,21 @@ describe('resolveLR2ResultState values', () => {
     expect(state.slider(9)).toBeUndefined();
     expect(state.bargraph(3)).toBeUndefined();
   });
+
+  it('leaves the best record and the target undrawn, and draws the 2P graphs of a BATTLE play', () => {
+    const solo = resolveLR2ResultState({ result: { ...makeResult({ total: 100, exScore: 50 }), maxCombo: 25 } });
+    for (const type of [12, 13, 14, 15, 30, 37]) expect(solo.bargraph(type)).toBeUndefined();
+
+    const secondPlayer = { ...makeResult({ total: 100, exScore: 150 }), maxCombo: 80 };
+    const battle = resolveLR2ResultState({
+      result: { ...makeResult({ total: 100, exScore: 50 }), maxCombo: 25, secondPlayer },
+    });
+    expect(battle.bargraph(14)).toBe(0.75);
+    expect(battle.bargraph(37)).toBe(0.75);
+    expect(battle.bargraph(35)).toBe(0.8);
+    expect(battle.bargraph(12)).toBeUndefined();
+    expect(battle.bargraph(15)).toBeUndefined();
+  });
 });
 
 describe('resolveLR2ResultTimers', () => {
