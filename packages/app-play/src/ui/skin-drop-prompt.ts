@@ -52,9 +52,16 @@ export function promptSkinDrop(family: SkinDropFamily, setPending: (family: Skin
 /** Confirms a detected skin before loading can replace the current theme's assets. */
 export function confirmSkinDrop(
   families: ReadonlySet<SkinFamilyId>,
-  preferred?: SkinDropFamily,
+  preferred: SkinDropFamily | undefined,
+  policy: 'ask' | 'apply' | 'keep-current',
+  rememberChoice: (apply: boolean) => void,
 ): Promise<SkinDropFamily | undefined> {
   if (!families.has('lr2') && !families.has('beatoraja')) return Promise.resolve(undefined);
+  if (policy === 'keep-current') return Promise.resolve(undefined);
+  if (policy === 'apply') {
+    if (preferred !== undefined && families.has(preferred)) return Promise.resolve(preferred);
+    return Promise.resolve(families.has('lr2') ? 'lr2' : 'beatoraja');
+  }
   const dialog = document.querySelector<HTMLDialogElement>('#skin-switch');
   if (dialog === null || dialog.open) return Promise.resolve(undefined);
   const buttons = dialog.querySelectorAll<HTMLButtonElement>('[data-skin-family]');
@@ -62,6 +69,8 @@ export function confirmSkinDrop(
     const family = button.dataset.skinFamily as SkinDropFamily;
     button.hidden = !families.has(family);
   }
+  const doNotAsk = dialog.querySelector<HTMLInputElement>('[data-skin-switch-do-not-ask]');
+  if (doNotAsk !== null) doNotAsk.checked = false;
   dialog.returnValue = '';
   // The dialog owns keyboard navigation; its keys must not reach the player's shortcuts.
   dialog.onkeydown = (event) => event.stopPropagation();
@@ -70,7 +79,9 @@ export function confirmSkinDrop(
       'close',
       () => {
         const family = dialog.returnValue;
-        resolve((family === 'lr2' || family === 'beatoraja') && families.has(family) ? family : undefined);
+        const accepted = (family === 'lr2' || family === 'beatoraja') && families.has(family);
+        if (doNotAsk?.checked) rememberChoice(accepted);
+        resolve(accepted ? family : undefined);
       },
       { once: true },
     );

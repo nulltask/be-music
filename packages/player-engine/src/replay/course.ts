@@ -1,4 +1,4 @@
-import type { GaugeType } from '../ruleset/gauge-type.ts';
+import { gaugePickType, resolveGaugePickSource, type GaugePick } from '../ruleset/gauge-type.ts';
 import { resolve____RankLabel } from '../ruleset/score.ts';
 import type { RulesetChartFacts } from '../ruleset/facts.ts';
 import { resolveRuleset, type RulesetId } from '../ruleset/index.ts';
@@ -112,7 +112,8 @@ export interface ReplayCourseResult {
 
   djLevel: string;
   /** The gauge the course ended on. */
-  gauge: { type: string; final: number; cleared: boolean };
+  /** The last stage's gauge; `source` as in a play's result, when it is another source's than the ruleset's own. */
+  gauge: { type: string; source?: RulesetId; final: number; cleared: boolean };
   /** The number of stages the run reached. */
   stagesPlayed: number;
   lamp: CourseClearLamp;
@@ -130,18 +131,21 @@ export interface ReplayCourseResult {
 export function resolveCourseLamp(
   ruleset: string,
   result: Pick<ReplayCourseResult, 'judge' | 'noteCount' | 'maxCombo' | 'gauge' | 'fullCombo'>,
-  pick: GaugeType,
+  pick: GaugePick,
 ): CourseClearLamp {
   const id = ruleset.split('/')[0]!;
   const fullCombo = result.fullCombo !== false && result.noteCount > 0 && result.maxCombo >= result.noteCount;
+  // The HP rule is the course gauge's own: LR2's course gauges keep it under another ruleset's judging (#1171).
+  const lr2Gauge = (result.gauge.source ?? id) === 'lr2';
   // CheckCourseClear: HP >= 2 may advance; at course end, HP == 2 clears only through the full-combo branch.
   const cleared =
-    result.gauge.cleared && (id !== 'lr2' || (result.gauge.final >= 2 && (fullCombo || result.gauge.final > 2)));
+    result.gauge.cleared && (!lr2Gauge || (result.gauge.final >= 2 && (fullCombo || result.gauge.final > 2)));
   return resolveCourseClearLamp({
     ruleset: id,
     cleared,
     gauge: result.gauge.type,
-    gaugeType: pick,
+    ...(result.gauge.source !== undefined ? { gaugeSource: result.gauge.source } : {}),
+    gaugeType: gaugePickType(pick),
     noteCount: result.noteCount,
     maxCombo: result.maxCombo,
     ...(result.fullCombo !== undefined ? { fullCombo: result.fullCombo } : {}),
@@ -169,11 +173,13 @@ export interface CourseStageStartGauge {
 export function resolveCourseStageStartGauge(
   rulesetId: RulesetId,
   course: ReplayCourseStage,
-  selectedGauge: string,
+  selectedGauge: GaugePick,
 ): CourseStageStartGauge {
-  const gaugeId = resolveCourseGaugeId(rulesetId, course.kind, selectedGauge);
+  // A qualified pick starts on its own source's course gauge (#1171).
+  const source = resolveGaugePickSource(selectedGauge, rulesetId);
+  const gaugeId = resolveCourseGaugeId(source, course.kind, gaugePickType(selectedGauge));
   // The lane mode and the HARD damage multiplier only pick the judging values, which this leaves out.
-  const spec = resolveCourseGauge(rulesetId, gaugeId, courseStageRulesetOptions(course), '7', 1);
+  const spec = resolveCourseGauge(source, gaugeId, courseStageRulesetOptions(course), '7', 1);
   return { type: spec.id, initial: spec.initial, max: spec.max, border: spec.border, survival: spec.survival };
 }
 
@@ -206,7 +212,7 @@ export function aggregateCourseResult(
   course: ReplayCourseInfo,
   stageResults: readonly ReplayRulesetResult[],
   stageNoteCounts: readonly number[],
-  pick: GaugeType,
+  pick: GaugePick,
 ): ReplayCourseResult {
   const judge: ReplayJudgmentCounts = { pgreat: 0, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 };
   let fast = 0;
@@ -231,8 +237,9 @@ export function aggregateCourseResult(
   const noteCount = stageNoteCounts.reduce((sum, count) => sum + count, 0);
   const last = stageResults.at(-1);
   const reachedAll = stageResults.length === stageNoteCounts.length;
-  const gauge = {
+  const gauge: ReplayCourseResult['gauge'] = {
     type: last?.gauge.type ?? '',
+    ...(last?.gauge.source !== undefined ? { source: last.gauge.source } : {}),
     final: last?.gauge.final ?? 0,
     cleared:
       reachedAll &&
@@ -316,7 +323,7 @@ export function simulateCourseReplay(
     return nonstopCourseResult(courseLog, simulateReplay(courseLog.nonstop.replay, options), stageResults);
   }
   const stageResults: ReplayRulesetResult[] = [];
-  let pick: GaugeType = 'GROOVE';
+  let pick: GaugePick = 'GROOVE';
   let previous: ReplayRulesetResult | undefined;
   for (const entry of courseLog.stages) {
     if (!entry.played || (previous !== undefined && stageFailed(previous))) break;
@@ -361,8 +368,9 @@ function nonstopCourseResult(
   const { judge, noteCount } = run;
   const judged = judge.pgreat + judge.great + judge.good + judge.bad + judge.poor - (run.minePoor ?? 0);
   // A NONSTOP play given up with ESC is a failed run.
-  const gauge = {
+  const gauge: ReplayCourseResult['gauge'] = {
     type: run.gauge.type,
+    ...(run.gauge.source !== undefined ? { source: run.gauge.source } : {}),
     final: run.gauge.final,
     cleared:
       run.gauge.cleared &&
@@ -718,7 +726,12 @@ function parseCourseResults(results: Record<string, unknown>): Record<string, Re
       maxCombo: base!.maxCombo,
       ...(base!.minePoor !== undefined ? { minePoor: base!.minePoor } : {}),
       djLevel: expectString(record.djLevel, `${path}.djLevel`),
-      gauge: { type: base!.gauge.type, final: base!.gauge.final, cleared: base!.gauge.cleared },
+      gauge: {
+        type: base!.gauge.type,
+        ...(base!.gauge.source !== undefined ? { source: base!.gauge.source } : {}),
+        final: base!.gauge.final,
+        cleared: base!.gauge.cleared,
+      },
       stagesPlayed: expectFiniteNumber(record.stagesPlayed, `${path}.stagesPlayed`),
       lamp: lamp as CourseClearLamp,
       stages: Object.values(parseResults(stageMap, `${path}.stages`)),

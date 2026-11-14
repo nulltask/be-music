@@ -177,6 +177,20 @@ textarea {
 .options-search-results[hidden] {
   display: none;
 }
+.remembered-folder-list {
+  max-block-size: 20dvh;
+  overflow: auto;
+}
+.remembered-folder-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.remembered-folder-list li > span {
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
 .options-body {
   display: flex;
   flex-direction: column;
@@ -2612,6 +2626,18 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
 /* Basecoat dialogs inherit a centered alignment; forms in them read from the start. */
 .dialog {
   text-align: start;
+}
+
+.skin-switch-preference {
+  display: flex;
+  align-items: center;
+  justify-self: start;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.skin-switch-preference > input {
+  flex: none;
 }
 
 /* Hidden family choices must override the shared buttons' inline-flex display. */

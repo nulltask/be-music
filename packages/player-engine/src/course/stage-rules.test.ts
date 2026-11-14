@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
+import type { GaugePick } from '../ruleset/gauge-type.ts';
 import {
   isCourseHiSpeedLocked,
   isLR2GradeCourse,
@@ -90,6 +91,14 @@ describe('LR2 GRADE course resets', () => {
     });
     // HARD and DEATH stay.
     expect(resolveLR2GradeCoursePlaySettings(lr2, { ...picks, gauge: 'HARD' }).gauge).toBe('HARD');
+    // A source-qualified pick is reset by its gauge type and keeps its source (#1171).
+    const qualified = (gauge: 'lr2:EASY' | 'lr2:G-ATTACK' | 'beatoraja:EASY' | 'beatoraja:HARD' | '____:ASSIST-EASY') =>
+      resolveLR2GradeCoursePlaySettings(lr2, { ...picks, gauge: gauge as GaugePick }).gauge;
+    expect(qualified('lr2:EASY')).toBe('lr2:GROOVE');
+    expect(qualified('lr2:G-ATTACK')).toBe('lr2:GROOVE');
+    expect(qualified('beatoraja:EASY')).toBe('beatoraja:GROOVE');
+    expect(qualified('beatoraja:HARD')).toBe('beatoraja:HARD');
+    expect(qualified('____:ASSIST-EASY')).toBe('____:ASSIST-EASY');
     // Another course keeps every pick.
     expect(resolveLR2GradeCoursePlaySettings({ ...lr2, kind: 'expert' }, picks)).toBe(picks);
   });

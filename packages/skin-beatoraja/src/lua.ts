@@ -21,6 +21,7 @@ import { normalizePath } from '@be-music/shared-utils/core';
 import fengariWeb from 'fengari-web';
 import type { lua_State, LuaCFunction } from 'fengari-web';
 import { logLuaDofile, logLuaRequire } from './lua-diagnostics.ts';
+import { createLuaVirtualFiles, pushLuaVirtualFileOps, pushLuaVirtualIO } from './lua-io.ts';
 
 const { lauxlib, lua, lualib, to_luastring } = fengariWeb;
 const {
@@ -769,12 +770,12 @@ function setupDofile(L: lua_State, resolver: ((path: string) => Uint8Array | und
 }
 
 /**
- * Restore stripped globals as inert stubs so theme code that touches `io`, `os`, or
+ * Restore stripped globals as sandboxed stand-ins so theme code that touches `io`, `os`, or
  * `luajava` (typically inside utility modules that use them for "rotation" features —
  * picking a random background image, persisting state across runs) loads without
- * crashing. File and process operations are inert; the clock reads the runtime context.
- * Other helpers either silently no-op (file persistence) or fall back to time-based defaults
- * (`os.time()`, `os.date(...)`).
+ * crashing. Process operations are inert; the clock reads the runtime context. Files are
+ * kept in memory for this runtime only (`lua-io.ts`): nothing reaches a real file system and
+ * nothing is persisted, and a file the skin never wrote does not exist.
  *
  * Without these, `customfunction.lua` modules in community skins crash at module-load
  * time because `local luajava = require("luajava")` followed by
@@ -784,8 +785,8 @@ function setupDofile(L: lua_State, resolver: ((path: string) => Uint8Array | und
 function setupCompatStubs(L: lua_State, owner: LuaRuntimeOwner): void {
   // ── `os` ────────────────────────────────────────────────────────────────────────
   // Tiny shim covering `os.time()` and `os.date()` which themes use for log file naming
-  // and "today's banner" effects. Other `os.*` calls (`execute`, `remove`, `rename`)
-  // return safe defaults — most just need to not throw.
+  // and "today's banner" effects. `os.execute` and `os.getenv` return nil: there is no
+  // process or environment to reach.
   lua_createtable(L, 0, 4);
   const osTimeFn: LuaCFunction = (state) => {
     lua_pushnumber(state, Math.floor(Date.now() / 1000));
@@ -820,33 +821,16 @@ function setupCompatStubs(L: lua_State, owner: LuaRuntimeOwner): void {
   pushClosureField(L, 'time', osTimeFn);
   pushClosureField(L, 'date', osDateFn);
   pushClosureField(L, 'execute', noOpReturnNil);
-  pushClosureField(L, 'remove', noOpReturnNil);
-  pushClosureField(L, 'rename', noOpReturnNil);
+  // `os.remove` / `os.rename` act on the same in-memory files as `io`.
+  const files = createLuaVirtualFiles();
+  pushLuaVirtualFileOps(L, files);
   pushClosureField(L, 'getenv', noOpReturnNil);
   lua_setglobal(L, to_luastring('os'));
 
   // ── `io` ────────────────────────────────────────────────────────────────────────
-  // `io.open` returns a fake file handle whose methods are no-ops — themes use this for
-  // log persistence (history files, "rotation" exclude lists). The handle's `:lines()`
-  // returns an empty iterator so loops over its lines simply terminate; `:read` returns
-  // nil; `:write` chains to itself; `:close` returns true.
-  lua_createtable(L, 0, 4);
-  const ioOpenFn: LuaCFunction = (state) => {
-    pushFakeFileHandle(state);
-    return 1;
-  };
-  const ioLinesFn: LuaCFunction = (state) => {
-    lua_pushjsfunction(state, () => {
-      lua_pushnil(state);
-      return 1;
-    });
-    return 1;
-  };
-  pushClosureField(L, 'open', ioOpenFn);
-  pushClosureField(L, 'lines', ioLinesFn);
-  pushClosureField(L, 'read', noOpReturnNil);
-  pushClosureField(L, 'write', noOpReturnNil);
-  pushClosureField(L, 'close', noOpReturnNil);
+  // Files live in memory for this runtime only (`lua-io.ts`): a file exists once the skin has written it and reads
+  // back what was written; opening one it never wrote for reading fails as Lua specifies. Nothing is persisted.
+  pushLuaVirtualIO(L, files);
   lua_setglobal(L, to_luastring('io'));
 
   // ── `luajava` ───────────────────────────────────────────────────────────────────
@@ -857,30 +841,6 @@ function setupCompatStubs(L: lua_State, owner: LuaRuntimeOwner): void {
   // match how beatoraja's Lua bridge surfaces it.
   pushLuajavaStub(L);
   lua_setglobal(L, to_luastring('luajava'));
-}
-
-function pushFakeFileHandle(L: lua_State): void {
-  lua_createtable(L, 0, 5);
-  pushClosureField(L, 'close', () => {
-    lua_pushboolean(L, 1);
-    return 1;
-  });
-  pushClosureField(L, 'read', () => 0);
-  pushClosureField(L, 'write', (state) => {
-    lua_pushvalue(state, 1); // chain to self for `f:write(a):write(b)`
-    return 1;
-  });
-  pushClosureField(L, 'lines', (state) => {
-    lua_pushjsfunction(state, () => {
-      lua_pushnil(state);
-      return 1;
-    });
-    return 1;
-  });
-  pushClosureField(L, 'seek', () => {
-    lua_pushinteger(L, 0);
-    return 1;
-  });
 }
 
 function pushLuajavaStub(L: lua_State): void {

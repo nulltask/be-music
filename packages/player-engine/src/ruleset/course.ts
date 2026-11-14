@@ -16,9 +16,16 @@ export type CourseGaugeSet = 'lr2' | '5k' | '7k' | '9k' | '24k';
 /** beatoraja's `NO_GOOD` / `NO_GREAT` course constraints. */
 export type CourseJudgeConstraint = 'no-good' | 'no-great';
 
-/** LR2 advances at HP >= 2; the class gauges of the other rulesets require a positive value. */
-export function isCourseStageFailed(ruleset: string, gauge: { final: number; failedMidPlay?: boolean }): boolean {
-  return gauge.failedMidPlay === true || (ruleset.split('/')[0] === 'lr2' ? gauge.final < 2 : gauge.final <= 0);
+/**
+ * LR2 advances at HP >= 2; the class gauges of the other rulesets require a positive value. The rule is the course
+ * gauge's own: a gauge of another source (`gauge.source`, #1171) keeps that source's rule under this ruleset's judging.
+ */
+export function isCourseStageFailed(
+  ruleset: string,
+  gauge: { final: number; failedMidPlay?: boolean; source?: string },
+): boolean {
+  const lr2 = (gauge.source ?? ruleset.split('/')[0]) === 'lr2';
+  return gauge.failedMidPlay === true || (lr2 ? gauge.final < 2 : gauge.final <= 0);
 }
 
 export interface RulesetCourseOptions {

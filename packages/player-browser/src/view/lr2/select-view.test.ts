@@ -113,6 +113,18 @@ describe('LR2SelectView buttons', () => {
     ]);
   });
 
+  it('steps a source-qualified gauge on from its gauge type, to a bare gauge (ADR 0019)', () => {
+    const { view, intents } = createView({
+      playOptions: { gauge1P: 'beatoraja:HARD', gauge2P: 'lr2:DEATH-CORRECTED' } as SelectFrame['playOptions'],
+    });
+    view.dispatchButtonClick({ type: 40 }, 1);
+    view.dispatchButtonClick({ type: 41 }, 1);
+    expect(intents).toEqual([
+      { type: 'set-play-option', key: 'gauge1P', value: 'DEATH' },
+      { type: 'set-play-option', key: 'gauge2P', value: 'EASY' },
+    ]);
+  });
+
   it('steps the RANDOM buttons (42 / 43) through LR2’s own lane options only, by the half clicked', () => {
     const step = (random1P: string, type: number, direction: 1 | -1) => {
       const { view, intents } = createView({

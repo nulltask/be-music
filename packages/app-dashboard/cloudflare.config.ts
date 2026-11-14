@@ -22,6 +22,8 @@ export default defineConfig(({ mode }) => {
       entrypoint: './src/index.ts',
       domains: [site],
       workersDev: false,
+      // Version preview URLs would bypass Cloudflare Access on the preview host (docs/services.md section 2.1).
+      ...(preview ? { previewUrls: false } : {}),
       observability: { enabled: true },
       env: {
         BUILD_TIMESTAMP: bindings.text(buildInfo.builtAt),

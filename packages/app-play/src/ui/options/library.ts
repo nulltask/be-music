@@ -31,6 +31,10 @@ export function buildLibraryFolder(
   library: OptionContainer,
   addFolder: (parent: OptionContainer, folder: OptionFolderSpec) => OptionContainer,
 ): void {
+  const folderManager = document.createElement('div');
+  folderManager.dataset.rememberedFolderManager = '';
+  library.addElement(folderManager);
+
   const urlParams = parseURLMediaParams(window.location.href);
   const urls = {
     music: urlParams.musicURL ?? '',

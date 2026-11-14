@@ -113,7 +113,10 @@ export const PLAYER_APP_TEMPLATE = html`
               <span>${localized('dropBeatorajaSkin')}</span>
             </div>
             <div class="start-load-actions">
-              <button class="btn" @click=${() => document.querySelector<HTMLInputElement>('#songs')?.click()}>
+              <button
+                class="btn"
+                @click=${() => document.querySelector('#songs')?.dispatchEvent(new Event('open-folder'))}
+              >
                 ${localized('openFolder')}
               </button>
               <button
@@ -124,6 +127,7 @@ export const PLAYER_APP_TEMPLATE = html`
                 ${localized('openZIP')}
               </button>
             </div>
+            <div data-remembered-folder-actions></div>
             <!--
             Leaderboard: whether this browser's plays are sent, and the
             account they go to. Rendered by \`LeaderboardPanel\`
@@ -279,6 +283,10 @@ export const PLAYER_APP_TEMPLATE = html`
             <h2 id="skin-switch-title">${localized('skinSwitchTitle')}</h2>
             <p id="skin-switch-hint">${localized('skinSwitchHint')}</p>
           </header>
+          <label class="skin-switch-preference">
+            <input class="input" type="checkbox" data-skin-switch-do-not-ask />
+            <span>${localized('skinSwitchDoNotAsk')}</span>
+          </label>
           <footer>
             <button type="submit" value="" class="btn" data-variant="outline" autofocus>${localized('cancel')}</button>
             <span class="account-dialog-buttons">
@@ -520,6 +528,7 @@ export const PLAYER_APP_TEMPLATE = html`
             />
           </header>
           <div id="options-search-results" class="options-search-results" hidden></div>
+          <div data-remembered-folder-actions></div>
           <section id="options-modal-body" class="options-body"></section>
           <button type="button" id="options-modal-close" aria-label=${localized('close')}>
             <svg

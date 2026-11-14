@@ -30,7 +30,7 @@ import {
   type LR2PlaySetup,
   type LR2PlayState,
 } from '@be-music/skin-lr2/state';
-import type { GaugeType } from '@be-music/player-engine/ruleset';
+import { gaugePickType, type GaugeType } from '@be-music/player-engine/ruleset';
 import type { CourseView } from '@be-music/player-scene-model';
 import type { GameplayLayoutMode } from '@be-music/player-skin-sdk';
 import type { Application, Texture } from 'pixi.js';
@@ -489,7 +489,9 @@ export class LR2PlayView extends PlayLayers implements PlayView, PlayFrameContex
         ...(options.lr2ExtraMode !== undefined ? { lr2ExtraMode: options.lr2ExtraMode } : {}),
       },
       gauge: options.gauge ?? 'GROOVE',
-      ...(play.secondPlayer !== undefined && options.gauge2P !== undefined ? { gauge2P: options.gauge2P } : {}),
+      ...(play.secondPlayer !== undefined && options.gauge2P !== undefined
+        ? { gauge2P: gaugePickType(options.gauge2P) }
+        : {}),
       courseGauge: options.courseGauge === true,
       ...(options.replay === true ? { replay: true } : {}),
       ...(options.course !== undefined ? { course: options.course } : {}),

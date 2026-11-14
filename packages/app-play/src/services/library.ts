@@ -94,6 +94,12 @@ export interface LibraryServiceOptions {
   readonly applyDroppedSkin: (family: SkinFamilyId) => void | Promise<void>;
 }
 
+interface LibraryLoadOrigin {
+  readonly showLibraryRoot?: boolean;
+  readonly entries?: readonly FileSystemEntry[];
+  readonly readFiles?: () => Promise<BrowserDroppedFile[]>;
+}
+
 /** The charts and courses the select screen lists, and the loads that add to them. */
 export class LibraryService {
   /**
@@ -102,10 +108,7 @@ export class LibraryService {
    */
   public collection: BrowserChartCollection = { sources: [], charts: [], errors: [] };
   /** Every load of charts, for the folder reload (`reloadCharts`): a drop's entries, or the files themselves. */
-  private readonly chartLoads: {
-    readonly entries?: readonly FileSystemEntry[];
-    readonly files: BrowserDroppedFile[];
-  }[] = [];
+  private readonly chartLoads: (LibraryLoadOrigin & { readonly files: BrowserDroppedFile[] })[] = [];
   private readonly collectionStore = new BrowserChartCollectionStore();
   /** Charts parsed on an earlier visit, by the SHA-256 of their files: a folder dropped again is not parsed again. */
   private readonly parsedChartCache = createIndexedDBParsedChartCache(currentParsedChartBuildStamp());
@@ -236,10 +239,7 @@ export class LibraryService {
    * pressed twice with two different folders) and every drop's charts stay uniquely addressable through the collection
    * per-source prefixing.
    */
-  public async processIncomingFiles(
-    files: BrowserDroppedFile[],
-    origin: { readonly entries?: readonly FileSystemEntry[] } = {},
-  ): Promise<void> {
+  public async processIncomingFiles(files: BrowserDroppedFile[], origin: LibraryLoadOrigin = {}): Promise<void> {
     if (files.length === 0) {
       return;
     }
@@ -343,7 +343,7 @@ export class LibraryService {
       tasks.push(this.loadBeatorajaTheme(themeFiles));
     }
     if (chartFiles.length > 0) {
-      tasks.push(this.loadCharts(chartFiles, origin.entries));
+      tasks.push(this.loadCharts(chartFiles, origin));
     }
     const playContinues = this.showing() === 'play';
     if (tasks.length === 0) {
@@ -377,7 +377,7 @@ export class LibraryService {
     }
     if (chartFiles.length > 0 || courseFiles.length > 0) await this.refreshCourseFolders();
     // Open what was dropped: its folder, or the folder list when the drop carried several.
-    const dropped = navigationAfterDrop(this.collection.charts, previousChartIds);
+    const dropped = navigationAfterDrop(this.collection.charts, previousChartIds, origin.showLibraryRoot);
     if (dropped !== undefined) this.browseTo(dropped);
     // Commit the confirmed family before mounting the next select scene. A skin dropped onto a play swaps that play's
     // family (`applyDroppedSkin`) and leaves the chart running; the select screen takes the family when the play returns.
@@ -566,11 +566,13 @@ export class LibraryService {
     const loads = [...this.chartLoads];
     const groups: BrowserDroppedFile[][] = [];
     for (const load of loads) {
-      if (load.entries === undefined) {
+      const { entries } = load;
+      const readFiles = load.readFiles ?? (entries && (() => readDropEntries(entries)));
+      if (!readFiles) {
         groups.push(load.files);
         continue;
       }
-      const files = (await readDropEntries(load.entries)).filter((file) => {
+      const files = (await readFiles()).filter((file) => {
         const name = file.name.toLowerCase();
         const path = file.webkitRelativePath || file.name;
         return (
@@ -597,9 +599,9 @@ export class LibraryService {
     this.setStatus(describeChartCollection(this.collection));
   }
 
-  private async loadCharts(files: BrowserDroppedFile[], entries?: readonly FileSystemEntry[]): Promise<void> {
+  private async loadCharts(files: BrowserDroppedFile[], origin: LibraryLoadOrigin = {}): Promise<void> {
     // Kept for the folder reload: the drop's entries walk its folders again, other files are read again as they are.
-    this.chartLoads.push(entries !== undefined ? { entries, files } : { files });
+    this.chartLoads.push({ ...origin, files });
     this.setStatus('Loading charts...');
     // Append rather than replace so a second / third folder drop adds to the existing collection instead of wiping the
     // previous pack. The store re-prefixes source / song IDs so each drop's entries stay uniquely addressable. The

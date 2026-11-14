@@ -121,6 +121,10 @@ describe('player cli', () => {
 
     expect(() => parseArgs(['chart.bms', '--ruleset', 'lr2oraja'])).toThrow(/Unknown --ruleset/);
     expect(() => parseArgs(['chart.bms', '--gauge', 'ASSIST'])).toThrow(/Unknown --gauge/);
+    // A source-qualified gauge runs that source's gauge under any ruleset, and must be one the source defines.
+    expect(parseArgs(['chart.bms', '--gauge', 'LR2:hard']).gauge).toBe('lr2:HARD');
+    expect(parseArgs(['chart.bms', '--gauge', 'beatoraja:ex-hard']).gauge).toBe('beatoraja:EX-HARD');
+    expect(() => parseArgs(['chart.bms', '--gauge', 'lr2:EX-HARD'])).toThrow(/Unknown --gauge/);
     const parsed = parseArgs(['chart.bms', '--no-ln-type-auto']);
     expect(parsed.inferBmsLNTypeWhenMissing).toBe(false);
     expect(parseArgs(['chart.bms', '--no-ln-type-auto', '--ln-type-auto']).inferBmsLNTypeWhenMissing).toBe(true);

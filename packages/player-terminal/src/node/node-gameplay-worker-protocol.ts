@@ -17,7 +17,7 @@ import type {
 import type { ChartTextStage, PlayerInterruptReason, PlayerLoadProgress, PlayerSummary } from '@be-music/player-engine';
 import type { LaneBinding } from '../manual-input.ts';
 import type { ImageResizeAlgorithm, TUINoteHeight } from '@be-music/player-engine/display';
-import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
+import type { GaugePick, RulesetId } from '@be-music/player-engine/ruleset';
 
 export interface NodeGameplayWorkerPlayOptions {
   chartOptionProgram?: ChartOptionProgram;
@@ -44,7 +44,7 @@ export interface NodeGameplayWorkerPlayOptions {
   highSpeed?: number;
   judgeWindowMs?: number;
   judgeRuleset?: RulesetId;
-  gauge?: GaugeType;
+  gauge?: GaugePick;
   debugActiveAudio?: boolean;
   leadInMs?: number;
   audio?: boolean;

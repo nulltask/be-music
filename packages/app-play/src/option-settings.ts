@@ -3,7 +3,7 @@
 // and the next visit still restores it (`option-settings-sync.ts`).
 
 import type { TunableCompressor } from '@be-music/player-browser/audio';
-import { isGaugeType, isRulesetId, migrateOptionValue, type RulesetId } from '@be-music/player-engine/ruleset';
+import { isGaugePick, isRulesetId, migrateOptionValue, type RulesetId } from '@be-music/player-engine/ruleset';
 import {
   DIFFICULTY_FILTER_CYCLE,
   KEYS_FILTER_CYCLE,
@@ -179,6 +179,8 @@ export interface OptionSettings {
   sort: BrowseSort;
   keysFilter: KeysFilter;
   difficultyFilter: DifficultyFilter;
+  confirmDroppedSkin: boolean;
+  skipDroppedSkin: boolean;
   skinFamilyOverride: SkinFamilyOverride;
   masterVolume: number;
   muted: boolean;
@@ -447,7 +449,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'ghostMode', oneOf(raw.ghostMode, GHOST_MODES));
   assign(settings, 'nonstopPlacement', oneOf(raw.nonstopPlacement, ['intended', 'lr2'] as const));
   assign(settings, 'judgeRuleset', isRulesetId(raw.judgeRuleset) ? raw.judgeRuleset : undefined);
-  assign(settings, 'gauge', isGaugeType(raw.gauge) ? raw.gauge : undefined);
+  assign(settings, 'gauge', isGaugePick(raw.gauge) ? raw.gauge : undefined);
   assign(settings, 'hRandomThresholdBPM', resolvePlayOptionValue('hRandomThresholdBPM', raw.hRandomThresholdBPM));
   for (const key of [
     'randomFixedLane1P',
@@ -463,6 +465,8 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'sort', oneOf(raw.sort, SORT_CYCLE));
   assign(settings, 'keysFilter', oneOf(raw.keysFilter, KEYS_FILTER_CYCLE));
   assign(settings, 'difficultyFilter', oneOf(raw.difficultyFilter, DIFFICULTY_FILTER_CYCLE));
+  assign(settings, 'confirmDroppedSkin', booleanOf(raw.confirmDroppedSkin));
+  assign(settings, 'skipDroppedSkin', booleanOf(raw.skipDroppedSkin));
   assign(settings, 'skinFamilyOverride', oneOf(raw.skinFamilyOverride, SKIN_FAMILIES));
   assign(settings, 'hiddenSudden1P', oneOf(raw.hiddenSudden1P, PLAY_OPTION_CHOICES.hiddenSudden1P!));
   assign(settings, 'hiddenSudden2P', oneOf(raw.hiddenSudden2P, PLAY_OPTION_CHOICES.hiddenSudden2P!));
@@ -735,6 +739,8 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('sort');
   assignState('keysFilter');
   assignState('difficultyFilter');
+  assignState('confirmDroppedSkin');
+  assignState('skipDroppedSkin');
   assignState('skinFamilyOverride');
   assignState('masterVolume');
   assignState('muted');
@@ -897,6 +903,8 @@ export function captureOptionSettings(
     sort: state.sort,
     keysFilter: state.keysFilter,
     difficultyFilter: state.difficultyFilter,
+    confirmDroppedSkin: state.confirmDroppedSkin,
+    skipDroppedSkin: state.skipDroppedSkin,
     skinFamilyOverride: state.skinFamilyOverride,
     masterVolume: state.masterVolume,
     muted: state.muted,

@@ -73,6 +73,8 @@ function harness(overrides: Partial<DropTargetOptions> = {}) {
     }),
     loadPickedFiles: vi.fn(async () => {}),
     recordLoad: vi.fn(),
+    resumeSelect: vi.fn(async () => {}),
+    setStatus: vi.fn(),
     ...overrides,
   };
   return { target: new DropTarget(options), options, elements, loaded };
@@ -83,6 +85,7 @@ const skinDropPrompt = { close: vi.fn() };
 beforeEach(() => {
   skinDropPrompt.close.mockClear();
   vi.stubGlobal('document', {
+    querySelectorAll: () => [],
     querySelector: (selector: string) => (selector === '#skin-drop' ? skinDropPrompt : null),
   });
 });

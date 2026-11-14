@@ -781,14 +781,13 @@ function audioFallbackPaths(path: string): string[] {
 /**
  * Image-asset variant of {@link resolveChartAsset} that walks the common BMS image-format extensions before giving up.
  * BMS charts historically declare `#BMPxx test.bmp`, but archives ship the actual graphic as `.png` / `.jpg` / `.gif`
- * more often than as a real Windows bitmap. Mirrors {@link resolveChartAudioAsset}'s codec-walking behavior, with the
- * order tuned for graphics:
+ * more often than as a real Windows bitmap. Mirrors {@link resolveChartAudioAsset}'s codec-walking behavior:
  *
- * - 1. `.webp` (first, so a pack re-encoded to WebP to save space wins over any leftover originals) 2. `.png`
- *   (lossless, broadly supported, the modern default) 3. `.jpg` / `.jpeg` (lossy, smaller — common for photo BGA) 4.
- *   `.gif` (legacy but still seen in older charts) 5. `.bmp` (the literal `#BMPxx` extension) 6. the original path
- *   verbatim — keeps video BGA references (`.mpg` / `.mp4` / `.webm` / …) and any exotic format not in the list above
- *   resolving correctly.
+ * - 1. the path the chart names, as LR2 tries it before any other extension (OpenLR2 `LR2f.cpp` L14607-L14673). A
+ *   same-stem file is not guaranteed to hold the same picture, so it never replaces a file that is there (#1192).
+ * - 2. when that file is missing, the same name as `.webp`, `.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, without repeating
+ *   the named extension. The order is a Be-Music policy: LR2 tries `.png`, `.jpg`, `.bmp` and beatoraja `.jpg`,
+ *   `.jpeg`, `.gif`, `.bmp`, `.png`, `.tga`; `.webp` is first so a pack re-encoded to save space resolves.
  *
  * The bytes are decoded by content, not by the declared extension, so a `#BMPxx foo.bmp` resolved to `foo.webp` decodes
  * as WebP.
@@ -849,11 +848,9 @@ function imageFallbackPaths(path: string): string[] {
     return [path, ...VIDEO_FALLBACK_EXTENSIONS.filter((ext) => ext !== declared).map((ext) => `${videoBase}.${ext}`)];
   }
   const base = path.slice(0, dotIndex);
-  const candidates = stillImageFallbackPaths(base);
-  if (!candidates.includes(path)) {
-    candidates.push(path);
-  }
-  return candidates;
+  const authored = path.toLowerCase();
+  // The file the chart names first, as LR2 looks images up: a same-stem file is not guaranteed to be the same picture.
+  return [path, ...stillImageFallbackPaths(base).filter((candidate) => candidate.toLowerCase() !== authored)];
 }
 
 function stillImageFallbackPaths(base: string): string[] {

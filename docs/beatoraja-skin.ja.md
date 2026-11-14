@@ -62,7 +62,14 @@ host は entry script の directory とその sub-directory、および 1 階層
 module は cache されるので、後続の `require()` は同じ table を返します。
 beatoraja の `timer_util` / `event_util` helper module は組み込みで用意しており、theme に同梱しなくても `require()` できます。
 
-`os.clock()` は host が渡す scene の経過時間を秒単位で返します。これにより、WMII_FHD のレーザーやキー発光など、遅延付き Lua draw 条件が描画とともに進みます。標準ライブラリーを除外した後、限定的な `os` / `io` 互換 shim を用意します。ファイルシステムやプロセスの操作は何も実行しません。
+`os.clock()` は host が渡す scene の経過時間を秒単位で返します。これにより、WMII_FHD のレーザーやキー発光など、遅延付き Lua draw 条件が描画とともに進みます。標準ライブラリーを除外した後、限定的な `os` / `io` の代替を用意します。プロセスの操作は何も実行しません（`os.execute` と `os.getenv` は nil を返します）。
+
+beatoraja は `io.open` でスキンに実際のファイルを渡します [V]（[SkinLuaAccessor](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/skin/lua/SkinLuaAccessor.java#L318-L370)）。Be-Music には渡せるファイルシステムがないため、プラットフォーム上の方針として、`io` は 1 つの Lua ランタイム（1 つのスキンのシーンを 1 回評価する間）だけメモリに置くファイルを扱います（[`lua-io.ts`](../packages/skin-beatoraja/src/lua-io.ts)）。
+
+- ファイルは、スキンが書き込んだ時点で存在し、書き込んだ内容をそのまま読み戻せます。`os.remove` と `os.rename` も同じファイルを扱います。
+- スキンが書いていないファイルを読み取りで開くと、Lua の仕様どおり失敗します（`nil`、メッセージ、エラー番号 2）。`io.lines` はエラーを送出します。スキン自身の存在確認や `pcall` の分岐は、ファイルがないことを正しく検出できます。`close` 後のハンドルや、開いたモードに合わない操作も失敗を返します。
+- 何も保存せず、実際のファイルも読みません。スキンが持つ履歴やローテーションの一覧は、シーンごとに空から始まります。`io.open` の結果を確認せずに書き込むスキン（ModernChic のリザルト画面など）もそのまま動きます。
+- `luajava` は空の代替のままです。`bindClass` と `new` は空のテーブルを返すため、そのメソッド呼び出しは Lua のエラーになり、スキンは `pcall` で捕捉できます。
 
 ブラウザの `main_state.event_index(id)` は `image.ref` と同じ画像番号の解決処理を使います。MODE/SORT と LNMODE はゼロ始まり、HS-FIX と CLEAR は beatoraja の番号順です。`main_state.set_timer(id, start)` はカスタムアニメーション用タイマー 10000–19999 だけを書き換え、開始時刻はマイクロ秒です。`main_state.timer_off_value` で停止します。Lua と数値指定の描画先タイマーには同じフレームで反映します。不正な書き込みは false を返し、保護されたエンジン・シーン用タイマーは変更しません。カスタムタイマーの状態は1つのスキンインスタンスだけに属します。
 

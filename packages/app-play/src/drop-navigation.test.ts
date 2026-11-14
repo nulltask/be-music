@@ -21,6 +21,11 @@ describe('navigationAfterDrop', () => {
     expect(navigationAfterDrop(chartEntries, before)).toEqual({ folderPath: [], cursors: [2] });
   });
 
+  test('shows the first Library level for a single folder drop when folders are already registered', () => {
+    const chartEntries = [...old, chartEntry('c', 'Gamma/Three')];
+    expect(navigationAfterDrop(chartEntries, before, true)).toEqual({ folderPath: [], cursors: [2] });
+  });
+
   test('leaves the screen alone when the drop added no songs', () => {
     expect(navigationAfterDrop(old, before)).toBeUndefined();
   });

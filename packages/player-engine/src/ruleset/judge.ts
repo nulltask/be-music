@@ -71,10 +71,9 @@ export function judgeWindowEarlyReachUs(set: JudgeWindowSetUs): number {
 }
 
 /**
- * The PGREAT window as positive reaches `[lateUs, earlyUs]` — the range LR2 uses for mine press detonation (its
- * changelog: a mine explodes on a press "within the PGREAT range", not GOOD; holding through a mine detonates at
- * the crossing instead). Returned in reach form rather than raw bounds so callers comparing elapsed time do not
- * have to re-derive the signs.
+ * The PGREAT window as positive reaches `[lateUs, earlyUs]`. Returned in reach form rather than raw bounds so callers
+ * comparing elapsed time do not have to re-derive the signs. No mine rule reads it any more: LR2's press reach is its
+ * GREAT window, ahead of the line only.
  */
 export function pgreatWindowReachUs(set: JudgeWindowSetUs): readonly [number, number] {
   const [lateBound, earlyBound] = set.judges[0];

@@ -224,7 +224,7 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
   const bmson: Record<string, unknown> = {
     ...collectBmsonExtraFields(json.bmson.extraFields, 'root'),
     version: resolveBmsonVersionForOutput(json),
-    info: createBmsonInfoForOutput(json, resolution, modeHint),
+    info: createBmsonInfoForOutput(json, resolution, modeHint, options.onDiagnostic),
     lines: mapBmsonLineValues(
       resolveBmsonLinesForOutput(json, resolution),
       json.bmson.lineExtraFields,
@@ -457,7 +457,12 @@ function resolveBmsonVersionForOutput(json: BeMusicJSON): string {
   return '1.0.0';
 }
 
-function createBmsonInfoForOutput(json: BeMusicJSON, resolution: number, modeHint: string): Record<string, unknown> {
+function createBmsonInfoForOutput(
+  json: BeMusicJSON,
+  resolution: number,
+  modeHint: string,
+  report?: ChartExportDiagnosticHandler,
+): Record<string, unknown> {
   const info = json.bmson.info;
   const metadataPlayLevel = resolveBmsonCompatiblePlayLevel(json.metadata.playLevel);
   const output: Record<string, unknown> = {
@@ -491,6 +496,15 @@ function createBmsonInfoForOutput(json: BeMusicJSON, resolution: number, modeHin
   const total = resolveBmsonTotalForOutput(json);
   if (total !== undefined) {
     output.total = total;
+  } else if (
+    typeof json.metadata.total === 'number' &&
+    Number.isFinite(json.metadata.total) &&
+    json.metadata.total > 0
+  ) {
+    report?.({
+      code: 'total',
+      message: `#TOTAL ${json.metadata.total} is an absolute gauge TOTAL, which bmson total (a percentage of the player's default) cannot express; no total is written and the player's default applies.`,
+    });
   }
 
   if (typeof info.backImage === 'string') {

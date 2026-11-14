@@ -175,6 +175,7 @@ export function playResultFromPlayState(state: PlayState, facts: PlayResultFacts
     cleared: state.cleared,
     score: facts.score,
     ...(state.gaugeType !== undefined ? { gauge: state.gaugeType } : {}),
+    ...(state.gaugeSource !== undefined ? { gaugeSource: state.gaugeSource } : {}),
     ...(facts.judgeRuleset !== undefined ? { ruleset: facts.judgeRuleset } : {}),
   });
   const ruleset = facts.judgeRuleset !== undefined && isRulesetId(facts.judgeRuleset) ? facts.judgeRuleset : undefined;

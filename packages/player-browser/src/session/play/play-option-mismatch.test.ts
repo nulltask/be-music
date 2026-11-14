@@ -45,6 +45,25 @@ describe('describeChartConvertingOptions', () => {
   });
 });
 
+describe('gauges in describeChartConvertingOptions (#1171)', () => {
+  test('names a gauge that is not the judge ruleset’s own', () => {
+    expect(
+      describeChartConvertingOptions({ gauge: 'lr2:HARD', gauge2P: '____:EASY', judgeRuleset: 'beatoraja' }),
+    ).toEqual(['Gauge: HARD (LR2)', 'Gauge 2P: EASY (????)']);
+    // A bare gauge the ruleset's own menu lacks, which the engine refuses.
+    expect(describeChartConvertingOptions({ gauge: 'P-ATTACK', judgeRuleset: 'beatoraja' })).toEqual([
+      'Gauge: P-ATTACK',
+    ]);
+    expect(describeChartConvertingOptions({ gauge: 'EX-HARD' })).toEqual(['Gauge: EX-HARD']);
+  });
+
+  test('leaves the judge ruleset’s own gauge out', () => {
+    expect(describeChartConvertingOptions({ gauge: 'HARD', gauge2P: 'EASY', judgeRuleset: 'beatoraja' })).toEqual([]);
+    expect(describeChartConvertingOptions({ gauge: 'lr2:HARD', judgeRuleset: 'lr2' })).toEqual([]);
+    expect(describeChartConvertingOptions({ gauge: 'lr2:P-ATTACK' })).toEqual([]);
+  });
+});
+
 describe('toPlayOptionMismatch', () => {
   const cause = new RangeError('beatoraja CONVERGE and playable RANDOM/S-RANDOM are PMS arrangements.');
 

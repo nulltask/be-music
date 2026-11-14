@@ -1,5 +1,4 @@
 import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
-import { resolveGaugeTypes } from '@be-music/player-engine/ruleset';
 // The Options dialog's Play options folder, split into pages, the Replay / ghost folder on its last page, the View
 // folder and the Select folder. They are built with the dialog as `this` (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
@@ -25,7 +24,7 @@ import { storeReplayView } from '../../replay-view-settings.ts';
 import type { OptionsDialog } from './index.ts';
 import { buildLR2ManiaRows } from './lr2-mania.ts';
 import { PLAY_OPTION_PAGES, VIEW_OPTION_PAGES } from './folders.ts';
-import { bottomShiftableGaugeItems, laneOptionItems, practiceGaugeItems } from './play-option-items.ts';
+import { bottomShiftableGaugeItems, gaugeChoices, laneOptionItems, practiceGaugeItems } from './play-option-items.ts';
 /**
  * How the player plays: auto play, hi-speed, gauge, lane options and assists.
  *
@@ -78,13 +77,7 @@ export function buildPlayOptionsFolder(
       this.setPlayOptions({ autoPlay: value });
     }),
   );
-  this.gaugeController = selectBinding(
-    judge,
-    this.guiState,
-    'gauge',
-    'Gauge',
-    resolveGaugeTypes(this.guiState.judgeRuleset),
-  );
+  this.gaugeController = selectBinding(judge, this.guiState, 'gauge', 'Gauge', gaugeChoices(this.guiState));
   trackPlayOption(
     this.gaugeController.on('change', ({ value }) => {
       this.setPlayOptions({ gauge1P: value });
@@ -320,13 +313,7 @@ export function buildPlayOptionsFolder(
     }),
   );
   // Two-player play (LR2 BATTLE): the 2P player's gauge, and That-Which-Must-Not-Be-Named's M-RAN per player.
-  this.gauge2PController = selectBinding(
-    lanes,
-    this.guiState,
-    'gauge2P',
-    'Gauge 2P',
-    resolveGaugeTypes(this.guiState.judgeRuleset),
-  );
+  this.gauge2PController = selectBinding(lanes, this.guiState, 'gauge2P', 'Gauge 2P', gaugeChoices(this.guiState));
   trackPlayOption(this.gauge2PController.on('change', ({ value }) => this.setPlayOptions({ gauge2P: value })));
   this.mRanControllers = (['mRan1P', 'mRan2P'] as const).map((key) =>
     trackPlayOption(

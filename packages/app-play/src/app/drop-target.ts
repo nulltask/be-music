@@ -14,6 +14,16 @@ import {
   showLoadingOverlay,
   type LoadingOverlayElements,
 } from '../loading-overlay.ts';
+import { html, render } from 'lit';
+import { playerText } from '../player-copy.ts';
+import { localized } from '../ui/localized.ts';
+import {
+  pickRememberedFolder,
+  readRememberedFolder,
+  captureDroppedFolders,
+  storedFolders,
+  type RememberedFolder,
+} from '../services/remembered-folder.ts';
 import type { PlayerWebElements } from '../types.ts';
 
 export interface DropTargetOptions {
@@ -24,12 +34,18 @@ export interface DropTargetOptions {
   /** Loads a drop's (or the folder picker's) files (`LibraryService`). */
   readonly processIncomingFiles: (
     files: BrowserDroppedFile[],
-    origin?: { readonly entries?: readonly FileSystemEntry[] },
+    origin?: {
+      readonly entries?: readonly FileSystemEntry[];
+      readonly showLibraryRoot?: boolean;
+      readonly readFiles?: () => Promise<BrowserDroppedFile[]>;
+    },
   ) => Promise<void>;
   /** Loads the "Open files" picker's files (`LibraryService`). */
   readonly loadPickedFiles: (files: File[]) => Promise<void>;
   /** A drop or a file pick has finished loading (the test hook's `loads`). */
   readonly recordLoad: () => void;
+  readonly resumeSelect: () => Promise<void>;
+  readonly setStatus: (text: string) => void;
 }
 
 /** Drags and drops on the window, and the Options dialog's file pickers. */
@@ -40,7 +56,15 @@ export class DropTarget {
   private readonly loadPickedFiles: DropTargetOptions['loadPickedFiles'];
   private readonly recordLoad: DropTargetOptions['recordLoad'];
 
+  private readonly options: DropTargetOptions;
+  private folderBusy = false;
+  private savedFolders: RememberedFolder[] = [];
+  private folderWrites = Promise.resolve();
+  private savedFoldersReady: Promise<void> | undefined;
+  private reconnectFolders: RememberedFolder[] = [];
+
   public constructor(options: DropTargetOptions) {
+    this.options = options;
     this.elements = options.elements;
     this.leaveSelect = options.leaveSelect;
     this.processIncomingFiles = options.processIncomingFiles;
@@ -48,8 +72,215 @@ export class DropTarget {
     this.recordLoad = options.recordLoad;
   }
 
+  public async openFolder(): Promise<void> {
+    if (this.folderBusy) return;
+    this.folderBusy = true;
+    try {
+      const picker = pickRememberedFolder();
+      if (!picker) {
+        this.elements.chartInput.click();
+        return;
+      }
+      const folder = await picker;
+      await this.loadFolder(folder);
+      await this.rememberLoadedFolders([folder]);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) this.reportFolderError(error);
+    } finally {
+      this.folderBusy = false;
+    }
+  }
+
+  public async restoreFolder(): Promise<void> {
+    if (!globalThis.indexedDB || this.folderBusy) return;
+    this.folderBusy = true;
+    try {
+      await this.readSavedFolders();
+      for (const folder of [...this.reconnectFolders]) {
+        try {
+          if ((await folder.queryPermission({ mode: 'read' })) === 'granted') {
+            await this.loadFolder(folder);
+            this.reconnectFolders = this.reconnectFolders.filter((pending) => pending !== folder);
+          }
+        } catch (error) {
+          this.reportFolderError(error);
+        }
+      }
+      this.renderReconnect();
+    } catch (error) {
+      this.reportFolderError(error);
+    } finally {
+      this.folderBusy = false;
+      this.renderFolderManager();
+    }
+  }
+
+  private renderReconnect(): void {
+    for (const root of document.querySelectorAll<HTMLElement>('[data-remembered-folder-actions]')) {
+      render(
+        this.reconnectFolders.map(
+          (folder) => html`
+            <button class="btn" @click=${() => void this.reconnectFolder(folder)}>
+              ${localized(() => playerText().shell.reconnectFolder(folder.name))}
+            </button>
+          `,
+        ),
+        root,
+      );
+    }
+  }
+
+  private renderFolderManager(): void {
+    const root = document.querySelector<HTMLElement>('[data-remembered-folder-manager]');
+    if (!root || !globalThis.indexedDB) return;
+    const canPick = 'showDirectoryPicker' in window;
+    if (!canPick && this.savedFolders.length === 0) return;
+    render(
+      html`
+        <section aria-labelledby="load-folders-heading">
+          <h3 id="load-folders-heading">${localized('savedFolders')}</h3>
+          <p>${localized('savedFoldersHint')}</p>
+          <ul class="remembered-folder-list">
+            ${this.savedFolders.map(
+              (folder) => html`
+                <li>
+                  <span>${folder.name}</span>
+                  <button
+                    type="button"
+                    class="btn"
+                    ?disabled=${!canPick}
+                    aria-label=${localized(() => playerText().shell.changeSavedFolder(folder.name))}
+                    @click=${() => void this.editSavedFolder(folder, true)}
+                  >
+                    ${localized('changeFolder')}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn"
+                    aria-label=${localized(() => playerText().shell.removeSavedFolder(folder.name))}
+                    @click=${() => void this.editSavedFolder(folder, false)}
+                  >
+                    ${localized('removeFolder')}
+                  </button>
+                </li>
+              `,
+            )}
+          </ul>
+          <button
+            type="button"
+            class="btn"
+            ?disabled=${!canPick}
+            @click=${() => void this.editSavedFolder(undefined, true)}
+          >
+            ${localized('addFolder')}
+          </button>
+        </section>
+      `,
+      root,
+    );
+  }
+
+  private async editSavedFolder(previous: RememberedFolder | undefined, pick: boolean): Promise<void> {
+    if (this.folderBusy) return;
+    this.folderBusy = true;
+    try {
+      const folder = pick ? await pickRememberedFolder() : undefined;
+      if (pick && !folder) return;
+      await this.updateSavedFolders(async (saved) => {
+        if (folder) {
+          for (const existing of saved) {
+            if (await existing.isSameEntry(folder)) {
+              return existing === previous ? saved : saved.filter((item) => item !== previous);
+            }
+          }
+        }
+        if (previous) return saved.flatMap((item) => (item === previous ? (folder ? [folder] : []) : [item]));
+        return folder ? [...saved, folder] : saved;
+      });
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) this.reportFolderError(error);
+    } finally {
+      this.folderBusy = false;
+    }
+  }
+
+  private readSavedFolders(): Promise<void> {
+    return (this.savedFoldersReady ??= storedFolders()
+      .then((folders) => {
+        this.savedFolders = folders;
+        this.reconnectFolders = [...folders];
+      })
+      .catch((error: unknown) => {
+        this.savedFoldersReady = undefined;
+        throw error;
+      }));
+  }
+
+  private updateSavedFolders(
+    update: (saved: readonly RememberedFolder[]) => Promise<readonly RememberedFolder[]>,
+  ): Promise<void> {
+    const write = this.folderWrites.then(async () => {
+      await this.readSavedFolders();
+      const next = await update(this.savedFolders);
+      this.savedFolders = await storedFolders(next);
+      this.reconnectFolders = this.reconnectFolders.filter((folder) => this.savedFolders.includes(folder));
+      this.renderReconnect();
+      this.renderFolderManager();
+    });
+    this.folderWrites = write.catch(() => undefined);
+    return write;
+  }
+
+  private rememberLoadedFolders(folders: readonly RememberedFolder[]): Promise<void> {
+    return this.updateSavedFolders(async (saved) => {
+      const next = [...saved];
+      for (const folder of folders) {
+        let index = 0;
+        while (index < next.length && !(await folder.isSameEntry(next[index]!))) index += 1;
+        next[index] = folder;
+      }
+      return next;
+    });
+  }
+
+  private async reconnectFolder(folder: RememberedFolder): Promise<void> {
+    if (this.folderBusy) return;
+    this.folderBusy = true;
+    try {
+      if ((await folder.requestPermission({ mode: 'read' })) !== 'granted') return;
+      await this.loadFolder(folder);
+      this.reconnectFolders = this.reconnectFolders.filter((pending) => pending !== folder);
+      this.renderReconnect();
+    } catch (error) {
+      this.reportFolderError(error);
+    } finally {
+      this.folderBusy = false;
+    }
+  }
+
+  private async loadFolder(folder: RememberedFolder): Promise<void> {
+    showLoadingOverlay(this.elements);
+    let leftSelect = false;
+    try {
+      leftSelect = await this.leaveSelect();
+      const files = await readRememberedFolder(folder, (progress) => applyLoadProgress(this.elements, progress));
+      await this.processIncomingFiles(files, { readFiles: () => readRememberedFolder(folder) });
+    } finally {
+      hideLoadingOverlay(this.elements);
+      if (leftSelect) await this.options.resumeSelect();
+      this.recordLoad();
+    }
+  }
+
+  private reportFolderError(error: unknown): void {
+    const message = playerText().shell.rememberedFolderError;
+    this.options.setStatus(message);
+    console.warn(message, error);
+  }
+
   /** Listens to the Options dialog's file pickers, and to files dragged onto the window. */
   public wire(): void {
+    this.elements.chartInput.addEventListener('open-folder', () => void this.openFolder());
     const onFilesPicked = (input: HTMLInputElement, load: (files: File[]) => Promise<void>) => {
       const files = input.files;
       if (!files || files.length === 0) {
@@ -138,6 +369,7 @@ export class DropTarget {
    * its items are read before this first yields.
    */
   public async handleDrop(dataTransfer: DataTransfer): Promise<void> {
+    const folders = captureDroppedFolders(dataTransfer);
     // The "Drop a skin" prompt has done its job once something lands.
     document.querySelector<HTMLDialogElement>('#skin-drop')?.close();
     // Show the overlay before we even start enumerating files — walking a deep `webkitGetAsEntry` tree on a chart pack
@@ -161,7 +393,24 @@ export class DropTarget {
       const progress = { onProgress: (value: LoadProgress) => applyLoadProgress(this.elements, value) };
       const files =
         entries.length > 0 ? await readDropEntries(entries, progress) : await readDroppedFiles(dataTransfer, progress);
-      await this.processIncomingFiles(files, entries.length > 0 ? { entries } : {});
+      const handles = await folders;
+      let showLibraryRoot = false;
+      if (globalThis.indexedDB && (handles.length > 0 || entries.some((entry) => entry.isDirectory))) {
+        try {
+          await this.readSavedFolders();
+          showLibraryRoot = this.savedFolders.length > 0;
+        } catch (error) {
+          this.reportFolderError(error);
+        }
+      }
+      await this.processIncomingFiles(files, { ...(entries.length > 0 ? { entries } : {}), showLibraryRoot });
+      if (handles.length > 0) {
+        try {
+          await this.rememberLoadedFolders(handles);
+        } catch (error) {
+          this.reportFolderError(error);
+        }
+      }
     } finally {
       // Always tear the overlay down — even when one of the sub-loaders threw or `splitDroppedChartAndThemeFiles`
       // produced an empty bucket. Otherwise a failed drop would leave the UI permanently masked.

@@ -293,8 +293,8 @@ describe('resolveChartImageAsset', () => {
     expect(entry).toBe(PNG_BYTES);
   });
 
-  test('prefers a `.webp` over every other image format', () => {
-    // A pack re-encoded to WebP to save space may still carry the original PNG / BMP next to it; the WebP wins.
+  test('returns the image the chart names, even with same-stem files of other formats beside it', () => {
+    // A same-stem file is not guaranteed to be the same picture: the named file wins, as LR2 looks it up.
     const WEBP_BYTES = new Uint8Array([0x52, 0x49, 0x46, 0x46]);
     const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
     const BMP_BYTES = new Uint8Array([0x42, 0x4d]);
@@ -303,8 +303,34 @@ describe('resolveChartImageAsset', () => {
       'Song/_logo.png': PNG_BYTES,
       'Song/_logo.bmp': BMP_BYTES,
     });
+    expect(resolveChartImageAsset(source, 'Song/main.bms', '_logo.bmp')).toBe(BMP_BYTES);
+    expect(resolveChartImageAsset(source, 'Song/main.bms', '_logo.png')).toBe(PNG_BYTES);
+    expect(resolveChartImageAsset(source, 'Song/main.bms', '_LOGO.PNG')).toBe(PNG_BYTES);
+    expect(resolveChartBGAAsset(source, 'Song/main.bms', '_logo.bmp')).toMatchObject({ path: '_logo.bmp' });
+  });
+
+  test('a missing named image falls back to `.webp` first, then the other formats', () => {
+    // A pack re-encoded to WebP to save space resolves through the fallback; the order is Be-Music's own.
+    const WEBP_BYTES = new Uint8Array([0x52, 0x49, 0x46, 0x46]);
+    const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const JPG_BYTES = new Uint8Array([0xff, 0xd8]);
+    const source = makeAssetSource({ 'Song/_logo.webp': WEBP_BYTES, 'Song/_logo.png': PNG_BYTES });
     expect(resolveChartImageAsset(source, 'Song/main.bms', '_logo.bmp')).toBe(WEBP_BYTES);
-    expect(resolveChartImageAsset(source, 'Song/main.bms', '_logo.png')).toBe(WEBP_BYTES);
+    expect(resolveChartBGAAsset(source, 'Song/main.bms', '_logo.bmp')).toMatchObject({ path: '_logo.webp' });
+    const withoutWebP = makeAssetSource({ 'Song/_logo.jpg': JPG_BYTES, 'Song/_logo.png': PNG_BYTES });
+    expect(resolveChartImageAsset(withoutWebP, 'Song/main.bms', '_logo.bmp')).toBe(PNG_BYTES);
+    expect(resolveChartImageAsset(withoutWebP, 'Song/main.bms', '_logo.gif')).toBe(PNG_BYTES);
+  });
+
+  test('the chart folder is searched under every extension before the parent folder', () => {
+    const PARENT_BMP = new Uint8Array([0x42, 0x4d]);
+    const CHILD_PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const source = makeAssetSource({ 'Song/_logo.bmp': PARENT_BMP, 'Song/sabun/_logo.png': CHILD_PNG });
+    expect(resolveChartImageAsset(source, 'Song/sabun/main.bms', '_logo.bmp')).toBe(CHILD_PNG);
+    expect(
+      resolveChartImageAsset(makeAssetSource({ 'Song/_logo.bmp': PARENT_BMP }), 'Song/sabun/main.bms', '_logo.bmp'),
+    ).toBe(PARENT_BMP);
+    expect(resolveChartImageAsset(source, 'Song/sabun/main.bms', '_missing.bmp')).toBeUndefined();
   });
 
   test('falls back past a missing `.webp` to the other formats', () => {
