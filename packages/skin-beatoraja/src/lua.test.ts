@@ -342,14 +342,15 @@ describe('evaluateBeatorajaLuaSkin', () => {
     expect(result.value).toEqual({ same: true, value: 42 });
   });
 
-  it('exposes inert stubs for `os` / `io` / `dofile` so themes that reference them load without crashing', () => {
+  it('exposes sandboxed `os` / `io` / `dofile` so themes that reference them load without crashing', () => {
     // Earlier versions of the sandbox stripped `os`, `io`, and `dofile` outright. Community
     // skins (ModernChic) require()-load utility modules whose top-level body unconditionally
     // touches these globals (`local luajava = require("luajava"); local f = io.open(...)`),
-    // so a stripped global crashed the entire module load. We now provide inert stubs:
-    // `os.time()` / `os.date()` work; `os.execute` / `os.remove` / `os.rename` no-op; `io.open`
-    // returns a fake file handle whose methods are no-ops. `dofile` is wired against the bundle
-    // resolver — without one supplied, it raises a clear "no resolver" error if invoked.
+    // so a stripped global crashed the entire module load. The sandbox provides stand-ins:
+    // `os.time()` / `os.date()` work; `os.execute` returns nil; `io` and `os.remove` /
+    // `os.rename` act on files kept in memory for the runtime (`lua-io.test.ts`). `dofile` is
+    // wired against the bundle resolver — without one supplied, it raises a clear "no
+    // resolver" error if invoked.
     const result = evaluateBeatorajaLuaSkin({
       entry: enc(
         [
