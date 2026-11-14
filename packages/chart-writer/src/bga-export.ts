@@ -8,9 +8,22 @@ import {
   type BeMusicJSON,
 } from '@be-music/chart-source';
 
-/** Something a format conversion could not carry over; the output still loads, without that part. */
+/**
+ * Something a format conversion could not carry over exactly; the output still loads, without that part or with it
+ * changed. The `bga-*` codes change what is drawn. `mine-damage`, `total` and `long-note-mode` change gameplay: the
+ * gauge a mine drains, the gauge's TOTAL, and how a long note is judged (#1198). A caller that must not convert with
+ * such a loss can throw from the handler.
+ */
 export interface ChartExportDiagnostic {
-  code: 'bga-layer2' | 'bga-extended' | 'bga-layer-black-key' | 'bga-poor-mode' | 'bga-sequence';
+  code:
+    | 'bga-layer2'
+    | 'bga-extended'
+    | 'bga-layer-black-key'
+    | 'bga-poor-mode'
+    | 'bga-sequence'
+    | 'mine-damage'
+    | 'total'
+    | 'long-note-mode';
   message: string;
 }
 

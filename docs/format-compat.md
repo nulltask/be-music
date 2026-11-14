@@ -385,6 +385,22 @@ flowchart LR
 | SPEED / `#STP` / `#EXRANK` | Dropped: bmson has no field for them                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | —                                                                                                                                                                                                                        |
 | `c`, `up`                  | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Lost: BMS has no sample slicing or LN end sound                                                                                                                                                                          |
 
+### 4.1 Losses that change gameplay
+
+Some of these differences change how the chart plays, not only how it is stored. The writers report each one through `onDiagnostic` (`ChartExportDiagnostic`), so a converted chart does not pass for a lossless one ([#1198](https://github.com/nulltask/be-music/issues/1198)):
+
+| Code             | Direction   | Reported when                                                                                                       | What the output plays                                                  |
+| ---------------- | ----------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `mine-damage`    | bmson → BMS | A mine's `damage` is not a whole number from 1 to 1295 (fractions, `0`, larger values), or the mine has no `damage` | The rounded or clamped value (`0` becomes `01`), or the default damage |
+| `total`          | bmson → BMS | `total` is set and is not `100`                                                                                     | No `#TOTAL`: the player's default TOTAL for the chart                  |
+| `total`          | BMS → bmson | The chart has a positive `#TOTAL`                                                                                   | No `total`: 100 % of the player's default                              |
+| `long-note-mode` | bmson → BMS | Long notes have different types (`ln_type` / `t`), and the chart has no `#LNMODE`                                   | Every long note under the chart-wide mode                              |
+
+- The message of `mine-damage` carries the number of mines affected. Exact values round-trip: a whole `damage` from 1 to 1295, `total` 100 or unset, and long notes of one type report nothing.
+- The conversion stays best-effort and still writes the chart. A caller that must not convert with such a loss throws from the handler, which stops the conversion.
+- A replay does not depend on the conversion: it records the effective chart it was played on, with each mine's damage, the chart's TOTAL and its unit, and each long note's mode, so every ruleset re-judges the play on those facts.
+- `bga-*` codes report what is drawn differently; they do not change judging.
+
 ## 5. Be-Music decisions in short
 
 Judgment and gauges are defined in the [player specification](./player-spec.md), options in [play options](./play-options.md), and family-specific state in the [LR2](./lr2-skin.md) and [beatoraja](./beatoraja-skin.md) specifications.
