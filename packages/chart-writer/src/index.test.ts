@@ -1086,9 +1086,20 @@ describe('chart-writer', () => {
         },
       );
 
-      test.each(['#RANK 2', '#DEFEXRANK 120', '#DEFEXRANK 64', '#RANK 7'])('LR2 matches exactly for %s', (header) => {
+      test.each(['#RANK 2', '#DEFEXRANK 100', '#RANK 7'])('LR2 matches exactly for %s', (header) => {
         const { bms, bmson } = convert(bmsChart(header));
         expect(windowsOf(bmson, 'lr2')).toEqual(windowsOf(bms, 'lr2'));
+      });
+
+      test('LR2 #DEFEXRANK differs away from 100: BMS scales #RANK 2, bmson judge_rank walks LR2’s rank anchors', () => {
+        const rounded = (set: JudgeWindowSetUs): number[] => lateEdges(set).map(Math.round);
+        // The value carries over as it is; LR2 has neither command, and Be-Music reads each by its own definition.
+        const wide = convert(bmsChart('#DEFEXRANK 120'));
+        expect(rounded(windowsOf(wide.bms, 'lr2'))).toEqual([21_600, 48_000, 120_000, 200_000]);
+        expect(rounded(windowsOf(wide.bmson, 'lr2'))).toEqual([19_800, 52_000, 112_000, 200_000]);
+        const narrow = convert(bmsChart('#DEFEXRANK 64'));
+        expect(rounded(windowsOf(narrow.bms, 'lr2'))).toEqual([11_520, 25_600, 64_000, 200_000]);
+        expect(rounded(windowsOf(narrow.bmson, 'lr2'))).toEqual([14_440, 29_520, 58_400, 200_000]);
       });
 
       test.each(['#RANK 0', '#RANK 1', '#RANK 3'])(

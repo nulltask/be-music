@@ -23,9 +23,14 @@ import type { BeMusicJSON } from '@be-music/chart-source';
  * windows (no widened scratch gate in LR2).
  *
  * Percent axis: ranks sit on a "judgerank percent" axis (VERY HARD = 25, HARD = 50, NORMAL = 75, EASY = 100) and
- * fractional percents (from `#DEFEXRANK` / `#EXRANKxx` / bmson `judge_rank`) interpolate piecewise-linearly between
- * the measured anchors — the same model lr2oraja uses (`JudgeWindowRule.LR2`). Values beyond EASY extrapolate along
- * the last segment and every scaled window is clamped to the fixed BAD width.
+ * fractional percents (from bmson `judge_rank` and PRACTICE's JUDGERANK) interpolate piecewise-linearly between the
+ * measured anchors — the same model lr2oraja uses (`JudgeWindowRule.LR2`). Values beyond EASY extrapolate along the
+ * last segment and every scaled window is clamped to the fixed BAD width.
+ *
+ * `#DEFEXRANK` and `#EXRANKxx` are not on that axis. LR2 has neither command, and nanasigroove defines their value as
+ * a percentage of `#RANK 2`, so the LR2 ruleset scales the `#RANK 2` windows by it: `#DEFEXRANK 120` is ±21.6 / ±48 /
+ * ±120 ms (#1190). This is a Be-Music extension of LR2, which takes the unit from the command's own definition instead
+ * of walking LR2's other ranks.
  */
 const LR2_BAD_WINDOW_MS = 200;
 const LR2_JUDGE_RANK_ANCHOR_PERCENTS = [0, 25, 50, 75, 100] as const;
@@ -35,6 +40,8 @@ const LR2_GOOD_ANCHORS_MS = [0, 40, 60, 100, 120] as const;
 /** `#RANK 0..4` → judgerank percent. `#RANK 4` (VERY EASY) maps onto NORMAL, mirroring LR2. */
 const LR2_BMS_RANK_JUDGERANK_PERCENTS = [25, 50, 75, 100, 75] as const;
 const LR2_NORMAL_JUDGERANK_PERCENT = LR2_BMS_RANK_JUDGERANK_PERCENTS[2];
+/** The `#RANK 2` windows `[PGREAT, GREAT, GOOD]`, which `#DEFEXRANK` and `#EXRANKxx` scale. */
+const LR2_NORMAL_WINDOWS_MS = [LR2_PGREAT_ANCHORS_MS[3], LR2_GREAT_ANCHORS_MS[3], LR2_GOOD_ANCHORS_MS[3]] as const;
 /** bmson `judge_rank` default per the 1.0.0 spec (100 = the player's default width, i.e. NORMAL here). */
 const BMSON_DEFAULT_JUDGERANK = 100;
 
@@ -180,14 +187,32 @@ export function resolveBMSJudgeWindowsMsForPercent(
 }
 
 /**
- * Resolves judge windows for a dynamic `#EXRANKxx` value applied via channel `A0` mid-chart.
+ * Resolves the LR2 judge windows for a `#DEFEXRANK` value, or a dynamic `#EXRANKxx` value applied via channel `A0`
+ * mid-chart: the `#RANK 2` windows scaled by `value / 100`, BAD fixed, nothing wider than BAD.
  *
- * `#EXRANKxx` shares `#DEFEXRANK`'s unit (`RANK 2 = 100`, hitkey command memo), so the value goes through
- * {@link bmsExRankValueToJudgeRankPercent} before scaling — `#EXRANK 100` lands on exactly the same windows as
- * `#DEFEXRANK 100` (NORMAL).
+ * Both commands share one unit (`RANK 2 = 100`, hitkey command memo), so `#EXRANK 100` lands on exactly the same
+ * windows as `#DEFEXRANK 100` (NORMAL), and `50` halves PGREAT, GREAT and GOOD.
  */
 export function resolveBMSJudgeWindowsMsForExRankValue(exRankValue: number, debugBadWindowMs?: number): JudgeWindowsMs {
-  return resolveBMSJudgeWindowsMsForPercent(bmsExRankValueToJudgeRankPercent(exRankValue), debugBadWindowMs);
+  const bad =
+    typeof debugBadWindowMs === 'number' && Number.isFinite(debugBadWindowMs) && debugBadWindowMs > 0
+      ? debugBadWindowMs
+      : LR2_BAD_WINDOW_MS;
+  // A value that is not a positive number changes nothing: the `#RANK 2` windows as they are.
+  const percent = Number.isFinite(exRankValue) && exRankValue > 0 ? exRankValue : 100;
+  const [pgreat, great, good] = LR2_NORMAL_WINDOWS_MS;
+  return {
+    pgreat: clampWindow((pgreat * percent) / 100, bad),
+    great: clampWindow((great * percent) / 100, bad),
+    good: clampWindow((good * percent) / 100, bad),
+    bad,
+  };
+}
+
+/** A chart's positive `#DEFEXRANK`, or `undefined` for bmson and for a BMS chart without one. */
+function resolveBMSDefExRank(json: BeMusicJSON): number | undefined {
+  const defExRank = json.sourceFormat === 'bmson' ? undefined : json.bms.defExRank;
+  return typeof defExRank === 'number' && Number.isFinite(defExRank) && defExRank > 0 ? defExRank : undefined;
 }
 
 /**
@@ -201,11 +226,16 @@ export function resolveJudgeRankPercent(json: BeMusicJSON): number {
 }
 
 /**
- * The LR2 judge windows a chart opens with: its judgerank ({@link resolveJudgeRankPercent}) scaled over LR2's measured
- * anchors. `debugBadWindowMs` replaces the fixed ±200 ms BAD window, and no other window grows past it.
+ * The LR2 judge windows a chart opens with: a BMS chart's positive `#DEFEXRANK` scales the `#RANK 2` windows
+ * ({@link resolveBMSJudgeWindowsMsForExRankValue}); any other chart's judgerank ({@link resolveJudgeRankPercent}) is
+ * scaled over LR2's measured anchors. `debugBadWindowMs` replaces the fixed ±200 ms BAD window, and no other window
+ * grows past it.
  */
 export function resolveJudgeWindowsMs(json: BeMusicJSON, debugBadWindowMs?: number): JudgeWindowsMs {
-  return scaleJudgeWindowsMs(resolveJudgeRankPercent(json), debugBadWindowMs);
+  const defExRank = resolveBMSDefExRank(json);
+  return defExRank !== undefined
+    ? resolveBMSJudgeWindowsMsForExRankValue(defExRank, debugBadWindowMs)
+    : scaleJudgeWindowsMs(resolveJudgeRankPercent(json), debugBadWindowMs);
 }
 
 function scaleJudgeWindowsMs(judgeRankPercent: number, debugBadWindowMs?: number): JudgeWindowsMs {

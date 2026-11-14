@@ -98,15 +98,15 @@
     "simulated": {
       "lr2": {
         "ruleset": "lr2/0",
-        "judge": {"pgreat":0,"great":3,"good":0,"bad":1,"poor":0,"emptyPoor":0},
+        "judge": {"pgreat":2,"great":1,"good":0,"bad":1,"poor":0,"emptyPoor":0},
         "fast": 0,
-        "slow": 3,
-        "exScore": 3,
+        "slow": 1,
+        "exScore": 5,
         "noteCount": 4,
         "maxCombo": 2,
-        "djLevel": "D",
+        "djLevel": "B",
         "gauge": {"type":"GROOVE","final":100,"cleared":true},
-        "score": 75000
+        "score": 125000
       },
       "beatoraja": {
         "ruleset": "beatoraja/0",

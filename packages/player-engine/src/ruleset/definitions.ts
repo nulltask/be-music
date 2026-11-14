@@ -13,6 +13,7 @@ import {
 } from './practice-gauge.ts';
 import {
   bmsExRankValueToJudgeRankPercent,
+  resolveBMSJudgeWindowsMsForExRankValue,
   resolveBMSJudgeWindowsMsForPercent,
   resolveBMSRankJudgeRankPercent,
   resolveLR2GambolWindowsMs,
@@ -1106,10 +1107,18 @@ function resolveRulesetTables(
     const timeline = practiceRank !== undefined ? [] : (chart.judgeRank.timeline ?? []);
     const initialStage =
       chart.sourceFormat === 'bmson' ? chart.judgeRank.stageRanks?.find((change) => change.timeUs === 0) : undefined;
-    const stagePercent = (rank: number, table: string): number =>
-      table === 'bmson' || table === 'bms-exrank' || table === 'bms-exrank-change'
-        ? bmsExRankValueToJudgeRankPercent(rank)
-        : resolveBMSRankJudgeRankPercent(rank);
+    // `#DEFEXRANK` / `#EXRANKxx` scale the `#RANK 2` windows (#1190); bmson `judge_rank` and `#RANK` sit on LR2's
+    // percent axis.
+    const exRankTables = (value: number): RulesetWindowTables =>
+      lr2WindowTables(resolveBMSJudgeWindowsMsForExRankValue(value, overrideBadMs));
+    const stageTablesOf = (rank: number, table: string): RulesetWindowTables =>
+      table === 'bms-exrank' || table === 'bms-exrank-change'
+        ? exRankTables(rank)
+        : resolveLR2WindowTables(
+            table === 'bmson' ? bmsExRankValueToJudgeRankPercent(rank) : resolveBMSRankJudgeRankPercent(rank),
+            overrideBadMs,
+          );
+    const defExRank = chart.sourceFormat === 'bmson' ? undefined : chart.judgeRank.sourceExRank;
     // GAMBOL fixes the windows whatever the chart's rank: LR2 sets them after the rank's own, as the chart opens and at
     // each NONSTOP rank object. LR2 has no `#EXRANKxx`, so a fixed window ignores those changes too.
     const gambolTables = (table: 'opening' | 'nonstop'): RulesetWindowTables =>
@@ -1118,18 +1127,18 @@ function resolveRulesetTables(
       gambol !== undefined
         ? gambolTables('opening')
         : constrain(
-            resolveLR2WindowTables(
-              practiceRank ??
-                (initialStage !== undefined
-                  ? stagePercent(initialStage.rank, initialStage.table)
-                  : chart.judgeRank.percent),
-              overrideBadMs,
-            ),
+            practiceRank !== undefined
+              ? resolveLR2WindowTables(practiceRank, overrideBadMs)
+              : initialStage !== undefined
+                ? stageTablesOf(initialStage.rank, initialStage.table)
+                : typeof defExRank === 'number' && Number.isFinite(defExRank) && defExRank > 0
+                  ? exRankTables(defExRank)
+                  : resolveLR2WindowTables(chart.judgeRank.percent, overrideBadMs),
           );
     const timelineTables = [
       ...(gambol !== undefined ? [] : timeline).map((change) => ({
         timeUs: change.timeUs,
-        tables: constrain(resolveLR2WindowTables(bmsExRankValueToJudgeRankPercent(change.exRankValue), overrideBadMs)),
+        tables: constrain(exRankTables(change.exRankValue)),
       })),
       // A stitched NONSTOP chart's later stages (`RulesetStageRank`); stable after the `#EXRANKxx` changes on a tie.
       ...(practiceRank !== undefined ? [] : (chart.judgeRank.stageRanks ?? [])).map((change) => ({
@@ -1140,7 +1149,7 @@ function resolveRulesetTables(
             : constrain(
                 change.table === 'lr2-nonstop'
                   ? lr2WindowTables(resolveLR2NonstopRankWindowsMs(change.rank, overrideBadMs))
-                  : resolveLR2WindowTables(stagePercent(change.rank, change.table), overrideBadMs),
+                  : stageTablesOf(change.rank, change.table),
               ),
       })),
     ].sort((left, right) => left.timeUs - right.timeUs);

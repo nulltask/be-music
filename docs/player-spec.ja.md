@@ -423,15 +423,20 @@ player は `#DEFEXRANK` を `Number.parseFloat()` で解釈し、有限かつ `0
 
 ### BMS の換算式
 
-判定幅は、上の実測テーブルを judgerank パーセント軸上のアンカー（25 / 50 / 75 / 100）として区分線形補間して求めます（lr2oraja の `JudgeWindowRule.LR2` と同じモデル）。
-`#DEFEXRANK n` は `n × 75 / 100` でパーセント軸へ換算します。たとえば `#DEFEXRANK 120` は percent `90` であり、`PGREAT=19.8ms`, `GREAT=52ms`, `GOOD=112ms`, `BAD=200ms`（固定）になります。
-`EASY`（percent `100`）を超える値は最終区間の傾きで外挿し、スケール対象は `PGREAT` / `GREAT` / `GOOD` のみです。どれだけ広げても各幅は固定の `BAD` 幅 `±200ms` を超えません。
+`#RANK` は上の実測テーブルをそのまま使います。
+
+`#DEFEXRANK n` は `#RANK 2` の判定幅を `n / 100` 倍にします（[#1190](https://github.com/nulltask/be-music/issues/1190)）。たとえば `#DEFEXRANK 120` は `PGREAT=21.6ms`, `GREAT=48ms`, `GOOD=120ms`, `BAD=200ms`（固定）、`#DEFEXRANK 50` は `9ms` / `20ms` / `50ms` になります。
+スケール対象は `PGREAT` / `GREAT` / `GOOD` のみです。どれだけ広げても各幅は固定の `BAD` 幅 `±200ms` を超えません。
+
+LR2 に `#DEFEXRANK` はないため、これは `lr2` ruleset に対する Be-Music の拡張です。nanasigroove はこの値を「`100` が `#RANK 2`」の百分率と定義しており [C]、拡張はその定義をそのまま使います。基準値は `#RANK 2` の判定幅です。LR2 のほかのランクの間に値を置くことはしないので、`#DEFEXRANK 133` は `#RANK 3` にはなりません。
+
+`#DEFEXRANK` 以外の小数の judgerank（bmson の `judge_rank` と PRACTICE の JUDGERANK）は、これまでどおり実測テーブルを judgerank パーセント軸上のアンカー（25 / 50 / 75 / 100）として区分線形補間します（lr2oraja の `JudgeWindowRule.LR2` と同じモデル）。`EASY` を超える値は最終区間の傾きで外挿します。
 
 ### BMS の動的判定幅変更
 
 BMS では `#xxxA0` チャンネルと `#EXRANKxx` を使って、演奏途中で判定幅を変更できます。
 player は `A0` チャンネルのイベント値を `#EXRANKxx` のキーとして解決し、その値を `Number.parseFloat()` で読んで、有限かつ `0` より大きい場合だけ採用します。
-採用した値は `#DEFEXRANK` と同じ「`RANK 2 = 100`」基準の百分率として解釈するため、`#EXRANKxx 100` はちょうど `NORMAL` の判定幅に戻ります。
+採用した値は `#DEFEXRANK` と同じ単位・同じ計算（`#RANK 2` の判定幅に対する百分率）で解釈するため、`#EXRANKxx 100` はちょうど `NORMAL` の判定幅に戻り、`#EXRANKxx 50` はその半分になります。
 
 `#EXRANKxx` が未定義、空文字列、非数、`0` 以下の場合、そのイベントは判定幅を変更しません。
 複数の `A0` イベントがある場合は、時刻順に適用し、後から到達した値が以後の判定幅になります。
@@ -460,7 +465,7 @@ bmson では次の優先順位で判定幅を決めます。
 2. `metadata.rank`
 3. 既定値 `100`
 
-bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の百分率として扱い、同じ LR2 アンカー補間で判定幅へ換算します。
+bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の百分率として扱いますが、`#RANK 2` の判定幅を倍率で伸縮するのではなく、LR2 のアンカー補間で判定幅へ換算します。両者は `100` で一致し、それ以外では異なります。`judgeRank` が `120` なら `±19.8/±52/±112ms`、`#DEFEXRANK 120` なら `±21.6/±48/±120ms` です。
 そのため `judgeRank=100` は `NORMAL`（`±18/±40/±100/±200ms`）そのままです。
 `beatoraja` ruleset は `judge_rank` をそのまま judgerank として使い、`judge_rank` のない bmson 譜面は
 `judge_rank: 100`（bmson の既定値。7 KEY の PGREAT は `±20ms`）として判定します。BMS の `#RANK 2` 扱いにはなりません。
