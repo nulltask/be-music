@@ -303,7 +303,7 @@ Be-Music は `generic-Nkeys`（1〜70）を、N 個の通常キーを持つ明�
 - `mine_channels`：地雷。ノートごとの `damage` をゲージの % として使う。LN の中や、ほかのノートがある位置の地雷は捨てる。
 - `key_channels`：隠し（不可視）ノートで、地雷ではない。
 
-Be-Music も beatoraja と同じく読みます。`mine_channels` は `damage` を保持した地雷（`D` / `E` チャンネル、`damage` がなければ既定の 4 %）に、`key_channels` は不可視ノート（`3x` / `4x`）になります（[`bmson-document.ts`][bm-bmson-document]、[`note-rules.ts`][bm-note-rules]）。beatoraja と異なり、LR2 が BMS のそうした地雷を残すのと同じく、LN の中や、ほかのノートがある位置の地雷も残します（[§2.6](#26-地雷)、[`resolved-notes.ts`][bm-resolved-notes]）。Qwilight は `mine_channels` を罠として読みます [V]。
+Be-Music も beatoraja と同じく読みます。`mine_channels` は `damage` を保持した地雷（`D` / `E` チャンネル、`damage` がなければ 0 %）に、`key_channels` は不可視ノート（`3x` / `4x`）になります（[`bmson-document.ts`][bm-bmson-document]、[`note-rules.ts`][bm-note-rules]）。beatoraja と異なり、LR2 が BMS のそうした地雷を残すのと同じく、LN の中や、ほかのノートがある位置の地雷も残します（[§2.6](#26-地雷)、[`resolved-notes.ts`][bm-resolved-notes]）。Qwilight は `mine_channels` を罠として読みます [V]。
 
 ### 3.6 `judge_rank`
 

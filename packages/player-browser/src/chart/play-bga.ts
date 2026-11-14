@@ -270,13 +270,13 @@ async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: B
       const bmsColorKey = resolveBMSExBMPColorKey(chart, key);
       if (base.has(key)) {
         const texture = bmsColorKey
-          ? await loadTextureFromBytes(path, bytes, { bmsColorKey })
-          : await loadTextureFromBytes(path, bytes);
+          ? await loadTextureFromBytes(resolved?.path ?? path, bytes, { bmsColorKey })
+          : await loadTextureFromBytes(resolved?.path ?? path, bytes);
         if (isCancelled()) return destroyTexture(texture);
         if (texture) into.textures.set(key, texture);
       }
       if (layer.has(key)) {
-        const texture = await loadTextureFromBytes(path, bytes, {
+        const texture = await loadTextureFromBytes(resolved?.path ?? path, bytes, {
           keyOutBlack: keyOutLayerBlack(key) && bmsColorKey === undefined,
           ...(bmsColorKey ? { bmsColorKey } : {}),
           ...(swBGAColorKey ? { swBGAColorKey } : {}),

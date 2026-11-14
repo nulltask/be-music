@@ -625,7 +625,7 @@ describe('engine fallbacks (findings A10 – A13)', () => {
     expect(document(bmson({ total: 120 })).total).toEqual({ bmson: '120' });
     expect(document(bmson({})).judge).toEqual({ exRank: '100' });
     const mines = { mine_channels: [{ name: 'mine.wav', notes: [{ x: 2, y: 960 }] }] };
-    expect(document(bmson({}, mines)).mines).toEqual([{ m: '1', p: '0', lane: '12', damage: '4' }]);
+    expect(document(bmson({}, mines)).mines).toEqual([{ m: '1', p: '0', lane: '12', damage: '0' }]);
     // Adding sound channels does not move the default damage.
     const more = {
       ...mines,

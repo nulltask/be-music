@@ -496,6 +496,22 @@ describe('loadPlayBGA', () => {
     expect(mocks.loadTextureFromBytes).toHaveBeenCalledWith('a.png', expect.any(Uint8Array), { keyOutBlack: false });
   });
 
+  test('decodes a resolved still for a missing video through the image pipeline', async () => {
+    mocks.resolveChartBGAAsset.mockReturnValue({ entry: 'bga.png', path: 'bga.png' });
+    const into = emptyResources();
+    await loadPlayBGA({
+      chart: bmsChart({ '01': 'bga.mpg' }),
+      source: SOURCE,
+      chartPath: 'x.bms',
+      timeline: { base: [{ seconds: 0, bmpKey: '01' }], layer: [], poor: [] },
+      into,
+      transcode: { maxLongEdgePx: 640 },
+      tempo: 1,
+    });
+    expect(mocks.loadVideoTexture).not.toHaveBeenCalled();
+    expect(mocks.loadTextureFromBytes).toHaveBeenCalledWith('bga.png', expect.any(Uint8Array));
+  });
+
   test('starts a video paused at the play tempo, under the file name it was found as', async () => {
     const video = { pause: vi.fn(), playbackRate: 1, defaultPlaybackRate: 1 };
     const texture = new Texture();

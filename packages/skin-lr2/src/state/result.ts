@@ -215,22 +215,43 @@ function resultText(st: number, input: LR2ResultInput): string | undefined {
   }
 }
 
-/**
- * How full a result bar graph is: 1 the score over 200000, 2 and 9 the EX score rate, 6 the gauge, 7 the max combo
- * over the notes. `undefined` for any other.
- */
+function resultProgress(result: PlayResult): number | undefined {
+  return result.chartSeconds && result.chartSeconds > 0
+    ? Math.max(0, Math.min(1, result.playSeconds / result.chartSeconds))
+    : undefined;
+}
+
 function resultBargraph(type: number, result: PlayResult): number | undefined {
-  const exMax = result.score.total * 2;
+  const score = result.score;
+  const ratio = (value: number, max: number) => (max > 0 ? Math.max(0, Math.min(1, value / max)) : 0);
   switch (type) {
     case 1:
-      return Math.max(0, Math.min(1, result.score.score / 200000));
+      return resultProgress(result);
     case 2:
-    case 9:
-      return exMax > 0 ? result.score.exScore / exMax : 0;
-    case 6:
-      return Math.max(0, Math.min(1, result.gauge / 100));
-    case 7:
-      return result.score.total > 0 ? Math.max(0, Math.min(1, result.maxCombo / result.score.total)) : 0;
+      return 1;
+    case 10:
+    case 27:
+      return ratio(score.exScore, score.total * 2);
+    case 11: {
+      const judged = score.perfect + score.great + score.good + score.bad + (result.judgedPoor ?? score.poor);
+      return judged > 0 ? ratio(score.exScore, judged * 2) : undefined;
+    }
+    case 14:
+      return result.secondPlayer ? resultBargraph(10, result.secondPlayer) : undefined;
+    case 20:
+      return ratio(score.perfect, score.total);
+    case 21:
+      return ratio(score.great, score.total);
+    case 22:
+      return ratio(score.good, score.total);
+    case 23:
+      return ratio(score.bad, score.total);
+    case 24:
+      return ratio(score.poor, score.total);
+    case 25:
+      return ratio(result.maxCombo, score.total);
+    case 26:
+      return result.judgeRuleset === 'lr2' ? ratio(score.score, 200000) : undefined;
     default:
       return undefined;
   }
@@ -240,7 +261,7 @@ function resultBargraph(type: number, result: PlayResult): number | undefined {
  * The LR2 result screen's state for a play's result: the result ops (cleared / failed, the chart's key mode in the
  * select and key-config ranges, its difficulty, the lamp, the ranks and updates, the result flip, the course), the
  * numbers (this play's score, counts, rates, combo, gauge and time, and the best-record and before / after numbers
- * read off it), the chart's and the course's texts, and the bar graphs (the sliders read the bar graphs' values).
+ * read off it), the chart's and the course's texts, and the bar graphs and the play progress slider.
  */
 export function resolveLR2ResultState(input: LR2ResultInput): LR2ResultState {
   const { result, course } = input;
@@ -249,7 +270,7 @@ export function resolveLR2ResultState(input: LR2ResultInput): LR2ResultState {
     number: (num) =>
       (course !== undefined ? resolveLR2CourseNumber(num, course) : undefined) ?? resultNumber(num, result),
     text: (st) => resultText(st, input),
-    slider: (type) => resultBargraph(type, result),
+    slider: (type) => (type === 6 ? resultProgress(result) : undefined),
     bargraph: (type) => resultBargraph(type, result),
   };
 }

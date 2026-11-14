@@ -160,7 +160,7 @@ describe('golden fingerprints (bmfp0)', () => {
     [
       'bmson',
       () => computePlayFingerprint(parseBmson(BMSON), { chartPath: 'golden.bmson' }),
-      'bmfp0:364f1aed23cb84fb0a8f8a8110ba0c259a44f0f503a5e78a6f1c64027d3cfa25',
+      'bmfp0:1a9e0665720480c985121a4775eb3edfc26e6fe618ddbfdfe641f8a92393f07f',
     ],
     [
       'PMS',

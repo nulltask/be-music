@@ -415,12 +415,16 @@ describe('resolveLR2ResultState values', () => {
   });
 
   it('fills the bar graphs and sliders', () => {
-    const result = { ...makeResult({ total: 100, exScore: 50 }), maxCombo: 25 };
+    const result = { ...makeResult({ total: 100, exScore: 50 }), maxCombo: 25, playSeconds: 25, chartSeconds: 100 };
     const state = resolveLR2ResultState({ result });
-    expect(state.bargraph(2)).toBe(0.25);
-    expect(state.bargraph(6)).toBe(0.8);
-    expect(state.bargraph(7)).toBe(0.25);
-    expect(state.slider(9)).toBe(0.25);
+    expect(state.bargraph(1)).toBe(0.25);
+    expect(state.bargraph(2)).toBe(1);
+    expect(state.bargraph(10)).toBe(0.25);
+    expect(state.bargraph(6)).toBeUndefined();
+    expect(state.bargraph(25)).toBe(0.25);
+    expect(state.bargraph(13)).toBeUndefined();
+    expect(state.slider(6)).toBe(0.25);
+    expect(state.slider(9)).toBeUndefined();
     expect(state.bargraph(3)).toBeUndefined();
   });
 });

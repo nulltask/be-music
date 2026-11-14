@@ -26,6 +26,6 @@ describe('note rules', () => {
   test('resolveLandmineDamage prefers bmson damage and never reads a bmson WAV slot as damage', () => {
     expect(resolveLandmineDamage({ value: '0A', bmson: { damage: 0 } }, 36, 'bmson')).toBe(0);
     expect(resolveLandmineDamage({ value: '0A', bmson: { damage: 25 } }, 36, 'bms')).toBe(25);
-    expect(resolveLandmineDamage({ value: '0A' }, 36, 'bmson')).toBe(DEFAULT_LANDMINE_DAMAGE);
+    expect(resolveLandmineDamage({ value: '0A' }, 36, 'bmson')).toBe(0);
   });
 });

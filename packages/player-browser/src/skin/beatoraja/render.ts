@@ -14,14 +14,8 @@ import { clamp } from '@be-music/shared-utils/core';
 //     sprite.visible = props.visible;
 //     sprite.blendMode = props.blendMode;
 
-// Side-effect import: registers Pixi's advanced blend-mode filters (subtract, difference,
-// color-burn, etc.) so `blendCodeToPixi` can hand back `'subtract'` for beatoraja's blend
-// code 3 and `'difference'` for code 9 (audit 2.13). Standard modes ('add' / 'multiply' /
-// 'screen' / 'erase' / 'normal') don't need this import; the registration is idempotent so
-// re-importing from another module is harmless. Requires `useBackBuffer: true` at app init
-// — see `host/scene-host.ts`.
 import 'pixi.js/advanced-blend-modes';
-import { Texture } from 'pixi.js';
+import { Texture, type BLEND_MODES } from 'pixi.js';
 import {
   applyBeatorajaOffsetAlpha,
   combineBeatorajaOffsets,
@@ -75,7 +69,7 @@ export interface BeatorajaSpriteProps {
  * PixiJS v8 blend mode strings the renderer assigns to `Sprite.blendMode`. Mapping covers the modes beatoraja's
  * reference theme actually uses; the rest fall back to `'normal'`.
  */
-export type BeatorajaPixiBlendMode = 'normal' | 'add' | 'multiply' | 'screen' | 'erase' | 'subtract' | 'difference';
+export type BeatorajaPixiBlendMode = BLEND_MODES;
 
 const HIDDEN_PROPS: BeatorajaSpriteProps = {
   visible: false,
@@ -586,15 +580,7 @@ export function createCroppedBeatorajaTexture(texture: Texture | undefined, rect
  *     advanced-blend-modes import (registered at the top of this file) and
  *     `useBackBuffer: true` at app init. Used by skins that paint dim / shadow overlays —
  *     the previous mapping was `'screen'`, which is the OPPOSITE operation (brighten-only).
- *   - `4` → `'multiply'` — beatoraja's `(GL_ZERO, GL_SRC_COLOR)`. Pixi's `'multiply'` is
- *     close (`(GL_DST_COLOR, GL_ONE_MINUS_SRC_ALPHA)`); halo-on-feathered-edges is the only
- *     visible drift, and standard multiply matches the dominant use case.
- *   - `9` → `'difference'` — beatoraja's `(GL_ONE_MINUS_DST_COLOR, GL_ZERO)` (`dst' = (1-dst)
- *     * src.rgb`) doesn't have an exact Pixi equivalent. `'difference'` (`|src - dst|`) is the
- *     closest visual approximation — both produce the "invert-feeling" effect that authors
- *     reach for blend=9 to express (most prominently ModernChic Play
- *     `Play/lua/sp/detailinfo/bgaareainfo.lua:650`). The previous mapping was `'erase'`,
- *     which was a fundamentally different operation (alpha hole-punch).
+ *   - `4` and `9` use the reference framebuffer equations.
  *
  * Codes outside this set silently fall back to `'normal'`.
  */
@@ -608,9 +594,9 @@ export function blendCodeToPixi(code: number): BeatorajaPixiBlendMode {
     case 3:
       return 'subtract';
     case 4:
-      return 'multiply';
+      return 'beatoraja-multiply' as BLEND_MODES;
     case 9:
-      return 'difference';
+      return 'beatoraja-invert' as BLEND_MODES;
     default:
       return 'normal';
   }

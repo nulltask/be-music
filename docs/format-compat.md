@@ -303,7 +303,7 @@ The spec has no mines. beatoraja defines two extension arrays [V] ([Bmson.java][
 - `mine_channels`: mines, with a per-note `damage` used as gauge percent. Mines inside an LN or on an occupied position are dropped.
 - `key_channels`: hidden (invisible) notes, not mines.
 
-Be-Music reads them as beatoraja does: `mine_channels` become mines (`D` / `E` channels) keeping `damage`, with a default 4 % when it is missing, and `key_channels` become invisible notes (`3x` / `4x`) ([`bmson-document.ts`][bm-bmson-document], [`note-rules.ts`][bm-note-rules]). Unlike beatoraja, Be-Music keeps a mine inside a long note or on a position that already has a note, as LR2 keeps such BMS mines ([§2.6](#26-mines), [`resolved-notes.ts`][bm-resolved-notes]). Qwilight reads `mine_channels` as traps [V].
+Be-Music reads them as beatoraja does: `mine_channels` become mines (`D` / `E` channels) keeping `damage`, with zero damage when it is missing, and `key_channels` become invisible notes (`3x` / `4x`) ([`bmson-document.ts`][bm-bmson-document], [`note-rules.ts`][bm-note-rules]). Unlike beatoraja, Be-Music keeps a mine inside a long note or on a position that already has a note, as LR2 keeps such BMS mines ([§2.6](#26-mines), [`resolved-notes.ts`][bm-resolved-notes]). Qwilight reads `mine_channels` as traps [V].
 
 ### 3.6 `judge_rank`
 

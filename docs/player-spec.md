@@ -266,7 +266,7 @@ When a mine detonates belongs to the judge ruleset (`mineTrigger` in [`definitio
 - "Held" is read off each lane's recorded presses and releases, so live play, replays and the simulators agree however late the mine is settled; a lane held by two keys stays held while either is down. An input at the very instant of a crossing counts before the crossing: a key pressed at that µs is down, one released at that µs is up. For input that sends no releases the engine infers them before the judge sees the press, holding the lane for 120 ms after each press (380 ms after one that hits a long note's head) ([Input without key releases](./replay.md#input-without-key-releases)).
 - `____` ruleset — That-Which-Must-Not-Be-Named has no mines. Be-Music supports charts with mines under this ruleset as a compatibility extension. A press within the symmetric PGREAT window or a held key at the crossing detonates the mine. This preserves the outcome of existing plays when rejudging their replays.
 - Every explosion drains the gauge and plays `#WAV00`. LR2 also increments POOR/BP once, without a judgment cue, combo break, EX-SCORE change or extra ordinary-POOR gauge damage. `minePoor` records the hits already included in `poor`, so they never replace unjudged notes in course BP. beatoraja and the Be-Music AC extension apply gauge damage only. Note judgment runs independently; a mine never consumes a nearby note press.
-- Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `mine_channels[].notes[].damage` uses that value instead; a bmson mine without `damage` deals the default `4%` (its object value is the WAV slot the parser assigned, not a damage encoding, so it is never read as damage).
+- Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `mine_channels[].notes[].damage` uses that value instead; a bmson mine without `damage` deals zero damage (its object value is the WAV slot the parser assigned, not a damage encoding, so it is never read as damage).
 - Mine damage bypasses the HARD sub-30% softening and the `#TOTAL` damage multiplier (same as beatoraja's direct `gauge.addValue()`).
 - `ZZ` (= 1295 %) instantly FAILs survival gauges (HARD / DEATH); GROOVE / EASY stop at the `2%` floor.
 - kitty keyboard protocol input uses the real press/release state; release-less input has its releases inferred first (`play-key-inference.ts`), so the judge always reads a press/release state.
@@ -582,7 +582,7 @@ Without key-state input (a terminal that sends no release events, so key repeat 
 
 A mine does not emit a judgment cue or change combo/EX-SCORE. LR2beta3 increments POOR and `minePoor` once, with only the mine's raw damage; the other rulesets keep gauge-only accounting.
 It only applies the mine damage to the gauge and triggers `#WAV00` when defined. See [Landmines](#landmines) for the detonation conditions and the damage rule.
-An object value that is not a two-character upper-case base36 ID (or is `00`) falls back to the default damage of `4%`; under `#BASE 62` this also covers lower-case values. A bmson mine without `damage` uses the same `4%`.
+An object value that is not a two-character upper-case base36 ID (or is `00`) falls back to the default damage of `4%`; under `#BASE 62` this also covers lower-case values. A bmson mine without `damage` deals zero damage.
 
 The basis for this rule is documented in [`bms-spec.md`](./bms-spec.md).
 
@@ -697,7 +697,7 @@ The following deltas describe the `lr2` ruleset's `GROOVE` gauge. `HARD`, `DEATH
 - `GOOD`: `+baseGain / 2`
 - `BAD`: `-4`
 - `POOR`: `-6`
-- Landmine explosion: `-mineValue(base36)` (or the bmson `damage`, `4` when a bmson mine has none), applied as a raw delta
+- Landmine explosion: `-mineValue(base36)` (or the bmson `damage`, zero when a bmson mine has none), applied as a raw delta
 
 The value after gauge update is clamped to the current gauge type's min/max range.
 

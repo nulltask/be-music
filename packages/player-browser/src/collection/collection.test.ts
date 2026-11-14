@@ -329,24 +329,19 @@ describe('resolveChartImageAsset', () => {
     expect(entry).toBe(MPG_BYTES);
   });
 
-  test('returns undefined for a `.mpg` reference when only a same-basename `.png` exists', () => {
-    // Corollary of the regression test above — the resolver must refuse to silently substitute the PNG. The caller can
-    // then fall back to whatever video-only logic it wants (skip the BGA, log a warning, etc.); pretending the asset
-    // was found would just kick the surprise downstream.
+  test('falls back to a PNG for a missing video', () => {
     const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
     const source = makeAssetSource({ 'Song/_scualee.png': PNG_BYTES });
     const entry = resolveChartImageAsset(source, 'Song/main.bms', '_scualee.mpg');
-    expect(entry).toBeUndefined();
+    expect(entry).toBe(PNG_BYTES);
   });
 
-  test('handles every supported video extension consistently (no image fallback)', () => {
-    // Locks in the contract for all extensions matched by the BGA loader's `isVideoExtension` regex — adding one there
-    // without updating `imageFallbackPaths` would silently re-introduce the PNG fallback bug for the new extension.
+  test('handles every supported video extension with a still fallback', () => {
     const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
     const VIDEO_EXTENSIONS = ['mpg', 'mpeg', 'mp4', 'm4v', 'avi', 'mov', 'wmv', 'webm', 'mkv'];
     for (const ext of VIDEO_EXTENSIONS) {
       const source = makeAssetSource({ 'Song/clip.png': PNG_BYTES });
-      expect(resolveChartImageAsset(source, 'Song/main.bms', `clip.${ext}`)).toBeUndefined();
+      expect(resolveChartImageAsset(source, 'Song/main.bms', `clip.${ext}`)).toBe(PNG_BYTES);
     }
   });
 });
@@ -383,9 +378,11 @@ describe('resolveChartBGAAsset', () => {
     });
   });
 
-  test('still never answers a video with an image', () => {
+  test('uses a still only after exhausting videos, including in the parent', () => {
     const source = makeAssetSource({ 'Song/m.png': new Uint8Array([0x89]) });
-    expect(resolveChartBGAAsset(source, 'Song/main.bms', 'm.mpg')).toBeUndefined();
+    expect(resolveChartBGAAsset(source, 'Song/main.bms', 'm.mpg')?.path).toBe('m.png');
+    const parentVideo = makeAssetSource({ 'Song/sub/m.png': new Uint8Array([1]), 'Song/m.mp4': new Uint8Array([2]) });
+    expect(resolveChartBGAAsset(parentVideo, 'Song/sub/main.bms', 'm.mpg')?.key).toBe('Song/m.mp4');
   });
 });
 
