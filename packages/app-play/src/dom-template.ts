@@ -283,9 +283,9 @@ export const PLAYER_APP_TEMPLATE = html`
             <h2 id="skin-switch-title">${localized('skinSwitchTitle')}</h2>
             <p id="skin-switch-hint">${localized('skinSwitchHint')}</p>
           </header>
-          <label>
+          <label class="skin-switch-preference">
             <input class="input" type="checkbox" data-skin-switch-do-not-ask />
-            ${localized('skinSwitchDoNotAsk')}
+            <span>${localized('skinSwitchDoNotAsk')}</span>
           </label>
           <footer>
             <button type="submit" value="" class="btn" data-variant="outline" autofocus>${localized('cancel')}</button>

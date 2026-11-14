@@ -388,6 +388,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     // The Options dialog's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
     // in the dropdown only when their theme is loaded (see `rebuildSkinFamilyPicker` in `ui/options/skin.ts`).
     confirmDroppedSkin: true,
+    skipDroppedSkin: false,
     skinFamilyOverride: 'auto',
     builtInSkin: inputs.builtInSkinId(readStoredBuiltInSkinId(storage)),
     skinEffects: readStoredSkinEffects(storage, inputs.signals),

@@ -2628,6 +2628,18 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   text-align: start;
 }
 
+.skin-switch-preference {
+  display: flex;
+  align-items: center;
+  justify-self: start;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.skin-switch-preference > input {
+  flex: none;
+}
+
 /* Hidden family choices must override the shared buttons' inline-flex display. */
 #skin-switch [hidden] {
   display: none;

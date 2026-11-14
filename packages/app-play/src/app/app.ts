@@ -396,8 +396,14 @@ export class PlayerWebApp {
       confirmSkinDrop: (families) => {
         const preferred = this.pendingSkinSystem;
         this.pendingSkinSystem = undefined;
-        return confirmSkinDrop(families, preferred, this.guiState.confirmDroppedSkin, () => {
+        const policy = this.guiState.confirmDroppedSkin
+          ? 'ask'
+          : this.guiState.skipDroppedSkin
+            ? 'keep-current'
+            : 'apply';
+        return confirmSkinDrop(families, preferred, policy, (apply) => {
           this.guiState.confirmDroppedSkin = false;
+          this.guiState.skipDroppedSkin = !apply;
           this.optionsDialog.confirmDroppedSkinController?.refresh();
           this.optionsDialog.scheduleSettingsSave();
         });

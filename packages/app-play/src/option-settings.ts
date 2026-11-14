@@ -180,6 +180,7 @@ export interface OptionSettings {
   keysFilter: KeysFilter;
   difficultyFilter: DifficultyFilter;
   confirmDroppedSkin: boolean;
+  skipDroppedSkin: boolean;
   skinFamilyOverride: SkinFamilyOverride;
   masterVolume: number;
   muted: boolean;
@@ -465,6 +466,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'keysFilter', oneOf(raw.keysFilter, KEYS_FILTER_CYCLE));
   assign(settings, 'difficultyFilter', oneOf(raw.difficultyFilter, DIFFICULTY_FILTER_CYCLE));
   assign(settings, 'confirmDroppedSkin', booleanOf(raw.confirmDroppedSkin));
+  assign(settings, 'skipDroppedSkin', booleanOf(raw.skipDroppedSkin));
   assign(settings, 'skinFamilyOverride', oneOf(raw.skinFamilyOverride, SKIN_FAMILIES));
   assign(settings, 'hiddenSudden1P', oneOf(raw.hiddenSudden1P, PLAY_OPTION_CHOICES.hiddenSudden1P!));
   assign(settings, 'hiddenSudden2P', oneOf(raw.hiddenSudden2P, PLAY_OPTION_CHOICES.hiddenSudden2P!));
@@ -738,6 +740,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('keysFilter');
   assignState('difficultyFilter');
   assignState('confirmDroppedSkin');
+  assignState('skipDroppedSkin');
   assignState('skinFamilyOverride');
   assignState('masterVolume');
   assignState('muted');
@@ -901,6 +904,7 @@ export function captureOptionSettings(
     keysFilter: state.keysFilter,
     difficultyFilter: state.difficultyFilter,
     confirmDroppedSkin: state.confirmDroppedSkin,
+    skipDroppedSkin: state.skipDroppedSkin,
     skinFamilyOverride: state.skinFamilyOverride,
     masterVolume: state.masterVolume,
     muted: state.muted,

@@ -245,6 +245,7 @@ describe('captureOptionSettings', () => {
       shutter: 0.4,
       builtInSkin: 'plain',
       confirmDroppedSkin: false,
+      skipDroppedSkin: true,
       skinEffects: 'off',
       renderResolution: 1,
       playLayout: 'touch',

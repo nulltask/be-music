@@ -53,11 +53,12 @@ export function promptSkinDrop(family: SkinDropFamily, setPending: (family: Skin
 export function confirmSkinDrop(
   families: ReadonlySet<SkinFamilyId>,
   preferred: SkinDropFamily | undefined,
-  ask: boolean,
-  disableConfirmation: () => void,
+  policy: 'ask' | 'apply' | 'keep-current',
+  rememberChoice: (apply: boolean) => void,
 ): Promise<SkinDropFamily | undefined> {
   if (!families.has('lr2') && !families.has('beatoraja')) return Promise.resolve(undefined);
-  if (!ask) {
+  if (policy === 'keep-current') return Promise.resolve(undefined);
+  if (policy === 'apply') {
     if (preferred !== undefined && families.has(preferred)) return Promise.resolve(preferred);
     return Promise.resolve(families.has('lr2') ? 'lr2' : 'beatoraja');
   }
@@ -78,12 +79,9 @@ export function confirmSkinDrop(
       'close',
       () => {
         const family = dialog.returnValue;
-        if ((family === 'lr2' || family === 'beatoraja') && families.has(family)) {
-          if (doNotAsk?.checked) disableConfirmation();
-          resolve(family);
-        } else {
-          resolve(undefined);
-        }
+        const accepted = (family === 'lr2' || family === 'beatoraja') && families.has(family);
+        if (doNotAsk?.checked) rememberChoice(accepted);
+        resolve(accepted ? family : undefined);
       },
       { once: true },
     );
