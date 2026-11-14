@@ -32,7 +32,7 @@ import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
 import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
 import { resolve____RankLabel } from '../ruleset/score.ts';
-import type { GaugeType, GaugeAutoShift, GaugeShiftBottom } from '../ruleset/gauge-type.ts';
+import type { GaugePick, GaugeAutoShift, GaugeShiftBottom } from '../ruleset/gauge-type.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import packageJSON from '../../package.json' with { type: 'json' };
 import {
@@ -113,7 +113,7 @@ export interface ReplayRecorderPlaySettings {
   /** ANY KEY routed the play's presses (`PlayerOptions.anyKey`). */
   anyKey?: boolean;
   /** The gauge the engine ran (`PlayerOptions.gauge`, else `recordReplay.gauge`); `GROOVE` when neither is set. */
-  gauge?: GaugeType;
+  gauge?: GaugePick;
   randomLane?: { p1?: string; p2?: string };
   dpFlip?: boolean;
   judgeWindowOverrideMs?: number;
@@ -203,7 +203,7 @@ export interface ReplayRecorderFinalizeInput {
   /** Chart seconds the judge had settled through when the play was aborted. */
   abortedAtSeconds?: number;
   /** The 2P player of a two-player play: its summary, max combo and gauge (recorded as `results.secondPlayer`). */
-  secondPlayer?: { summary: PlayerSummary; maxCombo: number; gauge: GaugeType };
+  secondPlayer?: { summary: PlayerSummary; maxCombo: number; gauge: GaugePick };
 }
 
 export interface ReplayRecorder {
@@ -637,7 +637,7 @@ function buildNativeResult(
   summary: PlayerSummary,
   maxCombo: number | undefined,
   emptyPoorCount: number,
-  declaredGauge: GaugeType,
+  declaredGauge: GaugePick,
   moneyScore: boolean,
 ): ReplayRulesetResult {
   // Reported the way the simulators report a ruleset result: the judgment count as `noteCount`, the DJ LEVEL, a money
@@ -660,6 +660,7 @@ function buildNativeResult(
     djLevel: resolve____RankLabel(summary.exScore, summary.total),
     gauge: {
       type: summary.gauge?.type ?? declaredGauge,
+      ...(summary.gauge?.source !== undefined ? { source: summary.gauge.source } : {}),
       ...(summary.gauge?.values ? { values: { ...summary.gauge.values } } : {}),
       final:
         summary.gauge?.max === 100

@@ -21,7 +21,7 @@ import { type TUINoteHeight } from './ui-options.ts';
 import { type AudioSinkClockState } from '../audio-clock.ts';
 import { type PlayerGaugeSummary, type PlayerUISignalBus } from './ui-signal-bus.ts';
 import { type PlayerInputSignalBus } from './input-signal-bus.ts';
-import type { GaugeType, GaugeAutoShift } from '../ruleset/gauge-type.ts';
+import type { GaugePick, GaugeAutoShift } from '../ruleset/gauge-type.ts';
 import { type LongNoteStyle, type RulesetId, type RulesetWindowTables } from '../ruleset/index.ts';
 import { type ReplayRecordingOptions } from '../replay/recorder.ts';
 import type { BeMusicReplay, ReplayCourseStage, ReplayInputEvent, ReplayInputSource } from '../replay/format.ts';
@@ -133,7 +133,7 @@ export interface PlayerPlaySettings {
   hRandomThresholdBPM?: number;
   battleMode?: BattleMode;
   /** The 2P player's gauge in a two-player play (`battleMode: 'TWO-PLAYER'`); absent plays the 1P gauge. */
-  gauge2P?: string;
+  gauge2P?: GaugePick;
   /** LR2 D-BATTLE: scratch objects stay playable, as LR2's hidden `randSC` command keeps them (buttons 12 + 13 at decide). */
   dBattleScratch?: boolean;
   lr2ExtraMode?: boolean;
@@ -156,8 +156,12 @@ export interface PlayerPlaySettings {
    * Gauge the player selected, as an LR2-family id (`'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`). Mapped onto the
    * active ruleset's own line-up — `'GROOVE'` is beatoraja's `NORMAL`, `'DEATH'` is its `HAZARD`, and so on.
    * Defaults to `recordReplay.gauge`, then `'GROOVE'`. The replay records the gauge the play ran on.
+   *
+   * A value qualified with a source (`'lr2:HARD'`, `'beatoraja:EX-HARD'`, `'____:EASY'`) runs that source's gauge
+   * under whichever ruleset judges the play, with the source's auto-shift ladder, fallback gauge and course gauges
+   * (ADR 0019, #1171).
    */
-  gauge?: GaugeType;
+  gauge?: GaugePick;
   /**
    * The compat ruleset the play is judged under: `'lr2'` (default), `'beatoraja'` or `'____'`. It owns every judge
    * rule — the windows (beatoraja's SEVENKEYS windows scaled by its judgerank, That-Which-Must-Not-Be-Named's fixed ±16.67 / ±33.33 /

@@ -22,8 +22,8 @@ import type { LongNoteMode, RandomDraw } from '@be-music/chart-model';
 import { isScratchSpin, type ScratchSpin } from '../core/scratch-spin.ts';
 import {
   GAUGE_TYPES,
-  isGaugeType,
-  type GaugeType,
+  isGaugePick,
+  type GaugePick,
   type GaugeAutoShift,
   type GaugeShiftBottom,
 } from '../ruleset/gauge-type.ts';
@@ -307,10 +307,14 @@ export interface ReplayPlay {
    * `inputs` keep the keys' own lanes, and replays and simulators route them again. Absent = off.
    */
   anyKey?: boolean;
-  /** Gauge the player selected for the session (declared by the host; LR2-family gauge id). */
-  gauge: GaugeType;
+  /**
+   * Gauge the player selected for the session (declared by the host; LR2-family gauge id). A bare value is the played
+   * ruleset's own gauge, read under a re-judging ruleset as that ruleset's own. A qualified one (`lr2:HARD`) keeps its
+   * source's gauge, auto-shift ladder and course gauges under every ruleset (ADR 0019, #1171).
+   */
+  gauge: GaugePick;
   /** The 2P player's gauge of a two-player play (`battleMode: 'TWO-PLAYER'`); `results.secondPlayer` is its result. */
-  gauge2P?: GaugeType;
+  gauge2P?: GaugePick;
   /**
    * Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'RANDOM'` / `'lr2:S-RANDOM'` /
    * ...). A bare colliding name (`'S-RANDOM'`, `'CONVERGE'`) is the played ruleset's own (ADR 0019). Older replays may hold
@@ -406,8 +410,13 @@ export interface ReplayJudgmentCounts {
 export interface ReplayGaugeResult {
   /** Raw values for every parallel gauge; course stages carry these into the next stage. */
   values?: Record<string, number>;
-  /** Ruleset-scoped gauge id (`'GROOVE'`, `'HARD'`, `'NORMAL'`, `'EX-HARD'`, ...). */
+  /** Gauge id in its source's line-up (`'GROOVE'`, `'HARD'`, `'NORMAL'`, `'EX-HARD'`, ...). */
   type: string;
+  /**
+   * The source whose gauge {@link type} names, when the play ran another source's gauge than the judging ruleset's own
+   * (`play.gauge: 'lr2:HARD'` under beatoraja judging, #1171). Absent: the judging ruleset's own.
+   */
+  source?: RulesetId;
   /** Final gauge value in percent. */
   final: number;
   cleared: boolean;
@@ -808,8 +817,10 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     throw new ReplayParseError(`play.mode: expected 'manual' | 'auto'`);
   }
   const gauge = play.gauge;
-  if (!isGaugeType(gauge)) {
-    throw new ReplayParseError(`play.gauge: expected one of ${GAUGE_TYPES.join(' | ')}`);
+  if (!isGaugePick(gauge)) {
+    throw new ReplayParseError(
+      `play.gauge: expected one of ${GAUGE_TYPES.join(' | ')}, optionally qualified with its source (lr2:HARD)`,
+    );
   }
   if (play.inputSources === undefined) {
     throw new ReplayParseError('play.inputSources: required (replays recorded before input sources are not read)');
@@ -831,8 +842,10 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   }
   if (play.dpFlip !== undefined) parsed.dpFlip = play.dpFlip === true;
   if (play.gauge2P !== undefined) {
-    if (!isGaugeType(play.gauge2P))
-      throw new ReplayParseError(`play.gauge2P: expected one of ${GAUGE_TYPES.join(' | ')}`);
+    if (!isGaugePick(play.gauge2P))
+      throw new ReplayParseError(
+        `play.gauge2P: expected one of ${GAUGE_TYPES.join(' | ')}, optionally qualified with its source (lr2:HARD)`,
+      );
     parsed.gauge2P = play.gauge2P;
   }
   const judgeWindowOverrideMs = optionalFiniteNumber(play.judgeWindowOverrideMs, 'play.judgeWindowOverrideMs');

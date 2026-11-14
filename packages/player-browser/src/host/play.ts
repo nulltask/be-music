@@ -6,7 +6,7 @@
 import { BGACameraFeed } from '../media/bga-camera.ts';
 import type { GuideSound, ResolvedPlayChart } from '@be-music/player-engine';
 import type { BeMusicReplay, ReplayCourseStage } from '@be-music/player-engine/replay';
-import type { RulesetId } from '@be-music/player-engine/ruleset';
+import { gaugePickType, type RulesetId } from '@be-music/player-engine/ruleset';
 import {
   DEFAULT_PLAY_OPTIONS,
   resolvePlayOptions,
@@ -319,8 +319,9 @@ function createPlayView(
       ...(settings.scoreGraph !== undefined ? { scoreGraph: settings.scoreGraph } : {}),
       ...(settings.battleMode !== undefined ? { battleMode: settings.battleMode } : {}),
       ...(settings.lr2ExtraMode !== undefined ? { lr2ExtraMode: settings.lr2ExtraMode } : {}),
-      ...(settings.gauge2P !== undefined ? { gauge2P: settings.gauge2P } : {}),
-      gauge: play.resolveSelectedGauge(),
+      // A view labels the gauge by its type; the source of a qualified pick (`lr2:HARD`) stays with the engine.
+      ...(settings.gauge2P !== undefined ? { gauge2P: gaugePickType(settings.gauge2P) } : {}),
+      gauge: gaugePickType(play.resolveSelectedGauge()),
       courseGauge: course !== undefined,
       ...(course?.view !== undefined ? { course: course.view } : {}),
       ...(options.replay !== undefined ? { replay: true } : {}),

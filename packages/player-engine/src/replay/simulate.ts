@@ -359,6 +359,7 @@ class ReplaySimulation {
       djLevel: resolve____RankLabel(this.exScore, this.config.noteCount),
       gauge: {
         type: this.gauge.spec.id,
+        ...(this.config.gaugeSource !== this.config.rulesetId ? { source: this.config.gaugeSource } : {}),
         ...(this.gauge.values ? { values: this.gauge.values } : {}),
         final:
           this.gauge.spec.max === 100

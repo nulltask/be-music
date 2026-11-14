@@ -15,7 +15,7 @@ import { clampJudgeTimingMs, resolvePlayOptionValue } from '@be-music/player-sce
 import { compileChartGaugeOptions, mirrorBeatAtTempoReversal } from '@be-music/chart-model';
 import { nonstopBPMAt } from '@be-music/player-engine/course';
 import { DEFAULT_REPLAY_PLAYBACK_OPTIONS, type BeMusicReplay } from '@be-music/player-engine/replay';
-import { resolveChartGaugeType, type GaugeType } from '@be-music/player-engine/ruleset';
+import { resolveChartGaugeType, type GaugePick } from '@be-music/player-engine/ruleset';
 import { createHiSpeedState, createPlayState, type LibraryChart, type PlayResult } from '@be-music/player-scene-model';
 import type { BeMusicLongNote } from '@be-music/player-skin-sdk';
 import type { Application, Texture } from 'pixi.js';
@@ -652,7 +652,7 @@ export class PlaySession extends PlaySessionState {
    * and clears exactly as the original did. Otherwise a chart's GAMELEVEL / EXTRA (#845) wins outside a course and
    * PRACTICE, as the engine decides; then the host's selection, defaulting to LR2 GROOVE.
    */
-  resolveSelectedGauge(): GaugeType {
+  resolveSelectedGauge(): GaugePick {
     if (this.options.replay !== undefined) return this.options.replay.play.gauge ?? 'GROOVE';
     const chart = this.resolvedChart ?? this.chart?.chart;
     const chartGauge =

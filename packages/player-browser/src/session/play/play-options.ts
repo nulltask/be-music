@@ -13,7 +13,7 @@ import type {
   ReplayRecordingOptions,
   ReplayPlaybackOptions,
 } from '@be-music/player-engine/replay';
-import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
+import type { GaugePick, RulesetId } from '@be-music/player-engine/ruleset';
 import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { GuideSound, ResolvedPlayChart } from '@be-music/player-engine';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
@@ -295,9 +295,9 @@ export interface PlaySessionOptions {
    * 1P gauge variant (`#SRC_BUTTON,type=40`). Selects the ruleset's gauge (the engine resolves the curve) and drives
    * the gauge-on-red-branch op flags (43 / 45).
    */
-  gauge?: GaugeType;
+  gauge?: GaugePick;
   /** The 2P player's gauge of a two-player play (`battleMode: 'TWO-PLAYER'`). */
-  gauge2P?: GaugeType;
+  gauge2P?: GaugePick;
   /** That-Which-Must-Not-Be-Named M-RAN per player: MIRROR after a RANDOM-type arrangement in two-player play. */
   mRan1P?: boolean;
   mRan2P?: boolean;

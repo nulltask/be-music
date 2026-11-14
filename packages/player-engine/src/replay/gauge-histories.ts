@@ -8,6 +8,7 @@
 import type { RulesetCourseKind } from '../ruleset/course.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import { resolveGaugeShiftLadder } from '../ruleset/gauge-shift.ts';
+import { resolveGaugePickSource } from '../ruleset/gauge-type.ts';
 import type { BeMusicReplay } from './format.ts';
 import { resolveRulesetConfig } from './rulesets.ts';
 import { simulateReplay } from './simulate.ts';
@@ -45,7 +46,9 @@ export function resolveReplayGaugeHistories(
 ): ReplayGaugeHistory[] {
   const ruleset = options.ruleset ?? replay.play.judgeRuleset ?? 'lr2';
   const untilUs = options.untilUs ?? Number.POSITIVE_INFINITY;
-  return resolveGaugeShiftLadder(ruleset, options.courseKind).map((gauge) => {
+  // The line-up is the gauge's own source's: a qualified pick steps through that source's gauges (#1171).
+  const source = resolveGaugePickSource(replay.play.gauge, ruleset);
+  return resolveGaugeShiftLadder(source, options.courseKind).map((gauge) => {
     const forced = { gauge, gaugeAutoShift: 'NONE' as const };
     const spec = resolveRulesetConfig(replay, ruleset, forced).gauge;
     const samples: { atUs: number; gauge: number }[] = [];

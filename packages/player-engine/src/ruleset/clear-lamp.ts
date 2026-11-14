@@ -209,8 +209,13 @@ export interface PlayClearLampFacts {
   ruleset?: string;
   /** The ruleset's verdict on the gauge the play ended on. */
   cleared: boolean;
-  /** The gauge the play ran on, by the ruleset's gauge id (`GROOVE`, `HARD`, `EX-HARD`, …); none counts as NORMAL. */
+  /** The gauge the play ran on, by its source's gauge id (`GROOVE`, `HARD`, `EX-HARD`, …); none counts as NORMAL. */
   gauge?: string;
+  /**
+   * The source whose gauge that is, when it is not the judge ruleset's own (`lr2:HARD` under beatoraja judging, #1171).
+   * The gauge's lamp follows its source; the full-combo lamps and the top lamp stay the judge ruleset's.
+   */
+  gaugeSource?: string;
   /** The judgments over the ruleset's `total` judgment notes (PGREATs are `perfect`). */
   score: { total: number; perfect: number; great: number; good: number; fullCombo?: boolean };
 }
@@ -227,7 +232,7 @@ export function resolveClearLamp(play: PlayClearLampFacts): ClearLamp {
   return finishClearLamp({
     top: topClearLamp(play.ruleset),
     cleared: play.cleared,
-    gaugeLamp: gaugeClearLamp(play.gauge, play.ruleset),
+    gaugeLamp: gaugeClearLamp(play.gauge, play.gaugeSource ?? play.ruleset),
     fullCombo,
     great: play.score.great,
     good: play.score.good,
@@ -242,6 +247,8 @@ export interface CourseClearLampFacts {
   cleared: boolean;
   /** The course gauge the run ended on (`GRADE`, `COURSE-HARD`, `CLASS`, …). */
   gauge: string;
+  /** The source whose course gauge that is, when it is not the judge ruleset's own (#1171). */
+  gaugeSource?: string;
   /** The gauge the player picked: LR2's course lamps follow it. */
   gaugeType: GaugeType;
   /** Judgment notes over every stage of the course, reached or not. */
@@ -265,7 +272,7 @@ export function resolveCourseClearLamp(run: CourseClearLampFacts): ClearLamp {
   return finishClearLamp({
     top: known ? topClearLamp(run.ruleset) : 'FULL_COMBO',
     cleared: run.cleared,
-    gaugeLamp: courseGaugeClearLamp(run.gauge, run.ruleset, run.gaugeType),
+    gaugeLamp: courseGaugeClearLamp(run.gauge, run.gaugeSource ?? run.ruleset, run.gaugeType),
     fullCombo: run.fullCombo !== false && run.noteCount > 0 && run.maxCombo >= run.noteCount,
     great: run.judge.great,
     good: run.judge.good,

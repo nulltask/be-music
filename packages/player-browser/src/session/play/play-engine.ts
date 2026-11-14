@@ -34,7 +34,7 @@ import type {
 } from '@be-music/player-engine/replay';
 import {
   resolveDisplayedPoor,
-  type GaugeType,
+  type GaugePick,
   type JudgmentKind,
   type LongNoteStyle,
   type ScoreSummary,
@@ -204,7 +204,7 @@ export interface PlayEngineContext
   readonly longNotes: LongNoteTracker;
   readonly playMoments: PlayPresentation['playMoments'];
   pauseAllBGAVideos(): void;
-  resolveSelectedGauge(): GaugeType;
+  resolveSelectedGauge(): GaugePick;
   getResultData(): PlayResult | undefined;
 }
 

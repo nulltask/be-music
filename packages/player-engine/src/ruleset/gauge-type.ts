@@ -46,6 +46,63 @@ export function isGaugeType(value: unknown): value is GaugeType {
   return typeof value === 'string' && (GAUGE_TYPES as readonly string[]).includes(value);
 }
 
+/** The sources a gauge pick can name: the judge rulesets, whose gauge line-ups differ. */
+type GaugeSource = 'lr2' | 'beatoraja' | '____';
+
+const GAUGE_SOURCES: readonly GaugeSource[] = ['lr2', 'beatoraja', '____'];
+
+/** A gauge of one source, whatever ruleset judges the play: `lr2:HARD`, `beatoraja:EX-HARD`, `____:EASY` (ADR 0019). */
+export type QualifiedGaugeType = `${GaugeSource}:${GaugeType}`;
+
+/**
+ * The gauge a play runs on. A bare {@link GaugeType} is the judge ruleset's own gauge of that name. A
+ * {@link QualifiedGaugeType} keeps its source under every judge ruleset: that source's gauge table, TOTAL reading,
+ * auto-shift ladder, fallback gauge and course gauges (#1171).
+ */
+export type GaugePick = GaugeType | QualifiedGaugeType;
+
+/** A gauge pick's source (`undefined` for a bare pick) and its gauge type. */
+export interface GaugePickParts {
+  source: GaugeSource | undefined;
+  type: GaugeType;
+}
+
+/** Splits a gauge pick into its source and type, or `undefined` when `value` is no gauge pick. */
+export function splitGaugePick(value: unknown): GaugePickParts | undefined {
+  if (typeof value !== 'string') return undefined;
+  const colon = value.indexOf(':');
+  if (colon < 0) return isGaugeType(value) ? { source: undefined, type: value } : undefined;
+  const source = GAUGE_SOURCES.find((id) => id === value.slice(0, colon));
+  const type = value.slice(colon + 1);
+  // A qualified pick names a gauge its source's own menu offers; it is never mapped to a lookalike.
+  return source !== undefined && isGaugeType(type) && resolveGaugeTypes(source).includes(type)
+    ? { source, type }
+    : undefined;
+}
+
+/** Whether `value` is a gauge pick: a bare gauge type, or one qualified with a source that defines it. */
+export function isGaugePick(value: unknown): value is GaugePick {
+  return splitGaugePick(value) !== undefined;
+}
+
+/**
+ * The gauge type of a pick, without its source (`lr2:HARD` is HARD): what a skin's label reads. A value that is no
+ * gauge pick (an unvalidated log) is returned as it is.
+ */
+export function gaugePickType(pick: GaugePick): GaugeType {
+  return splitGaugePick(pick)?.type ?? (pick as GaugeType);
+}
+
+/** The source whose gauge `pick` runs under the judge ruleset `ruleset`: its own source, or the ruleset for a bare pick. */
+export function resolveGaugePickSource(pick: GaugePick, ruleset: GaugeSource): GaugeSource {
+  return splitGaugePick(pick)?.source ?? ruleset;
+}
+
+/** `type` as `source`'s gauge. */
+export function qualifyGaugePick(source: GaugeSource, type: GaugeType): QualifiedGaugeType {
+  return `${source}:${type}`;
+}
+
 /**
  * Gauge auto-shift policies, beatoraja 0.8.9's (`BMSPlayer`), usable under every ruleset (#933): each shifts along the
  * judge ruleset's own gauge ladder (`resolveGaugeShiftLadder`).

@@ -59,6 +59,8 @@ export interface PlayGaugeInput {
   readonly initial?: number;
   readonly cleared: boolean;
   readonly type?: string;
+  /** The source of the gauge `type` names, when it is not the judge ruleset's own (`lr2:HARD` under beatoraja judging). */
+  readonly source?: string;
 }
 
 /**

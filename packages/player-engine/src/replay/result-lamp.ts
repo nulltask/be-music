@@ -16,6 +16,7 @@ export function resolveRulesetResultLamp(
     ruleset,
     cleared: result.gauge.cleared,
     gauge: result.gauge.type,
+    ...(result.gauge.source !== undefined ? { gaugeSource: result.gauge.source } : {}),
     score: {
       total: result.noteCount,
       perfect: pgreat,
