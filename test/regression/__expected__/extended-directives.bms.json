@@ -542,13 +542,13 @@
             "judge": {
               "pgreat": 6,
               "great": 3,
-              "good": 0,
-              "bad": 2,
+              "good": 1,
+              "bad": 1,
               "poor": 1,
               "emptyPoor": 0
             },
             "fast": 1,
-            "slow": 2,
+            "slow": 3,
             "exScore": 15,
             "noteCount": 12,
             "maxCombo": 5,
@@ -558,7 +558,7 @@
               "final": 100,
               "cleared": true
             },
-            "score": 125000
+            "score": 129166
           },
           "beatoraja": {
             "ruleset": "beatoraja/0",
@@ -610,15 +610,15 @@
               "total": 12,
               "perfect": 6,
               "fast": 1,
-              "slow": 2,
+              "slow": 3,
               "great": 3,
-              "good": 0,
-              "bad": 2,
+              "good": 1,
+              "bad": 1,
               "poor": 1,
               "emptyPoor": 0,
               "exScore": 15,
-              "score": 125000,
-              "combo": 4,
+              "score": 129166,
+              "combo": 5,
               "maxCombo": 5,
               "gauge": {
                 "current": 100,

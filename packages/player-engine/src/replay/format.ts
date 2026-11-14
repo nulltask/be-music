@@ -163,7 +163,8 @@ export interface ReplayControlInputEvent {
 export interface ReplayJudgeRank {
   /**
    * Initial judgerank on the internal LR2 percent axis (VERY HARD = 25 / HARD = 50 / NORMAL = 75 / EASY = 100),
-   * resolved through `resolveJudgeRankPercent` at record time.
+   * resolved through `resolveJudgeRankPercent` at record time. LR2 judges a BMS chart with a positive
+   * {@link sourceExRank} (`#DEFEXRANK`) by that value instead, scaling the `#RANK 2` windows (#1190).
    */
   percent: number;
   /** Raw `#RANK` (`metadata.rank`) when the chart specified one. */

@@ -60,26 +60,62 @@ describe('judge-window', () => {
     expect(windows.bad).toBe(200);
   });
 
-  test('BMS: #DEFEXRANK interpolates between the LR2 rank anchors and overrides #RANK', () => {
+  test('BMS: #DEFEXRANK scales the #RANK 2 windows by its percentage and overrides #RANK', () => {
     const json = createEmptyJSON('bms');
     json.metadata.rank = 0;
-    json.bms.defExRank = 120; // → percent 90, between NORMAL (75) and EASY (100)
+    json.bms.defExRank = 120; // 120 % of #RANK 2 (±18 / ±40 / ±100), not a point between NORMAL and EASY
 
     const windows = resolveJudgeWindowsMs(json);
-    expect(windows.pgreat).toBeCloseTo(18 + 15 * ((21 - 18) / 25), 6); // 19.8
-    expect(windows.great).toBeCloseTo(40 + 15 * ((60 - 40) / 25), 6); // 52
-    expect(windows.good).toBeCloseTo(100 + 15 * ((120 - 100) / 25), 6); // 112
+    expect(windows.pgreat).toBeCloseTo(21.6, 6);
+    expect(windows.great).toBeCloseTo(48, 6);
+    expect(windows.good).toBeCloseTo(120, 6);
     expect(windows.bad).toBe(200);
   });
 
-  test('BMS: #DEFEXRANK beyond EASY extrapolates but never exceeds the BAD gate', () => {
+  test.each([
+    [100, [18, 40, 100]],
+    [50, [9, 20, 50]],
+    [25, [4.5, 10, 25]],
+    [133.33, [23.9994, 53.332, 133.33]],
+    [0.5, [0.09, 0.2, 0.5]],
+  ] as const)('BMS: #DEFEXRANK %d is that percentage of the #RANK 2 windows', (defExRank, [pgreat, great, good]) => {
     const json = createEmptyJSON('bms');
-    json.bms.defExRank = 1000; // percent 750 — GOOD would extrapolate to 620ms without the clamp
+    json.bms.defExRank = defExRank;
+    const windows = resolveJudgeWindowsMs(json);
+    expect(windows.pgreat).toBeCloseTo(pgreat, 6);
+    expect(windows.great).toBeCloseTo(great, 6);
+    expect(windows.good).toBeCloseTo(good, 6);
+    expect(windows.bad).toBe(200);
+  });
+
+  test('BMS: a #DEFEXRANK that is not a positive number leaves #RANK in force', () => {
+    for (const defExRank of [0, -50, Number.NaN]) {
+      const json = createEmptyJSON('bms');
+      json.metadata.rank = 3;
+      json.bms.defExRank = defExRank;
+      expect(resolveJudgeWindowsMs(json)).toEqual({ pgreat: 21, great: 60, good: 120, bad: 200 });
+    }
+  });
+
+  test('BMS: a large #DEFEXRANK never widens a window past the BAD gate', () => {
+    const json = createEmptyJSON('bms');
+    json.bms.defExRank = 1000; // GOOD would be 1000 ms and GREAT 400 ms without the clamp
 
     const windows = resolveJudgeWindowsMs(json);
-    expect(windows.good).toBe(200); // clamped to the fixed BAD width
-    expect(windows.pgreat).toBeCloseTo(18 + (750 - 75) * ((21 - 18) / 25), 6); // 99, below the gate
+    expect(windows.good).toBe(200);
+    expect(windows.great).toBe(200);
+    expect(windows.pgreat).toBeCloseTo(180, 6); // below the gate
     expect(windows.bad).toBe(200);
+    expect(resolveJudgeWindowsMs(json, 150)).toEqual({ pgreat: 150, great: 150, good: 150, bad: 150 });
+  });
+
+  test('bmson judge_rank stays on LR2’s rank anchors, unlike #DEFEXRANK', () => {
+    const bmsonJSON = createEmptyJSON('bmson');
+    bmsonJSON.bmson.info.judgeRank = 120; // percent 90, between NORMAL (75) and EASY (100)
+    const windows = resolveJudgeWindowsMs(bmsonJSON);
+    expect(windows.pgreat).toBeCloseTo(19.8, 6);
+    expect(windows.great).toBeCloseTo(52, 6);
+    expect(windows.good).toBeCloseTo(112, 6);
   });
 
   test('BMSON: judge rank prefers bmson info, then metadata, then the NORMAL default', () => {
@@ -153,7 +189,13 @@ describe('judge-window', () => {
     expect(dynamic.pgreat).toBeCloseTo(18, 6);
     expect(dynamic.bad).toBe(200);
 
-    // `#EXRANK 120` matches the documented `#DEFEXRANK 120` interpolation.
-    expect(resolveBMSJudgeWindowsMsForExRankValue(120).great).toBeCloseTo(52, 6);
+    // `#EXRANK 120` is the same 120 % of #RANK 2 as `#DEFEXRANK 120`.
+    const json = createEmptyJSON('bms');
+    json.bms.defExRank = 120;
+    expect(resolveBMSJudgeWindowsMsForExRankValue(120)).toEqual(resolveJudgeWindowsMs(json));
+    expect(resolveBMSJudgeWindowsMsForExRankValue(120).great).toBeCloseTo(48, 6);
+    // A value that is not a positive number changes nothing, and the debug BAD width caps every window.
+    expect(resolveBMSJudgeWindowsMsForExRankValue(0)).toEqual(dynamic);
+    expect(resolveBMSJudgeWindowsMsForExRankValue(300, 100)).toEqual({ pgreat: 54, great: 100, good: 100, bad: 100 });
   });
 });

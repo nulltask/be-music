@@ -436,15 +436,20 @@ The player interprets `#DEFEXRANK` with `Number.parseFloat()` and only accepts v
 
 ### BMS conversion formula
 
-Judgment widths are derived by piecewise-linear interpolation of the measured table above over the judgerank percent anchors (25 / 50 / 75 / 100) — the same model as lr2oraja's `JudgeWindowRule.LR2`.
-`#DEFEXRANK n` converts to the percent axis as `n × 75 / 100`. For example `#DEFEXRANK 120` is percent `90` and yields `PGREAT=19.8ms`, `GREAT=52ms`, `GOOD=112ms`, `BAD=200ms` (fixed).
-Values beyond `EASY` (percent `100`) extrapolate along the final segment; only `PGREAT` / `GREAT` / `GOOD` scale, and no width ever exceeds the fixed `BAD` gate of `±200ms`.
+`#RANK` reads the measured table above directly.
+
+`#DEFEXRANK n` scales the `#RANK 2` widths by `n / 100` ([#1190](https://github.com/nulltask/be-music/issues/1190)). For example `#DEFEXRANK 120` yields `PGREAT=21.6ms`, `GREAT=48ms`, `GOOD=120ms`, `BAD=200ms` (fixed), and `#DEFEXRANK 50` yields `9ms` / `20ms` / `50ms`.
+Only `PGREAT` / `GREAT` / `GOOD` scale, and no width ever exceeds the fixed `BAD` gate of `±200ms`.
+
+LR2 has no `#DEFEXRANK`, so this is a Be-Music extension of the `lr2` ruleset. nanasigroove defines the value as a percentage where `100` is `#RANK 2` [C], and the extension takes that definition as it is: the `#RANK 2` width is the base value. It does not place the value among LR2's other ranks, so `#DEFEXRANK 133` is not `#RANK 3`.
+
+A fractional judgerank that is not a `#DEFEXRANK` (bmson `judge_rank` and PRACTICE's JUDGERANK) is still interpolated piecewise-linearly over the judgerank percent anchors (25 / 50 / 75 / 100) of the measured table — the same model as lr2oraja's `JudgeWindowRule.LR2` — with values beyond `EASY` extrapolated along the final segment.
 
 ### BMS dynamic judgment width change
 
 In BMS, you can use the `#xxxA0` channel and `#EXRANKxx` to change the judgment range during the performance.
 The player resolves the event value of the `A0` channel as a key in `#EXRANKxx`, reads the value with `Number.parseFloat()`, and uses it only if it is finite and greater than `0`.
-The adopted value shares `#DEFEXRANK`'s unit — a percentage with `RANK 2 = 100` as the baseline — so `#EXRANKxx 100` restores exactly the `NORMAL` judgment width.
+The adopted value shares `#DEFEXRANK`'s unit and its scaling — a percentage of the `#RANK 2` widths — so `#EXRANKxx 100` restores exactly the `NORMAL` judgment width and `#EXRANKxx 50` halves it.
 
 If `#EXRANKxx` is undefined, an empty string, a non-number, or less than or equal to `0`, the event does not change the judgment width.
 If there are multiple `A0` events, they are applied in chronological order, and the value reached later becomes the subsequent judgment width.
@@ -474,7 +479,7 @@ bmson determines the judgment width using the following priority order.
 2. `metadata.rank`
 3. Default value `100`
 
-bmson's `judgeRank` shares the `100 = NORMAL` percentage unit with `#DEFEXRANK` and converts through the same LR2 anchor interpolation.
+bmson's `judgeRank` shares the `100 = NORMAL` percentage unit with `#DEFEXRANK`, but converts through the LR2 anchor interpolation instead of scaling the `#RANK 2` widths. The two agree at `100` and differ away from it: a `judgeRank` of `120` is `±19.8/±52/±112ms`, where `#DEFEXRANK 120` is `±21.6/±48/±120ms`.
 Therefore `judgeRank=100` is exactly `NORMAL` (`±18/±40/±100/±200ms`).
 The `beatoraja` ruleset uses `judge_rank` as the judgerank directly, and a bmson chart without it judges like
 `judge_rank: 100` (the bmson default; PGREAT `±20ms` in 7 KEY), never like BMS `#RANK 2`.

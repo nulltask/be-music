@@ -306,14 +306,14 @@ describe('player', () => {
     expect(windows.bad).toBe(200);
   });
 
-  test('player: scales judge windows from bms DEFEXRANK via the LR2 anchor interpolation', () => {
+  test('player: scales the #RANK 2 judge windows by bms DEFEXRANK', () => {
     const json = createEmptyJSON('bms');
     json.metadata.rank = 0;
-    json.bms.defExRank = 120; // percent 90 — between NORMAL (75) and EASY (100)
+    json.bms.defExRank = 120; // 120 % of #RANK 2
     const windows = resolveJudgeWindowsMs(json);
-    expect(windows.pgreat).toBeCloseTo(19.8, 6);
-    expect(windows.great).toBeCloseTo(52, 6);
-    expect(windows.good).toBeCloseTo(112, 6);
+    expect(windows.pgreat).toBeCloseTo(21.6, 6);
+    expect(windows.great).toBeCloseTo(48, 6);
+    expect(windows.good).toBeCloseTo(120, 6);
     expect(windows.bad).toBe(200);
   });
 
