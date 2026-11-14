@@ -228,6 +228,42 @@ describe('LR2 negative-BPM reversal', () => {
     expect(resolver.beatToSeconds(8)).toBeCloseTo(4, 9);
   });
 
+  test('keeps dropping a #BPMxx 0 reference: the previous tempo continues and nothing reverses (deviation 2)', () => {
+    const json = createEmptyJSON('bms');
+    json.metadata.bpm = 120;
+    json.resources.bpm['02'] = 0;
+    json.events = [{ measure: 1, channel: '08', position: [0, 1], value: '02' }];
+
+    const resolver = createTimingResolver(json);
+    expect(resolver.reversal).toBeUndefined();
+    expect(resolver.bpmAtBeat(10)).toBe(120);
+    expect(resolver.beatToSeconds(8)).toBeCloseTo(4, 9);
+  });
+
+  test('never reads an undefined slot as -1 in bmson, which has no slots', () => {
+    const json = createEmptyJSON('bmson');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 1, channel: '08', position: [0, 1], value: 'ZZ' }];
+
+    const resolver = createTimingResolver(json);
+    expect(resolver.reversal).toBeUndefined();
+    expect(resolver.bpmAtBeat(10)).toBe(120);
+  });
+
+  test.each([0, -150])(
+    'falls back to the 130 default for an initial #BPM of %s, without a reversal (deviation 3)',
+    (initial) => {
+      const json = createEmptyJSON('bms');
+      json.metadata.bpm = initial;
+      json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+
+      const resolver = createTimingResolver(json);
+      expect(resolver.reversal).toBeUndefined();
+      expect(resolver.bpmAtBeat(0)).toBe(130);
+      expect(resolver.beatToSeconds(4)).toBeCloseTo((4 * 60) / 130, 9);
+    },
+  );
+
   test('fires only BGM, BPM and BGA on the LR2 reversal tick, and nothing behind it', () => {
     // LR2 orders same-tick events by op (`CMP_NotesByRealTimingOp`): BGM (1), BPM (3) and the BGA layers (4 / 6 / 7)
     // precede the negative BPM (op 8); STOP (9), lane sounds (10+) and invisible objects (30+) come after it.
