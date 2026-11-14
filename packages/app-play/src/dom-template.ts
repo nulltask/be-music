@@ -529,6 +529,7 @@ export const PLAYER_APP_TEMPLATE = html`
           </header>
           <div id="options-search-results" class="options-search-results" hidden></div>
           <div data-remembered-folder-actions></div>
+          <div data-remembered-folder-manager></div>
           <section id="options-modal-body" class="options-body"></section>
           <button type="button" id="options-modal-close" aria-label=${localized('close')}>
             <svg
