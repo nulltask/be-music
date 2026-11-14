@@ -137,8 +137,8 @@ export class DropTarget {
     if (!canPick && this.savedFolders.length === 0) return;
     render(
       html`
-        <details>
-          <summary>${localized('savedFolders')}</summary>
+        <section aria-labelledby="load-folders-heading">
+          <h3 id="load-folders-heading">${localized('savedFolders')}</h3>
           <p>${localized('savedFoldersHint')}</p>
           <ul class="remembered-folder-list">
             ${this.savedFolders.map(
@@ -174,7 +174,7 @@ export class DropTarget {
           >
             ${localized('addFolder')}
           </button>
-        </details>
+        </section>
       `,
       root,
     );

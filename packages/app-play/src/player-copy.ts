@@ -15,7 +15,7 @@ const en = {
     search: 'Search title / artist / genre... (? for a filter)',
     dropTitle: 'Drop to load',
     openFolder: 'Open folder',
-    savedFolders: 'Saved folders',
+    savedFolders: 'Folders to load',
     savedFoldersHint:
       'Changes apply the next time you open the player. Removing a folder only removes its registration.',
     changeFolder: 'Change',
@@ -422,7 +422,7 @@ const ja: typeof en = {
     search: 'タイトル / アーティスト / ジャンルを検索（? でフィルタ）',
     dropTitle: 'ドロップして読み込む',
     openFolder: 'フォルダを開く',
-    savedFolders: '保存済みフォルダ',
+    savedFolders: '読み込み対象フォルダ',
     savedFoldersHint: '変更はプレイヤーの次回起動時に反映されます。削除しても元のフォルダは残ります。',
     changeFolder: '変更',
     removeFolder: '削除',
