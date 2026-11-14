@@ -23,6 +23,9 @@ export function buildSkinFolder(
   // Skin family override — picks the active rendering family (LR2 / beatoraja / default) regardless of what's
   // loaded. Unloaded families ask for a drop; rebuilding updates their availability labels in place.
   this.rebuildSkinFamilyPicker();
+  this.confirmDroppedSkinController = skin.addBinding(this.guiState, 'confirmDroppedSkin', {
+    label: 'Confirm before using a dropped skin',
+  });
   const tabs = skin.addTab({ pages: [{ title: 'Built-in' }, { title: 'LR2' }, { title: 'beatoraja' }] });
   const [builtIn, lr2, beatoraja] = tabs.pages;
   if (!builtIn || !lr2 || !beatoraja) return;
