@@ -69,7 +69,14 @@ in the entry script's directory and its sub-directories (and one level up — be
 `play_parts.lua`). Modules are cached so a `require()` call always returns the same table on subsequent invocations.
 beatoraja's `timer_util` / `event_util` helper modules are built in and can be required without shipping them.
 
-`os.clock()` reads the host-provided scene clock in seconds, so delayed Lua draw predicates (including WMII_FHD key beams and key flashes) advance with rendering. Limited `os` and `io` compatibility shims are restored after the standard libraries are removed; filesystem and process operations remain inert.
+`os.clock()` reads the host-provided scene clock in seconds, so delayed Lua draw predicates (including WMII_FHD key beams and key flashes) advance with rendering. Limited `os` and `io` stand-ins are restored after the standard libraries are removed. Process operations remain inert (`os.execute` and `os.getenv` return nil).
+
+beatoraja gives a skin real files through `io.open` [V] ([SkinLuaAccessor](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/skin/lua/SkinLuaAccessor.java#L318-L370)). Be-Music has no file system to give, so as a platform policy `io` works on files kept in memory for one Lua runtime, which is one evaluation of one skin scene ([`lua-io.ts`](../packages/skin-beatoraja/src/lua-io.ts)):
+
+- A file exists once the skin has written it, and reads back what was written. `os.remove` and `os.rename` act on the same files.
+- Opening a file the skin never wrote for reading fails as Lua specifies (`nil`, a message, error number 2), and `io.lines` on it raises an error, so a skin's existence check and its `pcall` paths see that there is no file. A handle used after `close`, or against its mode, reports the failure too.
+- Nothing is persisted and no real file is read: a history or rotation list a skin keeps starts empty on every scene. Skins that write without checking `io.open`'s result (ModernChic's result screen does) keep running.
+- `luajava` stays an empty stand-in: `bindClass` and `new` return empty tables, so a method call on them is a Lua error the skin can catch with `pcall`.
 
 The browser wires `main_state.event_index(id)` to the same image-index resolver as `image.ref`. MODE/SORT and LNMODE are zero based; HS-FIX and CLEAR use beatoraja's index ordering. `main_state.set_timer(id, start)` writes only custom animation timers 10000–19999, with starts in microseconds. `main_state.timer_off_value` stops one. Lua and numeric destination timers observe writes in the same frame. Invalid writes return false; protected engine/scene timers are unchanged. Custom timer state belongs to one skin instance.
 
