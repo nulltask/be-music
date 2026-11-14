@@ -223,6 +223,7 @@ sequenceDiagram
 - beatoraja にとって別の意味を持つ LR2 の番号がいくつかあります（`IntegerPropertyFactory`、`BooleanPropertyFactory`、`StringPropertyFactory`）。number 92 はメイン BPM（LR2 ではインターネットランキングの順位）、op 400 は CONSTANT のオプション（LR2 ではキーコンフィグのページ）です。beatoraja には number 38-41・93-94、text 17-29、op 34 がないので、何も読みません（result と decide の画面では 0）（#430）。
 - op 400（CONSTANT）は、プレイヤーが[表示用 CONSTANT](./play-options.ja.md#表示用-constant)をオンにしている間、選曲画面とプレイ画面で点きます（`resolveBeatorajaConstantOps`）。beatoraja の `BooleanPropertyFactory` がプレイヤーのプレイ設定を読むとおり、`NO_SPEED` 制約で CONSTANT を描画しないコースでも点いたままです（#776）。
 - [判定タイミングの自動調整](./play-options.ja.md#判定タイミングと自動調整)が LR2 SILENT のプレイでは、組み込みと LR2 のプレイ画面と同じく、`judge[]` の表示（判定の文字とコンボの数字）を描きません（`resolveBeatorajaJudgeDisplayOps`）。beatoraja に SILENT はなく、LR2 は SILENT で NOWJUDGE / NOWCOMBO を隠します（#917）。
+- ブレンドコード 4 と 9 は beatoraja の係数で合成します（`Skin.java` L663-L664 [V]）。コード 4 は描画先にソースの色を掛け、コード 9 は `src × (1 − dst)` を書きます。これは差の絶対値ではありません（src = dst = 0.5 で 0.25）。不透明なテクセルの色は WebGL・WebGPU とも beatoraja と完全に一致します。beatoraja はストレートな色を、アルファが表示されないウィンドウへ合成しますが、Be-Music は乗算済みの色を透明なキャンバスへ合成するため、2 点を合わせ込んでいます。完全に透明なテクセルは描画先を変えません（beatoraja はそのテクセルが持つ色をそのまま合成しますが、乗算済みの色にはその情報が残りません）。半透明のテクセルはその中間になります。また、どちらのコードもアルファは beatoraja の式ではなく通常の合成と同じ被覆を書きます。beatoraja の式のままだとキャンバスに穴が開くためです。式は `skin/beatoraja/blend.ts` とそのテストを参照してください（#1194）。
 
 ### 既知の未対応
 

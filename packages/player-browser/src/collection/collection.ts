@@ -622,15 +622,42 @@ function resolveChartAssetKeyInFolder(
   assetPath: string,
   excludedEntries?: ReadonlySet<BrowserAssetEntry>,
 ): string | undefined {
-  // bmson 1.0.0 spec MUST: reject malicious paths at the chart-asset entry point. `findCaseInsensitiveMapPath` also
-  // vets each candidate as defense-in-depth, but short-circuiting here means we don't even synthesize the joined
-  // `${base}/${assetPath}` candidate for a path the chart never had any business referencing.
-  if (isMaliciousAssetPath(assetPath)) {
-    return undefined;
-  }
-  const base = dirname(chartPath);
+  const parts = chartAssetPathParts(assetPath);
+  return parts === undefined
+    ? undefined
+    : resolveChartAssetPartsKey(source, dirname(chartPath), parts, excludedEntries);
+}
+
+/** An asset path as the folder lookup reads it: normalized, and its file name alone. */
+interface ChartAssetPathParts {
+  readonly normalized: string;
+  readonly baseName: string;
+}
+
+/**
+ * `assetPath` split for {@link resolveChartAssetPartsKey}, or `undefined` for a malicious path. bmson 1.0.0 spec MUST:
+ * reject malicious paths at the chart-asset entry point. `findCaseInsensitiveMapPath` also vets each candidate as
+ * defense-in-depth, but short-circuiting here means we don't even synthesize the joined `${base}/${assetPath}`
+ * candidate for a path the chart never had any business referencing.
+ */
+function chartAssetPathParts(assetPath: string): ChartAssetPathParts | undefined {
+  if (isMaliciousAssetPath(assetPath)) return undefined;
   const normalized = normalizePath(assetPath);
-  const baseName = basename(normalized);
+  return { normalized, baseName: basename(normalized) };
+}
+
+/**
+ * The key an asset is found under from the chart folder `base`: the path joined to the folder, the path from the top of
+ * the source, the file name in the folder, then the file name at the top. `missed` holds paths already looked up and
+ * missed in the same resolution; they are not looked up again, and this lookup's misses join them.
+ */
+function resolveChartAssetPartsKey(
+  source: BrowserAssetSource,
+  base: string,
+  { normalized, baseName }: ChartAssetPathParts,
+  excludedEntries?: ReadonlySet<BrowserAssetEntry>,
+  missed?: Set<string>,
+): string | undefined {
   const candidates = [
     normalizePath(`${base}/${normalized}`),
     normalized,
@@ -638,8 +665,12 @@ function resolveChartAssetKeyInFolder(
     baseName,
   ];
   for (const candidate of candidates) {
+    if (missed?.has(candidate)) continue;
     const key = findCaseInsensitiveMapPath(source.files, candidate, { rejectCandidate: isMaliciousAssetPath });
-    if (key === undefined) continue;
+    if (key === undefined) {
+      missed?.add(candidate);
+      continue;
+    }
     const entry = source.files.get(key);
     if (entry !== undefined && !excludedEntries?.has(entry)) {
       return key;
@@ -812,13 +843,26 @@ export function resolveChartBGAAsset(
   chartPath: string,
   assetPath: string,
 ): { entry: BrowserAssetEntry; path: string; key: string } | undefined {
-  // Every extension in the chart's folder before any in its parent, as LR2 does.
-  for (const folderChartPath of chartLookupFolders(chartPath)) {
-    for (const candidate of imageFallbackPaths(assetPath)) {
-      const key = resolveChartAssetKeyInFolder(source, folderChartPath, candidate);
-      const entry = key === undefined ? undefined : source.files.get(key);
-      if (key !== undefined && entry !== undefined) {
-        return { entry, path: candidate, key };
+  const primary = imageFallbackPaths(assetPath);
+  const stills = isVideoExtensionPath(assetPath)
+    ? stillImageFallbackPaths(assetPath.slice(0, assetPath.lastIndexOf('.')))
+    : [];
+  // Each candidate is split once and each folder named once; a path missed once stays missed, since the bare forms
+  // recur across folders.
+  const missed = new Set<string>();
+  // Exhaust the video candidates across both folders before trying still images.
+  for (const paths of [primary, stills]) {
+    // Split lazily: a hit in the chart's own folder usually comes on the first candidate or two.
+    const split: (ChartAssetPathParts | null | undefined)[] = [];
+    for (const folderChartPath of chartLookupFolders(chartPath)) {
+      const base = dirname(folderChartPath);
+      for (let index = 0; index < paths.length; index += 1) {
+        const candidate = paths[index]!;
+        const candidateParts = (split[index] ??= chartAssetPathParts(candidate) ?? null);
+        if (candidateParts === null) continue;
+        const key = resolveChartAssetPartsKey(source, base, candidateParts, undefined, missed);
+        const entry = key === undefined ? undefined : source.files.get(key);
+        if (key !== undefined && entry !== undefined) return { entry, path: candidate, key };
       }
     }
   }
@@ -838,23 +882,19 @@ function imageFallbackPaths(path: string): string[] {
   if (dotIndex < 0 || dotIndex < lastSlash) {
     return [path];
   }
-  // A declared video falls back to the same name under the other video extensions (see VIDEO_FALLBACK_EXTENSIONS).
-  // Don't walk image extensions when the chart explicitly declared a video BGA — `_scualee.mpg` paired with a same-
-  // basename `_scualee.png` (cover art / static fallback frame shipped alongside the actual video) would otherwise have
-  // the resolver pick the PNG. The BGA loader only checks the declared path's extension to decide between the image vs.
-  // video pipeline, so feeding PNG bytes through the video path makes ffmpeg.wasm pick `png_pipe` and emit a 1-frame
-  // MP4 — visually a frozen still during gameplay. Returning just the original path here keeps the video reference
-  // resolving to its own file.
   if (isVideoExtensionPath(path)) {
     const videoBase = path.slice(0, dotIndex);
     const declared = path.slice(dotIndex + 1).toLowerCase();
     return [path, ...VIDEO_FALLBACK_EXTENSIONS.filter((ext) => ext !== declared).map((ext) => `${videoBase}.${ext}`)];
   }
   const base = path.slice(0, dotIndex);
-  const alternatives = [`${base}.webp`, `${base}.png`, `${base}.jpg`, `${base}.jpeg`, `${base}.gif`, `${base}.bmp`];
   const authored = path.toLowerCase();
   // The file the chart names first, as LR2 looks images up: a same-stem file is not guaranteed to be the same picture.
-  return [path, ...alternatives.filter((candidate) => candidate.toLowerCase() !== authored)];
+  return [path, ...stillImageFallbackPaths(base).filter((candidate) => candidate.toLowerCase() !== authored)];
+}
+
+function stillImageFallbackPaths(base: string): string[] {
+  return ['webp', 'png', 'jpg', 'jpeg', 'gif', 'bmp'].map((extension) => `${base}.${extension}`);
 }
 
 /**
