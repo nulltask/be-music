@@ -348,10 +348,10 @@ describe('judge core', () => {
 
   test.each([
     ['lr2', 0],
-    ['____', 1],
+    ['____', 0],
     ['beatoraja', 0],
   ] as const)('%s: a press just after a mine crossed, inside PGREAT, detonates it %i time(s)', (ruleset, hits) => {
-    // LR2beta3 has no late press window; only the provisional That-Which-Must-Not-Be-Named model keeps symmetric PGREAT.
+    // LR2beta3 has no late press window, That-Which-Must-Not-Be-Named imports LR2's policy, and beatoraja is hold-only.
     const state = createCore(LONG_AND_MINE, ruleset);
     const effects = [...stepJudgeCore(state, advance(2.501)), ...stepJudgeCore(state, press(2.505, '12'))];
     effects.push(...stepJudgeCore(state, advance(2.6)));
@@ -490,23 +490,42 @@ describe('judge core', () => {
       },
     );
 
-    test.each(['lr2', 'beatoraja'] as const)('%s: at the same µs, the input comes before the crossing', (ruleset) => {
-      // Down exactly at the crossing is down as it crosses.
-      expect(
-        mineHits(ruleset, [
-          [2500, 'down'],
-          [2600, 'up'],
-        ]),
-      ).toEqual([1, 1, 1]);
-    });
+    test.each(['lr2', 'beatoraja', '____'] as const)(
+      '%s: at the same µs, the input comes before the crossing',
+      (ruleset) => {
+        // Down exactly at the crossing is down as it crosses.
+        expect(
+          mineHits(ruleset, [
+            [2500, 'down'],
+            [2600, 'up'],
+          ]),
+        ).toEqual([1, 1, 1]);
+      },
+    );
 
-    test('the AC extension detonates on a late press inside PGREAT', () => {
+    test("AC imports LR2's policy: a late press inside PGREAT spares the mine", () => {
       expect(
         mineHits('____', [
           [2503, 'down'],
           [2505, 'up'],
         ]),
+      ).toEqual([0, 0, 0]);
+    });
+
+    test('AC reads the press reach on its own GREAT window, ahead of the line only', () => {
+      // AC's GREAT reaches 33.33 ms: 30 ms ahead detonates, 40 ms ahead does not.
+      expect(
+        mineHits('____', [
+          [2470, 'down'],
+          [2472, 'up'],
+        ]),
       ).toEqual([1, 1, 1]);
+      expect(
+        mineHits('____', [
+          [2460, 'down'],
+          [2462, 'up'],
+        ]),
+      ).toEqual([0, 0, 0]);
     });
 
     test('beatoraja: a key let go at the very µs of the crossing is up as it crosses', () => {

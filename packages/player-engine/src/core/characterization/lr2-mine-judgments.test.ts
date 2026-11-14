@@ -36,7 +36,10 @@ test.each([
   ['lr2', 960, 990, 0],
   ['beatoraja', 200, 1200, 0],
   ['beatoraja', 970, 980, 0],
-  ['____', 970, 980, 0],
+  ['____', 200, 1200, 1],
+  ['____', 960, 990, 0],
+  ['____', 970, 980, 1],
+  ['____', 1001, 1010, 0],
 ] as const)('%s held from %d to %d ms counts %d POOR', async (judgeRuleset, downMs, upMs, poor) => {
   const chart = createEmptyJSON('bms');
   chart.metadata.bpm = 240;
@@ -49,7 +52,7 @@ test.each([
     script: tap(downMs, '11', upMs - downMs),
   });
   expect(play.summary).toMatchObject({ total: 0, poor, exScore: 0, maxCombo: 0 });
-  expect(play.summary!.gauge!.current).toBe(play.summary!.gauge!.initial - (downMs === 200 ? 10 : 0));
+  expect(play.summary!.gauge!.current).toBe(play.summary!.gauge!.initial - (downMs === 200 || poor ? 10 : 0));
   const { ruleset: _native, ...native } = play.replay!.results!.native!;
   const { ruleset: _simulated, ...simulated } = play.simulated![judgeRuleset]!;
   expect(native).toEqual(simulated);

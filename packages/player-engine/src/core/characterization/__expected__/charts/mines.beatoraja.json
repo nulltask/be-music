@@ -117,14 +117,15 @@
       },
       "____": {
         "ruleset": "____/0",
-        "judge": {"pgreat":2,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "judge": {"pgreat":2,"great":0,"good":0,"bad":0,"poor":3,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
         "exScore": 4,
         "noteCount": 2,
         "maxCombo": 2,
         "djLevel": "AAA",
-        "gauge": {"type":"NORMAL","final":90,"cleared":true}
+        "gauge": {"type":"NORMAL","final":90,"cleared":true},
+        "minePoor": 3
       }
     },
     "audio": [

@@ -20,7 +20,6 @@ import {
   addHCNPassing,
   judgeWindowLateReachUs,
   longNoteOwesTailMiss,
-  pgreatWindowReachUs,
   preferJudgeCandidate,
   resolveEffectiveLongNoteMode,
   HCNTickCounter,
@@ -158,7 +157,6 @@ const TIMED_EVENT_ORDER = {
   'hcn-tick': 0.5,
   auto: 1,
   miss: 2,
-  'mine-enter': 3,
   mine: 3,
   'mine-settle': 3,
 } as const;
@@ -208,10 +206,8 @@ interface SimNote {
 interface SimMine {
   timeUs: number;
   damage: number;
-  /** Settled: detonated, or past the point where it no longer can (see {@link ReplaySimulation.mineSettleUs}). */
+  /** Settled: detonated, or past the crossing, where it no longer can. */
   applied: boolean;
-  /** Its PGREAT reach, worked out on first use (the windows at a fixed time never change during a run). */
-  reachUs?: readonly [number, number];
 }
 
 interface ActiveHold {
@@ -481,16 +477,7 @@ class ReplaySimulation {
     }
     interface TimedEvent {
       timeUs: number;
-      kind:
-        | 'ln-complete'
-        | 'hold-deadline'
-        | 'release-settle'
-        | 'hcn-tick'
-        | 'auto'
-        | 'miss'
-        | 'mine-enter'
-        | 'mine'
-        | 'mine-settle';
+      kind: 'ln-complete' | 'hold-deadline' | 'release-settle' | 'hcn-tick' | 'auto' | 'miss' | 'mine' | 'mine-settle';
       lane: SimLane;
       note?: SimNote;
       mine?: SimMine;
@@ -535,24 +522,15 @@ class ReplaySimulation {
       }
       for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
         const mine = lane.mines[index]!;
-        // Mines at or behind the reversal are frozen with the pump: not even LR2's early PGREAT reach detonates them.
+        // Mines at or behind the reversal are frozen with the pump: not even LR2's early GREAT reach detonates them.
         if (reversalUs !== undefined && mine.timeUs >= reversalUs) break;
-        const [lateUs, earlyUs] = this.minePgreatReachUs(mine);
-        if (mine.timeUs - earlyUs >= untilUs) break;
+        if (mine.timeUs >= untilUs) break;
         if (mine.applied) continue;
         // Each point is visited once: in the advance whose span [lastAdvanceUs, untilUs) holds it.
-        const fromUs = this.lastAdvanceUs;
-        const enterUs = mine.timeUs - earlyUs;
-        if (this.config.mineTrigger === 'press-or-hold' && enterUs >= fromUs && enterUs < untilUs) {
-          // The provisional That-Which-Must-Not-Be-Named model also detonates on held PGREAT entry.
-          events.push({ timeUs: enterUs, kind: 'mine-enter', lane, mine });
-        }
-        if (mine.timeUs >= fromUs && mine.timeUs < untilUs) {
+        if (mine.timeUs >= this.lastAdvanceUs) {
           events.push({ timeUs: mine.timeUs, kind: 'mine', lane, mine });
+          events.push({ timeUs: mine.timeUs, kind: 'mine-settle', lane, mine });
         }
-        const settleUs = this.config.mineTrigger === 'press-or-hold' ? mine.timeUs + lateUs : mine.timeUs;
-        if (settleUs >= fromUs && settleUs < untilUs)
-          events.push({ timeUs: settleUs, kind: 'mine-settle', lane, mine });
       }
     }
     // Hell Charge ticks, including those of a head missed in this span: no input falls inside it, so the miss is
@@ -613,8 +591,8 @@ class ReplaySimulation {
           // beatoraja: a missed CN/HCN head also POORs the tail. That-Which-Must-Not-Be-Named (headBadSkipsTail) skips it.
           this.applyJudge(JUDGE_MISS_POOR, undefined);
         }
-      } else if (event.kind === 'mine' || event.kind === 'mine-enter') {
-        // Held as it enters the window (LR2) or as it crosses the line (every ruleset).
+      } else if (event.kind === 'mine') {
+        // Held as it crosses the line (every ruleset).
         if (event.lane.downTokens.size > 0) this.detonateMine(event.mine!);
       } else if (event.kind === 'mine-settle') {
         event.mine!.applied = true;
@@ -668,11 +646,6 @@ class ReplaySimulation {
     this.lastAdvanceUs = untilUs;
   }
 
-  /** The PGREAT window's `[late, early]` reach (µs) around a mine, which bounds LR2's press-or-hold detonation. */
-  private minePgreatReachUs(mine: SimMine): readonly [number, number] {
-    return (mine.reachUs ??= pgreatWindowReachUs(this.config.windowsAt(mine.timeUs).note));
-  }
-
   private detonateMine(mine: SimMine): void {
     if (mine.applied) return;
     mine.applied = true;
@@ -686,7 +659,7 @@ class ReplaySimulation {
     this.noteFailure();
   }
 
-  /** LR2beta3 uses strict ahead-only GREAT; the provisional That-Which-Must-Not-Be-Named model keeps symmetric PGREAT. */
+  /** LR2beta3's strict ahead-only GREAT reach, which That-Which-Must-Not-Be-Named imports on its own GREAT window. */
   private detonateMinesOnPress(lanes: readonly SimLane[], timeUs: number): void {
     if (this.config.mineTrigger === 'hold') return;
     const reversalUs = this.replay.chart.reversalTimeUs;
@@ -694,14 +667,10 @@ class ReplaySimulation {
       for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
         const mine = lane.mines[index]!;
         if (reversalUs !== undefined && mine.timeUs >= reversalUs) break;
-        // Mines further ahead than any PGREAT reach cannot be hit.
+        // Mines further ahead than any GREAT reach cannot be hit.
         if (mine.timeUs - timeUs > 1_000_000) break;
         // Read the window at the press, including a dynamic LR2 rank.
-        const [lateUs, earlyUs] = pgreatWindowReachUs(this.config.windowsAt(timeUs).note);
-        const hit =
-          this.config.mineTrigger === 'press-ahead-or-hold'
-            ? mine.timeUs >= timeUs && mine.timeUs - timeUs < this.config.windowsAt(timeUs).note.judges[1][1]
-            : mine.timeUs - earlyUs <= timeUs && timeUs - mine.timeUs <= lateUs;
+        const hit = mine.timeUs >= timeUs && mine.timeUs - timeUs < this.config.windowsAt(timeUs).note.judges[1][1];
         if (!mine.applied && hit) this.detonateMine(mine);
       }
     }

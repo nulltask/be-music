@@ -89,13 +89,12 @@ export type LongNoteStyle =
  * When a mine detonates.
  *
  * - `'press-ahead-or-hold'` — LR2beta3: strict GREAT reach ahead of the line on key-down, or held crossing;
- *   passed mines retire immediately and hits count as POOR without changing combo or EX-SCORE.
- * - `'press-or-hold'` — Be-Music's BMS compatibility extension for the AC ruleset: the lane's key is held as the mine crosses the judge line, or
- *   pressed while the mine is inside the PGREAT window.
+ *   passed mines retire immediately and hits count as POOR without changing combo or EX-SCORE. That-Which-Must-Not-Be-Named has no
+ *   mines, so its ruleset imports this policy whole, reading the reach on its own GREAT window (#1169).
  * - `'hold'` — beatoraja (`JudgeManager` L244): the key is down at the moment the mine crosses the line; a press
  *   shortly before or after does nothing.
  */
-export type MineTrigger = 'press-ahead-or-hold' | 'press-or-hold' | 'hold';
+export type MineTrigger = 'press-ahead-or-hold' | 'hold';
 
 /**
  * How an LN (long-note mode 1) let go before its tail is judged. The LN's single judgment is otherwise the head's,
@@ -1232,8 +1231,8 @@ function resolveRulesetTables(
     headBadSkipsTail: true,
     scratchHoldsBySource: false,
     comboBreaksOnEmptyPoor: false,
-    // AC has no mines. Keep Be-Music's BMS compatibility extension for existing charts and replays.
-    mineTrigger: 'press-or-hold',
+    // AC has no mines: import LR2's policy, trigger and POOR accounting together (#1169).
+    mineTrigger: 'press-ahead-or-hold',
     hcnTick: { heldJudge: 0, heldRate: 1, releasedJudge: 5, releasedRate: 1 },
     gauge: initialGauge,
     ...shiftGauges(initialGauge, effectiveTotal, (id) => resolve____Gauge(id, noteCount)),
