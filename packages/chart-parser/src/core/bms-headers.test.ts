@@ -10,7 +10,7 @@ describe('resolveHeaderDefinitionKey', () => {
   });
 
   test('leaves the repeatable headers unkeyed', () => {
-    for (const command of ['STP', 'WAVCMD', 'LNOBJ']) {
+    for (const command of ['STP', 'WAVCMD', 'OPTION']) {
       expect(resolveHeaderDefinitionKey(command, command, 36)).toBeUndefined();
     }
   });
