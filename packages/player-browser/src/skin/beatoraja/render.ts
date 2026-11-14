@@ -580,7 +580,8 @@ export function createCroppedBeatorajaTexture(texture: Texture | undefined, rect
  *     advanced-blend-modes import (registered at the top of this file) and
  *     `useBackBuffer: true` at app init. Used by skins that paint dim / shadow overlays —
  *     the previous mapping was `'screen'`, which is the OPPOSITE operation (brighten-only).
- *   - `4` and `9` use the reference framebuffer equations.
+ *   - `4` → `'beatoraja-multiply'` and `9` → `'beatoraja-invert'`: beatoraja's own factor pairs, registered as blend
+ *     states by the host (`blend.ts` gives the equations and where Be-Music adapts them).
  *
  * Codes outside this set silently fall back to `'normal'`.
  */

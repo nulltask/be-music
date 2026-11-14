@@ -267,6 +267,14 @@ sequenceDiagram
 - A play with LR2 SILENT [automatic judge timing](./play-options.md#judge-timing-and-automatic-adjustment) draws no
   `judge[]` display, judgment words or combo digits, as the built-in and LR2 play screens draw none
   (`resolveBeatorajaJudgeDisplayOps`). beatoraja has no SILENT; LR2 hides NOWJUDGE / NOWCOMBO there (#917).
+- Blend codes 4 and 9 blend with beatoraja's factors (`Skin.java` L663-L664 [V]): code 4 multiplies the destination by
+  the source colour and code 9 writes `src × (1 − dst)`, which is not an absolute difference (0.25 at src = dst = 0.5).
+  An opaque texel's colour matches beatoraja exactly on WebGL and WebGPU. beatoraja blends straight colour into a
+  window whose alpha is never shown, while Be-Music blends premultiplied colour into a transparent canvas, so two
+  things are adapted: a transparent texel leaves the destination as it was (beatoraja blends in whatever colour it
+  stores, which premultiplied colour no longer has), a translucent one lands between the two, and both codes write
+  coverage as the normal blend does instead of beatoraja's alpha, which would punch a hole through the canvas. See
+  `skin/beatoraja/blend.ts` and its tests for the equations (#1194).
 
 ### Known gaps
 
