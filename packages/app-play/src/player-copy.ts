@@ -57,6 +57,7 @@ const en = {
     skinDropHintBeatoraja:
       'Drop the folder that holds your beatoraja skin (its <code>.luaskin</code> or <code>.json</code> skin files).',
     skinSwitchTitle: 'Use the dropped skin?',
+    skinSwitchDoNotAsk: 'Do not ask again',
     skinSwitchHint: 'Switch to this skin? Cancel keeps your current skin. Charts in the drop will still be imported.',
     useLr2: 'Use LR2 skin',
     useBeatoraja: 'Use beatoraja skin',
@@ -455,6 +456,7 @@ const ja: typeof en = {
     skinDropHintBeatoraja:
       'beatoraja スキンのフォルダ（<code>.luaskin</code> または <code>.json</code>）をドロップしてください。',
     skinSwitchTitle: 'ドロップしたスキンを使いますか？',
+    skinSwitchDoNotAsk: '今後表示しない',
     skinSwitchHint:
       'このスキンに切り替えますか？キャンセルすると今のスキンのままです。ドロップ内の譜面は読み込まれます。',
     useLr2: 'LR2 スキンを使う',

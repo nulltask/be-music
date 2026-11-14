@@ -354,6 +354,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
    * they had LR2 selected then dropped a beatoraja-only theme that wiped the LR2 state), `PlayerWebApp.rebuildSkinFamilyPicker`
    * silently resets to `'auto'` so the GUI never displays an unhonorable value.
    */
+  confirmDroppedSkin: boolean;
   skinFamilyOverride: SkinFamilyOverride;
   /**
    * Read-only status text (loading summaries, "Playing: …", recording state, etc.). Bound to a disabled string

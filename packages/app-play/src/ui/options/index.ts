@@ -310,6 +310,7 @@ export class OptionsDialog {
   /** LR2 tab holding the discovered theme picker. */
   public lr2SkinPage: Pick<OptionContainer, 'addBinding'> | undefined;
   /** Native list whose options follow loaded theme families without replacing its event handlers. */
+  public confirmDroppedSkinController: OptionBinding<boolean> | undefined;
   public skinFamilyController: OptionBinding<SkinFamilyOverride> | undefined;
   /** Native theme list, refreshed as drops discover new themes. */
   public lr2ThemeController: OptionBinding<string> | undefined;

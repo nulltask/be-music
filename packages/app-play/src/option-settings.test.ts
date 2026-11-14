@@ -244,6 +244,7 @@ describe('captureOptionSettings', () => {
       laneCover: true,
       shutter: 0.4,
       builtInSkin: 'plain',
+      confirmDroppedSkin: false,
       skinEffects: 'off',
       renderResolution: 1,
       playLayout: 'touch',

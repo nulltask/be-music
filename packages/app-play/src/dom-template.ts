@@ -283,6 +283,10 @@ export const PLAYER_APP_TEMPLATE = html`
             <h2 id="skin-switch-title">${localized('skinSwitchTitle')}</h2>
             <p id="skin-switch-hint">${localized('skinSwitchHint')}</p>
           </header>
+          <label>
+            <input class="input" type="checkbox" data-skin-switch-do-not-ask />
+            ${localized('skinSwitchDoNotAsk')}
+          </label>
           <footer>
             <button type="submit" value="" class="btn" data-variant="outline" autofocus>${localized('cancel')}</button>
             <span class="account-dialog-buttons">
