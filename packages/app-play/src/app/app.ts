@@ -309,7 +309,7 @@ export class PlayerWebApp {
       devicePixelRatio: window.devicePixelRatio || 1,
       builtInSkinId: (stored) => BE_MUSIC_SKINS.resolve(stored).id,
       actions: {
-        openFolder: () => this.elements.chartInput.click(),
+        openFolder: () => void this.dropTarget.openFolder(),
         openFiles: () => this.elements.filesInput.click(),
         record: () => {
           void toggleRecording(this.recording.deps());
@@ -403,7 +403,9 @@ export class PlayerWebApp {
     this.dropTarget = new DropTarget({
       elements,
       leaveSelect: () => this.leaveSelect(),
-      processIncomingFiles: (files) => this.library.processIncomingFiles(files),
+      processIncomingFiles: (files, origin) => this.library.processIncomingFiles(files, origin),
+      resumeSelect: () => this.router.current ? Promise.resolve() : this.showSelect(),
+      setStatus: (text) => this.status.set(text),
       loadPickedFiles: (files) => this.library.loadPickedFiles(files),
       recordLoad: () => this.testHook?.recordLoad(),
     });
@@ -790,7 +792,7 @@ export class PlayerWebApp {
 
     // `?music=<url.zip>` / `?skin=<url.zip>` auto-load, then the difficulty tables imported in an earlier visit, once the
     // first select screen is up.
-    void this.library.autoLoad(window.location.href, initialSelectReady);
+    void this.library.autoLoad(window.location.href, initialSelectReady.then(() => this.dropTarget.restoreFolder()));
   }
 
   /**
