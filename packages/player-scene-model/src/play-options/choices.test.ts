@@ -11,6 +11,7 @@ import {
   cyclePlayOptionValue,
   DEFAULT_PLAY_OPTIONS,
   isListPlayOption,
+  keepGaugePick,
   nextChoice,
   PLAY_OPTION_CHOICES,
   resolvePlayOptions,
@@ -486,4 +487,54 @@ test('BATTLE is offered with its source, and a bare BATTLE of older settings sta
   expect(resolvePlayOptionValue('battleMode', 'lr2:BATTLE')).toBeUndefined();
   for (const mode of ['BATTLE', 'beatoraja:BATTLE', '____:BATTLE'] as const)
     expect(isDuplicatedBattleChoice(mode)).toBe(true);
+});
+
+describe('source-qualified gauge picks (ADR 0019, #1171)', () => {
+  test('accepts a gauge qualified with a source that defines it, and keeps bare values', () => {
+    expect(resolvePlayOptionValue('gauge1P', 'HARD')).toBe('HARD');
+    expect(resolvePlayOptionValue('gauge1P', 'lr2:HARD')).toBe('lr2:HARD');
+    expect(resolvePlayOptionValue('gauge2P', 'beatoraja:EX-HARD')).toBe('beatoraja:EX-HARD');
+    expect(resolvePlayOptionValue('gauge1P', '____:ASSIST-EASY')).toBe('____:ASSIST-EASY');
+    // A source's menu does not offer these, and they are never mapped to a lookalike.
+    expect(resolvePlayOptionValue('gauge1P', 'lr2:EX-HARD')).toBeUndefined();
+    expect(resolvePlayOptionValue('gauge1P', 'beatoraja:P-ATTACK')).toBeUndefined();
+    expect(resolvePlayOptionValue('gauge1P', '____:DEATH')).toBeUndefined();
+    expect(resolvePlayOptionValue('gauge1P', 'unknown:HARD')).toBeUndefined();
+    expect(resolvePlayOptions({ gauge1P: 'lr2:HARD', gauge2P: 'lr2:EX-HARD' })).toMatchObject({
+      gauge1P: 'lr2:HARD',
+      gauge2P: 'GROOVE',
+    });
+  });
+
+  test('a gauge button steps on from a qualified pick’s gauge type, to a bare gauge', () => {
+    expect(cyclePlayOptionValue('gauge1P', 'lr2:HARD')).toBe('DEATH');
+    expect(cyclePlayOptionValue('gauge2P', 'beatoraja:EASY', -1)).toBe('DEATH');
+    // A type off LR2's cells starts the cycle over, as the bare value does.
+    expect(cyclePlayOptionValue('gauge1P', 'beatoraja:EX-HARD')).toBe(cyclePlayOptionValue('gauge1P', 'EX-HARD'));
+  });
+
+  test('labels a qualified pick by its gauge type', () => {
+    expect(formatGaugeLabel('lr2:P-ATTACK')).toBe('P.ATTACK');
+    expect(formatGaugeLabel('beatoraja:EX-HARD')).toBe('EX-HARD');
+    expect(formatGaugeLabel('lr2:DEATH-CORRECTED')).toBe('DEATH corrected');
+    expect(formatGaugeLabel('HARD')).toBe('HARD');
+    expect(formatGaugeLabel(undefined)).toBeUndefined();
+  });
+
+  test('a ruleset change keeps a qualified pick and resets a bare one the ruleset lacks', () => {
+    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+      expect(keepGaugePick('lr2:P-ATTACK', ruleset)).toBe('lr2:P-ATTACK');
+      expect(keepGaugePick('beatoraja:EX-HARD', ruleset)).toBe('beatoraja:EX-HARD');
+      expect(keepGaugePick('____:ASSIST-EASY', ruleset)).toBe('____:ASSIST-EASY');
+      expect(keepGaugePick('HARD', ruleset)).toBe('HARD');
+    }
+    expect(keepGaugePick('P-ATTACK', 'lr2')).toBe('P-ATTACK');
+    expect(keepGaugePick('P-ATTACK', 'beatoraja')).toBe('GROOVE');
+    expect(keepGaugePick('EX-HARD', 'lr2')).toBe('GROOVE');
+    expect(keepGaugePick('EX-HARD', '____')).toBe('EX-HARD');
+    expect(keepGaugePick('DEATH', '____')).toBe('GROOVE');
+    expect(keepGaugePick('DEATH-CORRECTED', 'beatoraja')).toBe('GROOVE');
+    // A value that is no gauge pick falls back too.
+    expect(keepGaugePick('lr2:EX-HARD' as 'lr2:HARD', 'lr2')).toBe('GROOVE');
+  });
 });

@@ -3,7 +3,7 @@ import type { ControlActionOverrides, ControlKeyOverrides, ControlScheme } from 
 import type { DecideScene, PlayScene, ResultScene, SelectScene } from '@be-music/player-browser/host';
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
 import type { ReplayPlaybackOptions } from '@be-music/player-engine/replay';
-import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
+import type { GaugePick, RulesetId } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter, HSFix, PlayOptions } from '@be-music/player-scene-model';
 import type { PlayTempoSettings } from './play-tempo-settings.ts';
 import type { ReplayAutoSaveRule } from './services/replay-slots.ts';
@@ -224,8 +224,11 @@ export interface PlayerGUIState extends PlayTempoSettings {
   hiddenSudden2P: PlayOptions['hiddenSudden2P'];
   laneCover: PlayOptions['laneCover'];
   shutter: PlayOptions['shutter'];
-  /** Gauge variant for the next play. Two-way synced with the LR2 select scene's PLAY OPTION panel. */
-  gauge: GaugeType;
+  /**
+   * Gauge for the next play: the judge ruleset's own (`HARD`) or another source's, qualified (`lr2:HARD`, ADR 0019).
+   * Two-way synced with the LR2 select scene's PLAY OPTION panel.
+   */
+  gauge: GaugePick;
   /** 1P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
   hRandomThresholdBPM: number;
   randomSeed1P: string;

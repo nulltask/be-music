@@ -12,6 +12,7 @@ import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
 import {
   formatGaugeLabel,
   isDuplicatedBattleChoice,
+  keepGaugePick,
   keepPracticeGauge,
   type PlayOptions,
 } from '@be-music/player-scene-model';
@@ -25,12 +26,7 @@ import {
   type OptionRow,
 } from '../options-controls.ts';
 import { paneOptions, type PaneBinding } from '../../pane-controls.ts';
-import {
-  migrateOptionValue,
-  practiceReadsJudgeRankAndTotal,
-  resolveGaugeTypes,
-  type GaugeType,
-} from '@be-music/player-engine/ruleset';
+import { migrateOptionValue, practiceReadsJudgeRankAndTotal, type GaugePick } from '@be-music/player-engine/ruleset';
 import { readStoredCompressorTunings, type CompressorTuning } from '../../compressor-tuning.ts';
 import { readStoredCourseTableURLs } from '../../course-table-import.ts';
 import { captureOptionSettings } from '../../option-settings.ts';
@@ -69,6 +65,7 @@ import { PlayLock } from './play-lock.ts';
 import {
   battleModeItems,
   bottomShiftableGaugeItems,
+  gaugeItems,
   laneOptionItems,
   menuLaneCovers,
   practiceGaugeItems,
@@ -250,11 +247,11 @@ export class OptionsDialog {
   public randomSeed2PController: PaneBinding | undefined;
   public random1PController: OptionBinding<PlayOptions['random1P']> | undefined;
   public random2PController: OptionBinding<PlayOptions['random2P']> | undefined;
-  public gaugeController: OptionBinding<GaugeType> | undefined;
+  public gaugeController: OptionBinding<GaugePick> | undefined;
   /** The quick options panel (`quick-options.ts`), and the controls on it whose choices or visibility follow others. */
   public quickOptionsPanel: OptionFolder | undefined;
   public quickRandom1PController: OptionBinding<PlayOptions['random1P']> | undefined;
-  public quickGaugeController: OptionBinding<GaugeType> | undefined;
+  public quickGaugeController: OptionBinding<GaugePick> | undefined;
   public quickHsFixController: OptionBinding<PlayOptions['hsFix']> | undefined;
   public quickHiSpeedController: PaneBinding | undefined;
   public bottomShiftableGaugeController: OptionBinding<PlayOptions['bottomShiftableGauge']> | undefined;
@@ -784,30 +781,22 @@ export class OptionsDialog {
         controller.refresh();
       }
     }
-    const choices = resolveGaugeTypes(this.guiState.judgeRuleset);
-    if (!choices.includes(this.guiState.gauge)) {
-      this.guiState.gauge = 'GROOVE';
-      this.setPlayOptions({ gauge1P: 'GROOVE' });
+    // The judge ruleset's own gauges, then the other sources' as qualified picks (ADR 0019, #1171). A qualified pick
+    // survives a ruleset change; a bare one the new ruleset does not offer falls back to GROOVE (keepGaugePick).
+    const gauge = keepGaugePick(this.guiState.gauge, ruleset);
+    if (gauge !== this.guiState.gauge) {
+      this.guiState.gauge = gauge;
+      this.setPlayOptions({ gauge1P: gauge });
     }
-    if (!choices.includes(this.guiState.gauge2P)) {
-      this.guiState.gauge2P = 'GROOVE';
-      this.setPlayOptions({ gauge2P: 'GROOVE' });
+    const gauge2P = keepGaugePick(this.guiState.gauge2P, ruleset);
+    if (gauge2P !== this.guiState.gauge2P) {
+      this.guiState.gauge2P = gauge2P;
+      this.setPlayOptions({ gauge2P });
     }
+    const gauges = gaugeItems(ruleset, [gauge, gauge2P]);
     for (const controller of [this.gaugeController, this.gauge2PController, this.quickGaugeController]) {
       if (!controller) continue;
-      controller.options = paneOptions(choices).map((item) => ({
-        ...item,
-        text:
-          item.value === 'ASSIST-EASY'
-            ? this.guiState.judgeRuleset === '____'
-              ? 'ASSISTED EASY'
-              : 'ASSIST EASY'
-            : item.value === 'DEATH' && this.guiState.judgeRuleset === 'beatoraja'
-              ? 'HAZARD'
-              : item.value === 'GROOVE' && this.guiState.judgeRuleset !== 'lr2'
-                ? 'NORMAL'
-                : (formatGaugeLabel(item.text) ?? item.text),
-      }));
+      controller.options = gauges;
       controller.refresh();
     }
   }

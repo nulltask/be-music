@@ -324,6 +324,12 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.resolvePlayOptionValue('hiSpeed', 99);
     },
   });
+  define('player-scene-model.keepGaugePick', {
+    run: () => {
+      sceneModelAPI.keepGaugePick('lr2:HARD', 'beatoraja');
+      sceneModelAPI.keepGaugePick('P-ATTACK', 'beatoraja');
+    },
+  });
   define('player-scene-model.keepPracticeGauge', {
     run: () => {
       sceneModelAPI.keepPracticeGauge('HAZARD', 'beatoraja');

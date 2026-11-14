@@ -1,6 +1,6 @@
 import type { BattleMode, LR2ExtraLevel } from '@be-music/player-engine/lanes';
 import type { MineModifier, LongNoteModifier, ScrollModifier } from '@be-music/player-engine/lanes';
-import type { GaugeType, GaugeAutoShift, QualifiedOptionValue } from '@be-music/player-engine/ruleset';
+import type { GaugePick, GaugeAutoShift, QualifiedOptionValue } from '@be-music/player-engine/ruleset';
 import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
 
@@ -310,10 +310,14 @@ export interface PlayOptions {
    * - `HARD` — survival gauge (start 100 %, fail at 0 %)
    * - `DEATH` — instant-death (start 100 %, any miss = 0)
    * - `EASY` — gentler GROOVE (clear 60 %)
+   *
+   * A bare gauge is the judge ruleset's own gauge of that name. A pick qualified with its source (`lr2:HARD`,
+   * `beatoraja:EX-HARD`) keeps that source's gauge under every judge ruleset (ADR 0019, #1171); a skin's button labels it
+   * by its gauge type and steps on from it (`cyclePlayOptionValue`).
    */
-  gauge1P: GaugeType;
-  /** 2P gauge variant (`#SRC_BUTTON,type=41`). */
-  gauge2P: GaugeType;
+  gauge1P: GaugePick;
+  /** 2P gauge variant (`#SRC_BUTTON,type=41`), bare or qualified like `gauge1P`. */
+  gauge2P: GaugePick;
 }
 
 /** Allowed values for {@link PlayOptions.hsFix}. */

@@ -13,7 +13,11 @@ import {
   PRACTICE_GAUGE_TYPES,
   canonicalOptionValue,
   clampCustomJudgeRate,
-  isGaugeType,
+  gaugePickType,
+  isGaugePick,
+  resolveGaugeTypes,
+  splitGaugePick,
+  type GaugePick,
   isQualifiedOptionName,
   splitOptionSource,
   type RulesetId,
@@ -79,8 +83,12 @@ export const HIDDEN_SUDDEN_CYCLE: readonly HiddenSuddenMode[] = ['OFF', 'HIDDEN'
 /** Cycle for boolean OFF/ON LR2 buttons (e.g. autoscratch). */
 export const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
 
-/** Source display spelling, without changing the recorded gauge identifier. */
-export function formatGaugeLabel(id: string | undefined): string | undefined {
+/**
+ * Source display spelling, without changing the recorded gauge identifier. A source-qualified pick reads as its gauge
+ * type (`lr2:P-ATTACK` as P.ATTACK), as ADR 0019 has a skin label it.
+ */
+export function formatGaugeLabel(pick: string | undefined): string | undefined {
+  const id = splitGaugePick(pick)?.type ?? pick;
   return id === 'P-ATTACK'
     ? 'P.ATTACK'
     : id === 'G-ATTACK'
@@ -449,7 +457,8 @@ export function resolvePlayOptionValue<K extends keyof PlayOptions>(
 ): PlayOptions[K] | undefined {
   if (!Object.hasOwn(DEFAULT_PLAY_OPTIONS, key)) return undefined;
   if (key === 'randomSeed1P' || key === 'randomSeed2P') return parseLaneRandomSeed(value) as PlayOptions[K] | undefined;
-  if (key === 'gauge1P' || key === 'gauge2P') return isGaugeType(value) ? (value as PlayOptions[K]) : undefined;
+  // A gauge is a bare type or one qualified with a source that defines it (`lr2:HARD`; `lr2:EX-HARD` is refused).
+  if (key === 'gauge1P' || key === 'gauge2P') return isGaugePick(value) ? (value as PlayOptions[K]) : undefined;
   // A bare colliding name from before ADR 0019 stays valid: it is the judge ruleset's own. A merged value reads as the
   // option it was merged into.
   if (key === 'random1P' || key === 'random2P')
@@ -479,7 +488,22 @@ export function cyclePlayOptionValue<K extends keyof PlayOptions>(
   if (!Object.hasOwn(PLAY_OPTION_CHOICES, key)) return undefined;
   const choices = PLAY_OPTION_CHOICES[key] as readonly PlayOptions[K][] | undefined;
   if (!choices || choices.length === 0) return undefined;
+  // A gauge button steps LR2's own cells: a qualified pick steps on from its gauge type, to a bare gauge.
+  if (key === 'gauge1P' || key === 'gauge2P')
+    return nextChoice(choices, gaugePickType(current as GaugePick) as PlayOptions[K], step);
   return nextChoice(choices, current, step);
+}
+
+/**
+ * The gauge pick to keep when the judge ruleset becomes `ruleset` (ADR 0019, #1171). A source-qualified pick stays as it
+ * is: it names its source's gauge, which no ruleset change touches. A bare pick is the judge ruleset's own gauge of that
+ * name, so it stays while `ruleset` offers it (`resolveGaugeTypes`) and falls back to GROOVE otherwise, as LR2's
+ * P.ATTACK does under beatoraja.
+ */
+export function keepGaugePick(pick: GaugePick, ruleset: RulesetId): GaugePick {
+  const parts = splitGaugePick(pick);
+  if (parts === undefined) return 'GROOVE';
+  return parts.source !== undefined || resolveGaugeTypes(ruleset).includes(parts.type) ? pick : 'GROOVE';
 }
 
 /**

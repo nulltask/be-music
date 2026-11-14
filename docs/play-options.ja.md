@@ -23,7 +23,7 @@ flowchart LR
   q -->|"S-RANDOM"| rules["判定ルール自身のもの"]
 ```
 
-それ以外はルールに従います。判定ルール（判定幅・ゲージ・判定対象ノートの選び方・ロングノートの種類・地雷の発動・スコア）はルールそのものです。LN MODE、CUSTOM JUDGE、LR2 の [GAMBOL](#gambol)、Options ダイアログに並ぶゲージの種類、判定アルゴリズムもルールに従います。エンジン、リプレイ、ターミナル版の `--gauge` は、参照元を付けたゲージ（`lr2:HARD`）も受け付けます。このゲージは、どの判定ルールでもその参照元のゲージ・オートシフトのラダー・コースゲージを使います（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)、[#1171](https://github.com/nulltask/be-music/issues/1171)）。ダイアログにはまだ出していません。[PRACTICE](#practice) と[ゲージオートシフト](#ゲージオートシフト)はどのルールでも使え、そのルールで読みます。PRACTICE はそのルールのゲージを並べ、自動切り替えはそのルールのゲージの並びに沿って切り替えます（[#933](https://github.com/nulltask/be-music/issues/933)）。参照元が混ざったプレイを記録でどう扱うかは[アシストと記録の方針](#アシストと記録の方針)で説明します。[#774](https://github.com/nulltask/be-music/issues/774) で管理しています。
+それ以外はルールに従います。判定ルール（判定幅・ゲージ・判定対象ノートの選び方・ロングノートの種類・地雷の発動・スコア）はルールそのものです。LN MODE、CUSTOM JUDGE、LR2 の [GAMBOL](#gambol)、判定アルゴリズムもルールに従います。参照元のないゲージ（`HARD`）も、そのルール自身のゲージです。参照元を付けたゲージ（`lr2:HARD`）は、どの判定ルールでもその参照元のゲージ・オートシフトのラダー・コースゲージを使います（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)、[#1171](https://github.com/nulltask/be-music/issues/1171)）。[ほかの参照元のゲージ](#ほかの参照元のゲージ)で説明します。[PRACTICE](#practice) と[ゲージオートシフト](#ゲージオートシフト)はどのルールでも使え、そのルールで読みます。PRACTICE はそのルールのゲージを並べ、自動切り替えはそのルールのゲージの並びに沿って切り替えます（[#933](https://github.com/nulltask/be-music/issues/933)）。参照元が混ざったプレイを記録でどう扱うかは[アシストと記録の方針](#アシストと記録の方針)で説明します。[#774](https://github.com/nulltask/be-music/issues/774) で管理しています。
 
 ## アシストと記録の方針
 
@@ -260,7 +260,7 @@ AC 34 の複合設定 A-SCR & LEGACY NOTE は、**Auto scratch 1P / 2P** をオ�
 
 Options ダイアログ の Play options の一番上で **Judgment windows → beatoraja / ????** を選び、**Play options → Gauge → EX-HARD** を選択します。EX-HARD は独立したサバイバルゲージで、AUTO SCRATCH などの入力アシストではありません。100 から始まり、HARD の低残量時のダメージ軽減を持たず、ゼロで失敗します。既存の参照元別テーブルに従い、beatoraja のモードごとの増減と AC の独自の増減を維持します。beatoraja の **HAZARD** は別の選択肢です（リプレイの既存キーは `DEATH`）。このキーを使う古い AC リプレイの解釈は維持します。
 
-LR2 beta3 に EX-HARD はありません。選択肢は GROOVE / HARD / DEATH / EASY（と P.ATTACK / G.ATTACK）を維持し、LR2 ルールで EX-HARD を直接指定した場合は明示的にエラーにします。選択したゲージに対応しないルールへ切り替えると通常ゲージに戻します。LR2 スキンのボタンは従来のセルと巡回順（GROOVE・HARD・DEATH・EASY・P.ATTACK・G.ATTACK）を維持します。別のルールの EX-HARD を LR2 スキンで表示する場合は赤いサバイバルゲージ表示を使用します。EX-HARD の選択には Options ダイアログ を使います。リプレイは `play.gauge: "EX-HARD"` と参照元の実効ゲージ名を記録し、beatoraja / AC のコースでは EXHARDCLASS に変換します。
+LR2 beta3 に EX-HARD はありません。選択肢は GROOVE / HARD / DEATH / EASY（と P.ATTACK / G.ATTACK）を維持し、LR2 ルールで EX-HARD を直接指定した場合は明示的にエラーにします。選択したゲージに対応しないルールへ切り替えると通常ゲージに戻します。beatoraja や AC の EX-HARD を LR2 を含むどのルールでも使い続けるには、**EX-HARD (beatoraja)** または **EX-HARD (????)** を選びます（[ほかの参照元のゲージ](#ほかの参照元のゲージ)）。LR2 スキンのボタンは従来のセルと巡回順（GROOVE・HARD・DEATH・EASY・P.ATTACK・G.ATTACK）を維持します。別のルールの EX-HARD を LR2 スキンで表示する場合は赤いサバイバルゲージ表示を使用します。EX-HARD の選択には Options ダイアログ を使います。リプレイは `play.gauge: "EX-HARD"` と参照元の実効ゲージ名を記録し、beatoraja / AC のコースでは EXHARDCLASS に変換します。
 
 参照元：beatoraja 0.8.9 の [`GaugeProperty`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GaugeProperty.java)、AC 34 の[ゲージオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。対応 Issue は [#726](https://github.com/nulltask/be-music/issues/726) です。
 
@@ -268,9 +268,30 @@ LR2 beta3 に EX-HARD はありません。選択肢は GROOVE / HARD / DEATH / 
 
 beatoraja ルールでは Options ダイアログ の **Gauge → ASSIST EASY**、???? ルールでは **ASSISTED EASY** を選べます。どちらも AUTO SCRATCH やロングノート変換から独立した、緩やかな回復ゲージです。リプレイの選択ゲージは `ASSIST-EASY`、実効的な結果のゲージ名は参照元に合わせて `ASSIST-EASY` または `ASSISTED-EASY` を保持します。ゲージ名から入力アシストのスイッチを推測しません。
 
-既存の beatoraja テーブルに従い、モードごとの回復量・ダメージ・クリア基準を維持します。7 鍵盤の基準は 60、5 鍵盤では 50 です。AC では独自の増減量とクリア基準 60 を使います。LR2 beta3 にこの選択肢はなく、直接指定した場合はエラーにします。beatoraja / AC のコースでは、参照元のコースゲージ変換に従い CLASS に変換します。LR2 スキンでは既存の EASY セルと通常ゲージ表示を使用し、テキストには選択した名前を保持します。
+既存の beatoraja テーブルに従い、モードごとの回復量・ダメージ・クリア基準を維持します。7 鍵盤の基準は 60、5 鍵盤では 50 です。AC では独自の増減量とクリア基準 60 を使います。LR2 beta3 にこの選択肢はなく、直接指定した場合はエラーにします。LR2 ルールでは、ダイアログに **ASSIST EASY (beatoraja)** と **ASSISTED EASY (????)** として並び、それぞれの参照元のゲージを使います（[ほかの参照元のゲージ](#ほかの参照元のゲージ)）。beatoraja / AC のコースでは、参照元のコースゲージ変換に従い CLASS に変換します。LR2 スキンでは既存の EASY セルと通常ゲージ表示を使用し、テキストには選択した名前を保持します。
 
 参照元：beatoraja 0.8.9 の [`GaugeProperty`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GaugeProperty.java)、AC 34 の [ASSISTED EASY](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。対応 Issue は [#725](https://github.com/nulltask/be-music/issues/725) です。
+
+## ほかの参照元のゲージ
+
+Options ダイアログの **Gauge** と **Gauge 2P** は、判定ルール自身のゲージを先に並べ、続けてほかの参照元のゲージを **HARD (LR2)**・**EX-HARD (beatoraja)**・**ASSISTED EASY (????)** のように参照元の名前を付けて並べます。ルール自身のゲージは参照元なし（`HARD`）で、ほかの参照元のゲージは参照元つき（`lr2:HARD`）で保存します。参照元つきのゲージは、どのルールで判定しても、その参照元のゲージ表・オートシフトのラダー・移行先・コースゲージを使います。判定ルールに従うものは [ADR 0019](./adr/0019-source-qualified-option-values.ja.md) にまとめています。
+
+```mermaid
+flowchart LR
+  change["Judgment windows を変更"] --> kind{"ゲージに参照元あり?"}
+  kind -->|"lr2:HARD"| keep["そのまま維持"]
+  kind -->|"HARD"| offered{"新しいルールにある?"}
+  offered -->|"ある"| own["維持（新しいルールのゲージ）"]
+  offered -->|"ない"| groove["GROOVE / NORMAL"]
+```
+
+- **ルールを切り替えたとき。** 参照元つきのゲージは、ルールに依存しないので選択したまま維持します。参照元のないゲージは、新しいルールに同じ名前のゲージがあれば維持し、そのルールのゲージになります。なければ、これまでどおり通常ゲージに戻します。いま判定しているルールの参照元を付けたゲージ（LR2 ルールでの `lr2:HARD`）は参照元のないゲージとまったく同じ動作をし、選択している間は一覧に **HARD (LR2)** として残します。
+- **設定とリプレイ。** 保存する設定は選択した値をそのまま持ち、以前の設定にある参照元のない値の意味は変わりません。リプレイは `play.gauge` / `play.gauge2P` に記録します。
+- **スキン。** LR2 スキンのゲージボタンとオプションパネルのキーは、LR2 のセルと巡回順を維持します。参照元つきのゲージはゲージの種類で表示し（`beatoraja:EX-HARD` は EX-HARD と読み、HARD のセルを使います）、そこから次の参照元のないゲージへ進みます。進んだ先は判定ルール自身のゲージです。ほかの参照元のゲージは Options ダイアログで選びます。
+- **LR2 の段位認定コース。** LR2 が EASY と G.ATTACK を GROOVE に戻す処理は、ゲージの種類を見て参照元を保ちます。`beatoraja:EASY` はコースを `beatoraja:GROOVE` でプレイします。この組み合わせを定義する参照元はなく、Be-Music が決めたものです。
+- **プレイオプションの通知。** 選択したオプションで譜面を準備できないときの通知は、判定ルール自身のものではないゲージも `Gauge: HARD (LR2)` のように挙げます。
+
+対応 Issue は [#1171](https://github.com/nulltask/be-music/issues/1171) です。
 
 ## 譜面が選ぶゲージ
 
