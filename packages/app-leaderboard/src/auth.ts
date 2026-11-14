@@ -19,6 +19,7 @@ export function oidcEnv(env: Env): OIDCEnv {
     OIDC_CLIENT_ID: env.OIDC_CLIENT_ID,
     SESSION_SECRET: env.SESSION_SECRET,
     API_AUDIENCE: env.API_AUDIENCE,
+    ACCOUNTS: env.ACCOUNTS,
   };
 }
 export async function oidcAuth(request: Request, env: Env): Promise<Response | null> {

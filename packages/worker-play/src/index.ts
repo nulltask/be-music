@@ -28,6 +28,8 @@ interface Env extends OIDCEnv {
   FFMPEG_CORE: R2Bucket;
   /** The Leaderboard Worker (`packages/app-leaderboard`) of the same environment. */
   LEADERBOARD: Fetcher;
+  /** The Dashboard Worker, which runs Accounts (the OIDC issuer), of the same environment. */
+  ACCOUNTS: Fetcher;
 }
 
 const FFMPEG_PREFIX = '/ffmpeg-core/';
