@@ -95,6 +95,7 @@ export interface LibraryServiceOptions {
 }
 
 interface LibraryLoadOrigin {
+  readonly showLibraryRoot?: boolean;
   readonly entries?: readonly FileSystemEntry[];
   readonly readFiles?: () => Promise<BrowserDroppedFile[]>;
 }
@@ -376,7 +377,7 @@ export class LibraryService {
     }
     if (chartFiles.length > 0 || courseFiles.length > 0) await this.refreshCourseFolders();
     // Open what was dropped: its folder, or the folder list when the drop carried several.
-    const dropped = navigationAfterDrop(this.collection.charts, previousChartIds);
+    const dropped = navigationAfterDrop(this.collection.charts, previousChartIds, origin.showLibraryRoot);
     if (dropped !== undefined) this.browseTo(dropped);
     // Commit the confirmed family before mounting the next select scene. A skin dropped onto a play swaps that play's
     // family (`applyDroppedSkin`) and leaves the chart running; the select screen takes the family when the play returns.

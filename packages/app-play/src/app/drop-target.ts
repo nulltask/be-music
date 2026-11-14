@@ -36,6 +36,7 @@ export interface DropTargetOptions {
     files: BrowserDroppedFile[],
     origin?: {
       readonly entries?: readonly FileSystemEntry[];
+      readonly showLibraryRoot?: boolean;
       readonly readFiles?: () => Promise<BrowserDroppedFile[]>;
     },
   ) => Promise<void>;
@@ -392,8 +393,17 @@ export class DropTarget {
       const progress = { onProgress: (value: LoadProgress) => applyLoadProgress(this.elements, value) };
       const files =
         entries.length > 0 ? await readDropEntries(entries, progress) : await readDroppedFiles(dataTransfer, progress);
-      await this.processIncomingFiles(files, entries.length > 0 ? { entries } : {});
       const handles = await folders;
+      let showLibraryRoot = false;
+      if (globalThis.indexedDB && (handles.length > 0 || entries.some((entry) => entry.isDirectory))) {
+        try {
+          await this.readSavedFolders();
+          showLibraryRoot = this.savedFolders.length > 0;
+        } catch (error) {
+          this.reportFolderError(error);
+        }
+      }
+      await this.processIncomingFiles(files, { ...(entries.length > 0 ? { entries } : {}), showLibraryRoot });
       if (handles.length > 0) {
         try {
           await this.rememberLoadedFolders(handles);
