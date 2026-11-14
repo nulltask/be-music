@@ -355,6 +355,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
    * silently resets to `'auto'` so the GUI never displays an unhonorable value.
    */
   confirmDroppedSkin: boolean;
+  skipDroppedSkin: boolean;
   skinFamilyOverride: SkinFamilyOverride;
   /**
    * Read-only status text (loading summaries, "Playing: …", recording state, etc.). Bound to a disabled string
