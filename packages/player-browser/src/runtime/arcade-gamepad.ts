@@ -1,8 +1,15 @@
-/** INFINITAS HID layout as exposed by Gamepad API, including compatible PHOENIXWAN firmware. */
+const infinitasUSBId = /\bvendor:\s*1ccf\s+product:\s*(?:8048|1018)\b|^1ccf-(?:8048|1018)-/i;
+const iidxProductNames = [
+  /\bcontroller inf&bms\b/i,
+  /\bbeatmania\s+iidx\s+(?:(?:usb\s+)?controller|pro\s+cont(?:r)?oller|professional\s+controller)\b/i,
+  /\b(?:dj\s*dao\s+|gamo2\s+)?fp7\s+emp\b/i,
+  /\b(?:yuan\s*con\s+)?dx\s*6th\b/i,
+];
+
+/** Detect devices exposing the INFINITAS layout as an unmapped HID gamepad. */
 export function isIIDXArcadeGamepad(pad: Pick<Gamepad, 'id' | 'mapping' | 'axes' | 'buttons'>): boolean {
   if (pad.mapping !== '' || pad.axes.length < 1 || pad.buttons.length < 7) return false;
-  // INFINITAS and compatible firmware can share these IDs. Some browsers only expose the product name.
-  return /\bvendor:\s*1ccf\s+product:\s*8048\b|^1ccf-8048-/i.test(pad.id) || /\bcontroller inf&bms\b/i.test(pad.id);
+  return infinitasUSBId.test(pad.id) || iidxProductNames.some((name) => name.test(pad.id));
 }
 
 export const IIDX_GAMEPAD_SCRATCH = { algorithm: 'be-music/gamepad-iidx/1', thresholdTicks: 2, stopMs: 100 };

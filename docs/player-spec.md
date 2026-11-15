@@ -815,8 +815,11 @@ judge core, a replay and the replay simulator all key a scratch hold by the same
 
   For USB arcade controllers, select the INFINITAS HID mode (including on compatible GAMO2/DJDAO PHOENIXWAN firmware).
   The browser must expose the controller through Gamepad API. Be-Music recognizes the INFINITAS VID/PID
-  (`1ccf:8048`) or the PHOENIXWAN product name (`Controller INF&BMS`) in `Gamepad.id`. The first seven buttons
-  play keys 1–7, and the X axis is treated as an 8-bit wrapping turntable encoder. Two ticks start or reverse the
+  (`1ccf:8048`, also used by [arcin-infinitas](https://github.com/kinetic-flow/arcin-infinitas)) and the KONAMI
+  Entry Model VID/PID (`1ccf:1018`) in `Gamepad.id`. It also recognizes product names for PHOENIXWAN
+  (`Controller INF&BMS`), GAMO2 FP7 EMP, KONAMI IIDX Entry / Premium / Professional, and YuanCon Dx6th+.
+  The name-based matches assume the INFINITAS layout and are pending hardware verification. The first seven buttons
+  play keys 1–7, and the X axis is quantized to 256 positions and treated as a wrapping turntable encoder. Two ticks start or reverse the
   scratch, and 100 ms without a qualifying movement releases it. These thresholds are Be-Music policy.
   See the [GAMO2 firmware guide](https://www.gamo2.com/en/firmware/) and
   [SnekBox's HID report definitions](https://github.com/dinsfire64/snekbox_firmware/blob/main/handlers/infinitas.h).

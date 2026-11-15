@@ -786,9 +786,13 @@ FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱�
   ボタン名または回転方向だけで、デバイス ID は記録しません。ソースがデバイスを識別するデータを持つことはありません。
 
   USB 専用コントローラー（対応ファームウェアの GAMO2/DJDAO PHOENIXWAN など）は INFINITAS HID モードに切り替えます。
-  ブラウザーが Gamepad API に公開した `Gamepad.id` の VID/PID（`1ccf:8048`）または PHOENIXWAN の製品名
-  （`Controller INF&BMS`）で検出します。先頭の 7 ボタンが 1〜7 鍵、X 軸が一周で値の戻る 8 ビットの
-  ターンテーブルです。Be-Music は 2 ティックの移動で押下または方向転換とし、その移動が 100 ms なければ解放します。
+  ブラウザーが Gamepad API に公開した `Gamepad.id` で検出します。VID/PID は INFINITAS（`1ccf:8048`、
+  [arcin-infinitas](https://github.com/kinetic-flow/arcin-infinitas) も使用）と KONAMI エントリーモデル
+  （`1ccf:1018`）に対応します。製品名では PHOENIXWAN（`Controller INF&BMS`）、GAMO2 FP7 EMP、KONAMI IIDX
+  エントリー・プレミアム・プロフェッショナル、YuanCon Dx6th+ を照合します。製品名での検出は INFINITAS と同じ
+  配置を前提としており、実機での確認は未実施です。先頭の 7 ボタンが 1〜7 鍵、X 軸は 256 段階に丸めて
+  一周で値が戻るターンテーブルとして扱います。Be-Music は 2 ティックの移動で押下または方向転換とし、
+  その移動が 100 ms なければ解放します。
   [GAMO2 のファームウェアガイド](https://www.gamo2.com/jp/firmware/)と
   [SnekBox の HID レポート定義](https://github.com/dinsfire64/snekbox_firmware/blob/main/handlers/infinitas.h)を参照してください。
 
