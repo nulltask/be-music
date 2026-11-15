@@ -7,6 +7,7 @@ import {
   resolveCabinetLayout,
   resolveScratchAngle,
   resolveLanePlayLabel,
+  resolvePlayModeLabel,
   resolveDifficulty,
   resolveDifficultyName,
   resolveScorePace,
@@ -368,6 +369,22 @@ it('labels automated lane banks and distinguishes the ghost from live input', ()
   expect(resolveLanePlayLabel({ autoplay: true }, '2P')).toBe('AUTO PLAY');
   expect(resolveLanePlayLabel({ ghostSide: '2P' }, '1P')).toBeUndefined();
   expect(resolveLanePlayLabel({ autoplay: true, ghostSide: '2P' }, '2P')).toBe('GHOST PLAY');
+});
+
+it('labels a practice play the player plays, below the ghost and autoplay', () => {
+  expect(resolveLanePlayLabel({ practice: true }, '1P')).toBe('PRACTICE PLAY');
+  expect(resolveLanePlayLabel({ practice: true }, '2P')).toBe('PRACTICE PLAY');
+  expect(resolveLanePlayLabel({ practice: false }, '1P')).toBeUndefined();
+  expect(resolveLanePlayLabel({ autoplay: true, practice: true }, '1P')).toBe('AUTO PLAY');
+  expect(resolveLanePlayLabel({ practice: true, ghostSide: '2P' }, '1P')).toBe('PRACTICE PLAY');
+  expect(resolveLanePlayLabel({ practice: true, ghostSide: '2P' }, '2P')).toBe('GHOST PLAY');
+});
+
+it('names the play mode for a header', () => {
+  expect(resolvePlayModeLabel({})).toBe('PLAY');
+  expect(resolvePlayModeLabel({ autoplay: true })).toBe('AUTO PLAY');
+  expect(resolvePlayModeLabel({ practice: true })).toBe('PRACTICE PLAY');
+  expect(resolvePlayModeLabel({ autoplay: true, practice: true })).toBe('AUTO PLAY');
 });
 
 it('scratch input moves clockwise or counterclockwise and preserves its initial angle', () => {

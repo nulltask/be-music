@@ -93,6 +93,7 @@ import {
   STAGE_HEIGHT as DESIGN_HEIGHT,
   STAGE_SIDE_COLUMN,
   STAGE_WIDTH as DESIGN_WIDTH,
+  resolvePlayModeLabel,
 } from '@be-music/player-skin-sdk';
 import {
   addHUDNumber,
@@ -985,14 +986,13 @@ function drawHeader(
   pulse: number,
   pool: ChildPool,
 ): void {
-  const autoplay = runtime.autoplay === true;
   // The right corner stays clear for a host's menu tab; touch play also keeps the left one clear for its pause button,
   // shifting the mode and readouts right to make room.
   const inset = layout.mode === 'touch' ? TOUCH_CORNER - HUD_MARGIN : 0;
   // Near-opaque, so the playfield rails and lanes stop under the header instead of running through its type.
   graphics.rect(0, 0, DESIGN_WIDTH, 34).fill({ color: SYN_VOID, alpha: 0.92 });
   graphics.rect(0, 34, DESIGN_WIDTH, 1).fill({ color: accent, alpha: 0.35 + 0.35 * pulse });
-  drawModeLight(graphics, layer, autoplay, HUD_MARGIN + inset, 17, accent, pulse, 10, pool);
+  drawModeLight(graphics, layer, runtime, HUD_MARGIN + inset, 17, accent, pulse, 10, pool);
   // Readouts on a fixed rhythm after the mode: label, then its value 40 px on; groups 96 px apart.
   addHUDText(layer, 'BPM', 172 + inset, 14, labelStyle(), pool);
   addHUDNumber(layer, formatBPM(runtime.bpm), 212 + inset, 9, displayStyle(14, SYN_WHITE), pool);
@@ -1009,33 +1009,41 @@ function drawHeader(
 }
 
 /**
- * The play-mode light (a glowing dot) and its PLAY / AUTO PLAY label (`autoLabel`, for a shorter one), the dot's left
- * edge at `x`.
+ * The play-mode light (a glowing dot) and its PLAY / AUTO PLAY / PRACTICE label (`short` for AUTO on a narrow header),
+ * the dot's left edge at `x`. PRACTICE drops PLAY so it keeps clear of the readouts after it.
  */
 function drawModeLight(
   graphics: Graphics,
   layer: Container,
-  autoplay: boolean,
+  runtime: Runtime,
   x: number,
   y: number,
   accent: number,
   pulse: number,
   size: number,
   pool: ChildPool,
-  autoLabel = 'AUTO PLAY',
+  short = false,
 ): void {
-  const color = autoplay ? SYN_AMBER : accent;
+  const mode = resolvePlayModeLabel(runtime);
+  const color = mode === 'AUTO PLAY' ? SYN_AMBER : accent;
   graphics.circle(x + 8, y, 3).fill({ color, alpha: 1 });
   graphics.circle(x + 8, y, 8).fill({ color, alpha: 0.18 + 0.2 * pulse });
   addHUDText(
     layer,
-    autoplay ? autoLabel : 'PLAY',
+    MODE_LIGHT_LABELS[mode][short ? 1 : 0],
     x + 22,
     y - 5,
     { ...displayStyle(size, SYN_WHITE), letterSpacing: 3 },
     pool,
   );
 }
+
+/** The mode light's label by play mode: the header's, then the narrow header's. */
+const MODE_LIGHT_LABELS: Readonly<Record<ReturnType<typeof resolvePlayModeLabel>, readonly [string, string]>> = {
+  'AUTO PLAY': ['AUTO PLAY', 'AUTO'],
+  'PRACTICE PLAY': ['PRACTICE', 'PRACTICE'],
+  PLAY: ['PLAY', 'PLAY'],
+};
 
 function drawChartPlate(graphics: Graphics, layer: Container, runtime: Runtime, accent: number, pool: ChildPool): void {
   const { x, y, h } = SONG_PLATE;
@@ -1248,7 +1256,7 @@ function drawPortraitHeader(
   graphics.rect(0, 0, width, PORTRAIT_HEADER_H).fill({ color: SYN_VOID, alpha: 0.92 });
   graphics.rect(0, PORTRAIT_HEADER_H, width, 1).fill({ color: accent, alpha: 0.35 + 0.35 * pulse });
   const cy = PORTRAIT_HEADER_H / 2;
-  drawModeLight(graphics, layer, runtime.autoplay === true, TOUCH_CORNER, cy, accent, pulse, 10, pool, 'AUTO');
+  drawModeLight(graphics, layer, runtime, TOUCH_CORNER, cy, accent, pulse, 10, pool, true);
   // Readouts on a fixed rhythm, as on the landscape header: label, then its value 40 px on (60 after SPEED).
   addHUDText(layer, 'BPM', 190, cy - 3, portraitLabel(), pool);
   addHUDNumber(layer, formatBPM(runtime.bpm), 230, cy - 7, displayStyle(13, SYN_WHITE), pool);

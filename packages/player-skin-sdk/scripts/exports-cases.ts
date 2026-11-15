@@ -540,6 +540,11 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.resolveLanePlayLabel({ autoplay: true }, '1P');
     },
   });
+  define('player-skin-sdk.resolvePlayModeLabel', {
+    run: () => {
+      skinSdkAPI.resolvePlayModeLabel({ practice: true });
+    },
+  });
   define('player-skin-sdk.resolveScratchAngle', {
     run: () => {
       skinSdkAPI.resolveScratchAngle(5.25);

@@ -7,6 +7,7 @@ import {
   judgeDisplayWord,
   resolveJudgeWordY,
   resolveLanePlayLabel,
+  resolvePlayModeLabel,
   loadingDots,
   resolveLaneRuns,
   type BeMusicGameplayFrame,
@@ -350,7 +351,7 @@ function drawHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, wid
   const headerX = layout.bga?.x ?? playfield.right + MARGIN;
   const left = playfield.left;
 
-  text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', headerX, 18, { size: 12, weight: 800, color: ACCENT });
+  text(ctx, resolvePlayModeLabel(runtime), headerX, 18, { size: 12, weight: 800, color: ACCENT });
   text(
     ctx,
     `BPM ${Math.round(runtime.bpm ?? 0)}   ${runtime.floatingHiSpeed ? 'FHS' : 'SPEED'} x${(runtime.hiSpeed ?? 0).toFixed(runtime.floatingHiSpeed ? 2 : 1)}`,
@@ -478,7 +479,7 @@ function drawPortraitHUD(
   const { header, track, scores, counts, gauge } = hud;
 
   const headerY = header.height / 2;
-  text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', header.left, headerY, { size: 14, weight: 800, color: ACCENT });
+  text(ctx, resolvePlayModeLabel(runtime), header.left, headerY, { size: 14, weight: 800, color: ACCENT });
   text(
     ctx,
     `BPM ${Math.round(runtime.bpm ?? 0)}   ${runtime.floatingHiSpeed ? 'FHS' : 'SPEED'} x${(runtime.hiSpeed ?? 0).toFixed(runtime.floatingHiSpeed ? 2 : 1)}`,

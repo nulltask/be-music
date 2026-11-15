@@ -494,10 +494,22 @@ export function resolveScratchAngle(
   return ((angle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
 }
 
-/** Caption above a lane bank’s judgment; a replay ghost takes precedence over autoplay. */
+/**
+ * Caption above a lane bank’s judgment: a replay ghost takes precedence over autoplay, and autoplay over practice (an
+ * AUTO practice play still reads AUTO PLAY, since nobody plays it).
+ */
 export function resolveLanePlayLabel(
-  runtime: Pick<BeMusicGameplayRuntime, 'autoplay' | 'ghostSide'>,
+  runtime: Pick<BeMusicGameplayRuntime, 'autoplay' | 'ghostSide' | 'practice'>,
   side: '1P' | '2P',
 ): string | undefined {
-  return runtime.ghostSide === side ? 'GHOST PLAY' : runtime.autoplay ? 'AUTO PLAY' : undefined;
+  if (runtime.ghostSide === side) return 'GHOST PLAY';
+  if (runtime.autoplay) return 'AUTO PLAY';
+  return runtime.practice ? 'PRACTICE PLAY' : undefined;
+}
+
+/** The play's mode in a header: AUTO PLAY, PRACTICE PLAY for a practice play the player plays, or PLAY. */
+export function resolvePlayModeLabel(
+  runtime: Pick<BeMusicGameplayRuntime, 'autoplay' | 'practice'>,
+): 'AUTO PLAY' | 'PRACTICE PLAY' | 'PLAY' {
+  return runtime.autoplay ? 'AUTO PLAY' : runtime.practice ? 'PRACTICE PLAY' : 'PLAY';
 }
