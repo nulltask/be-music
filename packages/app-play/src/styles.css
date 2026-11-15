@@ -3220,8 +3220,35 @@ html.touch-first .search-input.search-inline:focus {
 }
 .practice-bars-settings {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 8px 12px;
+  align-items: start;
+}
+.practice-bars-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.practice-bars-group > legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.practice-bars-field-wide {
+  grid-column: 1 / -1;
+}
+.practice-bars-check {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted-foreground);
 }
 .practice-bars-field {
   display: grid;

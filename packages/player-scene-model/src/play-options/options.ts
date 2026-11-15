@@ -235,6 +235,11 @@ export interface PlayOptions {
   practiceRestBefore: number;
   /** How many bars of rest a PRACTICE play gives after its range (0 ends at the range). */
   practiceRestAfter: number;
+  /**
+   * A PRACTICE play keeps a long note held into its range from before it, played from its head (`PlayPractice.carriedLongNotes`,
+   * a Be-Music extension); off drops it, as beatoraja's `PracticeModifier` does.
+   */
+  practiceCarriedLongNotes: boolean;
   customJudgeKeyPerfectGreat: number;
   customJudgeKeyGreat: number;
   customJudgeKeyGood: number;

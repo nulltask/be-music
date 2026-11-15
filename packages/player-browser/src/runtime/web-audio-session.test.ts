@@ -375,7 +375,7 @@ describe('createWebAudioSession', () => {
     expect(kept.trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(0, 2);
   });
 
-  test('with crossfades on, fades in as it starts and crossfades a seek instead of stopping at once', () => {
+  test('with crossfades on, crossfades a seek: partway voices fade in, on-time ones play whole, queued ones never', () => {
     vi.useFakeTimers();
     const { audioContext, audioBus, trackedBufferSources, createdGains, keyMixer, bgmMixer } = createMocks();
     const session = createWebAudioSession({
@@ -390,24 +390,41 @@ describe('createWebAudioSession', () => {
       seekCrossfadeSeconds: 0.5,
     });
     session.start();
-    // The start opens a key and a BGM gain on their mixers, fading in from silence.
-    const [firstKey, firstBGM] = createdGains;
+    // The start opens on-time key and BGM gains at full volume, and partway ones fading in from silence.
+    const [firstKey, firstBGM, firstPartwayKey, firstPartwayBGM] = createdGains;
     expect(vi.mocked(firstKey!.connect)).toHaveBeenCalledWith(keyMixer);
     expect(vi.mocked(firstBGM!.connect)).toHaveBeenCalledWith(bgmMixer);
-    expect(firstBGM!.gain.value).toBe(0);
-    expect(vi.mocked(firstBGM!.gain.linearRampToValueAtTime)).toHaveBeenCalledWith(1, 0.5);
+    expect(vi.mocked(firstPartwayKey!.connect)).toHaveBeenCalledWith(keyMixer);
+    expect(vi.mocked(firstPartwayBGM!.connect)).toHaveBeenCalledWith(bgmMixer);
+    expect(firstBGM!.gain.value).toBe(1);
+    expect(vi.mocked(firstBGM!.gain.linearRampToValueAtTime)).not.toHaveBeenCalled();
+    expect(firstPartwayBGM!.gain.value).toBe(0);
+    expect(vi.mocked(firstPartwayBGM!.gain.linearRampToValueAtTime)).toHaveBeenCalledWith(1, 0.5);
     session.triggerEvent?.(mkEvent('11', '01'));
     session.triggerEvent?.(mkEvent('01', '03'));
-    expect(trackedBufferSources.map((source) => source.connectedTo)).toEqual([firstKey, firstBGM]);
+    // A BGM cue queued ahead of the audio clock.
+    session.scheduleEvent?.(mkEvent('01', '03'), 0.2);
+    expect(trackedBufferSources.map((source) => source.connectedTo)).toEqual([firstKey, firstBGM, firstBGM]);
 
     session.seek?.(12);
-    // The old position fades out and its voices stop once it is silent; the new one fades in on gains of its own.
-    expect(vi.mocked(firstBGM!.gain.linearRampToValueAtTime)).toHaveBeenLastCalledWith(0, 0.5);
-    for (const source of trackedBufferSources) expect(vi.mocked(source.node.stop)).toHaveBeenCalledWith(0.5);
-    const [nextKey, nextBGM] = createdGains.slice(2);
-    expect(vi.mocked(nextBGM!.gain.linearRampToValueAtTime)).toHaveBeenCalledWith(1, 0.5);
+    // The old position fades out and the voices that started stop once it is silent; the queued one stops at once.
+    for (const gain of [firstKey, firstBGM, firstPartwayKey, firstPartwayBGM])
+      expect(vi.mocked(gain!.gain.linearRampToValueAtTime)).toHaveBeenLastCalledWith(0, 0.5);
+    expect(vi.mocked(trackedBufferSources[0]!.node.stop)).toHaveBeenCalledWith(0.5);
+    expect(vi.mocked(trackedBufferSources[2]!.node.stop)).toHaveBeenLastCalledWith();
+    const [nextKey, nextBGM, , nextPartwayBGM] = createdGains.slice(4);
+    // The new position's on-time voices play at full volume at once; the ones it starts partway fade in.
     session.triggerEvent?.(mkEvent('01', '03'));
-    expect(trackedBufferSources[2]!.connectedTo).toBe(nextBGM);
+    session.triggerEventAt?.(mkEvent('01', '03'), 0.25);
+    expect(trackedBufferSources[3]!.connectedTo).toBe(nextBGM);
+    // A voice started partway goes through a gain of its own (its fade-in at the sample's cut) first.
+    const partwayVoice = trackedBufferSources[4]!.connectedTo;
+    expect(
+      partwayVoice === nextPartwayBGM ||
+        (vi.mocked(partwayVoice!.connect).mock.calls[0]?.[0] as unknown) === nextPartwayBGM,
+    ).toBe(true);
+    expect(nextBGM!.gain.value).toBe(1);
+    expect(vi.mocked(nextPartwayBGM!.gain.linearRampToValueAtTime)).toHaveBeenCalledWith(1, 0.5);
     expect(nextKey).toBeDefined();
     // The old gains go once the fade is over.
     vi.advanceTimersByTime(600);

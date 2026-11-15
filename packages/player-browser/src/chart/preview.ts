@@ -523,20 +523,25 @@ export class ChartPreviewEngine {
     return decoded;
   }
 
-  /** A window sample stretched to `rate` at its own pitch, once per chart, tempo and stretcher. */
+  /**
+   * A window sample stretched to `rate` at its own pitch, once per chart, tempo, stretcher and `segment`: the part of
+   * the sample a window sounds ({@link resolveWindowStretchSegment}), or the whole sample without one.
+   */
   private stretchWindowSample(
     cache: NonNullable<ChartPreviewEngine['windowCache']>,
     path: string,
     rate: number,
     algorithm: TimeStretchAlgorithm,
+    segment?: WindowStretchSegment,
   ): Promise<AudioBuffer | undefined> {
-    const key = `${rate}:${algorithm}:${path}`;
+    const key = `${rate}:${algorithm}:${path}${segment === undefined ? '' : `:${segment.startSeconds}-${segment.endSeconds}`}`;
     let stretched = cache.stretched.get(key);
     if (stretched === undefined) {
       stretched = this.decodeWindowSample(cache, path).then(async (buffer) => {
         if (buffer === undefined || this.disposed) return undefined;
         try {
-          return (await stretchAudioBuffers(this.audioContext, [buffer], rate, algorithm))[0];
+          const part = segment === undefined ? buffer : this.sliceBuffer(buffer, segment);
+          return (await stretchAudioBuffers(this.audioContext, [part], rate, algorithm))[0];
         } catch {
           // A sample the stretcher cannot take plays at the tempo, its pitch following.
           return undefined;
@@ -545,6 +550,16 @@ export class ChartPreviewEngine {
       cache.stretched.set(key, stretched);
     }
     return stretched;
+  }
+
+  /** The part `segment` of `buffer`, in its own seconds, as a buffer of its own. */
+  private sliceBuffer(buffer: AudioBuffer, segment: WindowStretchSegment): AudioBuffer {
+    const from = Math.max(0, Math.floor(segment.startSeconds * buffer.sampleRate));
+    const to = Math.min(buffer.length, Math.max(from + 1, Math.ceil(segment.endSeconds * buffer.sampleRate)));
+    const part = this.audioContext.createBuffer(buffer.numberOfChannels, to - from, buffer.sampleRate);
+    for (let channel = 0; channel < buffer.numberOfChannels; channel += 1)
+      part.copyToChannel(buffer.getChannelData(channel).subarray(from, to), channel);
+    return part;
   }
 
   private async decodeChartAudioUnsequenced(
@@ -584,17 +599,41 @@ export class ChartPreviewEngine {
     const rate = window.tempo !== undefined && Number.isFinite(window.tempo) && window.tempo > 0 ? window.tempo : 1;
     const stretching = rate !== 1 && window.keepPitch === true;
     const buffers = new Map<string, AudioBuffer>();
-    const stretchedKeys = new Set<string>();
+    /** The samples played stretched: where the part stretched starts in each, and the sample's own length. */
+    const stretchedKeys = new Map<string, { readonly segmentStart: number; readonly sourceDuration: number }>();
     await Promise.all(
       [...new Set([...carried, ...triggers].map((trigger) => trigger.sampleKey))].map(async (key) => {
         const path = wavResources[key];
         if (typeof path !== 'string') return;
-        const stretched = stretching
-          ? await this.stretchWindowSample(cache, path, rate, window.stretchAlgorithm ?? 'wsola')
-          : undefined;
-        const buffer = stretched ?? (await this.decodeWindowSample(cache, path));
-        if (buffer) buffers.set(key, buffer);
-        if (stretched) stretchedKeys.add(key);
+        const source = await this.decodeWindowSample(cache, path);
+        if (source === undefined) return;
+        if (!stretching) {
+          buffers.set(key, source);
+          return;
+        }
+        // Only the part of a long sample the window sounds is stretched, so a bar of a long BGM file is quick to hear.
+        const segment = resolveWindowStretchSegment(
+          windowSampleNeeds(
+            [...carried, ...triggers].filter((trigger) => trigger.sampleKey === key),
+            window,
+            rate,
+            source.duration,
+          ),
+          source.duration,
+        );
+        const stretched = await this.stretchWindowSample(
+          cache,
+          path,
+          rate,
+          window.stretchAlgorithm ?? 'wsola',
+          segment,
+        );
+        if (stretched === undefined) {
+          buffers.set(key, source);
+          return;
+        }
+        buffers.set(key, stretched);
+        stretchedKeys.set(key, { segmentStart: segment?.startSeconds ?? 0, sourceDuration: source.duration });
       }),
     );
     if (this.isStale(sequence)) return;
@@ -617,8 +656,11 @@ export class ChartPreviewEngine {
     ): void => {
       // A stretched sample is `rate` times shorter: its offset and slice scale with it; a sped-up one keeps them, the
       // buffer's own time.
-      const stretched = stretchedKeys.has(trigger.sampleKey);
-      const offsetSeconds = stretched ? sampleOffsetSeconds / rate : sampleOffsetSeconds;
+      const stretchedPart = stretchedKeys.get(trigger.sampleKey);
+      const stretched = stretchedPart !== undefined;
+      const offsetSeconds = stretched
+        ? Math.max(0, sampleOffsetSeconds - stretchedPart.segmentStart) / rate
+        : sampleOffsetSeconds;
       const durationSeconds =
         sampleDurationSeconds === undefined || !stretched ? sampleDurationSeconds : sampleDurationSeconds / rate;
       let source: AudioBufferSourceNode;
@@ -651,7 +693,7 @@ export class ChartPreviewEngine {
       const buffer = buffers.get(trigger.sampleKey);
       if (!buffer) continue;
       // In the sample's own time: a chart second of it has played per chart second, sped up or stretched alike.
-      const sampleDuration = stretchedKeys.has(trigger.sampleKey) ? buffer.duration * rate : buffer.duration;
+      const sampleDuration = stretchedKeys.get(trigger.sampleKey)?.sourceDuration ?? buffer.duration;
       const part = resolveChartWindowCarryOver(trigger, sampleDuration, window.startSeconds);
       if (part !== undefined) schedule(trigger, buffer, startAt, part.offsetSeconds, part.durationSeconds);
     }
@@ -845,6 +887,61 @@ export function resolveChartWindowCarryOver(
   return trigger.sampleDurationSeconds !== undefined
     ? { offsetSeconds, durationSeconds: trigger.sampleDurationSeconds - elapsed }
     : { offsetSeconds };
+}
+
+/** A part of a sample, in its own seconds: `[startSeconds, endSeconds)`. */
+export interface WindowStretchSegment {
+  readonly startSeconds: number;
+  readonly endSeconds: number;
+}
+
+/**
+ * Pure helper: the parts of one sample a window sounds, in the sample's own seconds, for each of its `triggers` (those
+ * in the window and those carried into it): from where it starts sounding (its slice offset, and how far it played
+ * before the window for one carried in) up to the window's end and its fade-out, at the play tempo `rate`, or its
+ * slice's end.
+ */
+export function windowSampleNeeds(
+  triggers: readonly Pick<TimedSampleTrigger, 'seconds' | 'sampleOffsetSeconds' | 'sampleDurationSeconds'>[],
+  window: Pick<ChartPreviewWindow, 'startSeconds' | 'endSeconds'>,
+  rate: number,
+  sampleDurationSeconds: number,
+): WindowStretchSegment[] {
+  // The fade-out runs in context time: `rate` chart seconds, and as many of the sample's, per second.
+  const tail = CHART_PREVIEW_WINDOW_FADE_OUT_SECONDS * rate;
+  return triggers.map((trigger) => {
+    const offset = trigger.sampleOffsetSeconds ?? 0;
+    const sliceEnd =
+      trigger.sampleDurationSeconds === undefined ? sampleDurationSeconds : offset + trigger.sampleDurationSeconds;
+    const startSeconds = offset + Math.max(0, window.startSeconds - trigger.seconds);
+    const endSeconds = Math.min(sliceEnd, offset + Math.max(0, window.endSeconds - trigger.seconds) + tail);
+    return { startSeconds, endSeconds: Math.max(startSeconds, endSeconds) };
+  });
+}
+
+/** How long a sample has to be before a window stretches only the part of it it sounds. */
+export const WINDOW_STRETCH_SEGMENT_MIN_SAMPLE_SECONDS = 4;
+
+/** How far past what a window sounds a stretched part reaches on either side, so the stretcher settles before it. */
+export const WINDOW_STRETCH_SEGMENT_PAD_SECONDS = 0.25;
+
+/**
+ * Pure helper: the part of a sample of `sampleDurationSeconds` a window stretches to sound `needs`
+ * ({@link windowSampleNeeds}), padded by {@link WINDOW_STRETCH_SEGMENT_PAD_SECONDS} and snapped out to whole tenths so
+ * the windows of one bar share it; `undefined` stretches the whole sample, as for a short one or one the window sounds
+ * most of.
+ */
+export function resolveWindowStretchSegment(
+  needs: readonly WindowStretchSegment[],
+  sampleDurationSeconds: number,
+): WindowStretchSegment | undefined {
+  if (!(sampleDurationSeconds > WINDOW_STRETCH_SEGMENT_MIN_SAMPLE_SECONDS) || needs.length === 0) return undefined;
+  const from = Math.min(...needs.map((need) => need.startSeconds)) - WINDOW_STRETCH_SEGMENT_PAD_SECONDS;
+  const to = Math.max(...needs.map((need) => need.endSeconds)) + WINDOW_STRETCH_SEGMENT_PAD_SECONDS;
+  const startSeconds = Math.max(0, Math.floor(from * 10) / 10);
+  const endSeconds = Math.min(sampleDurationSeconds, Math.ceil(to * 10) / 10);
+  if (endSeconds - startSeconds >= sampleDurationSeconds * 0.75) return undefined;
+  return { startSeconds, endSeconds };
 }
 
 /**

@@ -9,8 +9,9 @@ import {
   resolveBmsWAVResources,
   resolveReferencedBmsWAVResources,
   collectBmsWAVPlaybackModifiers,
+  type TimedSampleTrigger,
 } from '@be-music/chart-model';
-import { type BeMusicJSON } from '@be-music/chart-source';
+import { normalizeObjectKey, resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
 import type { NonstopStitchMap } from '@be-music/player-engine/course';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
 import type { BrowserAssetEntry, BrowserAssetSource } from '../collection/types.ts';
@@ -68,11 +69,73 @@ export interface LoadPlaySamplesOptions {
    */
   peakGain?: boolean;
   /**
+   * The part of the chart the play sounds, as a PRACTICE play of picked bars has it: only the samples it can sound are
+   * decoded ({@link resolvePlayWindowSamples}). Absent decodes every sample the chart plays.
+   */
+  window?: PlaySampleWindow;
+  /**
    * The decoded samples of the chart played last (`AudioService.chartSamples`). A play of the same chart takes its
    * decodes from there and decodes only what is missing; a play of another chart releases them first. Without it,
    * every sample decodes.
    */
   sampleCache?: ChartSampleCache;
+}
+
+/** The chart seconds a play sounds, and the sample triggers of its chart ({@link LoadPlaySamplesOptions.window}). */
+export interface PlaySampleWindow {
+  readonly startSeconds: number;
+  readonly endSeconds: number;
+  readonly triggers: readonly Pick<TimedSampleTrigger, 'seconds' | 'sampleKey'>[];
+}
+
+/**
+ * Pure helper: the samples a play of `window` can sound, by sample key: those triggered in it (`inWindow`), and for
+ * each other sample triggered before it, when it was triggered last (`before`): it sounds only if it rings past the
+ * window's start, which its length decides.
+ */
+export function resolvePlayWindowSamples(window: PlaySampleWindow): {
+  inWindow: Set<string>;
+  before: Map<string, number>;
+} {
+  const inWindow = new Set<string>();
+  const before = new Map<string, number>();
+  for (const trigger of window.triggers) {
+    if (trigger.seconds > window.endSeconds) continue;
+    if (trigger.seconds >= window.startSeconds) inWindow.add(trigger.sampleKey);
+    else before.set(trigger.sampleKey, Math.max(before.get(trigger.sampleKey) ?? 0, trigger.seconds));
+  }
+  for (const key of inWindow) before.delete(key);
+  return { inWindow, before };
+}
+
+/** The lowest bitrate {@link estimateMaxAudioSeconds} assumes of a compressed file, in bytes a second (32 kbps). */
+const MIN_COMPRESSED_BYTES_PER_SECOND = 4000;
+
+/**
+ * Pure helper: how long the audio file `bytes` plays at most, in seconds, read without decoding it: a RIFF WAVE's
+ * length from its header, and any other file's at {@link MIN_COMPRESSED_BYTES_PER_SECOND}, longer than it can be.
+ */
+export function estimateMaxAudioSeconds(bytes: Uint8Array): number {
+  const compressed = bytes.length / MIN_COMPRESSED_BYTES_PER_SECOND;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const tag = (offset: number): string =>
+    offset + 4 <= bytes.length ? String.fromCharCode(...bytes.subarray(offset, offset + 4)) : '';
+  if (tag(0) !== 'RIFF' || tag(8) !== 'WAVE') return compressed;
+  let byteRate: number | undefined;
+  for (let offset = 12; offset + 8 <= bytes.length;) {
+    const id = tag(offset);
+    const size = view.getUint32(offset + 4, true);
+    if (id === 'fmt ' && offset + 16 <= bytes.length) {
+      // PCM's byte rate; a compressed WAVE (an ADPCM one) plays longer than its bytes at it, so it falls back.
+      const format = view.getUint16(offset + 8, true);
+      byteRate = format === 1 || format === 3 || format === 0xfffe ? view.getUint32(offset + 16, true) : undefined;
+      if (byteRate === undefined) return compressed;
+    } else if (id === 'data') {
+      return byteRate !== undefined && byteRate > 0 ? Math.min(size, bytes.length - offset - 8) / byteRate : compressed;
+    }
+    offset += 8 + size + (size % 2);
+  }
+  return compressed;
 }
 
 /**
@@ -97,6 +160,10 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
       Object.values(resolveReferencedBmsWAVResources(chart)).filter((path): path is string => typeof path === 'string'),
     ),
   ];
+  // A play of part of the chart (`window`) decodes what that part sounds: the samples triggered in it, and those
+  // triggered before it that ring into it, which their files' lengths tell before they decode.
+  const windowSamples = options.window === undefined ? undefined : resolvePlayWindowSamples(options.window);
+  const windowPaths = windowSamples === undefined ? undefined : resolveWindowSamplePaths(chart, windowSamples);
   // `#PATH_WAV <prefix>`: the chart's samples live under that directory; the resolver tries the prefixed path first.
   const pathPrefix = typeof chart.bms.pathWAV === 'string' ? chart.bms.pathWAV : undefined;
   const concurrency = resolveAudioDecodeConcurrency(
@@ -108,8 +175,10 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
     pathPrefix,
     sampleRate: audioContext.sampleRate,
   });
-  await runWithConcurrency(wavPaths, concurrency, async (path) => {
+  const decodePaths = windowPaths === undefined ? wavPaths : wavPaths.filter((path) => windowPaths.has(path));
+  await runWithConcurrency(decodePaths, concurrency, async (path) => {
     if (isCancelled()) return;
+    const ringsFrom = windowPaths?.get(path);
     const cached = lease?.get(path);
     // A path that needs its native rate decodes again when the cached decode has none (its `#EXWAV` changed branch).
     if (cached !== undefined && (!nativeRatePaths.has(path) || cached.nativeSampleRate !== undefined)) {
@@ -130,6 +199,9 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
         const bytes = await loadAssetBytes(entry);
         if (isCancelled()) return;
         if (!bytes) continue;
+        // Triggered only before the window: decoded when it may still ring at its start.
+        if (ringsFrom !== undefined && ringsFrom + estimateMaxAudioSeconds(bytes) <= options.window!.startSeconds)
+          return;
         const decoded = await audioContext.decodeAudioData(bytes.slice().buffer);
         let nativeSampleRate: number | undefined;
         if (nativeRatePaths.has(path)) {
@@ -154,6 +226,7 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
     }
   });
   // A play that loaded every sample leaves the cache with only those: no other `#RANDOM` branch's samples stay behind.
+  // A play of part of the chart keeps the rest of its decodes too, for the next play of it.
   if (!isCancelled()) lease?.retain(wavPaths);
   const stretchResources: Record<string, string> = {};
   for (const [key, path] of Object.entries(wavResources)) {
@@ -185,6 +258,29 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
     applyChartPeakGain(audibleBuffers);
   }
   return stretched;
+}
+
+/**
+ * The paths a play of part of the chart decodes: each path behind a sample triggered in it (`undefined`: always), and
+ * each one behind a sample triggered only before it, with when it was triggered last.
+ */
+function resolveWindowSamplePaths(
+  chart: BeMusicJSON,
+  samples: ReturnType<typeof resolvePlayWindowSamples>,
+): Map<string, number | undefined> {
+  const base = resolveBMSBase(chart);
+  const longKeys = chart.sourceFormat === 'bmson';
+  const always = new Set<string>();
+  const before = new Map<string, number>();
+  for (const [key, path] of Object.entries(resolveBmsWAVResources(chart))) {
+    const sampleKey = normalizeObjectKey(key, base, longKeys);
+    if (samples.inWindow.has(sampleKey)) always.add(path);
+    const last = samples.before.get(sampleKey);
+    if (last !== undefined) before.set(path, Math.max(before.get(path) ?? last, last));
+  }
+  const paths = new Map<string, number | undefined>(before);
+  for (const path of always) paths.set(path, undefined);
+  return paths;
 }
 
 /** Replaces each of `keys`' buffers that `lease` holds with a copy of it in `samples`, one copy per buffer. */

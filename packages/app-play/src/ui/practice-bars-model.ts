@@ -9,6 +9,7 @@ import {
   type ChartScoreLayout,
 } from '@be-music/player-ui';
 import { formatPracticeTime, type PracticeRange } from '@be-music/player-scene-model';
+import { clampTempoPercent } from '../play-tempo-settings.ts';
 import type { PlayerCopy } from '../player-copy.ts';
 
 /** The chart seconds a bar's audition sounds: the bar, from its line up to the next one. */
@@ -27,6 +28,32 @@ export function shouldPreviewPickedBar(
 ): boolean {
   if (!extend || before === undefined) return true;
   return bar < before.first || bar > before.last;
+}
+
+/**
+ * The BPM the bars `range` start at, at the chart's own tempo: the last tempo change at or before the head of its first
+ * bar, or the chart's initial BPM; the head of the first bar with no bars picked.
+ */
+export function practiceBaseBPM(
+  layout: Pick<ChartScoreLayout, 'bars' | 'initialBPM'>,
+  range: Pick<ChartScoreBarRange, 'first' | 'last'> | undefined,
+): number {
+  const first = range === undefined ? 0 : Math.min(range.first, range.last);
+  let bpm = layout.initialBPM;
+  for (const bar of layout.bars) {
+    if (bar.index > first) break;
+    for (const change of bar.tempos) if (bar.index < first || change.position <= 0) bpm = change.bpm;
+  }
+  return bpm;
+}
+
+/**
+ * The tempo slider's percent that plays `baseBPM` closest to `targetBPM`, within the slider's range (whole percents);
+ * `undefined` for a BPM that is not a positive finite number.
+ */
+export function tempoPercentForBPM(targetBPM: number, baseBPM: number): number | undefined {
+  if (!(Number.isFinite(targetBPM) && targetBPM > 0 && Number.isFinite(baseBPM) && baseBPM > 0)) return undefined;
+  return clampTempoPercent((targetBPM / baseBPM - 1) * 100);
 }
 
 /** A measure number as BMS writes it (`012`), as the score labels its bars. */

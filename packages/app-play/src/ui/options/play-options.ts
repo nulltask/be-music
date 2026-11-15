@@ -418,6 +418,14 @@ export function buildPlayOptionsFolder(
     ['practiceRestBefore', 'REST BEFORE (bars)', 0, 8, 1],
     ['practiceRestAfter', 'REST AFTER (bars)', 0, 8, 1],
   ]);
+  // A long note held into the bars from before them is kept and played from its head (a Be-Music extension).
+  this.practiceControllers.push(
+    trackPlayOption(
+      practice
+        .addBinding(this.guiState, 'practiceCarriedLongNotes', { label: 'Keep LNs held into the bars' })
+        .on('change', ({ value }) => this.setPlayOptions({ practiceCarriedLongNotes: value })),
+    ),
+  );
   // The judge ruleset's own gauges, then the other sources' (ADR 0019); refreshRulesetChoices relists them when the
   // ruleset changes.
   const practiceGauge = selectBinding(

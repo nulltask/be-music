@@ -20,6 +20,7 @@ import { emitPlayerLog, writeRuntimeEventLog } from './engine-trace.ts';
 import type { PlayerInterruptReason } from './engine-types.ts';
 import type { PlayControls } from './play-controls.ts';
 import { applySeek, clampSeekSeconds, isPracticeLoopDue, restartPractice } from './play-seek.ts';
+import { isSeamlessPracticeLoop } from './practice.ts';
 import type { PlaySession } from './play-session.ts';
 import type { PlayJudge, PlayTick } from './play-strategy.ts';
 
@@ -128,8 +129,8 @@ async function playChart(
   const endsWithChart = session.audioSession === undefined && hold === undefined;
   // A looping PRACTICE play (`PlayPractice.loop`) never reaches its horizon: it goes back to its start before it.
   const loopsPractice = options.practice?.loop === true && judge.seek !== undefined;
-  // With no rest after the range the loop is seamless: back at the range's end, the time past it carried over.
-  const seamlessPractice = loopsPractice && options.practice?.restBarsAfter === 0;
+  // A loop of picked bars is seamless: back at the play's end, the time past it carried over.
+  const seamlessPractice = loopsPractice && isSeamlessPracticeLoop(options.practice);
   // A replay of an ESC-aborted log stops where the play was aborted, as the replay simulators do.
   const replayStopSeconds =
     session.replay && options.replayAbortedAtUs !== undefined ? options.replayAbortedAtUs / 1_000_000 : undefined;

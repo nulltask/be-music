@@ -308,6 +308,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   practiceTotal: number;
   practiceRestBefore: number;
   practiceRestAfter: number;
+  practiceCarriedLongNotes: boolean;
   customJudgeKeyPerfectGreat: number;
   customJudgeKeyGreat: number;
   customJudgeKeyGood: number;

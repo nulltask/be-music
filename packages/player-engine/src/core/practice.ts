@@ -40,11 +40,18 @@ export interface PlayPractice {
   /** How many bars after the range the play ends, as a rest after its last note (0 ends at the range's end); absent is 1. */
   restBarsAfter?: number;
   /**
+   * Keeps a long note that started before the range and ends in it, instead of moving it to the background with the
+   * rest of what lies outside (`applyPracticeRange`): the play starts early enough to play it from its head
+   * (`resolvePracticePlayWindow`). A Be-Music extension: beatoraja's `PracticeModifier` drops it. Absent is `false`.
+   */
+  carriedLongNotes?: boolean;
+  /**
    * Plays the range again in place each time it ends, until the play is interrupted (#949): once the play's end (the
    * head of the bar after the one `END TIME` lies in, `resolvePracticePlayWindow`) is reached and judged, or its gauge
    * empties, the play goes back to its start (the head of the bar before the range's) with the score, combo and gauge of the practice settings, as a seek there does (`restartPractice`).
-   * With no rest after the range (`restBarsAfter` 0) the loop is seamless: the play goes back the moment it reaches the
-   * range's end, carrying the time it overshot, without waiting for the last notes' judgment.
+   * With an `END TIME` the loop is seamless: the play goes back the moment it reaches its end, carrying the time it
+   * overshot, without waiting for the last notes' judgment, and the next round's notes come down the lane before it
+   * (`resolvePracticeLoopShift`), as if the chart went on that way.
    * Absent, the play ends there as any other does.
    */
   loop?: boolean;
@@ -96,17 +103,27 @@ function restBarCount(bars: number | undefined): number {
  * plays that many whole bars on either side; 0 starts and ends at the range itself. The first round
  * (`firstStartSeconds`) starts a bar before the range even with no rest before it. Without an `END TIME` (to the
  * chart's end) one bar of rest ends 1000 ms past the range's end, as before. beatoraja starts 1000 ms before the range
- * and ends 1000 ms past it instead.
+ * and ends 1000 ms past it instead. With `carriedFromMs` (a long note kept from before the range) the bars before are
+ * counted from the bar that long note starts in.
  */
 export function resolvePracticePlayWindow(
   chart: Pick<ResolvedChart, 'beatResolver' | 'timing'>,
   practice: Pick<PlayPractice, 'endMs' | 'restBarsBefore' | 'restBarsAfter'>,
   range: { startMs: number; endMs: number },
+  carriedFromMs?: number,
 ): { startSeconds: number; endSeconds: number; firstStartSeconds: number } {
   const before = restBarCount(practice.restBarsBefore);
   const after = restBarCount(practice.restBarsAfter);
-  const startBar = barIndexAt(chart, range.startMs);
-  const startSeconds = before === 0 ? range.startMs / 1000 : barHeadMs(chart, Math.max(0, startBar - before)) / 1000;
+  // A long note kept from before the range (`carriedLongNotes`) is played from its head: the bar it starts in leads.
+  const leadMs =
+    carriedFromMs !== undefined && carriedFromMs < range.startMs ? Math.max(0, carriedFromMs) : range.startMs;
+  const startBar = barIndexAt(chart, leadMs);
+  const startSeconds =
+    before === 0
+      ? leadMs === range.startMs
+        ? range.startMs / 1000
+        : barHeadMs(chart, startBar) / 1000
+      : barHeadMs(chart, Math.max(0, startBar - before)) / 1000;
   let endMs: number;
   if (after === 0) endMs = range.endMs;
   else if (practice.endMs === undefined) {
@@ -124,21 +141,28 @@ export function resolvePracticePlayWindow(
 }
 
 /**
- * How far a seamless PRACTICE loop moves the play back each time (`restBarsAfter` 0 on a looping play of picked bars),
- * in chart seconds and beats: from the loop's start to the range's end. `undefined` when the loop is not seamless (a
- * rest after the range, no loop, or the whole chart to its end).
+ * How far a seamless PRACTICE loop (a looping play of picked bars, whatever its rest bars) moves the play back each
+ * time, in chart seconds and beats: from the loop's start to the play's end (the range's end, or the end of the rest
+ * bars after it). `undefined` when the loop is not seamless (no loop, or the whole chart to its end).
  */
 export function resolvePracticeLoopShift(
   chart: Pick<ResolvedChart, 'timing'>,
   practice: Pick<PlayPractice, 'loop' | 'endMs' | 'restBarsAfter'>,
   window: { startSeconds: number; endSeconds: number },
 ): { seconds: number; beats: number } | undefined {
-  if (practice.loop !== true || practice.endMs === undefined || restBarCount(practice.restBarsAfter) !== 0)
-    return undefined;
+  if (!isSeamlessPracticeLoop(practice)) return undefined;
   const seconds = window.endSeconds - window.startSeconds;
   if (!(seconds > 0)) return undefined;
   const beatAt = createBeatAtSecondsResolverFromTimingResolver(chart.timing);
   return { seconds, beats: beatAt(window.endSeconds) - beatAt(window.startSeconds) };
+}
+
+/**
+ * Whether a PRACTICE play loops seamlessly ({@link PlayPractice.loop}): it loops a range with an `END TIME`, and goes
+ * back the moment it reaches its end, the time it overshot carried over.
+ */
+export function isSeamlessPracticeLoop(practice: Pick<PlayPractice, 'loop' | 'endMs'> | undefined): boolean {
+  return practice?.loop === true && practice.endMs !== undefined;
 }
 
 /**
@@ -169,7 +193,8 @@ export function createPracticeLoopPreviewNotes(
 
 /**
  * `PracticeModifier`: move every judged object outside `[start, end)` to the background. A long note leaves with
- * either end outside, since moving one end moves its pair. Returns the scorable note counts from before, which the
+ * either end outside, since moving one end moves its pair, unless `carriedLongNotes` keeps one held into the range from
+ * before it (its head before `start`, its end in the range). Returns the scorable note counts from before, which the
  * PRACTICE TOTAL scales against.
  */
 export function applyPracticeRange(
@@ -177,7 +202,14 @@ export function applyPracticeRange(
   notes: TimedPlayableNote[],
   mines: TimedLandmineNote[],
   range: { startMs: number; endMs: number },
-): { chart: ResolvedChart; sourceNotes: RulesetNoteCounts; changedObjectCount: number } {
+  carriedLongNotes = false,
+): {
+  chart: ResolvedChart;
+  sourceNotes: RulesetNoteCounts;
+  changedObjectCount: number;
+  /** Where the earliest long note kept from before the range starts (`carriedLongNotes`), in chart milliseconds. */
+  carriedFromMs?: number;
+} {
   const long = { 1: 0, 2: 0, 3: 0 };
   let normal = 0;
   for (const note of notes) {
@@ -187,21 +219,34 @@ export function applyPracticeRange(
   const sourceNotes: RulesetNoteCounts = { normal, long };
   const before = notes.length + mines.length;
   // TimeLine times are whole milliseconds.
+  const msOf = (seconds: number): number => Math.floor(seconds * 1000 + 1e-6);
   const outside = (seconds: number): boolean => {
-    const ms = Math.floor(seconds * 1000 + 1e-6);
+    const ms = msOf(seconds);
     return ms < range.startMs || ms >= range.endMs;
   };
-  const sampleTriggers = moveNotesToBackground(
-    source,
-    notes,
-    mines,
-    (object) =>
+  // A long note held into the range from before it: its head before the range's start, its end in the range.
+  const carried = (object: TimedPlayableNote | TimedLandmineNote): boolean =>
+    carriedLongNotes &&
+    'endSeconds' in object &&
+    object.endSeconds !== undefined &&
+    object.endSeconds > object.seconds &&
+    msOf(object.seconds) < range.startMs &&
+    !outside(object.endSeconds);
+  let carriedFromMs: number | undefined;
+  const sampleTriggers = moveNotesToBackground(source, notes, mines, (object) => {
+    if (carried(object)) {
+      carriedFromMs = Math.min(carriedFromMs ?? Number.POSITIVE_INFINITY, msOf(object.seconds));
+      return false;
+    }
+    return (
       outside(object.seconds) ||
-      ('endSeconds' in object && object.endSeconds !== undefined && outside(object.endSeconds)),
-  );
+      ('endSeconds' in object && object.endSeconds !== undefined && outside(object.endSeconds))
+    );
+  });
   return {
     chart: withChartOverrides(source, { sampleTriggers }),
     sourceNotes,
     changedObjectCount: before - notes.length - mines.length,
+    ...(carriedFromMs !== undefined ? { carriedFromMs } : {}),
   };
 }

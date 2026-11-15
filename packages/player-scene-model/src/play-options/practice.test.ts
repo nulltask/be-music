@@ -18,6 +18,7 @@ const OPTIONS: PracticePlayOptions = {
   practiceTotal: 300,
   practiceRestBefore: 2,
   practiceRestAfter: 0,
+  practiceCarriedLongNotes: false,
 };
 
 test('a PRACTICE gauge is the judge ruleset’s own, else its default', () => {
@@ -38,6 +39,7 @@ test('beatoraja PRACTICE takes every setting', () => {
     startGauge: 40,
     restBarsBefore: 2,
     restBarsAfter: 0,
+    carriedLongNotes: false,
     judgeRank: 50,
     total: 300,
   });
@@ -51,6 +53,7 @@ test('LR2 PRACTICE has no GAUGE CATEGORY and reads JUDGERANK and TOTAL (#933)', 
     startGauge: 40,
     restBarsBefore: 2,
     restBarsAfter: 0,
+    carriedLongNotes: false,
     judgeRank: 50,
     total: 300,
   });
@@ -64,6 +67,7 @@ test('AC PRACTICE sets only the range and the gauge (#933)', () => {
     startGauge: 40,
     restBarsBefore: 2,
     restBarsAfter: 0,
+    carriedLongNotes: false,
   });
 });
 
@@ -72,9 +76,10 @@ test('no range plays the whole chart, and a 0 JUDGERANK or TOTAL keeps the chart
     startMs: 0,
     gauge: 'GROOVE',
     startGauge: 20,
-    // One bar of rest on either side by default.
+    // One bar of rest on either side by default, and a long note held into the range kept.
     restBarsBefore: 1,
     restBarsAfter: 1,
+    carriedLongNotes: true,
   });
 });
 
