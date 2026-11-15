@@ -5,6 +5,7 @@
 import { html, nothing, render, type TemplateResult } from 'lit';
 import type { ControlScheme, ControlScreen, ControlSettings } from '@be-music/player-browser/host';
 import { defineKeyboardMapElement } from './keyboard-element.ts';
+import { buildGamepadGuide } from './gamepad-guide.ts';
 import { buildKeyboardGuide, type KeyboardGuideLang, type KeyboardGuideRow } from './keyboard-guide.ts';
 import { guessKeyboard, KEYBOARD_FORMS, type KeyboardForm, type KeyboardPlatform } from './keyboard-layout.ts';
 
@@ -30,6 +31,10 @@ const COPY = {
     legend: 'Numbers are the lane keys (white and black), ◎ the turntable, ST / SL START / SELECT, ● an operation.',
     note: 'Point at a line to light its keys. On a laptop, a key it lacks reads as the Fn combination that gives it (the number pad is the one built into the letter keys, where the laptop has one). Combinations and held keys are on the Usage tab; Options → Keys moves any key.',
     none: 'No operation on this key map.',
+    gamepad: 'Gamepad',
+    iidx: 'IIDX controller',
+    gamepadNote:
+      'A gamepad button does what the key it stands for does, on the same key map. The first pad is 1P, the second 2P. Outside a play the D-pad is the arrow keys, and a held turntable or D-pad repeats; in a play the D-pad is key 1.',
   },
   ja: {
     screen: '画面',
@@ -43,6 +48,10 @@ const COPY = {
     legend: '数字はレーンの鍵盤 (白鍵・黒鍵)、◎ は皿、ST / SL は START / SELECT、● は操作のキーです。',
     note: '行にカーソルを合わせるとそのキーが光ります。ノートにないキーは、それを入力する Fn との組み合わせで示します (テンキーは、文字キーに内蔵されたテンキーがあるノートでの組み合わせです)。同時押しや長押しは「使い方」タブに、キーの変更は Options → Keys にあります。',
     none: 'このキー操作にはありません。',
+    gamepad: 'ゲームパッド',
+    iidx: 'IIDX コントローラー',
+    gamepadNote:
+      'ゲームパッドのボタンは、対応するキーと同じキー操作で同じ働きをします。1 台目が 1P、2 台目が 2P です。プレイ以外の画面では十字キーが矢印キーになり、皿や十字キーは押し続けるとくり返します。プレイ中の十字キーは鍵盤 1 です。',
   },
 } as const;
 
@@ -87,6 +96,7 @@ export class HelpKeyboard {
     const copy = COPY[this.lang];
     const scheme = this.scheme ?? 'lr2';
     const guide = buildKeyboardGuide(this.screen, scheme, this.source().settings, this.lang, this.platform, this.form);
+    const gamepad = buildGamepadGuide(this.screen, this.lang);
     const pick = <T>(value: T, current: T, label: string, set: () => void): TemplateResult =>
       html`<button
         type="button"
@@ -129,6 +139,14 @@ export class HelpKeyboard {
         ${this.list(copy.actions, guide.actions, copy.none)} ${this.list(copy.lanes, guide.lanes)}
       </div>
       <p class="help-keyboard-note">${copy.note}</p>
+      ${
+        gamepad.standard.length === 0
+          ? nothing
+          : html`<div class="help-keyboard-lists">
+                ${this.list(copy.gamepad, gamepad.standard)} ${this.list(copy.iidx, gamepad.iidx)}
+              </div>
+              <p class="help-keyboard-note">${copy.gamepadNote}</p>`
+      }
     </div>`;
   }
 
