@@ -808,8 +808,10 @@ judge core, a replay and the replay simulator all key a scratch hold by the same
   player sends it on the touch lane's `lane-input` and `kitty-state` commands.
 - A controller passes its source on the `lane-input` and `kitty-state` commands: a turntable is two sources, `up` and
   `down`, whether the device reports an axis or two buttons, and a host that turns an axis into presses names the
-  algorithm in `recordReplay.analogScratch`. No host has a controller input path yet (no Gamepad API input); that is
-  the boundary a controller plugs into. A source never carries device-identifying data.
+  algorithm in `recordReplay.analogScratch`. The web player reads standard-mapped Gamepads with the CS DualShock
+  assignment: D-pad to key 1, L1 / Square / R1 / Cross / Triangle / Circle to keys 2–7, and L2 / R2 to the two
+  turntable directions. It records only generic button / turntable source labels, never a device id. A source never
+  carries device-identifying data.
 
 **Single-source fallback.** With only one source on a scratch lane, beatoraja's strict rules would leave every BSS
 unclearable: only another source ends one. A hold started by a source that has no counterpart on its lane therefore

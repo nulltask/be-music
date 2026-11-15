@@ -1,15 +1,14 @@
 import type { CreatePlayerInputRuntimeContext, PlayerInputRuntime } from '@be-music/player-engine';
-import type { PlayerInputSignalBus } from '@be-music/player-engine/signals';
+import type { InputSource, PlayerInputSignalBus } from '@be-music/player-engine/signals';
 import { logger } from '../logger.ts';
 
 const log = logger('web-input-runtime');
 
 /**
- * Construction-time inputs for {@link createWebInputRuntime}. The factory closes over the host's `KeyboardEvent`
- * source (typically `window`) and forwards every press / release into the engine's `inputSignals` bus as the same
- * `lane-input` / `kitty-state` / `toggle-pause` / `interrupt` commands the TUI runtime emits — that way the engine's
- * judge / fallback / LN logic doesn't need a runtime-specific code path. Unlike the TUI it sends no `high-speed`
- * command (the TUI's Alt / Option + lane shortcut): the play session steps the hi-speed with the arrow keys itself.
+ * Construction-time inputs for {@link createWebInputRuntime}. The runtime forwards keyboard and standard Gamepad
+ * presses / releases into the engine's `inputSignals` bus as `lane-input` / `kitty-state` commands, so its judge /
+ * fallback / LN logic needs no runtime-specific code path. Unlike the TUI it sends no `high-speed` command (the TUI's
+ * Alt / Option + lane shortcut): the play session steps the hi-speed with the arrow keys itself.
  */
 export interface WebInputRuntimeOptions {
   inputSignals: PlayerInputSignalBus;
@@ -30,12 +29,31 @@ export interface WebInputRuntimeOptions {
    * doesn't leak through.
    */
   shouldSkipKey?: (event: KeyboardEvent) => boolean;
+  /** Whether to poll standard-mapped gamepads using the CS DualShock lane layout. Defaults to enabled. */
+  gamepadInput?: boolean;
 }
+
+/** The CS DualShock layout expressed as Web Gamepad standard button indices and IIDX lane channels. */
+export const CS_GAMEPAD_BUTTON_CHANNELS: Readonly<Record<number, string>> = {
+  // The CS version assigns the D-pad as one control for the first white key.
+  12: '1',
+  4: '2', // L1: left black key
+  2: '3', // Square: second white key
+  5: '4', // R1: middle black key
+  0: '5', // Cross: third white key
+  3: '8', // Triangle: right black key
+  1: '9', // Circle: fourth white key
+  6: '6', // L2: turntable, clockwise
+  7: '6', // R2: turntable, counter-clockwise
+};
+
+const gamepadPollIntervalMs = 4;
+const gamepadPressThreshold = 0.5;
 
 /**
  * Web-side adapter for the engine's `PlayerInputRuntime` contract. `start()` attaches the `keydown` / `keyup`
- * listeners; `stop()` detaches them. Pressing a key resolves to its lowercase token (matching the
- * {@link createLaneBindings} convention — `'z'`, `'shift-left'`, etc.) and pushes a `lane-input` command. Special
+ * listeners and polls standard-mapped Gamepads; `stop()` detaches and releases held inputs. Pressing a key resolves to
+ * its lowercase token (matching the {@link createLaneBindings} convention — `'z'`, `'shift-left'`, etc.) and pushes a `lane-input` command. Special
  * shortcuts (`Escape`, `F5` for restart, `Pause` for pause) are routed through `interrupt` / `toggle-pause`
  * commands so the engine sees the same control surface the TUI exposes.
  *
@@ -51,6 +69,16 @@ export interface WebInputRuntimeOptions {
 export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerInputRuntime {
   const target: EventTarget = options.target ?? globalThis;
   let attached = false;
+  let gamepadTimer: ReturnType<typeof setInterval> | undefined;
+  const gamepadButtons = new Map<
+    string,
+    {
+      pressed: boolean;
+      token: string;
+      source: InputSource;
+      code: string;
+    }
+  >();
 
   const handleKeyDown = (event: Event): void => {
     // Duck-type check rather than `instanceof KeyboardEvent` so the runtime is testable in Node (no DOM globals).
@@ -133,12 +161,134 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
     });
   };
 
+  const pollGamepads = (): void => {
+    if (
+      options.gamepadInput === false ||
+      typeof navigator === 'undefined' ||
+      typeof navigator.getGamepads !== 'function'
+    ) {
+      return;
+    }
+    let pads: Array<Gamepad | null>;
+    try {
+      pads = Array.from(navigator.getGamepads());
+    } catch {
+      return;
+    }
+    const seen = new Set<string>();
+    const mappedPads = pads
+      .filter((pad): pad is Gamepad => pad !== null && pad.mapping === 'standard')
+      .sort((a, b) => a.index - b.index);
+    for (const [padOrder, pad] of mappedPads.slice(0, 2).entries()) {
+      const sidePrefix = padOrder === 0 ? '1' : '2';
+      for (const [buttonIndexText, channelSuffix] of Object.entries(CS_GAMEPAD_BUTTON_CHANNELS)) {
+        const buttonIndex = Number(buttonIndexText);
+        if (buttonIndex === 12 && pad.buttons.length < 16) continue;
+        if (buttonIndex !== 12 && pad.buttons[buttonIndex] === undefined) continue;
+        const channel = `${sidePrefix}${channelSuffix}`;
+        const token = tokenForChannel(options.inputTokenToChannels, channel);
+        if (token === undefined) continue;
+        const isDpad = buttonIndex === 12;
+        const key = `${pad.index}:${isDpad ? 'dpad' : buttonIndex}`;
+        seen.add(key);
+        const pressed = isDpad
+          ? pad.buttons.slice(12, 16).some((button) => button.pressed || button.value >= gamepadPressThreshold)
+          : pad.buttons[buttonIndex]!.pressed || pad.buttons[buttonIndex]!.value >= gamepadPressThreshold;
+        const previous = gamepadButtons.get(key);
+        if (previous === undefined && !pressed) {
+          const scratchDirection = buttonIndex === 6 ? 'up' : buttonIndex === 7 ? 'down' : undefined;
+          gamepadButtons.set(key, {
+            pressed: false,
+            token,
+            source:
+              scratchDirection === undefined
+                ? {
+                    kind: 'button',
+                    device: 'controller',
+                    label: isDpad ? `p${sidePrefix}-dpad` : `p${sidePrefix}-b${buttonIndex}`,
+                  }
+                : { kind: 'turntable', device: 'controller', label: `p${sidePrefix}-tt`, direction: scratchDirection },
+            code: isDpad ? 'gamepad-dpad' : `gamepad-button-${buttonIndex}`,
+          });
+          continue;
+        }
+        if (previous?.pressed === pressed) continue;
+        const scratchDirection = buttonIndex === 6 ? 'up' : buttonIndex === 7 ? 'down' : undefined;
+        const source: InputSource =
+          scratchDirection === undefined
+            ? {
+                kind: 'button',
+                device: 'controller',
+                label: isDpad ? `p${sidePrefix}-dpad` : `p${sidePrefix}-b${buttonIndex}`,
+              }
+            : {
+                kind: 'turntable',
+                device: 'controller',
+                label: `p${sidePrefix}-tt`,
+                direction: scratchDirection,
+              };
+        const code = isDpad ? 'gamepad-dpad' : `gamepad-button-${buttonIndex}`;
+        gamepadButtons.set(key, { pressed, token, source, code });
+        const pressedAt = performance.timeOrigin + performance.now();
+        if (pressed) {
+          options.inputSignals.pushCommand({
+            kind: 'lane-input',
+            tokens: [token],
+            source,
+            ...(scratchDirection !== undefined ? { spin: scratchDirection === 'up' ? 'cw' : 'ccw' } : {}),
+            code,
+            pressedAt,
+          });
+          options.inputSignals.pushCommand({
+            kind: 'kitty-state',
+            pressTokens: [token],
+            repeatTokens: [],
+            releaseTokens: [],
+            source,
+            code,
+            pressedAt,
+          });
+        } else {
+          options.inputSignals.pushCommand({
+            kind: 'kitty-state',
+            pressTokens: [],
+            repeatTokens: [],
+            releaseTokens: [token],
+            source,
+            code,
+            pressedAt,
+          });
+        }
+      }
+    }
+    // A disconnected pad or a button disappearing from a changed mapping must release any held long note.
+    for (const [key, previous] of gamepadButtons) {
+      if (seen.has(key)) continue;
+      if (previous.pressed) {
+        options.inputSignals.pushCommand({
+          kind: 'kitty-state',
+          pressTokens: [],
+          repeatTokens: [],
+          releaseTokens: [previous.token],
+          source: previous.source,
+          code: previous.code,
+          pressedAt: performance.timeOrigin + performance.now(),
+        });
+      }
+      gamepadButtons.delete(key);
+    }
+  };
+
   return {
     reportsKeyReleases: true,
     start: (): void => {
       if (attached) return;
       target.addEventListener('keydown', handleKeyDown);
       target.addEventListener('keyup', handleKeyUp);
+      if (options.gamepadInput !== false) {
+        pollGamepads();
+        gamepadTimer = setInterval(pollGamepads, gamepadPollIntervalMs);
+      }
       attached = true;
       log.debug('input listeners attached');
     },
@@ -146,10 +296,38 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
       if (!attached) return;
       target.removeEventListener('keydown', handleKeyDown);
       target.removeEventListener('keyup', handleKeyUp);
+      if (gamepadTimer !== undefined) {
+        clearInterval(gamepadTimer);
+        gamepadTimer = undefined;
+      }
+      const releasedAt = performance.timeOrigin + performance.now();
+      for (const previous of gamepadButtons.values()) {
+        if (!previous.pressed) continue;
+        options.inputSignals.pushCommand({
+          kind: 'kitty-state',
+          pressTokens: [],
+          repeatTokens: [],
+          releaseTokens: [previous.token],
+          source: previous.source,
+          code: previous.code,
+          pressedAt: releasedAt,
+        });
+      }
+      gamepadButtons.clear();
       attached = false;
       log.debug('input listeners detached');
     },
   };
+}
+
+function tokenForChannel(
+  inputTokenToChannels: ReadonlyMap<string, readonly string[]>,
+  channel: string,
+): string | undefined {
+  for (const [token, channels] of inputTokenToChannels) {
+    if (channels.includes(channel)) return token;
+  }
+  return undefined;
 }
 
 /**
