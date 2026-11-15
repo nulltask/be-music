@@ -220,12 +220,13 @@ export interface PlayOptions {
    * PRACTICE (beatoraja's `PracticeProperty`, under every judge ruleset): play only the bars picked on the chart's score
    * when the chart is started (`resolvePracticeSelection`'s range) and play them again when they end. The range belongs
    * to that start, not to the options. `practiceGauge` is one of the judge ruleset's own
-   * gauges (`resolvePracticeGaugeTypes`). A 0 judgerank or TOTAL keeps the chart's; both are read on the judge ruleset's
+   * gauges (`resolvePracticeGaugeTypes`), or another source's qualified with it (`beatoraja:ASSIST-EASY`), which keeps
+   * that source's gauge under every judge ruleset (ADR 0019). A 0 judgerank or TOTAL keeps the chart's; both are read on the judge ruleset's
    * own tables and do nothing under That-Which-Must-Not-Be-Named. `MODE` keeps the play mode's gauge category, which
    * only beatoraja has.
    */
   practice: boolean;
-  practiceGauge: PracticeGaugeType;
+  practiceGauge: PracticeGaugePick;
   practiceGaugeCategory: PracticeGaugeCategory;
   practiceStartGauge: number;
   practiceJudgeRank: number;
@@ -356,8 +357,11 @@ export type RandomMode =
   | 'SYNCHRONIZE-RANDOM'
   | 'SYMMETRY-RANDOM';
 
-/** Allowed values for {@link PlayOptions.practiceGauge}: PRACTICE's GAUGE TYPE of any judge ruleset. */
+/** PRACTICE's GAUGE TYPE of any judge ruleset. */
 export type PracticeGaugeType = import('@be-music/player-engine/ruleset').PracticeGaugeType;
+
+/** Allowed values for {@link PlayOptions.practiceGauge}: a bare PRACTICE gauge type, or one qualified with its source. */
+export type PracticeGaugePick = import('@be-music/player-engine/ruleset').PracticeGaugePick;
 
 /** Allowed values for {@link PlayOptions.practiceGaugeCategory}: `MODE` or a beatoraja GAUGE CATEGORY. */
 export type PracticeGaugeCategory = 'MODE' | import('@be-music/player-engine/ruleset').BeatorajaGaugeCategory;

@@ -418,16 +418,28 @@ export function buildPlayOptionsFolder(
     ['practiceRestBefore', 'REST BEFORE (bars)', 0, 8, 1],
     ['practiceRestAfter', 'REST AFTER (bars)', 0, 8, 1],
   ]);
-  // The judge ruleset's own gauges; refreshRulesetChoices relists them when the ruleset changes.
+  // The judge ruleset's own gauges, then the other sources' (ADR 0019); refreshRulesetChoices relists them when the
+  // ruleset changes.
   const practiceGauge = selectBinding(
     practice,
     this.guiState,
     'practiceGauge',
     'GAUGE TYPE',
-    practiceGaugeItems(this.guiState.judgeRuleset).map((item) => item.value),
+    Object.fromEntries(
+      practiceGaugeItems(this.guiState.judgeRuleset, this.guiState.practiceGauge).map((item) => [
+        item.text,
+        item.value,
+      ]),
+    ),
   );
   this.practiceGaugeController = practiceGauge;
-  trackPlayOption(practiceGauge.on('change', ({ value }) => this.setPlayOptions({ practiceGauge: value })));
+  trackPlayOption(
+    practiceGauge.on('change', ({ value }) => {
+      this.setPlayOptions({ practiceGauge: value });
+      // GAUGE CATEGORY follows a beatoraja gauge.
+      this.refreshRulesetChoices();
+    }),
+  );
   const practiceCategory = selectBinding(practice, this.guiState, 'practiceGaugeCategory', 'GAUGE CATEGORY', {
     'Play mode': 'MODE',
     FIVEKEYS: 'FIVEKEYS',

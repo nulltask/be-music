@@ -143,6 +143,44 @@ test('PRACTICE plays on its own gauge whatever the play’s gauge pick is', () =
   expect(() => resolveRuleset(FACTS, 'lr2', { selectedGauge: 'ASSIST-EASY' })).toThrow(/no ASSIST-EASY/);
 });
 
+test('PRACTICE plays on another source’s gauge when its GAUGE TYPE names one (ADR 0019)', () => {
+  const sourceNotes = { normal: 200, long: { 1: 0, 2: 0, 3: 0 } };
+  // beatoraja's ASSIST EASY under LR2 judging: beatoraja's gauge and TOTAL reading, LR2's windows.
+  const lr2 = resolveRuleset(FACTS, 'lr2', { practice: { sourceNotes, gauge: 'GROOVE', startGauge: 20 } });
+  const borrowed = resolveRuleset(FACTS, 'lr2', {
+    practice: { sourceNotes, gauge: 'beatoraja:ASSIST-EASY', startGauge: 30 },
+  });
+  const beatoraja = resolveRuleset(FACTS, 'beatoraja', {
+    practice: { sourceNotes, gauge: 'ASSIST-EASY', startGauge: 30 },
+  });
+  expect(borrowed.gaugeSource).toBe('beatoraja');
+  expect(borrowed.gauge).toMatchObject({ id: 'ASSIST-EASY', initial: 30, border: beatoraja.gauge.border });
+  expect(borrowed.windows).toEqual(lr2.windows);
+  expect(borrowed.rulesetId).toBe('lr2');
+  // LR2's P.ATTACK under beatoraja judging, and AC's ASSISTED EASY under LR2.
+  expect(
+    resolveRuleset(FACTS, 'beatoraja', { practice: { sourceNotes, gauge: 'lr2:P-ATTACK', startGauge: 20 } }).gauge.id,
+  ).toBe('P-ATTACK');
+  expect(
+    resolveRuleset(FACTS, 'lr2', { practice: { sourceNotes, gauge: '____:ASSISTED-EASY', startGauge: 20 } }).gauge.id,
+  ).toBe('ASSISTED-EASY');
+  // A pick qualified with the judge ruleset is its own gauge.
+  expect(resolveRuleset(FACTS, 'lr2', { practice: { sourceNotes, gauge: 'lr2:HARD', startGauge: 60 } })).toMatchObject({
+    gaugeSource: 'lr2',
+    gauge: { id: 'HARD', initial: 60 },
+  });
+  // A source's pick names a gauge on that source's own PRACTICE list; a bare one the judge ruleset's.
+  for (const [ruleset, gauge] of [
+    ['lr2', 'lr2:ASSIST-EASY'],
+    ['lr2', 'ASSIST-EASY'],
+    ['beatoraja', 'beatoraja:GROOVE'],
+    ['beatoraja', 'unknown:HARD'],
+  ] as const)
+    expect(() =>
+      resolveRuleset(FACTS, ruleset, { practice: { sourceNotes, gauge: gauge as 'GROOVE', startGauge: 20 } }),
+    ).toThrow(RangeError);
+});
+
 test('PRACTICE plays a single chart under every ruleset', () => {
   const sourceNotes = { normal: 200, long: { 1: 0, 2: 0, 3: 0 } };
   for (const [ruleset, gauge] of [
