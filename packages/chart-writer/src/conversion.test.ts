@@ -367,9 +367,83 @@ describe('conversion losses that change gameplay are reported (#1198)', () => {
     ).toThrow(/1 mine\(s\)/);
   });
 
+  test('BMS → bmson: #STP, #EXRANK and SPEED, which bmson has no field for, are each reported with their count', () => {
+    const source = bms(
+      '#TITLE Directives',
+      '#BPM 120',
+      '#WAV01 key.wav',
+      '#STP 001.500 1000',
+      '#STP 002.000 500',
+      '#EXRANK01 50',
+      '#SPEED01 1.5',
+      '#SPEED02 1',
+      '#00111:01',
+      '#001A0:01',
+      '#002SP:0102',
+    );
+    const diagnostics = collect((onDiagnostic) => stringifyBmson(source, { onDiagnostic }));
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['stp', 'exrank', 'speed']);
+    expect(diagnostics.map((diagnostic) => diagnostic.message.split(' ')[0])).toEqual(['2', '1', '2']);
+  });
+
+  test('bmson → BMS: end keysounds (`up`) and continued sound slices (`c`) are reported with their count', () => {
+    const source = bmson({
+      info: { title: 'Slices', init_bpm: 120, resolution: 240 },
+      sound_channels: [
+        {
+          name: 'phrase.wav',
+          notes: [
+            { x: 1, y: 0, l: 240, c: false },
+            { x: 2, y: 240, l: 0, c: true },
+            { x: 3, y: 480, l: 0, c: true },
+          ],
+        },
+        { name: 'tail.wav', notes: [{ x: 1, y: 240, l: 0, c: false, up: true }] },
+      ],
+    });
+    const diagnostics = collect((onDiagnostic) => stringifyBMS(source, { onDiagnostic }));
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['ln-end-sound', 'sound-continuation']);
+    expect(diagnostics.map((diagnostic) => diagnostic.message.split(' ')[0])).toEqual(['1', '2']);
+  });
+
+  test('a chart without those directives or fields reports none of them', () => {
+    const plain = bms('#TITLE Plain', '#BPM 120', '#WAV01 key.wav', '#00111:01');
+    expect(collect((onDiagnostic) => stringifyBmson(plain, { onDiagnostic }))).toEqual([]);
+    const restart = bmson({
+      info: { title: 'Restart', init_bpm: 120, resolution: 240 },
+      sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0, l: 0, c: false }] }],
+    });
+    expect(collect((onDiagnostic) => stringifyBMS(restart, { onDiagnostic }))).toEqual([]);
+  });
+
   test('bmson → bmson and BMS → BMS report no conversion loss', () => {
     expect(collect((onDiagnostic) => stringifyBmson(mines(0, 2.5), { onDiagnostic }))).toEqual([]);
-    const source = bms('#TITLE Total', '#BPM 120', '#TOTAL 300', '#WAV01 key.wav', '#00111:01', '#001D2:0A');
+    const source = bms(
+      '#TITLE Total',
+      '#BPM 120',
+      '#TOTAL 300',
+      '#WAV01 key.wav',
+      '#STP 001.500 1000',
+      '#EXRANK01 50',
+      '#SPEED01 1.5',
+      '#00111:01',
+      '#001D2:0A',
+      '#001A0:01',
+      '#002SP:01',
+    );
     expect(collect((onDiagnostic) => stringifyBMS(source, { onDiagnostic }))).toEqual([]);
+    const sliced = bmson({
+      info: { title: 'Slices', init_bpm: 120, resolution: 240 },
+      sound_channels: [
+        {
+          name: 'phrase.wav',
+          notes: [
+            { x: 1, y: 0, l: 0, c: false },
+            { x: 2, y: 240, l: 0, c: true },
+          ],
+        },
+      ],
+    });
+    expect(collect((onDiagnostic) => stringifyBmson(sliced, { onDiagnostic }))).toEqual([]);
   });
 });

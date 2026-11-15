@@ -700,13 +700,18 @@ function convertChartForBMSOutput(json: BeMusicJSON, report?: ChartExportDiagnos
   // Mines whose damage BMS cannot hold as it is: a base-36 pair is a whole number from 1 to 1295.
   let adjustedMines = 0;
   let defaultedMines = 0;
+  // bmson fields BMS has no form for: `up` end keysounds and `c` sound continuations.
+  let endSounds = 0;
+  let continuations = 0;
 
   for (const event of json.events) {
     const channel = normalizeChannel(event.channel);
     if (isBmsonSource && event.bmson?.up === true && isPlayableChannel(channel)) {
+      endSounds += 1;
       changed = true;
       continue;
     }
+    if (isBmsonSource && event.bmson?.c === true) continuations += 1;
     const length = event.bmson?.l;
     if (isPlayableChannel(channel) && typeof length === 'number' && Number.isFinite(length) && length > 0) {
       const longNoteChannel = `${channel[0] === '1' ? '5' : '6'}${channel[1]}`;
@@ -738,6 +743,16 @@ function convertChartForBMSOutput(json: BeMusicJSON, report?: ChartExportDiagnos
     return json;
   }
 
+  if (endSounds > 0)
+    report?.({
+      code: 'ln-end-sound',
+      message: `${endSounds} long-note end keysound(s) (up) are left out: BMS has no end sound, so a long note ends silently.`,
+    });
+  if (continuations > 0)
+    report?.({
+      code: 'sound-continuation',
+      message: `${continuations} note(s) continue their sound slice (c), which BMS cannot express: each plays its sample from the start.`,
+    });
   if (adjustedMines > 0)
     report?.({
       code: 'mine-damage',
