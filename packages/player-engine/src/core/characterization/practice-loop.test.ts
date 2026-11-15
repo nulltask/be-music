@@ -36,15 +36,16 @@ describe('PRACTICE loop (#949)', () => {
       captureAt: [4.4, 7.9],
     });
     // The play was never finished and made again: after the seek to its start, one more back to 2.0 on the first tick past
-    // the head of bar 4 (8.0), of the next generation, and the same audio session from the start to the ESC.
+    // the head of bar 4 (8.0), seamlessly (the 10 ms past 8.0 carried over), of the next generation, and the same audio
+    // session from the start to the ESC.
     expect(play.frames.generations).toEqual([
       '0.000 generation=1 seconds=2 output=0 tempo=1',
-      '6010.000 generation=2 seconds=2 output=6.01 tempo=1',
+      '6010.000 generation=2 seconds=2.01 output=6.01 tempo=1',
     ]);
-    expect(play.audio.filter((entry) => / (start|seek 2|dispose|finish)$/.test(entry))).toEqual([
+    expect(play.audio.filter((entry) => / (start|seek 2(\.01)?|dispose|finish)$/.test(entry))).toEqual([
       '0.000 start',
       '0.000 seek 2',
-      '6010.000 seek 2',
+      '6010.000 seek 2.01',
       '11950.000 dispose',
     ]);
     // The second time through starts from nothing: no judgment yet just before the range, the starting gauge, and by

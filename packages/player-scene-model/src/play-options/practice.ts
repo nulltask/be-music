@@ -18,6 +18,7 @@ export type PracticePlayOptions = Pick<
   | 'practiceTotal'
   | 'practiceRestBefore'
   | 'practiceRestAfter'
+  | 'practiceCarriedLongNotes'
 >;
 
 /**
@@ -47,6 +48,8 @@ export interface PracticeSelection {
   restBarsBefore: number;
   /** Bars of rest after the range. */
   restBarsAfter: number;
+  /** Keeps a long note held into the range from before it. */
+  carriedLongNotes: boolean;
 }
 
 /** The source whose gauge a PRACTICE pick plays on under the judge ruleset `ruleset`: its own, or the ruleset's. */
@@ -88,6 +91,7 @@ export function resolvePracticeSelection(
     startGauge: options.practiceStartGauge,
     restBarsBefore: options.practiceRestBefore,
     restBarsAfter: options.practiceRestAfter,
+    carriedLongNotes: options.practiceCarriedLongNotes,
     ...(readsRules && options.practiceJudgeRank > 0 ? { judgeRank: options.practiceJudgeRank } : {}),
     ...(readsRules && options.practiceTotal > 0 ? { total: options.practiceTotal } : {}),
   };

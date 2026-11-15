@@ -43,6 +43,26 @@ test('PracticeModifier moves every object outside the range to the background', 
   ]);
 });
 
+test('a long note held into the range from before it stays with carriedLongNotes, played from its head', () => {
+  const source = () => resolveChart(parseBMS(SOURCE), { playVariant: '7' });
+  // [5.0, 8.0): the LN on 12 from 4 s to 6 s starts before the range and ends in it.
+  const practice = { startMs: 5000, endMs: 8000, gauge: 'NORMAL', startGauge: 20 } as const;
+  const dropped = preparePlaybackChart(source(), { practice });
+  expect(dropped.notes).toEqual([]);
+  // The range starts in bar 2 (4 s): the play starts a bar before it.
+  expect(dropped.practicePlayStartSeconds).toBe(2);
+  const carried = preparePlaybackChart(source(), { practice: { ...practice, carriedLongNotes: true } });
+  expect(carried.notes.map((note) => [note.channel, note.seconds, note.endSeconds])).toEqual([['12', 4, 6]]);
+  expect(carried.practiceChangedObjectCount).toBe(dropped.practiceChangedObjectCount! - 1);
+  // The LN's head lies in bar 2 too: the rest bar before it is the same.
+  expect(carried.practicePlayStartSeconds).toBe(2);
+  // A long note that also ends past the range still leaves, and so does one wholly before it.
+  const past = preparePlaybackChart(source(), {
+    practice: { startMs: 5000, endMs: 5500, gauge: 'NORMAL', startGauge: 20, carriedLongNotes: true },
+  });
+  expect(past.notes).toEqual([]);
+});
+
 test('the source limits keep the end at least 1000 ms after the start', () => {
   expect(resolvePracticeRange({ startMs: -5, gauge: 'NORMAL', startGauge: 20 }, 9000)).toEqual({
     startMs: 0,
@@ -270,12 +290,28 @@ describe('resolvePracticePlayWindow (#954)', () => {
     });
   });
 
+  test('leads from the bar a long note kept from before the range starts in', () => {
+    const chart = resolveChart(parseBMS(['#BPM 120', '#00911:01', ''].join('\n')), { playVariant: '7' });
+    const range = { startMs: 8000, endMs: 10000 };
+    // The kept long note starts at 3.0, in bar 1: one bar of rest before it starts at the chart's start, none at bar 1.
+    expect(resolvePracticePlayWindow(chart, { ...range }, range, 3000)).toMatchObject({
+      startSeconds: 0,
+      endSeconds: 12,
+    });
+    expect(resolvePracticePlayWindow(chart, { ...range, restBarsBefore: 0 }, range, 3000)).toMatchObject({
+      startSeconds: 2,
+      firstStartSeconds: 0,
+    });
+    // One that starts in the range's own bar or later changes nothing.
+    expect(resolvePracticePlayWindow(chart, { ...range }, range, 9000)).toMatchObject({ startSeconds: 6 });
+  });
+
   test('without an END TIME, ends 1000 ms past the range’s end as before', () => {
     expect(windowOf([], { startMs: 4500 })).toEqual({ startSeconds: 2, endSeconds: 22 });
   });
 });
 
-describe('the seamless PRACTICE loop (no rest after the range)', () => {
+describe('the seamless PRACTICE loop', () => {
   const chartOf = (lines: string[] = []) =>
     resolveChart(parseBMS(['#BPM 120', ...lines, '#00911:01', ''].join('\n')), { playVariant: '7' });
 
@@ -286,9 +322,12 @@ describe('the seamless PRACTICE loop (no rest after the range)', () => {
     expect(resolvePracticeLoopShift(chartOf(), practice, window)).toEqual({ seconds: 4, beats: 8 });
     // At 240 BPM from bar 2 (4.0): the same four seconds are sixteen beats.
     expect(resolvePracticeLoopShift(chartOf(['#00203:F0']), practice, window)).toEqual({ seconds: 4, beats: 16 });
-    // Not seamless: a rest after, no loop, or the whole chart.
-    expect(resolvePracticeLoopShift(chartOf(), { ...practice, restBarsAfter: 1 }, window)).toBeUndefined();
-    expect(resolvePracticeLoopShift(chartOf(), { ...practice, restBarsAfter: undefined }, window)).toBeUndefined();
+    // A rest after the range loops seamlessly too: the window's end is the rest's.
+    expect(resolvePracticeLoopShift(chartOf(), { ...practice, restBarsAfter: 1 }, window)).toEqual({
+      seconds: 4,
+      beats: 8,
+    });
+    // Not seamless: no loop, or the whole chart.
     expect(resolvePracticeLoopShift(chartOf(), { ...practice, loop: false }, window)).toBeUndefined();
     expect(resolvePracticeLoopShift(chartOf(), { ...practice, endMs: undefined }, window)).toBeUndefined();
   });

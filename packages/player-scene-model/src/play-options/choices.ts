@@ -256,6 +256,7 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   practiceTotal: 0,
   practiceRestBefore: 1,
   practiceRestAfter: 1,
+  practiceCarriedLongNotes: true,
   customJudgeKeyPerfectGreat: 400,
   customJudgeKeyGreat: 400,
   customJudgeKeyGood: 100,
@@ -377,6 +378,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   // Every ruleset's PRACTICE gauges; a menu offers the judge ruleset's own (`resolvePracticeGaugeTypes`).
   practiceGauge: PRACTICE_GAUGE_TYPES,
   practiceGaugeCategory: ['MODE', 'FIVEKEYS', 'SEVENKEYS', 'PMS', 'KEYBOARD', 'LR2'],
+  practiceCarriedLongNotes: BOOLEAN_CYCLE,
   lr2ExtraMode: BOOLEAN_CYCLE,
   lr2ExtraLevel: [0, 1, 2],
   autoScratch1P: BOOLEAN_CYCLE,

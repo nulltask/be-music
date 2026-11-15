@@ -473,12 +473,14 @@ export function preparePlaybackChart(
           Math.floor(Math.max(totalSeconds, resolved.sampleTriggers.at(-1)?.seconds ?? 0) * 1000),
         )
       : undefined;
-  const practice = practiceRange ? applyPracticeRange(resolved, notes, landmineNotes, practiceRange) : undefined;
+  const practice = practiceRange
+    ? applyPracticeRange(resolved, notes, landmineNotes, practiceRange, options.practice?.carriedLongNotes === true)
+    : undefined;
   resolved = practice?.chart ?? resolved;
   // A practice play runs from the head of the bar before its range to the head of the bar after it (#954).
   const practiceWindow =
     practiceRange && options.practice
-      ? resolvePracticePlayWindow(resolved, options.practice, practiceRange)
+      ? resolvePracticePlayWindow(resolved, options.practice, practiceRange, practice?.carriedFromMs)
       : undefined;
   if (practiceWindow) totalSeconds = practiceWindow.endSeconds;
   const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
