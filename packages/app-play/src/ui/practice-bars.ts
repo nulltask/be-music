@@ -18,15 +18,21 @@ import {
   type ChartScoreBarRange,
   type ChartScoreLayout,
 } from '@be-music/player-ui';
-import { clampTempoPercent, TEMPO_PERCENT_MAX, TEMPO_PERCENT_MIN } from '../play-tempo-settings.ts';
+import { clampTempoPercent, TEMPO_PERCENT_MAX, TEMPO_PERCENT_MIN, tempoFromPercent } from '../play-tempo-settings.ts';
 import { onPlayerLangChange, playerLang, playerText } from '../player-copy.ts';
 import { optionLabel } from './options/labels.ts';
 import { practiceGaugeItems } from './options/play-option-items.ts';
-import { describePracticeBars, practiceBarWindow, type PracticeBarsMemory } from './practice-bars-model.ts';
+import {
+  describePracticeBars,
+  practiceBarWindow,
+  shouldPreviewPickedBar,
+  type PracticeBarsMemory,
+} from './practice-bars-model.ts';
 
 // The PRACTICE bar picker: started with PRACTICE on, a chart opens its score (`<be-music-chart-score>`) before it
-// plays. A press on a bar sounds that bar alone, cutting the one sounding short; Shift or a drag picks a run of bars;
-// Start plays the run in a loop (the play's `practiceRange`), or the whole chart with no bars picked. beatoraja picks its
+// plays. A press on a bar sounds that bar alone, cutting the one sounding short; Shift or a drag picks a run of bars,
+// sounding each bar it takes in; the bars sound and the score reads its BPMs at the play tempo. Start plays the run in a
+// loop (the play's `practiceRange`), or the whole chart with no bars picked. beatoraja picks its
 // range in milliseconds on the play screen instead (`PracticeConfiguration`).
 
 /** The PRACTICE settings the picker sets, the same play options as the Options dialog's Practice page. */
@@ -40,6 +46,12 @@ export type PracticeSettings = Pick<
   | 'practiceRestBefore'
   | 'practiceRestAfter'
 >;
+
+/** How a tempo change sounds, as the Options dialog's Tempo page lists it. */
+const PITCH_MODES: readonly (readonly [string, PracticeTempo['pitchMode']])[] = [
+  ['Pitch follows tempo (LR2)', 'pitch'],
+  ['Keep pitch', 'keep-pitch'],
+];
 
 /** GAUGE CATEGORY's choices, as the Options dialog lists them. */
 const GAUGE_CATEGORIES: readonly (readonly [string, PracticeGaugeCategory])[] = [
@@ -64,14 +76,21 @@ export interface PracticeBarsDialogDeps {
   readonly ruleset: () => RulesetId;
   /** Sets play options as the Options dialog does: kept, saved and shown on its controls. */
   readonly setPlayOptions: (changes: Partial<PlayOptions>) => void;
-  /** The play tempo in percent off the chart's own (0 when the tempo is off), as the Options dialog's Tempo slider has it. */
-  readonly tempoPercent: () => number;
-  /** Sets the play tempo as the Options dialog's Tempo slider does: kept, saved and shown on its controls. */
-  readonly setTempoPercent: (percent: number) => void;
+  /**
+   * The play tempo as the Options dialog's Tempo page has it: the percent off the chart's own (0 when the tempo is off),
+   * how a tempo change sounds, and the stretcher keep pitch uses.
+   */
+  readonly tempo: () => PracticeTempo;
+  /** Sets the play tempo as the Options dialog's Tempo page does: kept, saved and shown on its controls. */
+  readonly setTempo: (changes: Partial<Pick<PracticeTempo, 'percent' | 'pitchMode'>>) => void;
 }
 
-/** How long a run picked must stay as it is before it sounds, so a drag does not restart it at every bar. */
-const RANGE_PREVIEW_SETTLE_MS = 150;
+/** The play tempo the picker shows and sets ({@link PracticeBarsDialogDeps.tempo}). */
+export interface PracticeTempo {
+  readonly percent: number;
+  readonly pitchMode: 'pitch' | 'keep-pitch';
+  readonly stretchAlgorithm: 'wsola' | 'signalsmith';
+}
 
 /** The score of each chart, laid out once; `null` for a chart that could not be. */
 const LAYOUTS = new WeakMap<LibraryChart, ChartScoreLayout | null>();
@@ -98,15 +117,13 @@ export class PracticeBarsDialog {
   private readonly playOptions: PracticeBarsDialogDeps['playOptions'];
   private readonly ruleset: PracticeBarsDialogDeps['ruleset'];
   private readonly setPlayOptions: PracticeBarsDialogDeps['setPlayOptions'];
-  private readonly tempoPercent: PracticeBarsDialogDeps['tempoPercent'];
-  private readonly setTempoPercent: PracticeBarsDialogDeps['setTempoPercent'];
+  private readonly tempo: PracticeBarsDialogDeps['tempo'];
+  private readonly setTempo: PracticeBarsDialogDeps['setTempo'];
   private chart: LibraryChart | undefined;
   private source: BrowserAssetSource | undefined;
   private layout: ChartScoreLayout | undefined;
   private selection: ChartScoreBarRange | undefined;
   private previewing: ChartScoreBarRange | undefined;
-  /** A run picked by a drag sounds once the drag rests on it, not at every bar it passes. */
-  private rangePreviewTimer: ReturnType<typeof setTimeout> | undefined;
   private previewTimer: ReturnType<typeof setTimeout> | undefined;
   private settle: ((start: boolean) => void) | undefined;
 
@@ -116,8 +133,8 @@ export class PracticeBarsDialog {
     this.playOptions = deps.playOptions;
     this.ruleset = deps.ruleset;
     this.setPlayOptions = deps.setPlayOptions;
-    this.tempoPercent = deps.tempoPercent;
-    this.setTempoPercent = deps.setTempoPercent;
+    this.tempo = deps.tempo;
+    this.setTempo = deps.setTempo;
     defineBeMusicElements();
     this.dialog = document.createElement('dialog');
     this.dialog.className = 'dialog practice-bars-dialog';
@@ -196,6 +213,7 @@ export class PracticeBarsDialog {
 
   private renderSettings(): unknown {
     const options = this.playOptions();
+    const tempo = this.tempo();
     const ruleset = this.ruleset();
     const lang = playerLang();
     const label = (text: string) => optionLabel(text, lang);
@@ -233,13 +251,28 @@ export class PracticeBarsDialog {
           min=${TEMPO_PERCENT_MIN}
           max=${TEMPO_PERCENT_MAX}
           step="1"
-          .value=${String(this.tempoPercent())}
+          .value=${String(tempo.percent)}
           @change=${(event: Event) => {
             const value = Number((event.target as HTMLInputElement).value);
-            if (Number.isFinite(value)) this.setTempoPercent(clampTempoPercent(value));
+            if (Number.isFinite(value)) this.setTempo({ percent: clampTempoPercent(value) });
             this.paint();
           }}
         />
+      </label>
+      <label class="practice-bars-field">
+        <span>${label('Pitch')}</span>
+        <select
+          class="select"
+          @change=${(event: Event) => {
+            this.setTempo({ pitchMode: (event.target as HTMLSelectElement).value as PracticeTempo['pitchMode'] });
+            this.paint();
+          }}
+        >
+          ${PITCH_MODES.map(
+            ([text, value]) =>
+              html`<option value=${value} ?selected=${value === tempo.pitchMode}>${label(text)}</option>`,
+          )}
+        </select>
       </label>
       ${number('practiceRestBefore', 'REST BEFORE (bars)', 0, 8)}
       ${number('practiceRestAfter', 'REST AFTER (bars)', 0, 8)}
@@ -293,8 +326,6 @@ export class PracticeBarsDialog {
   private stopPreview(): void {
     if (this.previewTimer !== undefined) clearTimeout(this.previewTimer);
     this.previewTimer = undefined;
-    if (this.rangePreviewTimer !== undefined) clearTimeout(this.rangePreviewTimer);
-    this.rangePreviewTimer = undefined;
     this.previewing = undefined;
     this.audio.stopOwned(this);
   }
@@ -305,8 +336,20 @@ export class PracticeBarsDialog {
     if (times === undefined || this.chart === undefined) return;
     if (this.previewTimer !== undefined) clearTimeout(this.previewTimer);
     this.previewing = range;
+    // At the play tempo, as the play will sound: sped up with the pitch, or stretched at it.
+    const tempo = this.tempo();
+    const rate = tempoFromPercent(tempo.percent);
     if (this.source !== undefined)
-      this.audio.preview.playWindow({ chart: this.chart, source: this.source }, practiceBarWindow(times), this);
+      this.audio.preview.playWindow(
+        { chart: this.chart, source: this.source },
+        {
+          ...practiceBarWindow(times),
+          tempo: rate,
+          keepPitch: tempo.pitchMode === 'keep-pitch',
+          stretchAlgorithm: tempo.stretchAlgorithm,
+        },
+        this,
+      );
     // The outline goes once the bars have played through.
     this.previewTimer = setTimeout(
       () => {
@@ -315,26 +358,17 @@ export class PracticeBarsDialog {
         this.previewing = undefined;
         this.paint();
       },
-      Math.max(200, times.endMs - times.startMs),
+      Math.max(200, (times.endMs - times.startMs) / rate),
     );
   }
 
   private onSelection(event: BeMusicUIEvent<'bar-selection-change'>): void {
     const { first, last, bar, extend } = event.detail;
+    const before = this.selection;
     this.selection = { first, last };
-    if (this.rangePreviewTimer !== undefined) clearTimeout(this.rangePreviewTimer);
-    this.rangePreviewTimer = undefined;
-    // A press sounds its bar at once; a run picked (Shift, a drag, Shift + arrows) sounds whole once it settles.
-    if (!extend) this.preview({ first: bar, last: bar });
-    else {
-      const range = { first, last };
-      this.rangePreviewTimer = setTimeout(() => {
-        this.rangePreviewTimer = undefined;
-        if (this.selection?.first !== range.first || this.selection.last !== range.last) return;
-        this.preview(range);
-        this.paint();
-      }, RANGE_PREVIEW_SETTLE_MS);
-    }
+    // A press sounds its bar; a run picked (Shift, a drag, Shift + arrows) sounds the bar it took in, at once, and a run
+    // drawn back takes in none, so it sounds nothing new.
+    if (shouldPreviewPickedBar(before, bar, extend)) this.preview({ first: bar, last: bar });
     this.paint();
   }
 
@@ -358,6 +392,7 @@ export class PracticeBarsDialog {
                 ? nothing
                 : html`<be-music-chart-score
                     .layout=${this.layout}
+                    .tempo=${tempoFromPercent(this.tempo().percent)}
                     .selection=${this.selection}
                     .previewing=${this.previewing}
                     @bar-selection-change=${(event: BeMusicUIEvent<'bar-selection-change'>) => this.onSelection(event)}

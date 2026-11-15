@@ -507,11 +507,18 @@ export class PlayerWebApp {
             this.optionsDialog.refreshRulesetChoices();
             this.optionsDialog.refreshPlayOptionControllers();
           },
-          tempoPercent: () => (this.guiState.tempoEnabled ? this.guiState.tempoPercent : 0),
-          // As the Options dialog's Tempo slider: a tempo other than 0 turns the tempo on; kept and saved.
-          setTempoPercent: (percent) => {
-            this.guiState.tempoPercent = percent;
-            this.guiState.tempoEnabled = percent !== 0;
+          tempo: () => ({
+            percent: this.guiState.tempoEnabled ? this.guiState.tempoPercent : 0,
+            pitchMode: this.guiState.tempoPitchMode,
+            stretchAlgorithm: this.guiState.tempoStretchAlgorithm,
+          }),
+          // As the Options dialog's Tempo page: a tempo other than 0 turns the tempo on; kept and saved.
+          setTempo: ({ percent, pitchMode }) => {
+            if (percent !== undefined) {
+              this.guiState.tempoPercent = percent;
+              this.guiState.tempoEnabled = percent !== 0;
+            }
+            if (pitchMode !== undefined) this.guiState.tempoPitchMode = pitchMode;
             storePlayTempoSettings(this.guiState);
             this.optionsDialog.refreshPlayOptionControllers();
           },

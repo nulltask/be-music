@@ -4,6 +4,7 @@ import {
   describePracticeBars,
   PracticeBarsMemory,
   practiceBarWindow,
+  shouldPreviewPickedBar,
   practiceBestEXScore,
   practiceNoteShare,
 } from './practice-bars-model.ts';
@@ -119,5 +120,18 @@ describe('practiceBestEXScore', () => {
     expect(practiceBestEXScore(100, 2)).toBe(100);
     expect(practiceBestEXScore(100, Number.NaN)).toBe(100);
     expect(practiceBestEXScore(-5, 0.5)).toBe(0);
+  });
+});
+
+describe('shouldPreviewPickedBar', () => {
+  it('sounds a pressed bar, and the bar a run takes in, but nothing for a run drawn back', () => {
+    expect(shouldPreviewPickedBar(undefined, 3, false)).toBe(true);
+    expect(shouldPreviewPickedBar({ first: 2, last: 4 }, 3, false)).toBe(true);
+    // A drag or Shift press from bar 2 to bar 5 takes bar 5 in.
+    expect(shouldPreviewPickedBar({ first: 2, last: 4 }, 5, true)).toBe(true);
+    expect(shouldPreviewPickedBar({ first: 2, last: 4 }, 1, true)).toBe(true);
+    // Drawn back from bar 4 to bar 3: bar 3 was picked already.
+    expect(shouldPreviewPickedBar({ first: 2, last: 4 }, 3, true)).toBe(false);
+    expect(shouldPreviewPickedBar(undefined, 3, true)).toBe(true);
   });
 });
