@@ -127,6 +127,60 @@ test('PRACTICE under AC rules sets only the gauge: its windows are fixed and its
   );
 });
 
+test('PRACTICE plays on its own gauge whatever the play’s gauge pick is', () => {
+  const sourceNotes = { normal: 200, long: { 1: 0, 2: 0, 3: 0 } };
+  // A pick of another source's gauge, one the judge ruleset lacks, used to stop the practice play with a RangeError.
+  for (const [ruleset, selectedGauge, gauge] of [
+    ['lr2', 'beatoraja:ASSIST-EASY', 'GROOVE'],
+    ['lr2', 'beatoraja:EX-HARD', 'HARD'],
+    ['beatoraja', 'lr2:P-ATTACK', 'NORMAL'],
+    ['____', 'lr2:G-ATTACK', 'EASY'],
+  ] as const)
+    expect(
+      resolveRuleset(FACTS, ruleset, { selectedGauge, practice: { sourceNotes, gauge, startGauge: 20 } }).gauge,
+    ).toMatchObject({ id: gauge, initial: 20 });
+  // Without PRACTICE the pick still names its source's gauge.
+  expect(() => resolveRuleset(FACTS, 'lr2', { selectedGauge: 'ASSIST-EASY' })).toThrow(/no ASSIST-EASY/);
+});
+
+test('PRACTICE plays on another source’s gauge when its GAUGE TYPE names one (ADR 0019)', () => {
+  const sourceNotes = { normal: 200, long: { 1: 0, 2: 0, 3: 0 } };
+  // beatoraja's ASSIST EASY under LR2 judging: beatoraja's gauge and TOTAL reading, LR2's windows.
+  const lr2 = resolveRuleset(FACTS, 'lr2', { practice: { sourceNotes, gauge: 'GROOVE', startGauge: 20 } });
+  const borrowed = resolveRuleset(FACTS, 'lr2', {
+    practice: { sourceNotes, gauge: 'beatoraja:ASSIST-EASY', startGauge: 30 },
+  });
+  const beatoraja = resolveRuleset(FACTS, 'beatoraja', {
+    practice: { sourceNotes, gauge: 'ASSIST-EASY', startGauge: 30 },
+  });
+  expect(borrowed.gaugeSource).toBe('beatoraja');
+  expect(borrowed.gauge).toMatchObject({ id: 'ASSIST-EASY', initial: 30, border: beatoraja.gauge.border });
+  expect(borrowed.windows).toEqual(lr2.windows);
+  expect(borrowed.rulesetId).toBe('lr2');
+  // LR2's P.ATTACK under beatoraja judging, and AC's ASSISTED EASY under LR2.
+  expect(
+    resolveRuleset(FACTS, 'beatoraja', { practice: { sourceNotes, gauge: 'lr2:P-ATTACK', startGauge: 20 } }).gauge.id,
+  ).toBe('P-ATTACK');
+  expect(
+    resolveRuleset(FACTS, 'lr2', { practice: { sourceNotes, gauge: '____:ASSISTED-EASY', startGauge: 20 } }).gauge.id,
+  ).toBe('ASSISTED-EASY');
+  // A pick qualified with the judge ruleset is its own gauge.
+  expect(resolveRuleset(FACTS, 'lr2', { practice: { sourceNotes, gauge: 'lr2:HARD', startGauge: 60 } })).toMatchObject({
+    gaugeSource: 'lr2',
+    gauge: { id: 'HARD', initial: 60 },
+  });
+  // A source's pick names a gauge on that source's own PRACTICE list; a bare one the judge ruleset's.
+  for (const [ruleset, gauge] of [
+    ['lr2', 'lr2:ASSIST-EASY'],
+    ['lr2', 'ASSIST-EASY'],
+    ['beatoraja', 'beatoraja:GROOVE'],
+    ['beatoraja', 'unknown:HARD'],
+  ] as const)
+    expect(() =>
+      resolveRuleset(FACTS, ruleset, { practice: { sourceNotes, gauge: gauge as 'GROOVE', startGauge: 20 } }),
+    ).toThrow(RangeError);
+});
+
 test('PRACTICE plays a single chart under every ruleset', () => {
   const sourceNotes = { normal: 200, long: { 1: 0, 2: 0, 3: 0 } };
   for (const [ruleset, gauge] of [
@@ -140,10 +194,14 @@ test('PRACTICE plays a single chart under every ruleset', () => {
 });
 
 describe('resolvePracticePlayWindow (#954)', () => {
-  const windowOf = (lines: string[], range: { startMs: number; endMs?: number }) => {
+  const windowOf = (
+    lines: string[],
+    range: { startMs: number; endMs?: number },
+    rest: { restBarsBefore?: number; restBarsAfter?: number } = {},
+  ) => {
     const chart = resolveChart(parseBMS(['#BPM 120', ...lines, '#00911:01', ''].join('\n')), { playVariant: '7' });
     const resolved = resolvePracticeRange({ ...range, gauge: 'NORMAL', startGauge: 20 }, 20_000);
-    return resolvePracticePlayWindow(chart, range, resolved);
+    return resolvePracticePlayWindow(chart, { ...range, ...rest }, resolved);
   };
 
   test('starts a bar before the range’s bar and ends a bar after the bar its end lies in', () => {
@@ -154,6 +212,22 @@ describe('resolvePracticePlayWindow (#954)', () => {
     // A range in the first bar starts at the chart's start; one in the second starts there too.
     expect(windowOf([], { startMs: 500, endMs: 1500 })).toEqual({ startSeconds: 0, endSeconds: 2 });
     expect(windowOf([], { startMs: 2000, endMs: 3000 })).toEqual({ startSeconds: 0, endSeconds: 4 });
+  });
+
+  test('rests the bars asked for on either side, none at 0', () => {
+    const range = { startMs: 4000, endMs: 8000 };
+    expect(windowOf([], range, { restBarsBefore: 0, restBarsAfter: 0 })).toEqual({ startSeconds: 4, endSeconds: 8 });
+    expect(windowOf([], range, { restBarsBefore: 1, restBarsAfter: 1 })).toEqual({ startSeconds: 2, endSeconds: 10 });
+    expect(windowOf([], range, { restBarsBefore: 2, restBarsAfter: 2 })).toEqual({ startSeconds: 0, endSeconds: 12 });
+    // A rest reaching past the first bar starts at the chart's start.
+    expect(windowOf([], range, { restBarsBefore: 8 }).startSeconds).toBe(0);
+    // Each side is its own: no rest before, three bars after.
+    expect(windowOf([], range, { restBarsBefore: 0, restBarsAfter: 3 })).toEqual({ startSeconds: 4, endSeconds: 14 });
+  });
+
+  test('rests without an END TIME: none ends at the range’s end, more bars end further out', () => {
+    expect(windowOf([], { startMs: 4000 }, { restBarsAfter: 0 }).endSeconds).toBe(21);
+    expect(windowOf([], { startMs: 4000 }, { restBarsAfter: 3 }).endSeconds).toBe(26);
   });
 
   test('reads odd measure lengths', () => {

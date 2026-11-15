@@ -63,6 +63,8 @@ export interface JudgeSideTiming {
 }
 
 export interface PlayfieldRuntime {
+  /** A seek (or a sought earlier course stage) made the play practice. */
+  readonly practice?: boolean;
   /** Where the play skin is moved and how far it is scaled (LR2's 1 / 2 + the arrows); where it is drawn without one. */
   readonly skinAdjust?: { readonly x: number; readonly y: number; readonly scale: number };
   readonly chart: LibraryChart | undefined;

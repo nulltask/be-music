@@ -1,9 +1,11 @@
 import {
   optionValueSources,
   qualifyGaugePick,
+  qualifyPracticeGaugePick,
   resolveGaugeTypes,
   resolvePracticeGaugeTypes,
   splitGaugePick,
+  splitPracticeGaugePick,
   splitOptionSource,
   type GaugePick,
   type GaugeType,
@@ -15,6 +17,7 @@ import {
   resolveRandomModes,
   type LaneCoverState,
   type PlayOptions,
+  type PracticeGaugePick,
   type PracticeGaugeType,
   type RandomMode,
 } from '@be-music/player-scene-model';
@@ -188,18 +191,37 @@ const PRACTICE_GAUGE_NAMES: Readonly<Partial<Record<PracticeGaugeType, string>>>
   EXHARDCLASS: 'EXHARD GRADE',
 };
 
+/** A PRACTICE gauge's name as its source spells it (LR2's DEATH is its HAZARD). */
+function practiceGaugeName(source: RulesetId, type: PracticeGaugeType): string {
+  return source === 'lr2' && type === 'DEATH'
+    ? 'HAZARD'
+    : (PRACTICE_GAUGE_NAMES[type] ?? formatGaugeLabel(type) ?? type);
+}
+
 /**
- * PRACTICE's GAUGE TYPE under `ruleset`: the judge ruleset's own gauges (#933), named as that ruleset names them (LR2's
- * DEATH is its HAZARD).
+ * PRACTICE's GAUGE TYPE under `ruleset`, grouped by source like the play's gauges (ADR 0019): the judge ruleset's own
+ * gauges (#933) as bare values, named as that ruleset names them, then each other source's PRACTICE gauges as qualified
+ * picks named with their source (`ASSIST EASY (beatoraja)` under LR2), which keep that source's gauge.
+ *
+ * `selected` is the pick the dialog holds: one qualified with the judge ruleset itself (kept across a ruleset change)
+ * plays as the bare gauge does, so it is listed after the own gauges only while it is selected.
  */
-export function practiceGaugeItems(ruleset: RulesetId): PlayOptionItem<PracticeGaugeType>[] {
-  return resolvePracticeGaugeTypes(ruleset).map((value) => ({
-    text:
-      ruleset === 'lr2' && value === 'DEATH'
-        ? 'HAZARD'
-        : (PRACTICE_GAUGE_NAMES[value] ?? formatGaugeLabel(value) ?? value),
-    value,
-  }));
+export function practiceGaugeItems(
+  ruleset: RulesetId,
+  selected?: PracticeGaugePick,
+): PlayOptionItem<PracticeGaugePick>[] {
+  const qualified = (source: RulesetId, type: PracticeGaugeType): PlayOptionItem<PracticeGaugePick> => ({
+    text: `${practiceGaugeName(source, type)} (${SOURCE_LABELS[source]})`,
+    value: qualifyPracticeGaugePick(source, type),
+  });
+  const kept = splitPracticeGaugePick(selected);
+  return [
+    ...resolvePracticeGaugeTypes(ruleset).map((type) => ({ text: practiceGaugeName(ruleset, type), value: type })),
+    ...(kept?.source === ruleset ? [qualified(ruleset, kept.type)] : []),
+    ...sourceOrder(ruleset)
+      .slice(1)
+      .flatMap((source) => resolvePracticeGaugeTypes(source).map((type) => qualified(source, type))),
+  ];
 }
 
 /**

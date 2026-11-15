@@ -142,7 +142,7 @@ On a landscape screen the built-in skins (Synesthesia, Plain and Native) lay the
 
 - **Play area:** the lanes, with the lane cover (SUDDEN+) over their top. The keys sit under the judgement line, then the gauge, the score and the hi-speed.
 - **Score graph:** your EX score against the pacemaker (the AAA line) and your best record, each held to the notes judged so far. The lane option and the pacemaker are named under it.
-- **Right-hand column:** the stage name (`FREE PLAY`, or a course's `1ST STAGE` … `FINAL STAGE`), the player's name with the chart's difficulty and level, the title and the artist, then the BGA. Under it are the judgement counts with FAST / SLOW and the last timing, the BPM with its range, and the tempo, shown where a cabinet shows its effector.
+- **Right-hand column:** the stage name (`FREE PLAY`, `PRACTICE PLAY` in a practice play, or a course's `1ST STAGE` … `FINAL STAGE`), the player's name with the chart's difficulty and level, the title and the artist, then the BGA. Under it are the judgement counts with FAST / SLOW and the last timing, the BPM with its range, and the tempo, shown where a cabinet shows its effector.
 
 The player hands the skins the best record (`PlaySceneOptions.scoreTargets`), the course stage, the signed-in Leaderboard account's name (`playerName`), the lane option and the tempo. A double-play chart (10 / 14 KEY) is centred on the stage, with the turntables on the outer edges. The stage name, the chart, the BGA and the judgement details move to a left column, and the graph stays on the right. The score, the gauge both sides share, the hi-speed and the BPM sit under the lanes, and the box between the two banks of keys shows the gauge. The touch layout and portrait screens keep their own HUDs.
 

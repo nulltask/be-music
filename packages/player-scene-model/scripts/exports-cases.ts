@@ -334,6 +334,13 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
     run: () => {
       sceneModelAPI.keepPracticeGauge('HAZARD', 'beatoraja');
       sceneModelAPI.keepPracticeGauge('HAZARD', 'lr2');
+      sceneModelAPI.keepPracticeGauge('beatoraja:ASSIST-EASY', 'lr2');
+    },
+  });
+  define('player-scene-model.practiceGaugeSource', {
+    run: () => {
+      sceneModelAPI.practiceGaugeSource('beatoraja:ASSIST-EASY', 'lr2');
+      sceneModelAPI.practiceGaugeSource('GROOVE', 'lr2');
     },
   });
   define('player-scene-model.resolvePracticeSelection', {
