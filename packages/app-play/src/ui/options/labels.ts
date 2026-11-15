@@ -158,6 +158,10 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'TOTAL (0 = chart)': 'TOTAL (0 = 譜面の値)',
   'REST BEFORE (bars)': '前の休憩 (小節)',
   'REST AFTER (bars)': '後の休憩 (小節)',
+  'Keep LNs held into the bars': '小節より前から続く LN を含める',
+  'Target BPM': '目標 BPM',
+  Range: '範囲',
+  'Gauge and judge': 'ゲージと判定',
   'GAUGE TYPE': 'GAUGE TYPE',
   'GAUGE CATEGORY': 'GAUGE CATEGORY',
   // Select

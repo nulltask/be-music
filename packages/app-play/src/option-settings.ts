@@ -155,6 +155,7 @@ export interface OptionSettings {
   practiceTotal: number;
   practiceRestBefore: number;
   practiceRestAfter: number;
+  practiceCarriedLongNotes: boolean;
   customJudgeKeyPerfectGreat: number;
   customJudgeKeyGreat: number;
   customJudgeKeyGood: number;
@@ -404,6 +405,11 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'practiceTotal', resolvePlayOptionValue('practiceTotal', raw.practiceTotal));
   assign(settings, 'practiceRestBefore', resolvePlayOptionValue('practiceRestBefore', raw.practiceRestBefore));
   assign(settings, 'practiceRestAfter', resolvePlayOptionValue('practiceRestAfter', raw.practiceRestAfter));
+  assign(
+    settings,
+    'practiceCarriedLongNotes',
+    resolvePlayOptionValue('practiceCarriedLongNotes', raw.practiceCarriedLongNotes),
+  );
   assign(
     settings,
     'customJudgeKeyPerfectGreat',
@@ -717,6 +723,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('practiceTotal');
   assignState('practiceRestBefore');
   assignState('practiceRestAfter');
+  assignState('practiceCarriedLongNotes');
   assignState('customJudgeKeyPerfectGreat');
   assignState('customJudgeKeyGreat');
   assignState('customJudgeKeyGood');
@@ -883,6 +890,7 @@ export function captureOptionSettings(
     practiceTotal: state.practiceTotal,
     practiceRestBefore: state.practiceRestBefore,
     practiceRestAfter: state.practiceRestAfter,
+    practiceCarriedLongNotes: state.practiceCarriedLongNotes,
     customJudgeKeyPerfectGreat: state.customJudgeKeyPerfectGreat,
     customJudgeKeyGreat: state.customJudgeKeyGreat,
     customJudgeKeyGood: state.customJudgeKeyGood,

@@ -7,6 +7,8 @@ import {
   shouldPreviewPickedBar,
   practiceBestEXScore,
   practiceNoteShare,
+  practiceBaseBPM,
+  tempoPercentForBPM,
 } from './practice-bars-model.ts';
 import { playerText, setPlayerLang } from '../player-copy.ts';
 
@@ -86,6 +88,52 @@ describe('PracticeBarsMemory without practice', () => {
     expect(memory.pickFor('a')?.bars).toEqual({ first: 1, last: 1 });
     memory.remember('a', LAYOUT, { first: 2, last: 2 });
     expect(memory.skipsPractice('a')).toBe(false);
+  });
+});
+
+describe('practiceBaseBPM', () => {
+  // 150 BPM from the start, 180 halfway through bar 1, 200 on bar 2's line.
+  const tempos = {
+    initialBPM: 150,
+    bars: [
+      bar(0, 0, 0, 2000),
+      { ...bar(1, 1, 2000, 4000), tempos: [{ position: 0.5, bpm: 180 }] },
+      { ...bar(2, 2, 4000, 6000), tempos: [{ position: 0, bpm: 200 }] },
+      { ...bar(3, 3, 6000, 8000), tempos: [{ position: 0.25, bpm: 100 }] },
+    ],
+  };
+
+  it('is the BPM in force at the head of the first bar picked', () => {
+    expect(practiceBaseBPM(tempos, { first: 0, last: 2 })).toBe(150);
+    // A change halfway through a bar comes after its head.
+    expect(practiceBaseBPM(tempos, { first: 1, last: 1 })).toBe(150);
+    // A change on the bar's line is in force at its head.
+    expect(practiceBaseBPM(tempos, { first: 2, last: 3 })).toBe(200);
+    expect(practiceBaseBPM(tempos, { first: 3, last: 2 })).toBe(200);
+  });
+
+  it('is the chart’s start with no bars picked', () => {
+    expect(practiceBaseBPM(tempos, undefined)).toBe(150);
+  });
+});
+
+describe('tempoPercentForBPM', () => {
+  it('is the whole tempo percent that plays the base BPM closest to the target', () => {
+    expect(tempoPercentForBPM(120, 150)).toBe(-20);
+    expect(tempoPercentForBPM(165, 150)).toBe(10);
+    expect(tempoPercentForBPM(151, 150)).toBe(1);
+    expect(tempoPercentForBPM(150, 150)).toBe(0);
+  });
+
+  it('stays within the slider’s range', () => {
+    expect(tempoPercentForBPM(30, 150)).toBe(-50);
+    expect(tempoPercentForBPM(400, 150)).toBe(50);
+  });
+
+  it('is undefined for a BPM that is not a positive number', () => {
+    expect(tempoPercentForBPM(0, 150)).toBeUndefined();
+    expect(tempoPercentForBPM(Number.NaN, 150)).toBeUndefined();
+    expect(tempoPercentForBPM(120, 0)).toBeUndefined();
   });
 });
 

@@ -351,6 +351,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     practiceTotal: 0,
     practiceRestBefore: 1,
     practiceRestAfter: 1,
+    practiceCarriedLongNotes: true,
     customJudgeKeyPerfectGreat: 400,
     customJudgeKeyGreat: 400,
     customJudgeKeyGood: 100,

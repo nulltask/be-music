@@ -25,7 +25,9 @@ import { practiceGaugeItems } from './options/play-option-items.ts';
 import {
   describePracticeBars,
   practiceBarWindow,
+  practiceBaseBPM,
   shouldPreviewPickedBar,
+  tempoPercentForBPM,
   type PracticeBarsMemory,
 } from './practice-bars-model.ts';
 
@@ -45,6 +47,7 @@ export type PracticeSettings = Pick<
   | 'practiceTotal'
   | 'practiceRestBefore'
   | 'practiceRestAfter'
+  | 'practiceCarriedLongNotes'
 >;
 
 /** How a tempo change sounds, as the Options dialog's Tempo page lists it. */
@@ -90,6 +93,11 @@ export interface PracticeTempo {
   readonly percent: number;
   readonly pitchMode: 'pitch' | 'keep-pitch';
   readonly stretchAlgorithm: 'wsola' | 'signalsmith';
+}
+
+/** A BPM for the Target BPM field: whole above 100, to a tenth below, as the score's readouts write it. */
+function formatPracticeBPM(bpm: number): string {
+  return bpm >= 100 ? String(Math.round(bpm)) : String(Math.round(bpm * 10) / 10);
 }
 
 /** The score of each chart, laid out once; `null` for a chart that could not be. */
@@ -241,85 +249,129 @@ export class PracticeBarsDialog {
           }}
         />
       </label>`;
+    // The BPM the bars start at, at the play tempo; a BPM entered sets the tempo that plays them closest to it.
+    const baseBPM = this.layout === undefined ? undefined : practiceBaseBPM(this.layout, this.selection);
+    const playedBPM = baseBPM === undefined ? undefined : baseBPM * tempoFromPercent(tempo.percent);
     return html`<div class="practice-bars-settings">
-      <label class="practice-bars-field">
-        <span>${label('Tempo (%)')}</span>
-        <input
-          class="input"
-          type="number"
-          inputmode="numeric"
-          min=${TEMPO_PERCENT_MIN}
-          max=${TEMPO_PERCENT_MAX}
-          step="1"
-          .value=${String(tempo.percent)}
-          @change=${(event: Event) => {
-            const value = Number((event.target as HTMLInputElement).value);
-            if (Number.isFinite(value)) this.setTempo({ percent: clampTempoPercent(value) });
-            this.paint();
-          }}
-        />
-      </label>
-      <label class="practice-bars-field">
-        <span>${label('Pitch')}</span>
-        <select
-          class="select"
-          @change=${(event: Event) => {
-            this.setTempo({ pitchMode: (event.target as HTMLSelectElement).value as PracticeTempo['pitchMode'] });
-            this.paint();
-          }}
-        >
-          ${PITCH_MODES.map(
-            ([text, value]) =>
-              html`<option value=${value} ?selected=${value === tempo.pitchMode}>${label(text)}</option>`,
-          )}
-        </select>
-      </label>
-      ${number('practiceRestBefore', 'REST BEFORE (bars)', 0, 8)}
-      ${number('practiceRestAfter', 'REST AFTER (bars)', 0, 8)}
-      <label class="practice-bars-field">
-        <span>${label('GAUGE TYPE')}</span>
-        <select
-          class="select"
-          @change=${(event: Event) =>
-            this.setSetting(
-              'practiceGauge',
-              (event.target as HTMLSelectElement).value as PracticeSettings['practiceGauge'],
+      <fieldset class="practice-bars-group">
+        <legend>${label('Tempo')}</legend>
+        <label class="practice-bars-field">
+          <span>${label('Tempo (%)')}</span>
+          <input
+            class="input"
+            type="number"
+            inputmode="numeric"
+            min=${TEMPO_PERCENT_MIN}
+            max=${TEMPO_PERCENT_MAX}
+            step="1"
+            .value=${String(tempo.percent)}
+            @change=${(event: Event) => {
+              const value = Number((event.target as HTMLInputElement).value);
+              if (Number.isFinite(value)) this.setTempo({ percent: clampTempoPercent(value) });
+              this.paint();
+            }}
+          />
+        </label>
+        <label class="practice-bars-field">
+          <span>${label('Target BPM')}</span>
+          <input
+            class="input"
+            type="number"
+            inputmode="decimal"
+            min="1"
+            step="any"
+            ?disabled=${baseBPM === undefined}
+            .value=${playedBPM === undefined ? '' : formatPracticeBPM(playedBPM)}
+            @change=${(event: Event) => {
+              const percent =
+                baseBPM === undefined
+                  ? undefined
+                  : tempoPercentForBPM(Number((event.target as HTMLInputElement).value), baseBPM);
+              if (percent !== undefined) this.setTempo({ percent });
+              // The field shows the BPM the tempo plays, whole percents apart, not the one typed.
+              (event.target as HTMLInputElement).value =
+                baseBPM === undefined ? '' : formatPracticeBPM(baseBPM * tempoFromPercent(this.tempo().percent));
+              this.paint();
+            }}
+          />
+        </label>
+        <label class="practice-bars-field practice-bars-field-wide">
+          <span>${label('Pitch')}</span>
+          <select
+            class="select"
+            @change=${(event: Event) => {
+              this.setTempo({ pitchMode: (event.target as HTMLSelectElement).value as PracticeTempo['pitchMode'] });
+              this.paint();
+            }}
+          >
+            ${PITCH_MODES.map(
+              ([text, value]) =>
+                html`<option value=${value} ?selected=${value === tempo.pitchMode}>${label(text)}</option>`,
             )}
-        >
-          ${practiceGaugeItems(ruleset, gauge).map(
-            (item) => html`<option value=${item.value} ?selected=${item.value === gauge}>${item.text}</option>`,
-          )}
-        </select>
-      </label>
-      ${
-        practiceGaugeSource(gauge, ruleset) === 'beatoraja'
-          ? html`<label class="practice-bars-field">
-              <span>${label('GAUGE CATEGORY')}</span>
-              <select
-                class="select"
-                @change=${(event: Event) =>
-                  this.setSetting(
-                    'practiceGaugeCategory',
-                    (event.target as HTMLSelectElement).value as PracticeGaugeCategory,
+          </select>
+        </label>
+      </fieldset>
+      <fieldset class="practice-bars-group">
+        <legend>${label('Range')}</legend>
+        ${number('practiceRestBefore', 'REST BEFORE (bars)', 0, 8)}
+        ${number('practiceRestAfter', 'REST AFTER (bars)', 0, 8)}
+        <label class="practice-bars-check">
+          <input
+            type="checkbox"
+            .checked=${options.practiceCarriedLongNotes}
+            @change=${(event: Event) =>
+              this.setSetting('practiceCarriedLongNotes', (event.target as HTMLInputElement).checked)}
+          />
+          <span>${label('Keep LNs held into the bars')}</span>
+        </label>
+      </fieldset>
+      <fieldset class="practice-bars-group">
+        <legend>${label('Gauge and judge')}</legend>
+        <label class="practice-bars-field">
+          <span>${label('GAUGE TYPE')}</span>
+          <select
+            class="select"
+            @change=${(event: Event) =>
+              this.setSetting(
+                'practiceGauge',
+                (event.target as HTMLSelectElement).value as PracticeSettings['practiceGauge'],
+              )}
+          >
+            ${practiceGaugeItems(ruleset, gauge).map(
+              (item) => html`<option value=${item.value} ?selected=${item.value === gauge}>${item.text}</option>`,
+            )}
+          </select>
+        </label>
+        ${
+          practiceGaugeSource(gauge, ruleset) === 'beatoraja'
+            ? html`<label class="practice-bars-field">
+                <span>${label('GAUGE CATEGORY')}</span>
+                <select
+                  class="select"
+                  @change=${(event: Event) =>
+                    this.setSetting(
+                      'practiceGaugeCategory',
+                      (event.target as HTMLSelectElement).value as PracticeGaugeCategory,
+                    )}
+                >
+                  ${GAUGE_CATEGORIES.map(
+                    ([text, value]) =>
+                      html`<option value=${value} ?selected=${value === options.practiceGaugeCategory}>
+                        ${label(text)}
+                      </option>`,
                   )}
-              >
-                ${GAUGE_CATEGORIES.map(
-                  ([text, value]) =>
-                    html`<option value=${value} ?selected=${value === options.practiceGaugeCategory}>
-                      ${label(text)}
-                    </option>`,
-                )}
-              </select>
-            </label>`
-          : nothing
-      }
-      ${number('practiceStartGauge', 'GAUGE VALUE', 1, 120)}
-      ${
-        practiceReadsJudgeRankAndTotal(ruleset)
-          ? html`${number('practiceJudgeRank', 'JUDGERANK (0 = chart)', 0, 400)}
-            ${number('practiceTotal', 'TOTAL (0 = chart)', 0, 5000)}`
-          : nothing
-      }
+                </select>
+              </label>`
+            : nothing
+        }
+        ${number('practiceStartGauge', 'GAUGE VALUE', 1, 120)}
+        ${
+          practiceReadsJudgeRankAndTotal(ruleset)
+            ? html`${number('practiceJudgeRank', 'JUDGERANK (0 = chart)', 0, 400)}
+              ${number('practiceTotal', 'TOTAL (0 = chart)', 0, 5000)}`
+            : nothing
+        }
+      </fieldset>
     </div>`;
   }
 
