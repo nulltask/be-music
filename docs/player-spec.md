@@ -824,6 +824,10 @@ judge core, a replay and the replay simulator all key a scratch hold by the same
   See the [GAMO2 firmware guide](https://www.gamo2.com/en/firmware/) and
   [SnekBox's HID report definitions](https://github.com/dinsfire64/snekbox_firmware/blob/main/handlers/infinitas.h).
 
+  The web player handles experimental raw Gamepad input events when the browser dispatches them. A timer requests
+  a sample every 4 ms as a fallback and checks for stopped turntables and disconnected controllers. The browser
+  and operating system determine the actual sampling interval.
+
 **Single-source fallback.** With only one source on a scratch lane, beatoraja's strict rules would leave every BSS
 unclearable: only another source ends one. A hold started by a source that has no counterpart on its lane therefore
 plays a lenient rule: any fresh press on the lane ends the BSS, its own source's included, and a release settles

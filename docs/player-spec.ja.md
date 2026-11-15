@@ -796,6 +796,10 @@ FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱�
   [GAMO2 のファームウェアガイド](https://www.gamo2.com/jp/firmware/)と
   [SnekBox の HID レポート定義](https://github.com/dinsfire64/snekbox_firmware/blob/main/handlers/infinitas.h)を参照してください。
 
+  ブラウザーが実験的な Gamepad の生入力イベントを送る場合は、イベントを受け取った時点で入力を処理します。
+  4 ms 間隔を要求するポーリングで、イベント非対応時の入力、皿の停止、コントローラーの切断を検出します。
+  実際の取得間隔はブラウザーと OS に依存します。
+
 **ソースがひとつだけのとき。** スクラッチレーンのソースがひとつだけだと、beatoraja の厳密な規則では BSS を終えるのは
 別のソースだけなので、どの BSS も終えられません。そこで、レーンに対になるソースがないソースで始めたホールドは緩い規則で
 演奏します。レーンへの新たな押下は、始点と同じソースからでも BSS を終え、離鍵は何も確定しません（`hasScratchCounterpart`、

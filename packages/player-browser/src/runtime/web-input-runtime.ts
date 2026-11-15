@@ -48,12 +48,13 @@ export const CS_GAMEPAD_BUTTON_CHANNELS: Readonly<Record<number, string>> = {
   7: '6', // R2: turntable, counter-clockwise
 };
 
+const rawGamepadEvents = ['gamepadrawinputchanged', 'gamepadrawinputchange', 'rawgamepadinputchange'] as const;
 const gamepadPollIntervalMs = 4;
 const gamepadPressThreshold = 0.5;
 
 /**
  * Web-side adapter for the engine's `PlayerInputRuntime` contract. `start()` attaches the `keydown` / `keyup`
- * listeners and polls standard-mapped Gamepads; `stop()` detaches and releases held inputs. Pressing a key resolves to
+ * listeners, listens for raw Gamepad input and polls as a fallback; `stop()` detaches and releases held inputs. Pressing a key resolves to
  * its lowercase token (matching the {@link createLaneBindings} convention — `'z'`, `'shift-left'`, etc.) and pushes a `lane-input` command. Special
  * shortcuts (`Escape`, `F5` for restart, `Pause` for pause) are routed through `interrupt` / `toggle-pause`
  * commands so the engine sees the same control surface the TUI exposes.
@@ -71,6 +72,8 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
   const target: EventTarget = options.target ?? globalThis;
   let attached = false;
   let gamepadTimer: ReturnType<typeof setInterval> | undefined;
+  const gamepadTarget = typeof window === 'undefined' ? undefined : window;
+  const latestGamepadSample = new Map<number, Gamepad>();
   const scratchByPad = new Map<number, ArcadeScratchState>();
   const padSlots: [number | undefined, number | undefined] = [undefined, undefined];
   const arcadeButtonChannels = ['1', '2', '3', '4', '5', '8', '9'];
@@ -165,32 +168,33 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
     });
   };
 
-  const pollGamepads = (): void => {
-    if (
-      options.gamepadInput === false ||
-      typeof navigator === 'undefined' ||
-      typeof navigator.getGamepads !== 'function'
-    ) {
-      return;
-    }
-    let pads: Array<Gamepad | null>;
-    try {
-      pads = Array.from(navigator.getGamepads());
-    } catch {
-      return;
-    }
+  const sampleGamepads = (pads: readonly (Gamepad | null)[], partial = false): void => {
     const seen = new Set<string>();
     const nowMs = performance.now();
     const pressedAt = performance.timeOrigin + nowMs;
-    const mappedPads = pads.filter(
-      (pad): pad is Gamepad =>
-        pad !== null && pad.connected !== false && (pad.mapping === 'standard' || isIIDXArcadeGamepad(pad)),
-    );
-    for (const index of scratchByPad.keys()) {
-      if (!mappedPads.some((pad) => pad.index === index && isIIDXArcadeGamepad(pad))) scratchByPad.delete(index);
-    }
-    for (const [slot, index] of padSlots.entries()) {
-      if (!mappedPads.some((pad) => pad.index === index)) padSlots[slot] = undefined;
+    const mappedPads = pads
+      .filter(
+        (pad): pad is Gamepad =>
+          pad !== null && pad.connected !== false && (pad.mapping === 'standard' || isIIDXArcadeGamepad(pad)),
+      )
+      .map((pad) => {
+        const previous = latestGamepadSample.get(pad.index);
+        // A timer snapshot or queued event can be older than the last sample we consumed.
+        if (previous !== undefined && previous.id === pad.id && previous.timestamp > pad.timestamp && pad.timestamp > 0)
+          return previous;
+        latestGamepadSample.set(pad.index, pad);
+        return pad;
+      });
+    if (!partial) {
+      for (const index of latestGamepadSample.keys()) {
+        if (!mappedPads.some((pad) => pad.index === index)) latestGamepadSample.delete(index);
+      }
+      for (const index of scratchByPad.keys()) {
+        if (!mappedPads.some((pad) => pad.index === index && isIIDXArcadeGamepad(pad))) scratchByPad.delete(index);
+      }
+      for (const [slot, index] of padSlots.entries()) {
+        if (!mappedPads.some((pad) => pad.index === index)) padSlots[slot] = undefined;
+      }
     }
     for (const pad of mappedPads) {
       const slot = padSlots.indexOf(undefined);
@@ -274,6 +278,7 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
         }
       }
     }
+    if (partial) return;
     // A disconnected pad or a button disappearing from a changed mapping must release any held long note.
     for (const [key, previous] of gamepadButtons) {
       if (seen.has(key)) continue;
@@ -292,23 +297,42 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
     }
   };
 
+  const pollGamepads = (): void => {
+    let pads: Array<Gamepad | null>;
+    try {
+      pads = Array.from(navigator.getGamepads());
+    } catch {
+      return;
+    }
+    sampleGamepads(pads);
+  };
+
+  const onRawGamepadInput = (event: Event): void => {
+    const pad = (event as GamepadEvent).gamepad;
+    if (attached && pad) sampleGamepads([pad], true);
+  };
+
   return {
     reportsKeyReleases: true,
     start: (): void => {
       if (attached) return;
       target.addEventListener('keydown', handleKeyDown);
       target.addEventListener('keyup', handleKeyUp);
-      if (options.gamepadInput !== false) {
-        pollGamepads();
-        gamepadTimer = setInterval(pollGamepads, gamepadPollIntervalMs);
-      }
       attached = true;
+      if (options.gamepadInput !== false) {
+        for (const event of rawGamepadEvents) gamepadTarget?.addEventListener(event, onRawGamepadInput);
+        if (typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function') {
+          pollGamepads();
+          gamepadTimer = setInterval(pollGamepads, gamepadPollIntervalMs);
+        }
+      }
       log.debug('input listeners attached');
     },
     stop: (): void => {
       if (!attached) return;
       target.removeEventListener('keydown', handleKeyDown);
       target.removeEventListener('keyup', handleKeyUp);
+      for (const event of rawGamepadEvents) gamepadTarget?.removeEventListener(event, onRawGamepadInput);
       if (gamepadTimer !== undefined) {
         clearInterval(gamepadTimer);
         gamepadTimer = undefined;
@@ -328,6 +352,7 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
       }
       gamepadButtons.clear();
       scratchByPad.clear();
+      latestGamepadSample.clear();
       padSlots.fill(undefined);
       attached = false;
       log.debug('input listeners detached');

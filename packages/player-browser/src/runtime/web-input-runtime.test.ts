@@ -168,6 +168,48 @@ describe('createWebInputRuntime', () => {
     ]);
   });
 
+  test('handles a raw Gamepad event before polling and ignores stale or duplicate snapshots', () => {
+    vi.useFakeTimers();
+    const window = new EventTarget();
+    vi.stubGlobal('window', window);
+    const makePad = (timestamp: number, pressed: boolean) => ({
+      id: 'Standard Gamepad',
+      index: 0,
+      mapping: 'standard',
+      timestamp,
+      buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: i === 2 && pressed, value: 0 })),
+    });
+    let pad = makePad(1, false);
+    vi.stubGlobal('navigator', { getGamepads: () => [pad] });
+    const inputSignals = createPlayerInputSignalBus();
+    const runtime = createWebInputRuntime({
+      inputSignals,
+      inputTokenToChannels: new Map([['s', ['13']]]),
+      target: makeMockTarget().target,
+    });
+    const rawInput = (gamepad: ReturnType<typeof makePad>): void => {
+      window.dispatchEvent(Object.assign(new Event('gamepadrawinputchanged'), { gamepad }));
+    };
+    try {
+      runtime.start();
+      const pressed = makePad(2, true);
+      rawInput(pressed);
+      expect(inputSignals.drainCommands().map(({ kind }) => kind)).toEqual(['lane-input', 'kitty-state']);
+      vi.advanceTimersByTime(4);
+      pad = pressed;
+      vi.advanceTimersByTime(4);
+      expect(inputSignals.drainCommands()).toEqual([]);
+      rawInput(makePad(3, false));
+      expect(inputSignals.drainCommands()).toMatchObject([{ kind: 'kitty-state', releaseTokens: ['s'] }]);
+      runtime.stop();
+      rawInput(makePad(4, true));
+      expect(inputSignals.drainCommands()).toEqual([]);
+    } finally {
+      runtime.stop();
+      vi.useRealTimers();
+    }
+  });
+
   test('start attaches keydown / keyup listeners and stop detaches them', () => {
     const inputSignals = createPlayerInputSignalBus();
     const { target, attachedTypes } = makeMockTarget();
