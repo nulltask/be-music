@@ -104,7 +104,7 @@ export interface LaneGeometryContext {
 export interface PlayChromeContext {
   readonly play: PlayfieldRuntime;
   readonly options: Readonly<
-    Pick<PlaySessionOptions, 'autoPlay' | 'beMusicEffects' | 'judgeTimingAutoAdjust' | 'nonstop'>
+    Pick<PlaySessionOptions, 'autoPlay' | 'beMusicEffects' | 'judgeTimingAutoAdjust' | 'nonstop' | 'practiceRange'>
   >;
   readonly audioFrame: AudioFeatures | undefined;
   /** The frame being drawn, for what it carries beside the play: the best record, the course and the player. */
@@ -257,6 +257,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     rank: total <= 0 ? undefined : resolve____RankLabel(ctx.play.score.exScore, total),
     secondPlayer: ctx.play.secondPlayer !== undefined ? secondPlayerRuntime(ctx.play.secondPlayer) : undefined,
     autoplay: ctx.options.autoPlay === true,
+    practice: ctx.play.practice === true || ctx.options.practiceRange !== undefined,
     // The camera fills the BGA frame even on a chart without a BGA.
     hasBGA: ctx.play.hasBGA || ctx.play.bgaCamera !== undefined,
     nowMs,
