@@ -394,7 +394,7 @@ export function buildPlayOptionsFolder(
   ];
   const addPracticeNumbers = (
     entries: readonly (readonly [
-      'practiceStartGauge' | 'practiceJudgeRank' | 'practiceTotal',
+      'practiceStartGauge' | 'practiceJudgeRank' | 'practiceTotal' | 'practiceRestBefore' | 'practiceRestAfter',
       string,
       number,
       number,
@@ -415,6 +415,8 @@ export function buildPlayOptionsFolder(
     ['practiceStartGauge', 'GAUGE VALUE', 1, 120, 1],
     ['practiceJudgeRank', 'JUDGERANK (0 = chart)', 0, 400, 1],
     ['practiceTotal', 'TOTAL (0 = chart)', 0, 5000, 1],
+    ['practiceRestBefore', 'REST BEFORE (bars)', 0, 8, 1],
+    ['practiceRestAfter', 'REST AFTER (bars)', 0, 8, 1],
   ]);
   // The judge ruleset's own gauges; refreshRulesetChoices relists them when the ruleset changes.
   const practiceGauge = selectBinding(

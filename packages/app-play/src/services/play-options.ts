@@ -92,6 +92,8 @@ export type GUIPlayOptions = Pick<
   | 'practiceStartGauge'
   | 'practiceJudgeRank'
   | 'practiceTotal'
+  | 'practiceRestBefore'
+  | 'practiceRestAfter'
   | 'customJudgeKeyPerfectGreat'
   | 'customJudgeKeyGreat'
   | 'customJudgeKeyGood'
@@ -194,6 +196,8 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     practiceStartGauge: state.practiceStartGauge,
     practiceJudgeRank: state.practiceJudgeRank,
     practiceTotal: state.practiceTotal,
+    practiceRestBefore: state.practiceRestBefore,
+    practiceRestAfter: state.practiceRestAfter,
     customJudgeKeyPerfectGreat: state.customJudgeKeyPerfectGreat,
     customJudgeKeyGreat: state.customJudgeKeyGreat,
     customJudgeKeyGood: state.customJudgeKeyGood,
@@ -312,6 +316,8 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.practiceStartGauge = options.practiceStartGauge;
   state.practiceJudgeRank = options.practiceJudgeRank;
   state.practiceTotal = options.practiceTotal;
+  state.practiceRestBefore = options.practiceRestBefore;
+  state.practiceRestAfter = options.practiceRestAfter;
   state.customJudgeKeyPerfectGreat = options.customJudgeKeyPerfectGreat;
   state.customJudgeKeyGreat = options.customJudgeKeyGreat;
   state.customJudgeKeyGood = options.customJudgeKeyGood;

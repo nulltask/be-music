@@ -140,10 +140,14 @@ test('PRACTICE plays a single chart under every ruleset', () => {
 });
 
 describe('resolvePracticePlayWindow (#954)', () => {
-  const windowOf = (lines: string[], range: { startMs: number; endMs?: number }) => {
+  const windowOf = (
+    lines: string[],
+    range: { startMs: number; endMs?: number },
+    rest: { restBarsBefore?: number; restBarsAfter?: number } = {},
+  ) => {
     const chart = resolveChart(parseBMS(['#BPM 120', ...lines, '#00911:01', ''].join('\n')), { playVariant: '7' });
     const resolved = resolvePracticeRange({ ...range, gauge: 'NORMAL', startGauge: 20 }, 20_000);
-    return resolvePracticePlayWindow(chart, range, resolved);
+    return resolvePracticePlayWindow(chart, { ...range, ...rest }, resolved);
   };
 
   test('starts a bar before the range’s bar and ends a bar after the bar its end lies in', () => {
@@ -154,6 +158,22 @@ describe('resolvePracticePlayWindow (#954)', () => {
     // A range in the first bar starts at the chart's start; one in the second starts there too.
     expect(windowOf([], { startMs: 500, endMs: 1500 })).toEqual({ startSeconds: 0, endSeconds: 2 });
     expect(windowOf([], { startMs: 2000, endMs: 3000 })).toEqual({ startSeconds: 0, endSeconds: 4 });
+  });
+
+  test('rests the bars asked for on either side, none at 0', () => {
+    const range = { startMs: 4000, endMs: 8000 };
+    expect(windowOf([], range, { restBarsBefore: 0, restBarsAfter: 0 })).toEqual({ startSeconds: 4, endSeconds: 8 });
+    expect(windowOf([], range, { restBarsBefore: 1, restBarsAfter: 1 })).toEqual({ startSeconds: 2, endSeconds: 10 });
+    expect(windowOf([], range, { restBarsBefore: 2, restBarsAfter: 2 })).toEqual({ startSeconds: 0, endSeconds: 12 });
+    // A rest reaching past the first bar starts at the chart's start.
+    expect(windowOf([], range, { restBarsBefore: 8 }).startSeconds).toBe(0);
+    // Each side is its own: no rest before, three bars after.
+    expect(windowOf([], range, { restBarsBefore: 0, restBarsAfter: 3 })).toEqual({ startSeconds: 4, endSeconds: 14 });
+  });
+
+  test('rests without an END TIME: none ends at the range’s end, more bars end further out', () => {
+    expect(windowOf([], { startMs: 4000 }, { restBarsAfter: 0 }).endSeconds).toBe(21);
+    expect(windowOf([], { startMs: 4000 }, { restBarsAfter: 3 }).endSeconds).toBe(26);
   });
 
   test('reads odd measure lengths', () => {
