@@ -103,6 +103,43 @@ describe('PRACTICE loop (#949)', () => {
     expect(generations[2]).toMatch(/generation=3 seconds=4(\.0\d*)? /);
   });
 
+  test('a seamless loop leaves the note on the range’s first beat to be hit, though it went past its start', async () => {
+    // Bar 2 alone, [4.0, 6.0), with 11 @ 4.0 on its first beat. The play loops a tick past 6.0 (the play clock's 4000)
+    // to just past 4.0, and a press there still hits 11 @ 4.0 instead of finding it consumed.
+    const play = await observePlay({
+      driver: 'manual',
+      chart: loopChart(),
+      options: {
+        judgeRuleset: 'beatoraja',
+        practice: { ...range, startMs: 4000, endMs: 6000, restBarsBefore: 0, restBarsAfter: 0, loop: true },
+      },
+      script: [...tap(4030, '11'), command(4_500, { kind: 'interrupt', reason: 'escape' })],
+    });
+    expect(play.frames.generations?.[1]).toMatch(/generation=2 seconds=4\.0\d* /);
+    expect(play.summary?.poor).toBe(0);
+    expect((play.summary?.perfect ?? 0) + (play.summary?.great ?? 0)).toBe(1);
+  });
+
+  test('AUTO plays the range’s first beat each time round, on its tick rather than as a sound already ringing', async () => {
+    const play = await observePlay({
+      driver: 'auto',
+      chart: loopChart(),
+      options: {
+        judgeRuleset: 'beatoraja',
+        practice: { ...range, startMs: 4000, endMs: 6000, restBarsBefore: 0, restBarsAfter: 0, loop: true },
+      },
+      script: [command(4_500, { kind: 'interrupt', reason: 'escape' })],
+    });
+    expect(play.frames.generations?.[1]).toMatch(/generation=2 seconds=4\.0\d* /);
+    // After the loop's seek 11 @ 4.0 is no sound started partway: it is played (and judged) on the next tick.
+    const seek = play.audio.findIndex((entry) => / seek 4\.0\d*$/.test(entry));
+    expect(seek).toBeGreaterThan(0);
+    const after = play.audio.slice(seek + 1);
+    expect(after.some((entry) => /trigger-at .*11/.test(entry))).toBe(false);
+    expect(after.some((entry) => / trigger .*11/.test(entry))).toBe(true);
+    expect(play.summary?.perfect).toBe(1);
+  });
+
   test('a practice play without the loop ends at the head of the bar after its range', async () => {
     const play = await observePlay({
       driver: 'manual',

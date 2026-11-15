@@ -66,6 +66,12 @@ export function resetPlayNotes(chart: PreparedPlaybackChartData): void {
   for (const mine of chart.landmineNotes) mine.judged = false;
 }
 
+/**
+ * How far before `judgeFromSeconds` a seek rebuilds its judge and realtime audio to ({@link applySeek}): past the
+ * realtime audio's trigger slack, so a note or sound right on it is still to come.
+ */
+const SEEK_JUDGE_FROM_EPSILON_SECONDS = 1e-4;
+
 /** The seek target within the chart or an aborted replay's recorded end; a non-finite value goes to the start. */
 export function clampSeekSeconds(session: PlaySession, seconds: number): number {
   if (!Number.isFinite(seconds)) return 0;
@@ -84,25 +90,39 @@ export function clampSeekSeconds(session: PlaySession, seconds: number): number 
  * the play clock at the tempo in force (a paused play stays paused); the judge rebuilds its state from the start; the
  * UI buses drop what they still hold of the old position and get the `seek` command, the long notes held across the
  * target and a cleared POOR image; and a frame at the target goes out. A play that seeks records no replay.
+ *
+ * `judgeFromSeconds` (at most `seconds`) is where the judge and the realtime audio go to instead: the notes and sounds
+ * from it on are still to come, judged and played on the next tick, while the clock goes on from `seconds`. A seamless
+ * PRACTICE loop goes back to its range's start this way, carrying the time it overshot, without skipping the notes on
+ * the range's first beat. The judge rebuilds to just before it, so a note on it is judged live: AUTO play plays it.
  */
-export function applySeek(session: PlaySession, judge: PlayJudge, seconds: number, nowMs: number): number | undefined {
+export function applySeek(
+  session: PlaySession,
+  judge: PlayJudge,
+  seconds: number,
+  nowMs: number,
+  judgeFromSeconds?: number,
+): number | undefined {
   if (judge.seek === undefined) return undefined;
   const { audioSession, uiEnabled, uiSignals, summary } = session;
   const target = clampSeekSeconds(session, seconds);
+  const from = judgeFromSeconds === undefined ? target : Math.min(target, clampSeekSeconds(session, judgeFromSeconds));
   session.replayRecorder?.discard();
   session.seekGeneration += 1;
   session.keyBoundBGA?.reset();
   const generation = session.seekGeneration;
 
   audioSession?.seek?.(target);
-  session.volumeChanges.seek(target);
-  session.backgroundAudio.seek(target, (sound, offsetSeconds) =>
+  // Up to `from` the sounds still ringing start partway; those from it on fire as the next tick reaches them.
+  const soundsFrom = from < target ? Math.max(0, from - SEEK_JUDGE_FROM_EPSILON_SECONDS) : target;
+  session.volumeChanges.seek(soundsFrom);
+  session.backgroundAudio.seek(soundsFrom, (sound, offsetSeconds) =>
     audioSession?.triggerEventAt?.(sound.event, offsetSeconds),
   );
   session.tempoClock.rebase(nowMs, target);
   session.resetScore();
   resetPlayNotes(session.playbackChart);
-  const rebuilt = judge.seek(target);
+  const rebuilt = judge.seek(from < target ? Math.max(0, from - SEEK_JUDGE_FROM_EPSILON_SECONDS) : target);
   session.bmsonBGA?.reset(rebuilt.bmsonBGAInputs);
   session.chartText?.reset(rebuilt.chartTextInputs);
 
@@ -181,7 +201,8 @@ export function isPracticeLoopDue(tick: Readonly<PracticeLoopTick>): boolean {
 /**
  * PRACTICE's loop (#949): moves the play back to where it loops from (`PlaySession.practiceLoopStartSeconds`, the head
  * of the rest bars before the range, or the range itself), `overshootSeconds` on for a seamless loop that went past the
- * range's end, at play-clock time `nowMs`, as a seek there does (`applySeek`): the audio stops what still rings, the judge,
+ * range's end (the notes and sounds from the loop's start on still come, `applySeek`'s `judgeFromSeconds`), at
+ * play-clock time `nowMs`, as a seek there does (`applySeek`): the audio stops what still rings, the judge,
  * the score, the combo and the gauge go back to the practice settings, the notes are judged again, and the host gets a
  * `seek` UI command and a frame of the next generation, keeping the samples, the BGA and the skin it loaded. Returns
  * the second it went to, or `undefined` when the judge cannot seek.
@@ -192,5 +213,6 @@ export function restartPractice(
   nowMs: number,
   overshootSeconds = 0,
 ): number | undefined {
-  return applySeek(session, judge, session.practiceLoopStartSeconds + Math.max(0, overshootSeconds), nowMs);
+  const loopStart = session.practiceLoopStartSeconds;
+  return applySeek(session, judge, loopStart + Math.max(0, overshootSeconds), nowMs, loopStart);
 }
