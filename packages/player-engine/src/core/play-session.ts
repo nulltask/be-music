@@ -117,6 +117,8 @@ export interface PlaySession {
   readonly leadInMs: number;
   /** The chart second the play starts at (`PlayerOptions.startAtSeconds`, its first seek): 0 unless asked for later. */
   readonly startAtSeconds: number;
+  /** Where a looping PRACTICE play goes back to (`restartPractice`): its start, unless the first round led in earlier. */
+  readonly practiceLoopStartSeconds: number;
   readonly audioOffsetMs: number;
   readonly beatAtSeconds: (seconds: number) => number;
   readonly idBase: 36 | 62;
@@ -285,10 +287,14 @@ export async function createPlaySession(
         resolvePracticePlayWindow(resolvedChart, options.practice, {
           startMs: Math.max(0, Math.trunc(options.practice.startMs)),
           endMs: Math.max(0, Math.trunc(options.practice.startMs)) + 1000,
-        }).startSeconds)
+        }).firstStartSeconds)
       : 0);
   const startAtSeconds =
     Number.isFinite(requestedStartAtSeconds) && requestedStartAtSeconds > 0 ? requestedStartAtSeconds : 0;
+  const practiceLoopStartSeconds =
+    options.startAtSeconds === undefined && playbackChart.practiceLoopStartSeconds !== undefined
+      ? Math.max(0, playbackChart.practiceLoopStartSeconds)
+      : startAtSeconds;
   backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
   const battleRequested = options.battleMode ?? playbackChart.battleMode ?? 'OFF';
   // A chart that copies itself onto the 2P side replaced the player's battle conversion (#932).
@@ -814,6 +820,7 @@ export async function createPlaySession(
     tempoClock,
     leadInMs,
     startAtSeconds,
+    practiceLoopStartSeconds,
     audioOffsetMs,
     beatAtSeconds,
     idBase,

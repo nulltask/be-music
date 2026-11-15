@@ -128,6 +128,8 @@ async function playChart(
   const endsWithChart = session.audioSession === undefined && hold === undefined;
   // A looping PRACTICE play (`PlayPractice.loop`) never reaches its horizon: it goes back to its start before it.
   const loopsPractice = options.practice?.loop === true && judge.seek !== undefined;
+  // With no rest after the range the loop is seamless: back at the range's end, the time past it carried over.
+  const seamlessPractice = loopsPractice && options.practice?.restBarsAfter === 0;
   // A replay of an ESC-aborted log stops where the play was aborted, as the replay simulators do.
   const replayStopSeconds =
     session.replay && options.replayAbortedAtUs !== undefined ? options.replayAbortedAtUs / 1_000_000 : undefined;
@@ -194,9 +196,11 @@ async function playChart(
         settled: judge.isSettled(),
         closed: judge.isClosed(),
         pastHorizon: clock.nowMs() >= horizonMs(),
+        seamless: seamlessPractice,
       })
     ) {
-      const restarted = restartPractice(session, judge, tick.nowMs);
+      const overshoot = seamlessPractice && !judge.isClosed() ? tick.nowSec - totalSeconds : 0;
+      const restarted = restartPractice(session, judge, tick.nowMs, overshoot);
       if (restarted !== undefined) lastFrameSeconds = restarted;
       await waitPreciseOrInput(TUI_FRAME_INTERVAL_MS, wakeUp);
       continue;

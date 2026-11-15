@@ -207,6 +207,7 @@ export interface PlayChartContext {
   laneTimelineBeats: Float64Array;
   preparedChart: PreparedPlaybackChartData | undefined;
   notes: TimedPlayableNote[];
+  drawNotes: TimedPlayableNote[];
   mineNotes: TimedLandmineNote[];
   invisibleNotes: TimedPlayableNote[];
   maxLongNoteBeatSpan: number;
@@ -429,7 +430,11 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       dBattleScratch: arrangement
         ? (arrangement.play.dBattleScratch ?? false)
         : ctx.options.dBattleScratch || lanes.lr2RandomScratch1P || lanes.lr2RandomScratch2P,
-      practice: arrangement ? undefined : ctx.options.practiceRange,
+      // A PRACTICE play loops its range (`play-engine.ts`), which a seamless loop's drawn notes need to know.
+      practice:
+        arrangement || ctx.options.practiceRange === undefined
+          ? undefined
+          : { ...ctx.options.practiceRange, loop: true },
       autoScratch1P: arrangement
         ? (arrangement.play.battleAssist1P ?? arrangement.play.autoScratch1P ?? arrangement.play.autoScratch)
         : ctx.options.autoScratch1P,
@@ -494,6 +499,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   ctx.preparedChart = prepared;
   ctx.touchTokenByChannel = undefined;
   ctx.notes = prepared.notes;
+  // The same notes, and past a seamless PRACTICE loop's end the next round's: drawn only.
+  ctx.drawNotes = prepared.renderNotes;
   ctx.mineNotes = prepared.landmineNotes;
   ctx.invisibleNotes = prepared.invisibleNotes;
   // The recorded rates and seed must rebuild what the play recorded: a different count means another chart.

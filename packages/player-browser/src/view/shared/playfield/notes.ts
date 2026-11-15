@@ -205,7 +205,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
   const cursor = drawWindow.rules === 'lr2' ? advanceNoteDrawCursor(ctx, seconds, isGone) : undefined;
   const firstNoteIndex =
     cursor?.note ??
-    findFirstIndexAtOrAfter(ctx.play.notes, currentBeat - ctx.play.maxLongNoteBeatSpan, (note) => note.beat);
+    findFirstIndexAtOrAfter(ctx.play.drawNotes, currentBeat - ctx.play.maxLongNoteBeatSpan, (note) => note.beat);
   const hideJudgedNotes = ctx.options.judgedNoteDisplay === 'HIDE';
   // AC 34's オートスクラッチ表示: the scratch notes AUTO SCRATCH plays are not drawn; they still play and count (#1137).
   const hiddenChannels = resolveHiddenNoteChannels(ctx.playOptions?.autoScratchNotes, ctx.play.autoScratchChannels);
@@ -231,8 +231,8 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
             unit: maniaUnit,
             sway,
           });
-  for (let noteIndex = firstNoteIndex; noteIndex < ctx.play.notes.length; noteIndex += 1) {
-    const note = ctx.play.notes[noteIndex]!;
+  for (let noteIndex = firstNoteIndex; noteIndex < ctx.play.drawNotes.length; noteIndex += 1) {
+    const note = ctx.play.drawNotes[noteIndex]!;
     if (isPastDrawWindow(drawWindow, note.beat)) {
       break;
     }
@@ -391,12 +391,17 @@ function advanceNoteDrawCursor(
   isGone: (object: RuntimeNote | TimedLandmineNote) => boolean,
 ): { note: number; mine: number } {
   let cursor = ctx.drawCursor;
-  if (!cursor || cursor.notes !== ctx.play.notes || cursor.mines !== ctx.play.mineNotes || seconds < cursor.seconds) {
-    cursor = { notes: ctx.play.notes, mines: ctx.play.mineNotes, seconds, note: 0, mine: 0 };
+  if (
+    !cursor ||
+    cursor.notes !== ctx.play.drawNotes ||
+    cursor.mines !== ctx.play.mineNotes ||
+    seconds < cursor.seconds
+  ) {
+    cursor = { notes: ctx.play.drawNotes, mines: ctx.play.mineNotes, seconds, note: 0, mine: 0 };
     ctx.drawCursor = cursor;
   }
   cursor.seconds = seconds;
-  cursor.note = advanceDrawCursor(ctx.play.notes, cursor.note, isGone);
+  cursor.note = advanceDrawCursor(ctx.play.drawNotes, cursor.note, isGone);
   cursor.mine = advanceDrawCursor(ctx.play.mineNotes, cursor.mine, isGone);
   return cursor;
 }

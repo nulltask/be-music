@@ -12,6 +12,7 @@ import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection
 import type { LibraryChart } from '@be-music/player-scene-model';
 import type { BrowserAssetEntry, BrowserAssetSource } from '../collection/types.ts';
 import { MIXER_HEADROOM_GAIN_LINEAR } from '../runtime/audio-bus.ts';
+import { stretchAudioBuffers, type TimeStretchAlgorithm } from '../runtime/time-stretch.ts';
 
 /**
  * Sample-amplitude threshold below which we treat audio as silent for the leading-silence trim. Mirrors
@@ -60,6 +61,14 @@ export const CHART_PREVIEW_WINDOW_FADE_OUT_SECONDS: number = 0.12;
 export interface ChartPreviewWindow {
   readonly startSeconds: number;
   readonly endSeconds: number;
+  /**
+   * The play tempo the window sounds at (default 1): a play at that tempo's speed, the chart's seconds `tempo` times as
+   * fast. With `keepPitch` the samples are stretched to it at their own pitch (`stretchAlgorithm`, WSOLA by default),
+   * as a keep-pitch play does; otherwise they play `tempo` times as fast, the pitch following, as LR2 does.
+   */
+  readonly tempo?: number;
+  readonly keepPitch?: boolean;
+  readonly stretchAlgorithm?: TimeStretchAlgorithm;
 }
 
 export interface ChartPreviewTarget {
@@ -186,6 +195,8 @@ export class ChartPreviewEngine {
         readonly target: ChartPreviewTarget;
         readonly triggers: readonly TimedSampleTrigger[];
         readonly buffers: Map<string, Promise<AudioBuffer | undefined>>;
+        /** Samples stretched for a keep-pitch window, by tempo, stretcher and path. */
+        readonly stretched: Map<string, Promise<AudioBuffer | undefined>>;
       }
     | undefined;
 
@@ -492,6 +503,7 @@ export class ChartPreviewEngine {
       target,
       triggers: collectChartPreviewTriggers(target.chart.chart, Number.MAX_VALUE),
       buffers: new Map<string, Promise<AudioBuffer | undefined>>(),
+      stretched: new Map<string, Promise<AudioBuffer | undefined>>(),
     };
     this.windowCache = fresh;
     return fresh;
@@ -509,6 +521,30 @@ export class ChartPreviewEngine {
       cache.buffers.set(path, decoded);
     }
     return decoded;
+  }
+
+  /** A window sample stretched to `rate` at its own pitch, once per chart, tempo and stretcher. */
+  private stretchWindowSample(
+    cache: NonNullable<ChartPreviewEngine['windowCache']>,
+    path: string,
+    rate: number,
+    algorithm: TimeStretchAlgorithm,
+  ): Promise<AudioBuffer | undefined> {
+    const key = `${rate}:${algorithm}:${path}`;
+    let stretched = cache.stretched.get(key);
+    if (stretched === undefined) {
+      stretched = this.decodeWindowSample(cache, path).then(async (buffer) => {
+        if (buffer === undefined || this.disposed) return undefined;
+        try {
+          return (await stretchAudioBuffers(this.audioContext, [buffer], rate, algorithm))[0];
+        } catch {
+          // A sample the stretcher cannot take plays at the tempo, its pitch following.
+          return undefined;
+        }
+      });
+      cache.stretched.set(key, stretched);
+    }
+    return stretched;
   }
 
   private async decodeChartAudioUnsequenced(
@@ -543,18 +579,27 @@ export class ChartPreviewEngine {
     const carried = selectChartWindowCarryOvers(cache.triggers, window, monophonic);
     if (triggers.length === 0 && carried.length === 0) return;
     const wavResources = resolveBmsWAVResources(chart);
+    // The play tempo: chart seconds pass `rate` times as fast. A keep-pitch window plays stretched samples at rate 1, a
+    // pitch-following one plays the samples `rate` times as fast.
+    const rate = window.tempo !== undefined && Number.isFinite(window.tempo) && window.tempo > 0 ? window.tempo : 1;
+    const stretching = rate !== 1 && window.keepPitch === true;
     const buffers = new Map<string, AudioBuffer>();
+    const stretchedKeys = new Set<string>();
     await Promise.all(
       [...new Set([...carried, ...triggers].map((trigger) => trigger.sampleKey))].map(async (key) => {
         const path = wavResources[key];
         if (typeof path !== 'string') return;
-        const buffer = await this.decodeWindowSample(cache, path);
+        const stretched = stretching
+          ? await this.stretchWindowSample(cache, path, rate, window.stretchAlgorithm ?? 'wsola')
+          : undefined;
+        const buffer = stretched ?? (await this.decodeWindowSample(cache, path));
         if (buffer) buffers.set(key, buffer);
+        if (stretched) stretchedKeys.add(key);
       }),
     );
     if (this.isStale(sequence)) return;
     const startAt = this.audioContext.currentTime + 0.02;
-    const span = Math.max(0, window.endSeconds - window.startSeconds);
+    const span = Math.max(0, window.endSeconds - window.startSeconds) / rate;
     const { fadeStartAt, endAt } = resolvePreviewFallbackFade(
       startAt,
       span + CHART_PREVIEW_WINDOW_FADE_OUT_SECONDS,
@@ -567,13 +612,20 @@ export class ChartPreviewEngine {
       trigger: TimedSampleTrigger,
       buffer: AudioBuffer,
       when: number,
-      offsetSeconds: number,
-      durationSeconds: number | undefined,
+      sampleOffsetSeconds: number,
+      sampleDurationSeconds: number | undefined,
     ): void => {
+      // A stretched sample is `rate` times shorter: its offset and slice scale with it; a sped-up one keeps them, the
+      // buffer's own time.
+      const stretched = stretchedKeys.has(trigger.sampleKey);
+      const offsetSeconds = stretched ? sampleOffsetSeconds / rate : sampleOffsetSeconds;
+      const durationSeconds =
+        sampleDurationSeconds === undefined || !stretched ? sampleDurationSeconds : sampleDurationSeconds / rate;
       let source: AudioBufferSourceNode;
       try {
         source = this.audioContext.createBufferSource();
         source.buffer = buffer;
+        if (!stretched && rate !== 1) source.playbackRate.value = rate;
       } catch {
         return;
       }
@@ -598,7 +650,9 @@ export class ChartPreviewEngine {
     for (const trigger of carried) {
       const buffer = buffers.get(trigger.sampleKey);
       if (!buffer) continue;
-      const part = resolveChartWindowCarryOver(trigger, buffer.duration, window.startSeconds);
+      // In the sample's own time: a chart second of it has played per chart second, sped up or stretched alike.
+      const sampleDuration = stretchedKeys.has(trigger.sampleKey) ? buffer.duration * rate : buffer.duration;
+      const part = resolveChartWindowCarryOver(trigger, sampleDuration, window.startSeconds);
       if (part !== undefined) schedule(trigger, buffer, startAt, part.offsetSeconds, part.durationSeconds);
     }
     for (const trigger of triggers) {
@@ -606,7 +660,7 @@ export class ChartPreviewEngine {
       if (chart.sourceFormat === 'bmson' && trigger.event.bmson?.c === true && activeSameSlot) continue;
       const buffer = buffers.get(trigger.sampleKey);
       if (!buffer) continue;
-      const when = startAt + Math.max(0, trigger.seconds - window.startSeconds);
+      const when = startAt + Math.max(0, trigger.seconds - window.startSeconds) / rate;
       schedule(trigger, buffer, when, trigger.sampleOffsetSeconds ?? 0, trigger.sampleDurationSeconds);
     }
     if (scheduledCount > 0) this.emitPlaybackStart(target);

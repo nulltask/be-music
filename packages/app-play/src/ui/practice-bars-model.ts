@@ -16,6 +16,19 @@ export function practiceBarWindow(bar: Pick<ChartScoreBar, 'startMs' | 'endMs'>)
   return { startSeconds: bar.startMs / 1000, endSeconds: Math.max(bar.startMs, bar.endMs) / 1000 };
 }
 
+/**
+ * Whether a pick sounds its bar: a press always does, and a run picked (Shift, a drag, Shift + arrows) does when it took
+ * the bar in, so a drag sounds each bar it reaches and a run drawn back sounds nothing new.
+ */
+export function shouldPreviewPickedBar(
+  before: Pick<ChartScoreBarRange, 'first' | 'last'> | undefined,
+  bar: number,
+  extend: boolean,
+): boolean {
+  if (!extend || before === undefined) return true;
+  return bar < before.first || bar > before.last;
+}
+
 /** A measure number as BMS writes it (`012`), as the score labels its bars. */
 function formatMeasure(measure: number): string {
   return String(measure).padStart(3, '0');

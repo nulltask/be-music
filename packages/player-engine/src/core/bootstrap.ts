@@ -22,7 +22,13 @@ import {
 } from './chart-notes-options.ts';
 import { withChartOverrides } from './resolved-chart-overrides.ts';
 import { duplicateBattleChart } from './battle-chart.ts';
-import { applyPracticeRange, resolvePracticePlayWindow, resolvePracticeRange } from './practice.ts';
+import {
+  applyPracticeRange,
+  createPracticeLoopPreviewNotes,
+  resolvePracticeLoopShift,
+  resolvePracticePlayWindow,
+  resolvePracticeRange,
+} from './practice.ts';
 import { isDuplicatedBattleMode, resolveEffectiveBattleMode } from './battle-mode.ts';
 import { convertLR2SPToDPChart } from './lr2-sp-to-dp-chart.ts';
 import type { EffectiveBattleMode } from './battle-mode.ts';
@@ -104,8 +110,10 @@ export interface PreparedPlaybackChartData {
   dBattleScratch?: boolean;
   /** beatoraja PRACTICE: the range played and the note counts before `PracticeModifier`. */
   practiceStartSeconds?: number;
-  /** Where a PRACTICE play starts: the head of the bar before the range's (`resolvePracticePlayWindow`). */
+  /** Where a PRACTICE play starts: a bar before the range's at least (`resolvePracticePlayWindow`'s first start). */
   practicePlayStartSeconds?: number;
+  /** Where a looping PRACTICE play goes back to: the head of the rest bars before the range, or the range itself. */
+  practiceLoopStartSeconds?: number;
   practiceEndSeconds?: number;
   practiceSourceNotes?: import('../ruleset/facts.ts').RulesetNoteCounts;
   practiceChangedObjectCount?: number;
@@ -474,7 +482,12 @@ export function preparePlaybackChart(
       : undefined;
   if (practiceWindow) totalSeconds = practiceWindow.endSeconds;
   const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
-  const renderNotes = notes;
+  // A seamless PRACTICE loop draws the next round's notes past the range's end, so they come down the lane (#949).
+  const loopShift =
+    practiceWindow && options.practice
+      ? resolvePracticeLoopShift(resolved, options.practice, practiceWindow)
+      : undefined;
+  const renderNotes = loopShift ? [...notes, ...createPracticeLoopPreviewNotes(notes, loopShift)] : notes;
   const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
   const laneModeOptions = {
     player: resolved.source.bms.player,
@@ -505,7 +518,8 @@ export function preparePlaybackChart(
       : {}),
     ...(practiceRange && practice
       ? {
-          practicePlayStartSeconds: practiceWindow?.startSeconds ?? 0,
+          practicePlayStartSeconds: practiceWindow?.firstStartSeconds ?? 0,
+          practiceLoopStartSeconds: practiceWindow?.startSeconds ?? 0,
           practiceStartSeconds: practiceRange.startMs / 1000,
           practiceEndSeconds: practiceRange.endMs / 1000,
           practiceSourceNotes: practice.sourceNotes,

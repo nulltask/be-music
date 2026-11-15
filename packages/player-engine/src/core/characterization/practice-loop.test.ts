@@ -78,6 +78,31 @@ describe('PRACTICE loop (#949)', () => {
     expect(play.summary?.gauge?.failedMidPlay).not.toBe(true);
   });
 
+  test('with no rest, leads the first round in by a bar and loops back to the range at its end, seamlessly', async () => {
+    // Bar 2 alone, [4.0, 6.0): the first round starts at the head of bar 1 (2.0); each loop goes back to 4.0 the moment
+    // the play reaches 6.0, carrying the time past it, without waiting for 11 @ 6.0's judgment.
+    const play = await observePlay({
+      driver: 'manual',
+      chart: loopChart(),
+      options: {
+        judgeRuleset: 'beatoraja',
+        practice: { ...range, startMs: 4000, endMs: 6000, restBarsBefore: 0, restBarsAfter: 0, loop: true },
+      },
+      script: [command(7_000, { kind: 'interrupt', reason: 'escape' })],
+    });
+    const generations = play.frames.generations ?? [];
+    expect(generations[0]).toBe('0.000 generation=1 seconds=2 output=0 tempo=1');
+    // The play reaches 6.0 on the play clock's 4000 and goes on from 4.0 plus the overshoot.
+    const loop = /^(\S+) generation=2 seconds=(\S+) /.exec(generations[1] ?? '');
+    expect(loop).not.toBeNull();
+    const [atMs, seconds] = [Number(loop![1]), Number(loop![2])];
+    expect(atMs).toBeGreaterThanOrEqual(4000);
+    expect(atMs).toBeLessThan(4050);
+    expect(seconds).toBeCloseTo(4 + (atMs - 4000) / 1000, 3);
+    // The next loop is the range's two seconds later: it starts at 4.0, not 2.0.
+    expect(generations[2]).toMatch(/generation=3 seconds=4(\.0\d*)? /);
+  });
+
   test('a practice play without the loop ends at the head of the bar after its range', async () => {
     const play = await observePlay({
       driver: 'manual',

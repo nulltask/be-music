@@ -2,7 +2,12 @@ import { describe, expect, test } from 'vite-plus/test';
 import { parseBMS } from '@be-music/chart-parser';
 import { resolveChart } from '@be-music/chart-model';
 import { preparePlaybackChart } from './bootstrap.ts';
-import { resolvePracticePlayWindow, resolvePracticeRange } from './practice.ts';
+import {
+  createPracticeLoopPreviewNotes,
+  resolvePracticeLoopShift,
+  resolvePracticePlayWindow,
+  resolvePracticeRange,
+} from './practice.ts';
 import { resolveRuleset } from '../ruleset/definitions.ts';
 import type { RulesetChartFacts } from '../ruleset/facts.ts';
 
@@ -194,7 +199,7 @@ test('PRACTICE plays a single chart under every ruleset', () => {
 });
 
 describe('resolvePracticePlayWindow (#954)', () => {
-  const windowOf = (
+  const playWindowOf = (
     lines: string[],
     range: { startMs: number; endMs?: number },
     rest: { restBarsBefore?: number; restBarsAfter?: number } = {},
@@ -202,6 +207,10 @@ describe('resolvePracticePlayWindow (#954)', () => {
     const chart = resolveChart(parseBMS(['#BPM 120', ...lines, '#00911:01', ''].join('\n')), { playVariant: '7' });
     const resolved = resolvePracticeRange({ ...range, gauge: 'NORMAL', startGauge: 20 }, 20_000);
     return resolvePracticePlayWindow(chart, { ...range, ...rest }, resolved);
+  };
+  const windowOf = (...args: Parameters<typeof playWindowOf>) => {
+    const { startSeconds, endSeconds } = playWindowOf(...args);
+    return { startSeconds, endSeconds };
   };
 
   test('starts a bar before the range’s bar and ends a bar after the bar its end lies in', () => {
@@ -223,6 +232,20 @@ describe('resolvePracticePlayWindow (#954)', () => {
     expect(windowOf([], range, { restBarsBefore: 8 }).startSeconds).toBe(0);
     // Each side is its own: no rest before, three bars after.
     expect(windowOf([], range, { restBarsBefore: 0, restBarsAfter: 3 })).toEqual({ startSeconds: 4, endSeconds: 14 });
+  });
+
+  test('starts the first round a bar before the range at least, so its notes come down the lane', () => {
+    const range = { startMs: 4000, endMs: 8000 };
+    // No rest before: the loop starts at the range, the first round a bar before it.
+    expect(playWindowOf([], range, { restBarsBefore: 0 })).toMatchObject({ startSeconds: 4, firstStartSeconds: 2 });
+    // A rest before: the first round starts with the loop.
+    expect(playWindowOf([], range, { restBarsBefore: 2 })).toMatchObject({ startSeconds: 0, firstStartSeconds: 0 });
+    expect(playWindowOf([], range)).toMatchObject({ startSeconds: 2, firstStartSeconds: 2 });
+    // A range in the first bar has no bar before it: the chart's start.
+    expect(playWindowOf([], { startMs: 0, endMs: 2000 }, { restBarsBefore: 0 })).toMatchObject({
+      startSeconds: 0,
+      firstStartSeconds: 0,
+    });
   });
 
   test('rests without an END TIME: none ends at the range’s end, more bars end further out', () => {
@@ -249,5 +272,44 @@ describe('resolvePracticePlayWindow (#954)', () => {
 
   test('without an END TIME, ends 1000 ms past the range’s end as before', () => {
     expect(windowOf([], { startMs: 4500 })).toEqual({ startSeconds: 2, endSeconds: 22 });
+  });
+});
+
+describe('the seamless PRACTICE loop (no rest after the range)', () => {
+  const chartOf = (lines: string[] = []) =>
+    resolveChart(parseBMS(['#BPM 120', ...lines, '#00911:01', ''].join('\n')), { playVariant: '7' });
+
+  test('moves back from the range’s end to the loop’s start, in seconds and beats', () => {
+    // 120 BPM: two seconds and four beats a bar; the loop from 4.0 to 8.0 is two bars.
+    const window = { startSeconds: 4, endSeconds: 8 };
+    const practice = { loop: true, endMs: 8000, restBarsAfter: 0 } as const;
+    expect(resolvePracticeLoopShift(chartOf(), practice, window)).toEqual({ seconds: 4, beats: 8 });
+    // At 240 BPM from bar 2 (4.0): the same four seconds are sixteen beats.
+    expect(resolvePracticeLoopShift(chartOf(['#00203:F0']), practice, window)).toEqual({ seconds: 4, beats: 16 });
+    // Not seamless: a rest after, no loop, or the whole chart.
+    expect(resolvePracticeLoopShift(chartOf(), { ...practice, restBarsAfter: 1 }, window)).toBeUndefined();
+    expect(resolvePracticeLoopShift(chartOf(), { ...practice, restBarsAfter: undefined }, window)).toBeUndefined();
+    expect(resolvePracticeLoopShift(chartOf(), { ...practice, loop: false }, window)).toBeUndefined();
+    expect(resolvePracticeLoopShift(chartOf(), { ...practice, endMs: undefined }, window)).toBeUndefined();
+  });
+
+  test('draws the next round’s notes, shifted, standing for their notes but judged on their own', () => {
+    const tap = {
+      event: { measure: 2, channel: '11', position: [0, 1], value: '01' },
+      channel: '11',
+      beat: 8,
+      seconds: 4,
+      judged: true,
+    } as const;
+    const long = { ...tap, channel: '12', beat: 10, seconds: 5, endBeat: 11, endSeconds: 5.5, judged: false };
+    const [tapPreview, longPreview] = createPracticeLoopPreviewNotes([{ ...tap }, long], { seconds: 4, beats: 8 });
+    expect(tapPreview).toMatchObject({ channel: '11', beat: 16, seconds: 8, judged: false });
+    expect(longPreview).toMatchObject({ beat: 18, seconds: 9, endBeat: 19, endSeconds: 9.5 });
+    // A later change to the note's lane (a lane option applied after) moves its preview too.
+    long.channel = '14';
+    expect(longPreview!.channel).toBe('14');
+    // Judging the preview leaves the note alone.
+    longPreview!.judged = true;
+    expect(long.judged).toBe(false);
   });
 });
