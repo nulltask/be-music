@@ -10,7 +10,8 @@ import {
 import { describe, expect, it, vi } from 'vite-plus/test';
 import { SILENT_AUDIO } from '../../runtime/audio-analysis.ts';
 import type { SelectFrame, SelectIntent, SelectRecords } from '../../view/types.ts';
-import type { SessionKeyEvent } from '../session-scene.ts';
+import type { GamepadMenuButton } from '../../runtime/gamepad-menu.ts';
+import { gamepadSessionKeyEvent, type SessionKeyEvent } from '../session-scene.ts';
 import { SELECT_POLICIES } from './select-policy.ts';
 import {
   PANEL_HOLD_MS,
@@ -1076,5 +1077,53 @@ describe('SelectSession beatoraja extra keys', () => {
     });
     expect(key('Digit9', '9')).toBe(true);
     expect(readtext).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
+  });
+});
+
+describe('SelectSession with a gamepad', () => {
+  /** A press and release of a 1P pad button, as `SessionScene` hands it to the session. */
+  const padPress = (session: SelectSession, button: GamepadMenuButton, timeStamp = 0): boolean => {
+    const handled = session.handleKey(
+      gamepadSessionKeyEvent({ type: 'down', side: '1P', button, repeat: false, timeStamp }),
+    );
+    session.handleKey(gamepadSessionKeyEvent({ type: 'up', side: '1P', button, repeat: false, timeStamp }));
+    return handled;
+  };
+
+  it("scrolls with LR2's turntable down, opens with a white key and backs out with key 2", () => {
+    const { session, advance, started } = createSession();
+    expect(padPress(session, 'scratch-ccw')).toBe(true);
+    expect(focusedTitle(advance(10))).toBe('pack');
+    padPress(session, 'key5');
+    expect(advance(10).browse.path.map((folder) => folder.label)).toEqual(['pack']);
+    padPress(session, 'key2');
+    expect(focusedTitle(advance(10))).toBe('pack');
+    padPress(session, 'key5');
+    advance(10);
+    padPress(session, 'key7');
+    advance(10);
+    expect(started).toHaveLength(1);
+    expect(started[0]?.autoPlay).toBe(false);
+  });
+
+  it("scrolls with beatoraja's turntable up and plays with the D-pad's →", () => {
+    const { session, advance, started } = createSession({ policy: SELECT_POLICIES.beatoraja });
+    padPress(session, 'scratch-cw');
+    expect(focusedTitle(advance(10))).toBe('pack');
+    padPress(session, 'right');
+    expect(advance(10).browse.path.map((folder) => folder.label)).toEqual(['pack']);
+    padPress(session, 'down');
+    advance(10);
+    padPress(session, 'up');
+    advance(10);
+    padPress(session, 'right');
+    advance(10);
+    expect(started).toHaveLength(1);
+  });
+
+  it("opens LR2's PLAY OPTION panel with START", () => {
+    const { session, advance } = createSession();
+    padPress(session, 'start');
+    expect(advance(10).panel).toBe(1);
   });
 });

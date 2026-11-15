@@ -828,6 +828,15 @@ judge core, a replay and the replay simulator all key a scratch hold by the same
   a sample every 4 ms as a fallback and checks for stopped turntables and disconnected controllers. The browser
   and operating system determine the actual sampling interval.
 
+  The select, decide and result screens read the same pads as their control buttons (`runtime/gamepad-menu.ts`), so
+  a pad button does what the key it stands for does on the screen's key map (LR2's or beatoraja's, by the skin
+  family). A standard pad keeps the play's keys and turntable; its Start is START, its Back (Share / Create) SELECT,
+  and its D-pad is the arrow keys there instead of key 1. An IIDX controller's START and SELECT are its buttons 9 and
+  10 (E1 / E2 on the INFINITAS layout, beatoraja's default controller START and SELECT); this follows the INFINITAS
+  HID report order and is pending hardware verification. The first pad is 1P, the second 2P. A held turntable or
+  D-pad repeats after 300 ms every 60 ms (Be-Music policy, as a held key repeats). A button already held when a
+  screen comes is not a press on it, and a modal dialog or a text field takes the pads as it takes the keys.
+
 **Single-source fallback.** With only one source on a scratch lane, beatoraja's strict rules would leave every BSS
 unclearable: only another source ends one. A hold started by a source that has no counterpart on its lane therefore
 plays a lenient rule: any fresh press on the lane ends the BSS, its own source's included, and a release settles
