@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@lit-labs/ssr": "^4.1.0",
-    "@tailwindcss/cli": "^4.3.3",
+    "@tailwindcss/cli": "^4.3.5",
     "basecoat-css": "^1.0.2",
     "esbuild": "0.28.2",
     "miniflare": "5.20261006.1-alpha",

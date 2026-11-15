@@ -1,7 +1,7 @@
 import type { ResolvedChart } from '@be-music/chart-model';
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
 import type { BeatorajaGaugeCategory } from '../ruleset/definitions.ts';
-import type { PracticeGaugeType } from '../ruleset/practice-gauge.ts';
+import type { PracticeGaugePick } from '../ruleset/practice-gauge.ts';
 import type { RulesetNoteCounts } from '../ruleset/facts.ts';
 import { moveNotesToBackground } from './background-notes.ts';
 import { withChartOverrides } from './resolved-chart-overrides.ts';
@@ -19,8 +19,11 @@ export interface PlayPractice {
    * is the source default, the chart's last timeline + 1000.
    */
   endMs?: number;
-  /** `GAUGE TYPE`: one of the judge ruleset's `resolvePracticeGaugeTypes`. */
-  gauge: PracticeGaugeType;
+  /**
+   * `GAUGE TYPE`: one of the judge ruleset's `resolvePracticeGaugeTypes`, or another source's qualified with it
+   * (`beatoraja:ASSIST-EASY`), which plays on that source's gauge and TOTAL reading.
+   */
+  gauge: PracticeGaugePick;
   /** `GAUGE CATEGORY` (beatoraja only); absent uses the play mode's. */
   gaugeCategory?: BeatorajaGaugeCategory;
   /** `GAUGE VALUE`. */
@@ -29,6 +32,13 @@ export interface PlayPractice {
   judgeRank?: number;
   /** `TOTAL`; absent keeps the chart's. */
   total?: number;
+  /**
+   * How many bars before the range the play starts, as a rest before its first note (0 starts at the range's head):
+   * the bars are played with no judged note. Absent is 1, as it was before it was a setting.
+   */
+  restBarsBefore?: number;
+  /** How many bars after the range the play ends, as a rest after its last note (0 ends at the range's end); absent is 1. */
+  restBarsAfter?: number;
   /**
    * Plays the range again in place each time it ends, until the play is interrupted (#949): once the play's end (the
    * head of the bar after the one `END TIME` lies in, `resolvePracticePlayWindow`) is reached and judged, or its gauge
@@ -72,25 +82,35 @@ function barIndexAt(chart: Pick<ResolvedChart, 'beatResolver' | 'timing'>, ms: n
   return measure;
 }
 
+/** `bars` as a whole number of rest bars: 1 when absent, never negative. */
+function restBarCount(bars: number | undefined): number {
+  return bars === undefined || !Number.isFinite(bars) ? 1 : Math.max(0, Math.trunc(bars));
+}
+
 /**
- * Where a PRACTICE play starts and ends, in chart seconds, measured in bars (#954): it starts at the head of the bar
- * before the one the range starts in (the chart's start when that is the first bar), and ends at the head of the bar
- * after the one its `END TIME` lies in, so a range snapped to bar lines plays one whole bar on either side. Without an
- * `END TIME` (to the chart's end) it ends 1000 ms past the range's end, as before. beatoraja starts 1000 ms before the
- * range and ends 1000 ms past it instead.
+ * Where a PRACTICE play starts and ends, in chart seconds, measured in bars (#954): it starts `restBarsBefore` bars
+ * (1 by default) before the one the range starts in (the chart's start when that reaches past the first bar), and ends
+ * at the head of the bar `restBarsAfter` bars after the one its `END TIME` lies in, so a range snapped to bar lines
+ * plays that many whole bars on either side; 0 starts and ends at the range itself. Without an `END TIME` (to the
+ * chart's end) one bar of rest ends 1000 ms past the range's end, as before. beatoraja starts 1000 ms before the range
+ * and ends 1000 ms past it instead.
  */
 export function resolvePracticePlayWindow(
   chart: Pick<ResolvedChart, 'beatResolver' | 'timing'>,
-  practice: Pick<PlayPractice, 'endMs'>,
+  practice: Pick<PlayPractice, 'endMs' | 'restBarsBefore' | 'restBarsAfter'>,
   range: { startMs: number; endMs: number },
 ): { startSeconds: number; endSeconds: number } {
+  const before = restBarCount(practice.restBarsBefore);
+  const after = restBarCount(practice.restBarsAfter);
   const startBar = barIndexAt(chart, range.startMs);
-  const startSeconds = startBar > 0 ? barHeadMs(chart, startBar - 1) / 1000 : 0;
-  const endSeconds =
-    practice.endMs === undefined
-      ? (range.endMs + 1000) / 1000
-      : Math.max(range.endMs, barHeadMs(chart, barIndexAt(chart, range.endMs) + 1)) / 1000;
-  return { startSeconds: Math.min(startSeconds, range.startMs / 1000), endSeconds };
+  const startSeconds = before === 0 ? range.startMs / 1000 : barHeadMs(chart, Math.max(0, startBar - before)) / 1000;
+  let endMs: number;
+  if (after === 0) endMs = range.endMs;
+  else if (practice.endMs === undefined) {
+    endMs = range.endMs + 1000;
+    if (after > 1) endMs = Math.max(endMs, barHeadMs(chart, barIndexAt(chart, range.endMs) + after));
+  } else endMs = Math.max(range.endMs, barHeadMs(chart, barIndexAt(chart, range.endMs) + after));
+  return { startSeconds: Math.min(startSeconds, range.startMs / 1000), endSeconds: endMs / 1000 };
 }
 
 /**

@@ -50,7 +50,7 @@ export function drawCabinetHUD(ctx: CanvasRenderingContext2D, frame: BeMusicGame
   );
   const pace = resolveScorePace(runtime);
   if (cabinet.graph) drawGraph(ctx, cabinet.graph, pace, runtime);
-  drawStage(ctx, cabinet.stage, resolveStageLabel(runtime.course), nowMs);
+  drawStage(ctx, cabinet.stage, resolveStageLabel(runtime.course, runtime.practice), nowMs);
   if (cabinet.doublePlay) drawChartStack(ctx, cabinet.players, runtime, nowMs);
   else drawPlayers(ctx, cabinet.players, runtime, nowMs);
   if (cabinet.secondSide && runtime.secondPlayer) {

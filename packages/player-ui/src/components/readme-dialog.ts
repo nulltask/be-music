@@ -150,14 +150,14 @@ export class BeMusicReadmeDialogElement extends BeMusicElement {
         <section part="body" tabindex="0" autofocus>
           <pre>
 ${
-              text === undefined
-                ? nothing
-                : splitLinkedText(text).map((run) =>
-                    run.kind === 'link'
-                      ? html`<a href=${run.href} target="_blank" rel="noopener noreferrer">${run.text}</a>`
-                      : run.text,
-                  )
-            }</pre>
+  text === undefined
+    ? nothing
+    : splitLinkedText(text).map((run) =>
+        run.kind === 'link'
+          ? html`<a href=${run.href} target="_blank" rel="noopener noreferrer">${run.text}</a>`
+          : run.text,
+      )
+}</pre>
         </section>
         <footer>
           ${this.hint ? html`<p class="hint">${this.hint}</p>` : nothing}

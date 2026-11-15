@@ -14,6 +14,7 @@ import {
   isDuplicatedBattleChoice,
   keepGaugePick,
   keepPracticeGauge,
+  practiceGaugeSource,
   type PlayOptions,
 } from '@be-music/player-scene-model';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
@@ -696,8 +697,8 @@ export class OptionsDialog {
       this.setPlayOptions({ longNoteMode: 'LN' });
     }
     if (this.longNoteModeController) this.longNoteModeController.hidden = !beatoraja;
-    // PRACTICE is offered under every ruleset (#933): its gauge list is the judge ruleset's own gauges, GAUGE CATEGORY
-    // is beatoraja's alone, and AC reads neither JUDGERANK nor TOTAL.
+    // PRACTICE is offered under every ruleset (#933): its gauge list is the judge ruleset's own gauges, then the other
+    // sources' (ADR 0019), GAUGE CATEGORY is beatoraja's alone, and AC reads neither JUDGERANK nor TOTAL.
     const practice = this.guiState.practice;
     this.practiceControllers.forEach((controller, index) => {
       controller.hidden = index > 0 && !practice;
@@ -708,10 +709,12 @@ export class OptionsDialog {
       this.setPlayOptions({ practiceGauge });
     }
     if (this.practiceGaugeController) {
-      this.practiceGaugeController.options = practiceGaugeItems(ruleset);
+      this.practiceGaugeController.options = practiceGaugeItems(ruleset, this.guiState.practiceGauge);
       this.practiceGaugeController.refresh();
     }
-    if (this.practiceGaugeCategoryController) this.practiceGaugeCategoryController.hidden = !practice || !beatoraja;
+    if (this.practiceGaugeCategoryController)
+      this.practiceGaugeCategoryController.hidden =
+        !practice || practiceGaugeSource(this.guiState.practiceGauge, ruleset) !== 'beatoraja';
     for (const controller of this.practiceJudgeRankAndTotalControllers)
       controller.hidden = !practice || !practiceReadsJudgeRankAndTotal(ruleset);
     if (!beatoraja && this.guiState.customJudge) {

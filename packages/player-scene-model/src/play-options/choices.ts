@@ -15,6 +15,7 @@ import {
   clampCustomJudgeRate,
   gaugePickType,
   isGaugePick,
+  isPracticeGaugePick,
   resolveGaugeTypes,
   splitGaugePick,
   type GaugePick,
@@ -253,6 +254,8 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   practiceStartGauge: 20,
   practiceJudgeRank: 0,
   practiceTotal: 0,
+  practiceRestBefore: 1,
+  practiceRestAfter: 1,
   customJudgeKeyPerfectGreat: 400,
   customJudgeKeyGreat: 400,
   customJudgeKeyGood: 100,
@@ -423,6 +426,8 @@ const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: 
   practiceStartGauge: (value) => clamp(Math.trunc(value), 1, 120),
   practiceJudgeRank: (value) => (value <= 0 ? 0 : clamp(Math.trunc(value), 1, 400)),
   practiceTotal: (value) => (value <= 0 ? 0 : clamp(Math.trunc(value), 10, 5000)),
+  practiceRestBefore: (value) => clamp(Math.trunc(value), 0, 8),
+  practiceRestAfter: (value) => clamp(Math.trunc(value), 0, 8),
   customJudgeKeyPerfectGreat: (value) => clampCustomJudgeRate('keyPerfectGreat', value),
   customJudgeKeyGreat: (value) => clampCustomJudgeRate('keyGreat', value),
   customJudgeKeyGood: (value) => clampCustomJudgeRate('keyGood', value),
@@ -459,6 +464,8 @@ export function resolvePlayOptionValue<K extends keyof PlayOptions>(
   if (key === 'randomSeed1P' || key === 'randomSeed2P') return parseLaneRandomSeed(value) as PlayOptions[K] | undefined;
   // A gauge is a bare type or one qualified with a source that defines it (`lr2:HARD`; `lr2:EX-HARD` is refused).
   if (key === 'gauge1P' || key === 'gauge2P') return isGaugePick(value) ? (value as PlayOptions[K]) : undefined;
+  // PRACTICE's GAUGE TYPE may name another source's gauge (`beatoraja:ASSIST-EASY`), as a gauge pick does.
+  if (key === 'practiceGauge') return isPracticeGaugePick(value) ? (value as PlayOptions[K]) : undefined;
   // A bare colliding name from before ADR 0019 stays valid: it is the judge ruleset's own. A merged value reads as the
   // option it was merged into.
   if (key === 'random1P' || key === 'random2P')

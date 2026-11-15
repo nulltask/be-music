@@ -5,6 +5,7 @@ import type { BrowserAssetSource } from '@be-music/player-browser/collection';
 import { practiceReadsJudgeRankAndTotal, type RulesetId } from '@be-music/player-engine/ruleset';
 import {
   keepPracticeGauge,
+  practiceGaugeSource,
   type LibraryChart,
   type PlayOptions,
   type PracticeGaugeCategory,
@@ -17,6 +18,7 @@ import {
   type ChartScoreBarRange,
   type ChartScoreLayout,
 } from '@be-music/player-ui';
+import { clampTempoPercent, TEMPO_PERCENT_MAX, TEMPO_PERCENT_MIN } from '../play-tempo-settings.ts';
 import { onPlayerLangChange, playerLang, playerText } from '../player-copy.ts';
 import { optionLabel } from './options/labels.ts';
 import { practiceGaugeItems } from './options/play-option-items.ts';
@@ -30,7 +32,13 @@ import { describePracticeBars, practiceBarWindow, type PracticeBarsMemory } from
 /** The PRACTICE settings the picker sets, the same play options as the Options dialog's Practice page. */
 export type PracticeSettings = Pick<
   PlayOptions,
-  'practiceGauge' | 'practiceGaugeCategory' | 'practiceStartGauge' | 'practiceJudgeRank' | 'practiceTotal'
+  | 'practiceGauge'
+  | 'practiceGaugeCategory'
+  | 'practiceStartGauge'
+  | 'practiceJudgeRank'
+  | 'practiceTotal'
+  | 'practiceRestBefore'
+  | 'practiceRestAfter'
 >;
 
 /** GAUGE CATEGORY's choices, as the Options dialog lists them. */
@@ -56,6 +64,10 @@ export interface PracticeBarsDialogDeps {
   readonly ruleset: () => RulesetId;
   /** Sets play options as the Options dialog does: kept, saved and shown on its controls. */
   readonly setPlayOptions: (changes: Partial<PlayOptions>) => void;
+  /** The play tempo in percent off the chart's own (0 when the tempo is off), as the Options dialog's Tempo slider has it. */
+  readonly tempoPercent: () => number;
+  /** Sets the play tempo as the Options dialog's Tempo slider does: kept, saved and shown on its controls. */
+  readonly setTempoPercent: (percent: number) => void;
 }
 
 /** How long a run picked must stay as it is before it sounds, so a drag does not restart it at every bar. */
@@ -86,6 +98,8 @@ export class PracticeBarsDialog {
   private readonly playOptions: PracticeBarsDialogDeps['playOptions'];
   private readonly ruleset: PracticeBarsDialogDeps['ruleset'];
   private readonly setPlayOptions: PracticeBarsDialogDeps['setPlayOptions'];
+  private readonly tempoPercent: PracticeBarsDialogDeps['tempoPercent'];
+  private readonly setTempoPercent: PracticeBarsDialogDeps['setTempoPercent'];
   private chart: LibraryChart | undefined;
   private source: BrowserAssetSource | undefined;
   private layout: ChartScoreLayout | undefined;
@@ -102,6 +116,8 @@ export class PracticeBarsDialog {
     this.playOptions = deps.playOptions;
     this.ruleset = deps.ruleset;
     this.setPlayOptions = deps.setPlayOptions;
+    this.tempoPercent = deps.tempoPercent;
+    this.setTempoPercent = deps.setTempoPercent;
     defineBeMusicElements();
     this.dialog = document.createElement('dialog');
     this.dialog.className = 'dialog practice-bars-dialog';
@@ -185,7 +201,7 @@ export class PracticeBarsDialog {
     const label = (text: string) => optionLabel(text, lang);
     const gauge = keepPracticeGauge(options.practiceGauge, ruleset);
     const number = (
-      key: 'practiceStartGauge' | 'practiceJudgeRank' | 'practiceTotal',
+      key: 'practiceStartGauge' | 'practiceJudgeRank' | 'practiceTotal' | 'practiceRestBefore' | 'practiceRestAfter',
       text: string,
       min: number,
       max: number,
@@ -209,6 +225,25 @@ export class PracticeBarsDialog {
       </label>`;
     return html`<div class="practice-bars-settings">
       <label class="practice-bars-field">
+        <span>${label('Tempo (%)')}</span>
+        <input
+          class="input"
+          type="number"
+          inputmode="numeric"
+          min=${TEMPO_PERCENT_MIN}
+          max=${TEMPO_PERCENT_MAX}
+          step="1"
+          .value=${String(this.tempoPercent())}
+          @change=${(event: Event) => {
+            const value = Number((event.target as HTMLInputElement).value);
+            if (Number.isFinite(value)) this.setTempoPercent(clampTempoPercent(value));
+            this.paint();
+          }}
+        />
+      </label>
+      ${number('practiceRestBefore', 'REST BEFORE (bars)', 0, 8)}
+      ${number('practiceRestAfter', 'REST AFTER (bars)', 0, 8)}
+      <label class="practice-bars-field">
         <span>${label('GAUGE TYPE')}</span>
         <select
           class="select"
@@ -218,13 +253,13 @@ export class PracticeBarsDialog {
               (event.target as HTMLSelectElement).value as PracticeSettings['practiceGauge'],
             )}
         >
-          ${practiceGaugeItems(ruleset).map(
+          ${practiceGaugeItems(ruleset, gauge).map(
             (item) => html`<option value=${item.value} ?selected=${item.value === gauge}>${item.text}</option>`,
           )}
         </select>
       </label>
       ${
-        ruleset === 'beatoraja'
+        practiceGaugeSource(gauge, ruleset) === 'beatoraja'
           ? html`<label class="practice-bars-field">
               <span>${label('GAUGE CATEGORY')}</span>
               <select

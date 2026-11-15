@@ -349,6 +349,8 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     practiceStartGauge: 20,
     practiceJudgeRank: 0,
     practiceTotal: 0,
+    practiceRestBefore: 1,
+    practiceRestAfter: 1,
     customJudgeKeyPerfectGreat: 400,
     customJudgeKeyGreat: 400,
     customJudgeKeyGood: 100,
