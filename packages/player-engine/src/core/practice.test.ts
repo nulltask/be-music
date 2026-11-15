@@ -127,6 +127,22 @@ test('PRACTICE under AC rules sets only the gauge: its windows are fixed and its
   );
 });
 
+test('PRACTICE plays on its own gauge whatever the play’s gauge pick is', () => {
+  const sourceNotes = { normal: 200, long: { 1: 0, 2: 0, 3: 0 } };
+  // A pick of another source's gauge, one the judge ruleset lacks, used to stop the practice play with a RangeError.
+  for (const [ruleset, selectedGauge, gauge] of [
+    ['lr2', 'beatoraja:ASSIST-EASY', 'GROOVE'],
+    ['lr2', 'beatoraja:EX-HARD', 'HARD'],
+    ['beatoraja', 'lr2:P-ATTACK', 'NORMAL'],
+    ['____', 'lr2:G-ATTACK', 'EASY'],
+  ] as const)
+    expect(
+      resolveRuleset(FACTS, ruleset, { selectedGauge, practice: { sourceNotes, gauge, startGauge: 20 } }).gauge,
+    ).toMatchObject({ id: gauge, initial: 20 });
+  // Without PRACTICE the pick still names its source's gauge.
+  expect(() => resolveRuleset(FACTS, 'lr2', { selectedGauge: 'ASSIST-EASY' })).toThrow(/no ASSIST-EASY/);
+});
+
 test('PRACTICE plays a single chart under every ruleset', () => {
   const sourceNotes = { normal: 200, long: { 1: 0, 2: 0, 3: 0 } };
   for (const [ruleset, gauge] of [

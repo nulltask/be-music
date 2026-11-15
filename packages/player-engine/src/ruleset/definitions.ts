@@ -1022,8 +1022,9 @@ function resolveRulesetTables(
   const baseNotes = countBaseNotes(chart.notes);
   const { course, practice } = options;
   // A qualified pick (`lr2:HARD`) keeps its source's gauges under this ruleset's judging; a bare one is the ruleset's
-  // own (ADR 0019, #1171). PRACTICE names a gauge of the judge ruleset's own PRACTICE list.
-  const pickedGauge = options.selectedGauge ?? 'GROOVE';
+  // own (ADR 0019, #1171). PRACTICE names a gauge of the judge ruleset's own PRACTICE list and plays on it, so the play's
+  // own pick does not apply: a pick only another source has (`beatoraja:ASSIST-EASY` under LR2) must not stop it.
+  const pickedGauge = practice === undefined ? (options.selectedGauge ?? 'GROOVE') : 'GROOVE';
   const pickedSource = pickedGauge.slice(0, Math.max(0, pickedGauge.indexOf(':')));
   const selectedGauge = isRulesetId(pickedSource) ? pickedGauge.slice(pickedSource.length + 1) : pickedGauge;
   const gaugeSource = practice === undefined && isRulesetId(pickedSource) ? pickedSource : rulesetId;
