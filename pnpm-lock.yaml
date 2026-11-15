@@ -416,7 +416,7 @@ importers:
         version: 5.20261006.1-alpha(@types/node@26.6.5)
       tailwindcss:
         specifier: ^4.3.3
-        version: 4.3.3
+        version: 4.3.5
       wrangler:
         specifier: ^4.155.0
         version: 4.155.0(@cloudflare/workers-types@5.20261022.1)(@types/node@26.6.5)
@@ -477,7 +477,7 @@ importers:
         version: 1.0.2
       tailwindcss:
         specifier: ^4.3.3
-        version: 4.3.3
+        version: 4.3.5
       vite:
         specifier: 'catalog:'
         version: '@voidzero-dev/vite-plus-core@1.4.0(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(typescript@7.0.2)(unrun@0.2.37)(yaml@2.9.0)'
@@ -768,7 +768,7 @@ importers:
         version: 1.0.2
       tailwindcss:
         specifier: ^4.3.3
-        version: 4.3.3
+        version: 4.3.5
 
   packages/player-ui-react:
     dependencies:
@@ -832,7 +832,7 @@ importers:
         version: 5.20261006.1-alpha(@types/node@26.6.5)
       tailwindcss:
         specifier: ^4.3.3
-        version: 4.3.3
+        version: 4.3.5
 
   packages/shared-utils:
     dependencies:
@@ -2739,9 +2739,6 @@ packages:
 
   '@types/dom-webcodecs@0.1.13':
     resolution: {integrity: sha512-O5hkiFIcjjszPIYyUSyvScyvrBoV3NOEEZx/pMlsu44TKzWNkLVBBxnxJz42in5n3QIolYOcBYFCPZZ0h8SkwQ==}
-
-  '@types/dom-webcodecs@0.1.18':
-    resolution: {integrity: sha512-vAvE8C9DGWR+tkb19xyjk1TSUlJ7RUzzp4a9Anu7mwBT+fpyePWK1UxmH14tMO5zHmrnrRIMg5NutnnDztLxgg==}
 
   '@types/earcut@3.0.0':
     resolution: {integrity: sha512-k/9fOUGO39yd2sCjrbAJvGDEQvRwRnQIZlBz43roGwUZo5SHAmyVvSFyaVVZkicRVCaDXPKlbxrUcBuJoSWunQ==}
@@ -5683,11 +5680,9 @@ snapshots:
 
   '@types/dom-mediacapture-transform@0.1.12':
     dependencies:
-      '@types/dom-webcodecs': 0.1.18
+      '@types/dom-webcodecs': 0.1.13
 
   '@types/dom-webcodecs@0.1.13': {}
-
-  '@types/dom-webcodecs@0.1.18': {}
 
   '@types/earcut@3.0.0': {}
 
