@@ -230,6 +230,10 @@ export interface PlayOptions {
   practiceStartGauge: number;
   practiceJudgeRank: number;
   practiceTotal: number;
+  /** How many bars of rest a PRACTICE play gives before its range (0 starts at the range). */
+  practiceRestBefore: number;
+  /** How many bars of rest a PRACTICE play gives after its range (0 ends at the range). */
+  practiceRestAfter: number;
   customJudgeKeyPerfectGreat: number;
   customJudgeKeyGreat: number;
   customJudgeKeyGood: number;

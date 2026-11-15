@@ -433,12 +433,13 @@ const ORDINALS = ['1ST', '2ND', '3RD', '4TH', '5TH', '6TH', '7TH', '8TH', '9TH',
 
 /**
  * What the stage band says: `1ST STAGE` … for a course stage, `FINAL STAGE` for its last, the course's title for a
- * NONSTOP run (one stitched play), and `FREE PLAY` for a single chart.
+ * NONSTOP run (one stitched play), and `FREE PLAY` for a single chart (`PRACTICE PLAY` when `practice`).
  */
 export function resolveStageLabel(
   course: Pick<CourseView, 'kind' | 'title' | 'stages' | 'stageIndex'> | undefined,
+  practice = false,
 ): string {
-  if (!course) return 'FREE PLAY';
+  if (!course) return practice ? 'PRACTICE PLAY' : 'FREE PLAY';
   if (course.kind === 'nonstop' || course.stageIndex === undefined) return course.title;
   if (course.stages.length > 1 && course.stageIndex === course.stages.length - 1) return 'FINAL STAGE';
   return `${ORDINALS[course.stageIndex] ?? `${course.stageIndex + 1}TH`} STAGE`;

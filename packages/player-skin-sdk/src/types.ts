@@ -368,6 +368,8 @@ export interface BeMusicGameplayRuntime {
   /** The 2P player of a two-player play (LR2 BATTLE); every other figure here is the 1P player's. */
   secondPlayer?: BeMusicSecondPlayerRuntime;
   autoplay?: boolean;
+  /** The play is a practice play: a PRACTICE-mode run, or one a seek made practice. */
+  practice?: boolean;
   hasBGA?: boolean;
   /** Monotonic play clock (ms) for animation. */
   nowMs?: number;

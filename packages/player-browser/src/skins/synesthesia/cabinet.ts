@@ -344,7 +344,7 @@ function drawStage(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime, contr
   );
   addHUDText(
     layer,
-    resolveStageLabel(runtime.course).toUpperCase(),
+    resolveStageLabel(runtime.course, runtime.practice).toUpperCase(),
     rect.x + rect.w / 2,
     rect.y + 5,
     {

@@ -10,7 +10,13 @@ import type { PlayOptions, PracticeGaugeType } from './options.ts';
 /** The PRACTICE play options a play reads. */
 export type PracticePlayOptions = Pick<
   PlayOptions,
-  'practiceGauge' | 'practiceGaugeCategory' | 'practiceStartGauge' | 'practiceJudgeRank' | 'practiceTotal'
+  | 'practiceGauge'
+  | 'practiceGaugeCategory'
+  | 'practiceStartGauge'
+  | 'practiceJudgeRank'
+  | 'practiceTotal'
+  | 'practiceRestBefore'
+  | 'practiceRestAfter'
 >;
 
 /**
@@ -35,6 +41,10 @@ export interface PracticeSelection {
   judgeRank?: number;
   /** Absent keeps the chart's. */
   total?: number;
+  /** Bars of rest before the range. */
+  restBarsBefore: number;
+  /** Bars of rest after the range. */
+  restBarsAfter: number;
 }
 
 /**
@@ -66,6 +76,8 @@ export function resolvePracticeSelection(
       ? { gaugeCategory: options.practiceGaugeCategory }
       : {}),
     startGauge: options.practiceStartGauge,
+    restBarsBefore: options.practiceRestBefore,
+    restBarsAfter: options.practiceRestAfter,
     ...(readsRules && options.practiceJudgeRank > 0 ? { judgeRank: options.practiceJudgeRank } : {}),
     ...(readsRules && options.practiceTotal > 0 ? { total: options.practiceTotal } : {}),
   };

@@ -67,6 +67,7 @@ import { FamilyKits } from './family-kits.ts';
 import { controlSettingsOf } from '../control-keys.ts';
 import { showExitMenu } from '../ui/exit-menu.ts';
 import { PracticeBarsDialog } from '../ui/practice-bars.ts';
+import { storePlayTempoSettings } from '../play-tempo-settings.ts';
 import { PracticeBarsMemory } from '../ui/practice-bars-model.ts';
 import { createFpsOverlay } from '../ui/fps-overlay.ts';
 import { openHelpModal, setHelpKeyboardSource, watchHelpExpanded } from '../help-modal.ts';
@@ -504,6 +505,14 @@ export class PlayerWebApp {
             this.setPlayOptions(changes);
             copyPlayOptionsToGUI(this.playOptions.current, this.guiState);
             this.optionsDialog.refreshRulesetChoices();
+            this.optionsDialog.refreshPlayOptionControllers();
+          },
+          tempoPercent: () => (this.guiState.tempoEnabled ? this.guiState.tempoPercent : 0),
+          // As the Options dialog's Tempo slider: a tempo other than 0 turns the tempo on; kept and saved.
+          setTempoPercent: (percent) => {
+            this.guiState.tempoPercent = percent;
+            this.guiState.tempoEnabled = percent !== 0;
+            storePlayTempoSettings(this.guiState);
             this.optionsDialog.refreshPlayOptionControllers();
           },
         });

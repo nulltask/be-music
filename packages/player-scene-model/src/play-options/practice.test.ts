@@ -15,6 +15,8 @@ const OPTIONS: PracticePlayOptions = {
   practiceStartGauge: 40,
   practiceJudgeRank: 50,
   practiceTotal: 300,
+  practiceRestBefore: 2,
+  practiceRestAfter: 0,
 };
 
 test('a PRACTICE gauge is the judge ruleset’s own, else its default', () => {
@@ -33,6 +35,8 @@ test('beatoraja PRACTICE takes every setting', () => {
     gauge: 'HARD',
     gaugeCategory: 'LR2',
     startGauge: 40,
+    restBarsBefore: 2,
+    restBarsAfter: 0,
     judgeRank: 50,
     total: 300,
   });
@@ -44,6 +48,8 @@ test('LR2 PRACTICE has no GAUGE CATEGORY and reads JUDGERANK and TOTAL (#933)', 
     endMs: 9000,
     gauge: 'DEATH',
     startGauge: 40,
+    restBarsBefore: 2,
+    restBarsAfter: 0,
     judgeRank: 50,
     total: 300,
   });
@@ -55,6 +61,8 @@ test('AC PRACTICE sets only the range and the gauge (#933)', () => {
     endMs: 9000,
     gauge: 'EX-HARD',
     startGauge: 40,
+    restBarsBefore: 2,
+    restBarsAfter: 0,
   });
 });
 
@@ -63,6 +71,9 @@ test('no range plays the whole chart, and a 0 JUDGERANK or TOTAL keeps the chart
     startMs: 0,
     gauge: 'GROOVE',
     startGauge: 20,
+    // One bar of rest on either side by default.
+    restBarsBefore: 1,
+    restBarsAfter: 1,
   });
 });
 

@@ -156,6 +156,8 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'GAUGE VALUE': 'GAUGE VALUE',
   'JUDGERANK (0 = chart)': 'JUDGERANK (0 = 譜面の値)',
   'TOTAL (0 = chart)': 'TOTAL (0 = 譜面の値)',
+  'REST BEFORE (bars)': '前の休憩 (小節)',
+  'REST AFTER (bars)': '後の休憩 (小節)',
   'GAUGE TYPE': 'GAUGE TYPE',
   'GAUGE CATEGORY': 'GAUGE CATEGORY',
   // Select

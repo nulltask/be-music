@@ -162,7 +162,7 @@ export function renderGameplayCabinet({
     ${cabinet.graph ? renderGraph(cabinet.graph, pace, r.random1P, place, !!cabinet.secondSide) : nothing}
     <div class="cab panel stage-band" part="stage" style=${place(cabinet.stage)}>
       ${mode}
-      <strong>${resolveStageLabel(f.course)}</strong>
+      <strong>${resolveStageLabel(f.course, r.practice)}</strong>
       ${cabinet.controls ? nothing : actions}
     </div>
     ${
