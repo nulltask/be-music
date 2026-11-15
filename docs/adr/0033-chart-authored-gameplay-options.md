@@ -34,3 +34,19 @@ nanasigroove lets a chart's initial `#OPTION` force `774:RANDOM_*` (MIRROR, RAND
 Charts that force these options play as their author staged them, deterministically on replay and on the server. Lamps and rankings of such a chart compare plays under the same compulsory options. Two limits remain. A Leaderboard that cannot read the chart trusts the recorded program, so a log could strip or add it. And `NOTES_*`, NONSTOP application and terminal arrangements are not implemented.
 
 [ADR 0035](./0035-chart-authored-notes-options.md) later implemented `NOTES_*` and the terminal's arrangement and ADDMINE, and the Leaderboard now checks the recorded program against the chart's fingerprint documents.
+
+## Amendment: nanasigroove's own readings (#1177, #1185)
+
+The table above read GOOD2BAD, GREAT2BAD, HELLJUDGE and ADDMINE from their names. nanasigroove 1.552 plays them as follows, and Be-Music now does too, keeping each judge ruleset's own windows and gauges as the base:
+
+| Option                  | nanasigroove 1.552                                                                                                                                | Be-Music                                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `GOOD2BAD`, `GREAT2BAD` | Judgments stay as they are; a GOOD (GOOD2BAD), or a GREAT and a GOOD (GREAT2BAD), moves the gauge as a BAD does. The game describes them that way | The same on the ruleset's gauge: those judgments take its BAD delta, on every gauge an auto-shift runs     |
+| `HELLJUDGE`             | Its judge table is swapped for a narrower one: COOL and GREAT at 3/8 of their width, GOOD at 1/3, BAD at 1/4                                      | The ruleset's PGREAT, GREAT, GOOD and BAD windows narrowed by those ratios, notes and long-note ends alike |
+| `ADDMINE`               | Mines scattered along every lane at random steps, with random damage (below)                                                                      | The same placement, as the mine option **ADDMINE (nanasigroove)** (`NANASI_ADD`)                           |
+
+ADDMINE draws each lane in turn. One draw in 1000 makes a dense lane (steps of up to 168 positions, 48 to a beat), one in ten a varied lane (two steps between 180 and 360, and harsher damage odds), and the rest a regular lane (steps of up to 360). The first mine sits a random step plus 24 into the chart and each next one a fresh step plus 24 further on, to the chart's end. Four candidates in five become mines; one within 12 positions of a note on its lane is skipped. Damage falls in five bands on nanasigroove's 200-point gauge, from 1–5 up to 1–200; Be-Music halves it into a gauge percentage. The rarest band heals one point, which Be-Music's mine model cannot express: those mines deal no damage. Mine trigger and its accounting stay the judge ruleset's.
+
+**The player can select them too.** The Options dialog offers **GOOD2BAD / GREAT2BAD (nanasigroove)**, **HELLJUDGE (nanasigroove)** and ADDMINE in **Mines**. A chart's own declaration wins within its family, as before (`withPlayerChartPlayOptions` in `@be-music/chart-model`).
+
+**Replays.** The recorded chart gameplay program is version 3 when it holds any of these options. Version 1 and 2 programs keep the earlier readings above (halved windows, collapsed GOOD and GREAT windows, beatoraja's ADD RANDOM), so existing replays re-judge as they played.

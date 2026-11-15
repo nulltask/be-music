@@ -171,6 +171,8 @@ describe('resolvePlaySceneOptions: a single play', () => {
       lr2ExtraLevel: 0,
       lr2ExtraMode: false,
       mineModifier: 'OFF',
+      crazyJudge: 'OFF',
+      crazyHellJudge: false,
       noteDurationMs: 500,
       randomFixedLane1P: 0,
       randomFixedLane2P: 0,

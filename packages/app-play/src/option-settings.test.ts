@@ -234,6 +234,8 @@ describe('captureOptionSettings', () => {
       lr2ExtraMode: false,
       lr2ExtraLevel: 0,
       mineModifier: 'OFF',
+      crazyJudge: 'OFF',
+      crazyHellJudge: false,
       scrollModifier: 'REMOVE',
       scrollSection: 8,
       scrollRate: 0.25,

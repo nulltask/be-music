@@ -253,15 +253,30 @@ export function buildPlayOptionsFolder(
       .addBinding(this.guiState, 'scrollRate', { label: 'Scroll rate', min: 0, max: 1, step: 0.01 })
       .on('change', ({ value }) => this.setPlayOptions({ scrollRate: value })),
   );
-  this.mineModifierController = selectBinding(notes, this.guiState, 'mineModifier', 'Mines (beatoraja)', {
+  // beatoraja's mine modifiers, and nanasigroove's ADDMINE, which a chart's `774:CRAZY_ADDMINE` also selects.
+  this.mineModifierController = selectBinding(notes, this.guiState, 'mineModifier', 'Mines', {
     OFF: 'OFF',
-    REMOVE: 'REMOVE',
-    'ADD RANDOM': 'ADD_RANDOM',
-    'ADD NEAR': 'ADD_NEAR',
-    'ADD ALL': 'ADD_BLANK',
+    'REMOVE (beatoraja)': 'REMOVE',
+    'ADD RANDOM (beatoraja)': 'ADD_RANDOM',
+    'ADD NEAR (beatoraja)': 'ADD_NEAR',
+    'ADD ALL (beatoraja)': 'ADD_BLANK',
+    'ADDMINE (nanasigroove)': 'NANASI_ADD',
   });
   trackPlayOption(
     this.mineModifierController.on('change', ({ value }) => this.setPlayOptions({ mineModifier: value })),
+  );
+  // nanasigroove's judgment CRAZY options (#1177, #1185); a chart's own `774:CRAZY_*` wins.
+  trackPlayOption(
+    selectBinding(notes, this.guiState, 'crazyJudge', 'GOOD2BAD / GREAT2BAD (nanasigroove)', {
+      OFF: 'OFF',
+      GOOD2BAD: 'GOOD2BAD',
+      GREAT2BAD: 'GREAT2BAD',
+    }).on('change', ({ value }) => this.setPlayOptions({ crazyJudge: value })),
+  );
+  trackPlayOption(
+    notes
+      .addBinding(this.guiState, 'crazyHellJudge', { label: 'HELLJUDGE (nanasigroove)' })
+      .on('change', ({ value }) => this.setPlayOptions({ crazyHellJudge: value })),
   );
   this.refreshRulesetChoices();
   trackPlayOption(

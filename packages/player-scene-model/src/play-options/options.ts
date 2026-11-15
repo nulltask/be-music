@@ -1,5 +1,8 @@
 import type { BattleMode, LR2ExtraLevel } from '@be-music/player-engine/lanes';
 import type { MineModifier, LongNoteModifier, ScrollModifier } from '@be-music/player-engine/lanes';
+
+/** The player's nanasigroove GOOD2BAD / GREAT2BAD choice. */
+export type CrazyJudgeOption = 'OFF' | 'GOOD2BAD' | 'GREAT2BAD';
 import type { GaugePick, GaugeAutoShift, QualifiedOptionValue } from '@be-music/player-engine/ruleset';
 import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
@@ -250,6 +253,13 @@ export interface PlayOptions {
   lr2ExtraMode: boolean;
   lr2ExtraLevel: LR2ExtraLevel;
   mineModifier: MineModifier;
+  /**
+   * nanasigroove's GOOD2BAD / GREAT2BAD (#1177): a GOOD, or a GREAT and a GOOD, moves the gauge as a BAD does. A chart's
+   * own `774:CRAZY_GOOD2BAD` / `GREAT2BAD` wins.
+   */
+  crazyJudge: CrazyJudgeOption;
+  /** nanasigroove's HELLJUDGE (#1185): every judgment's window narrowed by its own ratio. A chart's own wins. */
+  crazyHellJudge: boolean;
   /** beatoraja timeline BPM/STOP/SCROLL removal or generated SCROLL, independent of visual CONSTANT. */
   scrollModifier: ScrollModifier;
   /** beatoraja ADD: change every 1..1024 section lines (default 4), with width 0..1 (default 0.5). */

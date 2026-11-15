@@ -161,6 +161,8 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     judgeAlgorithm: replay?.play.judgeAlgorithm ?? playOptions.judgeAlgorithm,
     longNoteModifier: playOptions.longNoteModifier,
     mineModifier: playOptions.mineModifier,
+    crazyJudge: playOptions.crazyJudge,
+    crazyHellJudge: playOptions.crazyHellJudge,
     scrollModifier: playOptions.scrollModifier,
     scrollSection: playOptions.scrollSection,
     scrollRate: playOptions.scrollRate,

@@ -3,6 +3,7 @@ import { collectLR2SortObjects } from './lr2-sort-objects.ts';
 import {
   buildChartOptionTimeline,
   compileChartPlayOptions,
+  withPlayerChartPlayOptions,
   type BGAOpacityTimelines,
   type ChartOptionDiagnostic,
   type ChartPlayOptionProgram,
@@ -181,6 +182,8 @@ export interface PlayChartContext {
       | 'scrollRate'
       | 'scrollModifier'
       | 'mineModifier'
+      | 'crazyJudge'
+      | 'crazyHellJudge'
       | 'autoScratch1P'
       | 'autoScratch2P'
     >
@@ -366,10 +369,19 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // whose stages keep one key mode), so the arrangement maps onto the double-play lanes.
   const chartPlayEffect =
     arrangement === undefined
-      ? resolveEffectiveChartPlayOptions(compileChartPlayOptions(buildChartOptionTimeline(resolved)), {
-          playVariant,
-          course: ctx.options.course !== undefined,
-        })
+      ? resolveEffectiveChartPlayOptions(
+          // The player's own GOOD2BAD / GREAT2BAD and HELLJUDGE join where the chart sets none (#1177, #1185).
+          withPlayerChartPlayOptions(compileChartPlayOptions(buildChartOptionTimeline(resolved)), {
+            ...(ctx.options.crazyJudge === 'GOOD2BAD' || ctx.options.crazyJudge === 'GREAT2BAD'
+              ? { judge: ctx.options.crazyJudge }
+              : {}),
+            ...(ctx.options.crazyHellJudge === true ? { hellJudge: true as const } : {}),
+          }),
+          {
+            playVariant,
+            course: ctx.options.course !== undefined,
+          },
+        )
       : { program: arrangement.chart.chartPlayOptions, diagnostics: [] };
   const chartPlayProgram = chartPlayEffect.program;
   const chartNotes = chartPlayProgram?.options.notes;
@@ -468,7 +480,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       scrollSection: arrangement?.play.scrollSection ?? ctx.options.scrollSection,
       scrollRate: arrangement?.play.scrollRate ?? ctx.options.scrollRate,
       scrollModifierTimeline: arrangement?.play.scrollModifierTimeline,
-      ...(arrangement?.play.mineModifier?.startsWith('ADD_')
+      ...(arrangement?.play.mineModifier?.startsWith('ADD_') || arrangement?.play.mineModifier === 'NANASI_ADD'
         ? {
             mineModifierPlacements: modifierNotes!
               .filter((note) => note.type === 'mine')

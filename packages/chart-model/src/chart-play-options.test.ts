@@ -3,23 +3,56 @@ import {
   compileChartPlayOptions,
   hasChartPlayOptions,
   isChartPlayOptionDeclaration,
+  isLegacyChartPlayOptionProgram,
   parseChartPlayOption,
+  withPlayerChartPlayOptions,
 } from './chart-play-options.ts';
 
 test.each([
-  ['774:RANDOM_MIRROR', { random: 'MIRROR' }],
-  ['774:RANDOM_RANDOM+', { random: 'RANDOM+' }],
-  ['774:RANDOM_ALL', { random: 'ALL' }],
-  ['774:RANDOM_ALL+', { random: 'ALL+' }],
-  ['774:CRAZY_GOOD2BAD', { judge: 'GOOD2BAD' }],
-  ['774:CRAZY_GREAT2BAD', { judge: 'GREAT2BAD' }],
-  ['774:CRAZY_HELLJUDGE', { hellJudge: true }],
-  ['774:CRAZY_ADDMINE', { addMine: true }],
-  ['774:NOTES_DOUBLE', { notes: 'DOUBLE' }],
-  ['774:NOTES_COPY', { notes: 'COPY' }],
-  ['774:NOTES_DBLCOPY', { notes: 'DBLCOPY' }],
-])('compiles %s', (declaration, options) => {
-  expect(compileChartPlayOptions({ initial: [declaration] })).toEqual({ version: 1, options });
+  ['774:RANDOM_MIRROR', { random: 'MIRROR' }, 1],
+  ['774:RANDOM_RANDOM+', { random: 'RANDOM+' }, 1],
+  ['774:RANDOM_ALL', { random: 'ALL' }, 1],
+  ['774:RANDOM_ALL+', { random: 'ALL+' }, 1],
+  ['774:CRAZY_GOOD2BAD', { judge: 'GOOD2BAD' }, 3],
+  ['774:CRAZY_GREAT2BAD', { judge: 'GREAT2BAD' }, 3],
+  ['774:CRAZY_HELLJUDGE', { hellJudge: true }, 3],
+  ['774:CRAZY_ADDMINE', { addMine: true }, 3],
+  ['774:NOTES_DOUBLE', { notes: 'DOUBLE' }, 1],
+  ['774:NOTES_COPY', { notes: 'COPY' }, 1],
+  ['774:NOTES_DBLCOPY', { notes: 'DBLCOPY' }, 1],
+  ['774:CRA-RHS2', { baseSpeed: 1.5 }, 2],
+])('compiles %s (version %#)', (declaration, options, version) => {
+  // A CRAZY gameplay option takes nanasigroove's readings, version 3.
+  expect(compileChartPlayOptions({ initial: [declaration] })).toEqual({ version, options });
+});
+
+test('a CRAZY gameplay option with a base speed is version 3, which keeps the base speed', () => {
+  expect(compileChartPlayOptions({ initial: ['774:CRA-RHS1', '774:CRAZY_HELLJUDGE'] })).toEqual({
+    version: 3,
+    options: { baseSpeed: 1.2, hellJudge: true },
+  });
+});
+
+test('only a program before version 3 is legacy', () => {
+  expect(isLegacyChartPlayOptionProgram({ version: 1, options: {} })).toBe(true);
+  expect(isLegacyChartPlayOptionProgram({ version: 2, options: { baseSpeed: 2 } })).toBe(true);
+  expect(isLegacyChartPlayOptionProgram({ version: 3, options: { hellJudge: true } })).toBe(false);
+});
+
+test("the player's judgment options join where the chart sets none, the chart winning within a family", () => {
+  const empty = { version: 1 as const, options: { random: 'MIRROR' as const } };
+  expect(withPlayerChartPlayOptions(empty, undefined)).toBe(empty);
+  expect(withPlayerChartPlayOptions(empty, {})).toBe(empty);
+  expect(withPlayerChartPlayOptions(empty, { judge: 'GOOD2BAD', hellJudge: true })).toEqual({
+    version: 3,
+    options: { random: 'MIRROR', judge: 'GOOD2BAD', hellJudge: true },
+  });
+  const chart = { version: 3 as const, options: { judge: 'GREAT2BAD' as const } };
+  expect(withPlayerChartPlayOptions(chart, { judge: 'GOOD2BAD' })).toBe(chart);
+  expect(withPlayerChartPlayOptions(chart, { hellJudge: true })).toEqual({
+    version: 3,
+    options: { judge: 'GREAT2BAD', hellJudge: true },
+  });
 });
 
 test('later declarations win within a family, OFF clears it, and other families stay', () => {

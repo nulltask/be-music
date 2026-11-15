@@ -37,3 +37,16 @@ An EXTRA without a GAMELEVEL applies to NORMAL, nanasigroove's default. A gauge 
 ## Consequences
 
 A chart's gauge choice plays and records deterministically on every ruleset and host, and its lamps stay the ruleset's familiar ones. The difference from nanasigroove is deliberate: BEGINNER's 70 % border becomes the ruleset's EASY border, HYPER's 90 % clear border on a failing gauge becomes the ruleset's HARD, and DANGER's five-miss allowance becomes the first-break DEATH. Changing a row later changes which gauge new plays run, but never an existing replay.
+
+## Amendment: nanasigroove's full gauge rules, and why the mapping stays (#1180)
+
+nanasigroove 1.552's gauge holds 200 points; a COOL or GREAT adds `200 / notes × TOTAL / 100`, a GOOD half that, and a BAD, a missed POOR and an empty POOR cost 6, 10 and 4. GAMELEVEL and EXTRA then set the start, the clear border, whether an empty gauge fails, and multipliers on those deltas (OFF / EASY / HARD / VERYHARD):
+
+| GAMELEVEL | Start                           | Clear border                   | Fails at 0             | Deltas                                                                                                                             |
+| --------- | ------------------------------- | ------------------------------ | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| BEGINNER  | 30 % (HARD, VERYHARD 25 %)      | 70 % (HARD, VERYHARD 80 %)     | no                     | gains × 1.2 / × 1.5 / COOL × 1.1 / none; damage × 0.8 / × 0.75 / × 0.9 / × 0.95; no empty-POOR damage                              |
+| NORMAL    | 25 % (HARD 80 %, VERYHARD 60 %) | 80 % (HARD, VERYHARD: survive) | HARD and VERYHARD only | base / gains × 1.1, damage × 0.9 / COOL × 0.9, GREAT × 0.8, GOOD × 0.5, damage × 1.1 / COOL, GREAT × 0.8, GOOD × 0.4, damage × 1.2 |
+| HYPER     | 50 % (VERYHARD 40 %)            | 90 % (HARD, VERYHARD 100 %)    | yes                    | GREAT × 0.9, GOOD none, damage × 1.5 / same / GREAT, GOOD none, damage × 3 / same, damage × 5                                      |
+| DANGER    | 100 %                           | survive                        | yes                    | no gains; each BAD or POOR costs 40 (five end the play) / 200 / 200, with a GOOD costing 200 and a GREAT 0.02 on VERYHARD          |
+
+Following the rule that a judge ruleset's existing gauges supply the parameters, the mapping above stays: these pairs select the closest gauge each ruleset has, which runs on that ruleset's own numbers, TOTAL handling and lamps. The table records what the mapping approximates. The largest gap remains DANGER with OFF or EASY, whose five-miss allowance no LR2 or beatoraja gauge has; it plays as DEATH.

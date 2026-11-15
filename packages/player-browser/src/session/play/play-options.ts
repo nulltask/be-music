@@ -198,6 +198,10 @@ export interface PlaySessionOptions {
   extraNoteDepth?: number;
   extraNoteScratch?: boolean;
   mineModifier?: import('@be-music/player-scene-model').PlayOptions['mineModifier'];
+  /** nanasigroove's GOOD2BAD / GREAT2BAD the player picked; a chart's own wins. */
+  crazyJudge?: import('@be-music/player-scene-model').PlayOptions['crazyJudge'];
+  /** nanasigroove's HELLJUDGE the player picked; a chart's own wins. */
+  crazyHellJudge?: boolean;
   scrollModifier?: import('@be-music/player-scene-model').PlayOptions['scrollModifier'];
   scrollSection?: number;
   scrollRate?: number;

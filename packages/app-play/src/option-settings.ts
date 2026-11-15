@@ -166,6 +166,8 @@ export interface OptionSettings {
   lr2ExtraMode: boolean;
   lr2ExtraLevel: PlayerGUIState['lr2ExtraLevel'];
   mineModifier: PlayerGUIState['mineModifier'];
+  crazyJudge: PlayerGUIState['crazyJudge'];
+  crazyHellJudge: boolean;
   scrollModifier: PlayerGUIState['scrollModifier'];
   scrollSection: number;
   scrollRate: number;
@@ -388,6 +390,8 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'scrollRate', resolvePlayOptionValue('scrollRate', raw.scrollRate));
   assign(settings, 'scrollModifier', resolvePlayOptionValue('scrollModifier', raw.scrollModifier));
   assign(settings, 'mineModifier', resolvePlayOptionValue('mineModifier', raw.mineModifier));
+  assign(settings, 'crazyJudge', resolvePlayOptionValue('crazyJudge', raw.crazyJudge));
+  assign(settings, 'crazyHellJudge', booleanOf(raw.crazyHellJudge));
   assign(settings, 'sevenToNinePattern', resolvePlayOptionValue('sevenToNinePattern', raw.sevenToNinePattern));
   assign(settings, 'sevenToNineType', resolvePlayOptionValue('sevenToNineType', raw.sevenToNineType));
   assign(settings, 'battleMode', migrateStoredOption('battleMode', raw.battleMode, storedRuleset));
@@ -736,6 +740,8 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('extraNoteDepth');
   assignState('extraNoteScratch');
   assignState('mineModifier');
+  assignState('crazyJudge');
+  assignState('crazyHellJudge');
   assignState('scrollModifier');
   assignState('scrollSection');
   assignState('scrollRate');
@@ -903,6 +909,8 @@ export function captureOptionSettings(
     extraNoteDepth: state.extraNoteDepth,
     extraNoteScratch: state.extraNoteScratch,
     mineModifier: state.mineModifier,
+    crazyJudge: state.crazyJudge,
+    crazyHellJudge: state.crazyHellJudge,
     scrollModifier: state.scrollModifier,
     scrollSection: state.scrollSection,
     scrollRate: state.scrollRate,

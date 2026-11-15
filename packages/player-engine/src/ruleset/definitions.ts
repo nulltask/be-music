@@ -1,5 +1,5 @@
 import { isBmsonRecoveryDisabled, type BmsonTotalMode } from './bmson-total.ts';
-import { applyChartJudgeModifiers, type ChartJudgeModifiers } from './chart-judge.ts';
+import { applyChartGaugeModifiers, applyChartJudgeModifiers, type ChartJudgeModifiers } from './chart-judge.ts';
 import { applyCustomJudgeTables, type BeatorajaCustomJudge } from './custom-judge.ts';
 import { createLR2GoodAttackGauge, createLR2PerfectAttackGauge } from './lr2-attack.ts';
 import type { GaugeJudgeIndex } from './gauge.ts';
@@ -1036,7 +1036,7 @@ export function resolveRuleset(
     (chart.totalUnit ?? (chart.sourceFormat === 'bmson' ? 'percent' : 'absolute')) === 'percent'
   )
     throw new RangeError('bmson spec TOTAL must be normalized to a non-negative percentage.');
-  const config = resolveRulesetTables(chart, rulesetId, options);
+  const config = withChartGaugeModifiers(resolveRulesetTables(chart, rulesetId, options), options.chartJudge);
   const practiceTotal = practiceReadsJudgeRankAndTotal(rulesetId) ? options.practice?.total : undefined;
   const disabled = isBmsonRecoveryDisabled(chart, options.bmsonTotalMode) && practiceTotal === undefined;
   if (!disabled) return config;
@@ -1052,6 +1052,20 @@ export function resolveRuleset(
     ...(config.gaugeBank === undefined
       ? {}
       : { gaugeBank: { ...config.gaugeBank, specs: config.gaugeBank.specs.map(suppress) } }),
+  };
+}
+
+/** A ruleset with a chart's GOOD2BAD / GREAT2BAD applied to every gauge it may run on (`applyChartGaugeModifiers`). */
+function withChartGaugeModifiers(config: RulesetConfig, modifiers: ChartJudgeModifiers | undefined): RulesetConfig {
+  if (modifiers?.judge === undefined) return config;
+  const apply = (spec: GaugeSpec): GaugeSpec => applyChartGaugeModifiers(spec, modifiers);
+  return {
+    ...config,
+    gauge: apply(config.gauge),
+    ...(config.gaugeFallback === undefined ? {} : { gaugeFallback: apply(config.gaugeFallback) }),
+    ...(config.gaugeBank === undefined
+      ? {}
+      : { gaugeBank: { ...config.gaugeBank, specs: config.gaugeBank.specs.map(apply) } }),
   };
 }
 

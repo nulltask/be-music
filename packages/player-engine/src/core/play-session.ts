@@ -7,6 +7,7 @@ import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
 import { resolveEffectiveBattleMode } from './battle-mode.ts';
 import { chartNotesCopies, resolveEffectiveChartPlayOptions } from './chart-notes-options.ts';
 import { arrangeChartPlayLanes } from './chart-play-lanes.ts';
+import { resolveChartAddMineModifier } from './chart-play-options.ts';
 import { applySevenToNine } from './seven-to-nine.ts';
 import { clampExtraNoteDepth } from './extra-note-modifier.ts';
 import { buildAutoKeyBoundBGAInputs, KeyBoundBGAController } from './key-bound-bga.ts';
@@ -21,6 +22,7 @@ import {
   compileChartOptions,
   compileChartPlayOptions,
   resolveChartOptionsAt,
+  withPlayerChartPlayOptions,
   type ChartOptionProgram,
   isPlayLaneSoundChannel,
   type ResolvedChart,
@@ -212,7 +214,10 @@ export async function createPlaySession(
     options.chartPlayOptionProgram !== undefined
       ? { program: structuredClone(options.chartPlayOptionProgram), diagnostics: [] }
       : resolveEffectiveChartPlayOptions(
-          compileChartPlayOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing)),
+          withPlayerChartPlayOptions(
+            compileChartPlayOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing)),
+            options.playerChartPlayOptions,
+          ),
           { playVariant: resolvedChart.playVariant, course: options.course !== undefined },
         );
   const chartPlayOptions = chartPlay.program;
@@ -222,7 +227,8 @@ export async function createPlaySession(
   // Without a host-prepared chart (the terminal) the engine applies the chart's ADDMINE and arrangement itself, in place
   // of the player's options, as the browser host does (#932). A replay's recorded notes already hold them.
   const preparesChartPlayOptions = options.preparedChart === undefined && !replay;
-  if (preparesChartPlayOptions && chartPlayOptions.options.addMine === true) options.mineModifier = 'ADD_RANDOM';
+  if (preparesChartPlayOptions && chartPlayOptions.options.addMine === true)
+    options.mineModifier = resolveChartAddMineModifier(chartPlayOptions);
   // Dynamic `#EXRANKxx` changes are a chart fact, recorded whatever the ruleset: LR2 applies them, while beatoraja and
   // That-Which-Must-Not-Be-Named keep their initial windows (their `windowsAt` ignores the timeline). A log played under one ruleset can then
   // be re-simulated under LR2 with the windows LR2 would have used.

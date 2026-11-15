@@ -319,6 +319,8 @@ export interface PlayerGUIState extends PlayTempoSettings {
   lr2ExtraMode: boolean;
   lr2ExtraLevel: PlayOptions['lr2ExtraLevel'];
   mineModifier: PlayOptions['mineModifier'];
+  crazyJudge: PlayOptions['crazyJudge'];
+  crazyHellJudge: boolean;
   scrollModifier: PlayOptions['scrollModifier'];
   scrollSection: number;
   scrollRate: number;

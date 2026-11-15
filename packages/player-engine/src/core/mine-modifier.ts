@@ -1,4 +1,5 @@
-import type { ResolvedChart } from '@be-music/chart-model';
+import { createBeatAtSecondsResolverFromTimingResolver, type ResolvedChart } from '@be-music/chart-model';
+import { addNanasiMines } from './nanasi-add-mine.ts';
 import { resolveModifierLanes, collectModifierTimelines, type ModifierTimeline } from './chart-modifier-timelines.ts';
 import {
   createTimedLandmineNote,
@@ -7,7 +8,11 @@ import {
   type TimedPlayableNote,
 } from '../playable-notes.ts';
 
-export type MineModifier = 'OFF' | 'REMOVE' | 'ADD_RANDOM' | 'ADD_NEAR' | 'ADD_BLANK';
+/**
+ * `NANASI_ADD` is nanasigroove's ADDMINE (`addNanasiMines`), which a chart's `774:CRAZY_ADDMINE` selects; the others are
+ * beatoraja's.
+ */
+export type MineModifier = 'OFF' | 'REMOVE' | 'ADD_RANDOM' | 'ADD_NEAR' | 'ADD_BLANK' | 'NANASI_ADD';
 
 /** Effective mine placements from a replay; random generation is bypassed when these are supplied. */
 export interface MinePlacement {
@@ -44,8 +49,12 @@ export function prepareMineModifier(
     if (options.placements.length < original.length)
       throw new RangeError('Recorded added-mine population is missing authored mines.');
     const rows = new Map(timelines.map((row) => [Math.round(resolved.timing.beatToSeconds(row.beat) * 1e6), row]));
+    // nanasigroove's ADDMINE places mines between source rows: those are located from their time.
+    const beatAt = mode === 'NANASI_ADD' ? createBeatAtSecondsResolverFromTimingResolver(resolved.timing) : undefined;
     const mines = options.placements.map((placement) => {
-      const row = rows.get(placement.timeUs);
+      const row =
+        rows.get(placement.timeUs) ??
+        (beatAt === undefined ? undefined : locateRow(resolved, beatAt(placement.timeUs / 1e6)));
       if (!row) throw new RangeError('Recorded mine is not on a source timeline.');
       if (
         !/^[12][0-9A-Z]$/.test(placement.channel) ||
@@ -65,8 +74,20 @@ export function prepareMineModifier(
     });
     return { mines, changes: Math.max(0, mines.length - original.length) };
   }
-  if (mode === 'ADD_RANDOM' && !options.random)
+  if ((mode === 'ADD_RANDOM' || mode === 'NANASI_ADD') && !options.random)
     throw new RangeError('Mine ADD RANDOM requires supplied randomness or recorded placements.');
+  if (mode === 'NANASI_ADD') {
+    const noteBeats = new Map<string, number[]>();
+    for (const note of notes) noteBeats.set(note.channel, [...(noteBeats.get(note.channel) ?? []), note.beat]);
+    const endBeat = Math.max(0, ...timelines.map((row) => row.beat), ...notes.map((note) => note.endBeat ?? note.beat));
+    const added = addNanasiMines(lanes, noteBeats, endBeat, options.random!).map((mine) =>
+      makeMine(locateRow(resolved, mine.beat), mine.lane, resolved.timing.beatToSeconds(mine.beat), mine.damage, false),
+    );
+    const mines = [...original, ...added].sort(
+      (a, b) => a.beat - b.beat || lanes.indexOf(a.channel) - lanes.indexOf(b.channel),
+    );
+    return { mines, changes: added.length };
+  }
   const scoring = new Map<number, (typeof notes)[number][]>();
   for (const note of notes) {
     const row = scoring.get(note.beat);
@@ -107,6 +128,17 @@ export function prepareMineModifier(
   }
   mines.sort((a, b) => a.beat - b.beat || lanes.indexOf(a.channel) - lanes.indexOf(b.channel));
   return { mines, changes: mines.length - original.length };
+}
+
+/** A modifier row at `beat`, with its measure and position, for a mine placed between source rows. */
+function locateRow(resolved: ResolvedChart, beat: number): ModifierTimeline {
+  const POSITION_STEPS = 1_000_000;
+  let measure = 0;
+  while (measure < 4999 && resolved.beatResolver.measureToBeat(measure + 1, 0) <= beat) measure += 1;
+  const start = resolved.beatResolver.measureToBeat(measure, 0);
+  const length = resolved.beatResolver.measureToBeat(measure + 1, 0) - start;
+  const fraction = length > 0 ? Math.min(1 - 1 / POSITION_STEPS, Math.max(0, (beat - start) / length)) : 0;
+  return { beat, event: { measure, position: [Math.round(fraction * POSITION_STEPS), POSITION_STEPS] } };
 }
 
 function makeMine(

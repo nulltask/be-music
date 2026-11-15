@@ -72,6 +72,8 @@ export type GUIPlayOptions = Pick<
   | 'scrollRate'
   | 'scrollModifier'
   | 'mineModifier'
+  | 'crazyJudge'
+  | 'crazyHellJudge'
   | 'gaugeAutoShift'
   | 'bmsonTotalMode'
   | 'bottomShiftableGauge'
@@ -212,6 +214,8 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     extraNoteDepth: state.extraNoteDepth,
     extraNoteScratch: state.extraNoteScratch,
     mineModifier: state.mineModifier,
+    crazyJudge: state.crazyJudge,
+    crazyHellJudge: state.crazyHellJudge,
     scrollModifier: state.scrollModifier,
     scrollSection: state.scrollSection,
     scrollRate: state.scrollRate,
@@ -333,6 +337,8 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.extraNoteDepth = options.extraNoteDepth;
   state.extraNoteScratch = options.extraNoteScratch;
   state.mineModifier = options.mineModifier;
+  state.crazyJudge = options.crazyJudge;
+  state.crazyHellJudge = options.crazyHellJudge;
   state.scrollModifier = options.scrollModifier;
   state.scrollSection = options.scrollSection;
   state.scrollRate = options.scrollRate;
@@ -460,6 +466,8 @@ const ARRANGEMENT_OPTIONS = [
   'extraNoteDepth',
   'extraNoteScratch',
   'mineModifier',
+  'crazyJudge',
+  'crazyHellJudge',
   'scrollModifier',
   'scrollSection',
   'scrollRate',

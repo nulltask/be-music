@@ -143,6 +143,14 @@ test.each([
   expect(() => parseChartPlayOptionProgram(value)).toThrow();
 });
 
+test('version 3 reads the CRAZY options as nanasigroove does, with or without a base speed', () => {
+  const raw = { version: 3, options: { judge: 'GOOD2BAD', hellJudge: true, addMine: true } };
+  expect(parseChartPlayOptionProgram(raw)).toEqual(raw);
+  const withSpeed = { version: 3, options: { hellJudge: true, baseSpeed: 1.5 } };
+  expect(parseChartPlayOptionProgram(withSpeed)).toEqual(withSpeed);
+  expect(() => parseChartPlayOptionProgram({ version: 4, options: {} })).toThrow(/expected 1, 2 or 3/);
+});
+
 test.each([1.2, 1.5, 2])('accepts chart BASE-SPEED %s in version 2', (baseSpeed) => {
   const program = { version: 2, options: { baseSpeed } };
   expect(parseChartPlayOptionProgram(program)).toEqual(program);

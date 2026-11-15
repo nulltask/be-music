@@ -364,6 +364,8 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     extraNoteDepth: 0,
     extraNoteScratch: false,
     mineModifier: 'OFF',
+    crazyJudge: 'OFF',
+    crazyHellJudge: false,
     scrollModifier: 'OFF',
     scrollSection: 4,
     scrollRate: 0.5,
