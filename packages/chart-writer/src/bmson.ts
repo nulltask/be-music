@@ -86,10 +86,15 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
   // BPM / STOP slot when re-emitted as bmson.
   const idBase = resolveBMSBase(json);
 
+  // BMS objects bmson has no field for, counted for `onDiagnostic`.
+  let speedObjects = 0;
+  let exRankObjects = 0;
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
     const isSampleChannel = isSampleTriggerChannel(channel);
     if (!isSampleChannel && channel !== '03' && channel !== '08' && channel !== '09' && channel !== 'SC') {
+      if (channel === 'SP') speedObjects += 1;
+      else if (channel === 'A0') exRankObjects += 1;
       continue;
     }
 
@@ -245,6 +250,7 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
   if (bga) {
     bmson.bga = bga;
   }
+  reportBMSOnlyDirectives(json, speedObjects, exRankObjects, options.onDiagnostic);
 
   return `${JSON.stringify(bmson, null, indent)}\n`;
 }
@@ -584,6 +590,35 @@ function resolveBmsonTotalForOutput(json: BeMusicJSON): number | undefined {
     return total;
   }
   return undefined;
+}
+
+/**
+ * Reports the BMS directives bmson has no field for, which the output leaves out: `#STP` stops and `#EXRANKxx`
+ * changes (both change judging), and `SPEED` changes (the scroll).
+ */
+function reportBMSOnlyDirectives(
+  json: BeMusicJSON,
+  speedObjects: number,
+  exRankObjects: number,
+  report: ChartExportDiagnosticHandler | undefined,
+): void {
+  if (report === undefined) return;
+  const stops = (json.bms.stp ?? []).filter((stp) => typeof stp === 'string' && stp.length > 0).length;
+  if (stops > 0)
+    report({
+      code: 'stp',
+      message: `${stops} #STP stop(s) are left out: bmson has no field for them, so every later note comes earlier.`,
+    });
+  if (exRankObjects > 0)
+    report({
+      code: 'exrank',
+      message: `${exRankObjects} #EXRANK change(s) (channel A0) are left out: bmson has no field for them, so the judgment rank stays at judge_rank.`,
+    });
+  if (speedObjects > 0)
+    report({
+      code: 'speed',
+      message: `${speedObjects} SPEED change(s) (channel SP) are left out: bmson has no field for them, so the scroll speed does not change.`,
+    });
 }
 
 function resolveBmsonCompatiblePlayLevel(value: BeMusicJSON['metadata']['playLevel']): number | undefined {

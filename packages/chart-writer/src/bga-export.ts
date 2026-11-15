@@ -10,9 +10,13 @@ import {
 
 /**
  * Something a format conversion could not carry over exactly; the output still loads, without that part or with it
- * changed. The `bga-*` codes change what is drawn. `mine-damage`, `total` and `long-note-mode` change gameplay: the
- * gauge a mine drains, the gauge's TOTAL, and how a long note is judged (#1198). A caller that must not convert with
- * such a loss can throw from the handler.
+ * changed (#1198). A caller that must not convert with such a loss can throw from the handler.
+ *
+ * - Judging changes: `mine-damage` (the gauge a mine drains), `total` (the gauge's TOTAL), `long-note-mode` (how a long
+ *   note is judged), `stp` (BMS `#STP` stops, which move every later note) and `exrank` (BMS `#EXRANKxx` changes,
+ *   which the LR2 ruleset judges by).
+ * - Presentation changes: `speed` (BMS `SPEED` scroll changes), `sound-continuation` (bmson `c`, a note that continues
+ *   its sound slice), `ln-end-sound` (beatoraja's `up`, a long note's end keysound) and the `bga-*` codes.
  */
 export interface ChartExportDiagnostic {
   code:
@@ -23,7 +27,12 @@ export interface ChartExportDiagnostic {
     | 'bga-sequence'
     | 'mine-damage'
     | 'total'
-    | 'long-note-mode';
+    | 'long-note-mode'
+    | 'stp'
+    | 'exrank'
+    | 'speed'
+    | 'sound-continuation'
+    | 'ln-end-sound';
   message: string;
 }
 
