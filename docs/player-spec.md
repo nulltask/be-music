@@ -808,8 +808,25 @@ judge core, a replay and the replay simulator all key a scratch hold by the same
   player sends it on the touch lane's `lane-input` and `kitty-state` commands.
 - A controller passes its source on the `lane-input` and `kitty-state` commands: a turntable is two sources, `up` and
   `down`, whether the device reports an axis or two buttons, and a host that turns an axis into presses names the
-  algorithm in `recordReplay.analogScratch`. No host has a controller input path yet (no Gamepad API input); that is
-  the boundary a controller plugs into. A source never carries device-identifying data.
+  algorithm in `recordReplay.analogScratch`. The web player reads standard-mapped Gamepads with the CS DualShock
+  assignment: D-pad to key 1, L1 / Square / R1 / Cross / Triangle / Circle to keys 2–7, and L2 / R2 to the two
+  turntable directions. It records only generic button / turntable source labels, never a device id. A source never
+  carries device-identifying data.
+
+  For USB arcade controllers, select the INFINITAS HID mode (including on compatible GAMO2/DJDAO PHOENIXWAN firmware).
+  The browser must expose the controller through Gamepad API. Be-Music recognizes the INFINITAS VID/PID
+  (`1ccf:8048`, also used by [arcin-infinitas](https://github.com/kinetic-flow/arcin-infinitas)) and the KONAMI
+  Entry Model VID/PID (`1ccf:1018`) in `Gamepad.id`. It also recognizes product names for PHOENIXWAN
+  (`Controller INF&BMS`), GAMO2 FP7 EMP, KONAMI IIDX Entry / Premium / Professional, and YuanCon Dx6th+.
+  The name-based matches assume the INFINITAS layout and are pending hardware verification. The first seven buttons
+  play keys 1–7, and the X axis is quantized to 256 positions and treated as a wrapping turntable encoder. Two ticks start or reverse the
+  scratch, and 100 ms without a qualifying movement releases it. These thresholds are Be-Music policy.
+  See the [GAMO2 firmware guide](https://www.gamo2.com/en/firmware/) and
+  [SnekBox's HID report definitions](https://github.com/dinsfire64/snekbox_firmware/blob/main/handlers/infinitas.h).
+
+  The web player handles experimental raw Gamepad input events when the browser dispatches them. A timer requests
+  a sample every 4 ms as a fallback and checks for stopped turntables and disconnected controllers. The browser
+  and operating system determine the actual sampling interval.
 
 **Single-source fallback.** With only one source on a scratch lane, beatoraja's strict rules would leave every BSS
 unclearable: only another source ends one. A hold started by a source that has no counterpart on its lane therefore

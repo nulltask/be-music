@@ -781,8 +781,24 @@ FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱�
   Web プレイヤーはタッチレーンの `lane-input` と `kitty-state` コマンドでこれを送ります。
 - コントローラーは `lane-input` と `kitty-state` コマンドでソースを渡します。ターンテーブルは、デバイスが軸を報告しても
   2 つのボタンを報告しても、`up` と `down` の 2 つのソースです。軸を押下に変えるホストは、そのアルゴリズムを
-  `recordReplay.analogScratch` に記録します。コントローラーの入力経路を持つホストはまだありません（Gamepad API の入力は
-  未実装）。コントローラーはこの境界に接続します。ソースがデバイスを識別するデータを持つことはありません。
+  `recordReplay.analogScratch` に記録します。Web プレイヤーは標準マッピングの Gamepad を CS 版 DualShock の配置で読み取ります。
+  方向キーは1鍵、L1 / □ / R1 / × / △ / ○ は2〜7鍵、L2 / R2 はターンテーブルの2方向です。記録するソース名は汎用の
+  ボタン名または回転方向だけで、デバイス ID は記録しません。ソースがデバイスを識別するデータを持つことはありません。
+
+  USB 専用コントローラー（対応ファームウェアの GAMO2/DJDAO PHOENIXWAN など）は INFINITAS HID モードに切り替えます。
+  ブラウザーが Gamepad API に公開した `Gamepad.id` で検出します。VID/PID は INFINITAS（`1ccf:8048`、
+  [arcin-infinitas](https://github.com/kinetic-flow/arcin-infinitas) も使用）と KONAMI エントリーモデル
+  （`1ccf:1018`）に対応します。製品名では PHOENIXWAN（`Controller INF&BMS`）、GAMO2 FP7 EMP、KONAMI IIDX
+  エントリー・プレミアム・プロフェッショナル、YuanCon Dx6th+ を照合します。製品名での検出は INFINITAS と同じ
+  配置を前提としており、実機での確認は未実施です。先頭の 7 ボタンが 1〜7 鍵、X 軸は 256 段階に丸めて
+  一周で値が戻るターンテーブルとして扱います。Be-Music は 2 ティックの移動で押下または方向転換とし、
+  その移動が 100 ms なければ解放します。
+  [GAMO2 のファームウェアガイド](https://www.gamo2.com/jp/firmware/)と
+  [SnekBox の HID レポート定義](https://github.com/dinsfire64/snekbox_firmware/blob/main/handlers/infinitas.h)を参照してください。
+
+  ブラウザーが実験的な Gamepad の生入力イベントを送る場合は、イベントを受け取った時点で入力を処理します。
+  4 ms 間隔を要求するポーリングで、イベント非対応時の入力、皿の停止、コントローラーの切断を検出します。
+  実際の取得間隔はブラウザーと OS に依存します。
 
 **ソースがひとつだけのとき。** スクラッチレーンのソースがひとつだけだと、beatoraja の厳密な規則では BSS を終えるのは
 別のソースだけなので、どの BSS も終えられません。そこで、レーンに対になるソースがないソースで始めたホールドは緩い規則で
