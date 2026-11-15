@@ -1,8 +1,9 @@
 import { expect, test } from 'vite-plus/test';
-import { DEFAULT_PLAY_OPTIONS } from './choices.ts';
+import { DEFAULT_PLAY_OPTIONS, resolvePlayOptionValue } from './choices.ts';
 import {
   formatPracticeTime,
   keepPracticeGauge,
+  practiceGaugeSource,
   resolvePracticeSelection,
   type PracticePlayOptions,
 } from './practice.ts';
@@ -87,4 +88,25 @@ test('a range without an end, or one that does not end after its start, plays to
 test('formatPracticeTime writes m:ss.s, tenths rounded down', () => {
   expect(formatPracticeTime(83_456)).toBe('1:23.4');
   expect(formatPracticeTime(0)).toBe('0:00.0');
+});
+
+test('PRACTICE may play on another source’s gauge, qualified with it (ADR 0019)', () => {
+  const borrowed = { ...OPTIONS, practiceGauge: 'beatoraja:ASSIST-EASY' } as const;
+  // The pick and beatoraja's GAUGE CATEGORY follow a beatoraja gauge under LR2 judging.
+  expect(resolvePracticeSelection(borrowed, 'lr2', RANGE)).toMatchObject({
+    gauge: 'beatoraja:ASSIST-EASY',
+    gaugeCategory: 'LR2',
+  });
+  // An LR2 gauge under beatoraja judging has no GAUGE CATEGORY.
+  expect(
+    resolvePracticeSelection({ ...OPTIONS, practiceGauge: 'lr2:G-ATTACK' }, 'beatoraja', RANGE),
+  ).not.toHaveProperty('gaugeCategory');
+  expect(practiceGaugeSource('beatoraja:ASSIST-EASY', 'lr2')).toBe('beatoraja');
+  expect(practiceGaugeSource('GROOVE', 'lr2')).toBe('lr2');
+  // A ruleset change keeps a qualified pick and resets a bare one the new ruleset lacks.
+  expect(keepPracticeGauge('beatoraja:ASSIST-EASY', 'lr2')).toBe('beatoraja:ASSIST-EASY');
+  expect(keepPracticeGauge('ASSIST-EASY', 'lr2')).toBe('GROOVE');
+  // Stored settings take a qualified pick and refuse one its source lacks.
+  expect(resolvePlayOptionValue('practiceGauge', 'beatoraja:ASSIST-EASY')).toBe('beatoraja:ASSIST-EASY');
+  expect(resolvePlayOptionValue('practiceGauge', 'lr2:ASSIST-EASY')).toBeUndefined();
 });

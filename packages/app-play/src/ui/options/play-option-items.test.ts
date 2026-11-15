@@ -11,19 +11,15 @@ import {
   practiceGaugeItems,
 } from './play-option-items.ts';
 
-test('PRACTICE lists the judge ruleset’s own gauges, named as it names them (#933)', () => {
-  expect(practiceGaugeItems('lr2').map((item) => item.text)).toEqual([
-    'GROOVE',
-    'HARD',
-    'HAZARD',
-    'EASY',
-    'P.ATTACK',
-    'G.ATTACK',
-    'DEATH corrected',
-  ]);
+test('PRACTICE lists the judge ruleset’s own gauges first, named as it names them (#933)', () => {
+  const own = (ruleset: 'lr2' | 'beatoraja' | '____', count: number) =>
+    practiceGaugeItems(ruleset)
+      .slice(0, count)
+      .map((item) => item.text);
+  expect(own('lr2', 7)).toEqual(['GROOVE', 'HARD', 'HAZARD', 'EASY', 'P.ATTACK', 'G.ATTACK', 'DEATH corrected']);
   expect(practiceGaugeItems('lr2')[2]).toEqual({ text: 'HAZARD', value: 'DEATH' });
-  expect(practiceGaugeItems('lr2').at(-1)).toEqual({ text: 'DEATH corrected', value: 'DEATH-CORRECTED' });
-  expect(practiceGaugeItems('beatoraja').map((item) => item.text)).toEqual([
+  expect(practiceGaugeItems('lr2')[6]).toEqual({ text: 'DEATH corrected', value: 'DEATH-CORRECTED' });
+  expect(own('beatoraja', 9)).toEqual([
     'ASSIST EASY',
     'EASY',
     'NORMAL',
@@ -34,13 +30,19 @@ test('PRACTICE lists the judge ruleset’s own gauges, named as it names them (#
     'EX GRADE',
     'EXHARD GRADE',
   ]);
-  expect(practiceGaugeItems('____').map((item) => item.text)).toEqual([
-    'ASSISTED EASY',
-    'EASY',
-    'NORMAL',
-    'HARD',
-    'EX-HARD',
-  ]);
+  expect(own('____', 5)).toEqual(['ASSISTED EASY', 'EASY', 'NORMAL', 'HARD', 'EX-HARD']);
+});
+
+test('PRACTICE then lists the other sources’ gauges, qualified and named with their source (ADR 0019)', () => {
+  const lr2 = practiceGaugeItems('lr2');
+  // LR2's own seven, then beatoraja's nine and AC's five.
+  expect(lr2).toHaveLength(7 + 9 + 5);
+  expect(lr2[7]).toEqual({ text: 'ASSIST EASY (beatoraja)', value: 'beatoraja:ASSIST-EASY' });
+  expect(lr2.at(-1)).toEqual({ text: 'EX-HARD (????)', value: '____:EX-HARD' });
+  expect(practiceGaugeItems('beatoraja')).toContainEqual({ text: 'HAZARD (LR2)', value: 'lr2:DEATH' });
+  // A pick qualified with the judge ruleset itself is listed after the own gauges only while it is selected.
+  expect(lr2.some((item) => item.value === 'lr2:HARD')).toBe(false);
+  expect(practiceGaugeItems('lr2', 'lr2:HARD')[7]).toEqual({ text: 'HARD (LR2)', value: 'lr2:HARD' });
 });
 
 test('the lowest auto-shift gauge reads as the ruleset’s own gauges; LR2 starts at EASY (#933)', () => {

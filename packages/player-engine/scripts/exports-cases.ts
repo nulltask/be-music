@@ -1314,6 +1314,26 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.isPracticeGaugeType('HAZARD', '____');
     },
   });
+  define('player-engine.ruleset.splitPracticeGaugePick', {
+    run() {
+      rulesetAPI.splitPracticeGaugePick('GROOVE');
+      rulesetAPI.splitPracticeGaugePick('beatoraja:ASSIST-EASY');
+      rulesetAPI.splitPracticeGaugePick('lr2:ASSIST-EASY');
+    },
+  });
+  define('player-engine.ruleset.isPracticeGaugePick', {
+    run() {
+      rulesetAPI.isPracticeGaugePick('beatoraja:ASSIST-EASY', 'lr2');
+      rulesetAPI.isPracticeGaugePick('ASSIST-EASY', 'lr2');
+      rulesetAPI.isPracticeGaugePick('HARD');
+    },
+  });
+  define('player-engine.ruleset.qualifyPracticeGaugePick', {
+    run() {
+      rulesetAPI.qualifyPracticeGaugePick('beatoraja', 'ASSIST-EASY');
+      rulesetAPI.qualifyPracticeGaugePick('lr2', 'G-ATTACK');
+    },
+  });
   define('player-engine.ruleset.practiceReadsJudgeRankAndTotal', {
     run() {
       rulesetAPI.practiceReadsJudgeRankAndTotal('lr2');

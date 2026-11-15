@@ -9,7 +9,9 @@ import {
   BEATORAJA_PRACTICE_GAUGE_TYPES,
   isPracticeGaugeType,
   practiceReadsJudgeRankAndTotal,
-  type PracticeGaugeType,
+  resolveDefaultPracticeGauge,
+  splitPracticeGaugePick,
+  type PracticeGaugePick,
 } from './practice-gauge.ts';
 import {
   bmsExRankValueToJudgeRankPercent,
@@ -626,8 +628,11 @@ export interface PracticeRules {
    * LR2 on its `#RANK` table, where 25 / 50 / 75 / 100 are `#RANK` 0-3. Ignored under That-Which-Must-Not-Be-Named.
    */
   judgeRank?: number;
-  /** `GAUGE TYPE`: one of the judge ruleset's `resolvePracticeGaugeTypes`. */
-  gauge: PracticeGaugeType;
+  /**
+   * `GAUGE TYPE`: one of the judge ruleset's `resolvePracticeGaugeTypes`, or another source's qualified with it
+   * (`beatoraja:ASSIST-EASY`), which plays on that source's gauge and TOTAL reading (ADR 0019).
+   */
+  gauge: PracticeGaugePick;
   /** `GAUGE CATEGORY` (beatoraja only); absent uses the play mode's. */
   gaugeCategory?: BeatorajaGaugeCategory;
   /** `GAUGE VALUE`, clamped to the gauge's range. */
@@ -870,6 +875,42 @@ function resolveSourceGauges(
 }
 
 /**
+ * Another source's PRACTICE gauge under the judge ruleset's judging (`beatoraja:ASSIST-EASY` under LR2): the gauge as that
+ * source's PRACTICE builds it, on its TOTAL reading of PRACTICE's TOTAL (LR2 as is, beatoraja scaled by the notes left in
+ * the range for NORMAL and gentler gauges, AC none), over the judgments the judge ruleset issues (`noteCount`), starting
+ * at `GAUGE VALUE`. `gaugeOf` builds the source's single gauges for auto-shift.
+ */
+function resolveSourcePracticeGauges(
+  source: RulesetId,
+  chart: RulesetChartFacts,
+  baseNoteCount: number,
+  noteCount: number,
+  practice: PracticeRules,
+): { effectiveTotal: number; gauge: GaugeSpec; gaugeOf: (id: string) => GaugeSpec } {
+  if (source === 'lr2') {
+    const effectiveTotal =
+      practice.total ??
+      resolveEffectiveTotal('lr2', { ...chart, notes: practice.sourceNotes }, countBaseNotes(practice.sourceNotes));
+    const gaugeOf = (id: string): GaugeSpec => resolveLR2Gauge(id, effectiveTotal, noteCount);
+    return { effectiveTotal, gauge: startPracticeGauge(gaugeOf(practice.gauge), practice), gaugeOf };
+  }
+  if (source === 'beatoraja') {
+    const effectiveTotal = resolvePracticeTotal(chart, noteCount, practice);
+    return {
+      effectiveTotal,
+      gauge: resolvePracticeGauge(practice, effectiveTotal, noteCount, chart.laneMode),
+      gaugeOf: (id) => resolveBeatorajaGauge(id, effectiveTotal, noteCount, chart.laneMode),
+    };
+  }
+  const gaugeOf = (id: string): GaugeSpec => resolve____Gauge(id, noteCount);
+  return {
+    effectiveTotal: resolveEffectiveTotal('____', chart, baseNoteCount),
+    gauge: startPracticeGauge(gaugeOf(practice.gauge), practice),
+    gaugeOf,
+  };
+}
+
+/**
  * The TOTAL a ruleset falls back to when the chart names none: LR2's note-count curve for `lr2`, beatoraja's formula
  * for `beatoraja`. The `____` gauge never reads TOTAL (its recovery comes from {@link resolve____GaugeUnit}), so its
  * reported TOTAL follows the `lr2` curve.
@@ -1020,13 +1061,37 @@ function resolveRulesetTables(
   options: ResolveRulesetOptions,
 ): RulesetConfig {
   const baseNotes = countBaseNotes(chart.notes);
-  const { course, practice } = options;
+  const { course } = options;
+  // PRACTICE's GAUGE TYPE is a gauge of the judge ruleset's own PRACTICE list, or another source's qualified with it
+  // (`beatoraja:ASSIST-EASY` under LR2), which keeps that source's gauge as a qualified gauge pick does (ADR 0019).
+  const practicePick = options.practice === undefined ? undefined : splitPracticeGaugePick(options.practice.gauge);
+  if (
+    options.practice !== undefined &&
+    (practicePick === undefined ||
+      (practicePick.source === undefined && !isPracticeGaugeType(practicePick.type, rulesetId)))
+  )
+    throw new RangeError(`PRACTICE under ${rulesetId} rules has no ${String(options.practice.gauge)} gauge.`);
+  const practiceSource = practicePick?.source ?? rulesetId;
+  // The practice the judge ruleset's branch below reads: its own gauge, or its default one while another source's gauge
+  // replaces it (`borrowedGauges`). `sourcePractice` names the gauge on its source's own list.
+  const practice: PracticeRules | undefined =
+    options.practice === undefined
+      ? undefined
+      : {
+          ...options.practice,
+          gauge: practiceSource === rulesetId ? practicePick!.type : resolveDefaultPracticeGauge(rulesetId),
+        };
+  const sourcePractice: PracticeRules | undefined =
+    options.practice === undefined || practiceSource === rulesetId
+      ? undefined
+      : { ...options.practice, gauge: practicePick!.type };
   // A qualified pick (`lr2:HARD`) keeps its source's gauges under this ruleset's judging; a bare one is the ruleset's
-  // own (ADR 0019, #1171). PRACTICE names a gauge of the judge ruleset's own PRACTICE list.
-  const pickedGauge = options.selectedGauge ?? 'GROOVE';
+  // own (ADR 0019, #1171). PRACTICE plays on its own GAUGE TYPE, so the play's own pick does not apply: a pick only
+  // another source has (`beatoraja:ASSIST-EASY` under LR2) must not stop it.
+  const pickedGauge = practice === undefined ? (options.selectedGauge ?? 'GROOVE') : 'GROOVE';
   const pickedSource = pickedGauge.slice(0, Math.max(0, pickedGauge.indexOf(':')));
   const selectedGauge = isRulesetId(pickedSource) ? pickedGauge.slice(pickedSource.length + 1) : pickedGauge;
-  const gaugeSource = practice === undefined && isRulesetId(pickedSource) ? pickedSource : rulesetId;
+  const gaugeSource = practice !== undefined ? practiceSource : isRulesetId(pickedSource) ? pickedSource : rulesetId;
   if (
     gaugeSource !== 'lr2' &&
     (['P-ATTACK', 'G-ATTACK'].includes(selectedGauge) || ['P-ATTACK', 'G-ATTACK'].includes(options.gauge ?? ''))
@@ -1046,8 +1111,6 @@ function resolveRulesetTables(
   const gambol = options.lr2Gambol;
   if (gambol !== undefined && rulesetId !== 'lr2') throw new RangeError('GAMBOL is available only for LR2.');
   if (practice !== undefined && course !== undefined) throw new RangeError('PRACTICE plays a single chart.');
-  if (practice !== undefined && !isPracticeGaugeType(practice.gauge, rulesetId))
-    throw new RangeError(`PRACTICE under ${rulesetId} rules has no ${String(practice.gauge)} gauge.`);
   const constrain = (tables: RulesetWindowTables): RulesetWindowTables =>
     applyCourseJudgeConstraint(applyChartJudgeModifiers(tables, options.chartJudge), course?.judge);
   // A course gauge starts from the value its own id carried in (auto-shift carries every ladder gauge's), else from the
@@ -1085,6 +1148,15 @@ function resolveRulesetTables(
     | (Pick<RulesetConfig, 'gauge' | 'gaugeBank' | 'gaugeFallback' | 'effectiveTotal'> & { gaugeSource: RulesetId })
     | undefined => {
     if (gaugeSource === rulesetId) return undefined;
+    if (sourcePractice !== undefined) {
+      const source = resolveSourcePracticeGauges(gaugeSource, chart, baseNotes, notes, sourcePractice);
+      return {
+        gaugeSource,
+        gauge: source.gauge,
+        ...shiftGauges(source.gauge, source.effectiveTotal, source.gaugeOf, notes),
+        effectiveTotal: source.effectiveTotal,
+      };
+    }
     const source = resolveSourceGauges(gaugeSource, chart, baseNotes, notes);
     const gauge = courseGauge(source.effectiveTotal, notes) ?? source.gaugeOf(gaugeId);
     return {

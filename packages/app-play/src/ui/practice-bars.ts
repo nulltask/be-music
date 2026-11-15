@@ -5,6 +5,7 @@ import type { BrowserAssetSource } from '@be-music/player-browser/collection';
 import { practiceReadsJudgeRankAndTotal, type RulesetId } from '@be-music/player-engine/ruleset';
 import {
   keepPracticeGauge,
+  practiceGaugeSource,
   type LibraryChart,
   type PlayOptions,
   type PracticeGaugeCategory,
@@ -252,13 +253,13 @@ export class PracticeBarsDialog {
               (event.target as HTMLSelectElement).value as PracticeSettings['practiceGauge'],
             )}
         >
-          ${practiceGaugeItems(ruleset).map(
+          ${practiceGaugeItems(ruleset, gauge).map(
             (item) => html`<option value=${item.value} ?selected=${item.value === gauge}>${item.text}</option>`,
           )}
         </select>
       </label>
       ${
-        ruleset === 'beatoraja'
+        practiceGaugeSource(gauge, ruleset) === 'beatoraja'
           ? html`<label class="practice-bars-field">
               <span>${label('GAUGE CATEGORY')}</span>
               <select

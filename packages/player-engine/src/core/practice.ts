@@ -1,7 +1,7 @@
 import type { ResolvedChart } from '@be-music/chart-model';
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
 import type { BeatorajaGaugeCategory } from '../ruleset/definitions.ts';
-import type { PracticeGaugeType } from '../ruleset/practice-gauge.ts';
+import type { PracticeGaugePick } from '../ruleset/practice-gauge.ts';
 import type { RulesetNoteCounts } from '../ruleset/facts.ts';
 import { moveNotesToBackground } from './background-notes.ts';
 import { withChartOverrides } from './resolved-chart-overrides.ts';
@@ -19,8 +19,11 @@ export interface PlayPractice {
    * is the source default, the chart's last timeline + 1000.
    */
   endMs?: number;
-  /** `GAUGE TYPE`: one of the judge ruleset's `resolvePracticeGaugeTypes`. */
-  gauge: PracticeGaugeType;
+  /**
+   * `GAUGE TYPE`: one of the judge ruleset's `resolvePracticeGaugeTypes`, or another source's qualified with it
+   * (`beatoraja:ASSIST-EASY`), which plays on that source's gauge and TOTAL reading.
+   */
+  gauge: PracticeGaugePick;
   /** `GAUGE CATEGORY` (beatoraja only); absent uses the play mode's. */
   gaugeCategory?: BeatorajaGaugeCategory;
   /** `GAUGE VALUE`. */

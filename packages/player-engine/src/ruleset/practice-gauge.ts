@@ -67,6 +67,52 @@ export function isPracticeGaugeType(value: unknown, ruleset?: RulesetId): value 
   return typeof value === 'string' && types.includes(value);
 }
 
+/** The rulesets whose PRACTICE gauges a pick can name. */
+const PRACTICE_GAUGE_SOURCES: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
+
+/**
+ * A PRACTICE `GAUGE TYPE` of one source, whatever ruleset judges the play: `beatoraja:ASSIST-EASY` under LR2 plays on
+ * beatoraja's ASSIST EASY, as a source-qualified gauge pick does (ADR 0019).
+ */
+export type QualifiedPracticeGaugeType = `${RulesetId}:${PracticeGaugeType}`;
+
+/**
+ * The gauge a PRACTICE play runs on. A bare {@link PracticeGaugeType} is the judge ruleset's own; a
+ * {@link QualifiedPracticeGaugeType} keeps its source's gauge and that source's TOTAL reading under every judge ruleset.
+ */
+export type PracticeGaugePick = PracticeGaugeType | QualifiedPracticeGaugeType;
+
+/**
+ * Splits a PRACTICE gauge pick into its source (`undefined` for a bare one) and its gauge type, or `undefined` when
+ * `value` is none. A qualified pick names a gauge its own source's PRACTICE list offers; it is never mapped to a
+ * lookalike.
+ */
+export function splitPracticeGaugePick(
+  value: unknown,
+): { source: RulesetId | undefined; type: PracticeGaugeType } | undefined {
+  if (typeof value !== 'string') return undefined;
+  const colon = value.indexOf(':');
+  if (colon < 0) return isPracticeGaugeType(value) ? { source: undefined, type: value } : undefined;
+  const source = PRACTICE_GAUGE_SOURCES.find((id) => id === value.slice(0, colon));
+  const type = value.slice(colon + 1);
+  return source !== undefined && isPracticeGaugeType(type, source) ? { source, type } : undefined;
+}
+
+/**
+ * Whether `value` is a PRACTICE gauge pick: a qualified one of any source, or a bare one of `ruleset` when given (else of
+ * any ruleset).
+ */
+export function isPracticeGaugePick(value: unknown, ruleset?: RulesetId): value is PracticeGaugePick {
+  const parts = splitPracticeGaugePick(value);
+  if (parts === undefined) return false;
+  return parts.source !== undefined || ruleset === undefined || isPracticeGaugeType(parts.type, ruleset);
+}
+
+/** `type` as `source`'s PRACTICE gauge. */
+export function qualifyPracticeGaugePick(source: RulesetId, type: PracticeGaugeType): QualifiedPracticeGaugeType {
+  return `${source}:${type}`;
+}
+
 /**
  * Whether PRACTICE's `JUDGERANK` and `TOTAL` take effect under `ruleset`. beatoraja and LR2 read them (a judgerank
  * percent on their own window tables, an absolute TOTAL); That-Which-Must-Not-Be-Named's windows are fixed and its
