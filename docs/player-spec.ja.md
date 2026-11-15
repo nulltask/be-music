@@ -785,6 +785,13 @@ FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱�
   方向キーは1鍵、L1 / □ / R1 / × / △ / ○ は2〜7鍵、L2 / R2 はターンテーブルの2方向です。記録するソース名は汎用の
   ボタン名または回転方向だけで、デバイス ID は記録しません。ソースがデバイスを識別するデータを持つことはありません。
 
+  USB 専用コントローラー（対応ファームウェアの GAMO2/DJDAO PHOENIXWAN など）は INFINITAS HID モードに切り替えます。
+  ブラウザーが Gamepad API に公開した `Gamepad.id` の VID/PID（`1ccf:8048`）または PHOENIXWAN の製品名
+  （`Controller INF&BMS`）で検出します。先頭の 7 ボタンが 1〜7 鍵、X 軸が一周で値の戻る 8 ビットの
+  ターンテーブルです。Be-Music は 2 ティックの移動で押下または方向転換とし、その移動が 100 ms なければ解放します。
+  [GAMO2 のファームウェアガイド](https://www.gamo2.com/jp/firmware/)と
+  [SnekBox の HID レポート定義](https://github.com/dinsfire64/snekbox_firmware/blob/main/handlers/infinitas.h)を参照してください。
+
 **ソースがひとつだけのとき。** スクラッチレーンのソースがひとつだけだと、beatoraja の厳密な規則では BSS を終えるのは
 別のソースだけなので、どの BSS も終えられません。そこで、レーンに対になるソースがないソースで始めたホールドは緩い規則で
 演奏します。レーンへの新たな押下は、始点と同じソースからでも BSS を終え、離鍵は何も確定しません（`hasScratchCounterpart`、

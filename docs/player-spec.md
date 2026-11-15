@@ -813,6 +813,14 @@ judge core, a replay and the replay simulator all key a scratch hold by the same
   turntable directions. It records only generic button / turntable source labels, never a device id. A source never
   carries device-identifying data.
 
+  For USB arcade controllers, select the INFINITAS HID mode (including on compatible GAMO2/DJDAO PHOENIXWAN firmware).
+  The browser must expose the controller through Gamepad API. Be-Music recognizes the INFINITAS VID/PID
+  (`1ccf:8048`) or the PHOENIXWAN product name (`Controller INF&BMS`) in `Gamepad.id`. The first seven buttons
+  play keys 1–7, and the X axis is treated as an 8-bit wrapping turntable encoder. Two ticks start or reverse the
+  scratch, and 100 ms without a qualifying movement releases it. These thresholds are Be-Music policy.
+  See the [GAMO2 firmware guide](https://www.gamo2.com/en/firmware/) and
+  [SnekBox's HID report definitions](https://github.com/dinsfire64/snekbox_firmware/blob/main/handlers/infinitas.h).
+
 **Single-source fallback.** With only one source on a scratch lane, beatoraja's strict rules would leave every BSS
 unclearable: only another source ends one. A hold started by a source that has no counterpart on its lane therefore
 plays a lenient rule: any fresh press on the lane ends the BSS, its own source's included, and a release settles

@@ -142,6 +142,32 @@ describe('createWebInputRuntime', () => {
     });
   });
 
+  test('uses sequential lane buttons for a USB INFINITAS-compatible controller', () => {
+    const buttons = Array.from({ length: 16 }, (_, index) => ({
+      pressed: index === 6,
+      value: index === 6 ? 1 : 0,
+    }));
+    vi.stubGlobal('navigator', {
+      getGamepads: () => [{ id: '1ccf-8048-Controller', index: 0, mapping: '', buttons, axes: [0, 0] }],
+    });
+    const inputSignals = createPlayerInputSignalBus();
+    const runtime = createWebInputRuntime({
+      inputSignals,
+      inputTokenToChannels: new Map([
+        ['v', ['19']],
+        ['shift-left', ['16']],
+      ]),
+      target: makeMockTarget().target,
+    });
+    runtime.start();
+    runtime.stop();
+    expect(inputSignals.drainCommands()).toMatchObject([
+      { kind: 'lane-input', tokens: ['v'], source: { device: 'controller', label: 'p1-b6' } },
+      { kind: 'kitty-state', pressTokens: ['v'] },
+      { kind: 'kitty-state', releaseTokens: ['v'] },
+    ]);
+  });
+
   test('start attaches keydown / keyup listeners and stop detaches them', () => {
     const inputSignals = createPlayerInputSignalBus();
     const { target, attachedTypes } = makeMockTarget();
