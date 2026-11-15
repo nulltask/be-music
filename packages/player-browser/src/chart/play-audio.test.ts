@@ -1,7 +1,13 @@
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { BrowserAssetSource } from '../collection/types.ts';
-import { collectChartVolumeMultipliers, loadPlaySamples, resolveAudioDecodeConcurrency } from './play-audio.ts';
+import {
+  collectChartVolumeMultipliers,
+  estimateMaxAudioSeconds,
+  loadPlaySamples,
+  resolveAudioDecodeConcurrency,
+  resolvePlayWindowSamples,
+} from './play-audio.ts';
 import { createChartSampleCache } from '../runtime/chart-sample-cache.ts';
 import { PEAK_GAIN_TARGET_LINEAR } from './peak-gain.ts';
 
@@ -355,6 +361,103 @@ describe('loadPlaySamples', () => {
     expect(audioContext.decoded).toEqual([]);
     expect(samples.size).toBe(0);
     expect(mocks.stretchDecodedSamples).not.toHaveBeenCalled();
+  });
+});
+
+describe('a play of part of the chart', () => {
+  const wave = (seconds: number): Uint8Array => {
+    // A 1 kHz mono 8-bit PCM WAVE: its data is as many bytes as milliseconds, its header 44.
+    const data = Math.round(seconds * 1000);
+    const bytes = new Uint8Array(44 + data);
+    const view = new DataView(bytes.buffer);
+    const text = (offset: number, value: string) => [...value].forEach((c, i) => (bytes[offset + i] = c.charCodeAt(0)));
+    text(0, 'RIFF');
+    view.setUint32(4, 36 + data, true);
+    text(8, 'WAVE');
+    text(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, 1000, true);
+    view.setUint32(28, 1000, true);
+    view.setUint16(32, 1, true);
+    view.setUint16(34, 8, true);
+    text(36, 'data');
+    view.setUint32(40, data, true);
+    return bytes;
+  };
+
+  test('estimateMaxAudioSeconds reads a WAVE’s length, and bounds any other file’s by a low bitrate', () => {
+    expect(estimateMaxAudioSeconds(wave(2.5))).toBeCloseTo(2.5);
+    // 40 kB of anything else: 10 s at 32 kbps, longer than it can play.
+    expect(estimateMaxAudioSeconds(new Uint8Array(40_000))).toBe(10);
+  });
+
+  test('resolvePlayWindowSamples keeps what the window triggers, and when each other sample was last triggered before it', () => {
+    const triggers = [
+      { seconds: 0, sampleKey: 'AA' },
+      { seconds: 3, sampleKey: 'BB' },
+      { seconds: 5, sampleKey: 'CC' },
+      { seconds: 6, sampleKey: 'BB' },
+      { seconds: 7, sampleKey: 'DD' },
+      { seconds: 12, sampleKey: 'EE' },
+    ];
+    const { inWindow, before } = resolvePlayWindowSamples({ startSeconds: 4, endSeconds: 10, triggers });
+    expect([...inWindow].sort()).toEqual(['BB', 'CC', 'DD']);
+    expect([...before]).toEqual([['AA', 0]]);
+  });
+
+  test('decodes the samples the window sounds, and those before it that ring into it', async () => {
+    const chart = createEmptyJSON('bms');
+    chart.resources.wav = { '01': 'song.wav', '02': 'hit.wav', '03': 'in.wav', '04': 'after.wav' };
+    chart.events = [];
+    const files: Record<string, Uint8Array> = {
+      'song.wav': wave(60),
+      'hit.wav': wave(0.5),
+      'in.wav': wave(0.5),
+      'after.wav': wave(0.5),
+    };
+    mocks.resolveChartAudioAsset.mockReset();
+    mocks.loadAssetBytes.mockReset();
+    mocks.resolveChartAudioAsset.mockImplementation((_source, _chartPath, path: string) => path);
+    mocks.loadAssetBytes.mockImplementation(async (path: string) => files[path]);
+    // Every slot is played, each at its own time: the song from 0, a short hit at 1, one in the window, one after it.
+    chart.events = ['01', '02', '03', '04'].map((value) => ({ measure: 0, channel: '01', position: [0, 1], value }));
+    const decoded: string[] = [];
+    const context = {
+      decodeAudioData: async (buffer: ArrayBuffer) => {
+        const bytes = new Uint8Array(buffer);
+        const name = Object.entries(files).find(
+          ([, file]) => file.length === bytes.length && file !== files['hit.wav'],
+        )?.[0];
+        decoded.push(name ?? 'short');
+        return { duration: 1, sampleRate: 44100 } as unknown as AudioBuffer;
+      },
+    } as unknown as BaseAudioContext;
+    await loadPlaySamples({
+      audioContext: context,
+      chart,
+      source: SOURCE,
+      chartPath: 'main.bms',
+      samples: new Map(),
+      tempo: 1,
+      tempoPitchMode: 'pitch',
+      tempoStretchAlgorithm: 'signalsmith',
+      window: {
+        startSeconds: 4,
+        endSeconds: 8,
+        triggers: [
+          { seconds: 0, sampleKey: '01' },
+          { seconds: 1, sampleKey: '02' },
+          { seconds: 5, sampleKey: '03' },
+          { seconds: 9, sampleKey: '04' },
+        ],
+      },
+    });
+    // The song still rings at 4 s and the sample in the window plays; the hit ended at 1.5 s and the last comes after.
+    expect(decoded.length).toBe(2);
+    expect(decoded).toContain('song.wav');
+    expect(mocks.loadAssetBytes).not.toHaveBeenCalledWith('after.wav');
   });
 });
 

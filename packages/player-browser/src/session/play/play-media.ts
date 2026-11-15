@@ -12,7 +12,8 @@ import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
 import { resolveJudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { TimedPlayableNote } from '@be-music/player-engine/display';
 import type { Texture } from 'pixi.js';
-import { loadPlaySamples } from '../../chart/play-audio.ts';
+import { loadPlaySamples, type PlaySampleWindow } from '../../chart/play-audio.ts';
+import type { PreparedPlaybackChartData } from '@be-music/player-engine';
 import { loadPlayBGA, releaseVideo } from '../../chart/play-bga.ts';
 import type { LibraryChart } from '@be-music/player-scene-model';
 import type { BrowserAssetSource } from '../../collection/types.ts';
@@ -31,7 +32,7 @@ import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/n
 import { createPlayAudioGraph } from '../../runtime/play-audio-graph.ts';
 import { chartToElapsedSeconds, resolveSamplePlaybackRate, stretchSlicePlayback } from '../../runtime/play-tempo.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
-import type { BGACue } from '../../chart/bga-timeline.ts';
+import { clipBGACuesToWindow, type BGACue } from '../../chart/bga-timeline.ts';
 import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
 import { resolveGameplayAudioTailCleanupDelayMs } from './result-delay.ts';
 
@@ -53,11 +54,16 @@ export interface PlayMediaContext {
       | 'judgeTimingAutoAdjust'
       | 'replay'
       | 'guideSounds'
+      | 'practiceRange'
     >
   >;
   readonly chart: LibraryChart | undefined;
   readonly source: BrowserAssetSource | undefined;
   readonly resolvedChart: BeMusicJSON | undefined;
+  /** The chart the engine plays (`prepareChart`), prepared before the samples decode. */
+  readonly preparedChart:
+    | Pick<PreparedPlaybackChartData, 'resolvedChart' | 'practicePlayStartSeconds' | 'totalSeconds'>
+    | undefined;
   readonly disposed: boolean;
   readonly tempo: number;
   readonly playbackTempo?: number;
@@ -173,6 +179,7 @@ export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
       tempoPitchMode: pitchMode,
       tempoStretchAlgorithm: ctx.options.tempoStretchAlgorithm ?? 'signalsmith',
       ...(ctx.options.nonstop !== undefined ? { nonstop: ctx.options.nonstop } : {}),
+      ...practiceSampleWindow(ctx),
       isCancelled: () => ctx.disposed,
       ...(ctx.options.peakGain === true ? { peakGain: true } : {}),
       // The chart played last keeps its decodes in the audio service, so a quick retry skips decoding them.
@@ -212,6 +219,41 @@ export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
   }
 }
 
+/**
+ * The part of the chart a PRACTICE play of picked bars sounds ({@link LoadPlaySamplesOptions.window}): from where its
+ * first round starts to its end, rest bars and long notes kept from before included; `undefined` for any other play,
+ * which decodes every sample.
+ */
+function practiceSampleWindow(ctx: PlayMediaContext): { window: PlaySampleWindow } | undefined {
+  const prepared = ctx.preparedChart;
+  const range = ctx.options.practiceRange;
+  if (ctx.options.replay !== undefined || range?.endMs === undefined || prepared === undefined) return undefined;
+  if (prepared.practicePlayStartSeconds === undefined) return undefined;
+  return {
+    window: {
+      startSeconds: prepared.practicePlayStartSeconds,
+      endSeconds: prepared.totalSeconds,
+      triggers: prepared.resolvedChart.sampleTriggers,
+    },
+  };
+}
+
+/**
+ * The BGA cues a play loads the images of: for a PRACTICE play of picked bars, those its window shows
+ * ({@link clipBGACuesToWindow}), else every cue.
+ */
+function practiceBGATimeline(ctx: PlayMediaContext): PlayMediaContext['bgaTimeline'] {
+  const window = practiceSampleWindow(ctx)?.window;
+  if (window === undefined) return ctx.bgaTimeline;
+  const { base, layer, layer2, poor } = ctx.bgaTimeline;
+  return {
+    base: clipBGACuesToWindow(base, window),
+    layer: clipBGACuesToWindow(layer, window),
+    ...(layer2 !== undefined ? { layer2: clipBGACuesToWindow(layer2, window) } : {}),
+    poor: clipBGACuesToWindow(poor, window),
+  };
+}
+
 /** Every sample's playback rate: the play tempo when it moves the pitch, 1 when the samples were stretched to it. */
 export function samplePlaybackRate(ctx: Pick<PlayMediaContext, 'options' | 'tempo' | 'playbackTempo'>): number {
   return resolveSamplePlaybackRate(ctx.options.tempoPitchMode ?? 'pitch', ctx.playbackTempo ?? ctx.tempo);
@@ -238,7 +280,7 @@ export async function prepareBGA(ctx: PlayMediaContext): Promise<void> {
     bmsonBGACues: ctx.options.nonstop?.bmsonBGA,
     source,
     chartPath: chartEntry.chartPath,
-    timeline: ctx.bgaTimeline,
+    timeline: practiceBGATimeline(ctx),
     poorFallbackKey: ctx.poorBGAFallbackKey,
     into: {
       textures: ctx.bgaTextures,

@@ -2,6 +2,7 @@ import type { TimingResolver } from '@be-music/chart-model';
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
 import { describe, expect, it } from 'vite-plus/test';
 import {
+  clipBGACuesToWindow,
   buildBGATimeline,
   buildSkinBGAFrame,
   collectBGATextureLoadKeys,
@@ -510,4 +511,26 @@ it('HDX BGAMODE places a cropped or oversized image relative to the viewport', (
   expect(resolveBGAImageRect(64, 64, rect, { x: 1, y: 2 }, 0)).toEqual(rect);
   expect(resolveBGAImageRect(512, 300, rect, undefined, 1)).toEqual({ x: -28, y: 20, w: 512, h: 150 });
   expect(resolveBGAImageRect(160, 80, rect, { x: 1, y: 2 }, 2)).toEqual({ x: 164, y: 20, w: 128, h: 32 });
+});
+
+describe('clipBGACuesToWindow', () => {
+  const cues = [0, 2, 5, 7, 12].map((seconds) => ({ seconds, bmpKey: `B${seconds}` }));
+
+  it('keeps the cue in force at the window’s start and those in the window', () => {
+    expect(clipBGACuesToWindow(cues, { startSeconds: 4, endSeconds: 10 }).map((cue) => cue.bmpKey)).toEqual([
+      'B2',
+      'B5',
+      'B7',
+    ]);
+    // A cue on the window's start is the one in force there.
+    expect(clipBGACuesToWindow(cues, { startSeconds: 5, endSeconds: 6 }).map((cue) => cue.bmpKey)).toEqual(['B5']);
+  });
+
+  it('keeps the first cues of a window before any cue, and none of an empty track', () => {
+    expect(clipBGACuesToWindow(cues, { startSeconds: 0, endSeconds: 3 }).map((cue) => cue.bmpKey)).toEqual([
+      'B0',
+      'B2',
+    ]);
+    expect(clipBGACuesToWindow([], { startSeconds: 0, endSeconds: 3 })).toEqual([]);
+  });
 });
