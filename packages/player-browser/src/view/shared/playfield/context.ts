@@ -76,6 +76,11 @@ export interface PlayfieldRuntime {
   readonly battleSourceVariant?: ChartPlayVariant;
   readonly laneX: Map<string, PlayfieldLaneRect>;
   readonly notes: RuntimeNote[];
+  /**
+   * The notes the lanes draw: `notes`, and past a seamless PRACTICE loop's end the next round's (the engine's
+   * `renderNotes`), which nobody judges.
+   */
+  readonly drawNotes: RuntimeNote[];
   readonly mineNotes: RuntimeMineNote[];
   readonly invisibleNotes: TimedPlayableNote[];
   readonly maxLongNoteBeatSpan: number;

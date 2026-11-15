@@ -158,6 +158,8 @@ export interface BeatorajaPlayRuntime {
   /** The play's Visual CONSTANT switch and the course's NO_SPEED lock, which decide whether `#SPEED` scrolls. */
   readonly options?: { readonly visualConstant?: boolean; readonly hiSpeedLocked?: boolean };
   readonly notes: readonly PlayerUIFrameNote[];
+  /** The notes the lanes draw before the engine's first frame: `notes`, and a seamless PRACTICE loop's next round. */
+  readonly drawNotes: readonly PlayerUIFrameNote[];
   readonly mineNotes: readonly PlayerUIFrameNote[];
   readonly invisibleNotes: readonly PlayerUIFrameNote[];
   /** The engine's latest frame; `undefined` before its first. */
@@ -550,7 +552,7 @@ export class BeatorajaPlayView implements PlayView {
       engineFrame ??
       (this.loaded
         ? {
-            notes: play.notes,
+            notes: play.drawNotes,
             landmineNotes: play.mineNotes,
             invisibleNotes: play.invisibleNotes,
             currentSeconds: 0,

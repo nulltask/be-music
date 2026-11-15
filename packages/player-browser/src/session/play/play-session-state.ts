@@ -115,6 +115,8 @@ export class PlaySessionState extends PlayPresentation {
    */
   preparedChart: PreparedPlaybackChartData | undefined;
   notes: RuntimeNote[] = [];
+  /** The notes the lanes draw (`PlayfieldRuntime.drawNotes`). */
+  drawNotes: RuntimeNote[] = [];
   /**
    * Landmine notes (channels D1-D9 / E1-E9). Sorted by `seconds` for the same binary-search-by-time access pattern the
    * playable-note judge loop uses. Hit-test runs in `judge()` BEFORE the playable-note check so a press that lands

@@ -620,6 +620,7 @@ export class PlaySession extends PlaySessionState {
     this.bgaSubRegionOrigins.clear();
     this.playState = createPlayState();
     this.notes = [];
+    this.drawNotes = [];
     this.mineNotes = [];
     this.invisibleNotes.length = 0;
     this.preparedChart = undefined;
