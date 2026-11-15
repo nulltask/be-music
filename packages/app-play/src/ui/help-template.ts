@@ -200,13 +200,13 @@ export const PLAYER_HELP_TEMPLATE = html`
               </li>
               <li>
                 Text that starts with <code>?</code> is a chart filter, written like an SQL <code>WHERE</code> clause
-                (beatoraja's random-course filters): <code>=</code> <code>!=</code> <code>&lt;</code>
-                <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code>, <code>BETWEEN … AND …</code>,
-                <code>IN (…)</code>, <code>LIKE</code> (<code>%</code> any text, <code>_</code> one character, case
-                ignored for A–Z), <code>IS NULL</code>, <code>AND</code> <code>OR</code> <code>NOT</code> and
-                parentheses, then an optional <code>ORDER BY … DESC</code> and <code>LIMIT n</code> (which replace the
-                sort). Put text in single quotes; <code>=</code> on text is exact and case-sensitive. Keywords may be
-                lower case. A filter that does not parse shows why under the search box and filters nothing.
+                (beatoraja's random-course filters): <code>=</code> <code>!=</code> <code>&lt;</code> <code>&lt;=</code>
+                <code>&gt;</code> <code>&gt;=</code>, <code>BETWEEN … AND …</code>, <code>IN (…)</code>,
+                <code>LIKE</code> (<code>%</code> any text, <code>_</code> one character, case ignored for A–Z),
+                <code>IS NULL</code>, <code>AND</code> <code>OR</code> <code>NOT</code> and parentheses, then an
+                optional <code>ORDER BY … DESC</code> and <code>LIMIT n</code> (which replace the sort). Put text in
+                single quotes; <code>=</code> on text is exact and case-sensitive. Keywords may be lower case. A filter
+                that does not parse shows why under the search box and filters nothing.
               </li>
               <li>
                 Columns: <code>title</code> <code>subtitle</code> <code>artist</code> <code>subartist</code>
