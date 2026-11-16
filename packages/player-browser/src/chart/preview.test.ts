@@ -465,9 +465,29 @@ describe('ChartPreviewEngine.playWindow', () => {
     expect(sources.map((source) => source.start.mock.calls[0]?.[0])).toEqual([0.02, 2.02]);
     expect(sources.map((source) => source.playbackRate.value)).toEqual([1, 1]);
     expect(sources.every((source) => (source.buffer as unknown as { stretched?: boolean }).stretched)).toBe(true);
+    // Both samples went to the stretcher in one batch, and the second window reuses them.
+    expect(stretchMocks.stretchAudioBuffers).toHaveBeenCalledTimes(1);
+    expect(stretchMocks.stretchAudioBuffers.mock.calls[0]![1]).toHaveLength(2);
     engine.playWindow(target, window);
     await vi.waitFor(() => expect(sources).toHaveLength(4));
-    expect(stretchMocks.stretchAudioBuffers).toHaveBeenCalledTimes(2);
+    expect(stretchMocks.stretchAudioBuffers).toHaveBeenCalledTimes(1);
+  });
+
+  test('with the pitch kept, stretches no sample that has finished before the window', async () => {
+    // Bar 2 [4, 6): the keysound at 3 s (a 1 s sample) has ended by 4 s; only the BGM hit on the bar line sounds.
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    stretchMocks.stretchAudioBuffers.mockClear();
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0 });
+    engine.playWindow(makePreviewTarget(barChart()), {
+      startSeconds: 4,
+      endSeconds: 6,
+      tempo: 0.5,
+      keepPitch: true,
+      stretchAlgorithm: 'wsola',
+    });
+    await vi.waitFor(() => expect(sources).toHaveLength(1));
+    // The bar's own batch holds the BGM hit alone; the background stretches the rest of the chart afterwards.
+    expect(stretchMocks.stretchAudioBuffers.mock.calls[0]![1]).toHaveLength(1);
   });
 
   test('with the pitch kept, stretches only the part of a long sample the window sounds', async () => {
@@ -636,6 +656,8 @@ describe('resolveWindowStretchSegment', () => {
   });
 
   test('stretches the whole of a short sample, or of one the window sounds most of', () => {
+    // Nothing to sound past the sample's end.
+    expect(resolveWindowStretchSegment([{ startSeconds: 70, endSeconds: 70 }], 60)).toBeUndefined();
     expect(resolveWindowStretchSegment([{ startSeconds: 0, endSeconds: 0.5 }], 3)).toBeUndefined();
     expect(resolveWindowStretchSegment([{ startSeconds: 0, endSeconds: 9 }], 10)).toBeUndefined();
     expect(resolveWindowStretchSegment([], 60)).toBeUndefined();

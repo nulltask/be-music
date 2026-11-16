@@ -97,6 +97,16 @@ export interface AudioServicePreview {
    * previous window or the focus preview short. The preview belongs to `owner` until the next focus or window.
    */
   playWindow(target: ChartPreviewTarget, window: ChartPreviewWindow, owner?: AudioOwner): void;
+  /**
+   * Gets `target`'s `bars` ready to sound at a kept-pitch tempo, stretching what each sounds in the background, nearest
+   * `aroundSeconds` first (`ChartPreviewEngine.prepareWindows`); `undefined` settings stop that.
+   */
+  prepareWindows(
+    target: ChartPreviewTarget,
+    settings: Omit<ChartPreviewWindow, 'startSeconds' | 'endSeconds'> | undefined,
+    bars?: readonly Pick<ChartPreviewWindow, 'startSeconds' | 'endSeconds'>[],
+    aroundSeconds?: number,
+  ): void;
   /** Stops the preview and forgets the focus. */
   stop(): void;
   /** Whether a preview is audible now. */
@@ -126,6 +136,13 @@ export interface ChartPreviewPlayer {
   focus(target: ChartPreviewTarget | undefined): void;
   /** Sounds a window of a chart at once; an engine without it sounds nothing. */
   playWindow?(target: ChartPreviewTarget, window: ChartPreviewWindow): void;
+  /** Stretches a chart's bars in the background; an engine without it stretches each window as it plays. */
+  prepareWindows?(
+    target: ChartPreviewTarget,
+    settings: Omit<ChartPreviewWindow, 'startSeconds' | 'endSeconds'> | undefined,
+    bars?: readonly Pick<ChartPreviewWindow, 'startSeconds' | 'endSeconds'>[],
+    aroundSeconds?: number,
+  ): void;
   stop(): void;
   dispose(): void;
 }
@@ -576,6 +593,12 @@ export function createAudioService(options: AudioServiceOptions = {}): AudioServ
       previewOwner = owner;
       if (system !== undefined) resumeContext(system.context);
       engine.playWindow?.(target, window);
+    },
+    prepareWindows(target, settings, bars, aroundSeconds) {
+      if (disposed) return;
+      // Nothing to stop before the engine exists.
+      if (settings === undefined && previewEngine === undefined) return;
+      ensurePreview()?.prepareWindows?.(target, settings, bars, aroundSeconds);
     },
     stop() {
       previewEngine?.focus(undefined);
