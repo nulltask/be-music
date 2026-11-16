@@ -1250,11 +1250,12 @@ export function applyRandomMode(
     });
     return;
   }
-  if (mode === 'RANDOM-EX' && (options.scratchLanes?.length ?? 0) === 0)
-    throw new RangeError('RANDOM-EX requires scratch lanes.');
+  // nanasigroove's RANDOM+ (a chart's `774:RANDOM_RANDOM+`, #1244) shuffles the keys and the scratch as RANDOM-EX does.
+  const withScratch = mode === 'RANDOM-EX' || mode === 'RANDOM+';
+  if (withScratch && (options.scratchLanes?.length ?? 0) === 0) throw new RangeError(`${mode} requires scratch lanes.`);
   const domainLanes = includeScratch
     ? [options.scratch!, ...allLanes]
-    : mode === 'RANDOM-EX'
+    : withScratch
       ? [...allLanes, ...options.scratchLanes!]
       : allLanes;
   if (domainLanes.length < 2) return;
@@ -1312,10 +1313,10 @@ export function applyRandomMode(
     return;
   }
 
-  if (mode === 'RANDOM' || mode === 'RANDOM-EX') {
+  if (mode === 'RANDOM' || withScratch) {
     // LR2, beatoraja and That-Which-Must-Not-Be-Named define RANDOM alike, one chart-wide shuffle of the keys, so every
     // source draws it as beatoraja 0.8.9's LaneRandomShuffleModifier does: the seed then gives beatoraja's arrangement.
-    // RANDOM-EX is the same draw over the keys and the scratch.
+    // RANDOM-EX, and nanasigroove's RANDOM+, are the same draw over the keys and the scratch.
     const available = [...domainLanes];
     const map = new Map<string, string>();
     for (const target of domainLanes) {

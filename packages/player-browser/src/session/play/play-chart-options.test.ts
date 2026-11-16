@@ -49,6 +49,20 @@ test('chart MIRROR wins over the player S-RANDOM and is recorded as played', () 
   expect(recording.randomLane).toEqual({ p1: 'MIRROR', p2: 'MIRROR' });
 });
 
+test("chart RANDOM+ plays and is recorded as nanasigroove's RANDOM+, not beatoraja's RANDOM-EX (#1244)", () => {
+  // Every draw 0.99 takes the last remaining source: the keys and the scratch reverse, so key 1 lands on the scratch.
+  vi.spyOn(Math, 'random').mockReturnValue(0.99);
+  const play = prepare(SP('774:RANDOM_RANDOM+'), { random1P: 'RANDOM-EX' });
+  expect(play.chartPlay?.selection).toMatchObject({ random1P: 'RANDOM+', random2P: 'RANDOM+' });
+  expect(play.notes.map((note) => note.channel)).toContain('16');
+  const recording = resolveReplayRecording(
+    { ...play.options, ...play.chartPlay?.selection } as PlaySessionOptions,
+    undefined,
+    {},
+  );
+  expect(recording.randomLane).toEqual({ p1: 'RANDOM+', p2: 'RANDOM+' });
+});
+
 test('a chart without gameplay options leaves the player choices', () => {
   const play = prepare('#BPM 120\n#00111:01\n', { random1P: 'MIRROR', mineModifier: 'OFF' });
   expect(play.chartPlay?.program).toEqual({ version: 1, options: {} });

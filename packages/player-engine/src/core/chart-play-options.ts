@@ -42,7 +42,9 @@ export function resolveChartAddMineModifier(program: ChartPlayOptionProgram): Mi
  * chart author's staging). Mapped onto the existing per-side arrangements:
  *
  * - `MIRROR` → MIRROR on both sides; `RANDOM` → RANDOM on both sides, without the player's fixed lane or M-RAN.
- * - `RANDOM+` → the scratch-inclusive RANDOM-EX shuffle on both sides (plain RANDOM where the variant has no scratch).
+ * - `RANDOM+` → nanasigroove's own lane value `RANDOM+` on both sides (#1244): one shuffle of the side's keys and scratch
+ *   lanes. It draws as RANDOM-EX does but is recorded as nanasigroove's, not as beatoraja's RANDOM-EX. Plain RANDOM where
+ *   the variant has no scratch, where the two are the same shuffle.
  * - `ALL` / `ALL+` → one shuffle across both sides (`crossSide`), keys only or with scratch; on a one-sided chart they are
  *   `RANDOM` / `RANDOM+`.
  * - `addMine` → nanasigroove's ADDMINE (`NANASI_ADD`); a program recorded before version 3 keeps the ADD_RANDOM mine
@@ -64,7 +66,7 @@ export function applyChartPlayOptions<T extends ChartPlaySelection>(
   if (random === undefined) return { selection: next };
   const crossSide = layout.doublePlay && (random === 'ALL' || random === 'ALL+');
   const scratch = (random === 'RANDOM+' || random === 'ALL+') && layout.hasScratch;
-  const perSide = crossSide ? 'OFF' : random === 'MIRROR' ? 'MIRROR' : scratch ? 'RANDOM-EX' : 'RANDOM';
+  const perSide = crossSide ? 'OFF' : random === 'MIRROR' ? 'MIRROR' : scratch ? 'RANDOM+' : 'RANDOM';
   writable.random1P = perSide;
   writable.random2P = perSide;
   delete writable.randomFixedLane1P;
