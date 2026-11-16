@@ -15,6 +15,7 @@ Be-Music は `lr2`、`beatoraja`、`____` に並ぶ 4 つ目の判定 ruleset �
 - **スコア**：`100000·PG/n + 50000·GR/n + 25000·GD/n`。各項を整数で割ります。EX-SCORE も並べて持ちます。
 - **ランプ**：ゲージの種類から NORMAL、EASY、HARD。HAZARD でのクリアは FULL COMBO、EX-HAZARD でのクリアは PERFECT です。フルコンボは PERFECT が上限で、PERFECT には空 POOR がないことも必要です。MAX はありません。
 - **地雷**：plugout にはないため、`____` と同じく LR2 の方針を取り入れます。
+- **空押しの音**：判定するもののない押下は、レーンの音カーソルのノーツを鳴らします。カーソルは判定される押下、ロングノーツを離す操作、見えないノーツで動きます（[format-compat §7](../format-compat.ja.md#7-lrx)）。最初に動くまでのカーソルは plugout では初期化されていません。Be-Music はレーンの最初のノーツから始めます。
 
 ロングノーツの終点は次の規則に従います。
 

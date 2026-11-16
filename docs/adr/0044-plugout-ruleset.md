@@ -15,6 +15,7 @@ Be-Music adds a fourth judge ruleset, `plugout` (revision `plugout/0`), beside `
 - **Score**: `100000·PG/n + 50000·GR/n + 25000·GD/n`, each term integer-divided. EX-SCORE is kept beside it.
 - **Lamps**: NORMAL, EASY and HARD from the gauge type; a HAZARD clear is FULL COMBO, an EX-HAZARD clear PERFECT. A full combo tops out at PERFECT, which also needs no empty POOR. There is no MAX.
 - **Mines**: plugout has none, so the ruleset imports LR2's policy, as `____` does.
+- **Empty-press sound**: a press with nothing to judge plays the lane's sound cursor, which judged presses, long-note releases and hidden notes move ([format-compat §7](../format-compat.md#7-lrx)). Before the first move the cursor is uninitialized in plugout; Be-Music starts it at the lane's first note.
 
 The long-note end follows this rule:
 
