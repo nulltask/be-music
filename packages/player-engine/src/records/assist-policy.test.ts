@@ -294,6 +294,19 @@ describe('classifyReplayAssists', () => {
     expect(classOf({}, { chartPlayOptions: { version: 3, options: { notes: 'COPY' } } })).toBe('none');
   });
 
+  test('a play on single-source input (touch, a controller button) is no assist, whatever the BSS rule it played (#1181)', () => {
+    // The lenient BSS rule is an input capability adaptation (ADR 0040): it sets no assist class and keeps the record.
+    const inputSources = [
+      { id: 0, kind: 'button' as const, device: 'touch' as const, label: 'scratch' },
+      { id: 1, kind: 'button' as const, device: 'controller' as const, label: 'b8' },
+    ];
+    expect(classifyReplayAssists(replay({ inputSources }))).toEqual([]);
+    expect(resolveReplayRecordPolicy(replay({ inputSources }))).toMatchObject({
+      keepsRecord: true,
+      leaderboard: 'main',
+    });
+  });
+
   test('counts the 2P AUTO SCRATCH only on a chart with a 2P side', () => {
     expect(classOf({ autoScratch1P: false, autoScratch2P: true })).toBe('none');
     expect(classOf({ autoScratch1P: false, autoScratch2P: true }, { notes: [note('11'), note('26')] })).toBe('light');
