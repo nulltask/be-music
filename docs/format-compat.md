@@ -36,7 +36,7 @@ Each de facto claim carries one label:
 - **[V]** verified in the implementation's source code at the commit above.
 - **[R]** read in OpenLR2's reconstruction of LR2 beta3 100201. It is the best available evidence for LR2, but it is a rewrite, not LR2's own source.
 - **[C]** community knowledge: documented by hitkey or LR2oraja's author, not checked in code.
-- **[D]** read in the disassembly of a program's own executable, cited by address: LR2 beta3's `LR2body.exe` where OpenLR2 strays from the program (note drawing, [§2.18](#218-note-drawing)), nanasigroove 1.552's `nanasi.exe` (`#EXWAVxx`), and plugout4's `plugout4.exe` ([§7](#7-lrx)).
+- **[D]** read in the disassembly of a program's own executable, cited by address: LR2 beta3's `LR2body.exe` where OpenLR2 strays from the program (note drawing, [§2.18](#218-note-drawing)), nanasigroove 1.552's `nanasi.exe` (`#EXWAVxx`), Nanasi Groove 2's `nanasi2.exe` (its `.n2s` containers) and plugout4's `plugout4.exe` (LRX).
 - **[I]** inferred from the absence of evidence (for example, a command that no support list mentions).
 
 "Undefined" means no de jure source says anything.
