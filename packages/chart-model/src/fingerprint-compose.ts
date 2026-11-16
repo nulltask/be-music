@@ -84,6 +84,7 @@ export function expandChartFingerprintDocument(
       total: parseTotal(document.total),
       player3: document.lanes.player3,
       modeHint: document.lanes.modeHint ?? null,
+      lrxLaneType: document.lanes.lrxLaneType ?? null,
       barLines: true,
       playOptions: { ...document.playOptions },
     },

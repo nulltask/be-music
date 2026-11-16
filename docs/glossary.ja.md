@@ -108,7 +108,7 @@
 
 - **IR (`@be-music/chart-source`)**: BMS/bmson/JSON chart を共通表現として扱う内部中間表現です。外部交換フォーマットではありません。
 - **pure IR**: `@be-music/chart-source` が譜面意味論を持たず、正規化済みデータ構造と preservation data の保持に徹する設計方針です。
-- **sourceFormat**: その IR がもともと `bms`、`bmson`、`json` のどれから来たかを示す属性です。
+- **sourceFormat**: その IR がもともと `bms`、`bmson`、`lrx`、`json` のどれから来たかを示す属性です。
 - **round-trip**: `parse -> IR -> stringify` の往復で、元の譜面構造をできるだけ再現することです。
 - **preservation**: round-trip のために source-level 情報を保持する補助レイヤーです。正規化済みの `events` / `measures` とは分けて管理します。
 - **sourceLines**: BMS の header、object、control-flow 行を宣言順で保持する preservation 情報です。
@@ -166,7 +166,7 @@
 - **投げ（give up）**: コースの実行を ESC で抜けること。投げた実行は落ちた実行です。
 - **結合したプレイ（stitched play）**: NONSTOP のコースを遊ぶ 1 本の譜面。ステージをつなぎ方と配置に従って結合して作ります。
 - **IR フラグ（IR flag）**: コースの実行をランキングに入れるかどうか。LR2 の `ir` 列（ここでの IR は LR2 のインターネットランキングで、譜面の IR ではありません）、beatoraja の `release` にあたり、コードでは `release` と呼びます。プレイヤーが作ったコースは未登録で始まり、登録は一方向で、登録したコースは読み取り専用になります。
-- **判定ルールセット（judge ruleset）**: プレイを判定し順位付けする基準のゲーム。判定幅・ゲージ・ランプが決まります。`lr2`・`beatoraja`・`____`。
+- **判定ルールセット（judge ruleset）**: プレイを判定し順位付けする基準のゲーム。判定幅・ゲージ・ランプが決まります。`lr2`・`beatoraja`・`____`・`plugout`。
 - **ゲージの種類（gauge type）**: プレイヤーが選ぶゲージ。LR2 の名前で `GROOVE`・`HARD`・`DEATH`・`EASY`（`GaugeType`）。判定ルールセットはそれぞれ自分のゲージで遊ばせ、そのゲージはゲージ ID（`NORMAL`・`HAZARD`・`CLASS` など）で呼びます。
 - **クリアランプ（clear lamp）**: プレイで得たクリアの区分（FAILED〜MAX、`ClearLamp`）。保存する番号は追加専用で、順序ではありません（ASSIST EASY と EASY の間の LIGHT ASSIST EASY は 10）。判定ルールセットごとに付く範囲が違います。どのプレイも 1 つの規則で決めます（`@be-music/player-engine/ruleset` の `resolveClearLamp`、`resolveCourseClearLamp`）。
 - **アシスト区分（assist class）**: プレイがどれだけアシストを受けたかを、各オプションの参照元の規則で表したもの。`none`・`light`・`assist`・`no-save`（`@be-music/player-engine/records` の `AssistClass`、`classifyReplayAssists`）。その結果どうなるかは判定ルールセットが決めます（`resolveRecordPolicy`）。

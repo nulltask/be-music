@@ -431,7 +431,7 @@ function parseImageResizeAlgorithmArg(raw: string | undefined): ImageResizeAlgor
 export function printUsage(): void {
   process.stdout.write(
     [
-      'Usage: bms-player <input.(bms|bme|bml|pms|bmson|json)|directory> [options]',
+      'Usage: bms-player <input.(bms|bme|bml|pms|bmson|lrs|json)|directory> [options]',
       '',
       'Essential options:',
       '  --auto                    Enable auto play mode (default: off)',
@@ -481,7 +481,7 @@ export function printUsage(): void {
       'Developer/debug:',
       '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
       '  --bmson-total-mode <mode>  bmson TOTAL 0: beatoraja (default) | spec (no recovery)',
-      '  --ruleset <name>       Compat ruleset: lr2 (default) | beatoraja | ____',
+      '  --ruleset <name>       Compat ruleset: lr2 (default) | beatoraja | ____ | plugout',
       `  --gauge <name>         Gauge: GROOVE (default) | ${CLI_GAUGES.slice(1).join(' | ')},`,
       "                         or <source>:<NAME> for a source's gauge under any ruleset (lr2:HARD, beatoraja:EX-HARD)",
       '  --no-end-on-failure    Keep playing after a survival gauge empties (default: the play ends there)',

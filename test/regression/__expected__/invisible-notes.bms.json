@@ -301,6 +301,29 @@
               "cleared": false
             }
           },
+          "plugout": {
+            "ruleset": "plugout/0",
+            "judge": {
+              "pgreat": 0,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 16,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 0,
+            "noteCount": 16,
+            "maxCombo": 0,
+            "djLevel": "F",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 2,
+              "cleared": false
+            },
+            "score": 0
+          },
           "engine": {
             "lr2": {
               "total": 16,
@@ -451,6 +474,29 @@
               "cleared": true
             }
           },
+          "plugout": {
+            "ruleset": "plugout/0",
+            "judge": {
+              "pgreat": 16,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 0,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 32,
+            "noteCount": 16,
+            "maxCombo": 16,
+            "djLevel": "AAA",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 100,
+              "cleared": true
+            },
+            "score": 100000
+          },
           "engine": {
             "lr2": {
               "total": 16,
@@ -600,6 +646,29 @@
               "final": 98,
               "cleared": true
             }
+          },
+          "plugout": {
+            "ruleset": "plugout/0",
+            "judge": {
+              "pgreat": 6,
+              "great": 4,
+              "good": 2,
+              "bad": 2,
+              "poor": 2,
+              "emptyPoor": 0
+            },
+            "fast": 3,
+            "slow": 3,
+            "exScore": 16,
+            "noteCount": 16,
+            "maxCombo": 6,
+            "djLevel": "C",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 96.8125,
+              "cleared": true
+            },
+            "score": 53125
           },
           "engine": {
             "lr2": {

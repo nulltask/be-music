@@ -336,6 +336,8 @@ export function describeNonstopPrepareFailure(
   const copy = playerText().course;
   const stage = failure.stage !== undefined ? copy.stageNote(failure.stage + 1) : '';
   if (failure.reason === 'generic-layout-mismatch') return copy.nonstopLayout(name, stage);
+  if (failure.reason === 'lrx-mixed') return copy.nonstopLRXMixed(name, stage);
+  if (failure.reason === 'lrx-layout-mismatch') return copy.nonstopLRXLayout(name, stage);
   return copy.nonstopStitch(name, failure.reason, stage);
 }
 

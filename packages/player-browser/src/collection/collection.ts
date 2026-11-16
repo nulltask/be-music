@@ -22,6 +22,7 @@ import {
 import { isMaliciousAssetPath, loadAssetBytes } from './file-lookup.ts';
 import { logger } from '../logger.ts';
 import { parseChartThroughCache, type ParsedChartCache } from './parsed-chart-cache.ts';
+import { loadChartSiblings } from './chart-siblings.ts';
 
 export { loadAssetBytes, loadAssetFile, asLoadedBytes } from './file-lookup.ts';
 export { type BrowserDroppedFile, DeferredDroppedFile, materializeDroppedFiles } from './dropped-file.ts';
@@ -462,8 +463,9 @@ export async function loadChartCollectionFromFiles(
       if (!chartBytes) {
         throw new Error(`chart bytes missing for ${path}`);
       }
+      const siblings = await loadChartSiblings(source.files, path, chartBytes);
       const { chart, scored, packed, strings } = await parseChartThroughCache(
-        { path, bytes: chartBytes },
+        { path, bytes: chartBytes, ...(siblings ? { siblings } : {}) },
         options.parsedChartCache,
       );
       // The scored notes and the play variant they were read under, without timing every note: the list shows a count.

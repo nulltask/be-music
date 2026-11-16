@@ -339,12 +339,15 @@ describe('judge core', () => {
     expect(state.summary.minePoor).toBe(1);
   });
 
-  test.each(['lr2', 'beatoraja', '____'] as const)('%s: a lane held through a mine detonates it', (ruleset) => {
-    const state = createCore(LONG_AND_MINE, ruleset);
-    stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
-    const effects = [...stepJudgeCore(state, advance(2.49)), ...stepJudgeCore(state, advance(2.6))];
-    expect(effects.filter((effect) => effect.kind === 'trace' && effect.name === 'mine-hit')).toHaveLength(1);
-  });
+  test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
+    '%s: a lane held through a mine detonates it',
+    (ruleset) => {
+      const state = createCore(LONG_AND_MINE, ruleset);
+      stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
+      const effects = [...stepJudgeCore(state, advance(2.49)), ...stepJudgeCore(state, advance(2.6))];
+      expect(effects.filter((effect) => effect.kind === 'trace' && effect.name === 'mine-hit')).toHaveLength(1);
+    },
+  );
 
   test.each([
     ['lr2', 0],
@@ -478,7 +481,7 @@ describe('judge core', () => {
       ).toEqual([hits, hits, hits]);
     });
 
-    test.each(['lr2', 'beatoraja', '____'] as const)(
+    test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
       '%s: a key let go in the frame right after the crossing detonates',
       (r) => {
         expect(
@@ -490,7 +493,7 @@ describe('judge core', () => {
       },
     );
 
-    test.each(['lr2', 'beatoraja', '____'] as const)(
+    test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
       '%s: at the same µs, the input comes before the crossing',
       (ruleset) => {
         // Down exactly at the crossing is down as it crosses.
@@ -657,7 +660,7 @@ describe('judge core', () => {
     expect(state.activeLongNotes.size).toBe(0);
   });
 
-  test.each(['lr2', 'beatoraja', '____'] as const)(
+  test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
     '%s: a replay produces the same effects however its advances are spaced',
     (ruleset) => {
       const stream = inputs(
@@ -685,7 +688,7 @@ describe('judge core', () => {
 });
 
 describe('practice start', () => {
-  for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+  for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
     test(`${ruleset}: consumes earlier heads and tails without judgments or gauge changes`, () => {
       const state = createCore(LONG_AND_MINE, ruleset, { practiceFromSeconds: 2.75 });
       const gauge = state.summary.gauge?.current;

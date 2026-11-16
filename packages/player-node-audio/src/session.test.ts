@@ -255,3 +255,35 @@ describe('bmson slice fades', () => {
     for (const value of mixed) expect(value).toBeCloseTo(0.5, 6);
   });
 });
+
+describe('voices with their own rate and balance', () => {
+  const sampleRate = 8000;
+  const ramp = Float32Array.from({ length: 8000 }, (_, i) => i / 8000);
+  const sample = { sampleRate, left: ramp, right: ramp, durationSeconds: 1, peak: 1 };
+
+  test('a voice reads its source at its rate and attenuates the far channel', () => {
+    const voice: ActiveVoice = {
+      sample,
+      gain: 1,
+      rate: 0.5,
+      leftGain: 0.5,
+      rightGain: 1,
+      ...resolveVoiceFrameWindow(ramp.length, sampleRate, undefined)!,
+    };
+    const left = new Float32Array(4);
+    const right = new Float32Array(4);
+    mixActiveVoices(left, right, [voice], 4);
+    expect([...right].map((value) => value * 8000)).toEqual([0, 0.5, 1, 1.5].map((frame) => expect.closeTo(frame, 6)));
+    expect(left[2]! * 8000).toBeCloseTo(0.5, 6);
+  });
+
+  test('a release widens the window past its length', () => {
+    const window = resolveVoiceFrameWindow(8000, sampleRate, {
+      offsetSeconds: 0,
+      durationSeconds: 0.25,
+      releaseSeconds: 0.1,
+    })!;
+    expect(window).toMatchObject({ startPosition: 0, endPosition: 2800 });
+    expect(window.slice?.envelope).toEqual({ fadeIn: 0, fadeOut: 800 });
+  });
+});

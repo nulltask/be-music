@@ -1,6 +1,7 @@
 import { isBmsonRecoveryDisabled, type BmsonTotalMode } from './bmson-total.ts';
 import { applyChartGaugeModifiers, applyChartJudgeModifiers, type ChartJudgeModifiers } from './chart-judge.ts';
 import { applyCustomJudgeTables, type BeatorajaCustomJudge } from './custom-judge.ts';
+import { BEATORAJA_MODES, resolveBeatorajaMode } from './beatoraja-windows.ts';
 import { createLR2GoodAttackGauge, createLR2PerfectAttackGauge } from './lr2-attack.ts';
 import type { GaugeJudgeIndex } from './gauge.ts';
 import type { GaugeAutoShift, GaugeShiftBottom } from './gauge-type.ts';
@@ -30,8 +31,10 @@ import {
   resolveCourseGaugeId,
   type RulesetCourseOptions,
 } from './course.ts';
-import { countBaseNotes, type RulesetChartFacts, type RulesetNoteCounts } from './facts.ts';
+import { countBaseNotes, withoutRulesetNotes, type RulesetChartFacts, type RulesetNoteCounts } from './facts.ts';
 import { isChargeLongNoteMode, resolveEffectiveLongNoteMode } from './long-note.ts';
+import { resolvePlugoutDefaultTotal, resolvePlugoutGauge, resolvePlugoutGaugeId } from './plugout.ts';
+import { resolvePlugoutRuleset } from './plugout-ruleset.ts';
 
 /**
  * Ruleset tables for the replay simulators.
@@ -68,7 +71,7 @@ export interface RulesetWindowTables {
 }
 
 /** Every supported judge ruleset id, in canonical display order. */
-export const RULESET_IDS = ['lr2', 'beatoraja', '____'] as const;
+export const RULESET_IDS = ['lr2', 'beatoraja', '____', 'plugout'] as const;
 
 export type RulesetId = (typeof RULESET_IDS)[number];
 
@@ -157,6 +160,17 @@ export interface GaugeSpec {
   /** Low-gauge damage reduction steps (first match wins). */
   guts: readonly GaugeGutsStep[];
   /**
+   * plugout's grade gauges: damage scales by `base + perGauge × value` (the value before the judgment) while the gauge
+   * is above 0, instead of `guts`.
+   */
+  damageScale?: { base: number; perGauge: number };
+  /**
+   * plugout's grade NORMAL / EASY: on reaching 0 the gauge does not fail but plays on `initial` lives, each judgment
+   * costing `costs[judge]` (`[PG, GR, GD, BD, missPOOR, emptyPOOR]`); it fails when none are left, and clears while any
+   * are.
+   */
+  lives?: { initial: number; costs: readonly [number, number, number, number, number, number] };
+  /**
    * beatoraja: the gauge, its deltas and every update run in Java `float` (`GrooveGauge.Gauge`), so each step rounds to
    * float32. LR2 keeps HP and its deltas in `double` (#1090).
    */
@@ -176,6 +190,11 @@ export interface RulesetConfig {
   selection: BeatorajaJudgeAlgorithm;
   /** LR2: after a tap BAD, re-judge the next tap on that lane with the same press until a non-BAD stops it. */
   multiBad: boolean;
+  /**
+   * How far after the press, in µs, a note {@link multiBad} re-judges may lie (exclusive). Absent: the BAD window's early
+   * edge (LR2). plugout re-runs the press only on a note earlier than 3 ms after it (`plugout4.exe` 0x4407c4..0x4407fa).
+   */
+  multiBadAheadUs?: number;
   /** LR2: a long-note head is never judged as a LATE bad — the press is ignored instead. */
   ignoreLateBadOnLNHead: boolean;
   longNoteStyle: LongNoteStyle;
@@ -225,6 +244,22 @@ export interface RulesetConfig {
   effectiveTotal: number;
   /** LR2 money score (`(4PG + 2GR + GD) × 50000 / notes`, floored). */
   moneyScore: boolean;
+  /** plugout's score (`100000·PG/n + 50000·GR/n + 25000·GOOD/n`) instead of the EX-SCORE or LR2's money score. */
+  plugoutScore?: boolean;
+  /**
+   * What a charge-note tail still held past its end becomes. Absent: a missed POOR once the tail's late window closes
+   * (beatoraja, AC). plugout: a key lane's tail is a BAD at that point, and a scratch lane's tail is a PGREAT as soon as
+   * the end is reached (0x440d75..0x440f5b); a release before the tail's windows is a BAD, not a POOR (0x4408bf).
+   */
+  heldChargeTail?: { note: 'BAD'; scratch: 'PGREAT'; earlyRelease: 'BAD' };
+  /**
+   * How a press with nothing to judge picks its lane's sound. Absent: the last note whose early window has opened
+   * (LR2's lane sound hold). `plugout`: the lane's sound cursor, moved by judged presses, long-note releases and hidden
+   * notes (`core/plugout-lane-sound.ts`). Audio only: no judgment or score depends on it.
+   */
+  laneSound?: 'plugout';
+  /** plugout: AUTO SCRATCH notes only sound; they are neither judged nor counted (0x43fa2e, 0x43e1a4). */
+  autoScratchUnjudged?: boolean;
   /**
    * Whether the ruleset's own result screen folds empty POORs into its POOR counter. LR2 does — OpenLR2's
    * `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch and LR2 exposes no separate stat —
@@ -238,6 +273,10 @@ export interface RulesetConfig {
 }
 
 export interface ResolveRulesetOptions {
+  /** The notes AUTO SCRATCH plays. plugout leaves them out of judging and the note count (0x43e1a4). */
+  autoScratchNotes?: RulesetNoteCounts;
+  /** Judged notes plugout leaves out of its note count: LRX chain notes that start their lane (0x43c071). */
+  uncountedNotes?: RulesetNoteCounts;
   /** bmson zero-total policy. Absent retains beatoraja-compatible recovery. */
   bmsonTotalMode?: BmsonTotalMode;
   /** Forces a specific ruleset-scoped gauge id (see the gauge tables), bypassing {@link selectedGauge} mapping. */
@@ -320,56 +359,6 @@ function resolveBeatorajaJudgeRank(chart: RulesetChartFacts, rankTable: readonly
     return rankTable[rank]!;
   }
   return rankTable[2]!;
-}
-
-interface BeatorajaModeWindows {
-  note: readonly number[];
-  scratch?: readonly number[];
-  longNoteEnd: readonly number[];
-  longScratchEnd?: readonly number[];
-  rankTable: readonly number[];
-  /** Which judge windows scale with judgerank (`[PG, GR, GD, BD]`; MS is always fixed). */
-  scaled: readonly [boolean, boolean, boolean, boolean];
-}
-
-// beatoraja JudgeProperty flat tables: {PG late, PG early, GR..., GD..., BD..., MS late, MS early} in µs.
-const BEATORAJA_MODES: Record<'FIVEKEYS' | 'SEVENKEYS' | 'PMS' | 'KEYBOARD', BeatorajaModeWindows> = {
-  FIVEKEYS: {
-    note: [-20000, 20000, -50000, 50000, -100000, 100000, -150000, 150000, -150000, 500000],
-    scratch: [-30000, 30000, -60000, 60000, -110000, 110000, -160000, 160000, -160000, 500000],
-    longNoteEnd: [-120000, 120000, -150000, 150000, -200000, 200000, -250000, 250000],
-    longScratchEnd: [-130000, 130000, -160000, 160000, -110000, 110000, -260000, 260000],
-    rankTable: [25, 50, 75, 100, 125],
-    scaled: [true, true, true, true],
-  },
-  SEVENKEYS: {
-    note: [-20000, 20000, -60000, 60000, -150000, 150000, -280000, 220000, -150000, 500000],
-    scratch: [-30000, 30000, -70000, 70000, -160000, 160000, -290000, 230000, -160000, 500000],
-    longNoteEnd: [-120000, 120000, -160000, 160000, -200000, 200000, -280000, 220000],
-    longScratchEnd: [-130000, 130000, -170000, 170000, -210000, 210000, -290000, 230000],
-    rankTable: [25, 50, 75, 100, 125],
-    scaled: [true, true, true, true],
-  },
-  PMS: {
-    note: [-20000, 20000, -50000, 50000, -117000, 117000, -183000, 183000, -175000, 500000],
-    longNoteEnd: [-120000, 120000, -150000, 150000, -217000, 217000, -283000, 283000],
-    rankTable: [33, 50, 70, 100, 133],
-    scaled: [false, true, true, false],
-  },
-  KEYBOARD: {
-    note: [-30000, 30000, -90000, 90000, -200000, 200000, -320000, 240000, -200000, 650000],
-    longNoteEnd: [-160000, 25000, -200000, 75000, -260000, 140000, -320000, 240000],
-    rankTable: [25, 50, 75, 100, 125],
-    scaled: [true, true, true, true],
-  },
-};
-
-function resolveBeatorajaMode(laneMode: string): BeatorajaModeWindows {
-  if (laneMode.endsWith(' KEY GENERIC')) return BEATORAJA_MODES.KEYBOARD;
-  if (laneMode.startsWith('5') || laneMode.startsWith('10')) return BEATORAJA_MODES.FIVEKEYS;
-  if (laneMode.startsWith('9')) return BEATORAJA_MODES.PMS;
-  if (laneMode.startsWith('24') || laneMode.startsWith('48')) return BEATORAJA_MODES.KEYBOARD;
-  return BEATORAJA_MODES.SEVENKEYS;
 }
 
 /**
@@ -853,6 +842,7 @@ function resolve____Gauge(gaugeId: string, noteCount: number): GaugeSpec {
 
 /** Maps the replay's LR2-family gauge pick onto each ruleset's own gauge id. */
 function resolveDefaultGaugeId(rulesetId: RulesetId, playGauge: string): string {
+  if (rulesetId === 'plugout') return resolvePlugoutGaugeId(playGauge);
   switch (playGauge) {
     case 'P-ATTACK':
     case 'G-ATTACK':
@@ -904,6 +894,10 @@ function resolveSourceGauges(
     const effectiveTotal = resolveEffectiveTotal('beatoraja', chart, noteCount);
     return { effectiveTotal, gaugeOf: (id) => resolveBeatorajaGauge(id, effectiveTotal, noteCount, chart.laneMode) };
   }
+  if (source === 'plugout') {
+    const effectiveTotal = resolveEffectiveTotal('plugout', chart, noteCount);
+    return { effectiveTotal, gaugeOf: (id) => resolvePlugoutGauge(id, effectiveTotal, noteCount) };
+  }
   return {
     effectiveTotal: resolveEffectiveTotal('____', chart, baseNoteCount),
     gaugeOf: (id) => resolve____Gauge(id, noteCount),
@@ -938,6 +932,12 @@ function resolveSourcePracticeGauges(
       gaugeOf: (id) => resolveBeatorajaGauge(id, effectiveTotal, noteCount, chart.laneMode),
     };
   }
+  if (source === 'plugout') {
+    // plugout has no PRACTICE: PRACTICE's TOTAL (else the chart's) over the judgments issued, starting at `GAUGE VALUE`.
+    const effectiveTotal = practice.total ?? resolveEffectiveTotal('plugout', chart, noteCount);
+    const gaugeOf = (id: string): GaugeSpec => resolvePlugoutGauge(id, effectiveTotal, noteCount);
+    return { effectiveTotal, gauge: startPracticeGauge(gaugeOf(practice.gauge), practice), gaugeOf };
+  }
   const gaugeOf = (id: string): GaugeSpec => resolve____Gauge(id, noteCount);
   return {
     effectiveTotal: resolveEffectiveTotal('____', chart, baseNoteCount),
@@ -952,6 +952,7 @@ function resolveSourcePracticeGauges(
  * reported TOTAL follows the `lr2` curve.
  */
 function resolveDefaultTotal(rulesetId: RulesetId, baseNoteCount: number, laneMode: string): number {
+  if (rulesetId === 'plugout') return resolvePlugoutDefaultTotal(baseNoteCount);
   if (rulesetId === 'beatoraja' && resolveBeatorajaMode(laneMode) === BEATORAJA_MODES.KEYBOARD)
     return Math.max(300, (7.605 * (baseNoteCount + 100)) / (0.01 * baseNoteCount + 6.5));
   return rulesetId === 'beatoraja'
@@ -1150,6 +1151,12 @@ function resolveRulesetTables(
   if (gaugeSource === 'lr2' && (selectedGauge === 'EX-HARD' || selectedGauge === 'ASSIST-EASY')) {
     throw new RangeError(`LR2 beta3 has no ${selectedGauge} gauge.`);
   }
+  if (gaugeSource === 'plugout' && selectedGauge === 'ASSIST-EASY') {
+    throw new RangeError('plugout has no ASSIST-EASY gauge.');
+  }
+  if (gaugeSource !== 'plugout' && ['EX-GROOVE', 'EX-EASY', 'EX-DEATH'].includes(selectedGauge)) {
+    throw new RangeError(`Only plugout has a ${selectedGauge} gauge.`);
+  }
   const gaugeId =
     options.gauge ??
     (course === undefined
@@ -1175,6 +1182,7 @@ function resolveRulesetTables(
       { ...stage, initialGauge: stage.initialGauges?.[id] ?? stage.initialGauge },
       chart.laneMode,
       resolveLR2HardDamageMultiplier(total, notes),
+      notes,
     );
     return courseMineFloor === undefined ? spec : { ...spec, mineFloor: courseMineFloor };
   };
@@ -1397,6 +1405,27 @@ function resolveRulesetTables(
       moneyScore: false,
       emptyPoorCountsInPoorDisplay: false,
     };
+  }
+
+  if (rulesetId === 'plugout') {
+    // Long notes count twice: the tail is a judgment of its own (0x43c050), and TOTAL's default counts it too.
+    const played = withoutRulesetNotes(withoutRulesetNotes(chart, options.autoScratchNotes), options.uncountedNotes);
+    const noteCount = countRulesetNotes(played, 'charge');
+    const effectiveTotal = practice?.total ?? resolveEffectiveTotal('plugout', played, noteCount);
+    return resolvePlugoutRuleset({
+      chart: played,
+      practice,
+      gaugeId,
+      gaugeSource,
+      noteCount,
+      effectiveTotal,
+      overrideBadMs,
+      constrain,
+      startPracticeGauge,
+      courseGauge: (total, notes) => courseGauge(total, notes),
+      shiftGauges,
+      borrowedGauges,
+    });
   }
 
   const noteCount = countRulesetNotes(chart, 'charge');

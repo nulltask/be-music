@@ -11,7 +11,7 @@ beatoraja skin's IR ops).
 
 ## 1. Scope
 
-The service verifies chart and course replays and stores results and personal bests under `lr2`, `beatoraja` and `____`. Be-Music Fingerprints identify charts. Public pages show scores, charts, courses and players, with share images for scores.
+The service verifies chart and course replays and stores results and personal bests under `lr2`, `beatoraja`, `____` and `plugout`. Be-Music Fingerprints identify charts. Public pages show scores, charts, courses and players, with share images for scores.
 
 The protocol does not guarantee human input. The service does not distribute chart or audio assets.
 
@@ -76,7 +76,7 @@ trust. The service does not enforce a minimum client version.
 
 ### 5.2 Sequence
 
-The [package README flowchart](../packages/app-leaderboard/README.md) shows the processing order: authentication and rate limits, input validation, duplicate detection, fingerprint verification, simulation under three rulesets, then R2 and D1 storage.
+The [package README flowchart](../packages/app-leaderboard/README.md) shows the processing order: authentication and rate limits, input validation, duplicate detection, fingerprint verification, simulation under four rulesets, then R2 and D1 storage.
 
 Resubmitting the same play from its owner returns the stored result; submission from another account is rejected. Unknown charts require a chart document. R2 writes precede the D1 update. Share images are uploaded through a separate API after the score submission.
 
@@ -96,8 +96,8 @@ L5 (equivalence of replay notes and play-document timings) and input anomaly det
 
 A manual play that seeks is practice (`PlayResult.practice`). Its first seek discards the replay recorder, and beatoraja PRACTICE records none, so neither has a replay to send: the web app skips best-record writes, Leaderboard submission and replay auto-save for that result, even if a host supplies replay data alongside it. Seeking a course stage or NONSTOP run also excludes the entire course and every later stage; course results remain available without a replay. Sending practice plays needs their range in the replay, and is left to a later change.
 
-- **Three rulesets.** Every play is re-simulated under `lr2`, `beatoraja` and `____`, and appears in all three
-  rankings. The ruleset the player actually played (`play.judgeRuleset`) is stored and shown as a mark, and a ranking
+- **Four rulesets.** Every play is re-simulated under `lr2`, `beatoraja`, `____` and `plugout`, and appears in all
+  four rankings. The ruleset the player actually played (`play.judgeRuleset`) is stored and shown as a mark, and a ranking
   can be filtered to "played under this ruleset" only.
 - **Re-judging outcomes** ([ADR 0019](./adr/0019-source-qualified-option-values.md), `rejudgeReplay` in
   [Replays](./replay.md#re-judging-under-another-ruleset)): a ruleset that cannot read the play (a gauge it does not
@@ -160,7 +160,7 @@ with its own rankings per ruleset, and never as single-chart plays.
   be here, not a reason to refuse it. The stages must be judged under one ruleset, play under the course's constraints
   (its gauge set and judge constraint, and a lane option the course allows), and carry in exactly what the previous
   stage left once re-simulated (gauge, course combo and course max combo; the first stage carries in nothing). The run
-  is re-simulated under `lr2`, `beatoraja` and `____` with `simulateCourseReplay`; the client's cached results are
+  is re-simulated under `lr2`, `beatoraja`, `____` and `plugout` with `simulateCourseReplay`; the client's cached results are
   ignored.
 - **Unreached stages.** Their notes count as BP, so their note counts must not be the client's word. Every unreached
   stage's chart is required (`stage-chart-required`), must hash to the chart fingerprint the log names for the stage
@@ -232,7 +232,7 @@ sequenceDiagram
     end
     A->>A: simulateCourseReplay under the played ruleset
     A->>A: constraints, carry-in, failed vs given up
-    A->>A: simulateCourseReplay under lr2, beatoraja, ____
+    A->>A: simulateCourseReplay under lr2, beatoraja, ____, plugout
     A->>R: PUT course replay, new chart documents
     A->>D: batch: charts, course, course score + results, course bests
     A-->>C: 201 { courseScoreId, courseFingerprint, results, ranks }

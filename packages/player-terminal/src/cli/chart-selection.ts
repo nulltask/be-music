@@ -5,7 +5,13 @@ import { dirname, extname, relative, resolve } from 'node:path';
 import { isAbortError, throwIfAborted } from '@be-music/shared-utils/core';
 import { invokeWorkerizedFunction, workerize } from '@be-music/shared-utils/workerize';
 import { type BeMusicJSON, type BeMusicPlayLevel } from '@be-music/chart-source';
-import { decodeBMSText, parseChart, resolveBMSControlFlow } from '@be-music/chart-parser';
+import {
+  decodeBMSText,
+  parseChart,
+  parseChartFile,
+  resolveBMSControlFlow,
+  resolveLRXHeaderPath,
+} from '@be-music/chart-parser';
 import { resolveChart, type ResolvedChart } from '@be-music/chart-model';
 import {
   estimateDifficultyFromNames,
@@ -117,7 +123,7 @@ export interface ListChartFilesOptions {
   signal?: AbortSignal;
 }
 
-const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
+const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson', '.lrs']);
 const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/7';
 const CHART_SELECTION_BUILD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism()));
 let buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
@@ -224,7 +230,12 @@ async function buildChartSummaryWithCache(
     }
   }
 
-  const contentHash = sourceBuffer ? buildChartSelectionContentHash(sourceBuffer) : undefined;
+  // An LRX chart's title and levels live in the `.lrh` beside it, so its bytes take part in the hash.
+  const headerBuffer =
+    sourceBuffer && extname(filePath).toLowerCase() === '.lrs'
+      ? await readFile(resolveLRXHeaderPath(filePath), { signal }).catch(() => undefined)
+      : undefined;
+  const contentHash = sourceBuffer ? buildChartSelectionContentHash(sourceBuffer, headerBuffer) : undefined;
   const cachedEntry = typeof contentHash === 'string' ? cachedEntries[contentHash] : undefined;
   if (
     cachedEntry &&
@@ -471,9 +482,12 @@ async function buildChartSummary(
   let difficulty: number | undefined;
   try {
     throwIfAborted(signal);
-    const chart = sourceBuffer
-      ? parseChartSelectionSourceBuffer(filePath, sourceBuffer)
-      : await parseChartFileWithCacheMiss(filePath, signal);
+    const chart =
+      extname(filePath).toLowerCase() === '.lrs'
+        ? await parseChartFile(filePath, { signal })
+        : sourceBuffer
+          ? parseChartSelectionSourceBuffer(filePath, sourceBuffer)
+          : await parseChartFileWithCacheMiss(filePath, signal);
     throwIfAborted(signal);
     const resolvedChart = resolveBMSControlFlow(chart, { random: () => 0 });
     const resolved = resolveChart(resolvedChart, { chartPath: filePath });
@@ -579,8 +593,10 @@ export function resolveChartSummaryDifficulty(chart: {
   return counted !== undefined ? { value: counted, basis: 'notes' } : undefined;
 }
 
-function buildChartSelectionContentHash(sourceBuffer: Buffer): string {
-  return createHash('sha256').update(sourceBuffer).digest('hex');
+function buildChartSelectionContentHash(sourceBuffer: Buffer, headerBuffer?: Buffer): string {
+  const hash = createHash('sha256').update(sourceBuffer);
+  if (headerBuffer) hash.update(headerBuffer);
+  return hash.digest('hex');
 }
 
 function buildChartSelectionCacheHash(entry: { contentHash: string; summary: PersistedChartSummaryItem }): string {

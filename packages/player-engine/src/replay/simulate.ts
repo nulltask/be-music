@@ -1,6 +1,7 @@
 import { AnyKeyRoutes, anyKeyRouteKeys, selectAnyKeyLane, type AnyKeyCandidate } from '../core/any-key.ts';
+import { resolvePlugoutScore } from '../ruleset/plugout.ts';
 import { resolveAutoScratchSides } from '../core/auto-scratch.ts';
-import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart-model';
+import { resolveScratchChannels } from './scratch-channels.ts';
 import { resolve____RankLabel } from '../ruleset/score.ts';
 import type { BeMusicReplay, ReplayInputEvent, ReplayRulesetResult } from './format.ts';
 import {
@@ -100,7 +101,12 @@ export type ReplayJudgmentObserver = (event: ReplayJudgmentEvent) => void;
 const JUDGMENT_KINDS: readonly ReplayJudgmentKind[] = ['pgreat', 'great', 'good', 'bad', 'poor', 'empty-poor'];
 
 /** The rulesets `simulateReplay` scores under, in display order. */
-export const REPLAY_SIMULATOR_RULESETS: readonly ['lr2', 'beatoraja', '____'] = ['lr2', 'beatoraja', '____'];
+export const REPLAY_SIMULATOR_RULESETS: readonly ['lr2', 'beatoraja', '____', 'plugout'] = [
+  'lr2',
+  'beatoraja',
+  '____',
+  'plugout',
+];
 
 /**
  * Re-derives one ruleset's judgments / EX-SCORE / combo / gauge from a replay's canonical data (resolved chart +
@@ -132,7 +138,12 @@ export function simulateReplay(replay: BeMusicReplay, options: SimulateReplayOpt
   }
   const config = resolveRulesetConfig(replay, options.ruleset, options);
   const endOnFailure =
-    options.endOnFailure ?? resolveGaugeEndOnFailure(replay.play.gaugeAutoShift, replay.play.endOnFailure === true);
+    options.endOnFailure ??
+    resolveGaugeEndOnFailure(
+      replay.play.gaugeAutoShift,
+      replay.play.endOnFailure === true,
+      replay.play.course === undefined ? config.gaugeSource : undefined,
+    );
   return new ReplaySimulation(replay, config, endOnFailure, options.onJudgment, options.onFailure).run();
 }
 
@@ -381,7 +392,12 @@ class ReplaySimulation {
     if (this.course !== undefined) {
       result.course = { combo: this.course.combo, maxCombo: this.course.maxCombo };
     }
-    if (this.config.moneyScore) {
+    if (this.config.plugoutScore === true) {
+      result.score = resolvePlugoutScore(
+        { pgreat: this.counts[JUDGE_PGREAT]!, great: this.counts[JUDGE_GREAT]!, good: this.counts[JUDGE_GOOD]! },
+        this.config.noteCount,
+      );
+    } else if (this.config.moneyScore) {
       const notes = Math.max(1, this.config.noteCount);
       result.score = Math.floor(
         ((4 * this.counts[JUDGE_PGREAT]! + 2 * this.counts[JUDGE_GREAT]! + this.counts[JUDGE_GOOD]!) * 50000) / notes,
@@ -407,6 +423,8 @@ class ReplaySimulation {
         continue;
       }
       const lane = this.laneFor(note.channel, autoPlay, autoScratch);
+      // plugout's AUTO SCRATCH only sounds its notes: they are neither judged nor counted.
+      if (this.config.autoScratchUnjudged === true && lane.auto && !autoPlay && note.type !== 'mine') continue;
       if (note.type === 'mine') {
         lane.mines.push({ timeUs: note.timeUs, damage: note.damage ?? 0, applied: false });
         continue;
@@ -616,14 +634,21 @@ class ReplaySimulation {
         hold.note.judged = true;
         this.applyJudge(hold.headJudge ?? JUDGE_BAD, hold.headDmUs);
       } else {
-        // Charge tail held past its late window — the tail resolves as a missed POOR (beatoraja / That-Which-Must-Not-Be-Named).
+        // Charge tail held past its late window — the tail resolves as a missed POOR (beatoraja / That-Which-Must-Not-Be-Named);
+        // under plugout a key's is a BAD, and a scratch's a PGREAT already at its end (`heldChargeTail`).
         const lane = event.lane;
         const hold = lane.hold;
         if (!hold || hold.note !== event.note) continue;
         lane.hold = undefined;
         hold.note.holding = false;
         hold.note.judged = true;
-        this.applyJudge(JUDGE_MISS_POOR, undefined);
+        const heldTail = this.config.heldChargeTail;
+        if (heldTail === undefined) {
+          this.applyJudge(JUDGE_MISS_POOR, undefined);
+        } else {
+          this.judgingAt(event.timeUs, lane, hold.note);
+          this.applyJudge(hold.note.scratch ? JUDGE_PGREAT : JUDGE_BAD, hold.note.endTimeUs! - event.timeUs);
+        }
       }
     }
 
@@ -861,9 +886,11 @@ class ReplaySimulation {
           endWindows,
         );
       } else {
-        // CN / HCN tail: judged by the release timing; early releases beyond the windows are POOR.
+        // CN / HCN tail: judged by the release timing; early releases beyond the windows are POOR (BAD under plugout,
+        // `heldChargeTail.earlyRelease`).
         const endJudge = classifyJudge(dmUs, endWindows);
-        released = { judge: endJudge === JUDGE_NONE ? JUDGE_MISS_POOR : endJudge, dmUs };
+        const outside = this.config.heldChargeTail !== undefined && dmUs > 0 ? JUDGE_BAD : JUDGE_MISS_POOR;
+        released = { judge: endJudge === JUDGE_NONE ? outside : endJudge, dmUs };
       }
       const marginUs = note.scratch
         ? this.config.longNoteReleaseMarginUs.scratch
@@ -998,8 +1025,13 @@ class ReplaySimulation {
     });
     lane.hold = {
       note,
-      tailMissDeadlineUs: note.endTimeUs! + judgeWindowLateReachUs(endWindows),
-      ...(isBackSpinScratch(style, lane.scratch)
+      // plugout settles a scratch held to its end at the end itself (`heldChargeTail`).
+      tailMissDeadlineUs:
+        this.config.heldChargeTail !== undefined && note.scratch
+          ? note.endTimeUs!
+          : note.endTimeUs! + judgeWindowLateReachUs(endWindows),
+      // plugout has no back-spin scratch: a release ends a scratch charge like a key's.
+      ...(this.config.heldChargeTail === undefined && isBackSpinScratch(style, lane.scratch)
         ? { backSpinScratch: true as const, ...(source !== undefined ? { headSource: source } : {}) }
         : {}),
     };
@@ -1103,6 +1135,7 @@ class ReplaySimulation {
       if (note.isLong) break;
       const deltaUs = note.timeUs - timeUs;
       if (deltaUs < bad[0] || deltaUs > bad[1]) break;
+      if (this.config.multiBadAheadUs !== undefined && deltaUs >= this.config.multiBadAheadUs) break;
       const judge = classifyRulesetJudge(deltaUs, set);
       if (judge === RULESET_JUDGE_NONE || judge > JUDGE_BAD) break;
       note.judged = true;
@@ -1201,28 +1234,6 @@ function windowSetFor(candidate: SelectionCandidate, windows: RulesetWindowTable
 }
 
 /** Play-mode layout per leading key count, for lane-mode strings that are not a layout label (`'7keys'`, `'14K'`). */
-const LAYOUT_BY_KEY_COUNT: Readonly<Record<string, PlayModeLayoutId>> = {
-  '5': '5',
-  '7': '7',
-  '9': '9-pms',
-  '10': '10',
-  '14': '14',
-  '24': '24',
-  '48': '48',
-};
-
-/**
- * The scratch lanes of a recorded lane mode: the lanes the play-mode table marks `scratch` in the layout the engine
- * played (`ReplayChart.laneMode` is its label), the same set the engine binds as scratch. Other spellings resolve by
- * their leading key count, as the ruleset reads the lane mode, with 7 KEY for anything else.
- */
-function resolveScratchChannels(laneMode: string): ReadonlySet<string> {
-  const layout =
-    Object.values(PLAY_MODE_LAYOUTS).find((candidate) => candidate.label === laneMode) ??
-    PLAY_MODE_LAYOUTS[LAYOUT_BY_KEY_COUNT[/^\d+/.exec(laneMode)?.[0] ?? ''] ?? '7'];
-  return new Set(layout.lanes.filter((lane) => lane.kind === 'scratch').map((lane) => lane.channel));
-}
-
 /**
  * Index of a lane's first note a press at `timeUs` can reach: the first whose `timeUs - pressUs` is not below `lateUs`
  * (the window's late edge, negative). A lane's notes are sorted by time, so a binary search finds it where a walk from

@@ -52,7 +52,8 @@ function playedRuleset(replay: BeMusicReplay): RulesetId {
 
 /**
  * Whether `ruleset` defines the bare gauge pick `gauge`. A course stage plays the pick on the ruleset's course gauges,
- * which take every pick but the attack gauges outside LR2 and EX-HARD or ASSIST EASY under LR2 (`resolveCourseGaugeId`).
+ * which take every pick but the attack gauges outside LR2, EX-HARD or ASSIST EASY under LR2, ASSIST EASY under plugout,
+ * and plugout's EX picks anywhere else (`resolveCourseGaugeId`).
  */
 function definesGauge(ruleset: RulesetId, pick: GaugePick, courseStage: boolean): boolean {
   const parts = splitGaugePick(pick);
@@ -60,6 +61,9 @@ function definesGauge(ruleset: RulesetId, pick: GaugePick, courseStage: boolean)
   if (parts?.source !== undefined) return true;
   const gauge = parts?.type ?? (pick as GaugeType);
   if (!courseStage) return resolveGaugeTypes(ruleset).includes(gauge);
+  // plugout's course gauges take every pick of its own but ASSIST EASY; its EX picks exist nowhere else.
+  if (ruleset === 'plugout') return gauge !== 'ASSIST-EASY' && gauge !== 'P-ATTACK' && gauge !== 'G-ATTACK';
+  if (gauge === 'EX-GROOVE' || gauge === 'EX-EASY' || gauge === 'EX-DEATH') return false;
   return ruleset === 'lr2'
     ? gauge !== 'EX-HARD' && gauge !== 'ASSIST-EASY'
     : gauge !== 'P-ATTACK' && gauge !== 'G-ATTACK';

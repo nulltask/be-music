@@ -172,7 +172,7 @@ describe('courses', () => {
       ),
     );
     const reference = simulateCourseReplay(own, { ruleset: 'lr2' });
-    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+    for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
       const outcome = rejudgeCourseReplay(course, { ruleset });
       expect(outcome.status, ruleset).toBe('simulated');
       if (outcome.status !== 'simulated') continue;

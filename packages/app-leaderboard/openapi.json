@@ -587,7 +587,8 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "____"
+                              "____",
+                              "plugout"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -669,7 +670,8 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "____"
+                              "____",
+                              "plugout"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -733,7 +735,8 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "____"
+                              "____",
+                              "plugout"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -815,7 +818,8 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "____"
+                              "____",
+                              "plugout"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -1106,7 +1110,8 @@
                       "enum": [
                         "lr2",
                         "beatoraja",
-                        "____"
+                        "____",
+                        "plugout"
                       ],
                       "type": "string",
                       "description": "Ruleset the figures are simulated under."
@@ -1144,7 +1149,8 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "____"
+                              "____",
+                              "plugout"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -1859,7 +1865,8 @@
               "enum": [
                 "lr2",
                 "beatoraja",
-                "____"
+                "____",
+                "plugout"
               ],
               "type": "string"
             },
@@ -2085,7 +2092,8 @@
               "enum": [
                 "lr2",
                 "beatoraja",
-                "____"
+                "____",
+                "plugout"
               ],
               "type": "string"
             },
@@ -2212,7 +2220,8 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "____"
+                              "____",
+                              "plugout"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -2321,7 +2330,8 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "____"
+                              "____",
+                              "plugout"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -2385,7 +2395,8 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "____"
+                              "____",
+                              "plugout"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -2494,7 +2505,8 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "____"
+                              "____",
+                              "plugout"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -2805,7 +2817,8 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "____"
+                              "____",
+                              "plugout"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -2923,7 +2936,8 @@
               "enum": [
                 "lr2",
                 "beatoraja",
-                "____"
+                "____",
+                "plugout"
               ],
               "type": "string"
             },
@@ -3015,7 +3029,8 @@
                       "enum": [
                         "lr2",
                         "beatoraja",
-                        "____"
+                        "____",
+                        "plugout"
                       ],
                       "type": "string",
                       "description": "Ruleset the figures are simulated under."
@@ -3056,7 +3071,8 @@
                             "enum": [
                               "lr2",
                               "beatoraja",
-                              "____"
+                              "____",
+                              "plugout"
                             ],
                             "type": "string",
                             "description": "Ruleset the figures are simulated under."
@@ -4028,7 +4044,8 @@
               "enum": [
                 "lr2",
                 "beatoraja",
-                "____"
+                "____",
+                "plugout"
               ],
               "type": "string"
             },
@@ -4278,7 +4295,8 @@
               "enum": [
                 "lr2",
                 "beatoraja",
-                "____"
+                "____",
+                "plugout"
               ],
               "type": "string"
             },

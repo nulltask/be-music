@@ -3,4 +3,5 @@
  */
 export * from './core/parser.ts';
 export { parseBMSBytes } from './core/bms-bytes.ts';
+export { parseLRX, parseLRXBytes, resolveLRXHeaderPath, resolveLRXMoviePath, type LRXSourceFiles } from './core/lrx.ts';
 export { parseChartFile, type ParseChartFileOptions } from './node-file.ts';

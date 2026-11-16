@@ -1482,6 +1482,8 @@ function formatRuleset(value: string | undefined): string {
       return 'BEATORAJA';
     case '____':
       return '????';
+    case 'plugout':
+      return 'PLUGOUT';
     default:
       return 'LR2';
   }

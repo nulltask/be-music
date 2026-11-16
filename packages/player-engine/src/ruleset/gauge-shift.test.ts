@@ -51,7 +51,7 @@ describe('resolveGaugeShiftBottomIndex', () => {
   });
 
   test('a course starts from its gentlest course gauge whatever the pick', () => {
-    for (const ruleset of ['lr2', 'beatoraja', '____'] as const)
+    for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const)
       expect(resolveGaugeShiftBottomIndex(ruleset, 'GROOVE', 'grade')).toBe(0);
   });
 });

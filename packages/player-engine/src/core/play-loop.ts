@@ -184,6 +184,9 @@ async function playChart(
     // Queue audio against the write head, then judge and render against what is actually audible.
     session.volumeChanges.triggerUntil(tick.scheduledSec);
     session.backgroundAudio.triggerUntil(tick.scheduledSec);
+    // A chain note waits on the clock its press was judged on, so it sounds as long after the press's keysound as it
+    // follows its note in the chart.
+    session.chainSounds.triggerUntil(tick.nowSec);
     judge.judge(tick);
     publishUIFrame(tick.nowSec, beatAtSeconds(tick.nowSec));
     lastFrameSeconds = tick.nowSec;

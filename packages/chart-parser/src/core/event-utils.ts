@@ -16,6 +16,8 @@ import {
   normalizePositiveInt,
 } from '@be-music/shared-utils/core';
 
+import { normalizeLRXEventExtensions } from './lrx-extensions.ts';
+
 type MeasureLengthEntry = BeMusicJSON['measures'][number];
 
 export function normalizeBmsonNoteLength(value: unknown): number | undefined {
@@ -182,6 +184,7 @@ function normalizeRawEvent(
     return undefined;
   }
   const bmson = normalizeEventBmsonExtension(raw.bmson);
+  const lrx = normalizeLRXEventExtensions(raw.lrx);
   return {
     measure,
     channel,
@@ -191,6 +194,7 @@ function normalizeRawEvent(
       ? { bmsLineOrder: raw.bmsLineOrder }
       : {}),
     ...(bmson ? { bmson } : {}),
+    ...(lrx ? { lrx } : {}),
   };
 }
 

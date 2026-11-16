@@ -1,4 +1,10 @@
-import { normalizeChannel, normalizeObjectKey, type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
+import {
+  LRX_TICKS_PER_BEAT,
+  normalizeChannel,
+  normalizeObjectKey,
+  type BeMusicEvent,
+  type BeMusicJSON,
+} from '@be-music/chart-source';
 import { resolveBMSLongNotes, resolveLNOBJLongNotes, type BeatResolver, type ChartPlayVariant } from './index.ts';
 import {
   DEFAULT_LONG_NOTE_MODE,
@@ -39,6 +45,19 @@ export interface ResolvedNote {
   readonly soundEvents?: readonly BeMusicEvent[];
   /** bmson `up`: source slice played when this long note's tail is resolved. */
   readonly endSoundEvent?: BeMusicEvent;
+  /** LRX chain notes that follow this note: played after a press that sounds it (see {@link ResolvedChainSound}). */
+  readonly chainSounds?: readonly ResolvedChainSound[];
+}
+
+/**
+ * An LRX chain note (`cn="1"`) tied to the judged note before it on its lane. plugout plays it whenever a press sounds
+ * that note, `delaySeconds` after the press: as far after the note as it is in the chart (`plugout4.exe` 0x43bbb0 links
+ * the notes, 0x43bcd0 plays them). Its event stays in the background channel for players that do not judge.
+ */
+export interface ResolvedChainSound {
+  readonly event: BeMusicEvent;
+  /** Chart seconds from the note it follows to the chain note, ≥ 0. */
+  readonly delaySeconds: number;
 }
 
 export interface ResolvedNoteLists {
@@ -70,8 +89,8 @@ export interface ResolvedNoteContext {
 
 /**
  * Where a judged long note's tail comes from, exactly: the `#LNOBJ` end object or the closing `#LNTYPE 1` object
- * (`event`), one cell after the last object of an `#LNTYPE 2` run (`after-event`), a bmson length in pulses
- * (`pulses`), or the fixed one-beat FREE ZONE tail (`free-zone`).
+ * (`event`), one cell after the last object of an `#LNTYPE 2` run (`after-event`), a bmson length in pulses or an LRX
+ * length in ticks (`pulses`), or the fixed one-beat FREE ZONE tail (`free-zone`).
  */
 export type JudgedNoteTail =
   | { readonly kind: 'event'; readonly event: BeMusicEvent }
@@ -91,6 +110,9 @@ export interface JudgedNoteEntry {
   readonly tail?: JudgedNoteTail;
 }
 
+/** plugout counts and judges an LRX long note's end, which Be-Music calls a CN. */
+const LRX_LONG_NOTE_MODE: LongNoteMode = 2;
+
 /** A FREE ZONE note's fixed tail, in beats. */
 const FREE_ZONE_BEAT_LENGTH = 1;
 
@@ -106,6 +128,7 @@ interface MutableNote {
   tail?: JudgedNoteTail;
   soundEvents?: BeMusicEvent[];
   endSoundEvent?: BeMusicEvent;
+  chainSounds?: ResolvedChainSound[];
 }
 
 /**
@@ -165,10 +188,15 @@ function resolveMutableJudgedNotes(
     } else if (event.bmson?.l && event.bmson.l > 0 && bmsonResolution !== undefined) {
       note.endBeat = beat + event.bmson.l / bmsonResolution;
       note.tail = { kind: 'pulses', pulses: event.bmson.l };
+    } else if (json.sourceFormat === 'lrx' && event.lrx?.length && event.lrx.length > 0) {
+      note.endBeat = beat + event.lrx.length / LRX_TICKS_PER_BEAT;
+      note.tail = { kind: 'pulses', pulses: event.lrx.length };
     }
     if (note.endBeat !== undefined) {
       note.endSeconds = timing.beatToSeconds(note.endBeat);
-      note.lnMode = resolveBmsonLongNoteMode(event, chartLongNoteType);
+      // plugout judges an LRX long note's end as a note of its own: a CN.
+      note.lnMode =
+        json.sourceFormat === 'lrx' ? LRX_LONG_NOTE_MODE : resolveBmsonLongNoteMode(event, chartLongNoteType);
     }
     notes.push(note);
   }
@@ -191,7 +219,32 @@ function resolveMutableJudgedNotes(
       if (note.endBeat !== undefined) note.endSoundEvent = endSounds.get(endKey(note.channel, note.endBeat));
     }
   }
+  if (json.sourceFormat === 'lrx') linkLRXChainSounds(context, withLNOBJ);
   return { notes: withLNOBJ, shadowed };
+}
+
+/**
+ * Ties each LRX chain note to the judged note before it on its lane, in chart order, as plugout links a lane's notes
+ * (0x43bbb0): a chain note follows the last note of its lane that is not one, together with the chain notes between
+ * them. A chain note with no such note stays a background sound.
+ */
+function linkLRXChainSounds(context: ResolvedNoteContext, notes: MutableNote[]): void {
+  const judged = new Map<BeMusicEvent, MutableNote>();
+  for (const note of notes) judged.set(note.event, note);
+  const previous = new Map<string, MutableNote>();
+  for (const event of context.sortedEvents) {
+    const note = judged.get(event);
+    if (note !== undefined) {
+      previous.set(note.channel, note);
+      continue;
+    }
+    // A hidden chain note is in no lane list in plugout, so it follows nothing.
+    const lane = event.lrx?.chain === true && event.lrx.damage !== 0 ? event.lrx.lane : undefined;
+    const base = lane === undefined ? undefined : previous.get(lane);
+    if (base === undefined) continue;
+    const seconds = context.timing.beatToSeconds(context.beatResolver.eventToBeat(event));
+    (base.chainSounds ??= []).push({ event, delaySeconds: Math.max(0, seconds - base.seconds) });
+  }
 }
 
 /** Resolves the landmines (`Dx` / `Ex`), on the lane they sit on, with their gauge damage. */
@@ -217,10 +270,27 @@ export function resolveMineNotes(context: ResolvedNoteContext): ResolvedNote[] {
   return mines;
 }
 
-/** Resolves the invisible objects (`3x` / `4x`): not judged, but they set the lane's keysound in manual play. */
+/**
+ * Resolves the invisible objects (`3x` / `4x`): not judged, but they set the lane's keysound in manual play. An LRX
+ * hidden (`dmg="0"`) lane note is one too, on its lane, besides the background sound it plays: plugout makes it the
+ * lane's keysound once it plays (`plugout4.exe` 0x43f430), and reads BMS invisible objects as such notes (0x44b00c).
+ */
 export function resolveInvisibleNotes(context: ResolvedNoteContext): ResolvedNote[] {
   const invisible: ResolvedNote[] = [];
   for (const event of context.sortedEvents) {
+    const hiddenLane = event.lrx?.damage === 0 ? event.lrx.lane : undefined;
+    if (hiddenLane !== undefined && context.json.sourceFormat === 'lrx') {
+      const beat = context.beatResolver.eventToBeat(event);
+      invisible.push({
+        kind: 'invisible',
+        channel: hiddenLane,
+        beat,
+        seconds: context.timing.beatToSeconds(beat),
+        sampleKey: normalizeObjectKey(event.value, context.idBase, false),
+        event,
+      });
+      continue;
+    }
     const channel = normalizeChannel(event.channel);
     const side = channel.charCodeAt(0);
     if (!isLaneChannel(channel) || (side !== 0x33 && side !== 0x34)) {
@@ -300,6 +370,7 @@ function freezeJudgedNote(note: MutableNote, idBase: 36 | 62, allowLongKeys: boo
       sampleKey,
       event: note.event,
       ...(note.soundEvents ? { soundEvents: note.soundEvents } : {}),
+      ...(note.chainSounds ? { chainSounds: note.chainSounds } : {}),
     };
   }
   const resolved: {
@@ -316,6 +387,7 @@ function freezeJudgedNote(note: MutableNote, idBase: 36 | 62, allowLongKeys: boo
     sampleKey,
     event: note.event,
     ...(note.soundEvents ? { soundEvents: note.soundEvents } : {}),
+    ...(note.chainSounds ? { chainSounds: note.chainSounds } : {}),
   };
   if (note.freeZone) {
     resolved.freeZone = true;

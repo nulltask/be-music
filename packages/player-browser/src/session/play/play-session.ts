@@ -541,6 +541,8 @@ export class PlaySession extends PlaySessionState {
     this.disposed = true;
     this.detachInput();
     this.stopPlay(options);
+    this.lrxBGA?.dispose();
+    this.lrxBGA = undefined;
     const textures = [...this.bgaTextures.values(), ...this.bgaLayerTextures.values()];
     this.bgaTextures.clear();
     this.bgaLayerTextures.clear();

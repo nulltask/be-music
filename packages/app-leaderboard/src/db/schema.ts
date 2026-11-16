@@ -160,7 +160,7 @@ export const chart = sqliteTable(
     /** `#PLAYLEVEL` / bmson `info.level` as written, and `#DIFFICULTY` (1 BEGINNER .. 5 INSANE), from a replay. */
     playLevel: text('play_level'),
     difficulty: integer('difficulty'),
-    sourceFormat: text('source_format', { enum: ['bms', 'bmson'] }),
+    sourceFormat: text('source_format', { enum: ['bms', 'bmson', 'lrx'] }),
     laneMode: text('lane_mode'),
     /** Raw `#TOTAL` / bmson `info.total`, when the chart wrote one. */
     total: real('total'),

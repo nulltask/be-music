@@ -10,6 +10,8 @@ const japanese: Record<ChartDiagnostic['code'], string> = {
   'missing-reference': '譜面内の参照先が定義されていません。',
   'unsupported-option': '未対応の譜面オプションです。',
   'invalid-option': '無効な譜面オプションです。',
+  'unsupported-lane-type': '未対応のレーン構成です。',
+  'unsupported-channel': '未対応のチャンネルです。',
 };
 
 /** The host's warning list is shared by every select and decide skin. */

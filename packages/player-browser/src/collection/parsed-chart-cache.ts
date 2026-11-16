@@ -19,12 +19,13 @@ export interface ParsedChartCache {
 }
 
 /**
- * What of a chart's path its parse result depends on: bmson or BMS text, and the `.pms` extension that decides the
- * play variant. Two files with the same bytes under the same kind of name parse the same.
+ * What of a chart's path its parse result depends on: bmson, LRX or BMS text, and the `.pms` extension that decides
+ * the play variant. Two files with the same bytes under the same kind of name parse the same.
  */
-export function parsedChartPathKind(path: string): 'bmson' | 'pms' | 'bms' {
+export function parsedChartPathKind(path: string): 'bmson' | 'lrx' | 'pms' | 'bms' {
   const lower = path.toLowerCase();
   if (lower.endsWith('.bmson')) return 'bmson';
+  if (lower.endsWith('.lrs')) return 'lrx';
   if (lower.endsWith('.pms')) return 'pms';
   return 'bms';
 }
@@ -46,6 +47,12 @@ export async function parseChartThroughCache(
   if (cache !== undefined) {
     try {
       key = parsedChartCacheKey(await sha256HexAsync(input.bytes), input.path);
+      // An LRX chart also reads its header and BGA file, so those take part in the key.
+      if (input.siblings !== undefined) {
+        for (const sibling of [input.siblings.lrh, input.siblings.lrm]) {
+          key += `:${sibling === undefined ? '-' : await sha256HexAsync(sibling)}`;
+        }
+      }
       const cached = await cache.get(key);
       if (isParseChartTaskResult(cached)) return cached;
     } catch {
