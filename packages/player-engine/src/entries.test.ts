@@ -16,6 +16,7 @@ describe('designed entries', () => {
       'GUIDE_SOUNDS',
       'PlayerInterruptedError',
       'applyChartPlayOptions',
+      'arrangeChartPlayLanes',
       'autoPlay',
       'createTempoClock',
       'manualPlay',

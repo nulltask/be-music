@@ -20,6 +20,7 @@ export { autoPlay, manualPlay } from './play.ts';
 export { resolveChartRulesetFacts, resolvePlayChart } from './engine-preparation.ts';
 export { createTempoClock, type TempoClock, type TempoClockSegment } from './tempo-clock.ts';
 export { preparePlaybackChart, type PreparedPlaybackChartData } from './bootstrap.ts';
+export { arrangeChartPlayLanes } from './chart-play-lanes.ts';
 export {
   applyChartPlayOptions,
   type ChartPlayArrangement,
