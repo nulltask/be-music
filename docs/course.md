@@ -362,6 +362,8 @@ A course stage runs on the ruleset's course gauge, not on the single-chart gauge
 
 **`beatoraja`** plays every course on its class gauges (`GrooveGauge.create`): GROOVE and EASY map to `CLASS`, HARD to `EXCLASS`, DEATH to `EXHARDCLASS`. The table set comes from the course's `gauge_*` constraint, or from the play mode when it names none (5 / 10 keys → `5k`, PMS → `9k`, 24 / 48 keys → `24k`, otherwise `7k`). They start at 100 with no TOTAL modifier. **`____`** has no published class gauge, so it uses beatoraja's.
 
+**`plugout`** follows plugout4 -ARCADE EDITION-: expert and nonstop courses scale NORMAL and EASY damage by each stage's note count, and grade courses scale it by the gauge and then play on 24 lives once the gauge empties. Every plugout course gauge starts at 100, never recovers and clears above 0. The tables are in [ADR 0044](./adr/0044-plugout-ruleset.md#course-gauges).
+
 lr2oraja and LR2oraja Endless Dream play courses on beatoraja's `GAUGE_LR2` class gauges with LR2's death border and damage-reduction threshold; how that compares with these rules, and why Be-Music does not follow it, is in [lr2oraja courses](./research/lr2oraja-courses.md).
 
 ### Judgment constraints

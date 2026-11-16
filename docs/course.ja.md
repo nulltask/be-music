@@ -362,6 +362,8 @@ flowchart LR
 
 **`beatoraja`** は、どのコースも段位ゲージで遊びます（`GrooveGauge.create`）。GROOVE と EASY は `CLASS`、HARD は `EXCLASS`、DEATH は `EXHARDCLASS` に対応します。ゲージの表の組はコースの `gauge_*` 制約で決まり、なければプレイモードで決まります（5 / 10 鍵は `5k`、PMS は `9k`、24 / 48 鍵は `24k`、それ以外は `7k`）。どれも 100 から始まり、TOTAL による補正はありません。**`____`** には公表された段位ゲージがないので、beatoraja のものを使います。
 
+**`plugout`** は plugout4 -ARCADE EDITION- に従います。EXPERT と NONSTOP のコースは NORMAL と EASY のダメージをステージごとのノーツ数で変え、段位コースはゲージの値で変えたうえで、ゲージが尽きると 24 ライフで続けます。plugout のコースゲージはどれも 100 から始まり、回復せず、0 より上でクリアです。表は [ADR 0044](./adr/0044-plugout-ruleset.ja.md#コースゲージ) にあります。
+
 lr2oraja と LR2oraja Endless Dream は、beatoraja の `GAUGE_LR2` の段位ゲージに LR2 の死亡ラインと被ダメージ軽減の境目を加えてコースを遊びます。これらの規則との比較と、Be-Music が従わない理由は [lr2oraja のコース](./research/lr2oraja-courses.ja.md)にまとめています。
 
 ### 判定の制約
