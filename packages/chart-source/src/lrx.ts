@@ -45,7 +45,10 @@ export interface LRXEventExtensions {
   offsetMs?: number;
   /** `len`: how long the sample plays, in milliseconds (absent = to its end). */
   lengthMs?: number;
-  /** `rev="1"`: the sample plays reversed. */
+  /**
+   * `rev="1"`, the editor's "Reverse". plugout plays nothing reversed: a chain note's queued playback keeps the flag
+   * (`plugout4.exe` 0x4dc7f0), but the queue never passes it on (0x4dd5b6). Kept as written; no player reads it.
+   */
   reverse?: boolean;
   /** `dmg` as written (a lane note with `dmg="0"` is an autoplayed background note). */
   damage?: number;
