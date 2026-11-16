@@ -44,7 +44,7 @@ Passing `--no-tui` also disables the TUI path; in that mode the effective play m
 When the input path is a single chart, the CLI parses that chart, prepares the loading screen, runs gameplay, and then shows a result screen.
 The result screen accepts replay for single-chart mode.
 
-When the input path is a directory, the CLI recursively discovers `.bms`, `.bme`, `.bml`, `.pms`, and `.bmson` files.
+When the input path is a directory, the CLI recursively discovers `.bms`, `.bme`, `.bml`, `.pms`, `.bmson`, and LRX `.lrs` files.
 It builds a Music Select list, then moves through a small state machine:
 
 - `select`: browse charts, filter difficulty, change play mode, change high-speed, or choose the random entry.

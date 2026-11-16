@@ -1,4 +1,10 @@
-import { normalizeChannel, normalizeObjectKey, type BeMusicEvent, type BeMusicJSON } from '@be-music/chart-source';
+import {
+  LRX_TICKS_PER_BEAT,
+  normalizeChannel,
+  normalizeObjectKey,
+  type BeMusicEvent,
+  type BeMusicJSON,
+} from '@be-music/chart-source';
 import { resolveBMSLongNotes, resolveLNOBJLongNotes, type BeatResolver, type ChartPlayVariant } from './index.ts';
 import {
   DEFAULT_LONG_NOTE_MODE,
@@ -70,8 +76,8 @@ export interface ResolvedNoteContext {
 
 /**
  * Where a judged long note's tail comes from, exactly: the `#LNOBJ` end object or the closing `#LNTYPE 1` object
- * (`event`), one cell after the last object of an `#LNTYPE 2` run (`after-event`), a bmson length in pulses
- * (`pulses`), or the fixed one-beat FREE ZONE tail (`free-zone`).
+ * (`event`), one cell after the last object of an `#LNTYPE 2` run (`after-event`), a bmson length in pulses or an LRX
+ * length in ticks (`pulses`), or the fixed one-beat FREE ZONE tail (`free-zone`).
  */
 export type JudgedNoteTail =
   | { readonly kind: 'event'; readonly event: BeMusicEvent }
@@ -90,6 +96,9 @@ export interface JudgedNoteEntry {
   /** Set exactly when the note is a long note. */
   readonly tail?: JudgedNoteTail;
 }
+
+/** plugout counts and judges an LRX long note's end, which Be-Music calls a CN. */
+const LRX_LONG_NOTE_MODE: LongNoteMode = 2;
 
 /** A FREE ZONE note's fixed tail, in beats. */
 const FREE_ZONE_BEAT_LENGTH = 1;
@@ -165,10 +174,15 @@ function resolveMutableJudgedNotes(
     } else if (event.bmson?.l && event.bmson.l > 0 && bmsonResolution !== undefined) {
       note.endBeat = beat + event.bmson.l / bmsonResolution;
       note.tail = { kind: 'pulses', pulses: event.bmson.l };
+    } else if (json.sourceFormat === 'lrx' && event.lrx?.length && event.lrx.length > 0) {
+      note.endBeat = beat + event.lrx.length / LRX_TICKS_PER_BEAT;
+      note.tail = { kind: 'pulses', pulses: event.lrx.length };
     }
     if (note.endBeat !== undefined) {
       note.endSeconds = timing.beatToSeconds(note.endBeat);
-      note.lnMode = resolveBmsonLongNoteMode(event, chartLongNoteType);
+      // plugout judges an LRX long note's end as a note of its own: a CN.
+      note.lnMode =
+        json.sourceFormat === 'lrx' ? LRX_LONG_NOTE_MODE : resolveBmsonLongNoteMode(event, chartLongNoteType);
     }
     notes.push(note);
   }

@@ -10,7 +10,7 @@ export interface SplitDroppedSongAndThemeFilesResult<TFile extends BrowserDropFi
   chartFiles: TFile[];
 }
 
-const CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
+const CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson', '.lrs']);
 
 export function isChartFilePath(path: string): boolean {
   return CHART_EXTENSIONS.has(extensionOf(path));

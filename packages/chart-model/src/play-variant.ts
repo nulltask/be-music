@@ -27,6 +27,10 @@ export interface ChartPlayVariantInput {
       modeHint?: string;
     };
   };
+  /** The LRX `.lrh` `lanetype` (`json.lrx.laneType`): it names the mode, whatever lanes the chart uses. */
+  lrx?: {
+    laneType?: number;
+  };
 }
 
 const laneChannelsOf = (layout: keyof typeof PLAY_MODE_LAYOUTS): string[] =>
@@ -64,6 +68,8 @@ const _____SIX_SEVEN_KEY_CHANNELS: readonly string[] = laneChannelsOf('14').filt
  *      chart uses: its `x` values already went through the keyboard lane map, so a chart that only touches the first
  *      nine keys is still a 24-key chart. Other hints are not authoritative (`beat-7k` is also the spec default for a
  *      missing hint, and real charts mislabel their mode), so they fall through to the lane rules.
+ *   ½. **LRX `lanetype`** — plugout picks the style from the `.lrh` and never from the lanes, so a 10 KEY chart that
+ *      leaves the 2P scratch and first key empty is still 10 KEY rather than PMS-STD (rule 4).
  *   0. **Extended lane channels (`1A..1Z` / `2A..2Z`)** — the 24-key (Keyboardmania) lane bank. Only these modes
  *      author lanes past the classic nine columns, so one extended channel decides it: `'48'` when the chart also
  *      uses the 2P side, `'24'` otherwise. Checked first because a 24-key chart fills all nine classic 1P columns
@@ -96,6 +102,8 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
   if (hintedVariant !== undefined) {
     return hintedVariant;
   }
+  const lrxVariant = resolveLRXLaneTypeVariant(chart.lrx?.laneType);
+  if (lrxVariant !== undefined) return lrxVariant;
   const channels = new Set<string>();
   for (const event of chart.events) {
     const channel = normalizeChannel(event.channel);
@@ -173,4 +181,27 @@ function resolveChartPathExtension(chartPath: string | undefined): string | unde
   const slashIndex = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
   if (dotIndex < 0 || dotIndex < slashIndex) return undefined;
   return trimmed.slice(dotIndex).toLowerCase();
+}
+
+/**
+ * The mode an LRX `lanetype` names: 0 = 7 KEY, 1 = 5 KEY, 2 = 14 KEY, 3 = 10 KEY, 4 = 9 KEY. 5 and 6 (single play with
+ * both scratches) have no Be-Music mode and play as 10 / 14 KEY; any other value names none.
+ */
+const LRX_LANE_TYPE_VARIANTS: ReadonlyMap<number, ChartPlayVariant> = new Map([
+  [0, '7'],
+  [1, '5'],
+  [2, '14'],
+  [3, '10'],
+  [4, '9'],
+  [5, '10'],
+  [6, '14'],
+]);
+
+function resolveLRXLaneTypeVariant(laneType: number | undefined): ChartPlayVariant | undefined {
+  return laneType === undefined ? undefined : LRX_LANE_TYPE_VARIANTS.get(laneType);
+}
+
+/** Whether `laneType` is an LRX `lanetype` that names a mode. */
+export function isLRXLaneType(laneType: number | undefined): laneType is number {
+  return resolveLRXLaneTypeVariant(laneType) !== undefined;
 }

@@ -1,6 +1,6 @@
 import { unzipSync } from 'fflate';
 import { countScoredNotes } from '@be-music/chart-model';
-import { decodeUTF8Text, parseBMSBytes, parseBmson } from '@be-music/chart-parser';
+import { decodeUTF8Text, parseBMSBytes, parseBmson, parseLRXBytes } from '@be-music/chart-parser';
 import { type BeMusicJSON } from '@be-music/chart-source';
 import { compactChartPreservation } from '../collection/chart-preservation.ts';
 import { normalizePath } from '@be-music/shared-utils/core';
@@ -10,6 +10,12 @@ import { timeStretchChannels } from '../runtime/time-stretch.ts';
 export interface ParseChartTaskInput {
   path: string;
   bytes: Uint8Array;
+  /** The files an LRX `.lrs` chart reads beside it: its `.lrh` header and its `.lrm` BGA file, when present. */
+  siblings?: ChartSiblingBytes;
+}
+export interface ChartSiblingBytes {
+  lrh?: Uint8Array;
+  lrm?: Uint8Array;
 }
 export interface ParseChartTaskResult {
   chart: BeMusicJSON;
@@ -18,9 +24,12 @@ export interface ParseChartTaskResult {
   strings: string[];
 }
 export function parseChartTask(input: ParseChartTaskInput): ParseChartTaskResult {
-  const chart = input.path.toLowerCase().endsWith('.bmson')
+  const path = input.path.toLowerCase();
+  const chart = path.endsWith('.bmson')
     ? parseBmson(decodeUTF8Text(input.bytes))
-    : parseBMSBytes(input.bytes);
+    : path.endsWith('.lrs')
+      ? parseLRXBytes({ lrs: input.bytes, ...input.siblings })
+      : parseBMSBytes(input.bytes);
   const scored = countScoredNotes(chart, { chartPath: input.path, inferBmsLNTypeWhenMissing: false });
   compactChartPreservation(chart);
   const strings = new PackedEventStrings();

@@ -69,6 +69,19 @@ describe('packEvents / unpackEvents', () => {
     expect(unpacked[1]!.bmson).toBe(events[1]!.bmson);
   });
 
+  test('keeps LRX extensions by index', () => {
+    const strings = new PackedEventStrings();
+    const events: BeMusicEvent[] = [
+      { measure: 0, channel: '11', position: [0, 1], value: '01', lrx: { length: 480, volume: 64 } },
+      { measure: 0, channel: '01', position: [1, 2], value: '02' },
+    ];
+    const packed = packEvents(events, strings)!;
+    expect(packed.lrx?.size).toBe(1);
+    const unpacked = unpackEvents(packed, strings);
+    expect(unpacked).toEqual(events);
+    expect(unpacked[0]!.lrx).toBe(events[0]!.lrx);
+  });
+
   test('refuses events with fields it does not model', () => {
     const events = [{ ...EVENTS[0]!, extra: true }] as unknown as BeMusicEvent[];
     expect(packEvents(events, new PackedEventStrings())).toBeUndefined();

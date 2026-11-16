@@ -29,6 +29,7 @@ export function resolveLibraryChartPlayVariant(
     events: chart.events,
     bms: chart.bms,
     bmson: chart.bmson,
+    lrx: chart.lrx,
   });
   PLAY_VARIANT_BY_CHART.set(chart, { chartPath: entry.chartPath, variant });
   return variant;

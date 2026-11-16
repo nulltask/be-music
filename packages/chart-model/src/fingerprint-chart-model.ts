@@ -857,7 +857,12 @@ function assembleChartDocument(
   const baseBPMIsBPM = header.baseBPM !== null && isRationalEqual(header.baseBPM, header.bpm);
   return {
     v: FINGERPRINT_VERSION,
-    lanes: { extension, player3: header.player3, ...(header.modeHint !== null ? { modeHint: header.modeHint } : {}) },
+    lanes: {
+      extension,
+      player3: header.player3,
+      ...(header.modeHint !== null ? { modeHint: header.modeHint } : {}),
+      ...(header.lrxLaneType !== null ? { lrxLaneType: header.lrxLaneType } : {}),
+    },
     bpm: formatRational(header.bpm),
     baseBPM:
       header.baseBPM === null || (baseBPMIsBPM && !anyOpaque && !touched.has('baseBPM'))
