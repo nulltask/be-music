@@ -1,11 +1,12 @@
 import type { ChartPlayOptionProgram } from '@be-music/chart-model';
 import { parseBMS } from '@be-music/chart-parser';
 import { createReplayRecorder, parseReplay, serializeReplay } from '@be-music/player-engine/replay';
+import { arrangeChartPlayLanes } from '@be-music/player-engine';
 import { createEmptyScore } from '@be-music/player-engine/ruleset';
 import type { LibraryChart } from '@be-music/player-scene-model';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 import { resolveReplayRecording } from './play-engine.ts';
-import { prepareChart } from './play-chart.ts';
+import { applyRandomMode, prepareChart } from './play-chart.ts';
 import type { PlaySessionOptions } from './play-options.ts';
 import { PlaySession } from './play-session.ts';
 
@@ -80,6 +81,31 @@ test('chart ALL shuffles across both sides of a DP chart', () => {
   // Every note stays on a key lane of either side, and the shuffle moved some 1P notes to the 2P side.
   expect(channels.every((channel) => /^[12][1-589]$/.test(channel))).toBe(true);
   expect(channels.filter((channel) => channel.startsWith('2')).length).toBeGreaterThan(1);
+});
+
+test('chart ALL+ draws the same nanasigroove shuffle under every judge ruleset (#1245)', () => {
+  const source =
+    '#BPM 120\n#OPTION 774:RANDOM_ALL+\n#00111:01\n#00112:01\n#00113:01\n#00116:01\n#00121:01\n#00125:01\n#00126:01\n';
+  const channelsUnder = (judgeRuleset: 'lr2' | 'beatoraja' | '____') => {
+    const play = new PlaySession({ judgeRuleset, randomSeed1P: '42', random1P: 'OFF', random2P: 'OFF' });
+    prepareChart(play, entry(source));
+    return play.notes.map((note) => note.channel);
+  };
+  const lr2 = channelsUnder('lr2');
+  expect(channelsUnder('beatoraja')).toEqual(lr2);
+  expect(channelsUnder('____')).toEqual(lr2);
+  // The draw is the one the browser made before #1245, so a seed keeps its arrangement.
+  const values = [0.1, 0.7, 0.3, 0.9, 0.5, 0.2, 0.8, 0.4, 0.6, 0.05, 0.95, 0.15];
+  const sequence = () => {
+    let index = 0;
+    return () => values[index++ % values.length]!;
+  };
+  const keys = ['11', '12', '13', '14', '15', '21', '22', '23', '24', '25'];
+  const before = [...keys, '16', '26'].map((channel) => ({ channel }));
+  applyRandomMode(before, keys, 'RANDOM-EX', sequence(), { ruleset: 'lr2', scratchLanes: ['16', '26'] });
+  const now = [...keys, '16', '26'].map((channel) => ({ channel }));
+  arrangeChartPlayLanes([now], 'ALL+', '10', sequence());
+  expect(now).toEqual(before);
 });
 
 test("chart ADDMINE, nanasigroove's, wins over the player mine option", () => {

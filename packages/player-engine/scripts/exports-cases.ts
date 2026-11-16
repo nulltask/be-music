@@ -1177,6 +1177,14 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  define('player-engine.arrangeChartPlayLanes', {
+    run() {
+      const notes = ['11', '12', '13', '14', '15', '16', '21', '22', '23', '24', '25', '26'].map((channel) => ({
+        channel,
+      }));
+      playerAPI.arrangeChartPlayLanes([notes], 'ALL+', '10', () => 0.5);
+    },
+  });
   define('player-engine.resolveEffectiveChartPlayOptions', {
     run() {
       playerAPI.resolveEffectiveChartPlayOptions(

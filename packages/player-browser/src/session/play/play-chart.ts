@@ -44,6 +44,7 @@ import {
 import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
 import {
   applyChartPlayOptions,
+  arrangeChartPlayLanes,
   preparePlaybackChart,
   resolveChartNotesPlayVariant,
   resolveEffectiveChartPlayOptions,
@@ -696,23 +697,20 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
     );
-    // Chart ALL / ALL+ (#844): one shuffle across both sides' keys, with ALL+ their scratch lanes too.
+    // Chart ALL / ALL+ (#844): one shuffle across both sides' keys, with ALL+ their scratch lanes too. It is
+    // nanasigroove's, drawn as the engine draws it for every host and judge ruleset, not through an LR2 or beatoraja
+    // lane option (#1245).
     if (chartArrangement.crossSide !== undefined) {
-      const scratchLanes =
-        playVariant === '9'
-          ? []
-          : PLAY_MODE_LAYOUTS[playVariant].lanes.filter((lane) => lane.kind !== 'key').map((lane) => lane.channel);
-      applyRandomMode(
-        ctx.notes as Array<{ channel: string }>,
+      arrangeChartPlayLanes(
         [
-          ...resolveLaneOptionChannels('1P', playVariant, prepared.laneBindings),
-          ...resolveLaneOptionChannels('2P', playVariant, prepared.laneBindings),
+          ctx.notes as Array<{ channel: string }>,
+          ctx.mineNotes as Array<{ channel: string }>,
+          ctx.invisibleNotes as Array<{ channel: string }>,
         ],
-        chartArrangement.crossSide.scratch ? 'RANDOM-EX' : 'RANDOM',
+        chartArrangement.crossSide.scratch ? 'ALL+' : 'ALL',
+        playVariant,
         laneRandom('1P'),
-        { ruleset: 'lr2', scratchLanes },
-        ctx.mineNotes as Array<{ channel: string }>,
-        ctx.invisibleNotes as Array<{ channel: string }>,
+        prepared.laneBindings,
       );
     }
     if (twoPlayer) {
