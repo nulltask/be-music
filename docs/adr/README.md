@@ -71,3 +71,5 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [0040: Key scratch holds by a recorded input source](./0040-replay-input-sources.md)
 
 - [Treat chart-authored BASE-SPEED as the standard rate](./0041-chart-authored-base-speed.md)
+
+- [0043: Read LRX charts as their own source format](./0043-lrx-charts.md)

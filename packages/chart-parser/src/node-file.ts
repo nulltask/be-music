@@ -7,17 +7,28 @@ import type { BeMusicJSON } from '@be-music/chart-source';
 import { decodeUTF8Text } from './core/bms-text-decode.ts';
 import { parseBMSBytes } from './core/bms-bytes.ts';
 import { parseBmson, parseChart } from './core/parser.ts';
+import { parseLRXBytes, resolveLRXHeaderPath, resolveLRXMoviePath } from './core/lrx.ts';
 
 export interface ParseChartFileOptions {
   signal?: AbortSignal;
 }
 
 export async function parseChartFile(filePath: string, options: ParseChartFileOptions = {}): Promise<BeMusicJSON> {
-  const [{ readFile }, { extname }] = await Promise.all([import('node:fs/promises'), import('node:path')]);
+  const [{ readFile }, { dirname, extname, join }] = await Promise.all([
+    import('node:fs/promises'),
+    import('node:path'),
+  ]);
   const buffer = await readFile(filePath, {
     signal: options.signal,
   });
   const extension = extname(filePath).toLowerCase();
+  if (extension === '.lrs') {
+    // An LRX chart reads its `.lrh` header and the BGA file it names from beside it, when they are there.
+    const readSibling = (path: string) => readFile(path, { signal: options.signal }).catch(() => undefined);
+    const lrh = await readSibling(resolveLRXHeaderPath(filePath));
+    const lrm = await readSibling(join(dirname(filePath), resolveLRXMoviePath(buffer, lrh).replace(/\\/g, '/')));
+    return parseLRXBytes({ lrs: buffer, ...(lrh ? { lrh } : {}), ...(lrm ? { lrm } : {}) });
+  }
   if (extension === '.bmson') {
     return parseBmson(decodeUTF8Text(buffer));
   }

@@ -13,6 +13,31 @@ function benchRandomDraws(source: Parameters<typeof drawRandomOutcomes>[0]): Ran
   return draws;
 }
 
+/** A small LRX chart: a sequence of keys, BGM and BPM notes, its header and its BGA file. */
+const BENCH_LRX = {
+  lrs: [
+    '<?xml version="1.0"?>',
+    '<LRS>',
+    '<information rank="2" total="200" />',
+    ...Array.from({ length: 16 }, (_, id) => `<sound id="${id}" filename="s${id}.wav" />`),
+    '<n c="301" s="0" p="150.000000" />',
+    ...Array.from({ length: 64 }, (_, bar) => `<n c="300" s="${bar * 1920}" />`),
+    ...Array.from({ length: 512 }, (_, index) =>
+      index % 8 === 0
+        ? `<n c="${100 + (index % 4)}" s="${index * 240}" p="${index % 16}" />`
+        : `<n c="${index % 6}" s="${index * 240}"${index % 16 === 1 ? ` e="${index * 240 + 480}"` : ''} p="${index % 16}" />`,
+    ),
+    '</LRS>',
+  ].join('\r\n'),
+  lrh: '<LRH><information title="Bench" artist_song="bench" lanetype="1" lrslevel="7" moviepath="_movie.lrm" /></LRH>',
+  lrm: '<LRM><movie id="1" filename="bench.mp4" /><n c="200" s="0" p="1" /></LRM>',
+};
+const BENCH_LRX_BYTES = {
+  lrs: new TextEncoder().encode(BENCH_LRX.lrs),
+  lrh: new TextEncoder().encode(BENCH_LRX.lrh),
+  lrm: new TextEncoder().encode(BENCH_LRX.lrm),
+};
+
 export function registerParserExportsCases(define: DefineBenchmarkCase): void {
   define('chart-parser.canonicalizeBMSCharset', {
     run: () => {
@@ -49,6 +74,26 @@ export function registerParserExportsCases(define: DefineBenchmarkCase): void {
     run: (fixtures) => {
       parserAPI.parseBmson(fixtures.bmsonText);
       parserAPI.parseBmson(JSON.stringify({ ...JSON.parse(fixtures.bmsonText), vendor: { tags: [null, 1] } }));
+    },
+  });
+  define('chart-parser.parseLRX', {
+    run: () => {
+      parserAPI.parseLRX(BENCH_LRX);
+    },
+  });
+  define('chart-parser.parseLRXBytes', {
+    run: () => {
+      parserAPI.parseLRXBytes(BENCH_LRX_BYTES);
+    },
+  });
+  define('chart-parser.resolveLRXHeaderPath', {
+    run: () => {
+      parserAPI.resolveLRXHeaderPath('plugout4/song/001/01.lrs');
+    },
+  });
+  define('chart-parser.resolveLRXMoviePath', {
+    run: () => {
+      parserAPI.resolveLRXMoviePath(BENCH_LRX_BYTES.lrs, BENCH_LRX_BYTES.lrh);
     },
   });
   define('chart-parser.parseChart', {

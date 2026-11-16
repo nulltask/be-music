@@ -19,6 +19,7 @@ import {
   normalizeBmsonStopEvents,
 } from './bmson.ts';
 import { normalizeControlFlowCommand } from './control-flow.ts';
+import { normalizeLRXExtensions } from './lrx-extensions.ts';
 
 export function parseJSONDocument(raw: Partial<BeMusicJSON>): BeMusicJSON {
   const json = createEmptyJSON(raw.sourceFormat ?? 'json');
@@ -80,6 +81,8 @@ export function parseJSONDocument(raw: Partial<BeMusicJSON>): BeMusicJSON {
   }
   json.bms = normalizeBMSExtensions(rawBMS, json.sourceFormat === 'bmson');
   json.bmson = normalizeBmsonExtensions(rawBmson);
+  const lrx = normalizeLRXExtensions(structured.lrx);
+  if (lrx) json.lrx = lrx;
   json.preservation = normalizePreservation(structured.preservation, rawBMS, rawBmson);
   migrateBMSExtensionHeadersFromExtras(json);
   return json;

@@ -108,7 +108,7 @@ Write the product name **Be-Music** in all prose and user-facing text: documenta
 
 - **IR (`@be-music/chart-source`)**: Internal intermediate representation for BMS/bmson/JSON charts. It is not an external exchange format.
 - **pure IR**: Design policy that `@be-music/chart-source` stores normalized structure and preservation data without owning score semantics.
-- **sourceFormat**: IR attribute that records whether the chart came from `bms`, `bmson`, or `json`.
+- **sourceFormat**: IR attribute that records whether the chart came from `bms`, `bmson`, `lrx`, or `json`.
 - **round-trip**: Recreate source structure as much as possible through `parse -> IR -> stringify`.
 - **preservation**: Auxiliary source-level data retained for round-trip output, separate from normalized `events` and `measures`.
 - **sourceLines**: BMS preservation data that keeps header, object, and control-flow lines in declaration order.

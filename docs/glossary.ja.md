@@ -108,7 +108,7 @@
 
 - **IR (`@be-music/chart-source`)**: BMS/bmson/JSON chart を共通表現として扱う内部中間表現です。外部交換フォーマットではありません。
 - **pure IR**: `@be-music/chart-source` が譜面意味論を持たず、正規化済みデータ構造と preservation data の保持に徹する設計方針です。
-- **sourceFormat**: その IR がもともと `bms`、`bmson`、`json` のどれから来たかを示す属性です。
+- **sourceFormat**: その IR がもともと `bms`、`bmson`、`lrx`、`json` のどれから来たかを示す属性です。
 - **round-trip**: `parse -> IR -> stringify` の往復で、元の譜面構造をできるだけ再現することです。
 - **preservation**: round-trip のために source-level 情報を保持する補助レイヤーです。正規化済みの `events` / `measures` とは分けて管理します。
 - **sourceLines**: BMS の header、object、control-flow 行を宣言順で保持する preservation 情報です。

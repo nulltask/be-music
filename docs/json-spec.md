@@ -128,7 +128,7 @@ A full example:
 ```json
 {
   "format": "be-music-json/0.1.0",
-  "sourceFormat": "bms | bmson | json",
+  "sourceFormat": "bms | bmson | lrx | json",
   "metadata": {
     "title": "Example",
     "bpm": 130,
@@ -458,6 +458,15 @@ flowchart LR
 - `chart-writer` uses `position` denominator information to determine intra-bar resolution
 - `parseJson` requires `position` tuple and treats missing events as errors
 - Score semantics helpers such as beat conversion and event order are provided by `@be-music/chart-model`
+
+## LRX values
+
+A chart read from LRX ([format-compat §7](./format-compat.md#7-lrx)) has `sourceFormat: "lrx"` and keeps what the BMS-shaped fields cannot hold:
+
+- `BeMusicEvent.lrx` holds a note's values that differ from plugout's defaults: `length` (a lane note's long-note length in ticks, 480 per beat), `chain` (`cn`), `volume`, `pan`, `frequency`, `attackMs`, `releaseMs`, `offsetMs`, `lengthMs`, `reverse`, `damage` (`dmg`) and `recover` (`rcv`).
+- `BeMusicJSON.lrx` holds the header values without a BMS counterpart (`laneType`, `category`, `level`, `bmsLevel`, the sequence title and artist, the display BPMs, `phase`, `unlock`, `songId`), the BGA file read (`moviePath`), the end-of-song tick (`endTick`) and the ticks the measures start at (`barTicks`).
+
+Both survive a JSON round trip and `cloneJSON`; neither exists on other charts.
 
 ## Opaque bmson data
 
