@@ -127,6 +127,15 @@ export interface NonstopStitchStage {
    * chart's own `#BACKBMP` is the first stage's.
    */
   backBMP?: string;
+  /**
+   * The stage's `#STAGEFILE` and `#BANNER`, through `assetPath`, and its `#PLAYLEVEL` and `#DIFFICULTY` (#1073). The
+   * stitched chart's own are the first stage's, as its library entry is: LR2's loader reads none of them while it
+   * stitches (OpenLR2 `ParseBMSFile`), so no stage's value is the source's.
+   */
+  stageFile?: string;
+  banner?: string;
+  playLevel?: BeMusicJSON['metadata']['playLevel'];
+  difficulty?: number;
 }
 
 export interface NonstopStitchMap {
@@ -556,6 +565,17 @@ function stitchNonstopCourseAs(
     return path ? assetPath(index, 'bmp', path) : undefined;
   });
   if (backBMPs[0] !== undefined) chart.metadata.backBMP = backBMPs[0];
+  // The decide and play screens read these from the chart; the stitched one takes the first stage's, as #BACKBMP.
+  const stageImage = (index: number, path: string | undefined): string | undefined => {
+    const trimmed = path?.trim();
+    return trimmed ? assetPath(index, 'bmp', trimmed) : undefined;
+  };
+  const stageFiles = stages.map((stage, index) => stageImage(index, stage.chart.metadata.stageFile));
+  const banners = stages.map((stage, index) => stageImage(index, stage.chart.metadata.banner));
+  if (stageFiles[0] !== undefined) chart.metadata.stageFile = stageFiles[0];
+  if (banners[0] !== undefined) chart.metadata.banner = banners[0];
+  if (first.playLevel !== undefined) chart.metadata.playLevel = first.playLevel;
+  if (first.difficulty !== undefined) chart.metadata.difficulty = first.difficulty;
   if (perStageRules && !asBmson && stages[0]!.chart.bms.defExRank !== undefined)
     chart.bms.defExRank = stages[0]!.chart.bms.defExRank;
   const total = stages[totalStage]?.chart.metadata.total;
@@ -645,6 +665,14 @@ function stitchNonstopCourseAs(
           lr2StageMarker: before === 'blank1' || before === 'blank2',
           songInfo: stageSongInfo(stages[index]!.chart),
           ...(backBMPs[index] !== undefined ? { backBMP: backBMPs[index] } : {}),
+          ...(stageFiles[index] !== undefined ? { stageFile: stageFiles[index] } : {}),
+          ...(banners[index] !== undefined ? { banner: banners[index] } : {}),
+          ...(stages[index]!.chart.metadata.playLevel !== undefined
+            ? { playLevel: stages[index]!.chart.metadata.playLevel }
+            : {}),
+          ...(stages[index]!.chart.metadata.difficulty !== undefined
+            ? { difficulty: stages[index]!.chart.metadata.difficulty }
+            : {}),
         };
       }),
     },

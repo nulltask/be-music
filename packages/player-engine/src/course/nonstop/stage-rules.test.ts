@@ -148,6 +148,32 @@ describe('NONSTOP stitching keeps each stage’s own rules (rule version 4)', ()
     expect(stitch([plain(), plain('#BACKBMP other.png')]).chart.metadata.backBMP).toBeUndefined();
   });
 
+  test('each stage’s #STAGEFILE, #BANNER, #PLAYLEVEL and #DIFFICULTY go to the map and the first ones to the chart (#1073)', () => {
+    const { chart, map } = stitch(
+      [
+        plain('#STAGEFILE stage.png', '#BANNER banner.png', '#PLAYLEVEL 7', '#DIFFICULTY 3'),
+        plain('#PLAYLEVEL 12'),
+        plain('#STAGEFILE last.png', '#BANNER last-banner.png', '#DIFFICULTY 4'),
+      ],
+      { assetPath: (stage, kind, path) => `s${stage}/${kind}/${path}` },
+    );
+    expect(chart.metadata).toMatchObject({
+      stageFile: 's0/bmp/stage.png',
+      banner: 's0/bmp/banner.png',
+      playLevel: 7,
+      difficulty: 3,
+    });
+    expect(map.stages.map((stage) => [stage.stageFile, stage.banner, stage.playLevel, stage.difficulty])).toEqual([
+      ['s0/bmp/stage.png', 's0/bmp/banner.png', 7, 3],
+      [undefined, undefined, 12, undefined],
+      ['s2/bmp/last.png', 's2/bmp/last-banner.png', undefined, 4],
+    ]);
+    // A first stage without them leaves the chart without them, as #BACKBMP.
+    const bare = stitch([plain(), plain('#STAGEFILE late.png', '#PLAYLEVEL 9')]).chart.metadata;
+    expect(bare.stageFile).toBeUndefined();
+    expect(bare.playLevel).toBeUndefined();
+  });
+
   describe('negative-BPM reversal', () => {
     // The reversal sits at measure 2.5 of the first stage, inside its window.
     const reversing = () => plain('#BPM01 -240', '#00208:0001');
