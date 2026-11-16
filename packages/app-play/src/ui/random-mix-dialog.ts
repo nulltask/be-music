@@ -11,6 +11,7 @@ import {
 } from '@be-music/player-engine/course';
 import { connectionSelect, RANDOM_MIX_FIELDS, randomMixSelect } from '../course-maker-panel.ts';
 import { playerText } from '../player-copy.ts';
+import { dialogShortcutAria, dialogShortcutHint } from './dialog-shortcuts.ts';
 
 // The RANDOM MIX dialog: deciding a RANDOM MIX bar asks which charts to draw from (a key mode, a level range or the
 // difficulties) and how many stages (or endless), with the draw settings the Options dialog's My courses also sets
@@ -370,8 +371,27 @@ function template(
       ${matches === 0 ? t.noMatch : start.blocked ? t.noFirstStage(matches) : t.matches(matches)}
     </p>
     <footer>
-      <button type="submit" value="" class="btn" data-variant="outline">${t.cancel}</button>
-      <button type="submit" value="ok" class="btn" ?disabled=${matches === 0} autofocus>${t.ok}</button>
+      <button
+        type="submit"
+        value=""
+        class="btn"
+        data-variant="outline"
+        data-dialog-shortcut="cancel"
+        aria-keyshortcuts=${dialogShortcutAria('cancel')}
+      >
+        ${t.cancel}${dialogShortcutHint('cancel')}
+      </button>
+      <button
+        type="submit"
+        value="ok"
+        class="btn"
+        ?disabled=${matches === 0}
+        autofocus
+        data-dialog-shortcut="primary"
+        aria-keyshortcuts=${dialogShortcutAria('primary')}
+      >
+        ${t.ok}${dialogShortcutHint('primary')}
+      </button>
     </footer>
   </form>`;
 }
