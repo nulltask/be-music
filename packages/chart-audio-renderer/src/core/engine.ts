@@ -26,7 +26,9 @@ const loadNodePath = (): Promise<NodePath> => (nodePathPromise ??= import('node:
 import { normalizeObjectKey, type BeMusicJSON } from '@be-music/chart-source';
 import {
   isAbortError,
-  resolveSampleSliceEnvelope,
+  readSampleFrame,
+  resolveSampleVoiceEnvelope,
+  resolveStereoBalance,
   sampleSliceEnvelopeGain,
   SAMPLE_SLICE_FADE_SECONDS,
   throwIfAborted,
@@ -108,8 +110,17 @@ interface ScheduledSampleRender {
   sample: StereoSample;
   triggerGain: number;
   sampleOffsetFrames: number;
+  /** Source frames the voice plays; at a rate other than 1 it sounds for `sampleMaxFrames / voice.rate` frames. */
   sampleMaxFrames?: number;
   slice?: ScheduledSampleSlice;
+  voice?: ScheduledSampleVoice;
+}
+
+/** A trigger's own rate and stereo balance (an LRX note's `frq` and `pan`). */
+interface ScheduledSampleVoice {
+  rate: number;
+  leftGain: number;
+  rightGain: number;
 }
 
 /** A slice window that cuts its source file, with the ramps that keep the cut from clicking. */
@@ -297,6 +308,7 @@ async function scheduleSampleRenders(params: {
     }
     trimPreviousBMSRetrigger(json, trigger, start, scheduled, latestBMSScheduleBySampleKey);
 
+    const voice = resolveScheduledSampleVoice(trigger);
     const scheduleIndex =
       scheduled.push({
         start,
@@ -305,12 +317,14 @@ async function scheduleSampleRenders(params: {
         sampleOffsetFrames: frameWindow.sampleOffsetFrames,
         sampleMaxFrames: frameWindow.sampleMaxFrames,
         slice: frameWindow.slice,
+        ...(voice ? { voice } : {}),
       }) - 1;
     if (usesMonophonicWAVPlayback(json, trigger.sampleKey)) {
       latestBMSScheduleBySampleKey.set(trigger.sampleKey, scheduleIndex);
     }
     if (triggerGain > 0) {
-      maxFrame = Math.max(maxFrame, start + frameWindow.sampleMaxFrames + Math.round(tailSeconds * sampleRate));
+      const soundingFrames = Math.ceil(frameWindow.sampleMaxFrames / (voice?.rate ?? 1));
+      maxFrame = Math.max(maxFrame, start + soundingFrames + Math.round(tailSeconds * sampleRate));
     }
   }
 
@@ -336,11 +350,13 @@ function resolveScheduledSampleFrameWindow(
   if (lengthFrames <= 0) {
     return undefined;
   }
-  const envelope = resolveSampleSliceEnvelope(
+  const envelope = resolveSampleVoiceEnvelope(
     sampleOffsetFrames,
     requestedDurationFrames,
     sample.left.length,
     Math.round(SAMPLE_SLICE_FADE_SECONDS * sampleRate),
+    Math.round((trigger.sampleAttackSeconds ?? 0) * sampleRate),
+    Math.round((trigger.sampleReleaseSeconds ?? 0) * sampleRate),
   );
   if (envelope.fadeIn === 0 && envelope.fadeOut === 0) {
     return { sampleOffsetFrames, sampleMaxFrames: lengthFrames };
@@ -351,6 +367,15 @@ function resolveScheduledSampleFrameWindow(
     sampleMaxFrames: lengthFrames + envelope.fadeOut,
     slice: { lengthFrames, envelope },
   };
+}
+
+/** A trigger's own rate and balance, or `undefined` when it plays at rate 1 in the centre. */
+function resolveScheduledSampleVoice(trigger: TimedSampleTrigger): ScheduledSampleVoice | undefined {
+  const rate =
+    typeof trigger.samplePlaybackRate === 'number' && trigger.samplePlaybackRate > 0 ? trigger.samplePlaybackRate : 1;
+  const balance = resolveStereoBalance(trigger.samplePan ?? 0);
+  if (rate === 1 && balance.left === 1 && balance.right === 1) return undefined;
+  return { rate, leftGain: balance.left, rightGain: balance.right };
 }
 
 function resolveScheduledTriggerGain(
@@ -370,7 +395,9 @@ function resolveScheduledTriggerGain(
   // `#WAVCMD 01 xx vv` per-slot volume — multiplied in alongside the dynamic-volume bus state so a chart can stack a
   // 50% `#WAVCMD` slot under a `97`/`98` runtime cut.
   const wavCmdGain = wavCmdVolumeMultipliers.get(trigger.sampleKey) ?? 1;
-  return (Number.isFinite(rawTriggerGain) ? Math.max(0, rawTriggerGain) : 1) * dynamicGain * wavCmdGain;
+  // An LRX note's own `vol`.
+  const noteGain = typeof trigger.sampleGain === 'number' && trigger.sampleGain >= 0 ? trigger.sampleGain : 1;
+  return (Number.isFinite(rawTriggerGain) ? Math.max(0, rawTriggerGain) : 1) * dynamicGain * wavCmdGain * noteGain;
 }
 
 function shouldScheduleTrigger(
@@ -440,6 +467,7 @@ function mixScheduledSamples(
       item.sampleMaxFrames,
       signal,
       item.slice,
+      item.voice,
     );
   }
 }
@@ -677,7 +705,23 @@ function mixSample(
   sampleMaxFrames?: number,
   signal?: AbortSignal,
   slice?: ScheduledSampleSlice,
+  voice?: ScheduledSampleVoice,
 ): void {
+  if (voice) {
+    mixSampleVoice(
+      destinationLeft,
+      destinationRight,
+      sample,
+      startFrame,
+      gain,
+      sampleOffsetFrames,
+      sampleMaxFrames,
+      voice,
+      slice,
+      signal,
+    );
+    return;
+  }
   const sourceStart = Math.max(0, sampleOffsetFrames);
   const availableFrames = sample.left.length - sourceStart;
   if (availableFrames <= 0) {
@@ -727,6 +771,39 @@ function mixSample(
     const target = startFrame + index;
     destinationLeft[target] += sourceLeft[source] * gain;
     destinationRight[target] += sourceRight[source] * gain;
+  }
+}
+
+/**
+ * {@link mixSample} for a voice with its own rate and balance: each output frame reads the source `rate` frames on,
+ * interpolated, and the slice envelope runs over source frames as it does at rate 1.
+ */
+function mixSampleVoice(
+  destinationLeft: Float32Array,
+  destinationRight: Float32Array,
+  sample: StereoSample,
+  startFrame: number,
+  gain: number,
+  sampleOffsetFrames: number,
+  sampleMaxFrames: number | undefined,
+  voice: ScheduledSampleVoice,
+  slice: ScheduledSampleSlice | undefined,
+  signal: AbortSignal | undefined,
+): void {
+  const sourceStart = Math.max(0, sampleOffsetFrames);
+  const sourceFrames = Math.min(sample.left.length - sourceStart, sampleMaxFrames ?? Number.POSITIVE_INFINITY);
+  if (!(sourceFrames > 0)) return;
+  const outputFrames = Math.min(Math.ceil(sourceFrames / voice.rate), destinationLeft.length - startFrame);
+  const leftGain = gain * voice.leftGain;
+  const rightGain = gain * voice.rightGain;
+  for (let index = 0; index < outputFrames; index += 1) {
+    if (signal && (index & 0x7ff) === 0) throwIfAborted(signal);
+    const played = index * voice.rate;
+    if (played >= sourceFrames) break;
+    const envelope = slice ? sampleSliceEnvelopeGain(played, slice.lengthFrames, slice.envelope) : 1;
+    const target = startFrame + index;
+    destinationLeft[target] += readSampleFrame(sample.left, sourceStart + played) * leftGain * envelope;
+    destinationRight[target] += readSampleFrame(sample.right, sourceStart + played) * rightGain * envelope;
   }
 }
 

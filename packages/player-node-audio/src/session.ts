@@ -15,7 +15,9 @@ import {
 } from '@be-music/chart-model';
 import {
   floatToInt16,
-  resolveSampleSliceEnvelope,
+  readSampleFrame,
+  resolveSampleVoiceEnvelope,
+  resolveStereoBalance,
   sampleSliceEnvelopeGain,
   SAMPLE_SLICE_FADE_SECONDS,
   throwIfAborted,
@@ -54,6 +56,12 @@ interface PlayableNotePlayback {
   offsetSeconds: number;
   durationSeconds?: number;
   sliceId?: string;
+  /** A trigger's own gain, balance, rate and ramps (an LRX note's); see `TimedSampleTrigger`. */
+  gain?: number;
+  pan?: number;
+  rate?: number;
+  attackSeconds?: number;
+  releaseSeconds?: number;
 }
 
 const AUTO_AUDIO_CHUNK_FRAMES = 256;
@@ -292,10 +300,13 @@ export async function createNodeAudioSession({
       }
       const isPlayLaneSound = isPlayLaneSoundChannel(normalizedChannel);
       const voiceGain =
-        (isPlayLaneSound ? playVolume : bgmVolume) * (isPlayLaneSound ? currentPlayDynamicGain : currentBGMDynamicGain);
+        (isPlayLaneSound ? playVolume : bgmVolume) *
+        (isPlayLaneSound ? currentPlayDynamicGain : currentBGMDynamicGain) *
+        (playback?.gain ?? 1);
       if (voiceGain <= 0) {
         return;
       }
+      const balance = resolveStereoBalance(playback?.pan ?? 0);
       activeVoices.push({
         sample,
         ...window,
@@ -305,6 +316,8 @@ export async function createNodeAudioSession({
         sliceId: playback?.sliceId,
         startSeconds,
         gain: voiceGain,
+        ...(playback?.rate !== undefined && playback.rate > 0 && playback.rate !== 1 ? { rate: playback.rate } : {}),
+        ...(balance.left !== 1 || balance.right !== 1 ? { leftGain: balance.left, rightGain: balance.right } : {}),
       });
     },
     stopChannel:
@@ -333,6 +346,11 @@ export interface ActiveVoice {
   sliceId?: string;
   startSeconds?: number;
   gain: number;
+  /** Source frames the voice moves on per output frame (an LRX note's `frq`); 1 when absent. */
+  rate?: number;
+  /** Per-channel gains of the voice's stereo balance (an LRX note's `pan`); 1 when absent. */
+  leftGain?: number;
+  rightGain?: number;
 }
 
 /** A slice window that cuts its source file, with the ramps that keep the cut from clicking. */
@@ -360,11 +378,13 @@ export function resolveVoiceFrameWindow(
     return undefined;
   }
   const window = { startPosition: offsetFrames, position: offsetFrames, endPosition: offsetFrames + lengthFrames };
-  const envelope = resolveSampleSliceEnvelope(
+  const envelope = resolveSampleVoiceEnvelope(
     offsetFrames,
     requestedFrames,
     sampleLength,
     Math.round(SAMPLE_SLICE_FADE_SECONDS * sampleRate),
+    Math.round((playback?.attackSeconds ?? 0) * sampleRate),
+    Math.round((playback?.releaseSeconds ?? 0) * sampleRate),
   );
   if (envelope.fadeIn === 0 && envelope.fadeOut === 0) {
     return window;
@@ -382,6 +402,10 @@ export function mixActiveVoices(
   // Voice-major accumulation removes a per-sample boundary branch from the hot path.
   for (let voiceIndex = 0; voiceIndex < activeVoices.length; voiceIndex += 1) {
     const voice = activeVoices[voiceIndex]!;
+    if (voice.rate !== undefined || voice.leftGain !== undefined) {
+      mixShapedVoice(mixedLeft, mixedRight, voice, chunkFrames);
+      continue;
+    }
     const voiceFrames = Math.min(chunkFrames, voice.endPosition - voice.position);
     if (voiceFrames <= 0) {
       continue;
@@ -412,6 +436,28 @@ export function mixActiveVoices(
         sourceFrame += 1;
       }
     }
+  }
+}
+
+/** {@link mixActiveVoices} for a voice with its own rate or balance: it reads its source `rate` frames per output frame. */
+function mixShapedVoice(
+  mixedLeft: Float32Array,
+  mixedRight: Float32Array,
+  voice: ActiveVoice,
+  chunkFrames: number,
+): void {
+  const rate = voice.rate ?? 1;
+  const leftGain = voice.gain * (voice.leftGain ?? 1);
+  const rightGain = voice.gain * (voice.rightGain ?? 1);
+  const slice = voice.slice;
+  let sourceFrame = voice.position;
+  for (let frame = 0; frame < chunkFrames && sourceFrame < voice.endPosition; frame += 1) {
+    const envelope = slice
+      ? sampleSliceEnvelopeGain(sourceFrame - voice.startPosition, slice.lengthFrames, slice.envelope)
+      : 1;
+    mixedLeft[frame] += readSampleFrame(voice.sample.left, sourceFrame) * leftGain * envelope;
+    mixedRight[frame] += readSampleFrame(voice.sample.right, sourceFrame) * rightGain * envelope;
+    sourceFrame += rate;
   }
 }
 
@@ -481,7 +527,7 @@ function advanceAndPruneActiveVoices(activeVoices: ActiveVoice[], chunkFrames: n
   let writeIndex = 0;
   for (let readIndex = 0; readIndex < activeVoices.length; readIndex += 1) {
     const voice = activeVoices[readIndex]!;
-    voice.position += chunkFrames;
+    voice.position += chunkFrames * (voice.rate ?? 1);
     if (voice.position >= voice.endPosition) {
       continue;
     }
@@ -836,6 +882,11 @@ function buildEventPlaybackMap(resolved: ResolvedChart): Map<BeMusicEvent, Playa
       offsetSeconds: trigger.sampleOffsetSeconds,
       durationSeconds: trigger.sampleDurationSeconds,
       sliceId: trigger.sampleSliceId,
+      ...(trigger.sampleGain !== undefined ? { gain: trigger.sampleGain } : {}),
+      ...(trigger.samplePan !== undefined ? { pan: trigger.samplePan } : {}),
+      ...(trigger.samplePlaybackRate !== undefined ? { rate: trigger.samplePlaybackRate } : {}),
+      ...(trigger.sampleAttackSeconds !== undefined ? { attackSeconds: trigger.sampleAttackSeconds } : {}),
+      ...(trigger.sampleReleaseSeconds !== undefined ? { releaseSeconds: trigger.sampleReleaseSeconds } : {}),
     });
   }
   return playbackMap;

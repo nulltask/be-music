@@ -1,3 +1,4 @@
+import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
 /**
  * Media preparation for a play on the built-in and LR2 play screens (`PlaySession`): the play's AudioContext,
  * audio bus and analyser, the decoded (and, for keep pitch, stretched) samples, the NONSTOP stage mixer and the
@@ -79,9 +80,7 @@ export interface PlayMediaContext {
   nonstopMixer: NonstopStageMixer | undefined;
   readonly decodedSamples: Map<string, AudioBuffer>;
   readonly wavCmdVolumeMultipliers: Map<string, number>;
-  bmsonSlicePlayback:
-    | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
-    | undefined;
+  bmsonSlicePlayback: Map<BeMusicEvent, WebAudioSessionSlicePlayback> | undefined;
   readonly hasBGA: boolean;
   readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; layer2?: BGACue[]; poor: BGACue[] };
   readonly poorBGAFallbackKey: string | undefined;

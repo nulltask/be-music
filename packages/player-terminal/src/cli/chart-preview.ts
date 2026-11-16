@@ -1,4 +1,9 @@
-import { isPlayLaneSoundChannel, resolveChart, volWAVToLinearGain } from '@be-music/chart-model';
+import {
+  isPlayLaneSoundChannel,
+  resolveChart,
+  volWAVToLinearGain,
+  type TimedSampleTrigger,
+} from '@be-music/chart-model';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { isAbortError, throwIfAborted } from '@be-music/shared-utils/core';
@@ -44,6 +49,8 @@ interface FallbackSignaturePayload {
       sampleOffsetSeconds: number,
       sampleDurationSeconds?: number,
       sampleSliceId?: string,
+      /** An LRX note's own gain, balance, rate and ramps; absent for every other trigger. */
+      voice?: string,
     ]
   >;
 }
@@ -487,6 +494,7 @@ async function resolveFallbackPreviewIdentity(
       trigger.sampleOffsetSeconds,
       trigger.sampleDurationSeconds,
       trigger.sampleSliceId,
+      encodeTriggerVoice(trigger),
     ]),
   };
   const continueKey = computeFallbackContinueKey(payload);
@@ -495,6 +503,18 @@ async function resolveFallbackPreviewIdentity(
     continueKey,
     startSeconds: firstTriggerSeconds,
   };
+}
+
+/** A trigger's own playback values (an LRX note's), or `undefined` so other charts keep their signature. */
+function encodeTriggerVoice(trigger: TimedSampleTrigger): string | undefined {
+  const values = [
+    trigger.sampleGain,
+    trigger.samplePan,
+    trigger.samplePlaybackRate,
+    trigger.sampleAttackSeconds,
+    trigger.sampleReleaseSeconds,
+  ];
+  return values.every((value) => value === undefined) ? undefined : values.map((value) => value ?? '-').join('/');
 }
 
 function computeFallbackContinueKey(payload: FallbackSignaturePayload): string {
@@ -527,8 +547,8 @@ function computeFallbackContinueKey(payload: FallbackSignaturePayload): string {
   }
   const normalizedTriggers = payload.triggers
     .map(
-      ([seconds, beat, sampleKey, samplePath, sampleOffsetSeconds, sampleDurationSeconds, sampleSliceId]) =>
-        `trigger:${encodeSignatureNumber(seconds)}:${encodeSignatureNumber(beat)}:${sampleKey}:${normalizePath(samplePath)}:${encodeSignatureNumber(sampleOffsetSeconds)}:${encodeSignatureNumber(sampleDurationSeconds)}:${sampleSliceId ?? ''}`,
+      ([seconds, beat, sampleKey, samplePath, sampleOffsetSeconds, sampleDurationSeconds, sampleSliceId, voice]) =>
+        `trigger:${encodeSignatureNumber(seconds)}:${encodeSignatureNumber(beat)}:${sampleKey}:${normalizePath(samplePath)}:${encodeSignatureNumber(sampleOffsetSeconds)}:${encodeSignatureNumber(sampleDurationSeconds)}:${sampleSliceId ?? ''}${voice === undefined ? '' : `:${voice}`}`,
     )
     .sort();
   for (const line of normalizedTriggers) {

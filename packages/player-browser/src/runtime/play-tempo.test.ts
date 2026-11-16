@@ -11,6 +11,7 @@ import {
   setVideoPlaybackTempo,
   stretchDecodedSamples,
   stretchSlicePlayback,
+  collectTriggerVoicePlayback,
   supportsLiveTempoChange,
 } from './play-tempo.ts';
 
@@ -107,6 +108,35 @@ describe('stretchSlicePlayback', () => {
     const stretched = stretchSlicePlayback(slices, 0.5);
     expect(stretched.get(event)).toEqual({ offsetSeconds: 4, durationSeconds: 2, sliceId: 'a' });
     expect(stretched.get(other)).toEqual({ offsetSeconds: 2, sliceId: 'b' });
+  });
+});
+
+describe('LRX note playback', () => {
+  test('stretching also shrinks an LRX note ramps', () => {
+    const event = {} as BeMusicEvent;
+    const stretched = stretchSlicePlayback(
+      new Map([[event, { offsetSeconds: 1, durationSeconds: 1, attackSeconds: 0.2, releaseSeconds: 0.4, gain: 0.5 }]]),
+      2,
+    );
+    expect(stretched.get(event)).toEqual({
+      offsetSeconds: 0.5,
+      durationSeconds: 0.5,
+      attackSeconds: 0.1,
+      releaseSeconds: 0.2,
+      gain: 0.5,
+    });
+  });
+
+  test('collects the triggers that carry their own playback, and none when no trigger does', () => {
+    const shaped = {} as BeMusicEvent;
+    const plain = {} as BeMusicEvent;
+    const base = { beat: 0, seconds: 0, channel: '01', sampleKey: '01', sampleOffsetSeconds: 0 };
+    const playback = collectTriggerVoicePlayback([
+      { ...base, event: shaped, samplePlaybackRate: 2, samplePan: -0.5, sampleDurationSeconds: 0.25 },
+      { ...base, event: plain },
+    ]);
+    expect([...playback!]).toEqual([[shaped, { offsetSeconds: 0, durationSeconds: 0.25, pan: -0.5, rate: 2 }]]);
+    expect(collectTriggerVoicePlayback([{ ...base, event: plain }])).toBeUndefined();
   });
 });
 

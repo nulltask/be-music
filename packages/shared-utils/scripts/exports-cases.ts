@@ -36,6 +36,8 @@ const inlineWorker = Object.assign(
 );
 const workerAbortController = new AbortController();
 
+const BENCH_SAMPLE_CHANNEL = Float32Array.from({ length: 4410 }, (_, index) => Math.sin(index / 10));
+
 export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
   define('shared-utils.transformStereoPCM', {
     run: () => {
@@ -49,6 +51,22 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
   define('shared-utils.resolveSampleSliceEnvelope', {
     run: () => {
       utilsAPI.resolveSampleSliceEnvelope(4410, 2205, 44100, 132);
+    },
+  });
+  define('shared-utils.resolveSampleVoiceEnvelope', {
+    run: () => {
+      utilsAPI.resolveSampleVoiceEnvelope(4410, 2205, 44100, 132, 441, 882);
+    },
+  });
+  define('shared-utils.resolveStereoBalance', {
+    run: () => {
+      utilsAPI.resolveStereoBalance(-0.25);
+      utilsAPI.resolveStereoBalance(0.5);
+    },
+  });
+  define('shared-utils.readSampleFrame', {
+    run: () => {
+      utilsAPI.readSampleFrame(BENCH_SAMPLE_CHANNEL, 1234.5);
     },
   });
   define('shared-utils.sampleSliceEnvelopeGain', {

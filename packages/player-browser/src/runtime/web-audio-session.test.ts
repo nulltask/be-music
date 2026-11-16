@@ -608,6 +608,56 @@ describe('createWebAudioSession', () => {
     expect(trackedBufferSources[2]!.node.start).toHaveBeenCalledWith(1);
   });
 
+  test('plays an LRX note at its own rate, gain and balance, and ramps its attack and release', () => {
+    const { audioContext, audioBus, trackedBufferSources, createdGains } = createMocks();
+    const connectable = () => ({ connect: vi.fn(), disconnect: vi.fn() });
+    Object.assign(audioContext, {
+      createChannelSplitter: vi.fn(connectable),
+      createChannelMerger: vi.fn(connectable),
+    });
+    const chart = makeChartWithSamples();
+    chart.sourceFormat = 'lrx';
+    const shaped = mkEvent('01', '03');
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart,
+      decodedSamples: new Map([['bgm.wav', makeMockAudioBuffer(1)]]),
+      wavCmdVolumeMultipliers: new Map(),
+      bmsonSlicePlayback: new Map([
+        [
+          shaped,
+          {
+            offsetSeconds: 0,
+            durationSeconds: 0.5,
+            gain: 0.5,
+            pan: 0.5,
+            rate: 0.5,
+            attackSeconds: 0.1,
+            releaseSeconds: 0.2,
+          },
+        ],
+      ]),
+    });
+    (audioContext as { currentTime: number }).currentTime = 1;
+    session.triggerEvent?.(shaped);
+
+    const source = trackedBufferSources[0]!.node;
+    expect(source.playbackRate.value).toBe(0.5);
+    // The sample window rings on past its length for the release.
+    expect(source.start).toHaveBeenCalledWith(1, 0, 0.7);
+    // Its balance (the left channel at half), then the note gain, on gain nodes of their own.
+    const [leftGain, rightGain, voiceGain] = createdGains;
+    expect([leftGain!.gain.value, rightGain!.gain.value]).toEqual([0.5, 1]);
+    const ramps = voiceGain!.gain as unknown as Record<string, ReturnType<typeof vi.fn>>;
+    // Attack 0.1 s and release 0.2 s of the sample last 0.2 s and 0.4 s at half rate; the release starts after 1 s.
+    expect(ramps.setValueAtTime.mock.calls[0]).toEqual([0, 1]);
+    expect(ramps.linearRampToValueAtTime.mock.calls).toEqual([
+      [0.5, 1.2],
+      [0, 2.4],
+    ]);
+  });
+
   test('stops the previous BMS source when the same #WAV slot is retriggered', () => {
     const { audioContext, audioBus, trackedBufferSources } = createMocks();
     const session = createWebAudioSession({

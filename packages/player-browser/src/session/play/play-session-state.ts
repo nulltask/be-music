@@ -1,3 +1,4 @@
+import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
 import type { BGAOpacityTimelines } from '@be-music/chart-model';
 /**
  * The state of a play the play session works on, apart from what draws it: the chart and its notes, the audio graph,
@@ -309,11 +310,9 @@ export class PlaySessionState extends PlayPresentation {
    * `prepareChart`; the `WebAudioSession` looks each note's event up here and calls `node.start(when, offset, duration)`
    * accordingly so the sliced-WAV authoring intent is preserved.
    *
-   * Stays `undefined` for non-bmson charts (they have no slicing semantics — each note plays its entire WAV from t=0).
+   * Stays `undefined` for charts other than bmson and LRX: each note plays its entire WAV from t=0.
    */
-  bmsonSlicePlayback:
-    | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
-    | undefined;
+  bmsonSlicePlayback: Map<BeMusicEvent, WebAudioSessionSlicePlayback> | undefined;
   autoSampleTriggers: TimedSampleTrigger[] = [];
   /**
    * The engine's judgment counts and scores, as the readouts show them: under LR2 the POOR counter folds the empty POORs

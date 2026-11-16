@@ -1,3 +1,4 @@
+import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
 import type { PlayJudgeSideState } from './play-presentation.ts';
 import { collectLR2SortObjects } from './lr2-sort-objects.ts';
 import {
@@ -117,6 +118,7 @@ import { resolveLaneSides } from '../../chart/lane-sides.ts';
 import type { SecondPlayerState } from './play-state.ts';
 import { isSilentJudgeTimingPlay } from './play-media.ts';
 import { applyUndefinedLongNoteMode } from '@be-music/player-engine/course';
+import { collectTriggerVoicePlayback } from '../../runtime/play-tempo.ts';
 
 /** Whether a battle mode copies one SP chart onto both sides (each copy keeps a 2P source channel). */
 const isDuplicatedBattle = (mode: string): boolean =>
@@ -225,9 +227,7 @@ export interface PlayChartContext {
   battleSourceVariant: ChartPlayVariant | undefined;
   touchTokenByChannel: Map<string, string> | undefined;
   wavCmdVolumeMultipliers: Map<string, number>;
-  bmsonSlicePlayback:
-    | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
-    | undefined;
+  bmsonSlicePlayback: Map<BeMusicEvent, WebAudioSessionSlicePlayback> | undefined;
   autoSampleTriggers: TimedSampleTrigger[];
   score: ScoreSummary;
   playState: PlayState;
@@ -826,7 +826,9 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
             },
           ]),
         )
-      : undefined;
+      : resolved.sourceFormat === 'lrx'
+        ? collectTriggerVoicePlayback(resolvedPlay.sampleTriggers)
+        : undefined;
   ctx.chartDurationSeconds = Math.max(ctx.chartLastNoteEndSeconds, ctx.autoSampleTriggers.at(-1)?.seconds ?? 0);
   // Initialize gauge with the actual playable-note count and the chart's #TOTAL value so PG/GR gain matches LR2: a
   // long chart with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a short TOTAL=160 100-note chart gets +1.6
