@@ -3,6 +3,7 @@ import type { CourseView } from '@be-music/player-scene-model';
 import { CONNECTION_LABELS, RANDOM_MIX_FIELDS } from '../course-maker-panel.ts';
 import { formatLR2RandomMixSetting } from '@be-music/skin-lr2/state';
 import { playerText } from '../player-copy.ts';
+import { dialogShortcutAria, dialogShortcutHint } from './dialog-shortcuts.ts';
 import { RANDOM_MIX_DIFFICULTY_NAMES } from './random-mix-dialog.ts';
 import { formatRandomMixSaveName, type RandomMixSaveRequest, type RandomMixSetup } from '../random-mix-save.ts';
 
@@ -135,8 +136,26 @@ function template(request: RandomMixSaveRequest, offered: string, setName: (name
       <p class="random-mix-note">${t.settingsFixed}</p>
     </section>
     <footer>
-      <button type="submit" value="" class="btn" data-variant="outline">${t.discard}</button>
-      <button type="submit" value="save" class="btn" autofocus>${t.save}</button>
+      <button
+        type="submit"
+        value=""
+        class="btn"
+        data-variant="outline"
+        data-dialog-shortcut="cancel"
+        aria-keyshortcuts=${dialogShortcutAria('cancel')}
+      >
+        ${t.discard}${dialogShortcutHint('cancel')}
+      </button>
+      <button
+        type="submit"
+        value="save"
+        class="btn"
+        autofocus
+        data-dialog-shortcut="primary"
+        aria-keyshortcuts=${dialogShortcutAria('primary')}
+      >
+        ${t.save}${dialogShortcutHint('primary')}
+      </button>
     </footer>
   </form>`;
 }

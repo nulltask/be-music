@@ -2640,6 +2640,35 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   flex: none;
 }
 
+/*
+ * The keys a dialog button's shortcut is pressed with (ui/dialog-shortcuts.ts): small caps outlined in the button's own
+ * text colour, so they read on filled and outline buttons alike. Devices without a hover pointer rarely have a keyboard.
+ */
+.dialog-shortcut {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-inline-start: 0.25rem;
+}
+.dialog-shortcut kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.375rem;
+  height: 1.375rem;
+  padding: 0 0.3rem;
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+  border-radius: 0.3rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1;
+  opacity: 0.85;
+}
+@media (hover: none) {
+  .dialog-shortcut {
+    display: none;
+  }
+}
+
 /* Hidden family choices must override the shared buttons' inline-flex display. */
 #skin-switch [hidden] {
   display: none;
@@ -2647,6 +2676,12 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
 #skin-switch footer,
 #skin-switch .account-dialog-buttons {
   flex-wrap: wrap;
+}
+/* Room for Cancel and both skin buttons with their shortcut keys on one row; a narrow screen still wraps them. */
+@media (min-width: 40rem) {
+  #skin-switch > form {
+    max-width: 32rem;
+  }
 }
 
 /* The RANDOM MIX dialog: the conditions a mix is drawn by. */

@@ -20,6 +20,7 @@ import {
 } from '@be-music/player-ui';
 import { clampTempoPercent, TEMPO_PERCENT_MAX, TEMPO_PERCENT_MIN, tempoFromPercent } from '../play-tempo-settings.ts';
 import { onPlayerLangChange, playerLang, playerText } from '../player-copy.ts';
+import { dialogShortcutAria, dialogShortcutHint } from './dialog-shortcuts.ts';
 import { optionLabel } from './options/labels.ts';
 import { practiceGaugeItems } from './options/play-option-items.ts';
 import {
@@ -502,21 +503,47 @@ export class PracticeBarsDialog {
             data-size="sm"
             data-variant="outline"
             ?disabled=${this.selection === undefined}
+            data-dialog-shortcut="w"
+            aria-keyshortcuts=${dialogShortcutAria('w')}
             @click=${() => {
               this.selection = undefined;
               this.paint();
             }}
           >
-            ${copy.clear}
+            ${copy.clear}${dialogShortcutHint('w')}
           </button>
-          <button class="btn" type="button" data-size="sm" data-variant="outline" @click=${() => this.finish(false)}>
-            ${copy.cancel}
+          <button
+            class="btn"
+            type="button"
+            data-size="sm"
+            data-variant="outline"
+            data-dialog-shortcut="cancel"
+            aria-keyshortcuts=${dialogShortcutAria('cancel')}
+            @click=${() => this.finish(false)}
+          >
+            ${copy.cancel}${dialogShortcutHint('cancel')}
           </button>
-          <button class="btn" type="button" data-size="sm" data-variant="outline" @click=${() => this.playNormally()}>
-            ${copy.playNormally}
+          <button
+            class="btn"
+            type="button"
+            data-size="sm"
+            data-variant="outline"
+            data-dialog-shortcut="p"
+            aria-keyshortcuts=${dialogShortcutAria('p')}
+            @click=${() => this.playNormally()}
+          >
+            ${copy.playNormally}${dialogShortcutHint('p')}
           </button>
-          <button class="btn" type="button" data-size="sm" ?disabled=${loading} @click=${() => this.finish(true)}>
-            ${copy.start}
+          <button
+            class="btn"
+            type="button"
+            data-size="sm"
+            ?disabled=${loading}
+            data-dialog-shortcut="primary"
+            aria-keyshortcuts=${dialogShortcutAria('primary')}
+            @click=${() => this.finish(true)}
+          >
+            ${copy.start}${dialogShortcutHint('primary')}
           </button>
         </div>
       </div>`,
