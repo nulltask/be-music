@@ -58,7 +58,7 @@ export class RulesetGauge {
     }
     if (fallbackSpec !== undefined && fallbackSpec.id !== spec.id) this.fallback = new RulesetGauge(fallbackSpec);
     this.activeSpec = spec;
-    this.value = spec.initial;
+    this.value = spec.float32 === true ? Math.fround(spec.initial) : spec.initial;
     if (spec.survival && spec.initial <= 0) {
       this.dead = true;
       this.failedMidPlay = true;
@@ -76,12 +76,14 @@ export class RulesetGauge {
     // beatoraja GrooveGauge.update updates the hidden gauge too, including on the fatal judgment.
     this.fallback?.applyJudge(judge, rate);
     if (this.dead) return;
-    let delta = this.spec.values[judge]! * rate;
+    // beatoraja computes `gauge[judge] * rate` and the guts product in float (`GrooveGauge.Gauge.update`).
+    const f32 = this.spec.float32 === true ? Math.fround : (value: number) => value;
+    let delta = f32(this.spec.values[judge]! * f32(rate));
     if (delta < 0) {
       for (const step of this.spec.guts) {
         if (step.judges !== undefined && !step.judges.includes(judge)) continue;
         if (step.inclusive === true ? this.value <= step.threshold : this.value < step.threshold) {
-          delta *= step.multiplier;
+          delta = f32(delta * step.multiplier);
           break;
         }
       }
@@ -104,6 +106,7 @@ export class RulesetGauge {
     this.fallback?.applyRawDelta(delta);
     if (this.dead) return;
     if (this.spec.recoveryDisabled === true && delta > 0) delta = 0;
+    if (this.spec.float32 === true) delta = Math.fround(delta);
     const floor = this.spec.mineFloor;
     this.set(delta < 0 && floor !== undefined ? Math.max(floor, this.value + delta) : this.value + delta);
     this.selectFallback();
@@ -155,7 +158,9 @@ export class RulesetGauge {
   }
 
   private set(next: number): void {
-    let value = Math.min(this.spec.max, Math.max(this.spec.min, next));
+    // beatoraja adds in float before it clamps (`GrooveGauge.Gauge.setValue`).
+    const sum = this.spec.float32 === true ? Math.fround(next) : next;
+    let value = Math.min(this.spec.max, Math.max(this.spec.min, sum));
     if (this.spec.death !== undefined && value < this.spec.death) {
       value = 0;
     }
