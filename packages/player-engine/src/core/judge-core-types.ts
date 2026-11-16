@@ -9,6 +9,7 @@ import type { GrooveGaugeJudgmentKind } from './groove-gauge.ts';
 import type { AnyKeyRoutes } from './any-key.ts';
 import type { LaneHoldHistory } from './lane-hold.ts';
 import type { ScratchSpin } from './scratch-spin.ts';
+import type { PlugoutLaneSoundState } from './plugout-lane-sound.ts';
 import type { InputSource } from './input-source.ts';
 import { type PendingAutoLongNoteState, type TimedManualJudge } from './judge-rules.ts';
 import { type ScoreSummary, type ScoreTracker } from './scoring.ts';
@@ -184,6 +185,8 @@ export interface JudgeCoreState {
   remainingScorableNotes: number;
   remainingLandmineNotes: number;
   remainingInvisibleNotes: number;
+  /** Each lane's sound cursor under a ruleset that picks lane sounds as plugout does (`RulesetConfig.laneSound`). */
+  readonly plugoutLaneSounds?: PlugoutLaneSoundState;
 }
 
 /** One thing that happens to the judge state, stamped with chart seconds (and the millisecond domain). */

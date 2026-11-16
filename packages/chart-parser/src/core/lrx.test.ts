@@ -118,11 +118,11 @@ describe('parseLRX', () => {
       lrh: lrh('lanetype="1"'),
     });
     const byValue = new Map(chart.events.map((event) => [event.value, event]));
-    expect(byValue.get('04')).toMatchObject({ channel: '01', lrx: { damage: 0, keyVolume: true } });
+    expect(byValue.get('04')).toMatchObject({ channel: '01', lrx: { damage: 0, lane: '12', keyVolume: true } });
     // A chain note remembers its lane, for chart-model to tie it to the lane's preceding note.
-    expect(byValue.get('05')).toMatchObject({ channel: '01', lrx: { chain: true, chainLane: '13', keyVolume: true } });
-    // A hidden chain note is in no lane list in plugout, so it follows nothing.
-    expect(byValue.get('07')!.lrx).toEqual({ chain: true, damage: 0, keyVolume: true });
+    expect(byValue.get('05')).toMatchObject({ channel: '01', lrx: { chain: true, lane: '13', keyVolume: true } });
+    // A hidden chain note keeps its lane too; chart-model ties it to nothing, since plugout keeps it out of the lane.
+    expect(byValue.get('07')!.lrx).toEqual({ chain: true, damage: 0, lane: '15', keyVolume: true });
     expect(byValue.get('06')).toMatchObject({
       channel: '14',
       lrx: {
@@ -280,11 +280,11 @@ describe('LRX background volume', () => {
 
 describe('normalizeLRXEventExtensions', () => {
   test("keeps a chain note's lane when reading Be-Music JSON back", () => {
-    expect(normalizeLRXEventExtensions({ chain: true, chainLane: '13', keyVolume: true, other: 1 })).toEqual({
+    expect(normalizeLRXEventExtensions({ chain: true, lane: '13', keyVolume: true, other: 1 })).toEqual({
       chain: true,
-      chainLane: '13',
+      lane: '13',
       keyVolume: true,
     });
-    expect(normalizeLRXEventExtensions({ chainLane: 13 })).toBeUndefined();
+    expect(normalizeLRXEventExtensions({ lane: 13 })).toBeUndefined();
   });
 });

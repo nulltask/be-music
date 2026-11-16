@@ -238,7 +238,8 @@ function linkLRXChainSounds(context: ResolvedNoteContext, notes: MutableNote[]):
       previous.set(note.channel, note);
       continue;
     }
-    const lane = event.lrx?.chain === true ? event.lrx.chainLane : undefined;
+    // A hidden chain note is in no lane list in plugout, so it follows nothing.
+    const lane = event.lrx?.chain === true && event.lrx.damage !== 0 ? event.lrx.lane : undefined;
     const base = lane === undefined ? undefined : previous.get(lane);
     if (base === undefined) continue;
     const seconds = context.timing.beatToSeconds(context.beatResolver.eventToBeat(event));
@@ -269,10 +270,27 @@ export function resolveMineNotes(context: ResolvedNoteContext): ResolvedNote[] {
   return mines;
 }
 
-/** Resolves the invisible objects (`3x` / `4x`): not judged, but they set the lane's keysound in manual play. */
+/**
+ * Resolves the invisible objects (`3x` / `4x`): not judged, but they set the lane's keysound in manual play. An LRX
+ * hidden (`dmg="0"`) lane note is one too, on its lane, besides the background sound it plays: plugout makes it the
+ * lane's keysound once it plays (`plugout4.exe` 0x43f430), and reads BMS invisible objects as such notes (0x44b00c).
+ */
 export function resolveInvisibleNotes(context: ResolvedNoteContext): ResolvedNote[] {
   const invisible: ResolvedNote[] = [];
   for (const event of context.sortedEvents) {
+    const hiddenLane = event.lrx?.damage === 0 ? event.lrx.lane : undefined;
+    if (hiddenLane !== undefined && context.json.sourceFormat === 'lrx') {
+      const beat = context.beatResolver.eventToBeat(event);
+      invisible.push({
+        kind: 'invisible',
+        channel: hiddenLane,
+        beat,
+        seconds: context.timing.beatToSeconds(beat),
+        sampleKey: normalizeObjectKey(event.value, context.idBase, false),
+        event,
+      });
+      continue;
+    }
     const channel = normalizeChannel(event.channel);
     const side = channel.charCodeAt(0);
     if (!isLaneChannel(channel) || (side !== 0x33 && side !== 0x34)) {

@@ -92,4 +92,18 @@ describe('LRX charts in the chart model', () => {
     expect(playsAtKeysoundVolume('01', { lrx: { keyVolume: true } })).toBe(true);
     expect(playsAtKeysoundVolume('01', {})).toBe(false);
   });
+
+  test('a hidden lane note is also an invisible note on its lane, and no chain follows it', () => {
+    const json = chart(
+      0,
+      '<n c="1" s="480" p="0" dmg="0" />',
+      '<n c="1" s="600" p="1" cn="1" />',
+      '<n c="2" s="480" p="2" />',
+    );
+    const resolved = resolveChart(json);
+    expect(resolved.invisibleNotes.map((note) => [note.channel, note.event.value])).toEqual([['11', '01']]);
+    // It still plays in the background, and the chain note after it has no judged note to follow.
+    expect(resolved.sampleTriggers.some((trigger) => trigger.event.value === '01')).toBe(true);
+    expect(resolved.notes.some((note) => note.chainSounds !== undefined)).toBe(false);
+  });
 });

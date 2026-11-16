@@ -2,4 +2,4 @@
 '@be-music/chart-source': minor
 ---
 
-`LRXEventExtensions.chainLane` names the lane an LRX chain note sits on, so it can follow the note before it there, and `LRXEventExtensions.keyVolume` marks a background sound plugout plays at the keysound volume.
+`LRXEventExtensions.lane` names the lane of an LRX chain or hidden note that plays in the background, so a chain note can follow the note before it and a hidden note can become its lane's keysound. `LRXEventExtensions.keyVolume` marks a background sound plugout plays at the keysound volume.

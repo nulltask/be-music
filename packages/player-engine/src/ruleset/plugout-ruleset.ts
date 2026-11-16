@@ -74,6 +74,7 @@ export function resolvePlugoutRuleset(parts: PlugoutRulesetParts): RulesetConfig
     moneyScore: false,
     plugoutScore: true,
     heldChargeTail: { note: 'BAD', scratch: 'PGREAT', earlyRelease: 'BAD' },
+    laneSound: 'plugout',
     emptyPoorCountsInPoorDisplay: false,
   };
 }

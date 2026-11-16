@@ -20,10 +20,11 @@ export interface LRXEventExtensions {
    */
   chain?: boolean;
   /**
-   * The lane (BMS channel) a chain note sits on. chart-model links it to the lane's preceding judged note; without
-   * one it plays in the background at its own time.
+   * The lane (BMS channel) of a lane note that plays in the background: a chain note, which chart-model ties to the
+   * lane's preceding judged note (without one it plays at its own time), or a hidden (`dmg="0"`) note, which also
+   * becomes the lane's keysound once it plays, as an invisible note does.
    */
-  chainLane?: string;
+  lane?: string;
   /**
    * A background sound plugout plays at the keysound volume: its mixer puts every note in the key group but those on
    * the BGM columns (`c` 100–199) that keep a non-zero `dmg` (`plugout4.exe` 0x43b455, 0x43b640). Set on the events of

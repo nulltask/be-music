@@ -1,4 +1,5 @@
 import type { BeMusicEvent } from '@be-music/chart-source';
+import { advancePlugoutHiddenSounds, notePlugoutLaneJudged } from './plugout-lane-sound.ts';
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
 import { judgeWindowLateReachUs } from '../ruleset/judge.ts';
 import { addHCNPassing, HCNTickCounter, isChargeLongNoteMode } from '../ruleset/long-note.ts';
@@ -376,6 +377,7 @@ function startAutoScratchNote(
     emit({ kind: 'sound', source: 'auto-scratch', event, seconds: note.seconds, channel: note.channel });
   if (note.chainSounds)
     emit({ kind: 'chain-sounds', sounds: note.chainSounds, seconds: note.seconds, channel: note.channel });
+  notePlugoutLaneJudged(state, note.channel, note);
   const endSeconds = resolveLongNoteEndSeconds(note);
   emit({ kind: 'ui', command: { kind: 'flash-lane', channel: note.channel } });
   if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
@@ -760,6 +762,7 @@ export function advanceJudgeState(
 ): void {
   const { config } = state;
   state.advancedThroughSeconds = Math.max(state.advancedThroughSeconds, nowSec);
+  advancePlugoutHiddenSounds(state, nowSec);
 
   // Holds are judged on the judge clock: past an LR2 reversal it is the mirrored `t' = 2R - now`, which never reaches
   // a tail beyond R — a hold spanning the reversal stays open while held and BADs on release, as in LR2

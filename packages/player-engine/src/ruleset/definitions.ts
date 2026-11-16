@@ -242,6 +242,12 @@ export interface RulesetConfig {
    */
   heldChargeTail?: { note: 'BAD'; scratch: 'PGREAT'; earlyRelease: 'BAD' };
   /**
+   * How a press with nothing to judge picks its lane's sound. Absent: the last note whose early window has opened
+   * (LR2's lane sound hold). `plugout`: the lane's sound cursor, moved by judged presses, long-note releases and hidden
+   * notes (`core/plugout-lane-sound.ts`). Audio only: no judgment or score depends on it.
+   */
+  laneSound?: 'plugout';
+  /**
    * Whether the ruleset's own result screen folds empty POORs into its POOR counter. LR2 does — OpenLR2's
    * `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch and LR2 exposes no separate stat —
    * so a run judged under LR2 must display the sum to match the real thing. Purely a PRESENTATION rule: the
