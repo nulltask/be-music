@@ -258,6 +258,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
   guideSE: PlayOptions['guideSE'];
+  windowHold: PlayOptions['windowHold'];
   judgeCounts: PlayOptions['judgeCounts'];
   judgeDetailSplit: PlayOptions['judgeDetailSplit'];
   judgeDetail: PlayOptions['judgeDetail'];

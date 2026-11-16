@@ -27,6 +27,7 @@ export type GUIPlayOptions = Pick<
   | 'bpmGuide'
   | 'bpmChangeWarning'
   | 'guideSE'
+  | 'windowHold'
   | 'judgeCounts'
   | 'judgeDetailSplit'
   | 'judgeDetail'
@@ -142,6 +143,7 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
     guideSE: state.guideSE,
+    windowHold: state.windowHold,
     judgeCounts: state.judgeCounts,
     judgeDetailSplit: state.judgeDetailSplit,
     judgeDetail: state.judgeDetail,
@@ -267,6 +269,7 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.bpmGuide = options.bpmGuide;
   state.bpmChangeWarning = options.bpmChangeWarning;
   state.guideSE = options.guideSE;
+  state.windowHold = options.windowHold;
   state.judgeCounts = options.judgeCounts;
   state.judgeDetailSplit = options.judgeDetailSplit;
   state.judgeDetail = options.judgeDetail;

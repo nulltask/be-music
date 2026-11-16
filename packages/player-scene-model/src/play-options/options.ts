@@ -52,6 +52,11 @@ export interface PlayOptions {
   bpmChangeWarning: boolean;
   /** beatoraja's GUIDE SE: the sound set's sound for each judgment plays at the judgment. Read as the play starts. */
   guideSE: boolean;
+  /**
+   * beatoraja's WINDOW HOLD: from the start of a play until its last note, the play takes START as held, so the START +
+   * key controls (hi-speed, the lane cover) run on every key press (`ControlInputProcessor`, #1131).
+   */
+  windowHold: boolean;
   /** Whether the built-in skins show the judgment counts during a play. */
   judgeCounts: boolean;
   /** Whether the judge detail shows the keys' and the scratch's timing apart. */

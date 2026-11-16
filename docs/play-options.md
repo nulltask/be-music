@@ -336,6 +336,17 @@ Source: AC 34 [speed options](https://p.eagate.573.jp/game/2dx/34/howto/play/opt
 
 Tracked in [#1128](https://github.com/nulltask/be-music/issues/1128).
 
+## WINDOW HOLD
+
+**WINDOW HOLD (beatoraja)** on the View tab, beside HS-FIX, makes a play take START as held, as beatoraja's `isWindowHold` does: from the start of the play until its last note, every key press also runs the START + key controls ([`ControlInputProcessor` L155-L171](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/ControlInputProcessor.java#L155-L171), `8320241d`) [V]. beatoraja names it in its launcher only, with no description, and it was added without one ([exch-bms2/beatoraja#268](https://github.com/exch-bms2/beatoraja/pull/268)).
+
+- **What a key press does then.** What START + that key does in the play's key map: under beatoraja's, an odd key steps the hi-speed down, an even key up, and the turntable moves the lane cover; under LR2's, keys 1 / 3 / 5 down and 2 / 4 up, and keys 6 / 7 move the lane cover while it shows. The keys still play their notes.
+- **START itself.** It never comes up during the play, so pressing it twice no longer switches the lane cover. Under beatoraja's key map SELECT + a key changes the visible time and the START + key control runs as well, as both of beatoraja's branches do in one frame.
+- **When it holds.** In the player's own play only, as beatoraja runs these controls in PLAY and PRACTICE: not in AUTO play or a replay. After the last note it lets go, so START or SELECT ends the play as usual.
+- **Records.** It changes only the view (the hi-speed and the covers, recorded as view changes), so it sets no assist class and the replay re-judges as before. It is read as the play starts and is locked during one.
+
+Tracked in [#1131](https://github.com/nulltask/be-music/issues/1131).
+
 ## BPM GUIDE
 
 Turn on **BPM GUIDE (beatoraja)** in the Options dialog; it is off by default. Upcoming tempo changes then appear on the lanes as beatoraja 0.8.9's `LaneRenderer` draws them: a green `BPM<n>` label at each actual BPM change, skipping declarations that repeat the current BPM, and a yellow `STOP <n>ms` label at each positive STOP, both truncated to integers. Labels follow the notes' scroll, including STOPs and negative scroll, and leave once they pass the judge line.

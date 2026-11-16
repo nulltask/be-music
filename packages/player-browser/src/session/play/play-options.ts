@@ -242,6 +242,11 @@ export interface PlaySessionOptions {
   actionKeys?: ControlActionOverrides;
   /** The key map the play reads its keys by (the skin family's, `resolveControlScheme`). Defaults to LR2's. */
   controlScheme?: ControlScheme;
+  /**
+   * beatoraja's WINDOW HOLD (#1131): until the last note the play takes START as held, so every key press also runs the
+   * START + key controls of {@link controlScheme}. Not in AUTO play or a replay, as beatoraja runs them in PLAY only.
+   */
+  windowHold?: boolean;
   /** The key map of the built-in skins, from which the host takes `controlScheme` on a built-in skin. */
   builtInControlScheme?: ControlScheme;
   /**

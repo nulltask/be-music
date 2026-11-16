@@ -105,6 +105,7 @@ export interface OptionSettings {
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
   guideSE: PlayerGUIState['guideSE'];
+  windowHold: PlayerGUIState['windowHold'];
   judgeCounts: PlayerGUIState['judgeCounts'];
   judgeDetailSplit: PlayerGUIState['judgeDetailSplit'];
   judgeDetail: PlayerGUIState['judgeDetail'];
@@ -343,6 +344,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
   assign(settings, 'bpmChangeWarning', booleanOf(raw.bpmChangeWarning));
   assign(settings, 'guideSE', resolvePlayOptionValue('guideSE', raw.guideSE));
+  assign(settings, 'windowHold', resolvePlayOptionValue('windowHold', raw.windowHold));
   assign(settings, 'judgeCounts', resolvePlayOptionValue('judgeCounts', raw.judgeCounts));
   assign(settings, 'judgeDetailSplit', resolvePlayOptionValue('judgeDetailSplit', raw.judgeDetailSplit));
   assign(settings, 'judgeDetail', resolvePlayOptionValue('judgeDetail', raw.judgeDetail));
@@ -670,6 +672,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('bpmGuide');
   assignState('bpmChangeWarning');
   assignState('guideSE');
+  assignState('windowHold');
   assignState('judgeCounts');
   assignState('judgeDetailSplit');
   assignState('judgeDetail');
@@ -841,6 +844,7 @@ export function captureOptionSettings(
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
     guideSE: state.guideSE,
+    windowHold: state.windowHold,
     judgeCounts: state.judgeCounts,
     judgeDetailSplit: state.judgeDetailSplit,
     judgeDetail: state.judgeDetail,
