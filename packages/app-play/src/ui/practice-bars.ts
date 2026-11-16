@@ -148,6 +148,9 @@ export class PracticeBarsDialog {
     this.dialog = document.createElement('dialog');
     this.dialog.className = 'dialog practice-bars-dialog';
     this.dialog.setAttribute('aria-labelledby', 'practice-bars-title');
+    // Opening focuses the dialog itself, not its first field (`showModal` would pick the tempo field): the fields wait
+    // for Tab, and the letter and Cmd/Ctrl+Enter shortcuts press the buttons from the start.
+    this.dialog.tabIndex = -1;
     // The modal owns the keyboard: the select screen behind it takes no keys. Enter starts; Escape cancels.
     for (const type of ['keydown', 'keyup'] as const)
       this.dialog.addEventListener(type, (event) => {
@@ -179,7 +182,10 @@ export class PracticeBarsDialog {
     this.selection = this.memory.pickFor(chart.id)?.bars;
     this.previewing = undefined;
     this.paint(true);
-    if (!this.dialog.open) this.dialog.showModal();
+    if (!this.dialog.open) {
+      this.dialog.showModal();
+      this.dialog.focus();
+    }
     // Lay the chart out after the dialog shows, so a long chart's layout does not hold the press that opened it.
     requestAnimationFrame(() => {
       if (this.chart !== chart) return;
