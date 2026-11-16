@@ -1,7 +1,7 @@
 import { AnyKeyRoutes, anyKeyRouteKeys, selectAnyKeyLane, type AnyKeyCandidate } from '../core/any-key.ts';
 import { resolvePlugoutScore } from '../ruleset/plugout.ts';
 import { resolveAutoScratchSides } from '../core/auto-scratch.ts';
-import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart-model';
+import { resolveScratchChannels } from './scratch-channels.ts';
 import { resolve____RankLabel } from '../ruleset/score.ts';
 import type { BeMusicReplay, ReplayInputEvent, ReplayRulesetResult } from './format.ts';
 import {
@@ -138,7 +138,12 @@ export function simulateReplay(replay: BeMusicReplay, options: SimulateReplayOpt
   }
   const config = resolveRulesetConfig(replay, options.ruleset, options);
   const endOnFailure =
-    options.endOnFailure ?? resolveGaugeEndOnFailure(replay.play.gaugeAutoShift, replay.play.endOnFailure === true);
+    options.endOnFailure ??
+    resolveGaugeEndOnFailure(
+      replay.play.gaugeAutoShift,
+      replay.play.endOnFailure === true,
+      replay.play.course === undefined ? config.gaugeSource : undefined,
+    );
   return new ReplaySimulation(replay, config, endOnFailure, options.onJudgment, options.onFailure).run();
 }
 
@@ -418,6 +423,8 @@ class ReplaySimulation {
         continue;
       }
       const lane = this.laneFor(note.channel, autoPlay, autoScratch);
+      // plugout's AUTO SCRATCH only sounds its notes: they are neither judged nor counted.
+      if (this.config.autoScratchUnjudged === true && lane.auto && !autoPlay && note.type !== 'mine') continue;
       if (note.type === 'mine') {
         lane.mines.push({ timeUs: note.timeUs, damage: note.damage ?? 0, applied: false });
         continue;
@@ -1128,6 +1135,7 @@ class ReplaySimulation {
       if (note.isLong) break;
       const deltaUs = note.timeUs - timeUs;
       if (deltaUs < bad[0] || deltaUs > bad[1]) break;
+      if (this.config.multiBadAheadUs !== undefined && deltaUs >= this.config.multiBadAheadUs) break;
       const judge = classifyRulesetJudge(deltaUs, set);
       if (judge === RULESET_JUDGE_NONE || judge > JUDGE_BAD) break;
       note.judged = true;
@@ -1226,28 +1234,6 @@ function windowSetFor(candidate: SelectionCandidate, windows: RulesetWindowTable
 }
 
 /** Play-mode layout per leading key count, for lane-mode strings that are not a layout label (`'7keys'`, `'14K'`). */
-const LAYOUT_BY_KEY_COUNT: Readonly<Record<string, PlayModeLayoutId>> = {
-  '5': '5',
-  '7': '7',
-  '9': '9-pms',
-  '10': '10',
-  '14': '14',
-  '24': '24',
-  '48': '48',
-};
-
-/**
- * The scratch lanes of a recorded lane mode: the lanes the play-mode table marks `scratch` in the layout the engine
- * played (`ReplayChart.laneMode` is its label), the same set the engine binds as scratch. Other spellings resolve by
- * their leading key count, as the ruleset reads the lane mode, with 7 KEY for anything else.
- */
-function resolveScratchChannels(laneMode: string): ReadonlySet<string> {
-  const layout =
-    Object.values(PLAY_MODE_LAYOUTS).find((candidate) => candidate.label === laneMode) ??
-    PLAY_MODE_LAYOUTS[LAYOUT_BY_KEY_COUNT[/^\d+/.exec(laneMode)?.[0] ?? ''] ?? '7'];
-  return new Set(layout.lanes.filter((lane) => lane.kind === 'scratch').map((lane) => lane.channel));
-}
-
 /**
  * Index of a lane's first note a press at `timeUs` can reach: the first whose `timeUs - pressUs` is not below `lateUs`
  * (the window's late edge, negative). A lane's notes are sorted by time, so a binary search finds it where a walk from

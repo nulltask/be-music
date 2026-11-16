@@ -36,6 +36,7 @@ describe('play note shapes', () => {
       'event',
       'soundEvents',
       'endSoundEvent',
+      'chainSounds',
       'channel',
       'beat',
       'endBeat',

@@ -94,12 +94,15 @@ export async function prepareNonstopPlay(
     return { ok: false, reason: stitched.reason, ...(stitched.stage !== undefined ? { stage: stitched.stage } : {}) };
   }
   const { source } = assets;
+  // The stitched chart's own format names its path: an LRX course is an `.lrs`.
+  const format = stitched.course.chart.sourceFormat;
+  const chartPath = format === 'bmson' ? 'nonstop.bmson' : format === 'lrx' ? 'nonstop.lrs' : NONSTOP_CHART_PATH;
   const chartEntry: LibraryChart = {
     ...stages[0]!,
     id: `nonstop:${course.id}`,
     sourceId: source.id,
-    chartPath: stitched.course.chart.sourceFormat === 'bmson' ? 'nonstop.bmson' : NONSTOP_CHART_PATH,
-    fileLabel: stitched.course.chart.sourceFormat === 'bmson' ? 'nonstop.bmson' : NONSTOP_CHART_PATH,
+    chartPath,
+    fileLabel: chartPath,
     title: course.definition.name,
     totalNotes: stages.reduce((sum, stage) => sum + stage.totalNotes, 0),
     chart: stitched.course.chart,

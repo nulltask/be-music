@@ -76,8 +76,7 @@
         "mode": "manual",
         "autoScratch": false,
         "gauge": "GROOVE",
-        "judgeRuleset": "plugout",
-        "endOnFailure": true
+        "judgeRuleset": "plugout"
       },
       "results": {
         "native": {
@@ -301,8 +300,7 @@
         "mode": "manual",
         "autoScratch": false,
         "gauge": "GROOVE",
-        "judgeRuleset": "plugout",
-        "endOnFailure": true
+        "judgeRuleset": "plugout"
       },
       "results": "(same as manual)"
     },
@@ -435,14 +433,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {
-        "inputSources": [],
-        "mode": "auto",
-        "autoScratch": false,
-        "gauge": "GROOVE",
-        "judgeRuleset": "plugout",
-        "endOnFailure": true
-      },
+      "play": {"inputSources":[],"mode":"auto","autoScratch":false,"gauge":"GROOVE","judgeRuleset":"plugout"},
       "results": {
         "native": {
           "ruleset": "be-music/native",

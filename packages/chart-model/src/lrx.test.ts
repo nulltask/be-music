@@ -5,6 +5,7 @@ import {
   countScoredNotes,
   createChartFingerprintDocument,
   createPlayFingerprintDocument,
+  playsAtKeysoundVolume,
   resolveChart,
   resolveChartPlayVariant,
 } from './index.ts';
@@ -58,5 +59,51 @@ describe('LRX charts in the chart model', () => {
     const notes = [{ lane: '22' }, { lane: '25' }] as unknown as Parameters<typeof resolveFingerprintLaneMode>[0];
     expect(resolveFingerprintLaneMode(notes, null, false, null)).toBe('9');
     expect(resolveFingerprintLaneMode(notes, null, false, null, 3)).toBe('10');
+  });
+
+  test('ties each chain note to the judged note before it on its lane, with its delay', () => {
+    // 120 BPM: 480 ticks is 0.5 s.
+    const json = chart(
+      0,
+      '<n c="1" s="480" p="0" />',
+      '<n c="1" s="600" p="1" cn="1" />',
+      '<n c="1" s="720" p="2" cn="1" />',
+      '<n c="2" s="720" p="3" cn="1" />',
+      '<n c="1" s="960" p="4" />',
+      '<n c="1" s="1440" p="5" cn="1" />',
+    );
+    const notes = resolveChart(json).notes;
+    const chains = (channel: string, beat: number) =>
+      notes
+        .find((note) => note.channel === channel && note.beat === beat)!
+        .chainSounds?.map((sound) => [sound.event.value, sound.delaySeconds]);
+    expect(chains('11', 1)).toEqual([
+      ['02', 0.125],
+      ['03', 0.25],
+    ]);
+    expect(chains('11', 2)).toEqual([['06', 0.5]]);
+    // Lane 2 has no note before its chain note: it plays in the background, tied to nothing.
+    expect(notes.some((note) => note.chainSounds?.some((sound) => sound.event.value === '04'))).toBe(false);
+  });
+
+  test('a background sound plugout plays in its key group plays at the keysound volume', () => {
+    expect(playsAtKeysoundVolume('11')).toBe(true);
+    expect(playsAtKeysoundVolume('01')).toBe(false);
+    expect(playsAtKeysoundVolume('01', { lrx: { keyVolume: true } })).toBe(true);
+    expect(playsAtKeysoundVolume('01', {})).toBe(false);
+  });
+
+  test('a hidden lane note is also an invisible note on its lane, and no chain follows it', () => {
+    const json = chart(
+      0,
+      '<n c="1" s="480" p="0" dmg="0" />',
+      '<n c="1" s="600" p="1" cn="1" />',
+      '<n c="2" s="480" p="2" />',
+    );
+    const resolved = resolveChart(json);
+    expect(resolved.invisibleNotes.map((note) => [note.channel, note.event.value])).toEqual([['11', '01']]);
+    // It still plays in the background, and the chain note after it has no judged note to follow.
+    expect(resolved.sampleTriggers.some((trigger) => trigger.event.value === '01')).toBe(true);
+    expect(resolved.notes.some((note) => note.chainSounds !== undefined)).toBe(false);
   });
 });

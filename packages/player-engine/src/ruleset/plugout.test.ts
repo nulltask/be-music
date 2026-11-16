@@ -218,11 +218,12 @@ describe("resolveRuleset('plugout')", () => {
     notes: { ...createEmptyRulesetNoteCounts(), normal: 90, long: { 1: 5, 2: 0, 3: 0 } },
   };
 
-  test('plays every long note as a charge note with a held-tail rule and no multi-BAD', () => {
+  test('plays every long note as a charge note with a held-tail rule, re-judging only notes the press has reached', () => {
     const config = resolveRuleset(chart, 'plugout');
     expect(config).toMatchObject({
       selection: 'lowest',
-      multiBad: false,
+      multiBad: true,
+      multiBadAheadUs: 3000,
       longNoteStyle: 'charge',
       headBadSkipsTail: true,
       plugoutScore: true,

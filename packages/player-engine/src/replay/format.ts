@@ -104,6 +104,11 @@ export interface ReplayNote {
   damage?: number;
   /** Generated mines carry no explosion sample. Valid only for mine notes. */
   silent?: boolean;
+  /**
+   * A note plugout judges but leaves out of its note count: an LRX chain note at the start of its lane. Only the
+   * `plugout` ruleset reads it.
+   */
+  uncounted?: true;
 }
 
 export type ReplayInputAction = 'down' | 'up';
@@ -221,7 +226,8 @@ export interface ReplayChart {
    * the player played. Lane options (MIRROR / RANDOM / FLIP) are part of neither fingerprint; they live in `play`.
    */
   playFingerprint?: string;
-  sourceFormat: 'bms' | 'bmson';
+  /** The chart's source format. An LRX chart reads its rank and TOTAL as a BMS chart does. */
+  sourceFormat: 'bms' | 'bmson' | 'lrx';
   /** Explicit TOTAL units for mixed-format NONSTOP charts; otherwise derived from sourceFormat. */
   totalUnit?: 'absolute' | 'percent';
   /** Engine lane display mode (`'7keys'` / `'14keys'` / ... — `resolveLaneDisplayMode` output). */
@@ -570,8 +576,8 @@ function parseChart(chart: Record<string, unknown>): ReplayChart {
   const sourceFormat = chart.sourceFormat;
   if (chart.totalUnit !== undefined && chart.totalUnit !== 'absolute' && chart.totalUnit !== 'percent')
     throw new ReplayParseError('chart.totalUnit: expected absolute or percent');
-  if (sourceFormat !== 'bms' && sourceFormat !== 'bmson') {
-    throw new ReplayParseError(`chart.sourceFormat: expected 'bms' | 'bmson'`);
+  if (sourceFormat !== 'bms' && sourceFormat !== 'bmson' && sourceFormat !== 'lrx') {
+    throw new ReplayParseError(`chart.sourceFormat: expected 'bms' | 'bmson' | 'lrx'`);
   }
   const judgeRankRaw = expectRecord(chart.judgeRank, 'chart.judgeRank');
   const judgeRank: ReplayJudgeRank = {
@@ -734,6 +740,11 @@ function parseNote(value: unknown, index: number): ReplayNote {
         `chart.notes[${index}].generatedLongNote: expected a timed long note with a resolved mode`,
       );
     note.generatedLongNote = true;
+  }
+  if (record.uncounted !== undefined) {
+    if (record.uncounted !== true || (type !== 'normal' && type !== 'long'))
+      throw new ReplayParseError(`chart.notes[${index}].uncounted: expected true on a judged note`);
+    note.uncounted = true;
   }
   if (record.silent !== undefined) {
     if (type !== 'mine' || typeof record.silent !== 'boolean')

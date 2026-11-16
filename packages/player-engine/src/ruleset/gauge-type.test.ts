@@ -44,6 +44,13 @@ it('NONE ends judging when a survival gauge empties and every other policy keeps
   expect(GAUGE_AUTO_SHIFTS).toEqual(['NONE', 'CONTINUE', 'SURVIVAL_TO_GROOVE', 'BEST_CLEAR', 'SELECT_TO_UNDER']);
 });
 
+it("a single play on plugout's gauges plays on to the end, as plugout does", () => {
+  expect(resolveGaugeEndOnFailure('NONE', true, 'plugout')).toBe(false);
+  expect(resolveGaugeEndOnFailure(undefined, true, 'plugout')).toBe(false);
+  expect(resolveGaugeEndOnFailure('NONE', true, 'lr2')).toBe(true);
+  expect(() => resolveGaugeEndOnFailure('BOGUS' as never, true, 'plugout')).toThrow(RangeError);
+});
+
 it('keeps the host-level contract without a policy and rejects an unknown one', () => {
   expect(resolveGaugeEndOnFailure(undefined, false)).toBe(false);
   expect(resolveGaugeEndOnFailure(undefined)).toBe(true);

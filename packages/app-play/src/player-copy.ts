@@ -294,6 +294,10 @@ const en = {
       `${name}: all NONSTOP stages must use the same generic keyboard layout${stage}`,
     nonstopStitch: (name: string, reason: string, stage: string) =>
       `${name}: cannot stitch the NONSTOP course: ${reason}${stage}`,
+    nonstopLRXMixed: (name: string, stage: string) =>
+      `${name}: a NONSTOP course cannot mix LRX charts with BMS or bmson charts${stage}`,
+    nonstopLRXLayout: (name: string, stage: string) =>
+      `${name}: all LRX stages of a NONSTOP course must use the same lane type${stage}`,
     stageNote: (stage: number) => ` (stage ${stage})`,
     constraints: {
       option: 'Lane option',
@@ -695,6 +699,9 @@ const ja: typeof en = {
     randomBadFilter: (name, stage, error) => `${name}: ステージ ${stage} のフィルタが不正です（${error}）`,
     nonstopLayout: (name, stage) => `${name}: NONSTOP の全ステージは同じ汎用キーボード配置である必要があります${stage}`,
     nonstopStitch: (name, reason, stage) => `${name}: NONSTOP コースを繋げません: ${reason}${stage}`,
+    nonstopLRXMixed: (name, stage) => `${name}: NONSTOP コースでは LRX 譜面と BMS・bmson 譜面を混ぜられません${stage}`,
+    nonstopLRXLayout: (name, stage) =>
+      `${name}: NONSTOP コースの LRX ステージはすべて同じレーン構成である必要があります${stage}`,
     stageNote: (stage) => `（ステージ ${stage}）`,
     constraints: {
       option: 'レーンオプション',

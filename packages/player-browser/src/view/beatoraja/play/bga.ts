@@ -23,7 +23,7 @@ import { resolveChartOptionsAt, type ChartOptionProgram, type BGAOpacityTimeline
 
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { resolveBGAVideoResync } from '../../shared/bga-renderer.ts';
-import type { BGACameraFeed } from '../../../media/bga-camera.ts';
+import type { BGAFeed } from '../../../media/bga-camera.ts';
 import { fitBGACameraRect } from '../../../media/bga-camera-fit.ts';
 import { destinationToSpriteProps, type BeatorajaRenderContext } from '../../../skin/beatoraja/render.ts';
 import {
@@ -168,7 +168,7 @@ export class BeatorajaBGALayer {
       keyBoundBGA?: KeyBoundBGAFrame;
       bmsonBGA?: BmsonBGAFrame;
       /** The camera to show in place of the chart's BGA (`PlayScene.setBGACamera`). */
-      camera?: BGACameraFeed;
+      camera?: BGAFeed;
     } = {},
   ): void {
     if (this.disposed) return;
@@ -342,7 +342,7 @@ export class BeatorajaBGALayer {
    * Draws the camera on a black canvas in the BGA destination, fitted whole, in place of the chart's BGA; the chart's
    * videos pause, and the next frame without the camera starts the active cues' videos again at chart time.
    */
-  private drawCamera(camera: BGACameraFeed, props: BGADestinationProps): void {
+  private drawCamera(camera: BGAFeed, props: BGADestinationProps): void {
     for (const key of this.currentKeys.keys()) this.videoElements.get(key)?.pause();
     this.currentKeys.clear();
     if (!props.visible) return;

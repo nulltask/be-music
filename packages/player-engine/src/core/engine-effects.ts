@@ -21,6 +21,7 @@ import {
   writeSampleStopEventLog,
 } from './engine-trace.ts';
 import { type AudioSession } from './engine-types.ts';
+import { type ChainSoundQueue } from './chain-audio.ts';
 import { resolveGuideSound } from './guide-sound.ts';
 
 /**
@@ -32,6 +33,8 @@ interface JudgeEffectHost {
   onBmsonBGAInput?: (input: BmsonBGAEventInput) => void;
   onChartTextInput?: (input: ChartTextInput) => void;
   onInput?: (input: Extract<Parameters<JudgeCoreEffectSink>[0], { kind: 'record-input' }>) => void;
+  /** Where a press's LRX chain notes go to wait for their moment; without it they do not sound. */
+  chainSounds?: ChainSoundQueue;
   /**
    * The automatic judge-timing adjustment this play runs (`OFF` for none: AUTO, replays, or a mode the play skips), and
    * the live timing it moves. `currentSeconds` is the chart time an LR2 step is recorded at.
@@ -125,6 +128,9 @@ export function createJudgeEffectHandler(host: JudgeEffectHost): JudgeEffectHand
           );
         }
         audioSession?.triggerEvent?.(effect.event);
+        return;
+      case 'chain-sounds':
+        host.chainSounds?.schedule(effect.seconds, effect.sounds);
         return;
       case 'stop-sound':
         if (!uiEnabled) {

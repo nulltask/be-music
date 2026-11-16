@@ -4,7 +4,7 @@ import {
   resolveBmsWAVPlayback,
   type BmsWAVPlaybackModifiers,
   firesBeforeTempoReversal,
-  isPlayLaneSoundChannel,
+  playsAtKeysoundVolume,
   resolveChart,
   usesMonophonicWAVPlayback,
   type ResolvedVolumeChange,
@@ -387,7 +387,7 @@ function resolveScheduledTriggerGain(
   wavCmdVolumeMultipliers: ReadonlyMap<string, number>,
 ): number {
   const rawTriggerGain = resolveTriggerGain?.(trigger) ?? 1;
-  const volumeBus: DynamicVolumeBus = isPlayLaneSoundChannel(trigger.channel) ? 'play' : 'bgm';
+  const volumeBus: DynamicVolumeBus = playsAtKeysoundVolume(trigger.channel, trigger.event) ? 'play' : 'bgm';
   const dynamicGain =
     volumeBus === 'play'
       ? advanceDynamicVolumeGain(dynamicVolumeChanges.play, trigger.seconds, playVolumeState)

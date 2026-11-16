@@ -1,7 +1,7 @@
 {
   "manual": {
     "outcome": "completed",
-    "endedAtMs": 1958.333,
+    "endedAtMs": 5575,
     "summary": {
       "total": 32,
       "perfect": 4,
@@ -10,7 +10,7 @@
       "great": 0,
       "good": 0,
       "bad": 0,
-      "poor": 7,
+      "poor": 28,
       "emptyPoor": 0,
       "exScore": 8,
       "score": 12500,
@@ -100,13 +100,12 @@
         "mode": "manual",
         "autoScratch": false,
         "gauge": "HARD",
-        "judgeRuleset": "plugout",
-        "endOnFailure": true
+        "judgeRuleset": "plugout"
       },
       "results": {
         "native": {
           "ruleset": "be-music/native",
-          "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":7,"emptyPoor":0},
+          "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":28,"emptyPoor":0},
           "fast": 0,
           "slow": 0,
           "exScore": 8,
@@ -121,7 +120,7 @@
     "simulated": {
       "lr2": {
         "ruleset": "lr2/0",
-        "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":1,"emptyPoor":0},
+        "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":28,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
         "exScore": 8,
@@ -133,7 +132,7 @@
       },
       "beatoraja": {
         "ruleset": "beatoraja/0",
-        "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":10,"emptyPoor":0},
+        "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":28,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
         "exScore": 8,
@@ -144,7 +143,7 @@
       },
       "____": {
         "ruleset": "____/0",
-        "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":15,"emptyPoor":0},
+        "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":28,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
         "exScore": 8,
@@ -155,7 +154,7 @@
       },
       "plugout": {
         "ruleset": "plugout/0",
-        "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":7,"emptyPoor":0},
+        "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":28,"emptyPoor":0},
         "fast": 0,
         "slow": 0,
         "exScore": 8,
@@ -173,7 +172,8 @@
       "625.000 trigger 12:02@0+5/16",
       "750.000 trigger 13:02@0+6/16",
       "875.000 trigger 14:02@0+7/16",
-      "1958.333 dispose"
+      "5575.000 finish",
+      "5575.000 dispose"
     ],
     "judges": [
       "0.000 READY combo=0 gauge=100",
@@ -187,7 +187,28 @@
       "1591.667 POOR combo=0 ch=14 delta=216.666667 gauge=28",
       "1708.333 POOR combo=0 ch=11 delta=208.333333 gauge=15.4",
       "1841.667 POOR combo=0 ch=12 delta=216.666667 gauge=2.8",
-      "1958.333 POOR combo=0 ch=13 delta=208.333333 gauge=0"
+      "1958.333 POOR combo=0 ch=13 delta=208.333333 gauge=0",
+      "2091.667 POOR combo=0 ch=14 delta=216.666667 gauge=0",
+      "2208.333 POOR combo=0 ch=11 delta=208.333333 gauge=0",
+      "2341.667 POOR combo=0 ch=12 delta=216.666667 gauge=0",
+      "2458.333 POOR combo=0 ch=13 delta=208.333333 gauge=0",
+      "2591.667 POOR combo=0 ch=14 delta=216.666667 gauge=0",
+      "2708.333 POOR combo=0 ch=11 delta=208.333333 gauge=0",
+      "2841.667 POOR combo=0 ch=12 delta=216.666667 gauge=0",
+      "2958.333 POOR combo=0 ch=13 delta=208.333333 gauge=0",
+      "3091.667 POOR combo=0 ch=14 delta=216.666667 gauge=0",
+      "3208.333 POOR combo=0 ch=11 delta=208.333333 gauge=0",
+      "3341.667 POOR combo=0 ch=12 delta=216.666667 gauge=0",
+      "3458.333 POOR combo=0 ch=13 delta=208.333333 gauge=0",
+      "3591.667 POOR combo=0 ch=14 delta=216.666667 gauge=0",
+      "3708.333 POOR combo=0 ch=11 delta=208.333333 gauge=0",
+      "3841.667 POOR combo=0 ch=12 delta=216.666667 gauge=0",
+      "3958.333 POOR combo=0 ch=13 delta=208.333333 gauge=0",
+      "4091.667 POOR combo=0 ch=14 delta=216.666667 gauge=0",
+      "4208.333 POOR combo=0 ch=11 delta=208.333333 gauge=0",
+      "4341.667 POOR combo=0 ch=12 delta=216.666667 gauge=0",
+      "4458.333 POOR combo=0 ch=13 delta=208.333333 gauge=0",
+      "4591.667 POOR combo=0 ch=14 delta=216.666667 gauge=0"
     ],
     "ui": [
       "500.000 flash-lane 11",
@@ -216,10 +237,31 @@
       "1591.667 trigger-poor-bga seconds=1.591667",
       "1708.333 trigger-poor-bga seconds=1.708333",
       "1841.667 trigger-poor-bga seconds=1.841667",
-      "1958.333 trigger-poor-bga seconds=1.958333"
+      "1958.333 trigger-poor-bga seconds=1.958333",
+      "2091.667 trigger-poor-bga seconds=2.091667",
+      "2208.333 trigger-poor-bga seconds=2.208333",
+      "2341.667 trigger-poor-bga seconds=2.341667",
+      "2458.333 trigger-poor-bga seconds=2.458333",
+      "2591.667 trigger-poor-bga seconds=2.591667",
+      "2708.333 trigger-poor-bga seconds=2.708333",
+      "2841.667 trigger-poor-bga seconds=2.841667",
+      "2958.333 trigger-poor-bga seconds=2.958333",
+      "3091.667 trigger-poor-bga seconds=3.091667",
+      "3208.333 trigger-poor-bga seconds=3.208333",
+      "3341.667 trigger-poor-bga seconds=3.341667",
+      "3458.333 trigger-poor-bga seconds=3.458333",
+      "3591.667 trigger-poor-bga seconds=3.591667",
+      "3708.333 trigger-poor-bga seconds=3.708333",
+      "3841.667 trigger-poor-bga seconds=3.841667",
+      "3958.333 trigger-poor-bga seconds=3.958333",
+      "4091.667 trigger-poor-bga seconds=4.091667",
+      "4208.333 trigger-poor-bga seconds=4.208333",
+      "4341.667 trigger-poor-bga seconds=4.341667",
+      "4458.333 trigger-poor-bga seconds=4.458333",
+      "4591.667 trigger-poor-bga seconds=4.591667"
     ],
     "frames": {
-      "count": 130,
+      "count": 346,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "625.000 seconds=0.625 note 12@0.625",
@@ -231,9 +273,30 @@
         "1591.667 seconds=1.591667 note 14@1.375",
         "1708.333 seconds=1.708333 note 11@1.5",
         "1841.667 seconds=1.841667 note 12@1.625",
-        "1958.333 seconds=1.958333 note 13@1.75"
+        "1958.333 seconds=1.958333 note 13@1.75",
+        "2091.667 seconds=2.091667 note 14@1.875",
+        "2208.333 seconds=2.208333 note 11@2",
+        "2341.667 seconds=2.341667 note 12@2.125",
+        "2458.333 seconds=2.458333 note 13@2.25",
+        "2591.667 seconds=2.591667 note 14@2.375",
+        "2708.333 seconds=2.708333 note 11@2.5",
+        "2841.667 seconds=2.841667 note 12@2.625",
+        "2958.333 seconds=2.958333 note 13@2.75",
+        "3091.667 seconds=3.091667 note 14@2.875",
+        "3208.333 seconds=3.208333 note 11@3",
+        "3341.667 seconds=3.341667 note 12@3.125",
+        "3458.333 seconds=3.458333 note 13@3.25",
+        "3591.667 seconds=3.591667 note 14@3.375",
+        "3708.333 seconds=3.708333 note 11@3.5",
+        "3841.667 seconds=3.841667 note 12@3.625",
+        "3958.333 seconds=3.958333 note 13@3.75",
+        "4091.667 seconds=4.091667 note 14@3.875",
+        "4208.333 seconds=4.208333 note 11@4",
+        "4341.667 seconds=4.341667 note 12@4.125",
+        "4458.333 seconds=4.458333 note 13@4.25",
+        "4591.667 seconds=4.591667 note 14@4.375"
       ],
-      "last": "1958.333 seconds=1.958333 beat=3.916667"
+      "last": "5575.000 seconds=5.558333 beat=11.116667"
     },
     "host": [
       "0.000 ruleset plugout/0 charge note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -241,9 +304,9 @@
       "0.000 load-complete",
       "0.000 ui start",
       "0.000 input-runtime start",
-      "1958.333 input-runtime stop",
-      "1958.333 ui stop",
-      "1958.333 ui dispose"
+      "5575.000 input-runtime stop",
+      "5575.000 ui stop",
+      "5575.000 ui dispose"
     ],
     "log": [
       "0.000 info playback.prepared {\"mode\":\"manual\",\"uiEnabled\":true,\"audioEnabled\":true,\"totalSeconds\":4.375}",
@@ -260,7 +323,7 @@
       "GREAT  : 0",
       "GOOD   : 0",
       "BAD    : 0",
-      "POOR   : 7",
+      "POOR   : 28",
       "EMPTY  : 0",
       "FAST   : 0",
       "SLOW   : 0",
@@ -270,7 +333,7 @@
   },
   "replay": {
     "outcome": "completed",
-    "endedAtMs": 1966.667,
+    "endedAtMs": 5583.333,
     "summary": {
       "total": 32,
       "perfect": 4,
@@ -279,7 +342,7 @@
       "great": 0,
       "good": 0,
       "bad": 0,
-      "poor": 7,
+      "poor": 28,
       "emptyPoor": 0,
       "exScore": 8,
       "score": 12500,
@@ -313,8 +376,7 @@
         "mode": "manual",
         "autoScratch": false,
         "gauge": "HARD",
-        "judgeRuleset": "plugout",
-        "endOnFailure": true
+        "judgeRuleset": "plugout"
       },
       "results": "(same as manual)"
     },
@@ -326,7 +388,8 @@
       "633.333 trigger 12:02@0+5/16",
       "750.000 trigger 13:02@0+6/16",
       "883.333 trigger 14:02@0+7/16",
-      "1966.667 dispose"
+      "5583.333 finish",
+      "5583.333 dispose"
     ],
     "judges": [
       "0.000 READY combo=0 gauge=100",
@@ -340,7 +403,28 @@
       "1583.333 POOR combo=0 ch=14 delta=200.001 gauge=28",
       "1716.667 POOR combo=0 ch=11 delta=200.001 gauge=15.4",
       "1833.333 POOR combo=0 ch=12 delta=200.001 gauge=2.8",
-      "1966.667 POOR combo=0 ch=13 delta=200.001 gauge=0"
+      "1966.667 POOR combo=0 ch=13 delta=200.001 gauge=0",
+      "2083.333 POOR combo=0 ch=14 delta=200.001 gauge=0",
+      "2216.667 POOR combo=0 ch=11 delta=200.001 gauge=0",
+      "2333.333 POOR combo=0 ch=12 delta=200.001 gauge=0",
+      "2466.667 POOR combo=0 ch=13 delta=200.001 gauge=0",
+      "2583.333 POOR combo=0 ch=14 delta=200.001 gauge=0",
+      "2716.667 POOR combo=0 ch=11 delta=200.001 gauge=0",
+      "2833.333 POOR combo=0 ch=12 delta=200.001 gauge=0",
+      "2966.667 POOR combo=0 ch=13 delta=200.001 gauge=0",
+      "3083.333 POOR combo=0 ch=14 delta=200.001 gauge=0",
+      "3216.667 POOR combo=0 ch=11 delta=200.001 gauge=0",
+      "3333.333 POOR combo=0 ch=12 delta=200.001 gauge=0",
+      "3466.667 POOR combo=0 ch=13 delta=200.001 gauge=0",
+      "3583.333 POOR combo=0 ch=14 delta=200.001 gauge=0",
+      "3716.667 POOR combo=0 ch=11 delta=200.001 gauge=0",
+      "3833.333 POOR combo=0 ch=12 delta=200.001 gauge=0",
+      "3966.667 POOR combo=0 ch=13 delta=200.001 gauge=0",
+      "4083.333 POOR combo=0 ch=14 delta=200.001 gauge=0",
+      "4216.667 POOR combo=0 ch=11 delta=200.001 gauge=0",
+      "4333.333 POOR combo=0 ch=12 delta=200.001 gauge=0",
+      "4466.667 POOR combo=0 ch=13 delta=200.001 gauge=0",
+      "4583.333 POOR combo=0 ch=14 delta=200.001 gauge=0"
     ],
     "ui": [
       "500.000 press-lane 11",
@@ -369,10 +453,31 @@
       "1583.333 trigger-poor-bga seconds=1.575001",
       "1716.667 trigger-poor-bga seconds=1.700001",
       "1833.333 trigger-poor-bga seconds=1.825001",
-      "1966.667 trigger-poor-bga seconds=1.950001"
+      "1966.667 trigger-poor-bga seconds=1.950001",
+      "2083.333 trigger-poor-bga seconds=2.075001",
+      "2216.667 trigger-poor-bga seconds=2.200001",
+      "2333.333 trigger-poor-bga seconds=2.325001",
+      "2466.667 trigger-poor-bga seconds=2.450001",
+      "2583.333 trigger-poor-bga seconds=2.575001",
+      "2716.667 trigger-poor-bga seconds=2.700001",
+      "2833.333 trigger-poor-bga seconds=2.825001",
+      "2966.667 trigger-poor-bga seconds=2.950001",
+      "3083.333 trigger-poor-bga seconds=3.075001",
+      "3216.667 trigger-poor-bga seconds=3.200001",
+      "3333.333 trigger-poor-bga seconds=3.325001",
+      "3466.667 trigger-poor-bga seconds=3.450001",
+      "3583.333 trigger-poor-bga seconds=3.575001",
+      "3716.667 trigger-poor-bga seconds=3.700001",
+      "3833.333 trigger-poor-bga seconds=3.825001",
+      "3966.667 trigger-poor-bga seconds=3.950001",
+      "4083.333 trigger-poor-bga seconds=4.075001",
+      "4216.667 trigger-poor-bga seconds=4.200001",
+      "4333.333 trigger-poor-bga seconds=4.325001",
+      "4466.667 trigger-poor-bga seconds=4.450001",
+      "4583.333 trigger-poor-bga seconds=4.575001"
     ],
     "frames": {
-      "count": 121,
+      "count": 337,
       "judged": [
         "500.000 seconds=0.5 note 11@0.5",
         "633.333 seconds=0.633333 note 12@0.625",
@@ -384,9 +489,30 @@
         "1583.333 seconds=1.583333 note 14@1.375",
         "1716.667 seconds=1.716667 note 11@1.5",
         "1833.333 seconds=1.833333 note 12@1.625",
-        "1966.667 seconds=1.966667 note 13@1.75"
+        "1966.667 seconds=1.966667 note 13@1.75",
+        "2083.333 seconds=2.083333 note 14@1.875",
+        "2216.667 seconds=2.216667 note 11@2",
+        "2333.333 seconds=2.333333 note 12@2.125",
+        "2466.667 seconds=2.466667 note 13@2.25",
+        "2583.333 seconds=2.583333 note 14@2.375",
+        "2716.667 seconds=2.716667 note 11@2.5",
+        "2833.333 seconds=2.833333 note 12@2.625",
+        "2966.667 seconds=2.966667 note 13@2.75",
+        "3083.333 seconds=3.083333 note 14@2.875",
+        "3216.667 seconds=3.216667 note 11@3",
+        "3333.333 seconds=3.333333 note 12@3.125",
+        "3466.667 seconds=3.466667 note 13@3.25",
+        "3583.333 seconds=3.583333 note 14@3.375",
+        "3716.667 seconds=3.716667 note 11@3.5",
+        "3833.333 seconds=3.833333 note 12@3.625",
+        "3966.667 seconds=3.966667 note 13@3.75",
+        "4083.333 seconds=4.083333 note 14@3.875",
+        "4216.667 seconds=4.216667 note 11@4",
+        "4333.333 seconds=4.333333 note 12@4.125",
+        "4466.667 seconds=4.466667 note 13@4.25",
+        "4583.333 seconds=4.583333 note 14@4.375"
       ],
-      "last": "1966.667 seconds=1.966667 beat=3.933333"
+      "last": "5583.333 seconds=5.566667 beat=11.133333"
     },
     "host": [
       "0.000 ruleset plugout/0 charge note={\"judges\":[[-18000,18000],[-40000,40000],[-100000,100000],[-200000,200000]],\"ms\":[0,1000000]}",
@@ -394,9 +520,9 @@
       "0.000 load-complete",
       "0.000 ui start",
       "0.000 input-runtime start",
-      "1966.667 input-runtime stop",
-      "1966.667 ui stop",
-      "1966.667 ui dispose"
+      "5583.333 input-runtime stop",
+      "5583.333 ui stop",
+      "5583.333 ui dispose"
     ],
     "log": "(same as manual)",
     "output": "(same as manual)"
@@ -436,7 +562,7 @@
       "clock": {"unit":"us","origin":"chart-zero"},
       "chart": "(same as manual)",
       "inputs": [],
-      "play": {"inputSources":[],"mode":"auto","autoScratch":false,"gauge":"HARD","judgeRuleset":"plugout","endOnFailure":true},
+      "play": {"inputSources":[],"mode":"auto","autoScratch":false,"gauge":"HARD","judgeRuleset":"plugout"},
       "results": {
         "native": {
           "ruleset": "be-music/native",

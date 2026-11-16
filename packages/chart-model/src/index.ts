@@ -102,6 +102,7 @@ export {
   isFreeZoneChannel,
   isHeldLongNote,
   isInvisibleNoteChannel,
+  type ResolvedChainSound,
   type ResolvedNote,
   type ResolvedNoteKind,
 } from './resolved-notes.ts';
@@ -159,6 +160,7 @@ export {
   isPlayableChannel,
   isPlayLaneSoundChannel,
   isSampleTriggerChannel,
+  playsAtKeysoundVolume,
   isScrollChannel,
   isStopChannel,
   isTempoChannel,
@@ -328,3 +330,15 @@ export {
   type ChartPlayfieldVisual,
 } from './chart-option-crazy.ts';
 export { resolveChartLegacyOptionAlias } from './chart-option-legacy.ts';
+
+export {
+  easeLRXBGA,
+  LRX_BGA_HEIGHT,
+  LRX_BGA_WIDTH,
+  resolveLRXBGAProgram,
+  sampleLRXBGA,
+  type LRXBGANode,
+  type LRXBGAProgram,
+  type LRXBGASprite,
+} from './lrx-bga.ts';
+export { LRX_PLAY_END_TAIL_SECONDS, resolveLRXPlayEndSeconds } from './lrx-play-end.ts';
