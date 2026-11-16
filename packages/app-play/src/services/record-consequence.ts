@@ -46,6 +46,7 @@ export type RecordConsequenceState = Pick<
   | 'lr2AddMines'
   | 'lr2ExtraMode'
   | 'mineModifier'
+  | 'crazyAddMine'
   | 'scrollModifier'
   | 'longNoteModifier'
   | 'extraNoteDepth'
@@ -90,7 +91,7 @@ export function plannedPlayOf(state: RecordConsequenceState): PlannedPlay {
       addMines: state.lr2AddMines,
     } as NonNullable<PlannedPlay['lr2Mania']>,
     lr2ExtraMode: state.lr2ExtraMode,
-    mineModifier: state.mineModifier,
+    mineModifier: state.crazyAddMine ? 'NANASI_ADD' : state.mineModifier,
     scrollModifier: state.scrollModifier,
     longNoteModifier: state.longNoteModifier,
     extraNotes: state.extraNoteDepth > 0,

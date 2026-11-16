@@ -93,13 +93,17 @@ export function shiftChartOptionProgram(
   return { version: program.version, initial: startUs === 0 ? seed : {}, cues };
 }
 
-/** Parse a recorded chart gameplay program strictly. Version 2 carries the authored base speed. */
+/**
+ * Parse a recorded chart gameplay program strictly. Version 2 carries the authored base speed; version 3 may carry it, and
+ * reads the CRAZY gameplay options as nanasigroove does.
+ */
 export function parseChartPlayOptionProgram(raw: unknown): ChartPlayOptionProgram {
   const program = expectRecord(raw, 'chart.chartPlayOptions');
   if (Object.keys(program).some((key) => key !== 'version' && key !== 'options'))
     throw new ReplayParseError('chart.chartPlayOptions: unknown program field');
   const { version } = program;
-  if (version !== 1 && version !== 2) throw new ReplayParseError('chart.chartPlayOptions.version: expected 1 or 2');
+  if (version !== 1 && version !== 2 && version !== 3)
+    throw new ReplayParseError('chart.chartPlayOptions.version: expected 1, 2 or 3');
   const options = expectRecord(program.options, 'chart.chartPlayOptions.options');
   const parsed: ChartPlayOptions = {};
   for (const [key, value] of Object.entries(options)) {
@@ -109,7 +113,7 @@ export function parseChartPlayOptionProgram(raw: unknown): ChartPlayOptionProgra
       parsed.judge = value as ChartPlayOptions['judge'];
     else if (key === 'hellJudge' && value === true) parsed.hellJudge = true;
     else if (key === 'addMine' && value === true) parsed.addMine = true;
-    else if (key === 'baseSpeed' && version === 2 && (value === 1.2 || value === 1.5 || value === 2))
+    else if (key === 'baseSpeed' && version !== 1 && (value === 1.2 || value === 1.5 || value === 2))
       parsed.baseSpeed = value;
     else if (key === 'notes' && (CHART_NOTES_OPTIONS as readonly unknown[]).includes(value))
       parsed.notes = value as ChartPlayOptions['notes'];

@@ -30,6 +30,16 @@ export interface SkinAdjust {
 
 /** The play skin where it is drawn. */
 export const NO_SKIN_ADJUST: SkinAdjust = { x: 0, y: 0, scale: 1 };
+
+/**
+ * The mine option a play of the player's own selection runs: nanasigroove's ADDMINE (`NANASI_ADD`) while the player has
+ * it on, otherwise the beatoraja mine option they picked under Mines.
+ */
+export function resolvePlayerMineModifier(
+  options: Pick<PlaySessionOptions, 'mineModifier' | 'crazyAddMine'>,
+): import('@be-music/player-engine/lanes').MineModifier | undefined {
+  return options.crazyAddMine === true ? 'NANASI_ADD' : options.mineModifier;
+}
 import type { TempoPitchMode, TimeStretchAlgorithm } from '../../runtime/play-tempo.ts';
 import type { BeMusicEffectLevel } from '../../skin/be-music/types.ts';
 
@@ -198,6 +208,14 @@ export interface PlaySessionOptions {
   extraNoteDepth?: number;
   extraNoteScratch?: boolean;
   mineModifier?: import('@be-music/player-scene-model').PlayOptions['mineModifier'];
+  /** nanasigroove's GOOD2BAD / GREAT2BAD the player picked; a chart's own wins. */
+  crazyJudge?: import('@be-music/player-scene-model').PlayOptions['crazyJudge'];
+  /** nanasigroove's HELLJUDGE the player picked; a chart's own wins. */
+  crazyHellJudge?: boolean;
+  /** nanasigroove's ADDMINE the player picked: it replaces `mineModifier` while on (`resolvePlayerMineModifier`). */
+  crazyAddMine?: boolean;
+  /** nanasigroove's NOTES conversion the player picked; a chart's own wins. */
+  crazyNotes?: import('@be-music/player-scene-model').PlayOptions['crazyNotes'];
   scrollModifier?: import('@be-music/player-scene-model').PlayOptions['scrollModifier'];
   scrollSection?: number;
   scrollRate?: number;

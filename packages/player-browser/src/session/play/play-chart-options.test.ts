@@ -68,11 +68,31 @@ test('chart ALL shuffles across both sides of a DP chart', () => {
   expect(channels.filter((channel) => channel.startsWith('2')).length).toBeGreaterThan(1);
 });
 
-test('chart ADDMINE wins over the player mine option', () => {
-  vi.spyOn(Math, 'random').mockReturnValue(0.95);
+test("chart ADDMINE, nanasigroove's, wins over the player mine option", () => {
+  // Every draw 0.5: each lane's first mine 204 positions (4.25 beats) in.
+  vi.spyOn(Math, 'random').mockReturnValue(0.5);
   const play = prepare(SP('774:CRAZY_ADDMINE'), { mineModifier: 'REMOVE' });
-  expect(play.chartPlay?.selection.mineModifier).toBe('ADD_RANDOM');
+  expect(play.chartPlay?.selection.mineModifier).toBe('NANASI_ADD');
   expect(play.mineNotes.length).toBeGreaterThan(0);
+});
+
+test("the player's ADDMINE, its own option, plays nanasigroove's mines in place of the Mines choice", () => {
+  vi.spyOn(Math, 'random').mockReturnValue(0.5);
+  const play = prepare(SP('774:RANDOM_MIRROR'), { mineModifier: 'REMOVE', crazyAddMine: true });
+  expect(play.chartPlay?.selection.mineModifier).toBe('NANASI_ADD');
+  expect(play.mineNotes.length).toBeGreaterThan(0);
+  expect(prepare(SP('774:RANDOM_MIRROR'), { mineModifier: 'REMOVE' }).chartPlay?.selection.mineModifier).toBe('REMOVE');
+});
+
+test("the player's GOOD2BAD and HELLJUDGE join the chart's program, the chart winning within a family", () => {
+  const own = prepare(SP('774:RANDOM_MIRROR'), { crazyJudge: 'GREAT2BAD', crazyHellJudge: true });
+  expect(own.chartPlay?.program).toEqual({
+    version: 3,
+    options: { random: 'MIRROR', judge: 'GREAT2BAD', hellJudge: true },
+  });
+  const chartWins = prepare(SP('774:CRAZY_GOOD2BAD'), { crazyJudge: 'GREAT2BAD' });
+  expect(chartWins.chartPlay?.program?.options.judge).toBe('GOOD2BAD');
+  expect(prepare(SP('774:RANDOM_MIRROR'), { crazyJudge: 'OFF' }).chartPlay?.program?.version).toBe(1);
 });
 
 /** Chart-authored NOTES conversions (#932) run in the engine's chart preparation, on the host's chart. */
@@ -81,7 +101,7 @@ const COPY = (...options: string[]) =>
 
 test('chart COPY plays a 5 KEY chart as 10 KEY over the player battle conversion and DP FLIP', () => {
   const play = prepare(COPY('774:NOTES_COPY'), { battleMode: 'SP-TO-DP', dpFlip: true });
-  expect(play.chartPlay?.program).toEqual({ version: 1, options: { notes: 'COPY' } });
+  expect(play.chartPlay?.program).toEqual({ version: 3, options: { notes: 'COPY' } });
   expect(play.chartPlayVariant).toBe('10');
   expect(play.preparedChart?.battleMode).toBe('OFF');
   // 2P mirrors the 1P keys (11 → 25, 12 → 24) and copies the scratch; DP FLIP does not swap the sides.
@@ -99,12 +119,22 @@ test('chart ALL on a copied chart shuffles across both sides of the double-play 
 test('a course stage keeps its key mode: chart COPY is diagnosed and DBLCOPY keeps its DOUBLE', () => {
   const copied = prepare(COPY('774:NOTES_COPY'), { course: { kind: 'grade' } });
   expect(copied.chartPlayVariant).toBe('5');
-  expect(copied.chartPlay?.program).toEqual({ version: 1, options: {} });
+  expect(copied.chartPlay?.program).toEqual({ version: 3, options: {} });
   expect(copied.chartPlay?.diagnostics).toEqual([{ code: 'unsupported-option', declaration: '774:NOTES_COPY' }]);
   const doubled = prepare(COPY('774:NOTES_DBLCOPY'), { course: { kind: 'grade' } });
-  expect(doubled.chartPlay?.program).toEqual({ version: 1, options: { notes: 'DOUBLE' } });
-  // 11 → 15 and 12 → 14 partners; the scratch stays single.
-  expect(doubled.notes.map((note) => note.channel).sort()).toEqual(['11', '11', '12', '14', '15', '15', '16']);
+  expect(doubled.chartPlay?.program).toEqual({ version: 3, options: { notes: 'DOUBLE' } });
+  // nanasigroove's DOUBLE: the 1s reach 3 and 5, the 2 reaches 4; the scratch stays single.
+  expect(doubled.notes.map((note) => note.channel).sort()).toEqual([
+    '11',
+    '11',
+    '12',
+    '13',
+    '13',
+    '14',
+    '15',
+    '15',
+    '16',
+  ]);
 });
 
 test('a replay of a copied chart rebuilds the recorded double-play notes', () => {
@@ -117,11 +147,11 @@ test('a replay of a copied chart rebuilds the recorded double-play notes', () =>
         json: entry(source).chart,
         chart: original.preparedChart!,
         chartPlayOptions: original.chartPlay?.program,
-        play: { mode: 'auto', autoScratch: false, judgeRuleset: 'lr2', mineModifier: 'ADD_RANDOM' },
+        play: { mode: 'auto', autoScratch: false, judgeRuleset: 'lr2', mineModifier: 'NANASI_ADD' },
       }).finalize({ summary: { ...createEmptyScore(original.notes.length), fast: 0, slow: 0 } }),
     ),
   );
-  expect(replay.chart.chartPlayOptions).toEqual({ version: 1, options: { notes: 'DBLCOPY', addMine: true } });
+  expect(replay.chart.chartPlayOptions).toEqual({ version: 3, options: { notes: 'DBLCOPY', addMine: true } });
   expect(replay.chart.laneMode).toBe('5 KEY DP');
   const restored = prepare(source, { replay });
   expect(restored.chartPlayVariant).toBe('10');

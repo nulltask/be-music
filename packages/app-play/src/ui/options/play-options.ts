@@ -253,12 +253,13 @@ export function buildPlayOptionsFolder(
       .addBinding(this.guiState, 'scrollRate', { label: 'Scroll rate', min: 0, max: 1, step: 0.01 })
       .on('change', ({ value }) => this.setPlayOptions({ scrollRate: value })),
   );
-  this.mineModifierController = selectBinding(notes, this.guiState, 'mineModifier', 'Mines (beatoraja)', {
+  // beatoraja's mine modifiers. nanasigroove's ADDMINE is its own option below and replaces them while it is on.
+  this.mineModifierController = selectBinding(notes, this.guiState, 'mineModifier', 'Mines', {
     OFF: 'OFF',
-    REMOVE: 'REMOVE',
-    'ADD RANDOM': 'ADD_RANDOM',
-    'ADD NEAR': 'ADD_NEAR',
-    'ADD ALL': 'ADD_BLANK',
+    'REMOVE (beatoraja)': 'REMOVE',
+    'ADD RANDOM (beatoraja)': 'ADD_RANDOM',
+    'ADD NEAR (beatoraja)': 'ADD_NEAR',
+    'ADD ALL (beatoraja)': 'ADD_BLANK',
   });
   trackPlayOption(
     this.mineModifierController.on('change', ({ value }) => this.setPlayOptions({ mineModifier: value })),
@@ -480,6 +481,36 @@ export function buildPlayOptionsFolder(
         step: 0.01,
       })
       .on('change', ({ value }) => this.setPlayOptions({ longNoteRate: value })),
+  );
+  // nanasigroove's CRAZY gameplay options (#1177, #1184, #1185), which no LR2 or beatoraja option matches, kept apart
+  // in their own folder at the end of the Modifiers page. A chart's own `774:CRAZY_*` / `774:NOTES_*` wins within each
+  // family.
+  const nanasi = notes.addFolder({ title: 'nanasigroove' });
+  trackPlayOption(
+    selectBinding(nanasi, this.guiState, 'crazyJudge', 'GOOD2BAD / GREAT2BAD', {
+      OFF: 'OFF',
+      GOOD2BAD: 'GOOD2BAD',
+      GREAT2BAD: 'GREAT2BAD',
+    }).on('change', ({ value }) => this.setPlayOptions({ crazyJudge: value })),
+  );
+  trackPlayOption(
+    nanasi
+      .addBinding(this.guiState, 'crazyHellJudge', { label: 'HELLJUDGE' })
+      .on('change', ({ value }) => this.setPlayOptions({ crazyHellJudge: value })),
+  );
+  trackPlayOption(
+    nanasi.addBinding(this.guiState, 'crazyAddMine', { label: 'ADDMINE' }).on('change', ({ value }) => {
+      this.setPlayOptions({ crazyAddMine: value });
+      this.refreshRulesetChoices();
+    }),
+  );
+  trackPlayOption(
+    selectBinding(nanasi, this.guiState, 'crazyNotes', 'NOTES', {
+      OFF: 'OFF',
+      DOUBLE: 'DOUBLE',
+      COPY: 'COPY',
+      DBLCOPY: 'DBLCOPY',
+    }).on('change', ({ value }) => this.setPlayOptions({ crazyNotes: value })),
   );
   // The built-in and LR2 select screens' sort and filters (an LR2 skin's buttons change them too); the list keeps
   // the bar under the cursor. A play does not read them, so they stay enabled during one.

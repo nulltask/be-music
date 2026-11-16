@@ -250,12 +250,15 @@ export {
   compileChartPlayOptions,
   hasChartPlayOptions,
   isChartPlayOptionDeclaration,
+  isLegacyChartPlayOptionProgram,
   parseChartPlayOption,
+  withPlayerChartPlayOptions,
   type ChartJudgeModifier,
   type ChartNotesOption,
   type ChartPlayOptionProgram,
   type ChartPlayOptions,
   type ChartRandomOption,
+  type PlayerChartPlayOptions,
 } from './chart-play-options.ts';
 export {
   CHART_OPTION_PROGRAM_VERSION,

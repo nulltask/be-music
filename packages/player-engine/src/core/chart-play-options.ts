@@ -1,4 +1,4 @@
-import type { ChartPlayOptionProgram } from '@be-music/chart-model';
+import { isLegacyChartPlayOptionProgram, type ChartPlayOptionProgram } from '@be-music/chart-model';
 import type { MineModifier } from './mine-modifier.ts';
 
 /** The player's arrangement and mine choices a chart's gameplay options can replace. */
@@ -32,6 +32,11 @@ export interface ChartPlayArrangement<T extends ChartPlaySelection> {
   crossSide?: { scratch: boolean };
 }
 
+/** The mine modifier a chart's ADDMINE runs as: nanasigroove's, or beatoraja's ADD RANDOM for a program before version 3. */
+export function resolveChartAddMineModifier(program: ChartPlayOptionProgram): MineModifier {
+  return isLegacyChartPlayOptionProgram(program) ? 'ADD_RANDOM' : 'NANASI_ADD';
+}
+
 /**
  * Puts a chart's forced arrangement and ADDMINE in place of the player's own options (#844; the chart wins, as the
  * chart author's staging). Mapped onto the existing per-side arrangements:
@@ -40,7 +45,8 @@ export interface ChartPlayArrangement<T extends ChartPlaySelection> {
  * - `RANDOM+` → the scratch-inclusive RANDOM-EX shuffle on both sides (plain RANDOM where the variant has no scratch).
  * - `ALL` / `ALL+` → one shuffle across both sides (`crossSide`), keys only or with scratch; on a one-sided chart they are
  *   `RANDOM` / `RANDOM+`.
- * - `addMine` → the ADD_RANDOM mine modifier (mines at random blank cells).
+ * - `addMine` → nanasigroove's ADDMINE (`NANASI_ADD`); a program recorded before version 3 keeps the ADD_RANDOM mine
+ *   modifier it was played with (mines at random blank cells).
  *
  * Without a program, or for a replay (whose recorded notes already hold the result), the selection is unchanged.
  */
@@ -53,7 +59,7 @@ export function applyChartPlayOptions<T extends ChartPlaySelection>(
   if (options === undefined) return { selection };
   const next: T = { ...selection };
   const writable: ChartPlaySelection = next;
-  if (options.addMine === true) writable.mineModifier = 'ADD_RANDOM';
+  if (options.addMine === true) writable.mineModifier = resolveChartAddMineModifier(program!);
   const random = options.random;
   if (random === undefined) return { selection: next };
   const crossSide = layout.doublePlay && (random === 'ALL' || random === 'ALL+');

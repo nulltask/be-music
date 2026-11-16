@@ -20,6 +20,7 @@ import {
   doubleChartNotes,
   resolveChartNotesOption,
 } from './chart-notes-options.ts';
+import { doubleNanasiChartNotes } from './nanasi-notes-double.ts';
 import { withChartOverrides } from './resolved-chart-overrides.ts';
 import { duplicateBattleChart } from './battle-chart.ts';
 import {
@@ -305,6 +306,8 @@ export function preparePlaybackChart(
      * battle conversion when it copies the chart, and is narrowed to what can take effect (`resolveChartNotesOption`).
      */
     chartNotes?: ChartNotesOption;
+    /** Whether `chartNotes` comes from a version 1 / 2 gameplay program, which keeps Be-Music's earlier readings. */
+    chartNotesLegacy?: boolean;
     /** The player's own lane keys (`LaneModeOptions.laneKeys`). */
     laneKeys?: LaneKeyOverrides;
     /**
@@ -323,10 +326,12 @@ export function preparePlaybackChart(
     : undefined;
   resolved = lr2Extra?.chart ?? resolved;
   const battleSourceVariant = resolved.playVariant;
-  const chartNotes = resolveChartNotesOption(options.chartNotes, {
-    playVariant: battleSourceVariant,
-    course: options.course !== undefined,
-  });
+  const chartNotesLegacy = options.chartNotesLegacy === true;
+  const chartNotes = resolveChartNotesOption(
+    options.chartNotes,
+    { playVariant: battleSourceVariant, course: options.course !== undefined },
+    chartNotesLegacy,
+  );
   // A chart that copies itself onto the 2P side decides the double-play chart, in place of the player's conversion.
   const battleMode = chartNotesCopies(chartNotes)
     ? 'OFF'
@@ -434,16 +439,19 @@ export function preparePlaybackChart(
   });
   resolved = extraResult.chart;
   const invisibleNotes = resolved.invisibleNotes.map(toTimedInvisibleNote);
-  // The chart's NOTES conversion, after the note and mine modifiers (so a doubled partner avoids an added mine) and
-  // before the battle conversion it replaces.
-  let chartNotesChangedObjectCount = chartNotesDoubles(chartNotes)
-    ? doubleChartNotes(notes, landmineNotes, resolved.playVariant)
-    : 0;
+  // The chart's NOTES conversion, after the note and mine modifiers and before the battle conversion it replaces.
+  // nanasigroove copies the chart first and doubles the double-play chart; the version 1 / 2 reading doubles first (so a
+  // doubled partner avoids an added mine).
+  let chartNotesChangedObjectCount = 0;
+  if (chartNotesLegacy && chartNotesDoubles(chartNotes))
+    chartNotesChangedObjectCount += doubleChartNotes(notes, landmineNotes, resolved.playVariant);
   if (chartNotesCopies(chartNotes)) {
-    const copied = copyChartNotes(resolved, notes, landmineNotes, invisibleNotes);
+    const copied = copyChartNotes(resolved, notes, landmineNotes, invisibleNotes, chartNotesLegacy);
     resolved = copied.chart;
     chartNotesChangedObjectCount += copied.changedObjectCount;
   }
+  if (!chartNotesLegacy && chartNotesDoubles(chartNotes))
+    chartNotesChangedObjectCount += doubleNanasiChartNotes(notes, invisibleNotes, resolved.playVariant);
   const dBattleScratch = battleMode === 'D-BATTLE' && options.dBattleScratch === true;
   const duplicateBattle = isDuplicatedBattleMode(battleMode, battleSourceVariant)
     ? duplicateBattleChart(resolved, notes, landmineNotes, invisibleNotes, {

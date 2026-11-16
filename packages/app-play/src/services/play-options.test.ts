@@ -93,6 +93,10 @@ const gui: GUIPlayOptions = {
   lr2ExtraMode: false,
   lr2ExtraLevel: 0,
   mineModifier: 'OFF',
+  crazyJudge: 'OFF',
+  crazyHellJudge: false,
+  crazyAddMine: false,
+  crazyNotes: 'OFF',
   scrollModifier: 'OFF',
   scrollSection: 4,
   scrollRate: 0.5,
@@ -205,6 +209,10 @@ describe('playOptionsFromGUI', () => {
       lr2ExtraMode: false,
       lr2ExtraLevel: 0,
       mineModifier: 'OFF',
+      crazyJudge: 'OFF',
+      crazyHellJudge: false,
+      crazyAddMine: false,
+      crazyNotes: 'OFF',
       scrollModifier: 'OFF',
       scrollSection: 4,
       scrollRate: 0.5,
@@ -298,6 +306,10 @@ describe('copyPlayOptionsToGUI', () => {
       fixedDisplayArea: false,
       judgeAlgorithm: 'combo',
       mineModifier: 'OFF',
+      crazyJudge: 'OFF',
+      crazyHellJudge: false,
+      crazyAddMine: false,
+      crazyNotes: 'OFF',
       scrollModifier: 'OFF',
       scrollSection: 4,
       scrollRate: 0.5,
@@ -489,6 +501,23 @@ describe('previous arrangement selection', () => {
     expect(service.arrangementFor('chart')).toBeDefined();
     service.update({ longNoteRate: 0.5 });
     expect(service.arrangementFor('chart')).toBeUndefined();
+  });
+  test("restores nanasigroove's ADDMINE as its own option, keeping the Mines choice beside it", () => {
+    const service = new PlayOptionsService();
+    const replay = previous();
+    replay.play.mineModifier = 'NANASI_ADD';
+    replay.play.options = { ...replay.play.options, mineModifier: 'ADD_NEAR', crazyAddMine: true };
+    service.rememberArrangement('chart', replay);
+    expect(service.reusePreviousArrangement('beatoraja')).toMatchObject({
+      mineModifier: 'ADD_NEAR',
+      crazyAddMine: true,
+    });
+    replay.play.mineModifier = 'REMOVE';
+    service.rememberArrangement('chart', replay);
+    expect(service.reusePreviousArrangement('beatoraja')).toMatchObject({
+      mineModifier: 'REMOVE',
+      crazyAddMine: false,
+    });
   });
 });
 

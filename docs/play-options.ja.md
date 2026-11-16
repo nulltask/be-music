@@ -597,9 +597,17 @@ AC 34 では、オプション画面で、ダブルプレー時にテンキー 7
 
 出典: AC 34 [ゲームオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)と[テンキー](https://p.eagate.573.jp/game/2dx/34/howto/play/tenkey.html)。[#1138](https://github.com/nulltask/be-music/issues/1138) で追跡しています。
 
+## nanasigroove の GOOD2BAD・GREAT2BAD・HELLJUDGE
+
+どのルールでも、Options ダイアログの Modifiers ページにある **nanasigroove** フォルダーの **GOOD2BAD / GREAT2BAD** と **HELLJUDGE** で選びます。nanasigroove のオプションと同じ動きをする LR2・beatoraja のオプションはないため、ほかの出典のオプションとは分けて専用のフォルダーにまとめています。GOOD2BAD は判定をそのままにして、GOOD でゲージを BAD と同じだけ動かします。GREAT2BAD は GREAT と GOOD で同じことをします。HELLJUDGE はルールの PGREAT と GREAT の判定幅を 3/8、GOOD を 1/3、BAD を 1/4 に狭めます。譜面が同じ系統の `774:CRAZY_*` を宣言していれば譜面が優先します。リプレイは譜面のゲームプレイプログラムに記録するので、どのルールでもこれらを使って再判定します。アシストではありません（[ADR 0033](./adr/0033-chart-authored-gameplay-options.ja.md)、[#1177](https://github.com/nulltask/be-music/issues/1177)、[#1185](https://github.com/nulltask/be-music/issues/1185)）。
+
+## nanasigroove の NOTES
+
+どのルールでも、同じ **nanasigroove** フォルダーの **NOTES** で **OFF**（既定）・**DOUBLE**・**COPY**・**DBLCOPY** を選べます。DOUBLE は nanasigroove と同じくレーンをまるごとほかのレーンへ写すので、5 KEY 譜面の鍵盤 3 と 5 は鍵盤 1・3・5 を、鍵盤 2 と 4 は鍵盤 2・4 を持ちます。5・7・9・10・14 KEY で動きます。COPY は 5 / 7 KEY 譜面を 2P 側に鏡写しにして 10 / 14 KEY として遊びます（地雷は写しません）。DBLCOPY は写してから両サイドを倍にします。コースのステージはキーモードを保つので、そこでは COPY は何もしません。譜面自身の `774:NOTES_*` が優先します。リプレイは変換を譜面のゲームプレイプログラムに記録し、そのノートが結果を持ちます（[ADR 0035](./adr/0035-chart-authored-notes-options.ja.md)、[#1184](https://github.com/nulltask/be-music/issues/1184)）。
+
 ## 地雷の REMOVE と ADD
 
-どのルールでも、Options ダイアログ の **Mines (beatoraja)** で **OFF**（既定）、**REMOVE**、**ADD RANDOM**、**ADD NEAR**、**ADD ALL**（beatoraja の `ADD_BLANK`）を選びます。REMOVE はすべての地雷を取り除くため、地雷の爆発もゲージの減少も起きません。ADD は beatoraja 0.8.9 の `MineNoteModifier` に従い、参照元のタイムラインの各行をスクラッチを含むレーン順に調べ、ノート・地雷・押下中のロングノートがないセルを対象にします。ADD RANDOM はセルごとに独立した 10 分の 1 の抽選で、ADD NEAR はその行の追加前に隣のレーンが埋まっていた場合に、ADD ALL は対象のすべてのセルに地雷を置きます。追加した地雷のダメージは 10 % で、爆発音を鳴らしません。譜面にもともとある地雷は元の値を維持します。この変換はレーンオプションより前に譜面を準備するため、追加した地雷もレーンと一緒に移動します。
+どのルールでも、Options ダイアログ の **Mines** で **OFF**（既定）、beatoraja の **REMOVE**・**ADD RANDOM**・**ADD NEAR**・**ADD ALL**（`ADD_BLANK`）を選びます。nanasigroove の **ADDMINE** は **nanasigroove** フォルダーにある別のオプションです。オンのあいだは、譜面の `774:CRAZY_ADDMINE` と同じく Mines の選択に代わり、ダイアログは Mines を使えない状態で表示します（[ADR 0033](./adr/0033-chart-authored-gameplay-options.ja.md)）。リプレイには地雷オプション `NANASI_ADD` として記録します。REMOVE はすべての地雷を取り除くため、地雷の爆発もゲージの減少も起きません。ADD は beatoraja 0.8.9 の `MineNoteModifier` に従い、参照元のタイムラインの各行をスクラッチを含むレーン順に調べ、ノート・地雷・押下中のロングノートがないセルを対象にします。ADD RANDOM はセルごとに独立した 10 分の 1 の抽選で、ADD NEAR はその行の追加前に隣のレーンが埋まっていた場合に、ADD ALL は対象のすべてのセルに地雷を置きます。追加した地雷のダメージは 10 % で、爆発音を鳴らしません。譜面にもともとある地雷は元の値を維持します。この変換はレーンオプションより前に譜面を準備するため、追加した地雷もレーンと一緒に移動します。
 
 リプレイには `play.mineModifier` と、実際に除去・追加した地雷の数を示す `play.mineModifierChangeCount` を記録します。beatoraja は実際に除去した場合だけアシスト扱いにするため、この数で地雷のない譜面を REMOVE で遊んだ場合と、地雷を実際に除去した場合を区別できます。実効譜面のノートには追加した地雷をダメージと `silent` フラグ付きで含め、リプレイを開く際は再抽選せずに記録した位置へ地雷を置きます。beatoraja スキンの地雷モードボタン（351）は 5 つの選択肢を参照元の順で巡回し、ラベル画像に表示します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 

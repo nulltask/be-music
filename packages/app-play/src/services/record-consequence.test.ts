@@ -27,6 +27,9 @@ describe('plannedPlayOf', () => {
       extraNotes: true,
       sevenToNine: true,
     });
+    // nanasigroove's ADDMINE plays in place of the Mines choice.
+    expect(plannedPlayOf(state({ mineModifier: 'REMOVE', crazyAddMine: true })).mineModifier).toBe('NANASI_ADD');
+    expect(plannedPlayOf(state({ mineModifier: 'REMOVE' })).mineModifier).toBe('REMOVE');
   });
 });
 

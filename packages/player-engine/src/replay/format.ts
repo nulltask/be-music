@@ -977,8 +977,10 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     parsed.scrollModifierChanged = play.scrollModifierChanged;
   }
   if (play.mineModifier !== undefined) {
-    if (!['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'].includes(play.mineModifier as string))
-      throw new ReplayParseError('play.mineModifier: expected OFF, REMOVE, ADD_RANDOM, ADD_NEAR or ADD_BLANK');
+    if (!['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK', 'NANASI_ADD'].includes(play.mineModifier as string))
+      throw new ReplayParseError(
+        'play.mineModifier: expected OFF, REMOVE, ADD_RANDOM, ADD_NEAR, ADD_BLANK or NANASI_ADD',
+      );
     parsed.mineModifier = play.mineModifier as MineModifier;
   }
   if (play.mineModifierChangeCount !== undefined)

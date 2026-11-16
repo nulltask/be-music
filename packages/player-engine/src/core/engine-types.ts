@@ -1,4 +1,9 @@
-import type { ChartOptionProgram, ChartOptionDiagnostic, ChartPlayOptionProgram } from '@be-music/chart-model';
+import type {
+  ChartOptionProgram,
+  ChartOptionDiagnostic,
+  ChartPlayOptionProgram,
+  PlayerChartPlayOptions,
+} from '@be-music/chart-model';
 import type { ChartTextStage } from './chart-text.ts';
 export type { ChartTextStage } from './chart-text.ts';
 import type { BattleMode } from './battle-mode.ts';
@@ -263,6 +268,12 @@ export interface PlayerPlayRuntime {
    * the engine applies the judge modifiers and records the program.
    */
   chartPlayOptionProgram?: ChartPlayOptionProgram;
+  /**
+   * The player's own nanasigroove judgment options (GOOD2BAD / GREAT2BAD, HELLJUDGE), added to the chart's where the
+   * chart sets none (`withPlayerChartPlayOptions`). Ignored when {@link chartPlayOptionProgram} is given: that program is
+   * the effective one.
+   */
+  playerChartPlayOptions?: PlayerChartPlayOptions;
   /** Diagnostics retained by a host compiling stage-owned programs before playback. */
   chartOptionDiagnostics?: readonly ChartOptionDiagnostic[];
   /** Stage-owned chart text supplied by a NONSTOP host; overrides flattened TEXT definitions. */

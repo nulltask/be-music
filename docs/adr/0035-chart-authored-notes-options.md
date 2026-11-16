@@ -37,3 +37,30 @@ A key mode change touches the skin a host draws, the records (kept by chart), co
 ## Consequences
 
 Charts that force NOTES play as double or copied charts in every host, on replay and on the server. The fingerprint now separates charts that differ only in gameplay options. `bmfp0` is the development version, so no bump is needed, and charts without options keep their fingerprints. A replay can no longer strip or add the chart's program without changing the play fingerprint, which then names another chart. The DOUBLE placement is Be-Music's own rule and may differ from nanasigroove. The select screen still classifies a COPY chart by its authored key mode, and a NOTES COPY chart in a course plays single.
+
+## Amendment: nanasigroove's own conversions (#1184)
+
+The readings above were Be-Music's own. nanasigroove 1.552 converts the chart as follows, and Be-Music now does too:
+
+**DOUBLE copies whole lanes, one copy after another.** Each copy takes the source lane as it stands, so a lane that has already received a copy passes it on. The scratch and FREE ZONE are left alone; invisible objects travel with their lane, and mines do not.
+
+| Variant | Copies, in order                                                                             |
+| ------- | -------------------------------------------------------------------------------------------- |
+| 5 KEY   | 1→3, 2→4, 3→5, 4→2, 5→3: keys 3 and 5 carry keys 1, 3 and 5; keys 2 and 4 carry keys 2 and 4 |
+| 7 KEY   | 1→3, 2→4, 3→5, 4→2, 5→7, 6→4, 7→5                                                            |
+| 9 KEY   | 1→3, 2→4, 3→5, 4→2, 5→7, 6→4, 7→9, 8→6, 9→7 (keys 6 to 9 are channels 22 to 25)              |
+| 10 KEY  | 5 KEY on each side                                                                           |
+| 14 KEY  | 7 KEY on each side                                                                           |
+
+Each lane then keeps one object at each instant, preferring in turn the lane's own long note, its own key note, a long note from the same side, a key note from the same side, and otherwise whichever arrived first (the lane's own objects first, then the copies in the order they were made). Be-Music keeps two narrow rules of its own, because a Be-Music lane plays one object at a time:
+
+- The chart's own visible objects always stay. An instant the chart already doubles is the chart's, not DOUBLE's.
+- A long-note copy stays only when both its ends stay. A copy is dropped where it would overlap a long note already on its lane.
+
+nanasigroove defines no DOUBLE for 24 / 48 KEY, so it does nothing there and is diagnosed `unsupported-option`.
+
+**COPY** mirrors the 1P side onto 2P as above, but leaves the mines on 1P. **DBLCOPY** copies first and then doubles both sides of the double-play chart, on the 10 / 14 KEY copies. nanasigroove's COPY also turns 9 KEY into 18 KEY; Be-Music has no 18 KEY mode, so that stays unsupported. The course rule stays Be-Music's.
+
+**The player can select them too.** The Options dialog's **nanasigroove** folder offers **NOTES**: OFF, DOUBLE, COPY or DBLCOPY. A chart's own `774:NOTES_*` wins (`withPlayerChartPlayOptions`). The Leaderboard accepts a replay whose program adds the player's GOOD2BAD / GREAT2BAD, HELLJUDGE or NOTES where the chart sets none, and narrows the program with the replay's own version.
+
+**Replays.** A program with NOTES is now version 3, as with the CRAZY options in [ADR 0033](./0033-chart-authored-gameplay-options.md). Version 1 and 2 programs keep the readings above: mirror-lane DOUBLE on every variant with key lanes, COPY with the mines, and DBLCOPY doubling before it copies. Existing replays and records keep their notes.

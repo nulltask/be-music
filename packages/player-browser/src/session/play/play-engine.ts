@@ -54,7 +54,7 @@ import type { NonstopStageMixer } from '../../runtime/nonstop-audio.ts';
 import { supportsLiveTempoChange, type ReplayTempo } from '../../runtime/play-tempo.ts';
 import { drainWebUISignals, type WebUIRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
 import type { PlayChartContext } from './play-chart.ts';
-import type { PlaySessionOptions } from './play-options.ts';
+import { resolvePlayerMineModifier, type PlaySessionOptions } from './play-options.ts';
 import { toBeMusicJudgeWindows } from './judge-windows.ts';
 import type { LongNoteTracker } from './long-note-tracker.ts';
 import type { LiveTempo } from './live-tempo.ts';
@@ -107,6 +107,7 @@ export interface PlayEngineContext
       | 'scrollRate'
       | 'scrollModifier'
       | 'mineModifier'
+      | 'crazyAddMine'
       | 'gaugeAutoShift'
       | 'bmsonTotalMode'
       | 'bottomShiftableGauge'
@@ -570,7 +571,7 @@ export function resolveReplayRecording(
     lr2ExtraLevel: options.lr2ExtraLevel,
     extraNoteDepth: options.extraNoteDepth,
     extraNoteScratch: options.extraNoteScratch,
-    mineModifier: options.mineModifier,
+    mineModifier: resolvePlayerMineModifier(options),
     scrollModifier: options.scrollModifier,
     scrollSection: options.scrollSection,
     scrollRate: options.scrollRate,
@@ -744,7 +745,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
         ctx.options.replay?.play.mineModifier ??
         ctx.options.fixedArrangement?.play.mineModifier ??
         ctx.chartPlay?.selection.mineModifier ??
-        ctx.options.mineModifier,
+        resolvePlayerMineModifier(ctx.options),
       // The chart's gameplay program (#844): a replay's recorded one, or none for an older replay without it.
       chartPlayOptionProgram: ctx.options.replay
         ? (ctx.options.replay.chart.chartPlayOptions ?? { version: 1 as const, options: {} })

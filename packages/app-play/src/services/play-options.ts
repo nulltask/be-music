@@ -72,6 +72,10 @@ export type GUIPlayOptions = Pick<
   | 'scrollRate'
   | 'scrollModifier'
   | 'mineModifier'
+  | 'crazyJudge'
+  | 'crazyHellJudge'
+  | 'crazyAddMine'
+  | 'crazyNotes'
   | 'gaugeAutoShift'
   | 'bmsonTotalMode'
   | 'bottomShiftableGauge'
@@ -212,6 +216,10 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     extraNoteDepth: state.extraNoteDepth,
     extraNoteScratch: state.extraNoteScratch,
     mineModifier: state.mineModifier,
+    crazyJudge: state.crazyJudge,
+    crazyHellJudge: state.crazyHellJudge,
+    crazyAddMine: state.crazyAddMine,
+    crazyNotes: state.crazyNotes,
     scrollModifier: state.scrollModifier,
     scrollSection: state.scrollSection,
     scrollRate: state.scrollRate,
@@ -333,6 +341,10 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.extraNoteDepth = options.extraNoteDepth;
   state.extraNoteScratch = options.extraNoteScratch;
   state.mineModifier = options.mineModifier;
+  state.crazyJudge = options.crazyJudge;
+  state.crazyHellJudge = options.crazyHellJudge;
+  state.crazyAddMine = options.crazyAddMine;
+  state.crazyNotes = options.crazyNotes;
   state.scrollModifier = options.scrollModifier;
   state.scrollSection = options.scrollSection;
   state.scrollRate = options.scrollRate;
@@ -390,7 +402,12 @@ export class PlayOptionsService {
       lr2ExtraLevel: play.lr2ExtraLevel ?? 0,
       extraNoteDepth: play.extraNoteDepth ?? 0,
       extraNoteScratch: play.extraNoteScratch ?? false,
-      mineModifier: play.mineModifier ?? play.options?.mineModifier,
+      // A play recorded with nanasigroove's ADDMINE (`NANASI_ADD`) restores it as its own option, beside the Mines choice.
+      mineModifier:
+        play.mineModifier === 'NANASI_ADD'
+          ? play.options?.mineModifier
+          : (play.mineModifier ?? play.options?.mineModifier),
+      crazyAddMine: play.mineModifier === undefined ? play.options?.crazyAddMine : play.mineModifier === 'NANASI_ADD',
       scrollModifier: play.scrollModifier ?? play.options?.scrollModifier,
       scrollSection: play.scrollSection ?? play.options?.scrollSection,
       scrollRate: play.scrollRate ?? play.options?.scrollRate,
@@ -460,6 +477,10 @@ const ARRANGEMENT_OPTIONS = [
   'extraNoteDepth',
   'extraNoteScratch',
   'mineModifier',
+  'crazyJudge',
+  'crazyHellJudge',
+  'crazyAddMine',
+  'crazyNotes',
   'scrollModifier',
   'scrollSection',
   'scrollRate',

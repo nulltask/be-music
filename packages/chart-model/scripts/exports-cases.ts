@@ -94,6 +94,16 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.isChartPlayOptionDeclaration('774:RANDOM_MIRROR');
     },
   });
+  define('chart-model.withPlayerChartPlayOptions', {
+    run: () => {
+      chartAPI.withPlayerChartPlayOptions({ version: 1, options: { random: 'RANDOM' } }, { hellJudge: true });
+    },
+  });
+  define('chart-model.isLegacyChartPlayOptionProgram', {
+    run: () => {
+      chartAPI.isLegacyChartPlayOptionProgram({ version: 1, options: { judge: 'GOOD2BAD' } });
+    },
+  });
   define('chart-model.hasChartPlayOptions', {
     run: () => {
       chartAPI.hasChartPlayOptions({ version: 1, options: { random: 'RANDOM' } });

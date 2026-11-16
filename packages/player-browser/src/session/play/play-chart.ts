@@ -3,6 +3,8 @@ import { collectLR2SortObjects } from './lr2-sort-objects.ts';
 import {
   buildChartOptionTimeline,
   compileChartPlayOptions,
+  isLegacyChartPlayOptionProgram,
+  withPlayerChartPlayOptions,
   type BGAOpacityTimelines,
   type ChartOptionDiagnostic,
   type ChartPlayOptionProgram,
@@ -91,7 +93,7 @@ import {
   type NonstopStageBGATimeline,
 } from '../../chart/bga-timeline.ts';
 import { resolvePlayTempoRange, type PlayTempoRange } from './tempo-range.ts';
-import type { PlaySessionOptions } from './play-options.ts';
+import { resolvePlayerMineModifier, type PlaySessionOptions } from './play-options.ts';
 import type { LongNoteTracker } from './long-note-tracker.ts';
 import { changesScrollRate, collectResolvedLaneTimelineBeats } from '../../chart/note-draw-window.ts';
 import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
@@ -181,6 +183,10 @@ export interface PlayChartContext {
       | 'scrollRate'
       | 'scrollModifier'
       | 'mineModifier'
+      | 'crazyAddMine'
+      | 'crazyJudge'
+      | 'crazyHellJudge'
+      | 'crazyNotes'
       | 'autoScratch1P'
       | 'autoScratch2P'
     >
@@ -366,10 +372,23 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // whose stages keep one key mode), so the arrangement maps onto the double-play lanes.
   const chartPlayEffect =
     arrangement === undefined
-      ? resolveEffectiveChartPlayOptions(compileChartPlayOptions(buildChartOptionTimeline(resolved)), {
-          playVariant,
-          course: ctx.options.course !== undefined,
-        })
+      ? resolveEffectiveChartPlayOptions(
+          // The player's own GOOD2BAD / GREAT2BAD, HELLJUDGE and NOTES join where the chart sets none (#1177, #1184,
+          // #1185).
+          withPlayerChartPlayOptions(compileChartPlayOptions(buildChartOptionTimeline(resolved)), {
+            ...(ctx.options.crazyJudge === 'GOOD2BAD' || ctx.options.crazyJudge === 'GREAT2BAD'
+              ? { judge: ctx.options.crazyJudge }
+              : {}),
+            ...(ctx.options.crazyHellJudge === true ? { hellJudge: true as const } : {}),
+            ...(ctx.options.crazyNotes !== undefined && ctx.options.crazyNotes !== 'OFF'
+              ? { notes: ctx.options.crazyNotes }
+              : {}),
+          }),
+          {
+            playVariant,
+            course: ctx.options.course !== undefined,
+          },
+        )
       : { program: arrangement.chart.chartPlayOptions, diagnostics: [] };
   const chartPlayProgram = chartPlayEffect.program;
   const chartNotes = chartPlayProgram?.options.notes;
@@ -384,7 +403,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       lr2RandomScratch2P: ctx.options.lr2RandomScratch2P,
       mRan1P: ctx.options.mRan1P,
       mRan2P: ctx.options.mRan2P,
-      mineModifier: ctx.options.mineModifier,
+      mineModifier: resolvePlayerMineModifier(ctx.options),
     },
     arrangement === undefined ? chartPlayProgram : undefined,
     { doublePlay: ['10', '14', '48'].includes(arrangedVariant), hasScratch: arrangedVariant !== '9' },
@@ -468,7 +487,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       scrollSection: arrangement?.play.scrollSection ?? ctx.options.scrollSection,
       scrollRate: arrangement?.play.scrollRate ?? ctx.options.scrollRate,
       scrollModifierTimeline: arrangement?.play.scrollModifierTimeline,
-      ...(arrangement?.play.mineModifier?.startsWith('ADD_')
+      ...(arrangement?.play.mineModifier?.startsWith('ADD_') || arrangement?.play.mineModifier === 'NANASI_ADD'
         ? {
             mineModifierPlacements: modifierNotes!
               .filter((note) => note.type === 'mine')
@@ -482,6 +501,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
           }
         : {}),
       chartNotes,
+      chartNotesLegacy: chartPlayProgram !== undefined && isLegacyChartPlayOptionProgram(chartPlayProgram),
       // LR2 copies 1P's arranged lanes to 2P, mines included, when both players pick the same lane option (#1086). A
       // replay rebuilds its 2P mines only when it recorded them.
       twoPlayerMines: arrangement

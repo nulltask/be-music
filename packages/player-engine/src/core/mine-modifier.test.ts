@@ -116,6 +116,28 @@ test('recorded placements bypass generation, preserve damage/silence, and reject
   expect(() => prepareMineModifier(resolved, 'ADD_RANDOM')).toThrow(/supplied randomness/);
 });
 
+test("nanasigroove's ADDMINE places mines between source rows, and recorded placements restore them there", () => {
+  const resolved = resolveChart(parseChart('#BPM 120\n#00011:01\n#00111:01', 'bms'), { playVariant: '7' });
+  // Every draw 0.95: each lane's first mine 366 positions (7.625 beats) in, past the last row at beat 4: no mine.
+  expect(prepareMineModifier(resolved, 'NANASI_ADD', { random: () => 0.95 }).changes).toBe(0);
+  // Every draw 0: a dense lane, its first mine 24 positions (half a beat) in, then every 24; four in five candidates draw
+  // 0 (dropped), so none either. A draw of 0.5 keeps them: the first step is 84 + 24 → beat 2.25.
+  const draws = [0, 0.5, 0.5, 0, 0, 0.99];
+  let index = 0;
+  const added = prepareMineModifier(resolved, 'NANASI_ADD', { random: () => draws[index++ % draws.length]! });
+  const mine = added.mines.find((entry) => entry.channel === '11')!;
+  expect(mine.beat).toBe(2.25);
+  expect(mine.seconds).toBe(1.125);
+  expect(resolveLandmineGaugeEffect(mine.event).damage).toBe(0.5);
+  expect(added.changes).toBe(added.mines.length);
+  // A replay restores the same mine off the source rows, from its time.
+  const restored = prepareMineModifier(resolved, 'NANASI_ADD', {
+    placements: [{ channel: '11', timeUs: 1_125_000, damage: 0.5 }],
+  });
+  expect(restored.mines).toMatchObject([{ channel: '11', beat: 2.25, seconds: 1.125 }]);
+  expect(() => prepareMineModifier(resolved, 'NANASI_ADD')).toThrow(/supplied randomness/);
+});
+
 test('ADD NEAR uses original occupied neighbors without wrapping or expanding through new mines', () => {
   const resolved = resolveChart(parseChart('#BPM 120\n#00013:01\n#00101:01', 'bms'), { playVariant: '7' });
   const result = prepareMineModifier(resolved, 'ADD_NEAR');
