@@ -2,7 +2,7 @@
 
 # @be-music/chart-parser
 
-`.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / Be-Music JSON の譜面のパーサで、[`@be-music/chart-source`](../chart-source/README.ja.md) の中間表現を出力します。`bms-parse` CLI も含みます。
+`.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / ナナシグルーヴ2 の `.n2s` / Be-Music JSON の譜面のパーサで、[`@be-music/chart-source`](../chart-source/README.ja.md) の中間表現を出力します。`bms-parse` CLI も含みます。
 
 ## 使い方
 

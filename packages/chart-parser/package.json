@@ -29,6 +29,7 @@
   "dependencies": {
     "@be-music/chart-model": "workspace:*",
     "@be-music/chart-source": "workspace:*",
-    "@be-music/shared-utils": "workspace:*"
+    "@be-music/shared-utils": "workspace:*",
+    "fflate": "^0.8.3"
   }
 }

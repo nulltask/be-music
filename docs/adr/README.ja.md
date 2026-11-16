@@ -71,3 +71,5 @@
 - [0040: スクラッチのホールドを記録した入力ソースで識別する](./0040-replay-input-sources.ja.md)
 
 - [譜面指定の BASE-SPEED を標準速度として扱う](./0041-chart-authored-base-speed.ja.md)
+
+- [0042: ナナシグルーヴ2 の `.n2s` 譜面を PMS として読む](./0042-nanasi-groove-2-charts.ja.md)

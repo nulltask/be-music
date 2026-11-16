@@ -6,6 +6,7 @@
 import type { BeMusicJSON } from '@be-music/chart-source';
 import { decodeUTF8Text } from './core/bms-text-decode.ts';
 import { parseBMSBytes } from './core/bms-bytes.ts';
+import { parseN2SBytes } from './core/n2s.ts';
 import { parseBmson, parseChart } from './core/parser.ts';
 
 export interface ParseChartFileOptions {
@@ -23,6 +24,9 @@ export async function parseChartFile(filePath: string, options: ParseChartFileOp
   }
   if (extension === '.json') {
     return parseChart(decodeUTF8Text(buffer), 'json');
+  }
+  if (extension === '.n2s') {
+    return parseN2SBytes(buffer);
   }
   return parseBMSBytes(buffer);
 }

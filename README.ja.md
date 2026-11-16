@@ -58,7 +58,7 @@ Be-Music は、BMS・bmson 譜面を遊び、扱うためのオープンソー�
 - [`@be-music/chart-source`](./packages/chart-source/README.ja.md): Be-Music 内部処理専用の BMS/bmson 中間表現 (JSON互換) の pure IR
 - [`@be-music/chart-model`](./packages/chart-model/README.ja.md): beat 解決、イベント順序、ロングノート解決などの譜面意味論 helper
 - [`@be-music/shared-utils`](./packages/shared-utils/README.ja.md): 全パッケージで再利用する汎用ユーティリティ。browser-safe な core helper と Node 向け helper は狭い subpath export で分けています
-- [`@be-music/chart-parser`](./packages/chart-parser/README.ja.md): `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON のパーサ
+- [`@be-music/chart-parser`](./packages/chart-parser/README.ja.md): `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / `.n2s` / JSON のパーサ
 - [`@be-music/chart-writer`](./packages/chart-writer/README.ja.md): JSON から `.bms` / `.bmson` への文字列化
 - [`@be-music/chart-audio-renderer`](./packages/chart-audio-renderer/README.ja.md): 譜面をレンダリングして `.wav` / `.aiff` を出力
 - [`@be-music/player-engine`](./packages/player-engine/README.ja.md): 規則と再生 engine を共有する package。1 つのプレイループ（手動・AUTO・リプレイ）、判定、score、gauge とクリアランプ、自己ベスト、コースの実行と NONSTOP、リプレイの形式、ホストが差し込む runtime 契約
