@@ -65,6 +65,14 @@ nanasigroove は 24 / 48 KEY の DOUBLE を定めていないので、そこで�
 
 **リプレイ。** NOTES を持つプログラムは、[ADR 0033](./0033-chart-authored-gameplay-options.ja.md) の CRAZY オプションと同じく版 3 になります。版 1・2 のプログラムは上の読み方（キーレーンのあるすべてのキーモードでの鏡のレーンへの DOUBLE、地雷も写す COPY、倍にしてから写す DBLCOPY）を保つので、既存のリプレイと記録のノートは変わりません。
 
+## 追記: コースの規則は保つ（#1242）
+
+nanasigroove 1.552 には独自のコース（EXPERT モード）があります。マニュアル（`_RESOURCE/05_4_expert.html`、`05_5_exedit.html`）と `_datafiles/course/template.txt` は、テキスト形式の `.crs` ファイルを説明しています [C]。テンプレートは 1 つのコースに `.bms`・`.bme`・`.bml`・`.pms` のステージを並べているので、ステージ同士でキーモードがそろっている必要はありません。また `#OPTCHANGE_NOTES` / `#FIXED_NOTES` で、コースは NOTES をプレイヤーに任せるか、固定するか、ランダムに決めるかを選べます。そうしたコースで譜面自身の `774:NOTES_COPY` がどう動くかはどちらにも書かれておらず、ゲームも動かしていないので、分からないままです。
+
+Be-Music は `.crs` を読みません。Be-Music のコースは LR2 と beatoraja のコースで、それぞれ 1 つのキーモードのためのものです（LR2 の `line` や難易度表の `mode` から決まる `keyMode`。[course.ja.md](../course.ja.md)）。COPY でステージをダブルプレイ譜面にすると、LR2 や beatoraja のコースの意味を変えてしまいます。nanasigroove の対応は譜面の `#OPTION` のためのもので、それらのオプションを変えてはなりません（AGENTS.md）。そこで規則はそのまま保ちます。コースのステージは COPY を外し、DBLCOPY は DOUBLE を残し、宣言は `unsupported-option` と診断し、そのステージは譜面の記録を更新しません。リプレイとフィンガープリントは変わりません。
+
+プレイヤー自身の NOTES も同じ規則に従うので、黙って外すのをやめました。コースのバーでは、Options ダイアログが COPY と DBLCOPY を薄く表示して選べなくします。ステージでも効く DOUBLE は選べるままです。譜面のバーで選んだものは残り、次の譜面でまた効きます。
+
 ## 追記: プレイヤーの NOTES COPY は記録を残さない（#1243）
 
 リプレイは、プレイで使ったプログラムだけを記録していました。このプログラムは `withPlayerChartPlayOptions` が譜面の `#OPTION` とプレイヤーの選択を合わせたものです。そのため、COPY を強制する譜面と、COPY を選んだプレイヤーとが同じに見え、7 KEY 譜面をプレイヤーの COPY で遊んだプレイがその譜面の記録に入っていました。

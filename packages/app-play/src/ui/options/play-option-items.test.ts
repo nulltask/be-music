@@ -3,6 +3,7 @@ import { resolveRandomModes } from '@be-music/player-scene-model';
 import {
   battleModeItems,
   bottomShiftableGaugeItems,
+  crazyNotesItems,
   gaugeChoices,
   gaugeItems,
   laneOptionItems,
@@ -208,4 +209,19 @@ test('a pick qualified with the judge ruleset is listed while it is selected', (
     'EX-HARD (beatoraja)': 'beatoraja:EX-HARD',
     'HARD (LR2)': 'lr2:HARD',
   });
+});
+
+test('a course bar dims NOTES COPY and DBLCOPY, which a course stage leaves out, and keeps DOUBLE (#1242)', () => {
+  expect(crazyNotesItems(false)).toEqual([
+    { text: 'OFF', value: 'OFF' },
+    { text: 'DOUBLE', value: 'DOUBLE' },
+    { text: 'COPY', value: 'COPY' },
+    { text: 'DBLCOPY', value: 'DBLCOPY' },
+  ]);
+  expect(crazyNotesItems(true)).toEqual([
+    { text: 'OFF', value: 'OFF' },
+    { text: 'DOUBLE', value: 'DOUBLE' },
+    { text: 'COPY', value: 'COPY', disabled: true },
+    { text: 'DBLCOPY', value: 'DBLCOPY', disabled: true },
+  ]);
 });
