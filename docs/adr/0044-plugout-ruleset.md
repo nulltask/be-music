@@ -16,7 +16,8 @@ Be-Music adds a fourth judge ruleset, `plugout` (revision `plugout/0`), beside `
 - **Score**: `100000·PG/n + 50000·GR/n + 25000·GD/n`, each term integer-divided. EX-SCORE is kept beside it.
 - **Lamps** (0x43a7d0, from the final gauge once every note is judged): NORMAL, EASY and HARD from the gauge type; a HAZARD clear is FULL COMBO, an EX-HAZARD clear PERFECT. A full combo tops out at PERFECT, which also needs no empty POOR. There is no MAX.
 - **Mines**: plugout has none, so the ruleset imports LR2's policy, as `____` does.
-- **A survival gauge at 0** stays at 0: a judgment that starts from 0 leaves it there (0x43a4f1), so it never recovers. No code was found that ends the play there; whether a play ends then stays the player's gauge auto-shift choice (NONE ends it, CONTINUE plays on), as under the other rulesets.
+- **A survival gauge at 0** stays at 0: a judgment that starts from 0 leaves it there (0x43a4f1), so it never recovers. In single play nothing ends the play: the single-play gauge path raises no event (the course gauges' do, 0x43a41f, 0x43a4ba), so the chart plays to its end and fails on its final gauge. A single play on plugout's gauges therefore plays on whatever the gauge auto-shift policy says (`resolveGaugeEndOnFailure`); a course stage keeps the policy.
+- **A chain note that starts its lane** is judged: the lane's judge cursor starts on it (0x43c000) although the note count leaves chain notes out (0x43c071). The ruleset judges it and leaves it out of its count (`ReplayNote.uncounted`); the other rulesets count it.
 - **DJ LEVEL**: plugout's rank letters (AAA, AA, A …) use the EX score's ninths, as DJ LEVEL does (0x43a770).
 - **Empty-press sound**: a press with nothing to judge plays the lane's sound cursor, which judged presses, long-note releases and hidden notes move ([format-compat §7](../format-compat.md#7-lrx)). Before the first move the cursor is uninitialized in plugout; Be-Music starts it at the lane's first note.
 
