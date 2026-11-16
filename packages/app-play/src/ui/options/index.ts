@@ -65,6 +65,7 @@ import { buildLibraryFolder } from './library.ts';
 import { PlayLock } from './play-lock.ts';
 import {
   battleModeItems,
+  crazyNotesItems,
   bottomShiftableGaugeItems,
   gaugeItems,
   laneOptionItems,
@@ -291,6 +292,8 @@ export class OptionsDialog {
   public ghostController: OptionBinding<GhostSourceSetting> | undefined;
   /** "Ghost mode": how the ghost shows. Disabled with "Ghost". */
   public ghostModeController: OptionBinding<GhostModeSetting> | undefined;
+  /** nanasigroove's NOTES, whose COPY and DBLCOPY a course bar dims. */
+  public crazyNotesController: OptionBinding<PlayOptions['crazyNotes']> | undefined;
   /** "Ghost status": whether the bar under the cursor would show the picked ghost, or why not. */
   public ghostStatusController: PaneBinding | undefined;
   /** What "Ghost status" shows. */
@@ -555,11 +558,17 @@ export class OptionsDialog {
   }
   /**
    * Tells the menu about the bar under the cursor: "Ghost status" says whether a play of it would show the picked ghost
-   * (`resolveGhostStatus`), and a course bar disables "Ghost" and "Ghost mode", their choices kept for the charts.
+   * (`resolveGhostStatus`), and a course bar disables "Ghost" and "Ghost mode", their choices kept for the charts. A
+   * course bar also dims NOTES COPY and DBLCOPY, which a course stage leaves out (`refreshCourseBarChoices`).
    */
   public setGhostAvailability(facts: GhostBarFacts | undefined): void {
     this.ghostBar = facts;
     this.refreshGhostAvailability();
+    this.refreshCourseBarChoices();
+  }
+  /** Offers NOTES COPY and DBLCOPY on a chart bar and dims them on a course bar, keeping the pick for the charts. */
+  public refreshCourseBarChoices(): void {
+    if (this.crazyNotesController) this.crazyNotesController.options = crazyNotesItems(this.ghostBar?.course === true);
   }
   /** The "Record" row: what the options picked do to a play's record, before it is played. */
   public recordConsequenceController: PaneBinding | undefined;

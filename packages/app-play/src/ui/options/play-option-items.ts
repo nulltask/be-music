@@ -26,6 +26,8 @@ import {
 export interface PlayOptionItem<T> {
   text: string;
   value: T;
+  /** Shown dimmed and not selectable (`OptionChoice.disabled`). */
+  disabled?: boolean;
 }
 
 /** How the Options dialog names each source. */
@@ -255,4 +257,18 @@ export function menuLaneCovers(
     hidden,
     hiddenOn,
   }));
+}
+
+/**
+ * nanasigroove's NOTES choices for the bar under the cursor. A course keeps one key mode, so a course stage leaves COPY
+ * out and DBLCOPY keeps its DOUBLE (ADR 0035): on a course bar COPY and DBLCOPY are shown but cannot be picked, while
+ * DOUBLE, which a stage still plays, stays offered. A pick made on a chart bar is kept, so it returns with the chart.
+ */
+export function crazyNotesItems(course: boolean): PlayOptionItem<PlayOptions['crazyNotes']>[] {
+  return [
+    { text: 'OFF', value: 'OFF' },
+    { text: 'DOUBLE', value: 'DOUBLE' },
+    { text: 'COPY', value: 'COPY', ...(course ? { disabled: true } : {}) },
+    { text: 'DBLCOPY', value: 'DBLCOPY', ...(course ? { disabled: true } : {}) },
+  ];
 }

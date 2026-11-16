@@ -24,7 +24,13 @@ import { storeReplayView } from '../../replay-view-settings.ts';
 import type { OptionsDialog } from './index.ts';
 import { buildLR2ManiaRows } from './lr2-mania.ts';
 import { PLAY_OPTION_PAGES, VIEW_OPTION_PAGES } from './folders.ts';
-import { bottomShiftableGaugeItems, gaugeChoices, laneOptionItems, practiceGaugeItems } from './play-option-items.ts';
+import {
+  bottomShiftableGaugeItems,
+  crazyNotesItems,
+  gaugeChoices,
+  laneOptionItems,
+  practiceGaugeItems,
+} from './play-option-items.ts';
 /**
  * How the player plays: auto play, hi-speed, gauge, lane options and assists.
  *
@@ -504,14 +510,11 @@ export function buildPlayOptionsFolder(
       this.refreshRulesetChoices();
     }),
   );
-  trackPlayOption(
-    selectBinding(nanasi, this.guiState, 'crazyNotes', 'NOTES', {
-      OFF: 'OFF',
-      DOUBLE: 'DOUBLE',
-      COPY: 'COPY',
-      DBLCOPY: 'DBLCOPY',
-    }).on('change', ({ value }) => this.setPlayOptions({ crazyNotes: value })),
-  );
+  // A course bar dims COPY and DBLCOPY (`refreshCourseBarChoices`).
+  this.crazyNotesController = nanasi
+    .addBinding(this.guiState, 'crazyNotes', { label: 'NOTES', options: crazyNotesItems(false) })
+    .on('change', ({ value }) => this.setPlayOptions({ crazyNotes: value }));
+  trackPlayOption(this.crazyNotesController);
   // The built-in and LR2 select screens' sort and filters (an LR2 skin's buttons change them too); the list keeps
   // the bar under the cursor. A play does not read them, so they stay enabled during one.
   selectBinding(select, this.guiState, 'sort', 'Sort', [...SORT_CYCLE]).on('change', ({ value }) => {

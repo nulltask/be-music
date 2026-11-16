@@ -603,7 +603,7 @@ AC 34 では、オプション画面で、ダブルプレー時にテンキー 7
 
 ## nanasigroove の NOTES
 
-どのルールでも、同じ **nanasigroove** フォルダーの **NOTES** で **OFF**（既定）・**DOUBLE**・**COPY**・**DBLCOPY** を選べます。DOUBLE は nanasigroove と同じくレーンをまるごとほかのレーンへ写すので、5 KEY 譜面の鍵盤 3 と 5 は鍵盤 1・3・5 を、鍵盤 2 と 4 は鍵盤 2・4 を持ちます。5・7・9・10・14 KEY で動きます。COPY は 5 / 7 KEY 譜面を 2P 側に鏡写しにして 10 / 14 KEY として遊びます（地雷は写しません）。DBLCOPY は写してから両サイドを倍にします。コースのステージはキーモードを保つので、そこでは COPY は何もしません。譜面自身の `774:NOTES_*` が優先します。リプレイは変換を譜面のゲームプレイプログラムに記録し、そのノートが結果を持ちます（[ADR 0035](./adr/0035-chart-authored-notes-options.ja.md)、[#1184](https://github.com/nulltask/be-music/issues/1184)）。
+どのルールでも、同じ **nanasigroove** フォルダーの **NOTES** で **OFF**（既定）・**DOUBLE**・**COPY**・**DBLCOPY** を選べます。DOUBLE は nanasigroove と同じくレーンをまるごとほかのレーンへ写すので、5 KEY 譜面の鍵盤 3 と 5 は鍵盤 1・3・5 を、鍵盤 2 と 4 は鍵盤 2・4 を持ちます。5・7・9・10・14 KEY で動きます。COPY は 5 / 7 KEY 譜面を 2P 側に鏡写しにして 10 / 14 KEY として遊びます（地雷は写しません）。DBLCOPY は写してから両サイドを倍にします。コースのステージはキーモードを保つので、そこでは COPY は何もしません。コースのバーでは COPY と DBLCOPY を薄く表示して選べなくします。譜面のバーで選んだものは譜面のために残ります（[#1242](https://github.com/nulltask/be-music/issues/1242)）。譜面自身の `774:NOTES_*` が優先します。リプレイは変換を譜面のゲームプレイプログラムに記録し、そのノートが結果を持ちます（[ADR 0035](./adr/0035-chart-authored-notes-options.ja.md)、[#1184](https://github.com/nulltask/be-music/issues/1184)）。
 
 ## 地雷の REMOVE と ADD
 

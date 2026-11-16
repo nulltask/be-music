@@ -64,3 +64,11 @@ nanasigroove defines no DOUBLE for 24 / 48 KEY, so it does nothing there and is 
 **The player can select them too.** The Options dialog's **nanasigroove** folder offers **NOTES**: OFF, DOUBLE, COPY or DBLCOPY. A chart's own `774:NOTES_*` wins (`withPlayerChartPlayOptions`). The Leaderboard accepts a replay whose program adds the player's GOOD2BAD / GREAT2BAD, HELLJUDGE or NOTES where the chart sets none, and narrows the program with the replay's own version.
 
 **Replays.** A program with NOTES is now version 3, as with the CRAZY options in [ADR 0033](./0033-chart-authored-gameplay-options.md). Version 1 and 2 programs keep the readings above: mirror-lane DOUBLE on every variant with key lanes, COPY with the mines, and DBLCOPY doubling before it copies. Existing replays and records keep their notes.
+
+## Amendment: the course rule is kept (#1242)
+
+nanasigroove 1.552 has courses of its own, its EXPERT mode. Its manual (`_RESOURCE/05_4_expert.html`, `05_5_exedit.html`) and `_datafiles/course/template.txt` describe a `.crs` text file [C]: the template lists `.bms`, `.bme`, `.bml` and `.pms` stages in one course, so its stages need not share a key mode, and `#OPTCHANGE_NOTES` / `#FIXED_NOTES` let the course leave NOTES to the player, fix it, or draw it at random. Neither says what a chart's own `774:NOTES_COPY` does in such a course, and the game was not run, so that remains unknown.
+
+Be-Music does not read `.crs`. Its courses are LR2's and beatoraja's, each for one key mode (`keyMode`, from LR2's `line` or a table's `mode`; [course.md](../course.md)), so letting COPY turn a stage into a double-play chart would change what an LR2 or beatoraja course means. nanasigroove support exists for charts' `#OPTION` and must not change those options (AGENTS.md). The rule stays as it is: a course stage leaves COPY out, DBLCOPY keeps its DOUBLE, the declaration is diagnosed `unsupported-option`, and the stage does not update its chart's record. Replays and fingerprints are unchanged.
+
+The player's own NOTES follows the same rule, so it no longer does so silently: on a course bar the Options dialog shows COPY and DBLCOPY dimmed and not selectable, and DOUBLE, which a stage still plays, stays offered. A pick made on a chart bar is kept and applies again on the next chart.
