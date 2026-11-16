@@ -5,6 +5,7 @@ import {
   countScoredNotes,
   createChartFingerprintDocument,
   createPlayFingerprintDocument,
+  playsAtKeysoundVolume,
   resolveChart,
   resolveChartPlayVariant,
 } from './index.ts';
@@ -83,5 +84,12 @@ describe('LRX charts in the chart model', () => {
     expect(chains('11', 2)).toEqual([['06', 0.5]]);
     // Lane 2 has no note before its chain note: it plays in the background, tied to nothing.
     expect(notes.some((note) => note.chainSounds?.some((sound) => sound.event.value === '04'))).toBe(false);
+  });
+
+  test('a background sound plugout plays in its key group plays at the keysound volume', () => {
+    expect(playsAtKeysoundVolume('11')).toBe(true);
+    expect(playsAtKeysoundVolume('01')).toBe(false);
+    expect(playsAtKeysoundVolume('01', { lrx: { keyVolume: true } })).toBe(true);
+    expect(playsAtKeysoundVolume('01', {})).toBe(false);
   });
 });

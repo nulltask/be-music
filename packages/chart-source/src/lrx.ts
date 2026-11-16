@@ -24,6 +24,12 @@ export interface LRXEventExtensions {
    * one it plays in the background at its own time.
    */
   chainLane?: string;
+  /**
+   * A background sound plugout plays at the keysound volume: its mixer puts every note in the key group but those on
+   * the BGM columns (`c` 100–199) that keep a non-zero `dmg` (`plugout4.exe` 0x43b455, 0x43b640). Set on the events of
+   * channel `01` that it covers: chain notes, hidden lane notes and the other background columns.
+   */
+  keyVolume?: boolean;
   /** `vol`, 0..127: the note plays at `volume / 127` of full gain. */
   volume?: number;
   /** `pan`, 0..127: 64 is centre, the position is `(pan − 64) / 64`. */

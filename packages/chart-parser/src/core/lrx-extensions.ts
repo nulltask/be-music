@@ -12,7 +12,7 @@ const EVENT_NUMBERS = [
   'damage',
   'recover',
 ] as const satisfies ReadonlyArray<keyof LRXEventExtensions>;
-const EVENT_FLAGS = ['chain', 'reverse'] as const satisfies ReadonlyArray<keyof LRXEventExtensions>;
+const EVENT_FLAGS = ['chain', 'reverse', 'keyVolume'] as const satisfies ReadonlyArray<keyof LRXEventExtensions>;
 const EVENT_STRINGS = ['chainLane'] as const satisfies ReadonlyArray<keyof LRXEventExtensions>;
 
 /** The LRX values of an event read back from Be-Music JSON: known fields of the right type, nothing else. */

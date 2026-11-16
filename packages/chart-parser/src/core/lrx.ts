@@ -259,10 +259,19 @@ export function parseLRX(files: LRXSourceFiles<string>): BeMusicJSON {
       // follows its lane's preceding note (`chainLane`), which chart-model links it to.
       const background = lane === undefined || extension?.damage === 0 || extension?.chain === true;
       if (extension?.chain === true && lane !== undefined && extension.damage !== 0) extension.chainLane = lane;
+      // plugout's BGM group holds only the BGM columns' notes that keep a non-zero `dmg`; a background sound outside it
+      // plays at the keysound volume.
+      const bgmGroup = channel >= 100 && extension?.damage !== 0;
+      const backgroundExtension: LRXEventExtensions | undefined =
+        background && !bgmGroup ? { ...extension, keyVolume: true } : extension;
       if (!background && note.end > note.start) {
         soundEvents.push({ note, channel: lane, extension: { ...extension, length: note.end - note.start } });
       } else {
-        soundEvents.push({ note, channel: background ? '01' : lane, ...(extension ? { extension } : {}) });
+        soundEvents.push({
+          note,
+          channel: background ? '01' : lane,
+          ...(backgroundExtension ? { extension: backgroundExtension } : {}),
+        });
       }
       continue;
     }

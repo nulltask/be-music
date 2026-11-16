@@ -160,6 +160,7 @@ export {
   isPlayableChannel,
   isPlayLaneSoundChannel,
   isSampleTriggerChannel,
+  playsAtKeysoundVolume,
   isScrollChannel,
   isStopChannel,
   isTempoChannel,

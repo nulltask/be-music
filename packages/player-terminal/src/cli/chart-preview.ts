@@ -1,5 +1,5 @@
 import {
-  isPlayLaneSoundChannel,
+  playsAtKeysoundVolume,
   resolveChart,
   volWAVToLinearGain,
   type TimedSampleTrigger,
@@ -409,7 +409,7 @@ async function renderFallbackChartPreview(
     startSeconds: fallbackIdentity.startSeconds,
     gain: gains.master,
     fallbackToneSeconds: 0.05,
-    resolveTriggerGain: (trigger) => (isPlayLaneSoundChannel(trigger.channel) ? gains.play : gains.bgm),
+    resolveTriggerGain: (trigger) => (playsAtKeysoundVolume(trigger.channel, trigger.event) ? gains.play : gains.bgm),
     signal,
   });
   return {

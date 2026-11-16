@@ -118,11 +118,11 @@ describe('parseLRX', () => {
       lrh: lrh('lanetype="1"'),
     });
     const byValue = new Map(chart.events.map((event) => [event.value, event]));
-    expect(byValue.get('04')).toMatchObject({ channel: '01', lrx: { damage: 0 } });
+    expect(byValue.get('04')).toMatchObject({ channel: '01', lrx: { damage: 0, keyVolume: true } });
     // A chain note remembers its lane, for chart-model to tie it to the lane's preceding note.
-    expect(byValue.get('05')).toMatchObject({ channel: '01', lrx: { chain: true, chainLane: '13' } });
+    expect(byValue.get('05')).toMatchObject({ channel: '01', lrx: { chain: true, chainLane: '13', keyVolume: true } });
     // A hidden chain note is in no lane list in plugout, so it follows nothing.
-    expect(byValue.get('07')!.lrx).toEqual({ chain: true, damage: 0 });
+    expect(byValue.get('07')!.lrx).toEqual({ chain: true, damage: 0, keyVolume: true });
     expect(byValue.get('06')).toMatchObject({
       channel: '14',
       lrx: {
@@ -258,11 +258,32 @@ describe('parseChartFile', () => {
   });
 });
 
+describe('LRX background volume', () => {
+  test('only the BGM columns with a non-zero dmg play at the BGM volume, as plugout groups them', () => {
+    const chart = parseLRX({
+      lrs: lrs(
+        '<n c="301" s="0" p="120" />',
+        '<n c="100" s="0" p="0" />',
+        '<n c="150" s="0" p="1" dmg="0" />',
+        '<n c="20" s="0" p="2" />',
+        '<n c="1" s="0" p="3" />',
+      ),
+    });
+    const byValue = new Map(chart.events.map((event) => [event.value, event]));
+    expect(byValue.get('01')!.lrx?.keyVolume).toBeUndefined();
+    expect(byValue.get('02')!.lrx?.keyVolume).toBe(true);
+    expect(byValue.get('03')!.lrx?.keyVolume).toBe(true);
+    // A lane note is a keysound by its lane; it needs no flag.
+    expect(byValue.get('04')!.lrx?.keyVolume).toBeUndefined();
+  });
+});
+
 describe('normalizeLRXEventExtensions', () => {
   test("keeps a chain note's lane when reading Be-Music JSON back", () => {
-    expect(normalizeLRXEventExtensions({ chain: true, chainLane: '13', other: 1 })).toEqual({
+    expect(normalizeLRXEventExtensions({ chain: true, chainLane: '13', keyVolume: true, other: 1 })).toEqual({
       chain: true,
       chainLane: '13',
+      keyVolume: true,
     });
     expect(normalizeLRXEventExtensions({ chainLane: 13 })).toBeUndefined();
   });

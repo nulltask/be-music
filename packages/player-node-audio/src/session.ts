@@ -5,7 +5,7 @@ import {
   isBmsBGMVolumeChangeChannel,
   isBMSDynamicVolumeChangeChannel,
   isBMSKeyVolumeChangeChannel,
-  isPlayLaneSoundChannel,
+  playsAtKeysoundVolume,
   parseBMSDynamicVolumeGain,
   resolveBmsWAVResources,
   usesMonophonicWAVPlayback,
@@ -298,7 +298,7 @@ export async function createNodeAudioSession({
         }
         removeActiveVoicesInPlace(activeVoices, (voice) => voice.sliceId === playback.sliceId);
       }
-      const isPlayLaneSound = isPlayLaneSoundChannel(normalizedChannel);
+      const isPlayLaneSound = playsAtKeysoundVolume(normalizedChannel, event);
       const voiceGain =
         (isPlayLaneSound ? playVolume : bgmVolume) *
         (isPlayLaneSound ? currentPlayDynamicGain : currentBGMDynamicGain) *

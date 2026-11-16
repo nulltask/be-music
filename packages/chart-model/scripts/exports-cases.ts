@@ -533,6 +533,11 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.isPlayLaneSoundChannel('31');
     },
   });
+  define('chart-model.playsAtKeysoundVolume', {
+    run: () => {
+      chartAPI.playsAtKeysoundVolume('01', { lrx: { keyVolume: true } });
+    },
+  });
   define('chart-model.mapBMSLongNoteChannelToPlayable', {
     run: () => {
       chartAPI.mapBMSLongNoteChannelToPlayable('51');
