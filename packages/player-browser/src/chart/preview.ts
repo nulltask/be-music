@@ -524,32 +524,47 @@ export class ChartPreviewEngine {
   }
 
   /**
-   * A window sample stretched to `rate` at its own pitch, once per chart, tempo, stretcher and `segment`: the part of
-   * the sample a window sounds ({@link resolveWindowStretchSegment}), or the whole sample without one.
+   * The window samples `requests` stretched to `rate` at their own pitch, each once per chart, tempo, stretcher and
+   * `segment` (the part of the sample a window sounds, {@link resolveWindowStretchSegment}; the whole sample without
+   * one). The ones not stretched yet go to the stretcher together, in one batch: each call of it sets up its own
+   * render (Signalsmith Stretch an offline context and its worklet), which a bar's dozen long stems would otherwise
+   * pay a dozen times over at once. A sample the stretcher cannot take resolves `undefined`.
    */
-  private stretchWindowSample(
+  private stretchWindowSamples(
     cache: NonNullable<ChartPreviewEngine['windowCache']>,
-    path: string,
+    requests: readonly {
+      readonly path: string;
+      readonly source: AudioBuffer;
+      readonly segment?: WindowStretchSegment;
+    }[],
     rate: number,
     algorithm: TimeStretchAlgorithm,
-    segment?: WindowStretchSegment,
-  ): Promise<AudioBuffer | undefined> {
-    const key = `${rate}:${algorithm}:${path}${segment === undefined ? '' : `:${segment.startSeconds}-${segment.endSeconds}`}`;
-    let stretched = cache.stretched.get(key);
-    if (stretched === undefined) {
-      stretched = this.decodeWindowSample(cache, path).then(async (buffer) => {
-        if (buffer === undefined || this.disposed) return undefined;
-        try {
-          const part = segment === undefined ? buffer : this.sliceBuffer(buffer, segment);
-          return (await stretchAudioBuffers(this.audioContext, [part], rate, algorithm))[0];
-        } catch {
-          // A sample the stretcher cannot take plays at the tempo, its pitch following.
-          return undefined;
-        }
-      });
-      cache.stretched.set(key, stretched);
+  ): Promise<(AudioBuffer | undefined)[]> {
+    const keyOf = ({ path, segment }: (typeof requests)[number]): string =>
+      `${rate}:${algorithm}:${path}${segment === undefined ? '' : `:${segment.startSeconds}-${segment.endSeconds}`}`;
+    const pending = new Map<string, (typeof requests)[number]>();
+    for (const request of requests) {
+      const key = keyOf(request);
+      if (!cache.stretched.has(key)) pending.set(key, request);
     }
-    return stretched;
+    if (pending.size > 0) {
+      const parts = [...pending.values()].map(({ source, segment }) =>
+        segment === undefined ? source : this.sliceBuffer(source, segment),
+      );
+      const batch: Promise<(AudioBuffer | undefined)[]> = this.disposed
+        ? Promise.resolve(parts.map(() => undefined))
+        : stretchAudioBuffers(this.audioContext, parts, rate, algorithm).catch(
+            // Samples the stretcher cannot take play at the tempo, their pitch following.
+            () => parts.map(() => undefined),
+          );
+      [...pending.keys()].forEach((key, index) =>
+        cache.stretched.set(
+          key,
+          batch.then((stretched) => stretched[index]),
+        ),
+      );
+    }
+    return Promise.all(requests.map((request) => cache.stretched.get(keyOf(request))!));
   }
 
   /** The part `segment` of `buffer`, in its own seconds, as a buffer of its own. */
@@ -601,41 +616,44 @@ export class ChartPreviewEngine {
     const buffers = new Map<string, AudioBuffer>();
     /** The samples played stretched: where the part stretched starts in each, and the sample's own length. */
     const stretchedKeys = new Map<string, { readonly segmentStart: number; readonly sourceDuration: number }>();
+    const sources = new Map<string, { readonly path: string; readonly buffer: AudioBuffer }>();
     await Promise.all(
       [...new Set([...carried, ...triggers].map((trigger) => trigger.sampleKey))].map(async (key) => {
         const path = wavResources[key];
         if (typeof path !== 'string') return;
-        const source = await this.decodeWindowSample(cache, path);
-        if (source === undefined) return;
-        if (!stretching) {
-          buffers.set(key, source);
-          return;
-        }
-        // Only the part of a long sample the window sounds is stretched, so a bar of a long BGM file is quick to hear.
-        const segment = resolveWindowStretchSegment(
-          windowSampleNeeds(
-            [...carried, ...triggers].filter((trigger) => trigger.sampleKey === key),
-            window,
-            rate,
-            source.duration,
-          ),
-          source.duration,
-        );
-        const stretched = await this.stretchWindowSample(
-          cache,
-          path,
-          rate,
-          window.stretchAlgorithm ?? 'wsola',
-          segment,
-        );
-        if (stretched === undefined) {
-          buffers.set(key, source);
-          return;
-        }
-        buffers.set(key, stretched);
-        stretchedKeys.set(key, { segmentStart: segment?.startSeconds ?? 0, sourceDuration: source.duration });
+        const buffer = await this.decodeWindowSample(cache, path);
+        if (buffer !== undefined) sources.set(key, { path, buffer });
       }),
     );
+    if (!stretching) for (const [key, { buffer }] of sources) buffers.set(key, buffer);
+    else {
+      const byKey = new Map<string, TimedSampleTrigger[]>();
+      for (const trigger of [...carried, ...triggers]) {
+        const list = byKey.get(trigger.sampleKey);
+        if (list === undefined) byKey.set(trigger.sampleKey, [trigger]);
+        else list.push(trigger);
+      }
+      // A sample that has finished before the window sounds nothing in it: it is not stretched. Of a long one, only the
+      // part the window sounds is stretched, so a bar of a long BGM file is quick to hear.
+      const requests = [...sources].flatMap(([key, { path, buffer }]) => {
+        const needs = windowSampleNeeds(byKey.get(key) ?? [], window, rate, buffer.duration).filter(
+          (need) => need.endSeconds > need.startSeconds,
+        );
+        if (needs.length === 0) return [];
+        const segment = resolveWindowStretchSegment(needs, buffer.duration);
+        return [{ key, path, source: buffer, ...(segment !== undefined ? { segment } : {}) }];
+      });
+      const stretched = await this.stretchWindowSamples(cache, requests, rate, window.stretchAlgorithm ?? 'wsola');
+      requests.forEach(({ key, source, segment }, index) => {
+        const part = stretched[index];
+        if (part === undefined) {
+          buffers.set(key, source);
+          return;
+        }
+        buffers.set(key, part);
+        stretchedKeys.set(key, { segmentStart: segment?.startSeconds ?? 0, sourceDuration: source.duration });
+      });
+    }
     if (this.isStale(sequence)) return;
     const startAt = this.audioContext.currentTime + 0.02;
     const span = Math.max(0, window.endSeconds - window.startSeconds) / rate;
@@ -940,7 +958,7 @@ export function resolveWindowStretchSegment(
   const to = Math.max(...needs.map((need) => need.endSeconds)) + WINDOW_STRETCH_SEGMENT_PAD_SECONDS;
   const startSeconds = Math.max(0, Math.floor(from * 10) / 10);
   const endSeconds = Math.min(sampleDurationSeconds, Math.ceil(to * 10) / 10);
-  if (endSeconds - startSeconds >= sampleDurationSeconds * 0.75) return undefined;
+  if (!(endSeconds > startSeconds) || endSeconds - startSeconds >= sampleDurationSeconds * 0.75) return undefined;
   return { startSeconds, endSeconds };
 }
 
