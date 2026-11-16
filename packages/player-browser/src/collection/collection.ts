@@ -76,9 +76,27 @@ export class BrowserChartCollectionStore {
     files: Iterable<BrowserDroppedFile>,
     options: LoadProgressOptions = {},
   ): Promise<BrowserChartCollection> {
-    const incoming = await loadChartCollectionFromFiles(files, options);
+    return this.appendFromFileGroups([files], options);
+  }
+
+  /**
+   * {@link appendFromFiles} for several loads at once (the folder reload, which reads every earlier load again): each
+   * group is appended as its own drop, but their files are read and their charts parsed in one pass, so the progress
+   * runs once over every group's charts instead of starting again for each.
+   */
+  public async appendFromFileGroups(
+    groups: Iterable<Iterable<BrowserDroppedFile>>,
+    options: LoadProgressOptions = {},
+  ): Promise<BrowserChartCollection> {
+    for (const incoming of await loadChartCollectionsFromFileGroups(groups, options)) {
+      this.appendCollection(incoming);
+    }
+    return this.collection;
+  }
+
+  private appendCollection(incoming: BrowserChartCollection): void {
     if (incoming.sources.length === 0 && incoming.charts.length === 0 && incoming.errors.length === 0) {
-      return this.collection;
+      return;
     }
     this.dropSeq += 1;
     const prefix = `drop${this.dropSeq}-`;
@@ -100,7 +118,6 @@ export class BrowserChartCollectionStore {
       charts: [...this.collection.charts, ...remappedCharts],
       errors: [...this.collection.errors, ...remappedErrors],
     };
-    return this.collection;
   }
 
   public async loadFromDrop(
@@ -159,7 +176,7 @@ export async function readDropEntries(
   const listed: ListedDropEntry[] = [];
   // Total is unknown while we're still walking the FileSystem tree (the FileSystemEntry API doesn't expose a
   // directory's file count up-front), so we report `total: -1` and let the host UI show an indeterminate
-  // "Collecting…" indicator.
+  // "Listing local files…" indicator.
   options.onProgress?.({ phase: 'enumerating', current: 0, total: -1 });
   for (const entry of entries) {
     await listDropEntries(entry, '', listed, options.onProgress);
@@ -354,98 +371,53 @@ export async function loadChartCollectionFromFiles(
   files: Iterable<BrowserDroppedFile>,
   options: LoadProgressOptions = {},
 ): Promise<BrowserChartCollection> {
+  const [collection] = await loadChartCollectionsFromFileGroups([files], options);
+  return collection ?? { sources: [], charts: [], errors: [] };
+}
+
+/**
+ * {@link loadChartCollectionFromFiles} for several groups of files, one collection per group in the same order. Every
+ * group's files are read first, then every group's charts are parsed in one pass over the worker pool, so the
+ * `reading` and `parsing` progress each run once from 0 to the total over all groups.
+ */
+export async function loadChartCollectionsFromFileGroups(
+  groups: Iterable<Iterable<BrowserDroppedFile>>,
+  options: LoadProgressOptions = {},
+): Promise<BrowserChartCollection[]> {
   const onProgress = options.onProgress;
-  const sources: BrowserAssetSource[] = [];
-  const looseFiles = new Map<string, BrowserAssetEntry>();
-  const looseLabels = new Set<string>();
-  const errors: BrowserChartCollection['errors'] = [];
-
-  // Materialize the iterable so we can report "X / N" totals up front. The callers always pass an array today, so this
-  // is a no-op spread; it just lets the typing accept any iterable.
-  const fileList = [...files];
-  onProgress?.({ phase: 'reading', current: 0, total: fileList.length });
-  // Split ZIPs out before the parallel-read pool so we can keep each archive's expansion tied to its own source label.
-  // Everything else lands in the shared `looseFiles` map.
-  const zipFiles: BrowserDroppedFile[] = [];
-  const looseEntries: BrowserDroppedFile[] = [];
-  for (const file of fileList) {
-    if (extensionOf(file.name) === '.zip' && !file.webkitRelativePath) {
-      zipFiles.push(file);
-    } else {
-      looseEntries.push(file);
-      looseLabels.add(firstPathSegment(normalizePath(file.webkitRelativePath || file.name)) || file.name);
-    }
-  }
-  // Defer EVERY song-bundle file. Charts get read on demand by the parse loop below (each chart's bytes are released as
-  // soon as the parser produces its `BeMusicJSON`), and asset files (BGA images, audio, video, banner, …) stay as lazy
-  // `File` references until gameplay-mount actually needs them. This keeps the at-rest heap to "parsed chart metadata
-  // only" for the song bundle — the dropped pack itself sits on disk until the user picks a song. The throttled
-  // progress wrapper keeps the 4000-emit storm from dominating the read time.
+  // Materialize the iterables so we can report "X / N" totals up front.
+  const fileLists = [...groups].map((files) => [...files]);
+  const fileCount = fileLists.reduce((total, list) => total + list.length, 0);
+  onProgress?.({ phase: 'reading', current: 0, total: fileCount });
   const throttledProgress = createThrottledProgress(onProgress);
-  if (looseEntries.length > 0) {
-    const looseMap = await readFilesIntoBytesMap(looseEntries, {
-      shouldDefer: () => true,
-      onRead: (path, current, total) => {
-        throttledProgress?.({ phase: 'reading', current, total, label: path });
-      },
-    });
-    for (const [path, bytes] of looseMap) {
-      looseFiles.set(path, bytes);
-    }
+  const collections: BrowserChartCollection[] = [];
+  let readBefore = 0;
+  for (const fileList of fileLists) {
+    const offset = readBefore;
+    collections.push(
+      await readChartSources(fileList, (current, label) => {
+        throttledProgress?.({ phase: 'reading', current: offset + current, total: fileCount, label });
+      }),
+    );
+    readBefore += fileList.length;
   }
-  const zipSources: Array<BrowserAssetSource | undefined> = Array.from({ length: zipFiles.length });
-  const zipErrors: BrowserChartCollection['errors'][] = Array.from({ length: zipFiles.length }, () => []);
-  await runWithConcurrency(zipFiles, getBrowserWorkerCount(), async (dropped, index) => {
-    const sourceId = `zip:${dropped.name}`;
-    const [file] = await materializeDroppedFiles([dropped]);
-    if (!file) {
-      zipErrors[index]!.push({ sourceId, message: 'failed to open ZIP archive' });
-      return;
-    }
-    if (file.size > MAX_ZIP_ARCHIVE_BYTES) {
-      zipErrors[index]!.push({
-        sourceId,
-        message: `ZIP archive is too large (${formatBytes(file.size)}; limit ${formatBytes(MAX_ZIP_ARCHIVE_BYTES)})`,
-      });
-      return;
-    }
-    try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      zipSources[index] = await createZipSource(file.name, bytes);
-    } catch (error) {
-      zipErrors[index]!.push({
-        sourceId,
-        message: error instanceof Error ? error.message : 'failed to read ZIP archive',
-      });
-    }
-  });
-  sources.push(...zipSources.filter((source): source is BrowserAssetSource => source !== undefined));
-  errors.push(...zipErrors.flat());
   // Final 100 % emit for the read phase — the throttled wrapper may have suppressed the last one.
-  onProgress?.({ phase: 'reading', current: fileList.length, total: fileList.length });
+  onProgress?.({ phase: 'reading', current: fileCount, total: fileCount });
 
-  if (looseFiles.size > 0) {
-    sources.push({
-      id: `files:${sources.length}`,
-      kind: inferSourceKind(looseFiles),
-      label: looseLabels.size === 1 ? [...looseLabels][0]! : 'Dropped files',
-      files: looseFiles,
-    });
-  }
-
-  const charts: LibraryChart[] = [];
   // Build the chart-path lists in one pass per source so we don't sort + filter the full path table twice (once for the
   // count, once for the parse loop). Sort the chart paths only — the non-chart paths don't need ordering since they're
   // just asset lookups.
-  const chartPathsBySource = sources.map((source) => {
-    const paths: string[] = [];
-    for (const path of source.files.keys()) {
-      if (isChartFilePath(path)) paths.push(path);
-    }
-    paths.sort(JAPANESE_COLLATOR.compare);
-    return paths;
-  });
-  const chartCount = chartPathsBySource.reduce((acc, list) => acc + list.length, 0);
+  const items = collections.flatMap((collection, group) =>
+    collection.sources.flatMap((source) => {
+      const paths: string[] = [];
+      for (const path of source.files.keys()) {
+        if (isChartFilePath(path)) paths.push(path);
+      }
+      paths.sort(JAPANESE_COLLATOR.compare);
+      return paths.map((path) => ({ group, source, path }));
+    }),
+  );
+  const chartCount = items.length;
   let parsedSoFar = 0;
   if (chartCount > 0) {
     onProgress?.({ phase: 'parsing', current: 0, total: chartCount });
@@ -453,7 +425,6 @@ export async function loadChartCollectionFromFiles(
   const throttledParseProgress = createThrottledProgress(onProgress);
   // Keep cooperative progress yielding for hosts using the local fallback; workers already run outside the UI thread.
   const PARSE_YIELD_INTERVAL = 32;
-  const items = sources.flatMap((source, index) => chartPathsBySource[index]!.map((path) => ({ source, path })));
   const loadedCharts: Array<LibraryChart | undefined> = Array.from({ length: items.length });
   const parseErrors: Array<BrowserChartCollection['errors'][number] | undefined> = Array.from({ length: items.length });
   await runWithConcurrency(items, getBrowserWorkerCount(), async ({ source, path }, index) => {
@@ -505,13 +476,94 @@ export async function loadChartCollectionFromFiles(
     throttledParseProgress?.({ phase: 'parsing', current: parsedSoFar, total: chartCount, label: path });
     if (parsedSoFar % PARSE_YIELD_INTERVAL === 0) await yieldToTask();
   });
-  charts.push(...loadedCharts.filter((chart): chart is LibraryChart => chart !== undefined));
-  errors.push(...parseErrors.filter((error): error is BrowserChartCollection['errors'][number] => error !== undefined));
+  for (const [index, { group }] of items.entries()) {
+    const chart = loadedCharts[index];
+    if (chart !== undefined) collections[group]!.charts.push(chart);
+    const error = parseErrors[index];
+    if (error !== undefined) collections[group]!.errors.push(error);
+  }
   if (chartCount > 0) {
     onProgress?.({ phase: 'parsing', current: chartCount, total: chartCount });
   }
+  return collections;
+}
 
-  return { sources, charts, errors };
+/**
+ * Reads one group's files into its sources (one per ZIP archive, and one for the loose files) without parsing any
+ * chart. `onRead` counts the group's files read so far.
+ */
+async function readChartSources(
+  fileList: readonly BrowserDroppedFile[],
+  onRead: (current: number, label: string) => void,
+): Promise<BrowserChartCollection> {
+  const sources: BrowserAssetSource[] = [];
+  const looseFiles = new Map<string, BrowserAssetEntry>();
+  const looseLabels = new Set<string>();
+  const errors: BrowserChartCollection['errors'] = [];
+  // Split ZIPs out before the parallel-read pool so we can keep each archive's expansion tied to its own source label.
+  // Everything else lands in the shared `looseFiles` map.
+  const zipFiles: BrowserDroppedFile[] = [];
+  const looseEntries: BrowserDroppedFile[] = [];
+  for (const file of fileList) {
+    if (extensionOf(file.name) === '.zip' && !file.webkitRelativePath) {
+      zipFiles.push(file);
+    } else {
+      looseEntries.push(file);
+      looseLabels.add(firstPathSegment(normalizePath(file.webkitRelativePath || file.name)) || file.name);
+    }
+  }
+  // Defer EVERY song-bundle file. Charts get read on demand by the parse loop below (each chart's bytes are released as
+  // soon as the parser produces its `BeMusicJSON`), and asset files (BGA images, audio, video, banner, …) stay as lazy
+  // `File` references until gameplay-mount actually needs them. This keeps the at-rest heap to "parsed chart metadata
+  // only" for the song bundle — the dropped pack itself sits on disk until the user picks a song.
+  if (looseEntries.length > 0) {
+    const looseMap = await readFilesIntoBytesMap(looseEntries, {
+      shouldDefer: () => true,
+      onRead: (path, current) => onRead(current, path),
+    });
+    for (const [path, bytes] of looseMap) {
+      looseFiles.set(path, bytes);
+    }
+  }
+  const zipSources: Array<BrowserAssetSource | undefined> = Array.from({ length: zipFiles.length });
+  const zipErrors: BrowserChartCollection['errors'][] = Array.from({ length: zipFiles.length }, () => []);
+  await runWithConcurrency(zipFiles, getBrowserWorkerCount(), async (dropped, index) => {
+    const sourceId = `zip:${dropped.name}`;
+    const [file] = await materializeDroppedFiles([dropped]);
+    if (!file) {
+      zipErrors[index]!.push({ sourceId, message: 'failed to open ZIP archive' });
+      return;
+    }
+    if (file.size > MAX_ZIP_ARCHIVE_BYTES) {
+      zipErrors[index]!.push({
+        sourceId,
+        message: `ZIP archive is too large (${formatBytes(file.size)}; limit ${formatBytes(MAX_ZIP_ARCHIVE_BYTES)})`,
+      });
+      return;
+    }
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      zipSources[index] = await createZipSource(file.name, bytes);
+    } catch (error) {
+      zipErrors[index]!.push({
+        sourceId,
+        message: error instanceof Error ? error.message : 'failed to read ZIP archive',
+      });
+    }
+  });
+  sources.push(...zipSources.filter((source): source is BrowserAssetSource => source !== undefined));
+  errors.push(...zipErrors.flat());
+
+  if (looseFiles.size > 0) {
+    sources.push({
+      id: `files:${sources.length}`,
+      kind: inferSourceKind(looseFiles),
+      label: looseLabels.size === 1 ? [...looseLabels][0]! : 'Dropped files',
+      files: looseFiles,
+    });
+  }
+
+  return { sources, charts: [], errors };
 }
 
 export function describeChartCollection(collection: BrowserChartCollection): string {

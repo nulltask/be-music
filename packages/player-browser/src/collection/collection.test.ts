@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import {
   BrowserChartCollectionStore,
   loadChartCollectionFromFiles,
+  loadChartCollectionsFromFileGroups,
   resolveChartAsset,
   resolveChartAudioAsset,
   resolveChartAudioAssetCandidates,
@@ -215,6 +216,52 @@ describe('loadChartCollectionFromFiles progress events', () => {
   });
 });
 
+describe('loadChartCollectionsFromFileGroups', () => {
+  test('reads every group before parsing, and parses them all in one pass with one total', async () => {
+    const events: LoadProgress[] = [];
+    const collections = await loadChartCollectionsFromFileGroups(
+      [
+        [makeFile('PackA/main.bms', MINIMAL_BMS), makeFile('PackA/kick.wav')],
+        [],
+        [makeFile('PackB/one.bms', MINIMAL_BMS), makeFile('PackB/two.bms', MINIMAL_BMS)],
+      ],
+      { onProgress: (event) => events.push(event) },
+    );
+    expect(collections.map((collection) => collection.charts.map((chartEntry) => chartEntry.chartPath))).toEqual([
+      ['PackA/main.bms'],
+      [],
+      ['PackB/one.bms', 'PackB/two.bms'],
+    ]);
+    expect(collections.map((collection) => collection.sources.map((source) => source.label))).toEqual([
+      ['PackA'],
+      [],
+      ['PackB'],
+    ]);
+    const firstParse = events.findIndex((event) => event.phase === 'parsing');
+    expect(events.slice(firstParse).every((event) => event.phase === 'parsing')).toBe(true);
+    const reading = events.filter((event) => event.phase === 'reading');
+    expect(reading[0]).toMatchObject({ current: 0, total: 4 });
+    expect(reading.at(-1)).toMatchObject({ current: 4, total: 4 });
+    for (let i = 1; i < reading.length; i += 1) {
+      expect(reading[i]!.current).toBeGreaterThanOrEqual(reading[i - 1]!.current);
+    }
+    const parsing = events.filter((event) => event.phase === 'parsing');
+    expect(parsing.every((event) => event.total === 3)).toBe(true);
+    // Per-chart events are throttled; the 0 / N prelude and the N / N terminal always fire.
+    expect(parsing[0]?.current).toBe(0);
+    expect(parsing.at(-1)?.current).toBe(3);
+  });
+
+  test('keeps each group’s parse errors with its own group', async () => {
+    const collections = await loadChartCollectionsFromFileGroups([
+      [makeFile('PackA/main.bms', MINIMAL_BMS)],
+      [makeFile('PackB/broken.bmson', '{')],
+    ]);
+    expect(collections[0]?.errors).toEqual([]);
+    expect(collections[1]?.errors.map((error) => error.path)).toEqual(['PackB/broken.bmson']);
+  });
+});
+
 describe('BrowserChartCollectionStore', () => {
   test('appendFromFiles accumulates drops with collision-safe source and song ids', async () => {
     const store = new BrowserChartCollectionStore();
@@ -247,6 +294,24 @@ describe('BrowserChartCollectionStore', () => {
     const appended = await store.appendFromFiles([makeFile('PackC/main.bms', MINIMAL_BMS)]);
     expect(appended.sources.map((source) => source.id)).toEqual(['files:0', 'drop1-files:0']);
     expect(appended.charts.map((chartEntry) => chartEntry.sourceId)).toEqual(['files:0', 'drop1-files:0']);
+  });
+
+  test('appendFromFileGroups appends each group as its own drop, skipping empty ones', async () => {
+    const store = new BrowserChartCollectionStore();
+    await store.appendFromFiles([makeFile('PackA/main.bms', MINIMAL_BMS)]);
+
+    const appended = await store.appendFromFileGroups([
+      [makeFile('PackB/main.bms', MINIMAL_BMS)],
+      [],
+      [makeFile('PackB/main.bms', MINIMAL_BMS)],
+    ]);
+    expect(appended).toBe(store.collection);
+    expect(appended.sources.map((source) => source.id)).toEqual(['drop1-files:0', 'drop2-files:0', 'drop3-files:0']);
+    expect(appended.charts.map((chartEntry) => chartEntry.id)).toEqual([
+      'drop1-files:0:PackA/main.bms',
+      'drop2-files:0:PackB/main.bms',
+      'drop3-files:0:PackB/main.bms',
+    ]);
   });
 
   test('loadFromDrop replaces the collection from DataTransfer files', async () => {

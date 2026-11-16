@@ -301,6 +301,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       const store = new playerWebCoreAPI.BrowserChartCollectionStore();
       await store.loadFromFiles([BENCH_BMS_FILE]);
       await store.appendFromFiles([BENCH_APPEND_BMS_FILE]);
+      await store.appendFromFileGroups([[BENCH_BMS_FILE], [BENCH_APPEND_BMS_FILE]]);
     },
   });
   define('player-browser.ChartPreviewEngine', {
@@ -787,6 +788,14 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.loadChartCollectionFromFiles', {
     run: async () => {
       await playerWebCoreAPI.loadChartCollectionFromFiles([BENCH_BMS_FILE, BENCH_WAV_FILE]);
+    },
+  });
+  define('player-browser.loadChartCollectionsFromFileGroups', {
+    run: async () => {
+      await playerWebCoreAPI.loadChartCollectionsFromFileGroups([
+        [BENCH_BMS_FILE, BENCH_WAV_FILE],
+        [BENCH_APPEND_BMS_FILE],
+      ]);
     },
   });
   define('player-browser.loadTextureFromBytes', {
