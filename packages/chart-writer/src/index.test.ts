@@ -1134,3 +1134,19 @@ describe('chart-writer', () => {
     });
   });
 });
+
+describe('#WAV and #EXWAV order (#1197)', () => {
+  test("the written order keeps which of a slot's #WAV and #EXWAV wins when read back", () => {
+    const json = createEmptyJSON('bms');
+    json.resources.wav = { '01': 'plain1.wav', '02': 'plain2.wav' };
+    json.bms.exWAV = { '01': 'v -600 ex1.wav', '02': 'v -600 ex2.wav', '03': 'v -600 only.wav' };
+    json.bms.exWAVOverridden = ['02'];
+    const output = stringifyBMS(json);
+    // The EXWAV that wins follows its #WAV; the overridden one and an EXWAV-only slot precede the #WAV lines.
+    expect(output.indexOf('#EXWAV01 ')).toBeGreaterThan(output.indexOf('#WAV01 '));
+    expect(output.indexOf('#EXWAV02 ')).toBeLessThan(output.indexOf('#WAV02 '));
+    const reparsed = parseChart(output);
+    expect(reparsed.bms.exWAV).toEqual(json.bms.exWAV);
+    expect(reparsed.bms.exWAVOverridden).toEqual(['02']);
+  });
+});

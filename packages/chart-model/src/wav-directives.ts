@@ -7,11 +7,10 @@ import { normalizeObjectKey, type BeMusicJSON } from '@be-music/chart-source';
  * token names which channels are present (in order), and whitespace-separated parameters follow those flags
  * positionally. Be-Music also accepts its earlier comma-separated parameter spelling.
  *
- * Supported flags (hitkey BMS Memo): - `p` — stereo pan (`-10000..10000`, where 0 is center). - `v` —
- * playback attenuation in millibels (hundredths of a dB). Negative values attenuate, `0` is unity. - `f`
- * — playback frequency in Hz. The sample is resampled (or replayed at a different rate) so its native sample rate maps
- * onto this output rate.
- *
+ * Supported flags (hitkey BMS Memo, nanasigroove 1.552): - `p` — stereo pan (`-10000..10000`, where 0 is center).
+ * - `v` — playback attenuation in millibels (hundredths of a dB). Negative values attenuate, `0` is unity. - `f` —
+ * playback frequency in Hz. The sample is resampled (or replayed at a different rate) so its native sample rate maps
+ * onto this output rate. - `r` — a rate multiplier nanasigroove 1.552 reads but its manual does not list (#1197).
  */
 export interface BMSExWAV {
   /** Raw filename token, joined back together if it contained spaces. */
@@ -22,18 +21,25 @@ export interface BMSExWAV {
   volumeMillibels?: number;
   /** Playback frequency in Hz, when the `f` flag was present. */
   frequencyHz?: number;
+  /** Playback rate multiplier, when the `r` flag was present; applied after `f`. */
+  rate?: number;
 }
 
 /**
  * Parses one `#EXWAVxx` directive value (the post-`#EXWAVxx ` text).
  *
- * A flag string in declaration order (`pvf` / `vp` / `v`) is followed by one whitespace-separated integer per flag,
- * then the filename. Earlier Be-Music comma-separated parameters remain accepted. Trailing filename tokens are
- * joined back together so filenames can contain spaces.
+ * A flag word of up to five letters (`pvf` / `vp` / `v` / `fr`, in any case) is followed by one whitespace-separated
+ * number per letter, then the filename, as nanasigroove 1.552 reads it (`nanasi.exe` 0x4d05b4-0x4d07a4). A repeated
+ * letter reads another number that replaces the earlier one. `p`, `v` and `f` take integers, `r` a decimal. Earlier
+ * Be-Music comma-separated parameters remain accepted. Trailing filename tokens are joined back together so filenames
+ * can contain spaces.
  *
  * Returns `undefined` for malformed input — better to skip a broken `#EXWAV` than to apply nonsense to the audible
  * signal.
  */
+const INTEGER_PARAMETER = /^[+-]?\d+$/u;
+const DECIMAL_PARAMETER = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/u;
+
 export function parseBMSExWAV(raw: string): BMSExWAV | undefined {
   if (typeof raw !== 'string') return undefined;
   const trimmed = raw.trim();
@@ -41,11 +47,15 @@ export function parseBMSExWAV(raw: string): BMSExWAV | undefined {
   const tokens = trimmed.split(/\s+/u);
   if (tokens.length < 3) return undefined;
   const flags = tokens[0]!.toLowerCase();
-  if (!/^[pvf]+$/u.test(flags) || new Set(flags).size !== flags.length) return undefined;
+  if (!/^[pvfr]{1,5}$/u.test(flags)) return undefined;
   const commaSeparated = tokens[1]!.includes(',');
   const params = commaSeparated ? tokens[1]!.split(',') : tokens.slice(1, 1 + flags.length);
   const filenameStart = commaSeparated ? 2 : 1 + flags.length;
-  if (params.length !== flags.length || params.some((value) => !/^[+-]?\d+$/u.test(value))) return undefined;
+  if (
+    params.length !== flags.length ||
+    params.some((value, index) => !(flags[index] === 'r' ? DECIMAL_PARAMETER : INTEGER_PARAMETER).test(value))
+  )
+    return undefined;
   // Parameter count determines the boundary; the remaining filename may contain spaces.
   const filename = tokens.slice(filenameStart).join(' ');
   if (filename.length === 0) return undefined;
@@ -54,6 +64,12 @@ export function parseBMSExWAV(raw: string): BMSExWAV | undefined {
     const flag = flags[index];
     const valueRaw = params[index];
     if (valueRaw === undefined) break;
+    if (flag === 'r') {
+      const rate = Number.parseFloat(valueRaw.trim());
+      if (!Number.isFinite(rate)) return undefined;
+      out.rate = rate;
+      continue;
+    }
     const value = Number.parseInt(valueRaw.trim(), 10);
     if (!Number.isSafeInteger(value)) return undefined;
     if (flag === 'p') out.pan = value;
@@ -102,13 +118,24 @@ export function collectBMSExWAVVolumeMultipliers(entries: Readonly<Record<string
 }
 
 /**
- * Effective sample filenames. A valid EXWAV definition owns its shared WAV slot, including when WAV is also present.
- * This is Be-Music's explicit cross-dialect precedence; invalid EXWAV leaves the ordinary WAV definition intact.
- * Neither the authored resource map nor the raw EXWAV declarations are mutated.
+ * The `#EXWAVxx` declarations that take effect: those no later `#WAVxx` of the same slot redefines (`exWAVOverridden`).
+ * nanasigroove 1.552 stores `#WAV` and `#EXWAV` in one table and the later line wins (`nanasi.exe` 0x4d07c9, 0x4d0abb).
+ */
+export function resolveBmsExWAVDeclarations(json: Pick<BeMusicJSON, 'bms'>): Record<string, string> {
+  const overridden = json.bms.exWAVOverridden;
+  if (overridden === undefined || overridden.length === 0) return json.bms.exWAV;
+  return Object.fromEntries(Object.entries(json.bms.exWAV).filter(([key]) => !overridden.includes(key)));
+}
+
+/**
+ * Effective sample filenames. A valid EXWAV definition owns its shared WAV slot unless a later `#WAV` of the slot
+ * redefines it ({@link resolveBmsExWAVDeclarations}); invalid EXWAV leaves the ordinary WAV definition intact (Be-Music's
+ * reading: nanasigroove misreads such a line). Neither the authored resource map nor the raw EXWAV declarations are
+ * mutated.
  */
 export function resolveBmsWAVResources(json: Pick<BeMusicJSON, 'resources' | 'bms'>): Record<string, string> {
   const resources = { ...json.resources.wav };
-  for (const [key, raw] of Object.entries(json.bms.exWAV)) {
+  for (const [key, raw] of Object.entries(resolveBmsExWAVDeclarations(json))) {
     const parsed = parseBMSExWAV(raw);
     if (parsed) resources[key] = parsed.filename;
   }
@@ -223,7 +250,7 @@ export function collectBmsWAVCmdVolumeMultipliers(
 /** Per-slot authored volume, including exact intrinsic gain retained by composed Be-Music JSON charts. */
 export function collectBmsWAVVolumeMultipliers(json: Pick<BeMusicJSON, 'bms' | 'resources'>): Map<string, number> {
   const result = collectBmsWAVCmdVolumeMultipliers(json.bms.wavCmds, json.bms.base ?? 36);
-  for (const [key, gain] of collectBMSExWAVVolumeMultipliers(json.bms.exWAV))
+  for (const [key, gain] of collectBMSExWAVVolumeMultipliers(resolveBmsExWAVDeclarations(json)))
     result.set(key, (result.get(key) ?? 1) * gain);
   for (const [key, gain] of Object.entries(json.resources.wavGain ?? {})) {
     if (!Number.isFinite(gain) || gain < 0) throw new RangeError(`Invalid intrinsic WAV gain for slot ${key}`);

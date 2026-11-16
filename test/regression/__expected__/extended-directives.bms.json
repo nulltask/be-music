@@ -77,6 +77,11 @@
       "volWAV": 90,
       "defExRank": 100,
       "wavCmd": "01 01 64",
+      "exWAVOverridden": [
+        "01",
+        "02",
+        "03"
+      ],
       "wavNameBytePrefixes": {
         "sample.wav": "7361",
         "branch.wav": "6272",

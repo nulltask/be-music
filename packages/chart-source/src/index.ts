@@ -357,6 +357,11 @@ export interface BMSExtensions {
    */
   wavCmds: string[];
   exWAV: Record<string, string>;
+  /**
+   * Slots whose `#EXWAVxx` a later `#WAVxx` redefines (#1197): nanasigroove keeps one table for both, so the line later
+   * in the file wins. The `exWAV` declarations stay as authored; `@be-music/chart-model` skips these slots' EXWAV.
+   */
+  exWAVOverridden?: string[];
   exBMP: Record<string, string>;
   bga: Record<string, string>;
   scroll: Record<string, number>;
@@ -577,6 +582,7 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
       changeOption: { ...json.bms.changeOption },
       songText: { ...json.bms.songText },
       exWAV: { ...json.bms.exWAV },
+      ...(json.bms.exWAVOverridden !== undefined ? { exWAVOverridden: [...json.bms.exWAVOverridden] } : {}),
       exBMP: { ...json.bms.exBMP },
       bga: { ...json.bms.bga },
       scroll: { ...json.bms.scroll },
