@@ -1,6 +1,13 @@
 import type { BrowserDroppedFile } from '@be-music/player-browser/collection';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { DropTarget, type DropTargetOptions } from './drop-target.ts';
+import type { RememberedFolder } from '../services/remembered-folder.ts';
+
+const saved = vi.hoisted(() => ({ folders: [] as unknown[] }));
+vi.mock('../services/remembered-folder.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/remembered-folder.ts')>()),
+  storedFolders: async (folders?: readonly unknown[]) => (folders ? (saved.folders = [...folders]) : saved.folders),
+}));
 
 // These fixtures test synchronous drop reads and overlay lifecycle without a browser DOM.
 // Real Lit rendering is covered by the browser suites; retain the controller's other DOM effects here.
@@ -140,5 +147,59 @@ describe('DropTarget.handleDrop', () => {
     await expect(target.handleDrop(fakeDrop([new File(['x'], 'a.bms')]).transfer)).rejects.toThrow('unreadable');
     expect(elements.loadingOverlay.classList.contains('visible')).toBe(false);
     expect(options.recordLoad).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DropTarget.restoreFolder', () => {
+  /** A saved folder handle holding `fileNames`, readable when `permission` is granted. */
+  function savedFolder(name: string, fileNames: readonly string[], permission: PermissionState = 'granted') {
+    return {
+      name,
+      kind: 'directory',
+      queryPermission: async () => permission,
+      async *values() {
+        for (const fileName of fileNames) {
+          yield { kind: 'file', name: fileName, getFile: async () => new File([''], fileName) };
+        }
+      },
+    } as unknown as RememberedFolder;
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('indexedDB', {});
+  });
+
+  test('lists every readable saved folder first, then loads them as one drop', async () => {
+    saved.folders = [
+      savedFolder('A', ['a.bms']),
+      savedFolder('Locked', ['l.bms'], 'prompt'),
+      savedFolder('B', ['b.bms', 'b.wav']),
+    ];
+    const { target, options, loaded } = harness();
+    await target.restoreFolder();
+
+    expect(loaded).toEqual([['a.bms', 'b.bms', 'b.wav']]);
+    expect(options.leaveSelect).toHaveBeenCalledTimes(1);
+    expect(options.resumeSelect).toHaveBeenCalledTimes(1);
+    expect(options.recordLoad).toHaveBeenCalledTimes(1);
+  });
+
+  test('reloads the same folders, together, when the library reads its loads again', async () => {
+    saved.folders = [savedFolder('A', ['a.bms']), savedFolder('B', ['b.bms'])];
+    const { target, options } = harness();
+    await target.restoreFolder();
+
+    const origin = vi.mocked(options.processIncomingFiles).mock.calls[0]?.[1];
+    const relisted = await origin?.readFiles?.(() => {});
+    expect(relisted?.map((file) => file.webkitRelativePath)).toEqual(['A/a.bms', 'B/b.bms']);
+  });
+
+  test('loads nothing, and leaves the select screen alone, when no saved folder is readable', async () => {
+    saved.folders = [savedFolder('Locked', ['l.bms'], 'prompt')];
+    const { target, options, loaded } = harness();
+    await target.restoreFolder();
+
+    expect(loaded).toEqual([]);
+    expect(options.leaveSelect).not.toHaveBeenCalled();
   });
 });

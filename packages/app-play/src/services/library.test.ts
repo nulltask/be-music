@@ -1,4 +1,4 @@
-import { readDropEntries, type BrowserChartCollection } from '@be-music/player-browser/collection';
+import { readDropEntries, type BrowserChartCollection, type LoadProgress } from '@be-music/player-browser/collection';
 import type { SceneKind, SelectScene } from '@be-music/player-browser/host';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
@@ -6,9 +6,10 @@ import { COURSE_TABLE_URLS_STORAGE_KEY } from '../course-table-import.ts';
 import { LibraryService, type LibraryServiceOptions } from './library.ts';
 
 // The loading overlay draws with Lit, which needs a DOM: a load here only reports its progress to it.
+const progress = vi.hoisted(() => [] as LoadProgress[]);
 vi.mock('../loading-overlay.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../loading-overlay.ts')>()),
-  applyLoadProgress: () => {},
+  applyLoadProgress: (_elements: unknown, event: LoadProgress) => progress.push(event),
 }));
 
 const MD5 = ['a', 'b', 'c', 'd', 'e', 'f', '1'].map((digit) => digit.repeat(32));
@@ -493,6 +494,28 @@ describe('the folder reload', () => {
     await library.reloadCharts();
     expect(library.collection.charts.map((chart) => chart.title).sort()).toEqual(['alpha', 'beta']);
     expect(shown.length).toBeGreaterThan(1);
+  });
+
+  test('lists every load again before parsing, then parses all their charts in one pass', async () => {
+    const { library } = harness();
+    const first = folderEntry('one', new Map([['a.bms', bms('alpha')]]));
+    const second = folderEntry('two', new Map([['b.bms', bms('beta')]]));
+    await library.processIncomingFiles(await readDropEntries([first]), { entries: [first] });
+    await library.processIncomingFiles(await readDropEntries([second]), { entries: [second] });
+    progress.length = 0;
+    await library.reloadCharts();
+
+    const phases = progress.map((event) => event.phase);
+    expect(phases.lastIndexOf('enumerating')).toBeLessThan(phases.indexOf('reading'));
+    expect(phases.lastIndexOf('reading')).toBeLessThan(phases.indexOf('parsing'));
+    const listing = progress.filter((event) => event.phase === 'enumerating');
+    // The second listing counts on from the first, and only the end says how many there were.
+    expect(listing.slice(0, -1).every((event) => event.total === -1)).toBe(true);
+    expect(listing.at(-1)).toEqual({ phase: 'enumerating', current: 2, total: 2 });
+    expect(progress.filter((event) => event.phase === 'parsing').every((event) => event.total === 2)).toBe(true);
+    // Each load is still a source of its own.
+    expect(library.collection.sources).toHaveLength(2);
+    expect(library.collection.charts.map((chart) => chart.title).sort()).toEqual(['alpha', 'beta']);
   });
 
   test('says so when there is nothing to reload', async () => {

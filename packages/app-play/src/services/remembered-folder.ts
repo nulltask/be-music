@@ -34,39 +34,84 @@ export async function captureDroppedFolders(transfer: DataTransfer): Promise<Rem
   return handles.filter((handle): handle is RememberedFolder => handle?.kind === 'directory');
 }
 
-export async function readRememberedFolder(
-  folder: RememberedFolder,
-  onProgress?: (progress: LoadProgress) => void,
-): Promise<BrowserDroppedFile[]> {
+/** The folders {@link readRememberedFolders} listed, and the files they hold. */
+export interface RememberedFolderFiles {
+  readonly files: BrowserDroppedFile[];
+  /** The folders listed in full; a folder that could not be read is left out, with its files. */
+  readonly read: RememberedFolder[];
+}
+
+/**
+ * Lists the files of every folder in one walk, as a drop of the same folders is listed: the count runs on over all the
+ * folders, and the total is reported once every folder is listed, so the charts are then parsed in one pass. Each
+ * folder's files sit under its name (see {@link rememberedFolderPrefixes}); a folder that cannot be read is passed to
+ * `onError` and skipped, and the others are still listed.
+ */
+export async function readRememberedFolders(
+  folders: readonly RememberedFolder[],
+  options: {
+    readonly onProgress?: (progress: LoadProgress) => void;
+    readonly onError?: (folder: RememberedFolder, error: unknown) => void;
+  } = {},
+): Promise<RememberedFolderFiles> {
+  const { onProgress } = options;
   const files: BrowserDroppedFile[] = [];
+  const read: RememberedFolder[] = [];
   onProgress?.({ phase: 'enumerating', current: 0, total: -1 });
-  async function walk(directory: RememberedFolder, prefix: string): Promise<void> {
-    for await (const handle of directory.values()) {
-      const path = `${prefix}/${handle.name}`;
-      if (handle.kind === 'directory') {
-        await walk(handle as RememberedFolder, path);
-      } else {
-        const file = handle as FileSystemFileHandle;
-        files.push(
-          new DeferredDroppedFile(
-            {
-              name: file.name,
-              file: (resolve, reject) => {
-                void file.getFile().then(resolve, reject);
+  const prefixes = rememberedFolderPrefixes(folders.map((folder) => folder.name));
+  for (const [index, folder] of folders.entries()) {
+    const listed: BrowserDroppedFile[] = [];
+    async function walk(directory: RememberedFolder, prefix: string): Promise<void> {
+      for await (const handle of directory.values()) {
+        const path = `${prefix}/${handle.name}`;
+        if (handle.kind === 'directory') {
+          await walk(handle as RememberedFolder, path);
+        } else {
+          const file = handle as FileSystemFileHandle;
+          listed.push(
+            new DeferredDroppedFile(
+              {
+                name: file.name,
+                file: (resolve, reject) => {
+                  void file.getFile().then(resolve, reject);
+                },
               },
-            },
-            path,
-          ),
-        );
-        if ((files.length & 0x1f) === 1) {
-          onProgress?.({ phase: 'enumerating', current: files.length, total: -1, label: path });
+              path,
+            ),
+          );
+          const count = files.length + listed.length;
+          if ((count & 0x1f) === 1) {
+            onProgress?.({ phase: 'enumerating', current: count, total: -1, label: path });
+          }
         }
       }
     }
+    try {
+      await walk(folder, prefixes[index]!);
+    } catch (error) {
+      options.onError?.(folder, error);
+      continue;
+    }
+    files.push(...listed);
+    read.push(folder);
   }
-  await walk(folder, folder.name);
   onProgress?.({ phase: 'enumerating', current: files.length, total: files.length });
-  return files;
+  return { files, read };
+}
+
+/**
+ * The top folder each remembered folder's files are listed under: its own name, and for a later folder with the same
+ * name as an earlier one (two `BMS` folders on different drives) the name numbered as `BMS (2)`, so the folders'
+ * files never take each other's paths.
+ */
+export function rememberedFolderPrefixes(names: readonly string[]): string[] {
+  const taken = new Set<string>();
+  return names.map((name) => {
+    let prefix = name;
+    for (let count = 2; taken.has(prefix); count += 1) prefix = `${name} (${count})`;
+    taken.add(prefix);
+    return prefix;
+  });
 }
 
 export async function storedFolders(folders?: readonly RememberedFolder[]): Promise<RememberedFolder[]> {

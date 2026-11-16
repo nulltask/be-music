@@ -19,6 +19,7 @@ import {
   type ChartFileHashes,
   type CourseDefinitionGroup,
   type CourseMaker,
+  type LoadProgress,
 } from '@be-music/player-browser/collection';
 import { applyChartLevelEdits, readChartLevelEdits } from '../chart-level-edits.ts';
 import { createIndexedDBParsedChartCache, currentParsedChartBuildStamp } from './parsed-chart-database.ts';
@@ -53,6 +54,7 @@ import {
 import type { PlayerWebElements } from '../types.ts';
 import { expandZipToFiles, fetchZipAsFile, fetchZipAsFiles, parseURLMediaParams } from '../url-load.ts';
 import { isDroppedArchive, sortDroppedArchives } from './drop-archives.ts';
+import { tallyListings } from './listing-progress.ts';
 
 const dropLog = logger('drop');
 
@@ -97,7 +99,8 @@ export interface LibraryServiceOptions {
 interface LibraryLoadOrigin {
   readonly showLibraryRoot?: boolean;
   readonly entries?: readonly FileSystemEntry[];
-  readonly readFiles?: () => Promise<BrowserDroppedFile[]>;
+  /** Lists the load's files again for the folder reload, reporting the listing through `onProgress`. */
+  readonly readFiles?: (onProgress: (progress: LoadProgress) => void) => Promise<BrowserDroppedFile[]>;
 }
 
 /** The charts and courses the select screen lists, and the loads that add to them. */
@@ -565,14 +568,24 @@ export class LibraryService {
     this.setStatus('Reloading charts...');
     const loads = [...this.chartLoads];
     const groups: BrowserDroppedFile[][] = [];
+    const onProgress = (progress: LoadProgress) => applyLoadProgress(this.elements, progress);
+    // Every load is listed again before any chart is parsed, as one listing of them all; the charts of every load are
+    // then parsed in one pass, as a drop of several folders is.
+    const listing = tallyListings(onProgress);
+    let listed = false;
     for (const load of loads) {
       const { entries } = load;
-      const readFiles = load.readFiles ?? (entries && (() => readDropEntries(entries)));
+      const readFiles: LibraryLoadOrigin['readFiles'] =
+        load.readFiles ?? (entries && ((onListed) => readDropEntries(entries, { onProgress: onListed })));
       if (!readFiles) {
         groups.push(load.files);
         continue;
       }
-      const files = (await readFiles()).filter((file) => {
+      if (!listed) onProgress({ phase: 'enumerating', current: 0, total: -1 });
+      listed = true;
+      const read = await readFiles(listing.report);
+      listing.done(read.length);
+      const files = read.filter((file) => {
         const name = file.name.toLowerCase();
         const path = file.webkitRelativePath || file.name;
         return (
@@ -585,14 +598,12 @@ export class LibraryService {
       });
       groups.push(splitDroppedChartAndThemeFiles(files).chartFiles);
     }
+    if (listed) listing.finish();
     this.collection = await this.collectionStore.loadFromFiles([]);
-    for (const files of groups) {
-      if (files.length === 0) continue;
-      this.collection = await this.collectionStore.appendFromFiles(files, {
-        onProgress: (progress) => applyLoadProgress(this.elements, progress),
-        parsedChartCache: this.parsedChartCache,
-      });
-    }
+    this.collection = await this.collectionStore.appendFromFileGroups(
+      groups.filter((files) => files.length > 0),
+      { onProgress, parsedChartCache: this.parsedChartCache },
+    );
     applyChartLevelEdits(this.collection.charts, readChartLevelEdits(globalThis.localStorage));
     if (this.courseGroups.length > 0) await this.refreshCourseFolders();
     await this.showSelect();

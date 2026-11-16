@@ -19,7 +19,7 @@ import { playerText } from '../player-copy.ts';
 import { localized } from '../ui/localized.ts';
 import {
   pickRememberedFolder,
-  readRememberedFolder,
+  readRememberedFolders,
   captureDroppedFolders,
   storedFolders,
   type RememberedFolder,
@@ -37,7 +37,7 @@ export interface DropTargetOptions {
     origin?: {
       readonly entries?: readonly FileSystemEntry[];
       readonly showLibraryRoot?: boolean;
-      readonly readFiles?: () => Promise<BrowserDroppedFile[]>;
+      readonly readFiles?: (onProgress: (progress: LoadProgress) => void) => Promise<BrowserDroppedFile[]>;
     },
   ) => Promise<void>;
   /** Loads the "Open files" picker's files (`LibraryService`). */
@@ -82,8 +82,7 @@ export class DropTarget {
         return;
       }
       const folder = await picker;
-      await this.loadFolder(folder);
-      await this.rememberLoadedFolders([folder]);
+      await this.rememberLoadedFolders(await this.loadFolders([folder]));
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) this.reportFolderError(error);
     } finally {
@@ -96,16 +95,18 @@ export class DropTarget {
     this.folderBusy = true;
     try {
       await this.readSavedFolders();
-      for (const folder of [...this.reconnectFolders]) {
+      const granted: RememberedFolder[] = [];
+      for (const folder of this.reconnectFolders) {
         try {
-          if ((await folder.queryPermission({ mode: 'read' })) === 'granted') {
-            await this.loadFolder(folder);
-            this.reconnectFolders = this.reconnectFolders.filter((pending) => pending !== folder);
-          }
+          if ((await folder.queryPermission({ mode: 'read' })) === 'granted') granted.push(folder);
         } catch (error) {
           this.reportFolderError(error);
         }
       }
+      // Every folder still readable is listed first and loaded as one drop of them all, so their charts are parsed in
+      // one pass and the select screen comes back once, rather than once per folder.
+      const read = await this.loadFolders(granted);
+      this.reconnectFolders = this.reconnectFolders.filter((pending) => !read.includes(pending));
       this.renderReconnect();
     } catch (error) {
       this.reportFolderError(error);
@@ -248,8 +249,8 @@ export class DropTarget {
     this.folderBusy = true;
     try {
       if ((await folder.requestPermission({ mode: 'read' })) !== 'granted') return;
-      await this.loadFolder(folder);
-      this.reconnectFolders = this.reconnectFolders.filter((pending) => pending !== folder);
+      const read = await this.loadFolders([folder]);
+      this.reconnectFolders = this.reconnectFolders.filter((pending) => !read.includes(pending));
       this.renderReconnect();
     } catch (error) {
       this.reportFolderError(error);
@@ -258,13 +259,25 @@ export class DropTarget {
     }
   }
 
-  private async loadFolder(folder: RememberedFolder): Promise<void> {
+  /**
+   * Lists every folder's files, then loads them as one drop of the same folders: the charts of all of them are parsed in
+   * one pass once the listing is done, as a drop's are. Returns the folders it read; one that could not be read is
+   * reported and left out.
+   */
+  private async loadFolders(folders: readonly RememberedFolder[]): Promise<RememberedFolder[]> {
+    if (folders.length === 0) return [];
     showLoadingOverlay(this.elements);
     let leftSelect = false;
     try {
       leftSelect = await this.leaveSelect();
-      const files = await readRememberedFolder(folder, (progress) => applyLoadProgress(this.elements, progress));
-      await this.processIncomingFiles(files, { readFiles: () => readRememberedFolder(folder) });
+      const { files, read } = await readRememberedFolders(folders, {
+        onProgress: (progress) => applyLoadProgress(this.elements, progress),
+        onError: (_folder, error) => this.reportFolderError(error),
+      });
+      await this.processIncomingFiles(files, {
+        readFiles: async (onProgress) => (await readRememberedFolders(read, { onProgress })).files,
+      });
+      return read;
     } finally {
       hideLoadingOverlay(this.elements);
       if (leftSelect) await this.options.resumeSelect();
