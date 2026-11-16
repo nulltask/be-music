@@ -61,6 +61,6 @@ nanasigroove は 24 / 48 KEY の DOUBLE を定めていないので、そこで�
 
 **COPY** は上と同じく 1P 側を 2P に鏡写しにしますが、地雷は 1P に残します。**DBLCOPY** は先に写し、10 / 14 KEY になったダブルプレイ譜面の両サイドを倍にします。nanasigroove の COPY は 9 KEY を 18 KEY にもしますが、Be-Music には 18 KEY がないので未対応のままです。コースの規則は Be-Music のままです。
 
-**プレイヤーも選べます。** Options ダイアログの **NOTES (nanasigroove)** で OFF・DOUBLE・COPY・DBLCOPY を選べます。譜面自身の `774:NOTES_*` が優先します（`withPlayerChartPlayOptions`）。Leaderboard は、譜面が指定しない系統にプレイヤーの GOOD2BAD / GREAT2BAD・HELLJUDGE・NOTES を足したプログラムのリプレイを受け付け、リプレイ自身の版でプログラムを絞り込みます。
+**プレイヤーも選べます。** Options ダイアログの **nanasigroove** フォルダーの **NOTES** で OFF・DOUBLE・COPY・DBLCOPY を選べます。譜面自身の `774:NOTES_*` が優先します（`withPlayerChartPlayOptions`）。Leaderboard は、譜面が指定しない系統にプレイヤーの GOOD2BAD / GREAT2BAD・HELLJUDGE・NOTES を足したプログラムのリプレイを受け付け、リプレイ自身の版でプログラムを絞り込みます。
 
 **リプレイ。** NOTES を持つプログラムは、[ADR 0033](./0033-chart-authored-gameplay-options.ja.md) の CRAZY オプションと同じく版 3 になります。版 1・2 のプログラムは上の読み方（キーレーンのあるすべてのキーモードでの鏡のレーンへの DOUBLE、地雷も写す COPY、倍にしてから写す DBLCOPY）を保つので、既存のリプレイと記録のノートは変わりません。

@@ -163,6 +163,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     mineModifier: playOptions.mineModifier,
     crazyJudge: playOptions.crazyJudge,
     crazyHellJudge: playOptions.crazyHellJudge,
+    crazyAddMine: playOptions.crazyAddMine,
     crazyNotes: playOptions.crazyNotes,
     scrollModifier: playOptions.scrollModifier,
     scrollSection: playOptions.scrollSection,

@@ -692,6 +692,8 @@ export class OptionsDialog {
     if (this.gauge2PController) this.gauge2PController.hidden = !twoPlayer;
     for (const controller of this.mRanControllers) controller.hidden = !twoPlayer;
     if (this.lr2ExtraLevelController) this.lr2ExtraLevelController.unavailable = !this.guiState.lr2ExtraMode;
+    // nanasigroove's ADDMINE replaces the beatoraja mine option while it is on.
+    if (this.mineModifierController) this.mineModifierController.unavailable = this.guiState.crazyAddMine;
     if (!beatoraja && this.guiState.longNoteMode !== 'LN') {
       this.guiState.longNoteMode = 'LN';
       this.setPlayOptions({ longNoteMode: 'LN' });

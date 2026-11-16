@@ -236,6 +236,7 @@ describe('captureOptionSettings', () => {
       mineModifier: 'OFF',
       crazyJudge: 'OFF',
       crazyHellJudge: false,
+      crazyAddMine: false,
       crazyNotes: 'OFF',
       scrollModifier: 'REMOVE',
       scrollSection: 8,

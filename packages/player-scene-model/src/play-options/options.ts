@@ -5,6 +5,11 @@ import type { MineModifier, LongNoteModifier, ScrollModifier } from '@be-music/p
 export type CrazyJudgeOption = 'OFF' | 'GOOD2BAD' | 'GREAT2BAD';
 /** nanasigroove's NOTES conversion a player can pick (#1184). */
 export type CrazyNotesOption = 'OFF' | 'DOUBLE' | 'COPY' | 'DBLCOPY';
+/**
+ * The mine options the player picks under Mines: beatoraja's. nanasigroove's ADDMINE is a separate option
+ * (`PlayOptions.crazyAddMine`), which plays as the engine's `NANASI_ADD` mine option.
+ */
+export type PlayerMineModifier = Exclude<MineModifier, 'NANASI_ADD'>;
 import type { GaugePick, GaugeAutoShift, QualifiedOptionValue } from '@be-music/player-engine/ruleset';
 import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
@@ -254,7 +259,7 @@ export interface PlayOptions {
   customJudgeLongNoteMargin: number;
   lr2ExtraMode: boolean;
   lr2ExtraLevel: LR2ExtraLevel;
-  mineModifier: MineModifier;
+  mineModifier: PlayerMineModifier;
   /**
    * nanasigroove's GOOD2BAD / GREAT2BAD (#1177): a GOOD, or a GREAT and a GOOD, moves the gauge as a BAD does. A chart's
    * own `774:CRAZY_GOOD2BAD` / `GREAT2BAD` wins.
@@ -262,6 +267,11 @@ export interface PlayOptions {
   crazyJudge: CrazyJudgeOption;
   /** nanasigroove's HELLJUDGE (#1185): every judgment's window narrowed by its own ratio. A chart's own wins. */
   crazyHellJudge: boolean;
+  /**
+   * nanasigroove's ADDMINE (#1185): mines scattered along every lane, nanasigroove's placement and damage. While it is on
+   * it replaces the beatoraja mine option (`mineModifier`), as a chart's own `774:CRAZY_ADDMINE` does.
+   */
+  crazyAddMine: boolean;
   /** nanasigroove's NOTES DOUBLE / COPY / DBLCOPY (#1184). A chart's own wins. */
   crazyNotes: CrazyNotesOption;
   /** beatoraja timeline BPM/STOP/SCROLL removal or generated SCROLL, independent of visual CONSTANT. */

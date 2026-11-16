@@ -61,6 +61,6 @@ nanasigroove defines no DOUBLE for 24 / 48 KEY, so it does nothing there and is 
 
 **COPY** mirrors the 1P side onto 2P as above, but leaves the mines on 1P. **DBLCOPY** copies first and then doubles both sides of the double-play chart, on the 10 / 14 KEY copies. nanasigroove's COPY also turns 9 KEY into 18 KEY; Be-Music has no 18 KEY mode, so that stays unsupported. The course rule stays Be-Music's.
 
-**The player can select them too.** The Options dialog offers **NOTES (nanasigroove)**: OFF, DOUBLE, COPY or DBLCOPY. A chart's own `774:NOTES_*` wins (`withPlayerChartPlayOptions`). The Leaderboard accepts a replay whose program adds the player's GOOD2BAD / GREAT2BAD, HELLJUDGE or NOTES where the chart sets none, and narrows the program with the replay's own version.
+**The player can select them too.** The Options dialog's **nanasigroove** folder offers **NOTES**: OFF, DOUBLE, COPY or DBLCOPY. A chart's own `774:NOTES_*` wins (`withPlayerChartPlayOptions`). The Leaderboard accepts a replay whose program adds the player's GOOD2BAD / GREAT2BAD, HELLJUDGE or NOTES where the chart sets none, and narrows the program with the replay's own version.
 
 **Replays.** A program with NOTES is now version 3, as with the CRAZY options in [ADR 0033](./0033-chart-authored-gameplay-options.md). Version 1 and 2 programs keep the readings above: mirror-lane DOUBLE on every variant with key lanes, COPY with the mines, and DBLCOPY doubling before it copies. Existing replays and records keep their notes.

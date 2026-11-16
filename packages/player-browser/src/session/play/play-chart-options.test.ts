@@ -76,6 +76,14 @@ test("chart ADDMINE, nanasigroove's, wins over the player mine option", () => {
   expect(play.mineNotes.length).toBeGreaterThan(0);
 });
 
+test("the player's ADDMINE, its own option, plays nanasigroove's mines in place of the Mines choice", () => {
+  vi.spyOn(Math, 'random').mockReturnValue(0.5);
+  const play = prepare(SP('774:RANDOM_MIRROR'), { mineModifier: 'REMOVE', crazyAddMine: true });
+  expect(play.chartPlay?.selection.mineModifier).toBe('NANASI_ADD');
+  expect(play.mineNotes.length).toBeGreaterThan(0);
+  expect(prepare(SP('774:RANDOM_MIRROR'), { mineModifier: 'REMOVE' }).chartPlay?.selection.mineModifier).toBe('REMOVE');
+});
+
 test("the player's GOOD2BAD and HELLJUDGE join the chart's program, the chart winning within a family", () => {
   const own = prepare(SP('774:RANDOM_MIRROR'), { crazyJudge: 'GREAT2BAD', crazyHellJudge: true });
   expect(own.chartPlay?.program).toEqual({

@@ -93,7 +93,7 @@ import {
   type NonstopStageBGATimeline,
 } from '../../chart/bga-timeline.ts';
 import { resolvePlayTempoRange, type PlayTempoRange } from './tempo-range.ts';
-import type { PlaySessionOptions } from './play-options.ts';
+import { resolvePlayerMineModifier, type PlaySessionOptions } from './play-options.ts';
 import type { LongNoteTracker } from './long-note-tracker.ts';
 import { changesScrollRate, collectResolvedLaneTimelineBeats } from '../../chart/note-draw-window.ts';
 import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
@@ -183,6 +183,7 @@ export interface PlayChartContext {
       | 'scrollRate'
       | 'scrollModifier'
       | 'mineModifier'
+      | 'crazyAddMine'
       | 'crazyJudge'
       | 'crazyHellJudge'
       | 'crazyNotes'
@@ -402,7 +403,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       lr2RandomScratch2P: ctx.options.lr2RandomScratch2P,
       mRan1P: ctx.options.mRan1P,
       mRan2P: ctx.options.mRan2P,
-      mineModifier: ctx.options.mineModifier,
+      mineModifier: resolvePlayerMineModifier(ctx.options),
     },
     arrangement === undefined ? chartPlayProgram : undefined,
     { doublePlay: ['10', '14', '48'].includes(arrangedVariant), hasScratch: arrangedVariant !== '9' },

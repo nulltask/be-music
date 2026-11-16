@@ -321,6 +321,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   mineModifier: PlayOptions['mineModifier'];
   crazyJudge: PlayOptions['crazyJudge'];
   crazyHellJudge: boolean;
+  crazyAddMine: boolean;
   crazyNotes: PlayOptions['crazyNotes'];
   scrollModifier: PlayOptions['scrollModifier'];
   scrollSection: number;
