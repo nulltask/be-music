@@ -119,7 +119,8 @@ export function applySeek(
   session.backgroundAudio.seek(soundsFrom, (sound, offsetSeconds) =>
     audioSession?.triggerEventAt?.(sound.event, offsetSeconds),
   );
-  // Chain notes queued by presses before the seek are dropped; those after it queue again.
+  // Chain notes queued before the seek are dropped. A replay's rebuild queues its presses' chain notes again, starting
+  // the ones already due partway; a live play has no presses before the seek to sound.
   session.chainSounds.clear();
   session.tempoClock.rebase(nowMs, target);
   session.resetScore();
