@@ -99,6 +99,11 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.withPlayerChartPlayOptions({ version: 1, options: { random: 'RANDOM' } }, { hellJudge: true });
     },
   });
+  define('chart-model.playerChartPlayOptionsOf', {
+    run: () => {
+      chartAPI.playerChartPlayOptionsOf({ judge: 'GREAT2BAD' }, { judge: 'GREAT2BAD', notes: 'COPY' });
+    },
+  });
   define('chart-model.isLegacyChartPlayOptionProgram', {
     run: () => {
       chartAPI.isLegacyChartPlayOptionProgram({ version: 1, options: { judge: 'GOOD2BAD' } });

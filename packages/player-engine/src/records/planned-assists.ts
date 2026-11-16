@@ -19,6 +19,7 @@ import {
  * The options a play is about to start with, in the fields a replay records them in (`BeMusicReplay.play`). The
  * counts a prepared chart gives (`mineModifierChangeCount`, `longNoteModifierChangeCount`, `scrollModifierChanged`,
  * `extraNoteChangeCount`, `sevenToNineApplied`) are not read: the plan says whether the option is on instead.
+ * `playerChartPlayOptions` holds the player's picks; a NOTES COPY counts only on a chart it copies.
  */
 export interface PlannedPlay extends Partial<
   Pick<
@@ -32,6 +33,7 @@ export interface PlannedPlay extends Partial<
     | 'options'
     | 'view'
     | 'randomLane'
+    | 'playerChartPlayOptions'
     | 'battleMode'
     | 'lr2Mania'
     | 'lr2ExtraMode'
@@ -68,11 +70,19 @@ const EVERY_CASE_CHART = {
 const NO_CASE_CHART = { notes: [], bpmRange: { min: 1, max: 1 } } as unknown as AssistReplay['chart'];
 
 function planAsReplay(plan: PlannedPlay, everyCase: boolean): AssistReplay {
-  const { extraNotes, sevenToNine, ...recorded } = plan;
+  const { extraNotes, sevenToNine, playerChartPlayOptions, ...recorded } = plan;
   const count = everyCase ? 1 : 0;
+  // A player's NOTES COPY takes effect only on a 5 / 7 KEY chart outside a course; elsewhere DBLCOPY keeps its DOUBLE.
+  const copies = playerChartPlayOptions?.notes === 'COPY' || playerChartPlayOptions?.notes === 'DBLCOPY';
+  const { notes, ...playerOthers } = playerChartPlayOptions ?? {};
+  const player =
+    everyCase || !copies
+      ? playerChartPlayOptions
+      : { ...playerOthers, ...(notes === 'DBLCOPY' ? { notes: 'DOUBLE' as const } : {}) };
   return {
     play: {
       ...recorded,
+      ...(player !== undefined ? { playerChartPlayOptions: player } : {}),
       mineModifierChangeCount: count,
       longNoteModifierChangeCount: count,
       scrollModifierChanged: everyCase,

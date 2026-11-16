@@ -284,6 +284,16 @@ describe('classifyReplayAssists', () => {
     expect(classOf({ randomLane: { p1: 'RANDOM+' } })).toBe('none');
   });
 
+  test("the player's NOTES COPY keeps no record, while the chart's COPY and the player's other choices are no assist (#1243)", () => {
+    expect(classifyReplayAssists(replay({ playerChartPlayOptions: { notes: 'COPY' } }))).toEqual([
+      { option: 'nanasi-notes:COPY', source: 'be-music', assistClass: 'no-save' },
+    ]);
+    expect(classOf({ playerChartPlayOptions: { notes: 'DBLCOPY' } })).toBe('no-save');
+    expect(classOf({ playerChartPlayOptions: { notes: 'DOUBLE', judge: 'GREAT2BAD', hellJudge: true } })).toBe('none');
+    // A chart that forces COPY keeps the record of the double-play chart it makes.
+    expect(classOf({}, { chartPlayOptions: { version: 3, options: { notes: 'COPY' } } })).toBe('none');
+  });
+
   test('counts the 2P AUTO SCRATCH only on a chart with a 2P side', () => {
     expect(classOf({ autoScratch1P: false, autoScratch2P: true })).toBe('none');
     expect(classOf({ autoScratch1P: false, autoScratch2P: true }, { notes: [note('11'), note('26')] })).toBe('light');

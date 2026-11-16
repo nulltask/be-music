@@ -1,4 +1,9 @@
-import { hasChartPlayOptions, type ChartOptionProgram, type ChartPlayOptionProgram } from '@be-music/chart-model';
+import {
+  hasChartPlayOptions,
+  type ChartOptionProgram,
+  type ChartPlayOptionProgram,
+  type PlayerChartPlayOptions,
+} from '@be-music/chart-model';
 import type { BeatorajaCustomJudge } from '../ruleset/custom-judge.ts';
 import type { EffectiveBattleMode } from '../core/battle-mode.ts';
 import type { ChartPlayVariant } from '@be-music/chart-model';
@@ -115,6 +120,8 @@ export interface ReplayRecorderPlaySettings {
   /** The gauge the engine ran (`PlayerOptions.gauge`, else `recordReplay.gauge`); `GROOVE` when neither is set. */
   gauge?: GaugePick;
   randomLane?: { p1?: string; p2?: string };
+  /** The player's CRAZY selections the play ran with (`ReplayPlay.playerChartPlayOptions`); recorded when not empty. */
+  playerChartPlayOptions?: PlayerChartPlayOptions;
   dpFlip?: boolean;
   judgeWindowOverrideMs?: number;
   /** Judgment-window ruleset the engine ran (`PlayerOptions.judgeRuleset`). Absent = `'lr2'`. */
@@ -148,7 +155,7 @@ export interface ReplayRecorderPlaySettings {
  */
 export type ReplayRecordingOptions = Pick<
   ReplayRecorderPlaySettings,
-  'gauge' | 'randomLane' | 'dpFlip' | 'view' | 'native' | 'options' | 'analogScratch'
+  'gauge' | 'randomLane' | 'playerChartPlayOptions' | 'dpFlip' | 'view' | 'native' | 'options' | 'analogScratch'
 > & {
   chartSHA256?: string;
   chartMD5?: string;
@@ -341,6 +348,11 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       };
       if (secondPlayer !== undefined) play.gauge2P = secondPlayer.gauge;
       if (options.play.randomLane !== undefined) play.randomLane = options.play.randomLane;
+      if (
+        options.play.playerChartPlayOptions !== undefined &&
+        Object.keys(options.play.playerChartPlayOptions).length > 0
+      )
+        play.playerChartPlayOptions = { ...options.play.playerChartPlayOptions };
       if (options.play.dpFlip !== undefined) play.dpFlip = options.play.dpFlip;
       if (options.play.judgeWindowOverrideMs !== undefined) {
         play.judgeWindowOverrideMs = options.play.judgeWindowOverrideMs;

@@ -63,6 +63,7 @@ flowchart LR
 | PRACTICE                                                                                     | beatoraja | `no-save` | どのルールでも                                                       | beatoraja の PRACTICE は何も保存しない                    |
 | ANY KEY                                                                                      | PC        | `no-save` | すべてのルール                                                       | PC 版：ANY KEY のプレイは NO PLAY                         |
 | ADD NOTES、LOUDNESS（LR2）                                                                   | LR2       | `no-save` | 確率が 0 より大きい。どのルールでも同じ                              | OpenLR2 L27073-L27080（`isNosave`）                       |
+| プレイヤーが選んだ NOTES COPY、DBLCOPY                                                       | Be-Music  | `no-save` | 譜面を写した（5 / 7 KEY、コースの外）                                | Be-Music: 記録は譜面のキーモードのもの（#1243）           |
 
 アシストにならないもの: MIRROR、RANDOM、S-RANDOM、R-RANDOM、SYNCHRONIZE / SYMMETRY RANDOM、M-RAN、DP FLIP、カバーと LIFT、ハイスピードのオプション、表示の CONSTANT（beatoraja の `enableConstant` は描画の設定）、地雷の ADD、スクロールの ADD、ADD LN、判定アルゴリズム、ゲージ（ASSIST EASY と ASSISTED EASY はゲージのランプで、アシストではありません）、ゲージの自動切り替え。PC 版の NO PLAY になるオプション（KEY ASSIST、ANY KEY、PC 版自身の H-RANDOM と BATTLE）は PC 版の規則で、ほかの参照元には当てはめません。ここでの H-RANDOM は beatoraja のアルゴリズムなので、beatoraja のものとして区分します。PC 版を参照元とするオプションは `____` のルールで `no-save` になります。Be-Music が提供するのは ANY KEY です（[ANY KEY](#any-key)）。
 
@@ -603,7 +604,7 @@ AC 34 では、オプション画面で、ダブルプレー時にテンキー 7
 
 ## nanasigroove の NOTES
 
-どのルールでも、同じ **nanasigroove** フォルダーの **NOTES** で **OFF**（既定）・**DOUBLE**・**COPY**・**DBLCOPY** を選べます。DOUBLE は nanasigroove と同じくレーンをまるごとほかのレーンへ写すので、5 KEY 譜面の鍵盤 3 と 5 は鍵盤 1・3・5 を、鍵盤 2 と 4 は鍵盤 2・4 を持ちます。5・7・9・10・14 KEY で動きます。COPY は 5 / 7 KEY 譜面を 2P 側に鏡写しにして 10 / 14 KEY として遊びます（地雷は写しません）。DBLCOPY は写してから両サイドを倍にします。コースのステージはキーモードを保つので、そこでは COPY は何もしません。譜面自身の `774:NOTES_*` が優先します。リプレイは変換を譜面のゲームプレイプログラムに記録し、そのノートが結果を持ちます（[ADR 0035](./adr/0035-chart-authored-notes-options.ja.md)、[#1184](https://github.com/nulltask/be-music/issues/1184)）。
+どのルールでも、同じ **nanasigroove** フォルダーの **NOTES** で **OFF**（既定）・**DOUBLE**・**COPY**・**DBLCOPY** を選べます。DOUBLE は nanasigroove と同じくレーンをまるごとほかのレーンへ写すので、5 KEY 譜面の鍵盤 3 と 5 は鍵盤 1・3・5 を、鍵盤 2 と 4 は鍵盤 2・4 を持ちます。5・7・9・10・14 KEY で動きます。COPY は 5 / 7 KEY 譜面を 2P 側に鏡写しにして 10 / 14 KEY として遊びます（地雷は写しません）。DBLCOPY は写してから両サイドを倍にします。コースのステージはキーモードを保つので、そこでは COPY は何もしません。譜面自身の `774:NOTES_*` が優先します。リプレイは変換を譜面のゲームプレイプログラムに記録し、そのノートが結果を持ちます（[ADR 0035](./adr/0035-chart-authored-notes-options.ja.md)、[#1184](https://github.com/nulltask/be-music/issues/1184)）。記録は譜面自身のキーモードのものなので、プレイヤーの COPY や DBLCOPY で譜面を写したプレイは記録を残さず、Leaderboard は順位に入れずに保存します。譜面自身の COPY はこれまでどおり記録を残します。プレイヤーの DOUBLE は、GOOD2BAD / GREAT2BAD や HELLJUDGE と同じく、nanasigroove が記録するとおり普通のプレイです。リプレイは、プレイヤーが足したオプションを `play.playerChartPlayOptions` に記録します（[#1243](https://github.com/nulltask/be-music/issues/1243)）。
 
 ## 地雷の REMOVE と ADD
 

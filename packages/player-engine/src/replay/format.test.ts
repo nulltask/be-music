@@ -606,6 +606,23 @@ test('preserves the ANY KEY switch and rejects a non-boolean one', () => {
   expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
 });
 
+test("round-trips the player's nanasigroove options, which must be part of the chart program (#1243)", () => {
+  const replay = makeReplay();
+  expect(parseReplay(serializeReplay(replay)).play.playerChartPlayOptions).toBeUndefined();
+  replay.chart.chartPlayOptions = { version: 3, options: { random: 'MIRROR', notes: 'COPY', hellJudge: true } };
+  replay.play.playerChartPlayOptions = { notes: 'COPY', hellJudge: true };
+  expect(parseReplay(serializeReplay(replay)).play.playerChartPlayOptions).toEqual({ notes: 'COPY', hellJudge: true });
+  const invalid = (mutate: (play: Record<string, unknown>) => void) => {
+    const value = JSON.parse(serializeReplay(replay));
+    mutate(value.play.playerChartPlayOptions);
+    return value;
+  };
+  // A value the player cannot choose, a key that is no player option, and a value the program does not hold.
+  expect(() => parseReplay(invalid((options) => (options.notes = 'TRIPLE')))).toThrow(ReplayParseError);
+  expect(() => parseReplay(invalid((options) => (options.random = 'MIRROR')))).toThrow(ReplayParseError);
+  expect(() => parseReplay(invalid((options) => (options.judge = 'GOOD2BAD')))).toThrow(ReplayParseError);
+});
+
 test('round-trips source long-note modifiers and rejects unknown variants', () => {
   for (const longNoteModifier of ['OFF', 'LEGACY', 'REMOVE'] as const) {
     const replay = makeReplay();

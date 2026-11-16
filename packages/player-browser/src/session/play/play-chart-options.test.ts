@@ -133,6 +133,14 @@ test("the player's GOOD2BAD and HELLJUDGE join the chart's program, the chart wi
   const chartWins = prepare(SP('774:CRAZY_GOOD2BAD'), { crazyJudge: 'GREAT2BAD' });
   expect(chartWins.chartPlay?.program?.options.judge).toBe('GOOD2BAD');
   expect(prepare(SP('774:RANDOM_MIRROR'), { crazyJudge: 'OFF' }).chartPlay?.program?.version).toBe(1);
+  // The replay records which were the player's (#1243): not the chart's own, nor one a course stage left out.
+  expect(own.chartPlay?.player).toEqual({ judge: 'GREAT2BAD', hellJudge: true });
+  expect(chartWins.chartPlay?.player).toEqual({});
+  expect(prepare(COPY(), { crazyNotes: 'COPY' }).chartPlay?.player).toEqual({ notes: 'COPY' });
+  expect(prepare(COPY('774:NOTES_COPY'), { crazyNotes: 'COPY' }).chartPlay?.player).toEqual({});
+  expect(prepare(COPY(), { crazyNotes: 'DBLCOPY', course: { kind: 'grade' } }).chartPlay?.player).toEqual({
+    notes: 'DOUBLE',
+  });
 });
 
 /** Chart-authored NOTES conversions (#932) run in the engine's chart preparation, on the host's chart. */
