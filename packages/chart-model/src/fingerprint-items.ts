@@ -29,7 +29,7 @@ import {
   type ChartPlayVariant,
 } from './index.ts';
 import { compileChartPlayOptions, type ChartPlayOptions } from './chart-play-options.ts';
-import { isLRXLaneType } from './play-variant.ts';
+import { isLRXLaneType, isPMSChartPath } from './play-variant.ts';
 import { resolveGenericBmsonKeyCount } from './generic-bmson.ts';
 import { resolveKeyboardModeHint, type KeyboardModeHint } from './keyboard-mode-hint.ts';
 import { collectExRankChanges, resolveJudgeRankFacts, resolveTotalFacts } from './resolved-chart.ts';
@@ -1098,25 +1098,15 @@ export function flattenItems(items: ChartItems): FlatItems {
   return { notes, mines: [...items.mines], timeline, lengths: items.lengths, header: items.header };
 }
 
-/** The chart-file extension the lane mode reads (spec 3.5); any other extension counts as none. */
+/** The chart-file extension the lane mode reads (spec 3.5, `.n2s` reads as `.pms`); any other counts as none. */
 export type LaneModeExtension = '.pms' | null;
 
 /**
  * The lane-mode extension of a chart path or bare extension: only the last path segment counts, as in
- * `resolveChartPlayVariant`.
+ * `resolveChartPlayVariant`. A Nanasi Groove 2 `.n2s` chart holds a `.pms` file and reads as `.pms`.
  */
 export function resolveLaneModeExtension(chartPath: string | undefined): LaneModeExtension {
-  if (typeof chartPath !== 'string') {
-    return null;
-  }
-  const trimmed = chartPath.trim();
-  const dot = trimmed.lastIndexOf('.');
-  const slash = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
-  if (dot < 0 || dot < slash) {
-    return null;
-  }
-  const extension = trimmed.slice(dot).toLowerCase();
-  return extension === '.pms' ? extension : null;
+  return isPMSChartPath(chartPath) ? '.pms' : null;
 }
 
 /**

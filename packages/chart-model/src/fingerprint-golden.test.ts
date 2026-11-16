@@ -168,6 +168,12 @@ describe('golden fingerprints (bmfp0)', () => {
       'bmfp0:a3abd7386f12ae30af985765299f2fac6a8bdb80bfa6ed784a1373c5849a3e5c',
     ],
     [
+      // Nanasi Groove 2 `.n2s` holds a `.pms` file and reads as `.pms`.
+      'PMS in .n2s',
+      () => computePlayFingerprint(parseBMS(PMS), { chartPath: 'golden.n2s' }),
+      'bmfp0:a3abd7386f12ae30af985765299f2fac6a8bdb80bfa6ed784a1373c5849a3e5c',
+    ],
+    [
       'DP',
       () => computePlayFingerprint(parseBMS(DP), { chartPath: 'golden.bms' }),
       'bmfp0:a4a0425fe634602d02bfe2d157e6e4fd6989d9d220874cfe5d047153f8e22ea1',

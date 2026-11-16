@@ -16,6 +16,9 @@ test('parse/count/pack survives a structured-clone boundary and restores lazy ev
   expect(result.chart.bms.wavNameBytePrefixes).toEqual({ 'kick.wav': '6b69' });
   expect(result.chart.preservation.bms.sourceLines).toEqual([{ kind: 'header', command: 'WAV01', value: 'kick.wav' }]);
 });
+test('an .n2s path is read as a Nanasi Groove 2 container', () => {
+  expect(() => parseChartTask({ path: 'music/song/01_song_n.N2S', bytes: strToU8(TEXT) })).toThrow('missing ZEXA tag');
+});
 test('an .lrs path is read as LRX with the files beside it', () => {
   const lrs = strToU8('<LRS><n c="301" s="0" p="150" /><n c="1" s="0" p="0" /></LRS>');
   const lrh = strToU8('<LRH><information title="Side" lanetype="1" /></LRH>');

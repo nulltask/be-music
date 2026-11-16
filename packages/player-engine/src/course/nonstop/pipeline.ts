@@ -1,4 +1,4 @@
-import type { RandomDraws } from '@be-music/chart-model';
+import { isPMSChartPath, type RandomDraws } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import { resolveChartRulesetFacts, resolvePlayChart } from '../../core/play-chart.ts';
 import { createCourseReplay, type BeMusicCourseReplay, type ReplayCourseStageEntry } from '../../replay/course.ts';
@@ -116,7 +116,7 @@ export function prepareNonstopCourse(
   const stitch = options.stitch ?? NONSTOP_STITCH_VERSION;
   const assetPath = options.assetPath?.(stageCharts);
   const stitched = stitchNonstopCourse(
-    stageCharts.map((chart, index) => ({ chart, pms: isPMSPath(stages[index]!.chartPath) })),
+    stageCharts.map((chart, index) => ({ chart, pms: isPMSChartPath(stages[index]!.chartPath) })),
     {
       connections,
       placement,
@@ -201,8 +201,4 @@ function resolveStageChartFacts(stage: NonstopCourseStage): NonstopStageChartFac
     ...(chartFingerprint !== undefined ? { chartFingerprint } : {}),
     ...rest,
   };
-}
-
-function isPMSPath(chartPath: string | undefined): boolean {
-  return chartPath?.toLowerCase().endsWith('.pms') === true;
 }

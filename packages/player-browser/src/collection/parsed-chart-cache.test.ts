@@ -31,6 +31,7 @@ describe('parsedChartPathKind', () => {
     expect(parsedChartPathKind('songs/a.bmson')).toBe('bmson');
     expect(parsedChartPathKind('songs/A.BMSON')).toBe('bmson');
     expect(parsedChartPathKind('songs/a.PMS')).toBe('pms');
+    expect(parsedChartPathKind('songs/a.N2S')).toBe('n2s');
     expect(parsedChartPathKind('song/001/01.LRS')).toBe('lrx');
     expect(parsedChartPathKind('songs/a.bms')).toBe('bms');
     expect(parsedChartPathKind('songs/a.bme')).toBe('bms');

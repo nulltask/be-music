@@ -2,7 +2,7 @@
 
 # @be-music/chart-parser
 
-Parsers for `.bms` / `.bme` / `.bml` / `.pms` / `.bmson`, LRX (`.lrs` with its `.lrh` / `.lrm`) and Be-Music JSON charts, producing the intermediate representation of [`@be-music/chart-source`](../chart-source/README.md). The package also ships the `bms-parse` CLI.
+Parsers for `.bms` / `.bme` / `.bml` / `.pms` / `.bmson`, Nanasi Groove 2 `.n2s`, LRX (`.lrs` with its `.lrh` / `.lrm`) and Be-Music JSON charts, producing the intermediate representation of [`@be-music/chart-source`](../chart-source/README.md). The package also ships the `bms-parse` CLI.
 
 ## Usage
 

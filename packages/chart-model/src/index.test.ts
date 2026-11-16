@@ -28,6 +28,7 @@ import {
   parseBmsWAVCmd,
   parseBPMFrom03Token,
   resolveChartPlayVariant,
+  isPMSChartPath,
   resolveChartReferenceBPM,
   resolveBMSLongNotes,
   resolveLNOBJLongNotes,
@@ -36,6 +37,7 @@ import {
   volWAVToLinearGain,
 } from './index.ts';
 import { createEmptyJSON, type BeMusicEvent } from '../../chart-source/src/index.ts';
+import { resolveLaneModeExtension } from './fingerprint-items.ts';
 
 describe('chart', () => {
   test('parseBPMFrom03Token decodes hexadecimal BPM tokens', () => {
@@ -527,6 +529,16 @@ describe('chart', () => {
     expect(mapBMSLongNoteChannelToPlayable(' 61 ')).toBe('21');
   });
 
+  test('isPMSChartPath and resolveLaneModeExtension read .pms and .n2s from the last path segment', () => {
+    expect(isPMSChartPath('song/main.pms')).toBe(true);
+    expect(isPMSChartPath('.N2S')).toBe(true);
+    expect(isPMSChartPath('song.pms/main.bms')).toBe(false);
+    expect(isPMSChartPath('main.n2x')).toBe(false);
+    expect(isPMSChartPath(undefined)).toBe(false);
+    expect(resolveLaneModeExtension('music/song/01_song_n.n2s')).toBe('.pms');
+    expect(resolveLaneModeExtension('main.bme')).toBeNull();
+  });
+
   test('resolveChartPlayVariant classifies That-Which-Must-Not-Be-Named and PMS chart families', () => {
     const chart = (chartPath: string, channels: string[], player?: number) => ({
       chartPath,
@@ -539,6 +551,8 @@ describe('chart', () => {
     expect(resolveChartPlayVariant(chart('main.bms', ['11', '21', '25']))).toBe('10');
     expect(resolveChartPlayVariant(chart('main.bme', ['11', '18', '21', '28']))).toBe('14');
     expect(resolveChartPlayVariant(chart('main.pms', ['11', '15', '22', '23', '24', '25']))).toBe('9');
+    // A Nanasi Groove 2 `.n2s` container holds a `.pms` file: its five-button charts use only the centre lanes.
+    expect(resolveChartPlayVariant(chart('00_song_5btn.N2S', ['13', '14', '15']))).toBe('9');
     expect(resolveChartPlayVariant(chart('main.bms', ['11', '15', '17', '18', '19'], 3))).toBe('9');
     // PMS-STD content authored as `.bme` — uses any of `22..25` AND no traditional That-Which-Must-Not-Be-Named 2P channels
     // (`21`/`26..29`). Classified as `'9'` regardless of `.pms` extension so the engine picks up

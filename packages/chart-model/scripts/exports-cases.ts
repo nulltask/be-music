@@ -385,6 +385,13 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.compareEvents(fixtures.eventA, fixtures.eventB);
     },
   });
+  define('chart-model.isPMSChartPath', {
+    run: () => {
+      chartAPI.isPMSChartPath('Songs/Bench/main.pms');
+      chartAPI.isPMSChartPath('music/bench/01_bench_n.n2s');
+      chartAPI.isPMSChartPath('Songs/Bench.pms/main.bme');
+    },
+  });
   define('chart-model.resolveChartPlayVariant', {
     run: (fixtures) => {
       chartAPI.resolveChartPlayVariant({

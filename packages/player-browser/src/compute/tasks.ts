@@ -1,6 +1,6 @@
 import { unzipSync } from 'fflate';
 import { countScoredNotes } from '@be-music/chart-model';
-import { decodeUTF8Text, parseBMSBytes, parseBmson, parseLRXBytes } from '@be-music/chart-parser';
+import { decodeUTF8Text, parseBMSBytes, parseBmson, parseLRXBytes, parseN2SBytes } from '@be-music/chart-parser';
 import { type BeMusicJSON } from '@be-music/chart-source';
 import { compactChartPreservation } from '../collection/chart-preservation.ts';
 import { normalizePath } from '@be-music/shared-utils/core';
@@ -27,9 +27,11 @@ export function parseChartTask(input: ParseChartTaskInput): ParseChartTaskResult
   const path = input.path.toLowerCase();
   const chart = path.endsWith('.bmson')
     ? parseBmson(decodeUTF8Text(input.bytes))
-    : path.endsWith('.lrs')
-      ? parseLRXBytes({ lrs: input.bytes, ...input.siblings })
-      : parseBMSBytes(input.bytes);
+    : path.endsWith('.n2s')
+      ? parseN2SBytes(input.bytes)
+      : path.endsWith('.lrs')
+        ? parseLRXBytes({ lrs: input.bytes, ...input.siblings })
+        : parseBMSBytes(input.bytes);
   const scored = countScoredNotes(chart, { chartPath: input.path, inferBmsLNTypeWhenMissing: false });
   compactChartPreservation(chart);
   const strings = new PackedEventStrings();
