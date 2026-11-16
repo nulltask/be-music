@@ -109,7 +109,7 @@ const en = {
     yourPage: 'Your Leaderboard page (opens in a new tab)',
   },
   phases: {
-    enumerating: 'Collecting files…',
+    enumerating: 'Listing local files…',
     reading: 'Reading files…',
     parsing: 'Parsing charts…',
     theme: 'Loading LR2 theme…',
@@ -517,7 +517,7 @@ const ja: typeof en = {
     yourPage: 'あなたの Leaderboard ページ（新しいタブで開きます）',
   },
   phases: {
-    enumerating: 'ファイルを集めています…',
+    enumerating: 'ローカルのファイルを列挙しています…',
     reading: 'ファイルを読んでいます…',
     parsing: '譜面を解析しています…',
     theme: 'LR2 テーマを読み込んでいます…',
