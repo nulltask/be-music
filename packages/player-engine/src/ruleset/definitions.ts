@@ -433,21 +433,21 @@ const _____NOTE: JudgeWindowSetUs = {
     [-116667, 116667],
     [-250000, 250000],
   ],
-  // Provisional (#1189): the That-Which-Must-Not-Be-Named empty-POOR window has never been measured precisely. beatoraja's MS window
-  // (late 150 ms / early 500 ms, `JudgeProperty` SEVENKEYS [V]) is borrowed as a donor value: evidence of beatoraja,
-  // not of this game.
+  // Provisional (#1189): the That-Which-Must-Not-Be-Named empty-POOR window is not known ("?" in https://iidx.org/compendium/gauges_and_timing
+  // [C]: "exact numbers for excessive POORs in IIDX are not precisely known"). beatoraja's MS window (late 150 ms /
+  // early 500 ms, `JudgeProperty` SEVENKEYS [V]) is borrowed as a donor value: evidence of beatoraja, not of this game.
   ms: [-150000, 500000],
 };
-// Provisional (#1189): That-Which-Must-Not-Be-Named CN release windows are "significantly wider" but unmeasured. beatoraja's SEVENKEYS
-// long-note end windows (`JudgeProperty` [V]) are borrowed as donor values, unscaled: evidence of beatoraja, not of this
-// game. `judge.test.ts` pins them to the donor, so a later measured value replaces them deliberately.
+// That-Which-Must-Not-Be-Named's CN release (#1189). Its one rule on record [C] (https://iidx.org/compendium/gauges_and_timing): the release
+// judgment "only has PGREAT; GREAT and GOODs get automatically upgraded to PGREAT", so a release inside the GOOD window
+// is a PGREAT and the PGREAT and GREAT windows reach as far as the GOOD one. A BAD or POOR head skips the tail
+// (`headBadSkipsTail`). The bounds stay provisional: no source gives them. beatoraja's SEVENKEYS long-note end GOOD
+// (±200 ms) and BAD (+220 / -280 ms) windows (`JudgeProperty` [V]) are borrowed unscaled as donor values, evidence of
+// beatoraja, not of this game; iidx.org's "±120, ±160, ±200, {+220, -280}" are beatoraja's too. `judge.test.ts` pins
+// them, so a later measured value replaces them deliberately.
+const _____LN_END_GOOD: WindowPairUs = [-200000, 200000];
 const _____LN_END: JudgeWindowSetUs = {
-  judges: [
-    [-120000, 120000],
-    [-160000, 160000],
-    [-200000, 200000],
-    [-280000, 220000],
-  ],
+  judges: [_____LN_END_GOOD, _____LN_END_GOOD, _____LN_END_GOOD, [-280000, 220000]],
 };
 
 const _____WINDOWS: RulesetWindowTables = {
