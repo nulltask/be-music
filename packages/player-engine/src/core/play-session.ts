@@ -453,7 +453,8 @@ export async function createPlaySession(
             json: resolvedJSON,
             chartOptions,
             chartPlayOptions,
-            moneyScore: ruleset.moneyScore,
+            // The native result carries the score whenever the ruleset has one of its own (LR2's, plugout's).
+            moneyScore: ruleset.moneyScore || ruleset.plugoutScore === true,
             chart: playbackChart,
             chartSHA256,
             chartMD5,
@@ -876,6 +877,7 @@ function createPlayerScore(
     ...initialSummary,
     scoreTracker: createScoreTracker({
       moneyScore: ruleset.moneyScore,
+      plugoutScore: ruleset.plugoutScore === true,
       ...(courseCarry !== undefined ? { course: courseCarry } : {}),
     }),
   };

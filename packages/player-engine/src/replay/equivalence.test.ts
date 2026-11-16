@@ -82,7 +82,7 @@ function reversalScenarioChart(): BeMusicJSON {
   return json;
 }
 
-const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
+const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____', 'plugout'];
 
 // Each test plays its own engine on wall-clock timers at 16x and shares no state, so they wait out their charts together.
 describe.concurrent('engine / simulator equivalence', () => {
@@ -415,7 +415,8 @@ describe.concurrent('engine / simulator equivalence', () => {
         simulated.judge.bad,
         simulated.judge.poor,
       ]);
-      expect(summary.bad, `#LNMODE ${lnMode}`).toBe(0);
+      // A key held past the tail is a missed POOR, but a BAD under plugout (`heldChargeTail`).
+      expect(summary.bad, `#LNMODE ${lnMode}`).toBe(ruleset === 'plugout' ? 1 : 0);
     }
   });
 

@@ -37,9 +37,10 @@ export const en = {
       lr2: 'LR2’s judgment windows, gauges and lamps',
       beatoraja: 'beatoraja’s, with the PERFECT and MAX lamps',
       ____: 'That-Which-Must-Not-Be-Named’s, with charge notes',
+      plugout: 'plugout4 -ARCADE EDITION-’s, with its own gauges and score',
     },
     meaning:
-      'Every play is scored under each ruleset: the judgment windows, gauges and clear lamps of LR2, beatoraja or That-Which-Must-Not-Be-Named, applied by the Be-Music engine to the replay. It is how the score is counted, not the software the play came from.',
+      'Every play is scored under each ruleset: the judgment windows, gauges and clear lamps of LR2, beatoraja, That-Which-Must-Not-Be-Named or plugout, applied by the Be-Music engine to the replay. It is how the score is counted, not the software the play came from.',
     playedWith: (name: string) => `played with ${name}`,
     playedWithTitle: 'The scoring rules the player played under',
   },

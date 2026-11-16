@@ -310,29 +310,35 @@ const dBattle: AssistFinding = { option: 'D-BATTLE', source: 'lr2', assistClass:
 const scatter: AssistFinding = { option: 'SCATTER', source: 'lr2', assistClass: 'light' };
 
 describe('resolveRecordPolicy', () => {
-  test.each<RulesetId>(['lr2', 'beatoraja', '____'])('keeps an unassisted play whole under %s', (ruleset) => {
-    expect(resolveRecordPolicy([], ruleset)).toEqual({
-      ruleset,
-      assistClass: 'none',
-      keepsRecord: true,
-      updatesScore: true,
-      recordSlot: 'main',
-      keepsCourseRecord: true,
-      leaderboard: 'main',
-      keepsReplay: true,
-    });
-  });
+  test.each<RulesetId>(['lr2', 'beatoraja', '____', 'plugout'])(
+    'keeps an unassisted play whole under %s',
+    (ruleset) => {
+      expect(resolveRecordPolicy([], ruleset)).toEqual({
+        ruleset,
+        assistClass: 'none',
+        keepsRecord: true,
+        updatesScore: true,
+        recordSlot: 'main',
+        keepsCourseRecord: true,
+        leaderboard: 'main',
+        keepsReplay: true,
+      });
+    },
+  );
 
-  test.each<RulesetId>(['lr2', 'beatoraja', '____'])('keeps nothing from a no-save play under %s', (ruleset) => {
-    expect(resolveRecordPolicy([light, noSave], ruleset)).toMatchObject({
-      assistClass: 'no-save',
-      keepsRecord: false,
-      updatesScore: false,
-      keepsCourseRecord: false,
-      leaderboard: 'unranked',
-      keepsReplay: true,
-    });
-  });
+  test.each<RulesetId>(['lr2', 'beatoraja', '____', 'plugout'])(
+    'keeps nothing from a no-save play under %s',
+    (ruleset) => {
+      expect(resolveRecordPolicy([light, noSave], ruleset)).toMatchObject({
+        assistClass: 'no-save',
+        keepsRecord: false,
+        updatesScore: false,
+        keepsCourseRecord: false,
+        leaderboard: 'unranked',
+        keepsReplay: true,
+      });
+    },
+  );
 
   // Each ruleset's consequence of an assisted play: lamp only, the lamp limited by that ruleset's rule.
   test.each<[RulesetId, AssistFinding[], object]>([

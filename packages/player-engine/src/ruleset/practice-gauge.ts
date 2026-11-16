@@ -31,12 +31,24 @@ export const LR2_PRACTICE_GAUGE_TYPES = [
 
 /** That-Which-Must-Not-Be-Named's single-play gauges, gentlest first. */
 const ____PRACTICE_GAUGE_TYPES = ['ASSISTED-EASY', 'EASY', 'NORMAL', 'HARD', 'EX-HARD'] as const;
+/** plugout has no PRACTICE: Be-Music's offers its single-play gauges, by their ids (`PLUGOUT_GAUGE_IDS`). */
+const PLUGOUT_PRACTICE_GAUGE_TYPES = [
+  'EASY',
+  'NORMAL',
+  'HARD',
+  'HAZARD',
+  'EX-EASY',
+  'EX-NORMAL',
+  'EX-HARD',
+  'EX-HAZARD',
+] as const;
 
 /** A PRACTICE `GAUGE TYPE` of any ruleset: a gauge id, read under the judge ruleset it belongs to. */
 export type PracticeGaugeType =
   | (typeof BEATORAJA_PRACTICE_GAUGE_TYPES)[number]
   | (typeof LR2_PRACTICE_GAUGE_TYPES)[number]
-  | (typeof ____PRACTICE_GAUGE_TYPES)[number];
+  | (typeof ____PRACTICE_GAUGE_TYPES)[number]
+  | (typeof PLUGOUT_PRACTICE_GAUGE_TYPES)[number];
 
 /** Every ruleset's PRACTICE gauge types, each once: what a stored PRACTICE gauge may hold. */
 export const PRACTICE_GAUGE_TYPES: readonly PracticeGaugeType[] = [
@@ -44,16 +56,22 @@ export const PRACTICE_GAUGE_TYPES: readonly PracticeGaugeType[] = [
     ...BEATORAJA_PRACTICE_GAUGE_TYPES,
     ...LR2_PRACTICE_GAUGE_TYPES,
     ...____PRACTICE_GAUGE_TYPES,
+    ...PLUGOUT_PRACTICE_GAUGE_TYPES,
   ]),
 ];
 
 /** The PRACTICE gauge types `ruleset` offers, in its own order. */
 export function resolvePracticeGaugeTypes(ruleset: RulesetId): readonly PracticeGaugeType[] {
-  return ruleset === 'lr2'
-    ? LR2_PRACTICE_GAUGE_TYPES
-    : ruleset === 'beatoraja'
-      ? BEATORAJA_PRACTICE_GAUGE_TYPES
-      : ____PRACTICE_GAUGE_TYPES;
+  switch (ruleset) {
+    case 'lr2':
+      return LR2_PRACTICE_GAUGE_TYPES;
+    case 'beatoraja':
+      return BEATORAJA_PRACTICE_GAUGE_TYPES;
+    case 'plugout':
+      return PLUGOUT_PRACTICE_GAUGE_TYPES;
+    default:
+      return ____PRACTICE_GAUGE_TYPES;
+  }
 }
 
 /** The PRACTICE gauge a ruleset starts with: its default recovery gauge (LR2 GROOVE, else NORMAL). */
@@ -68,7 +86,7 @@ export function isPracticeGaugeType(value: unknown, ruleset?: RulesetId): value 
 }
 
 /** The rulesets whose PRACTICE gauges a pick can name. */
-const PRACTICE_GAUGE_SOURCES: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
+const PRACTICE_GAUGE_SOURCES: readonly RulesetId[] = ['lr2', 'beatoraja', '____', 'plugout'];
 
 /**
  * A PRACTICE `GAUGE TYPE` of one source, whatever ruleset judges the play: `beatoraja:ASSIST-EASY` under LR2 plays on

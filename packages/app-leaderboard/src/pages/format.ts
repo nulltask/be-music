@@ -44,7 +44,12 @@ export function lampStyle(lamp: number): { label: string; color: string; meaning
   return LAMP_STYLES[lamp] ?? { label: 'NO PLAY', color: '#6b7280', meaning: 'Not played.' };
 }
 
-export const RULESET_LABELS: Readonly<Record<string, string>> = { lr2: 'LR2', beatoraja: 'beatoraja', ____: '????' };
+export const RULESET_LABELS: Readonly<Record<string, string>> = {
+  lr2: 'LR2',
+  beatoraja: 'beatoraja',
+  ____: '????',
+  plugout: 'plugout',
+};
 
 /**
  * A ruleset as the pages name it: "LR2 rules". The bare name reads like the software a play came from; a ruleset is

@@ -801,6 +801,33 @@ export function advanceJudgeState(
     }
     // A tail settles once time has moved past it (whole microseconds, like every timed judgment).
     if (judgeUs > toJudgeUs(hold.endSeconds)) {
+      const heldTail = config.ruleset.heldChargeTail;
+      if (
+        heldTail !== undefined &&
+        isChargeLongNoteMode(hold.mode) &&
+        isHolding &&
+        config.scratchChannels.has(channel)
+      ) {
+        // plugout: a scratch still held reaches its tail as a PGREAT, without a release (0x440d75).
+        emit({
+          kind: 'long-note',
+          seconds: nowSec,
+          channel,
+          state: 'complete',
+          mode: hold.mode,
+          event: hold.note.event,
+          endSeconds: hold.endSeconds,
+        });
+        const signedDeltaMs = (judgeSec - hold.endSeconds) * 1000;
+        finalizeActiveLongNote(
+          state,
+          channel,
+          resolveLongNoteTailJudge(hold, { kind: 'PERFECT', signedDeltaMs }),
+          nowSec,
+          emit,
+        );
+        continue;
+      }
       if (
         isChargeLongNoteMode(hold.mode) &&
         (isHolding || hold.backSpinScratch === true) &&
@@ -835,9 +862,13 @@ export function advanceJudgeState(
       // A charge tail that was never let go is a missed POOR, whether the hold broke (HCN) or ran past the tail's late
       // window: only a release is judged against the windows (beatoraja's `CN end poor`). A back-spin scratch's tail
       // that was never spun back is missed the same way, held or not.
+      // plugout: a key held past its tail's late window is a BAD, not a missed POOR (0x440d75).
       const finalJudge =
         isChargeLongNoteMode(hold.mode) && releaseSeconds === undefined
-          ? resolveLongNoteTailJudge(hold, { kind: 'POOR', signedDeltaMs: (judgeSec - hold.endSeconds) * 1000 })
+          ? resolveLongNoteTailJudge(hold, {
+              kind: heldTail !== undefined ? heldTail.note : 'POOR',
+              signedDeltaMs: (judgeSec - hold.endSeconds) * 1000,
+            })
           : resolveLongNoteTailJudge(
               hold,
               resolveManualTimedJudge(
@@ -859,15 +890,20 @@ export function advanceJudgeState(
       if (!hold.audioStopped) {
         stopLongNoteSound(hold, channel, nowSec, 'release', emit);
       }
+      const released = resolveManualTimedJudge(
+        (tailJudgeSeconds - hold.endSeconds) * 1000,
+        judgeWindowsFor(config, channel, tailJudgeSeconds, true),
+      );
+      // plugout: a release before the tail's windows is a BAD ("RELASE TOO FAST"), not a missed POOR.
+      const earlyRelease = config.ruleset.heldChargeTail?.earlyRelease;
       finalizeActiveLongNote(
         state,
         channel,
         resolveLongNoteTailJudge(
           hold,
-          resolveManualTimedJudge(
-            (tailJudgeSeconds - hold.endSeconds) * 1000,
-            judgeWindowsFor(config, channel, tailJudgeSeconds, true),
-          ),
+          earlyRelease !== undefined && released.kind === 'POOR' && released.signedDeltaMs < 0
+            ? { ...released, kind: earlyRelease }
+            : released,
         ),
         tailAtSeconds,
         emit,

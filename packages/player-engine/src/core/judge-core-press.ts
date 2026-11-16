@@ -431,7 +431,7 @@ export function handleLanePress(
         headJudge,
         headScored: true,
         audioStopped: false,
-        ...(isBackSpinScratch(longNoteMode, config.scratchChannels.has(channel))
+        ...(ruleset.heldChargeTail === undefined && isBackSpinScratch(longNoteMode, config.scratchChannels.has(channel))
           ? { backSpinScratch: true as const, ...(source !== undefined ? { headSource: source } : {}) }
           : {}),
       });

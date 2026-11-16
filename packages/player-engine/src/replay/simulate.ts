@@ -1,4 +1,5 @@
 import { AnyKeyRoutes, anyKeyRouteKeys, selectAnyKeyLane, type AnyKeyCandidate } from '../core/any-key.ts';
+import { resolvePlugoutScore } from '../ruleset/plugout.ts';
 import { resolveAutoScratchSides } from '../core/auto-scratch.ts';
 import { PLAY_MODE_LAYOUTS, type PlayModeLayoutId } from '@be-music/chart-model';
 import { resolve____RankLabel } from '../ruleset/score.ts';
@@ -100,7 +101,12 @@ export type ReplayJudgmentObserver = (event: ReplayJudgmentEvent) => void;
 const JUDGMENT_KINDS: readonly ReplayJudgmentKind[] = ['pgreat', 'great', 'good', 'bad', 'poor', 'empty-poor'];
 
 /** The rulesets `simulateReplay` scores under, in display order. */
-export const REPLAY_SIMULATOR_RULESETS: readonly ['lr2', 'beatoraja', '____'] = ['lr2', 'beatoraja', '____'];
+export const REPLAY_SIMULATOR_RULESETS: readonly ['lr2', 'beatoraja', '____', 'plugout'] = [
+  'lr2',
+  'beatoraja',
+  '____',
+  'plugout',
+];
 
 /**
  * Re-derives one ruleset's judgments / EX-SCORE / combo / gauge from a replay's canonical data (resolved chart +
@@ -381,7 +387,12 @@ class ReplaySimulation {
     if (this.course !== undefined) {
       result.course = { combo: this.course.combo, maxCombo: this.course.maxCombo };
     }
-    if (this.config.moneyScore) {
+    if (this.config.plugoutScore === true) {
+      result.score = resolvePlugoutScore(
+        { pgreat: this.counts[JUDGE_PGREAT]!, great: this.counts[JUDGE_GREAT]!, good: this.counts[JUDGE_GOOD]! },
+        this.config.noteCount,
+      );
+    } else if (this.config.moneyScore) {
       const notes = Math.max(1, this.config.noteCount);
       result.score = Math.floor(
         ((4 * this.counts[JUDGE_PGREAT]! + 2 * this.counts[JUDGE_GREAT]! + this.counts[JUDGE_GOOD]!) * 50000) / notes,
@@ -616,14 +627,21 @@ class ReplaySimulation {
         hold.note.judged = true;
         this.applyJudge(hold.headJudge ?? JUDGE_BAD, hold.headDmUs);
       } else {
-        // Charge tail held past its late window — the tail resolves as a missed POOR (beatoraja / That-Which-Must-Not-Be-Named).
+        // Charge tail held past its late window — the tail resolves as a missed POOR (beatoraja / That-Which-Must-Not-Be-Named);
+        // under plugout a key's is a BAD, and a scratch's a PGREAT already at its end (`heldChargeTail`).
         const lane = event.lane;
         const hold = lane.hold;
         if (!hold || hold.note !== event.note) continue;
         lane.hold = undefined;
         hold.note.holding = false;
         hold.note.judged = true;
-        this.applyJudge(JUDGE_MISS_POOR, undefined);
+        const heldTail = this.config.heldChargeTail;
+        if (heldTail === undefined) {
+          this.applyJudge(JUDGE_MISS_POOR, undefined);
+        } else {
+          this.judgingAt(event.timeUs, lane, hold.note);
+          this.applyJudge(hold.note.scratch ? JUDGE_PGREAT : JUDGE_BAD, hold.note.endTimeUs! - event.timeUs);
+        }
       }
     }
 
@@ -861,9 +879,11 @@ class ReplaySimulation {
           endWindows,
         );
       } else {
-        // CN / HCN tail: judged by the release timing; early releases beyond the windows are POOR.
+        // CN / HCN tail: judged by the release timing; early releases beyond the windows are POOR (BAD under plugout,
+        // `heldChargeTail.earlyRelease`).
         const endJudge = classifyJudge(dmUs, endWindows);
-        released = { judge: endJudge === JUDGE_NONE ? JUDGE_MISS_POOR : endJudge, dmUs };
+        const outside = this.config.heldChargeTail !== undefined && dmUs > 0 ? JUDGE_BAD : JUDGE_MISS_POOR;
+        released = { judge: endJudge === JUDGE_NONE ? outside : endJudge, dmUs };
       }
       const marginUs = note.scratch
         ? this.config.longNoteReleaseMarginUs.scratch
@@ -998,8 +1018,13 @@ class ReplaySimulation {
     });
     lane.hold = {
       note,
-      tailMissDeadlineUs: note.endTimeUs! + judgeWindowLateReachUs(endWindows),
-      ...(isBackSpinScratch(style, lane.scratch)
+      // plugout settles a scratch held to its end at the end itself (`heldChargeTail`).
+      tailMissDeadlineUs:
+        this.config.heldChargeTail !== undefined && note.scratch
+          ? note.endTimeUs!
+          : note.endTimeUs! + judgeWindowLateReachUs(endWindows),
+      // plugout has no back-spin scratch: a release ends a scratch charge like a key's.
+      ...(this.config.heldChargeTail === undefined && isBackSpinScratch(style, lane.scratch)
         ? { backSpinScratch: true as const, ...(source !== undefined ? { headSource: source } : {}) }
         : {}),
     };

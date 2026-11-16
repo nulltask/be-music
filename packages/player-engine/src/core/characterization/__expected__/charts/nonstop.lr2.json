@@ -130,6 +130,19 @@
         "djLevel": "B",
         "gauge": {"type":"CLASS","final":100,"cleared":true},
         "course": {"combo":5,"maxCombo":5}
+      },
+      "plugout": {
+        "ruleset": "plugout/0",
+        "judge": {"pgreat":1,"great":4,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "fast": 2,
+        "slow": 2,
+        "exScore": 6,
+        "noteCount": 5,
+        "maxCombo": 5,
+        "djLevel": "B",
+        "gauge": {"type":"COURSE","final":100,"cleared":true},
+        "course": {"combo":5,"maxCombo":5},
+        "score": 60000
       }
     },
     "audio": [
@@ -446,6 +459,19 @@
         "djLevel": "AAA",
         "gauge": {"type":"CLASS","final":100,"cleared":true},
         "course": {"combo":5,"maxCombo":5}
+      },
+      "plugout": {
+        "ruleset": "plugout/0",
+        "judge": {"pgreat":5,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "fast": 0,
+        "slow": 0,
+        "exScore": 10,
+        "noteCount": 5,
+        "maxCombo": 5,
+        "djLevel": "AAA",
+        "gauge": {"type":"COURSE","final":100,"cleared":true},
+        "course": {"combo":5,"maxCombo":5},
+        "score": 100000
       }
     },
     "audio": [

@@ -28,7 +28,7 @@ import {
   type GaugeShiftBottom,
 } from '../ruleset/gauge-type.ts';
 import type { CourseGaugeSet, CourseJudgeConstraint, RulesetCourseKind } from '../ruleset/course.ts';
-import type { RulesetId } from '../ruleset/definitions.ts';
+import { isRulesetId, RULESET_IDS, type RulesetId } from '../ruleset/definitions.ts';
 import {
   parseReplayTempoChanges,
   parseReplayViewChanges,
@@ -852,8 +852,8 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   const judgeWindowOverrideMs = optionalFiniteNumber(play.judgeWindowOverrideMs, 'play.judgeWindowOverrideMs');
   if (judgeWindowOverrideMs !== undefined) parsed.judgeWindowOverrideMs = judgeWindowOverrideMs;
   if (play.judgeRuleset !== undefined) {
-    if (play.judgeRuleset !== 'lr2' && play.judgeRuleset !== 'beatoraja' && play.judgeRuleset !== '____') {
-      throw new ReplayParseError(`play.judgeRuleset: expected 'lr2' | 'beatoraja' | '____'`);
+    if (!isRulesetId(play.judgeRuleset)) {
+      throw new ReplayParseError(`play.judgeRuleset: expected ${RULESET_IDS.map((id) => `'${id}'`).join(' | ')}`);
     }
     parsed.judgeRuleset = play.judgeRuleset;
   }

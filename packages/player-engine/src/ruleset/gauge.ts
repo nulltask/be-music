@@ -25,6 +25,8 @@ export class RulesetGauge {
   value: number;
   /** Set once a survival gauge has bottomed out. The run keeps judging; the gauge stays dead. */
   failedMidPlay = false;
+  /** The lives left once a gauge with {@link GaugeSpec.lives} has reached 0; `undefined` before that. */
+  livesRemaining: number | undefined;
   private dead = false;
   private activeSpec: GaugeSpec;
 
@@ -76,8 +78,15 @@ export class RulesetGauge {
     // beatoraja GrooveGauge.update updates the hidden gauge too, including on the fatal judgment.
     this.fallback?.applyJudge(judge, rate);
     if (this.dead) return;
+    if (this.livesRemaining !== undefined) {
+      this.spendLives(this.spec.lives!.costs[judge]! * rate);
+      return;
+    }
     let delta = this.spec.values[judge]! * rate;
-    if (delta < 0) {
+    const damageScale = this.spec.damageScale;
+    if (delta < 0 && damageScale !== undefined) {
+      delta *= damageScale.base + damageScale.perGauge * this.value;
+    } else if (delta < 0) {
       for (const step of this.spec.guts) {
         if (step.judges !== undefined && !step.judges.includes(judge)) continue;
         if (step.inclusive === true ? this.value <= step.threshold : this.value < step.threshold) {
@@ -122,6 +131,7 @@ export class RulesetGauge {
   }
 
   cleared(): boolean {
+    if (this.livesRemaining !== undefined) return !this.failedMidPlay && this.livesRemaining > 0;
     if (this.spec.survival) {
       return !this.failedMidPlay && this.value > 0 && this.value >= (this.spec.clearBorder ?? 0);
     }
@@ -141,6 +151,7 @@ export class RulesetGauge {
     this.value = gauge.value;
     this.dead = gauge.dead;
     this.failedMidPlay = gauge.failedMidPlay;
+    this.livesRemaining = gauge.livesRemaining;
   }
 
   /** Source BMSPlayer: at zero switch to NORMAL's existing value, never refill it from survival HP. */
@@ -152,6 +163,7 @@ export class RulesetGauge {
     this.value = fallback.value;
     this.dead = fallback.dead;
     this.failedMidPlay = fallback.failedMidPlay;
+    this.livesRemaining = fallback.livesRemaining;
   }
 
   private set(next: number): void {
@@ -161,9 +173,22 @@ export class RulesetGauge {
     }
     if (this.spec.survival && value <= 0) {
       value = 0;
+      if (this.spec.lives !== undefined) {
+        // plugout's grade NORMAL / EASY: the stage plays on lives instead of failing.
+        this.livesRemaining = this.spec.lives.initial;
+      } else {
+        this.dead = true;
+        this.failedMidPlay = true;
+      }
+    }
+    this.value = value;
+  }
+
+  private spendLives(cost: number): void {
+    this.livesRemaining = Math.max(0, this.livesRemaining! - cost);
+    if (this.livesRemaining <= 0) {
       this.dead = true;
       this.failedMidPlay = true;
     }
-    this.value = value;
   }
 }

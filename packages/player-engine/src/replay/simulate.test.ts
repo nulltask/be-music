@@ -147,7 +147,7 @@ describe('simulateReplay', () => {
   test('a single note hit dead-on scores PGREAT on every ruleset', () => {
     const replay = makeReplay({ notes: [note(1_000_000)], inputs: [down(1_000_000)] });
     const results = simulateReplayRulesets(replay);
-    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+    for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
       const result = results[ruleset]!;
       expect(result.judge, ruleset).toEqual({ pgreat: 1, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 });
       expect(result.exScore, ruleset).toBe(2);
@@ -228,7 +228,7 @@ describe('simulateReplay', () => {
   test('unplayed notes miss as POOR and drain the gauge', () => {
     const replay = makeReplay({ notes: [note(1_000_000), note(2_000_000)] });
     const results = simulateReplayRulesets(replay);
-    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+    for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
       const result = results[ruleset]!;
       expect(result.judge.poor, ruleset).toBe(2);
       expect(result.exScore, ruleset).toBe(0);
@@ -429,7 +429,7 @@ describe('ruleset helpers', () => {
   });
 });
 
-test.each(['lr2', 'beatoraja', '____'] as const)(
+test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
   '%s re-simulates strict zero-total from the typed play setting',
   (ruleset) => {
     const replay = makeReplay({
