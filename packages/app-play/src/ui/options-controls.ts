@@ -288,7 +288,10 @@ export class OptionBinding<T = unknown> extends OptionRow {
             if (choice !== undefined) this.commit(choice.value);
           }}
         >
-          ${this.choices.map((choice, index) => html`<option value=${index}>${choice.text}</option>`)}
+          ${this.choices.map(
+            (choice, index) =>
+              html`<option value=${index} ?disabled=${choice.disabled === true}>${choice.text}</option>`,
+          )}
         </select>`;
     if (this.kind === 'toggle')
       return html`${this.labelTemplate()}
