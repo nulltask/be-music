@@ -59,7 +59,7 @@ function isChartJSON(value: unknown): value is ChartJSON {
   if (typeof value !== 'object' || value === null) return false;
   const chart = value as Record<string, unknown>;
   return (
-    (chart.sourceFormat === 'bms' || chart.sourceFormat === 'bmson') &&
+    (chart.sourceFormat === 'bms' || chart.sourceFormat === 'bmson' || chart.sourceFormat === 'lrx') &&
     typeof chart.metadata === 'object' &&
     chart.metadata !== null &&
     typeof chart.resources === 'object' &&

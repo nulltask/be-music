@@ -525,7 +525,7 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
   }
 
   const result: ReplayChart = {
-    sourceFormat: json.sourceFormat === 'bmson' ? 'bmson' : 'bms',
+    sourceFormat: json.sourceFormat === 'bmson' || json.sourceFormat === 'lrx' ? json.sourceFormat : 'bms',
     laneMode: chart.laneDisplayMode,
     lnMode: chartLNMode,
     judgeRank,

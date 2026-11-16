@@ -150,6 +150,13 @@ describe('replay recorder', () => {
     expect(replay.recorder?.engine).toBe(packageJSON.version);
   });
 
+  test('records an LRX chart as LRX, not as BMS', () => {
+    const replay = createReplayRecorder(makeRecorderOptions({ json: { ...makeJSON(), sourceFormat: 'lrx' } })).finalize(
+      { summary: makeSummary() },
+    );
+    expect(replay.chart.sourceFormat).toBe('lrx');
+  });
+
   test('captures chart metadata, noteCount, TOTAL, judge rank, and lnMode from the JSON', () => {
     const recorder = createReplayRecorder(makeRecorderOptions());
     const replay = recorder.finalize({ summary: makeSummary() });

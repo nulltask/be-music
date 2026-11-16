@@ -221,7 +221,8 @@ export interface ReplayChart {
    * the player played. Lane options (MIRROR / RANDOM / FLIP) are part of neither fingerprint; they live in `play`.
    */
   playFingerprint?: string;
-  sourceFormat: 'bms' | 'bmson';
+  /** The chart's source format. An LRX chart reads its rank and TOTAL as a BMS chart does. */
+  sourceFormat: 'bms' | 'bmson' | 'lrx';
   /** Explicit TOTAL units for mixed-format NONSTOP charts; otherwise derived from sourceFormat. */
   totalUnit?: 'absolute' | 'percent';
   /** Engine lane display mode (`'7keys'` / `'14keys'` / ... — `resolveLaneDisplayMode` output). */
@@ -570,8 +571,8 @@ function parseChart(chart: Record<string, unknown>): ReplayChart {
   const sourceFormat = chart.sourceFormat;
   if (chart.totalUnit !== undefined && chart.totalUnit !== 'absolute' && chart.totalUnit !== 'percent')
     throw new ReplayParseError('chart.totalUnit: expected absolute or percent');
-  if (sourceFormat !== 'bms' && sourceFormat !== 'bmson') {
-    throw new ReplayParseError(`chart.sourceFormat: expected 'bms' | 'bmson'`);
+  if (sourceFormat !== 'bms' && sourceFormat !== 'bmson' && sourceFormat !== 'lrx') {
+    throw new ReplayParseError(`chart.sourceFormat: expected 'bms' | 'bmson' | 'lrx'`);
   }
   const judgeRankRaw = expectRecord(chart.judgeRank, 'chart.judgeRank');
   const judgeRank: ReplayJudgeRank = {

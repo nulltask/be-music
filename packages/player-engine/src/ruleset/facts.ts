@@ -10,7 +10,8 @@ import type { LongNoteMode } from '@be-music/chart-model';
  * `ResolveRulesetOptions`.
  */
 export interface RulesetChartFacts {
-  sourceFormat: 'bms' | 'bmson';
+  /** An LRX chart's rank and TOTAL read as a BMS chart's: only bmson differs. */
+  sourceFormat: 'bms' | 'bmson' | 'lrx';
   /** Engine lane display mode (`resolveLaneDisplayMode` output) — picks beatoraja's per-mode window tables. */
   laneMode: string;
   /**
