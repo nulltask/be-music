@@ -260,7 +260,9 @@ function pushBMSExtensionLines(lines: string[], json: BeMusicJSON): void {
 
   pushIndexedStringLines(lines, 'EXRANK', json.bms.exRank, base);
   pushIndexedStringLines(lines, 'ARGB', json.bms.argb, base);
-  pushIndexedStringLines(lines, 'EXWAV', json.bms.exWAV, base);
+  // #WAV and #EXWAV share a slot and the later line wins (#1197): an EXWAV goes here, before the #WAV lines, only when
+  // no #WAV of its slot is written or a later #WAV redefines it; the rest follow the #WAV lines.
+  pushIndexedStringLines(lines, 'EXWAV', splitExWAVByWAVOrder(json).beforeWAV, base);
   pushIndexedStringLines(lines, 'EXBMP', json.bms.exBMP, base);
   pushIndexedStringLines(lines, 'BGA', json.bms.bga, base);
   pushIndexedNumberLines(lines, 'SCROLL', json.bms.scroll, base);
@@ -290,6 +292,7 @@ function pushBMSExtensionLines(lines: string[], json: BeMusicJSON): void {
 function pushResourceLines(lines: string[], json: BeMusicJSON): void {
   const base = resolveJSONBase(json);
   pushIndexedStringLines(lines, 'WAV', json.resources.wav, base);
+  pushIndexedStringLines(lines, 'EXWAV', splitExWAVByWAVOrder(json).afterWAV, base);
   pushIndexedStringLines(lines, 'BMP', json.resources.bmp, base);
   pushIndexedNumberLines(lines, 'BPM', json.resources.bpm, base);
   pushIndexedNumberLines(lines, 'STOP', json.resources.stop, base);
@@ -300,6 +303,21 @@ function pushResourceLines(lines: string[], json: BeMusicJSON): void {
 
 function resolveJSONBase(json: BeMusicJSON): 36 | 62 {
   return json.bms.base === 62 ? 62 : 36;
+}
+
+/** The `#EXWAVxx` declarations written before the `#WAVxx` lines and after them, so the file order keeps who wins. */
+function splitExWAVByWAVOrder(json: BeMusicJSON): {
+  beforeWAV: Record<string, string>;
+  afterWAV: Record<string, string>;
+} {
+  const beforeWAV: Record<string, string> = {};
+  const afterWAV: Record<string, string> = {};
+  for (const [key, value] of Object.entries(json.bms.exWAV)) {
+    const wav = json.resources.wav[key];
+    const exWAVWins = wav !== undefined && wav.length > 0 && json.bms.exWAVOverridden?.includes(key) !== true;
+    (exWAVWins ? afterWAV : beforeWAV)[key] = value;
+  }
+  return { beforeWAV, afterWAV };
 }
 
 function pushIndexedStringLines(

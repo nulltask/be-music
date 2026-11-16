@@ -3218,6 +3218,10 @@ html.touch-first .search-input.search-inline:focus {
 }
 
 /* The PRACTICE bar picker (`ui/practice-bars.ts`): the chart's score, opened as a chart starts with PRACTICE on. */
+/* The dialog takes the focus as it opens so the fields wait for Tab; it draws no ring of its own. */
+.practice-bars-dialog:focus {
+  outline: none;
+}
 .practice-bars-dialog > * {
   width: min(1100px, calc(100% - 2rem));
   max-width: none;

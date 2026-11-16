@@ -419,6 +419,19 @@ The boundaries of `PERFECT` / `GREAT` / `GOOD` / `BAD` are determined by these f
 An input outside every window reaches no note: the lane keysound plays and the press falls through to the
 empty-POOR path. `POOR` is a note that was missed outright.
 
+### That-Which-Must-Not-Be-Named windows and their evidence
+
+The `____` ruleset rests on community measurement [C] for its ordinary notes only, and keeps every other bound visibly provisional ([#1189](https://github.com/nulltask/be-music/issues/1189)).
+
+| Context                    | Window                                                                             | Evidence                                                                                                                                                                                                                            |
+| -------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Notes and scratch          | PG ±16.67 / GR ±33.33 / GD ±116.67 / BD ±250 ms (±1 / 2 / 7 / 15 frames at 60 fps) | [C] ([iidx.org](https://iidx.org/compendium/gauges_and_timing))                                                                                                                                                                     |
+| Empty POOR                 | late 150 / early 500 ms                                                            | Provisional: iidx.org lists it as "?" and says the numbers "are not precisely known"; beatoraja's SEVENKEYS miss window (`JudgeProperty` [V]) is borrowed                                                                           |
+| CN release                 | only PGREAT inside ±200 ms; BAD to +220 / -280 ms                                  | The rule is [C]: the release judgment "only has PGREAT; GREAT and GOODs get automatically upgraded to PGREAT". The bounds are provisional: beatoraja's SEVENKEYS long-note end GOOD and BAD windows (`JudgeProperty` [V]), unscaled |
+| CN after a BAD / POOR head | no tail judgment                                                                   | [C] (same page)                                                                                                                                                                                                                     |
+
+iidx.org's "±120, ±160, ±200, {+220, -280}" release windows describe beatoraja, not this game. A play judged under `____` stores these bounds in its result like any other; results that depend on an empty POOR or a CN release near a bound are only as exact as the borrowed values.
+
 ### BMS initial judgment width
 
 BMS determines the judgment range at the start of playback using the following priority order.
@@ -706,7 +719,7 @@ The following deltas describe the `lr2` ruleset's `GROOVE` gauge. `HARD`, `DEATH
 
 The value after gauge update is clamped to the current gauge type's min/max range.
 
-Be-Music calculates gauges with double-precision arithmetic. beatoraja uses single-precision gauge values, and LR2 uses single precision for the per-note GROOVE gain. Rounding can change the clear verdict when the gauge is close to a threshold. [beatoraja GrooveGauge](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GrooveGauge.java#L176-L240) · [OpenLR2 gain calculation](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27658-L27660)
+Each source's gauge keeps its own precision ([#1090](https://github.com/nulltask/be-music/issues/1090)). beatoraja's gauges, its class gauges included, run in Java `float`: the table, its TOTAL, LIMIT_INCREMENT and MODIFY_DAMAGE scaling, each delta and each sum round to single precision, under whichever judge ruleset plays them. LR2 keeps HP and its deltas in `double`, but divides the per-note GROOVE and EASY gain in single precision (`total / (float)notes`, then × 1.2 for EASY) [R]. AC's gauges stay in double precision. The live play and the replay simulator share the gauge, so a replay re-judges to the same value, and the rulesets' development revision `/0` takes the change without a bump ([ADR 0019](./adr/0019-source-qualified-option-values.md)). [beatoraja GrooveGauge](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GrooveGauge.java#L176-L240) · [OpenLR2 gain calculation](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27658-L27660)
 
 The `HARD` / `EASY` variants follow the LR2 values (beatoraja `GaugeProperty`'s `HARD_LR2` / `EASY_LR2`). `DEATH` follows LR2 itself (OpenLR2 `LR2f.cpp` L27673-L27680, LR2body.exe `ParseBMSFile`), not beatoraja's `HAZARD_LR2`.
 

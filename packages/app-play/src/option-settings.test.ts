@@ -160,6 +160,7 @@ describe('captureOptionSettings', () => {
       bpmGuide: true,
       bpmChangeWarning: true,
       guideSE: true,
+      windowHold: true,
       judgeCounts: false,
       judgeDetailSplit: true,
       judgeDetail: 'MS',

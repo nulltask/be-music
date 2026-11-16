@@ -291,6 +291,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     bpmGuide: false,
     bpmChangeWarning: false,
     guideSE: false,
+    windowHold: false,
     judgeCounts: true,
     judgeDetailSplit: false,
     judgeDetail: 'OFF',

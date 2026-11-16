@@ -144,7 +144,7 @@
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
-      "1250.000 PERFECT combo=1 ch=13 delta=0 gauge=63.333333",
+      "1250.000 PERFECT combo=1 ch=13 delta=0 gauge=63.333332",
       "1516.667 PERFECT combo=2 ch=11 delta=0 gauge=100",
       "1600.000 BAD combo=0 ch=12 delta=-400 gauge=97",
       "2516.667 PERFECT combo=1 ch=16 delta=0 gauge=100",
@@ -302,7 +302,7 @@
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
-      "1250.000 PERFECT combo=1 ch=13 delta=0 gauge=63.333333",
+      "1250.000 PERFECT combo=1 ch=13 delta=0 gauge=63.333332",
       "1516.667 PERFECT combo=2 ch=11 delta=0 gauge=100",
       "1600.000 BAD combo=0 ch=12 delta=-400 gauge=97",
       "2516.667 PERFECT combo=1 ch=16 delta=0 gauge=100",
@@ -482,7 +482,7 @@
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
-      "1250.000 PERFECT combo=1 ch=13 gauge=63.333333",
+      "1250.000 PERFECT combo=1 ch=13 gauge=63.333332",
       "1500.000 PERFECT combo=2 ch=11 gauge=100",
       "2000.000 PERFECT combo=3 ch=12 gauge=100",
       "2500.000 PERFECT combo=4 ch=16 gauge=100",

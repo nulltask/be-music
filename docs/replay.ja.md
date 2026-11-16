@@ -378,17 +378,18 @@ flowchart TD
 空 POOR・ゲージ表がルールセットごとに異なります。定数の出典は
 [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) に記載しています。
 
-| 項目                  | LR2 (`lr2/0`)                                           | beatoraja (`beatoraja/0`)                                    | 名前を言ってはいけないあのゲーム (`____/0`)                      |
-| --------------------- | ------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------- |
-| 出典                  | lr2oraja / OpenLR2                                      | beatoraja master                                             | コミュニティ実測 (https://iidx.org)                              |
-| 判定幅（RANK NORMAL） | ±18/±40/±100/±200 ms                                    | ±15/±45/±112.5/late 210 · early 165 ms（7K, judgerank 75 %） | ±16.67/±33.33/±116.67/±250 ms                                    |
-| ランクスケーリング    | LR2 アンカー補間、BAD 固定                              | judgerank 線形、空 POOR 窓固定                               | なし                                                             |
-| ノート選択            | Lowest + multi-BAD 連鎖                                 | Combo（デフォルト。duration / lowest / score 選択可）        | Lowest                                                           |
-| ロングノート          | 全て LN（終端確定の 1 判定）                            | ノートごとの LN / CN / HCN                                   | 全て CN（mode 3 は HCN ゲージ）                                  |
-| 空 POOR 窓            | 早側のみ 1000 ms                                        | late 150 / early 500 ms（7K）                                | 未測定 — beatoraja の窓を代用                                    |
-| 空 POOR でコンボ切断  | しない                                                  | 5K / PMS のみ                                                | しない                                                           |
-| マネースコア          | `(4·PG + 2·GR + GD) × 50000 / notes`                    | —                                                            | —（BISTROVER で廃止）                                            |
-| ゲージ                | lr2oraja LR2 表（2 % 未満即死、32 % 未満ダメージ ×0.6） | beatoraja ネイティブ表                                       | https://iidx.org 表（a 値回復、HARD は 30 % 以下でダメージ半減） |
+| 項目                  | LR2 (`lr2/0`)                                           | beatoraja (`beatoraja/0`)                                    | 名前を言ってはいけないあのゲーム (`____/0`)                          |
+| --------------------- | ------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------- |
+| 出典                  | lr2oraja / OpenLR2                                      | beatoraja master                                             | コミュニティ実測 (https://iidx.org)                                  |
+| 判定幅（RANK NORMAL） | ±18/±40/±100/±200 ms                                    | ±15/±45/±112.5/late 210 · early 165 ms（7K, judgerank 75 %） | ±16.67/±33.33/±116.67/±250 ms                                        |
+| ランクスケーリング    | LR2 アンカー補間、BAD 固定                              | judgerank 線形、空 POOR 窓固定                               | なし                                                                 |
+| ノート選択            | Lowest + multi-BAD 連鎖                                 | Combo（デフォルト。duration / lowest / score 選択可）        | Lowest                                                               |
+| ロングノート          | 全て LN（終端確定の 1 判定）                            | ノートごとの LN / CN / HCN                                   | 全て CN（mode 3 は HCN ゲージ）                                      |
+| 空 POOR 窓            | 早側のみ 1000 ms                                        | late 150 / early 500 ms（7K）                                | 未測定 — beatoraja の窓を代用                                        |
+| CN の離しの判定幅     | —                                                       | モードごとのロングノート終端の表                             | ±200 ms 以内は PGREAT のみ、BAD は +220 / −280 ms まで（範囲は暫定） |
+| 空 POOR でコンボ切断  | しない                                                  | 5K / PMS のみ                                                | しない                                                               |
+| マネースコア          | `(4·PG + 2·GR + GD) × 50000 / notes`                    | —                                                            | —（BISTROVER で廃止）                                                |
+| ゲージ                | lr2oraja LR2 表（2 % 未満即死、32 % 未満ダメージ ×0.6） | beatoraja ネイティブ表                                       | https://iidx.org 表（a 値回復、HARD は 30 % 以下でダメージ半減）     |
 
 EX スコアは全ルールセットで PGREAT × 2 + GREAT × 1、DJ LEVEL は 名前を言ってはいけないあのゲームの 9 分率です。チャージノート系の
 ルールセットはロングノートの始点・終端を 2 判定ノートとして数えます（各ルールセットの分母は
@@ -565,6 +566,8 @@ beatoraja/0    1174   82.68%   AA   ...
 省略可能な `chart.chartOptions` は、元のプレイで受理した実効表示プログラムを記録します。version 1 の形は `{ version: 1, initial: { hiSpeed? }, cues: [{ timeUs, state: { hiSpeed? } }] }` です。各命令は完全な譜面側の状態であり、空の状態は強制速度を解除して保存されたユーザーの view へ戻します。時刻は非負の安全な整数マイクロ秒で、非減少順です。HI-SPEED は 0.25–100 の有限数とし、未知のプロファイルバージョンや状態フィールドを拒否します。version 2 は省略可能な状態フィールド `hidden`・`changeHS`・`crazySize`・`crazyWave` を加えます。値はそれぞれ [ADR 0032](./adr/0032-chart-authored-visual-families.ja.md) に挙げた ID です（例：`{ hidden: 'SUDDEN', changeHS: 'ACCEL' }`）。これらを持つ version 1 のプログラムは拒否するため、古い記録が後から実装した系列を有効にすることはありません。version 3 は `hidden: 'M-SUDDEN'`、`crazyWave` の値 `YWAVE`・`YWAVE2`・`XYWAVE`・`XYWAVE2`・`3DWAVE`・`3DWAVE2`、フィールド `crazyColor`・`crazySpin`・`crazyClone`・`crazyLine`・`crazyJudge`・`crazyDark`・`crazyReverse` を加えます（[ADR 0036](./adr/0036-chart-authored-skin-level-options.ja.md)）。これらを持つ version 2 のプログラムも同じく拒否します。新しい記録は version 3 で書きます。M-SUDDEN の間にプレイヤーが動かした SUDDEN+ カバーの高さは、ほかのカバーの変更と同じく `play.view` に記録します。
 
 省略可能な `chart.chartPlayOptions` は、プレイで使った譜面指定のゲームプレイオプションを記録します。形は `{ version: 1, options: { random?, judge?, hellJudge?, addMine?, notes? } }` で、`random` は `MIRROR`・`RANDOM`・`RANDOM+`・`ALL`・`ALL+`、`judge` は `GOOD2BAD` か `GREAT2BAD`、`notes` は `DOUBLE`・`COPY`・`DBLCOPY` です。効いたものだけを持ちます。コースのステージは NOTES COPY を外すため、プログラムに `notes` はありません（DBLCOPY なら `DOUBLE`）。写した譜面の `chart.laneMode` はダブルプレイのモードで、再生は記録した `notes` でノーツを再び変換します（[ADR 0035](./adr/0035-chart-authored-notes-options.ja.md)）。配置と地雷の結果はすでに `chart.notes` にあります。シミュレーションは記録した判定変更を適用し、ソースを再コンパイルしないため、このフィールドのないリプレイは元の判定を保ちます。未知のバージョン・フィールド・値は拒否します。[ADR 0033](./adr/0033-chart-authored-gameplay-options.ja.md)を参照してください。
+
+省略可能な `play.playerChartPlayOptions` は、それらのオプションのうち、譜面の `#OPTION` ではなくプレイヤーが選んだものを示します。形は `{ judge?, hellJudge?, notes? }` で、`judge` は `GOOD2BAD` か `GREAT2BAD`、`hellJudge` は `true`、`notes` は `DOUBLE`・`COPY`・`DBLCOPY` です。どれも `chart.chartPlayOptions` の値と同じでなければなりません。ここにプレイヤーの COPY か DBLCOPY があると、そのプレイは `no-save` になります（[play-options.ja.md](./play-options.ja.md)、[#1243](https://github.com/nulltask/be-music/issues/1243)）。
 
 ホストは再生時に `PlayerOptions.chartOptionProgram` として渡します。browser はフィールドのない古い記録には空のプログラムを明示し、元の動作を維持します。既存の実効プロファイルへソース宣言を再解釈して追加しません。`play.options`・`play.view` とその変更には元のユーザー速度を保持し、強制表示は譜面プロファイルで再現します。譜面の値を永続的なユーザー設定へ書き込まず、解除時に正確なユーザー view を復元できます。シミュレーションは表示操作を無視し、スコア・入力 replay・fingerprint・記録可否は変えません。[ADR 0026](./adr/0026-chart-authored-display-options.ja.md)を参照してください。NONSTOP は合成した実効プログラムを記録します。切り出したステージの記録には所有する範囲だけを残し、ステージ offset を引きます。FIT を二重に適用せず、遊んだ先頭の状態を復元し、有限のステージ終了で解除します。切り詰めた未プレイの前方区間には、未観測の強制状態を作りません。
 

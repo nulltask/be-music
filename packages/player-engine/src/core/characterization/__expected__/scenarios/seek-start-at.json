@@ -157,13 +157,13 @@
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
-      "400.000 PERFECT combo=3 ch=12 gauge=100",
+      "400.000 PERFECT combo=3 ch=12 gauge=99.999998",
       "900.000 PERFECT combo=4 ch=16 gauge=100",
       "1900.000 PERFECT combo=5 ch=15 gauge=100",
       "1900.000 PERFECT combo=6 ch=14 gauge=100"
     ],
     "ui": [
-      "0.000 seek generation=1 seconds=1.6 combo=2 maxCombo=2 exScore=4 gauge=73.333333 judgments=2 last=PERFECT@1.5#2",
+      "0.000 seek generation=1 seconds=1.6 combo=2 maxCombo=2 exScore=4 gauge=73.333332 judgments=2 last=PERFECT@1.5#2",
       "0.000 hold-lane-until-beat 12 beat=4",
       "0.000 long-note-start 12 beat=2 mode=ln",
       "0.000 clear-poor-bga",

@@ -406,6 +406,19 @@ player は LR2 の実測判定幅を基準にします（hitkey 日記 2015-01-1
 どの窓にも入らない入力はノートに届きません — レーンのキー音だけが鳴り、押下は空 POOR の経路へ抜けます。
 `POOR` は取り逃したノートです。
 
+### 名前を言ってはいけないあのゲームの判定幅と根拠
+
+`____` ルールセットのうち、コミュニティの実測 [C] に基づくのは通常のノーツの判定幅だけです。それ以外の範囲は暫定であることがわかるようにしています（[#1189](https://github.com/nulltask/be-music/issues/1189)）。
+
+| 場面                    | 判定幅                                                                                | 根拠                                                                                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ノーツとスクラッチ      | PG ±16.67 / GR ±33.33 / GD ±116.67 / BD ±250 ms（60 fps で ±1 / 2 / 7 / 15 フレーム） | [C]（[iidx.org](https://iidx.org/compendium/gauges_and_timing)）                                                                                                                                      |
+| 空 POOR                 | 遅い側 150 / 早い側 500 ms                                                            | 暫定。iidx.org は「?」とし、数値は「正確には知られていない」としている。beatoraja の SEVENKEYS の見逃し窓（`JudgeProperty` [V]）を借りている                                                          |
+| CN の離し               | ±200 ms 以内は PGREAT のみ。BAD は +220 / -280 ms まで                                | 規則は [C]。離しの判定は PGREAT だけで、GREAT と GOOD は PGREAT に繰り上がる。範囲は暫定で、beatoraja の SEVENKEYS のロングノート終端の GOOD と BAD の窓（`JudgeProperty` [V]）を縮尺なしで借りている |
+| 始点が BAD / POOR の CN | 終点の判定なし                                                                        | [C]（同じページ）                                                                                                                                                                                     |
+
+iidx.org にある「±120、±160、±200、{+220, -280}」という離しの判定幅は beatoraja のもので、このゲームのものではありません。`____` で判定したプレイの結果は、ほかのプレイと同じくこれらの範囲で記録されます。空 POOR や範囲の端に近い CN の離しに左右される結果は、借りた値の分だけ不確かです。
+
 ### BMS の初期判定幅
 
 BMS では、再生開始時点の判定幅を次の優先順位で決めます。
@@ -690,7 +703,7 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 
 ゲージ更新後の値は、現在の gauge type の min/max range に clamp します。
 
-Be-Music はゲージを倍精度で計算します。beatoraja はゲージ値を単精度で扱い、LR2 は GROOVE のノート1つあたりの回復量を単精度で計算します。ゲージが閾値に近いと、丸めの違いでクリア判定が変わることがあります。[beatoraja GrooveGauge](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GrooveGauge.java#L176-L240) · [OpenLR2 の回復量の計算](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27658-L27660)
+ゲージはそれぞれの出典の精度で計算します（[#1090](https://github.com/nulltask/be-music/issues/1090)）。beatoraja のゲージ（クラスゲージを含む）は Java の `float` で動きます。表、TOTAL・LIMIT_INCREMENT・MODIFY_DAMAGE による補正、増減量、足した結果をそれぞれ単精度に丸め、どの判定ルールで遊んでも同じです。LR2 は HP と増減量を `double` で持ちますが、GROOVE と EASY のノート 1 つあたりの回復量は単精度で割ります（`total / (float)notes`。EASY はその後 1.2 倍）[R]。AC のゲージは倍精度のままです。本番のプレイとリプレイのシミュレーターは同じゲージを使うので、リプレイの再判定は同じ値になります。判定ルールは開発用のリビジョン `/0` なので、版は上げずにこの変更を入れます（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)）。[beatoraja GrooveGauge](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GrooveGauge.java#L176-L240) · [OpenLR2 の回復量の計算](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27658-L27660)
 
 `HARD` / `EASY` の variant は LR2 の値（beatoraja `GaugeProperty` の `HARD_LR2` / `EASY_LR2`）に合わせます。`DEATH` は beatoraja の `HAZARD_LR2` ではなく LR2 本体（OpenLR2 `LR2f.cpp` L27673-L27680、LR2body.exe `ParseBMSFile`）に合わせます。
 

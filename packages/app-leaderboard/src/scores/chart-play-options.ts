@@ -1,5 +1,6 @@
 import {
   canonicalizeJSONValue,
+  playerChartPlayOptionsOf,
   withPlayerChartPlayOptions,
   type ChartPlayOptions,
   type ChartPlayVariant,
@@ -17,8 +18,8 @@ export type ChartPlayOptionsCheck = { ok: true } | { ok: false; reason: 'chart-p
  * them to what takes effect in the play, as the client does (`resolveEffectiveChartPlayOptions`: a course stage keeps
  * its key mode without a NOTES COPY), and the replay must record exactly that. The player's own GOOD2BAD / GREAT2BAD,
  * HELLJUDGE and NOTES may join where the chart sets none (`withPlayerChartPlayOptions`, #1177, #1184, #1185), and the
- * replay's program version decides the readings. A NONSTOP run's stitched play applies no stage's options, so its
- * program must be empty.
+ * replay's program version decides the readings, and the replay names them apart (`play.playerChartPlayOptions`, #1243).
+ * A NONSTOP run's stitched play applies no stage's options, so its program must be empty.
  */
 export function checkChartPlayOptions(
   replay: Pick<BeMusicReplay, 'chart' | 'play'>,
@@ -26,7 +27,16 @@ export function checkChartPlayOptions(
 ): ChartPlayOptionsCheck {
   const recorded = replay.chart.chartPlayOptions?.options ?? {};
   const expected = expectedChartPlayOptions(replay, playDocument);
-  return expected !== undefined && canonicalizeJSONValue(recorded) === canonicalizeJSONValue(expected)
+  if (expected === undefined || canonicalizeJSONValue(recorded) !== canonicalizeJSONValue(expected))
+    return { ok: false, reason: 'chart-play-options-mismatch' };
+  // The options the replay names the player's must be exactly those the chart does not declare (#1243), so a player's
+  // NOTES COPY cannot pass for the chart's and keep a record. A NONSTOP run applies none.
+  const declared =
+    replay.play.course?.kind === 'nonstop'
+      ? recorded
+      : ((playDocument as { playOptions?: ChartPlayOptions }).playOptions ?? {});
+  return canonicalizeJSONValue(replay.play.playerChartPlayOptions ?? {}) ===
+    canonicalizeJSONValue(playerChartPlayOptionsOf(declared, recorded))
     ? { ok: true }
     : { ok: false, reason: 'chart-play-options-mismatch' };
 }

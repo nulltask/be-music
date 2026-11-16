@@ -102,6 +102,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Long-note add rate (beatoraja)': 'ロングノーツ追加率 (beatoraja)',
   // Hi-speed & view
   'HS-FIX': 'HS-FIX',
+  'WINDOW HOLD (beatoraja)': 'WINDOW HOLD (beatoraja)',
   'Display area info': '表示範囲の情報',
   'Effect 1P': 'エフェクト 1P',
   'Effect 2P': 'エフェクト 2P',
