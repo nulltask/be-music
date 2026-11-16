@@ -68,7 +68,7 @@ describe('ruleset/facts', () => {
 
   test("beatoraja's HAZARD keeps its own table", () => {
     const spec = resolveRuleset(facts(), 'beatoraja', { selectedGauge: 'DEATH' }).gauge;
-    expect(spec.values).toEqual([0.15, 0.06, 0, -100, -100, -10]);
+    expect(spec.values).toEqual([0.15, 0.06, 0, -100, -100, -10].map(Math.fround));
   });
 
   test('the debug judge-window override reaches the ruleset window tables', () => {
@@ -203,7 +203,8 @@ describe('effective TOTAL', () => {
   test('the lr2 GROOVE gauge recovers from the effective TOTAL of a bmson chart', () => {
     // 100 % of the LR2 default over 100 notes: +1.76 per PGREAT, not +1.00 (an absolute TOTAL 100).
     const gauge = resolveRuleset(facts({ sourceFormat: 'bmson', total: 100 }), 'lr2').gauge;
-    expect(gauge.values[0]).toBeCloseTo(lr2Default / 100, 9);
+    // LR2 divides in float32: `total / (float)notes` (#1090).
+    expect(gauge.values[0]).toBe(Math.fround(lr2Default / 100));
   });
 });
 
@@ -299,14 +300,15 @@ describe('beatoraja TOTAL counts charge tails', () => {
     const chart = facts({ notes, total: 165 });
     const rule = resolveRuleset(chart, 'beatoraja');
     expect(rule.noteCount).toBe(count);
-    expect(rule.gauge.values[0]).toBeCloseTo(165 / count, 12);
+    // beatoraja's TOTAL modifier rounds to float32 (#1090).
+    expect(rule.gauge.values[0]).toBe(Math.fround(165 / count));
     expect(resolveRuleset(chart, 'beatoraja', { gauge: 'HARD' }).gauge.values[0]).toBeCloseTo(
       Math.min(0.15, 10 / count),
-      12,
+      6,
     );
     const lr2 = resolveRuleset(chart, 'lr2');
     expect(lr2.noteCount).toBe(countBaseNotes(notes));
-    expect(lr2.gauge.values[0]).toBeCloseTo(165 / countBaseNotes(notes), 12);
+    expect(lr2.gauge.values[0]).toBe(Math.fround(165 / countBaseNotes(notes)));
   });
 
   test('uses judgment notes for default TOTAL and bmson percentage TOTAL', () => {

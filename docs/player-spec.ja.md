@@ -690,7 +690,7 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 
 ゲージ更新後の値は、現在の gauge type の min/max range に clamp します。
 
-Be-Music はゲージを倍精度で計算します。beatoraja はゲージ値を単精度で扱い、LR2 は GROOVE のノート1つあたりの回復量を単精度で計算します。ゲージが閾値に近いと、丸めの違いでクリア判定が変わることがあります。[beatoraja GrooveGauge](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GrooveGauge.java#L176-L240) · [OpenLR2 の回復量の計算](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27658-L27660)
+ゲージはそれぞれの出典の精度で計算します（[#1090](https://github.com/nulltask/be-music/issues/1090)）。beatoraja のゲージ（クラスゲージを含む）は Java の `float` で動きます。表、TOTAL・LIMIT_INCREMENT・MODIFY_DAMAGE による補正、増減量、足した結果をそれぞれ単精度に丸め、どの判定ルールで遊んでも同じです。LR2 は HP と増減量を `double` で持ちますが、GROOVE と EASY のノート 1 つあたりの回復量は単精度で割ります（`total / (float)notes`。EASY はその後 1.2 倍）[R]。AC のゲージは倍精度のままです。本番のプレイとリプレイのシミュレーターは同じゲージを使うので、リプレイの再判定は同じ値になります。判定ルールは開発用のリビジョン `/0` なので、版は上げずにこの変更を入れます（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)）。[beatoraja GrooveGauge](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/GrooveGauge.java#L176-L240) · [OpenLR2 の回復量の計算](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27658-L27660)
 
 `HARD` / `EASY` の variant は LR2 の値（beatoraja `GaugeProperty` の `HARD_LR2` / `EASY_LR2`）に合わせます。`DEATH` は beatoraja の `HAZARD_LR2` ではなく LR2 本体（OpenLR2 `LR2f.cpp` L27673-L27680、LR2body.exe `ParseBMSFile`）に合わせます。
 

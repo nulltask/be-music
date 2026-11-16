@@ -143,8 +143,14 @@ export function resolveClassGauge(gaugeId: string, gaugeSet: CourseGaugeSet): Ga
     initial: 100,
     border: 0,
     survival: true,
-    values: row.values,
-    guts: row.guts,
+    // beatoraja runs its class gauges in Java `float` too; LR2's course HP is `double` (#1090).
+    ...(gaugeSet === 'lr2'
+      ? { values: row.values, guts: row.guts }
+      : {
+          values: row.values.map(Math.fround) as unknown as GaugeSpec['values'],
+          guts: row.guts.map((step) => ({ ...step, multiplier: Math.fround(step.multiplier) })),
+          float32: true,
+        }),
   };
 }
 

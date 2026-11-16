@@ -103,7 +103,7 @@ test('PRACTICE scales TOTAL by the remaining notes up to NORMAL and sets the gau
   const lr2Normal = resolveRuleset(FACTS, 'beatoraja', {
     practice: { sourceNotes, gauge: 'HARD', gaugeCategory: 'LR2', startGauge: 100 },
   });
-  expect(lr2Normal.gauge.guts).toEqual([{ threshold: 30, multiplier: 0.6 }]);
+  expect(lr2Normal.gauge.guts).toEqual([{ threshold: 30, multiplier: Math.fround(0.6) }]);
   // A gauge of another ruleset is refused: PRACTICE lists the judge ruleset's own.
   expect(() => resolveRuleset(FACTS, 'lr2', { practice: { sourceNotes, gauge: 'NORMAL', startGauge: 20 } })).toThrow(
     RangeError,
