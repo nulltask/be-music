@@ -10,7 +10,8 @@ import type { LongNoteMode } from '@be-music/chart-model';
  * `ResolveRulesetOptions`.
  */
 export interface RulesetChartFacts {
-  sourceFormat: 'bms' | 'bmson';
+  /** An LRX chart's rank and TOTAL read as a BMS chart's: only bmson differs. */
+  sourceFormat: 'bms' | 'bmson' | 'lrx';
   /** Engine lane display mode (`resolveLaneDisplayMode` output) — picks beatoraja's per-mode window tables. */
   laneMode: string;
   /**
@@ -69,4 +70,40 @@ export function createEmptyRulesetNoteCounts(): RulesetNoteCounts {
 /** Total scorable note OBJECTS — every long note counts once. LR2 uses this count for TOTAL; beatoraja counts charge tails too. */
 export function countBaseNotes(notes: RulesetNoteCounts): number {
   return notes.normal + notes.long[1] + notes.long[2] + notes.long[3];
+}
+
+/** `chart` without the notes `removed` counts (none below zero): the notes a play leaves out of judging. */
+export function withoutRulesetNotes(
+  chart: RulesetChartFacts,
+  removed: RulesetNoteCounts | undefined,
+): RulesetChartFacts {
+  if (removed === undefined) return chart;
+  const long = chart.notes.long;
+  return {
+    ...chart,
+    notes: {
+      normal: Math.max(0, chart.notes.normal - removed.normal),
+      long: {
+        1: Math.max(0, long[1] - removed.long[1]),
+        2: Math.max(0, long[2] - removed.long[2]),
+        3: Math.max(0, long[3] - removed.long[3]),
+      },
+    },
+  };
+}
+
+/** Counts `notes` (scorable play notes) as the ruleset facts do: a note with a tail is a long note of its mode. */
+export function countRulesetNotesOf(
+  notes: Iterable<{ seconds: number; endSeconds?: number; longNoteMode?: LongNoteMode }>,
+  chartLNMode: LongNoteMode,
+): RulesetNoteCounts {
+  const long: Record<LongNoteMode, number> = { 1: 0, 2: 0, 3: 0 };
+  let normal = 0;
+  for (const note of notes) {
+    const hasTail =
+      typeof note.endSeconds === 'number' && Number.isFinite(note.endSeconds) && note.endSeconds > note.seconds;
+    if (hasTail) long[note.longNoteMode ?? chartLNMode] += 1;
+    else normal += 1;
+  }
+  return { normal, long };
 }

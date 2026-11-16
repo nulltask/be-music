@@ -653,13 +653,14 @@ LR2 との違いは次のとおりで、いずれも小さなものです。
 
 ## ゲージオートシフト
 
-どのルールでも、Options ダイアログ の **Gauge auto-shift** で **NONE**（既定）、**CONTINUE**、**SURVIVAL TO GROOVE**、**BEST CLEAR**、**SELECT TO UNDER** を選びます。**Lowest auto-shift gauge** は後の 2 つに適用します。切り替え方式と beatoraja のゲージ順は beatoraja 0.8.9 に由来します。LR2・AC では Be-Music の拡張として、下表のゲージ順に同じ方式を適用します。これにより、各ルールで共通の操作ができ、リプレイでも切り替えを再現できます（[#933](https://github.com/nulltask/be-music/issues/933)）。
+どのルールでも、Options ダイアログ の **Gauge auto-shift** で **NONE**（既定）、**CONTINUE**、**SURVIVAL TO GROOVE**、**BEST CLEAR**、**SELECT TO UNDER** を選びます。**Lowest auto-shift gauge** は後の 2 つに適用します。切り替え方式と beatoraja のゲージ順は beatoraja 0.8.9 に由来します。LR2・AC・plugout（自身のオートシフトを持たない）では Be-Music の拡張として、下表のゲージ順に同じ方式を適用します。これにより、各ルールで共通の操作ができ、リプレイでも切り替えを再現できます（[#933](https://github.com/nulltask/be-music/issues/933)）。
 
-| ルール       | 単曲（緩い順）                                   | 段位コース                     | EXPERT / NONSTOP コース                        |
-| ------------ | ------------------------------------------------ | ------------------------------ | ---------------------------------------------- |
-| beatoraja    | ASSIST EASY・EASY・NORMAL・HARD・EX-HARD・HAZARD | CLASS・EXCLASS・EXHARDCLASS    | CLASS・EXCLASS・EXHARDCLASS                    |
-| LR2          | EASY・GROOVE・HARD・HAZARD（`DEATH`）            | GRADE・GRADE-HARD・GRADE-DEATH | COURSE-EASY・COURSE・COURSE-HARD・COURSE-DEATH |
-| AC（`????`） | ASSISTED EASY・EASY・NORMAL・HARD・EX-HARD       | CLASS・EXCLASS・EXHARDCLASS    | CLASS・EXCLASS・EXHARDCLASS                    |
+| ルール       | 単曲（緩い順）                                   | 段位コース                                  | EXPERT / NONSTOP コース                         |
+| ------------ | ------------------------------------------------ | ------------------------------------------- | ----------------------------------------------- |
+| beatoraja    | ASSIST EASY・EASY・NORMAL・HARD・EX-HARD・HAZARD | CLASS・EXCLASS・EXHARDCLASS                 | CLASS・EXCLASS・EXHARDCLASS                     |
+| LR2          | EASY・GROOVE・HARD・HAZARD（`DEATH`）            | GRADE・GRADE-HARD・GRADE-DEATH              | COURSE-EASY・COURSE・COURSE-HARD・COURSE-DEATH  |
+| AC（`????`） | ASSISTED EASY・EASY・NORMAL・HARD・EX-HARD       | CLASS・EXCLASS・EXHARDCLASS                 | CLASS・EXCLASS・EXHARDCLASS                     |
+| plugout      | EASY・NORMAL・HARD・HAZARD                       | GRADE-EASY・GRADE・GRADE-HARD・GRADE-HAZARD | COURSE-EASY・COURSE・COURSE-HARD・COURSE-HAZARD |
 
 ```mermaid
 flowchart LR

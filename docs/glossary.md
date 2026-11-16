@@ -166,7 +166,7 @@ Write the product name **Be-Music** in all prose and user-facing text: documenta
 - **give up**: Leaving a course run with ESC. A run given up is a failed run.
 - **stitched play**: The single chart a NONSTOP course is played as, built by stitching its stages with their connections and placement.
 - **IR flag**: Whether a course's runs are ranked, LR2's `ir` column (IR: LR2's internet ranking, not the chart IR above) and beatoraja's `release`; code names it `release`. A course the player made starts unflagged; flagging it is one-way and makes the course read-only.
-- **judge ruleset**: The game whose judge windows, gauges and lamps a play is judged and ranked by: `lr2`, `beatoraja` or `____`.
+- **judge ruleset**: The game whose judge windows, gauges and lamps a play is judged and ranked by: `lr2`, `beatoraja`, `____` or `plugout`.
 - **gauge type**: The gauge the player picks, in LR2's names: `GROOVE`, `HARD`, `DEATH` or `EASY` (`GaugeType`). Each judge ruleset plays it on a gauge of its own line-up, named by its gauge id (`NORMAL`, `HAZARD`, `CLASS`, ...).
 - **clear lamp**: The class of clear a play earned (FAILED to MAX, `ClearLamp`), stored by an append-only rank that is not its order (LIGHT ASSIST EASY, between ASSIST EASY and EASY, is rank 10). Each judge ruleset awards its own subset; one rule lamps every play (`resolveClearLamp`, `resolveCourseClearLamp` in `@be-music/player-engine/ruleset`).
 - **assist class**: How assisted a play is, by the rules of each option's source: `none`, `light`, `assist` or `no-save` (`AssistClass`, `classifyReplayAssists` in `@be-music/player-engine/records`). The judge ruleset decides what follows from it (`resolveRecordPolicy`).

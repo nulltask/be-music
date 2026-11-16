@@ -1,7 +1,7 @@
 import {
   isBmsBGMVolumeChangeChannel,
   isBMSKeyVolumeChangeChannel,
-  isPlayLaneSoundChannel,
+  playsAtKeysoundVolume,
   parseBMSDynamicVolumeGain,
   resolveBmsWAVResources,
   collectBmsWAVPlaybackModifiers,
@@ -520,7 +520,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     const hasEnvelope = envelope.fadeIn > 0 || envelope.fadeOut > 0;
 
     const channel = normalizeChannel(event.channel);
-    const isPlayerLane = isPlayLaneSoundChannel(channel);
+    const isPlayerLane = playsAtKeysoundVolume(channel, event);
     const bus = isPlayerLane ? audioBus.keyMixer : audioBus.bgmMixer;
     const built = buildSourceNode(
       sampleKey,

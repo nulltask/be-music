@@ -112,9 +112,9 @@ describe.each(CASES.map((entry, index) => [entry.name, index] as const))('%s', (
     const live = await play(index, judge, `${source}:HARD`, { course });
     const own = await play(index, source, 'HARD', { course });
     const native = live.replay!.results!.native!;
-    // The stage runs on the source's course gauge (LR2's COURSE-HARD, the others' EXCLASS).
+    // The stage runs on the source's course gauge (LR2's and plugout's COURSE-HARD, the others' EXCLASS).
     expect(native.gauge.type).toBe(own.replay!.results!.native!.gauge.type);
-    expect(native.gauge.type).toBe(source === 'lr2' ? 'COURSE-HARD' : 'EXCLASS');
+    expect(native.gauge.type).toBe(source === 'lr2' || source === 'plugout' ? 'COURSE-HARD' : 'EXCLASS');
     expect(native.gauge.source).toBe(source);
     expect(live.summary!.gauge!.initial).toBe(76.5);
     expect(withoutRuleset(native)).toEqual(withoutRuleset(live.simulated![judge]!));

@@ -463,8 +463,8 @@ flowchart LR
 
 A chart read from LRX ([format-compat §7](./format-compat.md#7-lrx)) has `sourceFormat: "lrx"` and keeps what the BMS-shaped fields cannot hold:
 
-- `BeMusicEvent.lrx` holds a note's values that differ from plugout's defaults: `length` (a lane note's long-note length in ticks, 480 per beat), `chain` (`cn`), `volume`, `pan`, `frequency`, `attackMs`, `releaseMs`, `offsetMs`, `lengthMs`, `reverse`, `damage` (`dmg`) and `recover` (`rcv`).
-- `BeMusicJSON.lrx` holds the header values without a BMS counterpart (`laneType`, `category`, `level`, `bmsLevel`, the sequence title and artist, the display BPMs, `phase`, `unlock`, `songId`), the BGA file read (`moviePath`), the end-of-song tick (`endTick`) and the ticks the measures start at (`barTicks`).
+- `BeMusicEvent.lrx` holds a note's values that differ from plugout's defaults: `length` (a lane note's long-note length in ticks, 480 per beat), `chain` (`cn`), `lane` (the lane of a chain or hidden note, as a BMS channel), `keyVolume` (a background sound plugout plays at the keysound volume), `volume`, `pan`, `frequency`, `attackMs`, `releaseMs`, `offsetMs`, `lengthMs`, `reverse`, `damage` (`dmg`) and `recover` (`rcv`).
+- `BeMusicJSON.lrx` holds the header values without a BMS counterpart (`laneType`, `category`, `level`, `bmsLevel`, the sequence title and artist, the display BPMs, `phase`, `unlock`, `songId`), the BGA file read (`moviePath`), the end-of-song tick (`endTick`), the ticks the measures start at (`barTicks`) and, for a BGA the BMS channels cannot carry, every BGA cue with its transform (`bga`).
 
 Both survive a JSON round trip and `cloneJSON`; neither exists on other charts.
 

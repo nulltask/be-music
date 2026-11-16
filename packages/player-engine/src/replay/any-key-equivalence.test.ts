@@ -50,7 +50,7 @@ function simulatedJudgments(result: ReplayRulesetResult): Record<string, number>
   return { ...result.judge };
 }
 
-const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
+const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____', 'plugout'];
 
 async function playAndSimulate(json: BeMusicJSON, inputs: readonly ReplayInputEvent[], ruleset: RulesetId) {
   const { summary, replay } = await runRecordedPlay(json, inputs, ruleset, {

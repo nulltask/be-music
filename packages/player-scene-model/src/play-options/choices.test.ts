@@ -219,7 +219,7 @@ test('H-RANDOM is offered under every ruleset and the source threshold is valida
 test('LR2 CONVERGE and fixed-lane source settings are selectable and validated', () => {
   // CONVERGE names LR2's concentration and beatoraja's PMS arrangement: each is offered with its source under every
   // ruleset (ADR 0019), and the bare name of older settings stays valid as the ruleset's own.
-  for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+  for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
     expect(resolveRandomModes(ruleset)).toContain('lr2:CONVERGE');
     expect(resolveRandomModes(ruleset)).toContain('beatoraja:CONVERGE');
     expect(resolveRandomModes(ruleset)).not.toContain('CONVERGE');
@@ -429,7 +429,7 @@ test('7-to-9 accepts only the source six patterns and three scratch types', () =
 });
 
 test('battle arrangements follow a chart copied onto both sides, and CONVERGE stays with LR2 and beatoraja', () => {
-  for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+  for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
     expect(resolveRandomModes(ruleset)).not.toContain('SYNCHRONIZE-RANDOM');
     expect(resolveRandomModes(ruleset, true)).toEqual(
       expect.arrayContaining(['SYNCHRONIZE-RANDOM', 'SYMMETRY-RANDOM']),
@@ -450,7 +450,7 @@ test('bmson TOTAL mode is opt-in and validates both choices', () => {
 });
 
 test('RANDOM is one option and S-RANDOM is offered once per source, the judge ruleset own first (ADR 0019)', () => {
-  for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+  for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
     expect(resolveRandomModes(ruleset)).toContain('RANDOM');
     expect(resolveRandomModes(ruleset).filter((mode) => mode.endsWith(':RANDOM'))).toEqual([]);
   }
@@ -522,7 +522,7 @@ describe('source-qualified gauge picks (ADR 0019, #1171)', () => {
   });
 
   test('a ruleset change keeps a qualified pick and resets a bare one the ruleset lacks', () => {
-    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+    for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
       expect(keepGaugePick('lr2:P-ATTACK', ruleset)).toBe('lr2:P-ATTACK');
       expect(keepGaugePick('beatoraja:EX-HARD', ruleset)).toBe('beatoraja:EX-HARD');
       expect(keepGaugePick('____:ASSIST-EASY', ruleset)).toBe('____:ASSIST-EASY');

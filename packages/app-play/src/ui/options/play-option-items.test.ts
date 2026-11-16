@@ -77,7 +77,7 @@ test('the S-RANDOM AC shares with LR2 sits in the AC group under AC rules', () =
 });
 
 test('every lane option the scene model offers is listed once under every ruleset', () => {
-  for (const ruleset of ['lr2', 'beatoraja', '____'] as const)
+  for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const)
     for (const duplicated of [false, true]) {
       const values = laneOptionItems(ruleset, duplicated).map((item) => item.value);
       expect([...values].sort()).toEqual([...resolveRandomModes(ruleset, duplicated)].sort());

@@ -82,7 +82,7 @@ function reversalScenarioChart(): BeMusicJSON {
   return json;
 }
 
-const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
+const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____', 'plugout'];
 
 // Each test plays its own engine on wall-clock timers at 16x and shares no state, so they wait out their charts together.
 describe.concurrent('engine / simulator equivalence', () => {
@@ -415,7 +415,8 @@ describe.concurrent('engine / simulator equivalence', () => {
         simulated.judge.bad,
         simulated.judge.poor,
       ]);
-      expect(summary.bad, `#LNMODE ${lnMode}`).toBe(0);
+      // A key held past the tail is a missed POOR, but a BAD under plugout (`heldChargeTail`).
+      expect(summary.bad, `#LNMODE ${lnMode}`).toBe(ruleset === 'plugout' ? 1 : 0);
     }
   });
 
@@ -874,7 +875,40 @@ describe.concurrent('engine / simulator equivalence', () => {
 
   // A play that ends on failure stops scoring at the judgment that emptied its survival gauge; a press after it counts
   // for nothing on either side.
-  test.each(RULESETS)('%s: a play ending on failure stops scoring on both sides', async (ruleset) => {
+  test.each(RULESETS.filter((ruleset) => ruleset !== 'plugout'))(
+    '%s: a play ending on failure stops scoring on both sides',
+    async (ruleset) => {
+      const json = chart(
+        Array.from({ length: 24 }, (_, index) => ({
+          measure: 1 + Math.floor(index / 8),
+          channel: '11',
+          position: [index % 8, 8] as const,
+          value: '01',
+        })),
+      );
+      // Every note missed until the last one, pressed on time.
+      const inputs = [down(0, 3_875_000, '11'), up(1, 3_900_000, '11')];
+
+      const { summary, replay } = await runRecordedPlay(json, inputs, ruleset, { gauge: 'HARD' });
+      const simulated = simulateReplay(replay, { ruleset });
+
+      expect(replay.play.endOnFailure).toBe(true);
+      expect(summary.gauge?.failedMidPlay).toBe(true);
+      expect(summary.perfect).toBe(0);
+      expect(summary.poor).toBeLessThan(24);
+      expect(simulated.judge).toMatchObject({ pgreat: summary.perfect, poor: summary.poor });
+      expect(simulated.gauge.final).toBe(summary.gauge?.current);
+      // Its BP counts every note: those missed and those it never reached, on both sides (#584).
+      expect(recordPlayFromSummary(summary, 0, ruleset).missCount).toBe(24 + summary.emptyPoor);
+      expect(resolveRulesetResultMissCount(simulated)).toBe(24 + simulated.judge.emptyPoor);
+      // A log without the flag (or a re-simulation told otherwise) keeps judging to the end: every note gets a verdict.
+      const kept = simulateReplay(replay, { ruleset, endOnFailure: false }).judge;
+      expect(kept.pgreat + kept.great + kept.good + kept.bad + kept.poor).toBe(24);
+    },
+  );
+
+  // plugout plays a single chart to its end with an empty survival gauge (no event ends it), on both sides.
+  test('plugout: a single play plays on with an empty survival gauge on both sides', async () => {
     const json = chart(
       Array.from({ length: 24 }, (_, index) => ({
         measure: 1 + Math.floor(index / 8),
@@ -883,24 +917,24 @@ describe.concurrent('engine / simulator equivalence', () => {
         value: '01',
       })),
     );
-    // Every note missed until the last one, pressed on time.
     const inputs = [down(0, 3_875_000, '11'), up(1, 3_900_000, '11')];
 
-    const { summary, replay } = await runRecordedPlay(json, inputs, ruleset, { gauge: 'HARD' });
-    const simulated = simulateReplay(replay, { ruleset });
+    const { summary, replay } = await runRecordedPlay(json, inputs, 'plugout', { gauge: 'HARD' });
+    const simulated = simulateReplay(replay, { ruleset: 'plugout' });
 
-    expect(replay.play.endOnFailure).toBe(true);
+    expect(replay.play.endOnFailure).not.toBe(true);
     expect(summary.gauge?.failedMidPlay).toBe(true);
-    expect(summary.perfect).toBe(0);
-    expect(summary.poor).toBeLessThan(24);
+    expect(summary.gauge?.current).toBe(0);
+    // Every note gets a verdict: the play reaches the chart's end.
+    expect(
+      simulated.judge.pgreat +
+        simulated.judge.great +
+        simulated.judge.good +
+        simulated.judge.bad +
+        simulated.judge.poor,
+    ).toBe(24);
     expect(simulated.judge).toMatchObject({ pgreat: summary.perfect, poor: summary.poor });
-    expect(simulated.gauge.final).toBe(summary.gauge?.current);
-    // Its BP counts every note: those missed and those it never reached, on both sides (#584).
-    expect(recordPlayFromSummary(summary, 0, ruleset).missCount).toBe(24 + summary.emptyPoor);
-    expect(resolveRulesetResultMissCount(simulated)).toBe(24 + simulated.judge.emptyPoor);
-    // A log without the flag (or a re-simulation told otherwise) keeps judging to the end: every note gets a verdict.
-    const kept = simulateReplay(replay, { ruleset, endOnFailure: false }).judge;
-    expect(kept.pgreat + kept.great + kept.good + kept.bad + kept.poor).toBe(24);
+    expect(simulated.gauge.final).toBe(0);
   });
 
   // A course stage starts from the state the previous stage left: its gauge value and the course-wide combo.
@@ -1163,12 +1197,14 @@ for (const assistedSide of ['1P', '2P'] as const) {
       autoScratch2P: assistedSide === '2P',
       playVariant: '14' as const,
     };
+    // plugout's AUTO SCRATCH only sounds its notes: the assisted side is neither judged nor counted.
+    const assisted = ruleset === 'plugout' ? 0 : 1;
     const { summary, replay } = await runRecordedPlay(json, [], ruleset, settings);
-    expect([summary.perfect, summary.poor]).toEqual([1, 1]);
+    expect([summary.perfect, summary.poor, summary.total]).toEqual([assisted, 1, 1 + assisted]);
     expect(replay.play.autoScratch1P).toBe(settings.autoScratch1P);
     expect(replay.play.autoScratch2P).toBe(settings.autoScratch2P);
     const simulated = simulateReplay(replay, { ruleset });
-    expect([simulated.judge.pgreat, simulated.judge.poor]).toEqual([1, 1]);
+    expect([simulated.judge.pgreat, simulated.judge.poor, simulated.noteCount]).toEqual([assisted, 1, 1 + assisted]);
     const manualChannel = assistedSide === '1P' ? '26' : '16';
     const manual = await runRecordedPlay(
       json,
@@ -1176,8 +1212,8 @@ for (const assistedSide of ['1P', '2P'] as const) {
       ruleset,
       settings,
     );
-    expect([manual.summary.perfect, manual.summary.poor]).toEqual([2, 0]);
-    expect(simulateReplay(manual.replay, { ruleset }).judge.pgreat).toBe(2);
+    expect([manual.summary.perfect, manual.summary.poor]).toEqual([1 + assisted, 0]);
+    expect(simulateReplay(manual.replay, { ruleset }).judge.pgreat).toBe(1 + assisted);
   });
 }
 

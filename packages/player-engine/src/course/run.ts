@@ -9,7 +9,7 @@ import {
 } from '../replay/course.ts';
 import type { BeMusicReplay, ReplayCourseStage, ReplayRecorderInfo, ReplayRulesetResult } from '../replay/format.ts';
 import { computeStageChartFingerprint, resolveReplayCourseInfo } from './course-replay.ts';
-import { isCourseStageFailed, resolveRuleset } from '../ruleset/index.ts';
+import { isCourseStageFailed, isRulesetId, resolveRuleset } from '../ruleset/index.ts';
 import type { CourseDefinition } from './definition.ts';
 import { applyCourseLongNoteConstraint } from './long-note.ts';
 import {
@@ -243,7 +243,7 @@ export class CourseRun<
   buildPracticeResult(): ReplayCourseResult | undefined {
     if (!this.practiceMode || this.played.length === 0) return undefined;
     const id = this.played.at(-1)!.outcome.ruleset.split('/')[0];
-    const ruleset = id === 'beatoraja' || id === '____' ? id : 'lr2';
+    const ruleset = isRulesetId(id) ? id : 'lr2';
     const outcomes = this.played.map((stage) => stage.outcome);
     const counts = this.stages.map(
       (stage, index) =>

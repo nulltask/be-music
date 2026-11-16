@@ -35,7 +35,7 @@ describe('plannedPlayOf', () => {
 
 describe('describeRecordConsequence', () => {
   test('the default options keep the whole record under every ruleset', () => {
-    for (const judgeRuleset of ['lr2', 'beatoraja', '____'] as const)
+    for (const judgeRuleset of ['lr2', 'beatoraja', '____', 'plugout'] as const)
       expect(describeRecordConsequence(state({ judgeRuleset }))).toBe(
         'Record: score, lamp and play count are saved · Leaderboard: main board',
       );

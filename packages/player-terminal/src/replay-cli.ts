@@ -11,6 +11,7 @@ import {
   type RulesetId,
   type ReplayRulesetResult,
 } from '@be-music/player-engine/replay';
+import { isRulesetId, RULESET_IDS } from '@be-music/player-engine/ruleset';
 
 /**
  * `bms-replay` — re-derives LR2 / beatoraja / That-Which-Must-Not-Be-Named scores from a recorded replay (`*.bmplay.json`).
@@ -34,7 +35,7 @@ const USAGE = `Usage: bms-replay [options] <file.bmplay.json> [...more files]
 Re-derives LR2 / beatoraja / That-Which-Must-Not-Be-Named results from a recorded Be-Music replay.
 
 Options:
-  --ruleset=<list>    Comma-separated rulesets to simulate: lr2, beatoraja, ____, all (default: all)
+  --ruleset=<list>    Comma-separated rulesets to simulate: lr2, beatoraja, ____, plugout, all (default: all)
   --gauge=<id>        Override the simulated gauge (ruleset-scoped id, e.g. GROOVE / NORMAL / HARD / EX-HARD)
   --algorithm=<name>  beatoraja note-selection algorithm: combo (default) / duration / lowest / score
   --json              Emit the raw result objects as JSON instead of the text table
@@ -63,10 +64,10 @@ export function parseReplayCLIArgs(argv: readonly string[]): ReplayCLIArgs {
         const parsed: RulesetId[] = [];
         for (const entry of value.split(',')) {
           const id = entry.trim();
-          if (id === 'lr2' || id === 'beatoraja' || id === '____') {
+          if (isRulesetId(id)) {
             parsed.push(id);
           } else if (id.length > 0) {
-            throw new Error(`unknown ruleset '${id}' (expected lr2 / beatoraja / ____ / all)`);
+            throw new Error(`unknown ruleset '${id}' (expected ${RULESET_IDS.join(' / ')} / all)`);
           }
         }
         args.rulesets = parsed;

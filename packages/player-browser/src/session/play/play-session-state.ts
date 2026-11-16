@@ -8,6 +8,7 @@ import type { BGAOpacityTimelines } from '@be-music/chart-model';
  * (`PlayLayers`).
  */
 import type { BGACameraFeed } from '../../media/bga-camera.ts';
+import type { LRXBGACompositor } from '../../media/lrx-bga-compositor.ts';
 import type { Texture } from 'pixi.js';
 import type { PreparedPlaybackChartData, PlayerSummary } from '@be-music/player-engine';
 import { createEmptyScore, type LongNoteStyle, type ScoreSummary } from '@be-music/player-engine/ruleset';
@@ -475,6 +476,8 @@ export class PlaySessionState extends PlayPresentation {
    * owns it and disposes it.
    */
   bgaCamera: BGACameraFeed | undefined = undefined;
+  /** An LRX chart's composited BGA (plugout's transforms and layers 203 / 204), made once its images are loaded. */
+  lrxBGA: LRXBGACompositor | undefined = undefined;
   /** True iff we paused because the tab/window backgrounded itself. */
   autoPaused = false;
   /**

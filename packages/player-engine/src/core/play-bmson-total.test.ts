@@ -22,7 +22,7 @@ const native = (total: number) =>
     'bmson',
   );
 
-test.each(['lr2', 'beatoraja', '____'] as const)(
+test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
   '%s live play, recorded replay and simulation agree on no recovery',
   async (judgeRuleset) => {
     const play = await observePlay({
