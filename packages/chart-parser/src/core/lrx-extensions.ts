@@ -13,6 +13,7 @@ const EVENT_NUMBERS = [
   'recover',
 ] as const satisfies ReadonlyArray<keyof LRXEventExtensions>;
 const EVENT_FLAGS = ['chain', 'reverse'] as const satisfies ReadonlyArray<keyof LRXEventExtensions>;
+const EVENT_STRINGS = ['chainLane'] as const satisfies ReadonlyArray<keyof LRXEventExtensions>;
 
 /** The LRX values of an event read back from Be-Music JSON: known fields of the right type, nothing else. */
 export function normalizeLRXEventExtensions(value: unknown): LRXEventExtensions | undefined {
@@ -25,6 +26,10 @@ export function normalizeLRXEventExtensions(value: unknown): LRXEventExtensions 
   }
   for (const key of EVENT_FLAGS) {
     if (raw[key] === true) extension[key] = true;
+  }
+  for (const key of EVENT_STRINGS) {
+    const field = raw[key];
+    if (typeof field === 'string' && field.length > 0) extension[key] = field;
   }
   return Object.keys(extension).length > 0 ? extension : undefined;
 }

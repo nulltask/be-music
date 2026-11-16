@@ -174,7 +174,7 @@ export function writePlayableSampleTriggerEventLog(
   event: BeMusicEvent,
   seconds: number,
   resources: Readonly<Record<string, string>>,
-  source: 'auto-note' | 'auto-scratch' | 'manual-note' | 'lane-fallback' | 'mine-hit' | 'long-note-end',
+  source: 'auto-note' | 'auto-scratch' | 'manual-note' | 'lane-fallback' | 'mine-hit' | 'long-note-end' | 'chain-note',
   channel?: string,
   base: 36 | 62 = 36,
 ): void {

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { parseLRX, parseLRXBytes, resolveLRXHeaderPath, resolveLRXMoviePath } from './lrx.ts';
+import { normalizeLRXEventExtensions } from './lrx-extensions.ts';
 import { parseChart } from './parser.ts';
 
 const lrs = (...lines: string[]) => `<?xml version="1.0"?>\r\n<LRS>\r\n${lines.join('\r\n')}\r\n</LRS>\r\n`;
@@ -111,13 +112,17 @@ describe('parseLRX', () => {
         '<n c="301" s="0" p="120" />',
         '<n c="2" s="0" p="3" dmg="0" />',
         '<n c="3" s="0" p="4" cn="1" />',
+        '<n c="5" s="0" p="6" cn="1" dmg="0" />',
         '<n c="4" s="0" p="5" vol="64" pan="0" frq="22050" atk="10" rls="20" ost="30" len="40" rev="1" dmg="50" rcv="80" />',
       ),
       lrh: lrh('lanetype="1"'),
     });
     const byValue = new Map(chart.events.map((event) => [event.value, event]));
     expect(byValue.get('04')).toMatchObject({ channel: '01', lrx: { damage: 0 } });
-    expect(byValue.get('05')).toMatchObject({ channel: '01', lrx: { chain: true } });
+    // A chain note remembers its lane, for chart-model to tie it to the lane's preceding note.
+    expect(byValue.get('05')).toMatchObject({ channel: '01', lrx: { chain: true, chainLane: '13' } });
+    // A hidden chain note is in no lane list in plugout, so it follows nothing.
+    expect(byValue.get('07')!.lrx).toEqual({ chain: true, damage: 0 });
     expect(byValue.get('06')).toMatchObject({
       channel: '14',
       lrx: {
@@ -250,5 +255,15 @@ describe('parseChartFile', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('normalizeLRXEventExtensions', () => {
+  test("keeps a chain note's lane when reading Be-Music JSON back", () => {
+    expect(normalizeLRXEventExtensions({ chain: true, chainLane: '13', other: 1 })).toEqual({
+      chain: true,
+      chainLane: '13',
+    });
+    expect(normalizeLRXEventExtensions({ chainLane: 13 })).toBeUndefined();
   });
 });

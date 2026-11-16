@@ -1,3 +1,4 @@
+import type { ResolvedChainSound } from '@be-music/chart-model';
 import type { BeMusicEvent, BeMusicSourceFormat } from '@be-music/chart-source';
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
 import type { ReplayInputEvent } from '../replay/format.ts';
@@ -271,6 +272,8 @@ export type JudgeCoreEffect =
   | { kind: 'input-time'; seconds: number }
   /** Play a keysound / explosion sample. */
   | { kind: 'sound'; source: JudgeSoundSource; event: BeMusicEvent; seconds: number; channel: string }
+  /** A press sounded a note that LRX chain notes follow: play them, each its delay after `seconds`. */
+  | { kind: 'chain-sounds'; sounds: readonly ResolvedChainSound[]; seconds: number; channel: string }
   /** Cut a lane's sounding keysound (a long note released or broken). */
   | {
       kind: 'stop-sound';

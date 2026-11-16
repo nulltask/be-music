@@ -255,8 +255,10 @@ export function parseLRX(files: LRXSourceFiles<string>): BeMusicJSON {
       const extension = readSoundExtension(note);
       const lane = channel < 20 ? laneMap.get(channel) : undefined;
       if (channel < 20 && lane === undefined) unsupportedChannels.add(channel);
-      // A lane note with `dmg="0"` is an autoplayed background note; a chain note sounds in the background for now.
+      // A lane note with `dmg="0"` is an autoplayed background note; a chain note sits in the background too, and
+      // follows its lane's preceding note (`chainLane`), which chart-model links it to.
       const background = lane === undefined || extension?.damage === 0 || extension?.chain === true;
+      if (extension?.chain === true && lane !== undefined && extension.damage !== 0) extension.chainLane = lane;
       if (!background && note.end > note.start) {
         soundEvents.push({ note, channel: lane, extension: { ...extension, length: note.end - note.start } });
       } else {

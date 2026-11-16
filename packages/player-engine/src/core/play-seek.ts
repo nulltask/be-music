@@ -119,6 +119,8 @@ export function applySeek(
   session.backgroundAudio.seek(soundsFrom, (sound, offsetSeconds) =>
     audioSession?.triggerEventAt?.(sound.event, offsetSeconds),
   );
+  // Chain notes queued by presses before the seek are dropped; those after it queue again.
+  session.chainSounds.clear();
   session.tempoClock.rebase(nowMs, target);
   session.resetScore();
   resetPlayNotes(session.playbackChart);

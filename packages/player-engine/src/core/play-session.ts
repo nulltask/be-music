@@ -72,6 +72,7 @@ import {
   createNoTUIPlaybackStateLogger,
   emitPlayerLog,
   resolveOutputWriter,
+  writePlayableSampleTriggerEventLog,
   writeRealtimeTriggeredEventLog,
   writeRealtimeVolumeEventLog,
   type NoTUIPlaybackEventTracer,
@@ -85,6 +86,7 @@ import type {
   PlayerUIRuntime,
 } from './engine-types.ts';
 import { createRealtimeAudioCursor, type RealtimeAudioCursor } from './play-audio-cursor.ts';
+import { createChainSoundQueue, type ChainSoundQueue } from './chain-audio.ts';
 import type { JudgeStrategy } from './play-strategy.ts';
 import { resolvePracticePlayWindow } from './practice.ts';
 
@@ -160,6 +162,8 @@ export interface PlaySession {
   readonly volumeChanges: RealtimeAudioCursor<TimedChartSound>;
   /** The chart's background sounds, queued against the audio write head. */
   readonly backgroundAudio: RealtimeAudioCursor<TimedChartSound>;
+  /** LRX chain notes a press queued (`chain-audio.ts`), fired against the play clock. */
+  readonly chainSounds: ChainSoundQueue;
   /** What the play clock runs on: the audio session's output clock, or the engine scheduler's. */
   readonly clockSource: PlaybackClockSource;
   /** The play clock, from the moment the chart starts (after the lead-in). */
@@ -304,6 +308,12 @@ export async function createPlaySession(
       ? Math.max(0, playbackChart.practiceLoopStartSeconds)
       : startAtSeconds;
   backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
+  // An LRX chain note tied to a note sounds after the press that sounds that note (`chainSounds`), not at its own time.
+  // AUTO play sounds every note at its time, which puts each chain note at its own time: it stays background audio.
+  if (mode !== 'auto') {
+    const chained = new Set(resolvedChart.notes.flatMap((note) => note.chainSounds?.map((sound) => sound.event) ?? []));
+    if (chained.size > 0) backgroundTriggers = backgroundTriggers.filter((trigger) => !chained.has(trigger.event));
+  }
   const battleRequested = options.battleMode ?? playbackChart.battleMode ?? 'OFF';
   // A chart that copies itself onto the 2P side replaced the player's battle conversion (#932).
   const expectedBattle = chartNotesCopies(playbackChart.chartNotes)
@@ -757,7 +767,13 @@ export async function createPlaySession(
       };
     },
   });
+  const chainSounds = createChainSoundQueue((event, seconds) => {
+    if (!uiEnabled)
+      writePlayableSampleTriggerEventLog(writeOutput, event, seconds, wavResources, 'chain-note', '01', idBase);
+    audioSession?.triggerEvent?.(event);
+  });
   const applyJudgeEffect = createJudgeEffectHandler({
+    chainSounds,
     ...(chartText ? { onChartTextInput: (input) => chartText.addInput(input) } : {}),
     ...(bmsonBGA ? { onBmsonBGAInput: (input) => bmsonBGA.addInput(input) } : {}),
     ...(keyBoundBGA && !replay
@@ -858,6 +874,7 @@ export async function createPlaySession(
     settleJudgeTiming: () => applyJudgeEffect.settleJudgeTiming(),
     volumeChanges,
     backgroundAudio,
+    chainSounds,
     clockSource,
     clock: undefined,
     seekGeneration: 0,

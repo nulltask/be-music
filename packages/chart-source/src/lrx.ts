@@ -14,10 +14,16 @@ export interface LRXEventExtensions {
   /** Long-note length in LRX ticks (`e − s` of a lane note); absent for a normal note. */
   length?: number;
   /**
-   * `cn="1"`, a chain note: plugout plays it at its own time once the preceding note of its lane is hit and never
-   * judges it. Be-Music plays it in the background for now.
+   * `cn="1"`, a chain note: never judged or counted. When a press sounds the lane's preceding note, plugout plays the
+   * chain note after it, as far after the press as it is after that note in the chart. The event itself sits on the
+   * background channel `01`.
    */
   chain?: boolean;
+  /**
+   * The lane (BMS channel) a chain note sits on. chart-model links it to the lane's preceding judged note; without
+   * one it plays in the background at its own time.
+   */
+  chainLane?: string;
   /** `vol`, 0..127: the note plays at `volume / 127` of full gain. */
   volume?: number;
   /** `pan`, 0..127: 64 is centre, the position is `(pan − 64) / 64`. */

@@ -214,6 +214,8 @@ function applyLR2RejudgeChain(
     emit({ kind: 'ui', command: { kind: 'flash-lane', channel: note.channel } });
     for (const event of note.soundEvents ?? [note.event])
       emit({ kind: 'sound', source: 'manual-note', event, seconds: atSeconds, channel: note.channel });
+    if (note.chainSounds)
+      emit({ kind: 'chain-sounds', sounds: note.chainSounds, seconds: atSeconds, channel: note.channel });
     applyResolvedManualJudge(state, note.channel, judge, atSeconds, emit);
     if (judge.kind !== 'BAD' || isJudgingClosed(state)) break;
   }
@@ -368,6 +370,9 @@ export function handleLanePress(
     if (fallback) {
       for (const event of fallback.soundEvents ?? [fallback.event])
         emit({ kind: 'sound', source: 'lane-fallback', event, seconds: nowSec, channel: fallback.channel });
+      // plugout plays the chain after any press that sounds the note, an empty one included (0x43bcd0).
+      if (fallback.chainSounds)
+        emit({ kind: 'chain-sounds', sounds: fallback.chainSounds, seconds: nowSec, channel: fallback.channel });
     }
     if (!hasEmptyPoorReferenceNote(state, judgedChannels, judgeSec)) {
       // No note in the ruleset's miss window — the press is harmless: only the lane keysound plays.
@@ -386,6 +391,7 @@ export function handleLanePress(
   emit({ kind: 'ui', command: { kind: 'flash-lane', channel } });
   for (const event of candidate.soundEvents ?? [candidate.event])
     emit({ kind: 'sound', source: 'manual-note', event, seconds: nowSec, channel });
+  if (candidate.chainSounds) emit({ kind: 'chain-sounds', sounds: candidate.chainSounds, seconds: nowSec, channel });
   const endSeconds = candidate.endSeconds;
   if (typeof endSeconds === 'number' && Number.isFinite(endSeconds) && endSeconds > candidate.seconds) {
     const longNoteMode = resolveRulesetLongNoteMode(ruleset.longNoteStyle, candidate);

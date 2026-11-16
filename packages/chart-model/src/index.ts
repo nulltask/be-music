@@ -102,6 +102,7 @@ export {
   isFreeZoneChannel,
   isHeldLongNote,
   isInvisibleNoteChannel,
+  type ResolvedChainSound,
   type ResolvedNote,
   type ResolvedNoteKind,
 } from './resolved-notes.ts';

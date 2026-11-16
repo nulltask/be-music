@@ -374,6 +374,8 @@ function startAutoScratchNote(
   }
   for (const event of note.soundEvents ?? [note.event])
     emit({ kind: 'sound', source: 'auto-scratch', event, seconds: note.seconds, channel: note.channel });
+  if (note.chainSounds)
+    emit({ kind: 'chain-sounds', sounds: note.chainSounds, seconds: note.seconds, channel: note.channel });
   const endSeconds = resolveLongNoteEndSeconds(note);
   emit({ kind: 'ui', command: { kind: 'flash-lane', channel: note.channel } });
   if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
