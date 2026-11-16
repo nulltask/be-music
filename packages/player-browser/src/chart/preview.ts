@@ -12,7 +12,8 @@ import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection
 import type { LibraryChart } from '@be-music/player-scene-model';
 import type { BrowserAssetEntry, BrowserAssetSource } from '../collection/types.ts';
 import { MIXER_HEADROOM_GAIN_LINEAR } from '../runtime/audio-bus.ts';
-import { stretchAudioBuffers, type TimeStretchAlgorithm } from '../runtime/time-stretch.ts';
+import type { TimeStretchAlgorithm } from '../runtime/time-stretch.ts';
+import { PreviewStretchStore } from './preview-stretch.ts';
 
 /**
  * Sample-amplitude threshold below which we treat audio as silent for the leading-silence trim. Mirrors
@@ -195,8 +196,8 @@ export class ChartPreviewEngine {
         readonly target: ChartPreviewTarget;
         readonly triggers: readonly TimedSampleTrigger[];
         readonly buffers: Map<string, Promise<AudioBuffer | undefined>>;
-        /** Samples stretched for a keep-pitch window, by tempo, stretcher and path. */
-        readonly stretched: Map<string, Promise<AudioBuffer | undefined>>;
+        /** Samples stretched for a keep-pitch window, the bar first and the rest of the chart in the background. */
+        readonly stretcher: PreviewStretchStore;
       }
     | undefined;
 
@@ -262,6 +263,34 @@ export class ChartPreviewEngine {
   }
 
   /**
+   * Gets the window previews of `target` ready to sound at `settings`' tempo with the pitch kept: in the background,
+   * what each of `bars` sounds is stretched, nearest `aroundSeconds` first and a sample at a time, while a window that
+   * plays always goes ahead of it. A new tempo or stretcher starts over; `undefined` settings (or a tempo that keeps the
+   * pitch at 1, or a pitch that follows the tempo) stop the background and keep what was stretched.
+   */
+  public prepareWindows(
+    target: ChartPreviewTarget,
+    settings: Omit<ChartPreviewWindow, 'startSeconds' | 'endSeconds'> | undefined,
+    bars?: readonly Pick<ChartPreviewWindow, 'startSeconds' | 'endSeconds'>[],
+    aroundSeconds?: number,
+  ): void {
+    if (this.disposed) return;
+    const rate =
+      settings?.tempo !== undefined && Number.isFinite(settings.tempo) && settings.tempo > 0 ? settings.tempo : 1;
+    const stretching = settings !== undefined && rate !== 1 && settings.keepPitch === true;
+    if (!stretching) {
+      if (this.windowCache !== undefined && sameTarget(this.windowCache.target, target))
+        this.windowCache.stretcher.prepare(undefined);
+      return;
+    }
+    this.windowCacheFor(target).stretcher.prepare(
+      { rate, algorithm: settings.stretchAlgorithm ?? 'wsola' },
+      bars,
+      aroundSeconds,
+    );
+  }
+
+  /**
    * Force-stops any pending / active preview without changing the focused-target field. Use this when the host wants
    * the preview to go silent (scene hidden, song picked, etc.) but is about to call `focus(...)` again with new state.
    */
@@ -288,6 +317,7 @@ export class ChartPreviewEngine {
     this.stopAllSources({ fade: false });
     this.emitPlaybackStop();
     this.currentTarget = undefined;
+    this.windowCache?.stretcher.dispose();
   }
 
   private cancelPending(): void {
@@ -499,11 +529,17 @@ export class ChartPreviewEngine {
     const cached = this.windowCache;
     if (cached !== undefined && sameTarget(cached.target, target) && cached.target.chart.chart === target.chart.chart)
       return cached;
-    const fresh = {
+    cached?.stretcher.dispose();
+    const triggers = collectChartPreviewTriggers(target.chart.chart, Number.MAX_VALUE);
+    const buffers = new Map<string, Promise<AudioBuffer | undefined>>();
+    const fresh: NonNullable<ChartPreviewEngine['windowCache']> = {
       target,
-      triggers: collectChartPreviewTriggers(target.chart.chart, Number.MAX_VALUE),
-      buffers: new Map<string, Promise<AudioBuffer | undefined>>(),
-      stretched: new Map<string, Promise<AudioBuffer | undefined>>(),
+      triggers,
+      buffers,
+      stretcher: new PreviewStretchStore(
+        this.audioContext,
+        async (bar, spec) => (await this.planWindow(fresh, bar, spec.rate, true)).requests,
+      ),
     };
     this.windowCache = fresh;
     return fresh;
@@ -521,60 +557,6 @@ export class ChartPreviewEngine {
       cache.buffers.set(path, decoded);
     }
     return decoded;
-  }
-
-  /**
-   * The window samples `requests` stretched to `rate` at their own pitch, each once per chart, tempo, stretcher and
-   * `segment` (the part of the sample a window sounds, {@link resolveWindowStretchSegment}; the whole sample without
-   * one). The ones not stretched yet go to the stretcher together, in one batch: each call of it sets up its own
-   * render (Signalsmith Stretch an offline context and its worklet), which a bar's dozen long stems would otherwise
-   * pay a dozen times over at once. A sample the stretcher cannot take resolves `undefined`.
-   */
-  private stretchWindowSamples(
-    cache: NonNullable<ChartPreviewEngine['windowCache']>,
-    requests: readonly {
-      readonly path: string;
-      readonly source: AudioBuffer;
-      readonly segment?: WindowStretchSegment;
-    }[],
-    rate: number,
-    algorithm: TimeStretchAlgorithm,
-  ): Promise<(AudioBuffer | undefined)[]> {
-    const keyOf = ({ path, segment }: (typeof requests)[number]): string =>
-      `${rate}:${algorithm}:${path}${segment === undefined ? '' : `:${segment.startSeconds}-${segment.endSeconds}`}`;
-    const pending = new Map<string, (typeof requests)[number]>();
-    for (const request of requests) {
-      const key = keyOf(request);
-      if (!cache.stretched.has(key)) pending.set(key, request);
-    }
-    if (pending.size > 0) {
-      const parts = [...pending.values()].map(({ source, segment }) =>
-        segment === undefined ? source : this.sliceBuffer(source, segment),
-      );
-      const batch: Promise<(AudioBuffer | undefined)[]> = this.disposed
-        ? Promise.resolve(parts.map(() => undefined))
-        : stretchAudioBuffers(this.audioContext, parts, rate, algorithm).catch(
-            // Samples the stretcher cannot take play at the tempo, their pitch following.
-            () => parts.map(() => undefined),
-          );
-      [...pending.keys()].forEach((key, index) =>
-        cache.stretched.set(
-          key,
-          batch.then((stretched) => stretched[index]),
-        ),
-      );
-    }
-    return Promise.all(requests.map((request) => cache.stretched.get(keyOf(request))!));
-  }
-
-  /** The part `segment` of `buffer`, in its own seconds, as a buffer of its own. */
-  private sliceBuffer(buffer: AudioBuffer, segment: WindowStretchSegment): AudioBuffer {
-    const from = Math.max(0, Math.floor(segment.startSeconds * buffer.sampleRate));
-    const to = Math.min(buffer.length, Math.max(from + 1, Math.ceil(segment.endSeconds * buffer.sampleRate)));
-    const part = this.audioContext.createBuffer(buffer.numberOfChannels, to - from, buffer.sampleRate);
-    for (let channel = 0; channel < buffer.numberOfChannels; channel += 1)
-      part.copyToChannel(buffer.getChannelData(channel).subarray(from, to), channel);
-    return part;
   }
 
   private async decodeChartAudioUnsequenced(
@@ -600,23 +582,35 @@ export class ChartPreviewEngine {
     }
   }
 
-  private async playWindowNow(target: ChartPreviewTarget, window: ChartPreviewWindow, sequence: number): Promise<void> {
-    const chart = target.chart.chart;
-    const cache = this.windowCacheFor(target);
+  /**
+   * What a window of the chart sounds: the triggers in it, those carried into it, their decoded samples by sample key,
+   * and with `rate` stretching the pitch kept, what of each to stretch (a sample that has finished before the window
+   * sounds nothing in it and is left out; of a long one, only the part the window sounds).
+   */
+  private async planWindow(
+    cache: NonNullable<ChartPreviewEngine['windowCache']>,
+    window: Pick<ChartPreviewWindow, 'startSeconds' | 'endSeconds'>,
+    rate: number,
+    stretching: boolean,
+  ): Promise<{
+    triggers: TimedSampleTrigger[];
+    carried: TimedSampleTrigger[];
+    sources: Map<string, { readonly path: string; readonly buffer: AudioBuffer }>;
+    requests: {
+      readonly key: string;
+      readonly path: string;
+      readonly source: AudioBuffer;
+      readonly segment?: WindowStretchSegment;
+    }[];
+  }> {
+    const chart = cache.target.chart.chart;
     const triggers = selectChartWindowTriggers(cache.triggers, window);
     const monophonic = (sampleKey: string): boolean => usesMonophonicWAVPlayback(chart, sampleKey);
     // What started before the window and may still sound at its start, as a play that seeks there starts it partway.
     const carried = selectChartWindowCarryOvers(cache.triggers, window, monophonic);
-    if (triggers.length === 0 && carried.length === 0) return;
-    const wavResources = resolveBmsWAVResources(chart);
-    // The play tempo: chart seconds pass `rate` times as fast. A keep-pitch window plays stretched samples at rate 1, a
-    // pitch-following one plays the samples `rate` times as fast.
-    const rate = window.tempo !== undefined && Number.isFinite(window.tempo) && window.tempo > 0 ? window.tempo : 1;
-    const stretching = rate !== 1 && window.keepPitch === true;
-    const buffers = new Map<string, AudioBuffer>();
-    /** The samples played stretched: where the part stretched starts in each, and the sample's own length. */
-    const stretchedKeys = new Map<string, { readonly segmentStart: number; readonly sourceDuration: number }>();
     const sources = new Map<string, { readonly path: string; readonly buffer: AudioBuffer }>();
+    if (triggers.length === 0 && carried.length === 0) return { triggers, carried, sources, requests: [] };
+    const wavResources = resolveBmsWAVResources(chart);
     await Promise.all(
       [...new Set([...carried, ...triggers].map((trigger) => trigger.sampleKey))].map(async (key) => {
         const path = wavResources[key];
@@ -625,33 +619,51 @@ export class ChartPreviewEngine {
         if (buffer !== undefined) sources.set(key, { path, buffer });
       }),
     );
+    if (!stretching) return { triggers, carried, sources, requests: [] };
+    const byKey = new Map<string, TimedSampleTrigger[]>();
+    for (const trigger of [...carried, ...triggers]) {
+      const list = byKey.get(trigger.sampleKey);
+      if (list === undefined) byKey.set(trigger.sampleKey, [trigger]);
+      else list.push(trigger);
+    }
+    const requests = [...sources].flatMap(([key, { path, buffer }]) => {
+      const needs = windowSampleNeeds(byKey.get(key) ?? [], window, rate, buffer.duration).filter(
+        (need) => need.endSeconds > need.startSeconds,
+      );
+      if (needs.length === 0) return [];
+      const segment = resolveWindowStretchSegment(needs, buffer.duration);
+      return [{ key, path, source: buffer, ...(segment !== undefined ? { segment } : {}) }];
+    });
+    return { triggers, carried, sources, requests };
+  }
+
+  private async playWindowNow(target: ChartPreviewTarget, window: ChartPreviewWindow, sequence: number): Promise<void> {
+    const chart = target.chart.chart;
+    const cache = this.windowCacheFor(target);
+    // The play tempo: chart seconds pass `rate` times as fast. A keep-pitch window plays stretched samples at rate 1, a
+    // pitch-following one plays the samples `rate` times as fast.
+    const rate = window.tempo !== undefined && Number.isFinite(window.tempo) && window.tempo > 0 ? window.tempo : 1;
+    const stretching = rate !== 1 && window.keepPitch === true;
+    const { triggers, carried, sources, requests } = await this.planWindow(cache, window, rate, stretching);
+    const monophonic = (sampleKey: string): boolean => usesMonophonicWAVPlayback(chart, sampleKey);
+    if (triggers.length === 0 && carried.length === 0) return;
+    const buffers = new Map<string, AudioBuffer>();
+    /** The samples played stretched: where the part stretched starts in each, and the sample's own length. */
+    const stretchedKeys = new Map<string, { readonly segmentStart: number; readonly sourceDuration: number }>();
     if (!stretching) for (const [key, { buffer }] of sources) buffers.set(key, buffer);
     else {
-      const byKey = new Map<string, TimedSampleTrigger[]>();
-      for (const trigger of [...carried, ...triggers]) {
-        const list = byKey.get(trigger.sampleKey);
-        if (list === undefined) byKey.set(trigger.sampleKey, [trigger]);
-        else list.push(trigger);
-      }
-      // A sample that has finished before the window sounds nothing in it: it is not stretched. Of a long one, only the
-      // part the window sounds is stretched, so a bar of a long BGM file is quick to hear.
-      const requests = [...sources].flatMap(([key, { path, buffer }]) => {
-        const needs = windowSampleNeeds(byKey.get(key) ?? [], window, rate, buffer.duration).filter(
-          (need) => need.endSeconds > need.startSeconds,
-        );
-        if (needs.length === 0) return [];
-        const segment = resolveWindowStretchSegment(needs, buffer.duration);
-        return [{ key, path, source: buffer, ...(segment !== undefined ? { segment } : {}) }];
-      });
-      const stretched = await this.stretchWindowSamples(cache, requests, rate, window.stretchAlgorithm ?? 'wsola');
-      requests.forEach(({ key, source, segment }, index) => {
+      const spec = { rate, algorithm: window.stretchAlgorithm ?? 'wsola' } as const;
+      // The bar goes ahead of the background, which then carries on nearest this bar.
+      cache.stretcher.prepare(spec, undefined, window.startSeconds);
+      const stretched = await cache.stretcher.stretch(spec, requests);
+      requests.forEach(({ key, source }, index) => {
         const part = stretched[index];
         if (part === undefined) {
           buffers.set(key, source);
           return;
         }
-        buffers.set(key, part);
-        stretchedKeys.set(key, { segmentStart: segment?.startSeconds ?? 0, sourceDuration: source.duration });
+        buffers.set(key, part.buffer);
+        stretchedKeys.set(key, { segmentStart: part.segmentStart, sourceDuration: source.duration });
       });
     }
     if (this.isStale(sequence)) return;

@@ -312,13 +312,46 @@ describe('createAudioService', () => {
   });
 
   it('sounds a window of a chart through the preview engine, owned until the owner stops', () => {
-    const engine: ChartPreviewPlayer = { focus: vi.fn(), playWindow: vi.fn(), stop: vi.fn(), dispose: vi.fn() };
+    const engine: ChartPreviewPlayer = {
+      focus: vi.fn(),
+      playWindow: vi.fn(),
+      prepareWindows: vi.fn(),
+      stop: vi.fn(),
+      dispose: vi.fn(),
+    };
     const { service } = createService(undefined, { createPreviewEngine: () => engine });
     const target = { chart: { id: 'a' }, source: { id: 's' } } as unknown as ChartPreviewTarget;
     service.preview.playWindow(target, { startSeconds: 2, endSeconds: 4 }, scene);
     expect(engine.playWindow).toHaveBeenCalledWith(target, { startSeconds: 2, endSeconds: 4 });
     service.stopOwned(scene);
     expect(engine.focus).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it('passes a picker’s bars and tempo to the preview engine to stretch in the background', () => {
+    const engine: ChartPreviewPlayer = {
+      focus: vi.fn(),
+      playWindow: vi.fn(),
+      prepareWindows: vi.fn(),
+      stop: vi.fn(),
+      dispose: vi.fn(),
+    };
+    let created = 0;
+    const { service } = createService(undefined, {
+      createPreviewEngine: () => {
+        created += 1;
+        return engine;
+      },
+    });
+    const target = { chart: { id: 'a' }, source: { id: 's' } } as unknown as ChartPreviewTarget;
+    // Stopping before any preview builds no engine.
+    service.preview.prepareWindows(target, undefined);
+    expect(created).toBe(0);
+    const settings = { tempo: 0.8, keepPitch: true, stretchAlgorithm: 'wsola' } as const;
+    const bars = [{ startSeconds: 0, endSeconds: 2 }];
+    service.preview.prepareWindows(target, settings, bars, 1);
+    expect(engine.prepareWindows).toHaveBeenCalledWith(target, settings, bars, 1);
+    service.preview.prepareWindows(target, undefined);
+    expect(engine.prepareWindows).toHaveBeenLastCalledWith(target, undefined, undefined, undefined);
   });
 
   it('analyses the music bus once the context exists', async () => {

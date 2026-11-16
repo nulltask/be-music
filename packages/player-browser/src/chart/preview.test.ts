@@ -486,7 +486,7 @@ describe('ChartPreviewEngine.playWindow', () => {
       stretchAlgorithm: 'wsola',
     });
     await vi.waitFor(() => expect(sources).toHaveLength(1));
-    expect(stretchMocks.stretchAudioBuffers).toHaveBeenCalledTimes(1);
+    // The bar's own batch holds the BGM hit alone; the background stretches the rest of the chart afterwards.
     expect(stretchMocks.stretchAudioBuffers.mock.calls[0]![1]).toHaveLength(1);
   });
 
