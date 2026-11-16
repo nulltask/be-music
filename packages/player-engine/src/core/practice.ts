@@ -102,8 +102,9 @@ function restBarCount(bars: number | undefined): number {
  * at the head of the bar `restBarsAfter` bars after the one its `END TIME` lies in, so a range snapped to bar lines
  * plays that many whole bars on either side; 0 starts and ends at the range itself. The first round
  * (`firstStartSeconds`) starts a bar before the range even with no rest before it. Without an `END TIME` (to the
- * chart's end) one bar of rest ends 1000 ms past the range's end, as before. beatoraja starts 1000 ms before the range
- * and ends 1000 ms past it instead. With `carriedFromMs` (a long note kept from before the range) the bars before are
+ * chart's end) one bar of rest ends 1000 ms past the range's end whatever the tempo, as before. Rest in bars is Be-Music's
+ * policy (#1191): beatoraja pads by time, from `max(starttime - 1000, 0)` to `endtime + 1000` ms (`BMSPlayer`
+ * L586-L587 [V]), so a slow bar rests longer than its second and a stop inside a rest bar lengthens it. With `carriedFromMs` (a long note kept from before the range) the bars before are
  * counted from the bar that long note starts in.
  */
 export function resolvePracticePlayWindow(

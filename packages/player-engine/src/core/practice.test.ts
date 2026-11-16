@@ -309,6 +309,26 @@ describe('resolvePracticePlayWindow (#954)', () => {
   test('without an END TIME, ends 1000 ms past the range’s end as before', () => {
     expect(windowOf([], { startMs: 4500 })).toEqual({ startSeconds: 2, endSeconds: 22 });
   });
+
+  test('rests are bars, Be-Music’s policy, not beatoraja’s 1000 ms on either side (#1191)', () => {
+    // 60 BPM: a bar is 4 s, heads at 0, 4, 8, 12, 16. A range snapped to bars 2-3 rests a whole bar on either side,
+    // 4 s, where beatoraja's `starttime - 1000` / `endtime + 1000` would play from 7 s to 13 s.
+    const slow = windowOf(['#00003:3C'], { startMs: 8000, endMs: 12000 });
+    expect(slow).toEqual({ startSeconds: 4, endSeconds: 16 });
+    expect(slow).not.toEqual({ startSeconds: 7, endSeconds: 13 });
+    // 240 BPM: a bar is 1 s, so the same rest is 1 s, as beatoraja's.
+    expect(windowOf(['#00003:F0'], { startMs: 4000, endMs: 6000 })).toEqual({ startSeconds: 3, endSeconds: 7 });
+  });
+
+  test('without an END TIME, one bar of rest is 1000 ms whatever the tempo; more bars are bars (#1191)', () => {
+    // The range runs to the chart's end (21 s here). At 240 BPM a bar is 1 s, at 60 BPM 4 s: one bar of rest still
+    // ends 1000 ms after, not a bar after.
+    expect(windowOf(['#00003:F0'], { startMs: 4000 }).endSeconds).toBe(22);
+    expect(windowOf(['#00003:3C'], { startMs: 4000 }).endSeconds).toBe(22);
+    // Two bars end at the head of the second bar after the one the end lies in, when that is later.
+    expect(windowOf(['#00003:F0'], { startMs: 4000 }, { restBarsAfter: 2 }).endSeconds).toBe(23);
+    expect(windowOf(['#00003:3C'], { startMs: 4000 }, { restBarsAfter: 2 }).endSeconds).toBe(28);
+  });
 });
 
 describe('the seamless PRACTICE loop', () => {
@@ -326,6 +346,11 @@ describe('the seamless PRACTICE loop', () => {
     expect(resolvePracticeLoopShift(chartOf(), { ...practice, restBarsAfter: 1 }, window)).toEqual({
       seconds: 4,
       beats: 8,
+    });
+    // A 1 s stop at 5.0 (the middle of bar 2) moves no beat: 2 beats before it and 4 after it.
+    expect(resolvePracticeLoopShift(chartOf(['#STOP01 96', '#00209:0001']), practice, window)).toEqual({
+      seconds: 4,
+      beats: 6,
     });
     // Not seamless: no loop, or the whole chart.
     expect(resolvePracticeLoopShift(chartOf(), { ...practice, loop: false }, window)).toBeUndefined();
