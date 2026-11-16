@@ -186,6 +186,8 @@ export class PracticeBarsDialog {
       if (this.selection !== undefined && this.layout?.bars[this.selection.last] === undefined)
         this.selection = undefined;
       this.paint();
+      // At a kept-pitch tempo, the chart's samples stretch in the background while the player picks.
+      this.prepareStretch();
     });
     return new Promise((resolve) => {
       this.settle = resolve;
@@ -198,6 +200,7 @@ export class PracticeBarsDialog {
     this.settle = undefined;
     if (start && this.chart !== undefined) this.memory.remember(this.chart.id, this.layout, this.selection);
     this.stopPreview();
+    this.stopStretch();
     if (this.dialog.open) this.dialog.close();
     settle(start);
   }
@@ -209,8 +212,45 @@ export class PracticeBarsDialog {
     this.settle = undefined;
     this.memory.skipPractice(this.chart.id);
     this.stopPreview();
+    this.stopStretch();
     if (this.dialog.open) this.dialog.close();
     settle(true);
+  }
+
+  /** Sets the play tempo, and stretches the chart's samples for it in the background, dropping the old tempo's. */
+  private changeTempo(changes: Partial<Pick<PracticeTempo, 'percent' | 'pitchMode'>>): void {
+    this.setTempo(changes);
+    this.prepareStretch();
+  }
+
+  /**
+   * Stretches what each bar sounds in the background for the play tempo when it keeps the pitch, nearest the bars
+   * picked first (`AudioServicePreview.prepareWindows`); stops that otherwise.
+   */
+  private prepareStretch(): void {
+    if (this.chart === undefined || this.source === undefined) return;
+    const tempo = this.tempo();
+    const times =
+      this.layout === undefined || this.selection === undefined
+        ? undefined
+        : chartScoreRangeTimes(this.layout, this.selection);
+    this.audio.preview.prepareWindows(
+      { chart: this.chart, source: this.source },
+      {
+        tempo: tempoFromPercent(tempo.percent),
+        keepPitch: tempo.pitchMode === 'keep-pitch',
+        stretchAlgorithm: tempo.stretchAlgorithm,
+      },
+      // Each bar as a press on it sounds it.
+      this.layout?.bars.map((bar) => practiceBarWindow(bar)),
+      times === undefined ? 0 : times.startMs / 1000,
+    );
+  }
+
+  /** Stops stretching in the background, keeping what was stretched for the next time the picker opens. */
+  private stopStretch(): void {
+    if (this.chart !== undefined && this.source !== undefined)
+      this.audio.preview.prepareWindows({ chart: this.chart, source: this.source }, undefined);
   }
 
   /** Sets one PRACTICE setting and shows it as the play options took it (clamped to its range). */
@@ -267,7 +307,7 @@ export class PracticeBarsDialog {
             .value=${String(tempo.percent)}
             @change=${(event: Event) => {
               const value = Number((event.target as HTMLInputElement).value);
-              if (Number.isFinite(value)) this.setTempo({ percent: clampTempoPercent(value) });
+              if (Number.isFinite(value)) this.changeTempo({ percent: clampTempoPercent(value) });
               this.paint();
             }}
           />
@@ -287,7 +327,7 @@ export class PracticeBarsDialog {
                 baseBPM === undefined
                   ? undefined
                   : tempoPercentForBPM(Number((event.target as HTMLInputElement).value), baseBPM);
-              if (percent !== undefined) this.setTempo({ percent });
+              if (percent !== undefined) this.changeTempo({ percent });
               // The field shows the BPM the tempo plays, whole percents apart, not the one typed.
               (event.target as HTMLInputElement).value =
                 baseBPM === undefined ? '' : formatPracticeBPM(baseBPM * tempoFromPercent(this.tempo().percent));
@@ -300,7 +340,7 @@ export class PracticeBarsDialog {
           <select
             class="select"
             @change=${(event: Event) => {
-              this.setTempo({ pitchMode: (event.target as HTMLSelectElement).value as PracticeTempo['pitchMode'] });
+              this.changeTempo({ pitchMode: (event.target as HTMLSelectElement).value as PracticeTempo['pitchMode'] });
               this.paint();
             }}
           >
