@@ -137,7 +137,7 @@ No source, so refused: `song.folder`, `stagefile`, `banner`, `backbmp`, `preview
 
 ## NONSTOP courses
 
-An LR2 NONSTOP course (`.lr2crs` type 1) is not played stage by stage: LR2's chart loader stitches its stages (at most five) into one chart and plays it as a single run ([`ParseBMSFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680), `LR2body.exe` 0x4b0690). The LR2-compatible placement accepts BMS stages. The intended placement also accepts bmson stages and mixed courses. This section covers how the stages are placed and stitched; the browser player plays the stitched chart ([player-web.md](player-web.md)).
+An LR2 NONSTOP course (`.lr2crs` type 1) is not played stage by stage: LR2's chart loader stitches its stages (at most five) into one chart and plays it as a single run ([`ParseBMSFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680), `LR2body.exe` 0x4b0690). The LR2-compatible placement accepts BMS stages. The intended placement also accepts bmson stages and mixed courses. A course of LRX stages (plugout's NONSTOP) stitches into an LRX chart that keeps each note's sound values, chain notes and hidden notes, with its long notes as CNs; LRX does not mix with BMS or bmson (`lrx-mixed`), and its stages share one lane type (`lrx-layout-mismatch`). This section covers how the stages are placed and stitched; the browser player plays the stitched chart ([player-web.md](player-web.md)).
 
 **Connections.** Each stage but the last has a connection to the next, stored in the first ten characters of the course hash (`courseKeys`, `0`-`5`) and read by `parseLR2NonstopConnections` into `CourseDefinition.connections`:
 

@@ -137,7 +137,7 @@ flowchart LR
 
 ## NONSTOP コース
 
-LR2 の NONSTOP コース（`.lr2crs` の type 1）は、ステージごとには遊びません。LR2 の譜面読み込みが全ステージ（最大 5）を 1 本の譜面につなぎ、1 回のプレイとして遊びます（[`ParseBMSFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680)、`LR2body.exe` 0x4b0690）。LR2 互換の配置は BMS のステージを受け入れます。intended の配置は bmson と BMS/bmson 混在のコースにも対応します。この節はステージの配置と結合を扱います。結合した譜面はブラウザのプレイヤーで遊べます（[player-web.ja.md](player-web.ja.md)）。
+LR2 の NONSTOP コース（`.lr2crs` の type 1）は、ステージごとには遊びません。LR2 の譜面読み込みが全ステージ（最大 5）を 1 本の譜面につなぎ、1 回のプレイとして遊びます（[`ParseBMSFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680)、`LR2body.exe` 0x4b0690）。LR2 互換の配置は BMS のステージを受け入れます。intended の配置は bmson と BMS/bmson 混在のコースにも対応します。この節はステージの配置と結合を扱います。結合した譜面はブラウザのプレイヤーで遊べます（[player-web.ja.md](player-web.ja.md)）。 LRX のステージだけのコース（plugout の NONSTOP）は、ノーツごとの音の値、チェインノーツ、見えないノーツを保った 1 本の LRX 譜面につなぎ、ロングノーツは CN にします。LRX は BMS・bmson と混ぜられず（`lrx-mixed`）、ステージはすべて同じレーン構成である必要があります（`lrx-layout-mismatch`）。
 
 **つなぎ方。** 最後以外の各ステージは、次のステージへのつなぎ方を持ちます。コースのハッシュの先頭 10 文字（`courseKeys`、`0`〜`5`）に保存されており、`parseLR2NonstopConnections` が `CourseDefinition.connections` に読み込みます。
 
