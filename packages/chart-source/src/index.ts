@@ -13,10 +13,13 @@ export interface BmsonExtraFields {
 }
 
 import { normalizeASCIIBase36Code, normalizeASCIIBase62Code } from '@be-music/shared-utils/core';
+import { cloneLRXExtensions, type LRXEventExtensions, type LRXExtensions } from './lrx.ts';
+
+export { LRX_TICKS_PER_BEAT, type LRXBGACue, type LRXEventExtensions, type LRXExtensions } from './lrx.ts';
 
 export const BMS_JSON_FORMAT = 'be-music-json/0.1.0' as const;
 
-export type BeMusicSourceFormat = 'bms' | 'bmson' | 'json';
+export type BeMusicSourceFormat = 'bms' | 'bmson' | 'lrx' | 'json';
 
 export type BeMusicPlayLevel = number | string;
 
@@ -100,6 +103,8 @@ export interface BeMusicEvent {
   /** Relative BMS source line order for objects on normal note channels. */
   bmsLineOrder?: number;
   bmson?: BmsonEventExtensions;
+  /** LRX note values (sound parameters, long-note length, chain notes); only on events of an LRX chart. */
+  lrx?: LRXEventExtensions;
 }
 
 export interface BmsonInfoExtensions extends BmsonExtraFields {
@@ -411,7 +416,9 @@ export interface ChartDiagnostic {
     | 'stacked-note-length'
     | 'missing-reference'
     | 'unsupported-option'
-    | 'invalid-option';
+    | 'invalid-option'
+    | 'unsupported-lane-type'
+    | 'unsupported-channel';
   readonly message: string;
   readonly subject?: string;
   readonly position:
@@ -435,6 +442,8 @@ export interface BeMusicJSON {
   events: BeMusicEvent[];
   bms: BMSExtensions;
   bmson: BmsonExtensions;
+  /** The LRX values with no BMS counterpart; only on a chart read from LRX. */
+  lrx?: LRXExtensions;
   preservation: BeMusicPreservation;
 }
 
@@ -629,6 +638,7 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
         poorEvents,
       },
     },
+    ...(json.lrx !== undefined ? { lrx: cloneLRXExtensions(json.lrx) } : {}),
     preservation: {
       bms: {
         sourceLines: bmsSourceLines,
@@ -862,6 +872,7 @@ function cloneEvent(event: BeMusicEvent): BeMusicEvent {
     value: event.value,
     ...(event.bmsLineOrder !== undefined ? { bmsLineOrder: event.bmsLineOrder } : {}),
     bmson: event.bmson ? { ...event.bmson, ...copyExtras(event.bmson) } : undefined,
+    ...(event.lrx !== undefined ? { lrx: { ...event.lrx } } : {}),
   };
 }
 

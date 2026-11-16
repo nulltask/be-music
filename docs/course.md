@@ -137,7 +137,7 @@ No source, so refused: `song.folder`, `stagefile`, `banner`, `backbmp`, `preview
 
 ## NONSTOP courses
 
-An LR2 NONSTOP course (`.lr2crs` type 1) is not played stage by stage: LR2's chart loader stitches its stages (at most five) into one chart and plays it as a single run ([`ParseBMSFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680), `LR2body.exe` 0x4b0690). The LR2-compatible placement accepts BMS stages. The intended placement also accepts bmson stages and mixed courses. This section covers how the stages are placed and stitched; the browser player plays the stitched chart ([player-web.md](player-web.md)).
+An LR2 NONSTOP course (`.lr2crs` type 1) is not played stage by stage: LR2's chart loader stitches its stages (at most five) into one chart and plays it as a single run ([`ParseBMSFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680), `LR2body.exe` 0x4b0690). The LR2-compatible placement accepts BMS stages. The intended placement also accepts bmson stages and mixed courses. A course of LRX stages (plugout's NONSTOP) stitches into an LRX chart that keeps each note's sound values, chain notes and hidden notes, with its long notes as CNs; LRX does not mix with BMS or bmson (`lrx-mixed`), and its stages share one lane type (`lrx-layout-mismatch`). This section covers how the stages are placed and stitched; the browser player plays the stitched chart ([player-web.md](player-web.md)).
 
 **Connections.** Each stage but the last has a connection to the next, stored in the first ten characters of the course hash (`courseKeys`, `0`-`5`) and read by `parseLR2NonstopConnections` into `CourseDefinition.connections`:
 
@@ -361,6 +361,8 @@ A course stage runs on the ruleset's course gauge, not on the single-chart gauge
 | expert, nonstop        | HARD         | `COURSE-HARD`                 | +0.1 / +0.1 / +0.05    | −6 / −10 / −2, × the HARD damage multiplier |
 
 **`beatoraja`** plays every course on its class gauges (`GrooveGauge.create`): GROOVE and EASY map to `CLASS`, HARD to `EXCLASS`, DEATH to `EXHARDCLASS`. The table set comes from the course's `gauge_*` constraint, or from the play mode when it names none (5 / 10 keys → `5k`, PMS → `9k`, 24 / 48 keys → `24k`, otherwise `7k`). They start at 100 with no TOTAL modifier. **`____`** has no published class gauge, so it uses beatoraja's.
+
+**`plugout`** follows plugout4 -ARCADE EDITION-: expert and nonstop courses scale NORMAL and EASY damage by each stage's note count, and grade courses scale it by the gauge and then play on 24 lives once the gauge empties. Every plugout course gauge starts at 100, never recovers and clears above 0. The tables are in [ADR 0044](./adr/0044-plugout-ruleset.md#course-gauges).
 
 lr2oraja and LR2oraja Endless Dream play courses on beatoraja's `GAUGE_LR2` class gauges with LR2's death border and damage-reduction threshold; how that compares with these rules, and why Be-Music does not follow it, is in [lr2oraja courses](./research/lr2oraja-courses.md).
 

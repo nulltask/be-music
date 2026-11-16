@@ -1,4 +1,4 @@
-import type { BeMusicEvent, BmsonEventExtensions } from '@be-music/chart-source';
+import type { BeMusicEvent, BmsonEventExtensions, LRXEventExtensions } from '@be-music/chart-source';
 
 /** Lookups after which a load's string table also indexes two-character ids by their character codes. */
 const PAIR_TABLE_AFTER = 2048;
@@ -75,9 +75,11 @@ export interface PackedEvents {
   readonly denominators: Int32Array | Float64Array;
   /** bmson per-note extensions, by event index. Only bmson charts carry them. */
   readonly bmson: ReadonlyMap<number, BmsonEventExtensions> | undefined;
+  /** LRX per-note values, by event index. Only LRX charts carry them. */
+  readonly lrx?: ReadonlyMap<number, LRXEventExtensions>;
 }
 
-const EVENT_KEYS = new Set(['measure', 'channel', 'position', 'value', 'bmson']);
+const EVENT_KEYS = new Set(['measure', 'channel', 'position', 'value', 'bmson', 'lrx']);
 
 /**
  * Packs `events` into columns. Returns `undefined` when an event carries a field this format doesn't model, in which
@@ -100,6 +102,7 @@ export function packEvents(events: readonly BeMusicEvent[], strings: PackedEvent
   const numerators = integral ? new Int32Array(length) : new Float64Array(length);
   const denominators = integral ? new Int32Array(length) : new Float64Array(length);
   let bmson: Map<number, BmsonEventExtensions> | undefined;
+  let lrx: Map<number, LRXEventExtensions> | undefined;
   for (let index = 0; index < length; index += 1) {
     const event = events[index]!;
     measures[index] = event.measure;
@@ -111,14 +114,18 @@ export function packEvents(events: readonly BeMusicEvent[], strings: PackedEvent
       bmson ??= new Map();
       bmson.set(index, event.bmson!);
     }
+    if (event.lrx !== undefined) {
+      lrx ??= new Map();
+      lrx.set(index, event.lrx);
+    }
   }
-  return { length, measures, channels, values, numerators, denominators, bmson };
+  return { length, measures, channels, values, numerators, denominators, bmson, ...(lrx ? { lrx } : {}) };
 }
 
 /** Rebuilds the event objects {@link packEvents} packed, with the same fields in the same order. */
 export function unpackEvents(packed: PackedEvents, strings: PackedEventStrings): BeMusicEvent[] {
   const events: BeMusicEvent[] = Array.from({ length: packed.length });
-  const { measures, channels, values, numerators, denominators, bmson } = packed;
+  const { measures, channels, values, numerators, denominators, bmson, lrx } = packed;
   for (let index = 0; index < packed.length; index += 1) {
     const event: BeMusicEvent = {
       measure: measures[index]!,
@@ -130,6 +137,8 @@ export function unpackEvents(packed: PackedEvents, strings: PackedEventStrings):
     if (extensions !== undefined) {
       event.bmson = extensions;
     }
+    const lrxExtensions = lrx?.get(index);
+    if (lrxExtensions !== undefined) event.lrx = lrxExtensions;
     events[index] = event;
   }
   return events;

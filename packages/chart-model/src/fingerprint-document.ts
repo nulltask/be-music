@@ -73,6 +73,8 @@ export interface FingerprintLaneModeInputs {
   player3: boolean;
   /** The explicit bmson keyboard or generic hint; omitted for hints that do not determine lane identity. */
   modeHint?: KeyboardModeHint | `generic-${number}keys`;
+  /** The LRX `lanetype`; omitted for a chart that is not LRX or names no mode. */
+  lrxLaneType?: number;
 }
 
 export interface FingerprintDeltaLists {

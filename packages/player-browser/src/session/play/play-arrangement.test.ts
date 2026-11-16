@@ -583,7 +583,7 @@ const sp7: LibraryChart = {
   ),
 };
 
-test.each(['lr2', 'beatoraja', '____'] as const)(
+test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
   'source-specific lane options arrange the chart under %s rules (#774)',
   (judgeRuleset) => {
     for (const random1P of [

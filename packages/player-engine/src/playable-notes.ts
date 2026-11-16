@@ -1,4 +1,10 @@
-import { resolveChart, type ChartPlayVariant, type LongNoteMode, type ResolvedNote } from '@be-music/chart-model';
+import {
+  resolveChart,
+  type ChartPlayVariant,
+  type LongNoteMode,
+  type ResolvedChainSound,
+  type ResolvedNote,
+} from '@be-music/chart-model';
 import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
 
 /**
@@ -11,6 +17,8 @@ export interface TimedPlayableNote {
   soundEvents?: readonly BeMusicEvent[];
   /** bmson up source slice attached to the long-note tail. */
   endSoundEvent?: BeMusicEvent;
+  /** LRX chain notes a press that sounds this note plays after it (`ResolvedNote.chainSounds`). */
+  chainSounds?: readonly ResolvedChainSound[];
   channel: string;
   beat: number;
   endBeat?: number;
@@ -117,6 +125,7 @@ function createTimedPlayableNote(
     event: note.event,
     soundEvents,
     endSoundEvent,
+    chainSounds: note.chainSounds,
     channel: note.channel,
     beat: note.beat,
     endBeat,

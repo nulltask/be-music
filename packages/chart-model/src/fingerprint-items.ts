@@ -10,6 +10,7 @@
  */
 import {
   DEFAULT_BPM,
+  LRX_TICKS_PER_BEAT,
   normalizeChannel,
   resolveBMSBase,
   type BeMusicEvent,
@@ -28,7 +29,7 @@ import {
   type ChartPlayVariant,
 } from './index.ts';
 import { compileChartPlayOptions, type ChartPlayOptions } from './chart-play-options.ts';
-import { isPMSChartPath } from './play-variant.ts';
+import { isLRXLaneType, isPMSChartPath } from './play-variant.ts';
 import { resolveGenericBmsonKeyCount } from './generic-bmson.ts';
 import { resolveKeyboardModeHint, type KeyboardModeHint } from './keyboard-mode-hint.ts';
 import { collectExRankChanges, resolveJudgeRankFacts, resolveTotalFacts } from './resolved-chart.ts';
@@ -116,6 +117,8 @@ export interface HeaderItems {
   player3: boolean;
   /** The explicit bmson keyboard or generic hint, one of the lane-mode inputs. */
   modeHint: KeyboardModeHint | `generic-${number}keys` | null;
+  /** The LRX `lanetype` when it names a mode, one of the lane-mode inputs. */
+  lrxLaneType: number | null;
   /** `false` only for a bmson chart with an explicit `lines: []` (no bar lines drawn). */
   barLines: boolean;
   /**
@@ -518,6 +521,13 @@ function createItemContext(json: BeMusicJSON): ItemContext {
       ticksPerMeasure: Math.max(1, Math.floor(resolution * 4)),
       lines: json.preservation.bmson.lines,
     };
+  } else if (json.sourceFormat === 'lrx') {
+    // An LRX long note's length is in ticks over measures that start at the chart's measure ticks, as bmson pulses are.
+    bmson = {
+      resolution: LRX_TICKS_PER_BEAT,
+      ticksPerMeasure: LRX_TICKS_PER_BEAT * 4,
+      lines: json.lrx?.barTicks ?? [],
+    };
   }
   return { json, base: resolveBMSBase(json), lnType: json.bms.lnType === 2 ? 2 : DEFAULT_LONG_NOTE_TYPE, bmson };
 }
@@ -836,6 +846,7 @@ function computeHeader(json: BeMusicJSON): HeaderItems {
       genericKeys !== undefined
         ? `generic-${genericKeys}keys`
         : (resolveKeyboardModeHint(json.bmson?.info?.modeHint) ?? null),
+    lrxLaneType: json.sourceFormat === 'lrx' && isLRXLaneType(json.lrx?.laneType) ? json.lrx.laneType : null,
     barLines: json.bmson.barlinesSuppressed !== true,
     playOptions: compileChartPlayOptions({
       initial: json.bms.options ?? (json.bms.option ? [json.bms.option] : []),
@@ -1099,14 +1110,15 @@ export function resolveLaneModeExtension(chartPath: string | undefined): LaneMod
 }
 
 /**
- * Lane mode from the lane-mode inputs: the lanes that hold notes, the extension, `#PLAYER 3`, and the bmson keyboard
- * `mode_hint` (spec 3.5).
+ * Lane mode from the lane-mode inputs: the lanes that hold notes, the extension, `#PLAYER 3`, the bmson keyboard
+ * `mode_hint` and the LRX `lanetype` (spec 3.5).
  */
 export function resolveFingerprintLaneMode(
   notes: ReadonlyArray<NoteItem>,
   extension: LaneModeExtension,
   player3: boolean,
   modeHint: KeyboardModeHint | `generic-${number}keys` | null,
+  lrxLaneType: number | null = null,
 ): ChartPlayVariant {
   const lanes = new Set<string>();
   for (const note of notes) {
@@ -1117,6 +1129,7 @@ export function resolveFingerprintLaneMode(
     events: [...lanes].map((channel) => ({ channel })),
     bms: { player: player3 ? 3 : 1 },
     ...(modeHint !== null ? { bmson: { info: { modeHint } } } : {}),
+    ...(lrxLaneType !== null ? { lrx: { laneType: lrxLaneType } } : {}),
   });
 }
 
@@ -1194,7 +1207,13 @@ export interface CanonicalLists {
  * Canonical play lists of a fully resolved outcome: lane mode, FREE ZONE, the state-dependent drops, and sorting.
  */
 export function canonicalizeItems(items: FlatItems, extension: LaneModeExtension): CanonicalLists {
-  const laneMode = resolveFingerprintLaneMode(items.notes, extension, items.header.player3, items.header.modeHint);
+  const laneMode = resolveFingerprintLaneMode(
+    items.notes,
+    extension,
+    items.header.player3,
+    items.header.modeHint,
+    items.header.lrxLaneType,
+  );
   const freeZone = variantUsesFreeZone(laneMode) ? 'apply' : 'drop';
   const notes = [...items.notes].sort(compareNoteItems);
   const mines = [...items.mines].sort(compareMineItems);

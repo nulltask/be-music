@@ -19,6 +19,15 @@ test('parse/count/pack survives a structured-clone boundary and restores lazy ev
 test('an .n2s path is read as a Nanasi Groove 2 container', () => {
   expect(() => parseChartTask({ path: 'music/song/01_song_n.N2S', bytes: strToU8(TEXT) })).toThrow('missing ZEXA tag');
 });
+test('an .lrs path is read as LRX with the files beside it', () => {
+  const lrs = strToU8('<LRS><n c="301" s="0" p="150" /><n c="1" s="0" p="0" /></LRS>');
+  const lrh = strToU8('<LRH><information title="Side" lanetype="1" /></LRH>');
+  const result = parseChartTask({ path: 'song/01.LRS', bytes: lrs, siblings: { lrh } });
+  restorePackedCollectionChart(result.chart, result.packed, result.strings);
+  expect(result.chart.sourceFormat).toBe('lrx');
+  expect(result.chart.metadata.title).toBe('Side');
+  expect(result.scored).toEqual({ notes: 1, playVariant: '5' });
+});
 test('ZIP limits and skin filtering are applied inside the task', () => {
   const bytes = zipSync({ 'a.bms': strToU8(TEXT), '__MACOSX/junk': strToU8('junk') });
   const input = { bytes, limit: 4096, limitMessage: 'too big' };

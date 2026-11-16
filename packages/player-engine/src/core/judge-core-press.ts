@@ -1,4 +1,5 @@
 import { breakTrackedCombo } from './scoring.ts';
+import { notePlugoutLaneJudged, notePlugoutLaneReleased, resolvePlugoutLaneSound } from './plugout-lane-sound.ts';
 import { findFirstIndexNumberAtOrAfter } from '@be-music/shared-utils/core';
 import { findLaneSoundCandidate, lowerBoundBySeconds } from '../judging.ts';
 import type { TimedPlayableNote } from '../playable-notes.ts';
@@ -209,11 +210,15 @@ function applyLR2RejudgeChain(
     const windows = judgeWindowsFor(config, note.channel, nowSec);
     const deltaUs = judgeDeltaUs(note.seconds, nowSec);
     if (deltaUs < windows.judges[3][0] || deltaUs > windows.judges[3][1]) break;
+    if (config.ruleset.multiBadAheadUs !== undefined && deltaUs >= config.ruleset.multiBadAheadUs) break;
     if (!markScorableJudged(state, note)) break;
     const judge = resolveManualTimedJudge((nowSec - note.seconds) * 1000, windows);
     emit({ kind: 'ui', command: { kind: 'flash-lane', channel: note.channel } });
     for (const event of note.soundEvents ?? [note.event])
       emit({ kind: 'sound', source: 'manual-note', event, seconds: atSeconds, channel: note.channel });
+    if (note.chainSounds)
+      emit({ kind: 'chain-sounds', sounds: note.chainSounds, seconds: atSeconds, channel: note.channel });
+    notePlugoutLaneJudged(state, note.channel, note);
     applyResolvedManualJudge(state, note.channel, judge, atSeconds, emit);
     if (judge.kind !== 'BAD' || isJudgingClosed(state)) break;
   }
@@ -359,15 +364,21 @@ export function handleLanePress(
       // The press is part of a long note's sustain, not a phantom press.
       return;
     }
-    const fallback = findLaneSoundCandidate(
-      config.laneSoundNotes,
-      judgedChannels,
-      judgeSec,
-      maxJudgeEarlyReachSeconds(config, judgeSec),
-    );
+    const fallback =
+      state.plugoutLaneSounds !== undefined
+        ? resolvePlugoutLaneSound(state, judgedChannels, judgeSec)
+        : findLaneSoundCandidate(
+            config.laneSoundNotes,
+            judgedChannels,
+            judgeSec,
+            maxJudgeEarlyReachSeconds(config, judgeSec),
+          );
     if (fallback) {
       for (const event of fallback.soundEvents ?? [fallback.event])
         emit({ kind: 'sound', source: 'lane-fallback', event, seconds: nowSec, channel: fallback.channel });
+      // plugout plays the chain after any press that sounds the note, an empty one included (0x43bcd0).
+      if (fallback.chainSounds)
+        emit({ kind: 'chain-sounds', sounds: fallback.chainSounds, seconds: nowSec, channel: fallback.channel });
     }
     if (!hasEmptyPoorReferenceNote(state, judgedChannels, judgeSec)) {
       // No note in the ruleset's miss window — the press is harmless: only the lane keysound plays.
@@ -386,6 +397,8 @@ export function handleLanePress(
   emit({ kind: 'ui', command: { kind: 'flash-lane', channel } });
   for (const event of candidate.soundEvents ?? [candidate.event])
     emit({ kind: 'sound', source: 'manual-note', event, seconds: nowSec, channel });
+  if (candidate.chainSounds) emit({ kind: 'chain-sounds', sounds: candidate.chainSounds, seconds: nowSec, channel });
+  notePlugoutLaneJudged(state, channel, candidate);
   const endSeconds = candidate.endSeconds;
   if (typeof endSeconds === 'number' && Number.isFinite(endSeconds) && endSeconds > candidate.seconds) {
     const longNoteMode = resolveRulesetLongNoteMode(ruleset.longNoteStyle, candidate);
@@ -431,7 +444,7 @@ export function handleLanePress(
         headJudge,
         headScored: true,
         audioStopped: false,
-        ...(isBackSpinScratch(longNoteMode, config.scratchChannels.has(channel))
+        ...(ruleset.heldChargeTail === undefined && isBackSpinScratch(longNoteMode, config.scratchChannels.has(channel))
           ? { backSpinScratch: true as const, ...(source !== undefined ? { headSource: source } : {}) }
           : {}),
       });
@@ -618,6 +631,7 @@ export function handleLaneRelease(
       continue;
     }
     if (hold !== undefined) {
+      notePlugoutLaneReleased(state, channel);
       state.longHoldReleaseSeconds.set(channel, input.nowSec);
       const marginMs = resolveLongNoteReleaseMarginMs(state, channel, input.nowSec);
       // A release settles its long note at once, unless the ruleset lets a BAD-or-worse early release wait out a

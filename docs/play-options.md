@@ -665,13 +665,14 @@ Source: OpenLR2 [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555
 
 ## Gauge auto-shift
 
-Under every ruleset, choose **Gauge auto-shift** in the Options dialog: **NONE** (default), **CONTINUE**, **SURVIVAL TO GROOVE**, **BEST CLEAR** or **SELECT TO UNDER**. **Lowest auto-shift gauge** applies to the last two. beatoraja 0.8.9 defines the switching policies and its gauge order. For LR2 and AC, Be-Music extends those policies to the gauge orders below so the same controls work across rulesets and recorded plays can reproduce their gauge shifts ([#933](https://github.com/nulltask/be-music/issues/933)):
+Under every ruleset, choose **Gauge auto-shift** in the Options dialog: **NONE** (default), **CONTINUE**, **SURVIVAL TO GROOVE**, **BEST CLEAR** or **SELECT TO UNDER**. **Lowest auto-shift gauge** applies to the last two. beatoraja 0.8.9 defines the switching policies and its gauge order. For LR2, AC and plugout (which has no auto-shift of its own), Be-Music extends those policies to the gauge orders below so the same controls work across rulesets and recorded plays can reproduce their gauge shifts ([#933](https://github.com/nulltask/be-music/issues/933)):
 
-| Ruleset     | Single play (gentlest first)                     | Grade course                   | EXPERT / NONSTOP course                        |
-| ----------- | ------------------------------------------------ | ------------------------------ | ---------------------------------------------- |
-| beatoraja   | ASSIST EASY, EASY, NORMAL, HARD, EX-HARD, HAZARD | CLASS, EXCLASS, EXHARDCLASS    | CLASS, EXCLASS, EXHARDCLASS                    |
-| LR2         | EASY, GROOVE, HARD, HAZARD (`DEATH`)             | GRADE, GRADE-HARD, GRADE-DEATH | COURSE-EASY, COURSE, COURSE-HARD, COURSE-DEATH |
-| AC (`????`) | ASSISTED EASY, EASY, NORMAL, HARD, EX-HARD       | CLASS, EXCLASS, EXHARDCLASS    | CLASS, EXCLASS, EXHARDCLASS                    |
+| Ruleset     | Single play (gentlest first)                     | Grade course                                | EXPERT / NONSTOP course                         |
+| ----------- | ------------------------------------------------ | ------------------------------------------- | ----------------------------------------------- |
+| beatoraja   | ASSIST EASY, EASY, NORMAL, HARD, EX-HARD, HAZARD | CLASS, EXCLASS, EXHARDCLASS                 | CLASS, EXCLASS, EXHARDCLASS                     |
+| LR2         | EASY, GROOVE, HARD, HAZARD (`DEATH`)             | GRADE, GRADE-HARD, GRADE-DEATH              | COURSE-EASY, COURSE, COURSE-HARD, COURSE-DEATH  |
+| AC (`????`) | ASSISTED EASY, EASY, NORMAL, HARD, EX-HARD       | CLASS, EXCLASS, EXHARDCLASS                 | CLASS, EXCLASS, EXHARDCLASS                     |
+| plugout     | EASY, NORMAL, HARD, HAZARD                       | GRADE-EASY, GRADE, GRADE-HARD, GRADE-HAZARD | COURSE-EASY, COURSE, COURSE-HARD, COURSE-HAZARD |
 
 ```mermaid
 flowchart LR

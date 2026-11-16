@@ -19,13 +19,14 @@ export interface ParsedChartCache {
 }
 
 /**
- * What of a chart's path its parse result depends on: bmson, BMS text or a Nanasi Groove 2 `.n2s` container, and the
- * `.pms` extension that decides the play variant (an `.n2s` chart is PMS too). Two files with the same bytes under the
- * same kind of name parse the same.
+ * What of a chart's path its parse result depends on: bmson, LRX, BMS text or a Nanasi Groove 2 `.n2s` container, and
+ * the `.pms` extension that decides the play variant (an `.n2s` chart is PMS too). Two files with the same bytes under
+ * the same kind of name parse the same.
  */
-export function parsedChartPathKind(path: string): 'bmson' | 'n2s' | 'pms' | 'bms' {
+export function parsedChartPathKind(path: string): 'bmson' | 'lrx' | 'n2s' | 'pms' | 'bms' {
   const lower = path.toLowerCase();
   if (lower.endsWith('.bmson')) return 'bmson';
+  if (lower.endsWith('.lrs')) return 'lrx';
   if (lower.endsWith('.n2s')) return 'n2s';
   if (lower.endsWith('.pms')) return 'pms';
   return 'bms';
@@ -48,6 +49,12 @@ export async function parseChartThroughCache(
   if (cache !== undefined) {
     try {
       key = parsedChartCacheKey(await sha256HexAsync(input.bytes), input.path);
+      // An LRX chart also reads its header and BGA file, so those take part in the key.
+      if (input.siblings !== undefined) {
+        for (const sibling of [input.siblings.lrh, input.siblings.lrm]) {
+          key += `:${sibling === undefined ? '-' : await sha256HexAsync(sibling)}`;
+        }
+      }
       const cached = await cache.get(key);
       if (isParseChartTaskResult(cached)) return cached;
     } catch {

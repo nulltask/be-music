@@ -20,6 +20,19 @@ describe('json', () => {
     cloned.resources.wavGain!['01'] = 0;
     expect(source.resources.wavGain['01']).toBe(0.77);
   });
+  test('cloneJSON copies the LRX blocks independently and adds none to other charts', () => {
+    expect('lrx' in cloneJSON(createEmptyJSON())).toBe(false);
+    const source = createEmptyJSON('lrx');
+    source.lrx = { laneType: 3, barTicks: [0, 1920] };
+    source.events.push({ measure: 0, channel: '11', position: [0, 1], value: '01', lrx: { length: 480 } });
+    const cloned = cloneJSON(source);
+    expect(cloned.lrx).toEqual(source.lrx);
+    expect(cloned.events[0]!.lrx).toEqual({ length: 480 });
+    cloned.lrx!.barTicks!.push(3840);
+    cloned.events[0]!.lrx!.length = 1;
+    expect(source.lrx.barTicks).toEqual([0, 1920]);
+    expect(source.events[0]!.lrx).toEqual({ length: 480 });
+  });
   test('cloneJSON copies optional per-slot source formats independently', () => {
     const source = createEmptyJSON('bmson');
     expect(cloneJSON(source).resources.wavSourceFormat).toBeUndefined();

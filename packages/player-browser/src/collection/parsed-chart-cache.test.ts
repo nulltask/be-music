@@ -32,6 +32,7 @@ describe('parsedChartPathKind', () => {
     expect(parsedChartPathKind('songs/A.BMSON')).toBe('bmson');
     expect(parsedChartPathKind('songs/a.PMS')).toBe('pms');
     expect(parsedChartPathKind('songs/a.N2S')).toBe('n2s');
+    expect(parsedChartPathKind('song/001/01.LRS')).toBe('lrx');
     expect(parsedChartPathKind('songs/a.bms')).toBe('bms');
     expect(parsedChartPathKind('songs/a.bme')).toBe('bms');
     expect(parsedChartPathKind('songs/a.bml')).toBe('bms');
@@ -65,6 +66,22 @@ describe('parseChartThroughCache', () => {
     expect(second.chart.metadata.title).toBe('from cache');
     expect(second.scored).toEqual(first.scored);
     expect(cache.gets).toEqual([key, key]);
+  });
+
+  test('keys an LRX chart by its header and BGA file too', async () => {
+    const cache = memoryCache();
+    const lrs = new TextEncoder().encode('<LRS><n c="301" s="0" p="120" /><n c="1" s="0" p="0" /></LRS>');
+    const lrh = (title: string) => new TextEncoder().encode(`<LRH><information title="${title}" lanetype="1" /></LRH>`);
+    const first = await parseChartThroughCache({ path: 'song/01.lrs', bytes: lrs, siblings: { lrh: lrh('A') } }, cache);
+    const second = await parseChartThroughCache(
+      { path: 'song/01.lrs', bytes: lrs, siblings: { lrh: lrh('B') } },
+      cache,
+    );
+    expect([first.chart.metadata.title, second.chart.metadata.title]).toEqual(['A', 'B']);
+    expect([...cache.entries.keys()]).toEqual([
+      `${await sha256HexAsync(lrs)}:lrx:${await sha256HexAsync(lrh('A'))}:-`,
+      `${await sha256HexAsync(lrs)}:lrx:${await sha256HexAsync(lrh('B'))}:-`,
+    ]);
   });
 
   test('parses again under another path kind', async () => {

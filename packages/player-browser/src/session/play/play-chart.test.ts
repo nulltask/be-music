@@ -95,7 +95,7 @@ describe('applyRandomMode', () => {
     ];
     const expected = chord();
     applyRandomMode(expected, KEYS_1P, name, seededRandom(7), { ruleset: source });
-    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+    for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
       const notes = chord();
       applyRandomMode(notes, KEYS_1P, `${source}:${name}`, seededRandom(7), { ruleset });
       expect(channelsOf(notes)).toEqual(channelsOf(expected));
@@ -105,7 +105,7 @@ describe('applyRandomMode', () => {
   test('RANDOM is one option: every ruleset and every older source-qualified value draws the same arrangement', () => {
     const expected = beatorajaShuffle(KEYS_7, seededRandom(3));
     for (const value of ['RANDOM', 'lr2:RANDOM', 'beatoraja:RANDOM', '____:RANDOM'] as const)
-      for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+      for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
         const notes = notesOn(KEYS_7);
         applyRandomMode(notes, KEYS_1P, value as 'RANDOM', seededRandom(3), { ruleset });
         expect(channelsOf(notes)).toEqual(expected);
@@ -130,7 +130,7 @@ describe('applyRandomMode', () => {
   });
 
   test('a fixed key moves the original key 1 to the chosen key after RANDOM, under every ruleset', () => {
-    for (const ruleset of ['lr2', 'beatoraja', '____'] as const)
+    for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const)
       for (const fixedLane of [1, 3, 7]) {
         const notes = notesOn(KEYS_7);
         applyRandomMode(notes, KEYS_1P, 'RANDOM', seededRandom(11), { ruleset, fixedLane, playVariant: '7' });
@@ -155,7 +155,7 @@ describe('applyRandomMode', () => {
     const lanes = resolveLaneOptionChannels('2P', playVariant);
     const drawn = beatorajaShuffle(lanes, seededRandom(11));
     const fixedLane = lanes.indexOf(drawn[0]!) === 0 ? 2 : 1;
-    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+    for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
       const notes = notesOn(lanes);
       applyRandomMode(notes, lanes, 'RANDOM', seededRandom(11), { ruleset, side: '2P', fixedLane, playVariant });
       expect(channelsOf(notes)).toEqual(drawn);

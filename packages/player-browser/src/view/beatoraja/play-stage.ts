@@ -1,7 +1,7 @@
 import { isScratch } from '@be-music/player-engine/lanes';
 import { renderJudgeArea } from '../shared/judge-area.ts';
 import type { KeyBoundBGAFrame, BmsonBGAFrame } from '@be-music/player-engine/display';
-import type { BGACameraFeed } from '../../media/bga-camera.ts';
+import type { BGAFeed } from '../../media/bga-camera.ts';
 import type { BGAOpacityTimelines, ChartOptionProgram } from '@be-music/chart-model';
 import {
   resolveConstantAlpha,
@@ -249,7 +249,7 @@ export class BeatorajaPlayStage {
       /** beatoraja's judge area: the windows to draw as bands above the judge line, while the option is on. */
       judgeArea?: Pick<import('@be-music/player-skin-sdk').BeMusicJudgeWindows, 'note' | 'scratch'>;
       /** The camera to show in the BGA frame in place of the chart's BGA. */
-      camera?: BGACameraFeed;
+      camera?: BGAFeed;
     } = {},
   ): void {
     const view = this.stage.view;

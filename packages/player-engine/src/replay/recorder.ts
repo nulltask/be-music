@@ -491,6 +491,7 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
         if (note.generatedLongNote) entry.generatedLongNote = true;
       }
     }
+    if (note.event.lrx?.chain === true && !isFreeZone) entry.uncounted = true;
     notes.push(entry);
   }
   for (const mine of chart.landmineNotes) {
@@ -537,7 +538,7 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
   }
 
   const result: ReplayChart = {
-    sourceFormat: json.sourceFormat === 'bmson' ? 'bmson' : 'bms',
+    sourceFormat: json.sourceFormat === 'bmson' || json.sourceFormat === 'lrx' ? json.sourceFormat : 'bms',
     laneMode: chart.laneDisplayMode,
     lnMode: chartLNMode,
     judgeRank,

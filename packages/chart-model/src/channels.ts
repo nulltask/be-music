@@ -1,5 +1,5 @@
 import { normalizeASCIIBase36Code } from '@be-music/shared-utils/core';
-import { normalizeChannel, normalizeObjectKey } from '@be-music/chart-source';
+import { normalizeChannel, normalizeObjectKey, type BeMusicEvent } from '@be-music/chart-source';
 
 /**
  * Bounds of the extended lane-code range. A `<side><lane>` channel's lane code is either a classic `1`-`9` column or one
@@ -116,6 +116,14 @@ export function isBMSLongNoteChannel(channel: string): boolean {
 
 export function isPlayLaneSoundChannel(channel: string): boolean {
   return matchesPackedOrNormalizedChannel(channel, isPackedPlayLaneSoundChannel, isPlayLaneSoundNormalizedChannel);
+}
+
+/**
+ * Whether a sound plays at the keysound volume (the play / key bus) rather than the BGM volume: a play lane's sound, or
+ * an LRX background sound plugout plays in its key group (`BeMusicEvent.lrx.keyVolume`).
+ */
+export function playsAtKeysoundVolume(channel: string, event?: Pick<BeMusicEvent, 'lrx'>): boolean {
+  return isPlayLaneSoundChannel(channel) || event?.lrx?.keyVolume === true;
 }
 
 export function isBmsBGMVolumeChangeChannel(channel: string): boolean {

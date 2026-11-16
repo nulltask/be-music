@@ -259,7 +259,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     autoplay: ctx.options.autoPlay === true,
     practice: ctx.play.practice === true || ctx.options.practiceRange !== undefined,
     // The camera fills the BGA frame even on a chart without a BGA.
-    hasBGA: ctx.play.hasBGA || ctx.play.bgaCamera !== undefined,
+    hasBGA: ctx.play.hasBGA || ctx.play.bgaCamera !== undefined || ctx.play.lrxBGA !== undefined,
     nowMs,
     progressRatio: chartLengthSeconds > 0 ? Math.max(0, Math.min(1, seconds / chartLengthSeconds)) : 0,
     // The beat this frame already worked out for the same `seconds`.

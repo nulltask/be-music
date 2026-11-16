@@ -137,7 +137,7 @@ flowchart LR
 
 ## NONSTOP コース
 
-LR2 の NONSTOP コース（`.lr2crs` の type 1）は、ステージごとには遊びません。LR2 の譜面読み込みが全ステージ（最大 5）を 1 本の譜面につなぎ、1 回のプレイとして遊びます（[`ParseBMSFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680)、`LR2body.exe` 0x4b0690）。LR2 互換の配置は BMS のステージを受け入れます。intended の配置は bmson と BMS/bmson 混在のコースにも対応します。この節はステージの配置と結合を扱います。結合した譜面はブラウザのプレイヤーで遊べます（[player-web.ja.md](player-web.ja.md)）。
+LR2 の NONSTOP コース（`.lr2crs` の type 1）は、ステージごとには遊びません。LR2 の譜面読み込みが全ステージ（最大 5）を 1 本の譜面につなぎ、1 回のプレイとして遊びます（[`ParseBMSFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680)、`LR2body.exe` 0x4b0690）。LR2 互換の配置は BMS のステージを受け入れます。intended の配置は bmson と BMS/bmson 混在のコースにも対応します。この節はステージの配置と結合を扱います。結合した譜面はブラウザのプレイヤーで遊べます（[player-web.ja.md](player-web.ja.md)）。 LRX のステージだけのコース（plugout の NONSTOP）は、ノーツごとの音の値、チェインノーツ、見えないノーツを保った 1 本の LRX 譜面につなぎ、ロングノーツは CN にします。LRX は BMS・bmson と混ぜられず（`lrx-mixed`）、ステージはすべて同じレーン構成である必要があります（`lrx-layout-mismatch`）。
 
 **つなぎ方。** 最後以外の各ステージは、次のステージへのつなぎ方を持ちます。コースのハッシュの先頭 10 文字（`courseKeys`、`0`〜`5`）に保存されており、`parseLR2NonstopConnections` が `CourseDefinition.connections` に読み込みます。
 
@@ -361,6 +361,8 @@ flowchart LR
 | expert、nonstop        | HARD         | `COURSE-HARD`                 | +0.1 / +0.1 / +0.05    | −6 / −10 / −2、HARD のダメージ倍率を掛ける |
 
 **`beatoraja`** は、どのコースも段位ゲージで遊びます（`GrooveGauge.create`）。GROOVE と EASY は `CLASS`、HARD は `EXCLASS`、DEATH は `EXHARDCLASS` に対応します。ゲージの表の組はコースの `gauge_*` 制約で決まり、なければプレイモードで決まります（5 / 10 鍵は `5k`、PMS は `9k`、24 / 48 鍵は `24k`、それ以外は `7k`）。どれも 100 から始まり、TOTAL による補正はありません。**`____`** には公表された段位ゲージがないので、beatoraja のものを使います。
+
+**`plugout`** は plugout4 -ARCADE EDITION- に従います。EXPERT と NONSTOP のコースは NORMAL と EASY のダメージをステージごとのノーツ数で変え、段位コースはゲージの値で変えたうえで、ゲージが尽きると 24 ライフで続けます。plugout のコースゲージはどれも 100 から始まり、回復せず、0 より上でクリアです。表は [ADR 0044](./adr/0044-plugout-ruleset.ja.md#コースゲージ) にあります。
 
 lr2oraja と LR2oraja Endless Dream は、beatoraja の `GAUGE_LR2` の段位ゲージに LR2 の死亡ラインと被ダメージ軽減の境目を加えてコースを遊びます。これらの規則との比較と、Be-Music が従わない理由は [lr2oraja のコース](./research/lr2oraja-courses.ja.md)にまとめています。
 

@@ -24,7 +24,7 @@ const unpackedEvents = new Map<BeMusicJSON, BeMusicEvent[]>();
  *   array on demand. The most recently read charts keep their rebuilt array (see {@link UNPACKED_EVENTS_CACHE_SIZE}),
  *   so repeated reads within a frame return the same array. Assigning `events` replaces the accessor with a plain
  *   value.
- * - `metadata`, `resources`, `bms` and `bmson` are deep-copied so their strings stop referencing the chart's decoded
+ * - `metadata`, `resources`, `bms`, `bmson` and `lrx` are deep-copied so their strings stop referencing the chart's decoded
  *   source text; otherwise a header such as `#TITLE` keeps the whole source text alive for as long as the song stays
  *   in the collection.
  *
@@ -36,6 +36,7 @@ export function compactCollectionChart(chart: BeMusicJSON, strings: PackedEventS
   chart.resources = structuredClone(chart.resources);
   chart.bms = structuredClone(chart.bms);
   chart.bmson = structuredClone(chart.bmson);
+  if (chart.lrx !== undefined) chart.lrx = structuredClone(chart.lrx);
   const packed = packEvents(chart.events, strings);
   if (packed !== undefined) {
     defineLazyEvents(chart, packed, strings);

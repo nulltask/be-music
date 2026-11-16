@@ -4,4 +4,5 @@
 export * from './core/parser.ts';
 export { parseBMSBytes } from './core/bms-bytes.ts';
 export { isN2SArchive, parseN2SBytes, readN2SArchive, type N2SArchiveEntry } from './core/n2s.ts';
+export { parseLRX, parseLRXBytes, resolveLRXHeaderPath, resolveLRXMoviePath, type LRXSourceFiles } from './core/lrx.ts';
 export { parseChartFile, type ParseChartFileOptions } from './node-file.ts';

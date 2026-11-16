@@ -32,6 +32,7 @@ export interface LR2PlaySkinChart {
     events: ReadonlyArray<{ channel: string }>;
     bms?: { player?: number };
     bmson?: { info?: { modeHint?: string } };
+    lrx?: { laneType?: number };
   };
 }
 
@@ -581,6 +582,7 @@ export function pickLR2PlaySkinVariant(
     events: chartEntry.chart.events,
     bms: chartEntry.chart.bms,
     bmson: chartEntry.chart.bmson,
+    lrx: chartEntry.chart.lrx,
   });
   const effective =
     battle?.battleMode === 'AUTO'

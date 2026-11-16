@@ -14,11 +14,14 @@ import type { GaugeShiftBottom } from './gauge-type.ts';
  *   COURSE-EASY, COURSE, COURSE-HARD, COURSE-DEATH.
  * - That-Which-Must-Not-Be-Named: ASSISTED EASY, EASY, NORMAL, HARD, EX-HARD (it has no HAZARD outside a course); a
  *   course plays beatoraja's class gauges, so CLASS, EXCLASS, EXHARDCLASS.
+ * - plugout has no auto-shift; its ladder takes LR2's shape: EASY, NORMAL, HARD, HAZARD, and on a course its course
+ *   gauges in the same order. The EX gauges are off the ladder, as LR2's attack gauges are.
  */
 const SINGLE_LADDERS: Readonly<Record<RulesetId, readonly string[]>> = {
   lr2: ['EASY', 'GROOVE', 'HARD', 'DEATH'],
   beatoraja: ['ASSIST-EASY', 'EASY', 'NORMAL', 'HARD', 'EX-HARD', 'HAZARD'],
   ____: ['ASSISTED-EASY', 'EASY', 'NORMAL', 'HARD', 'EX-HARD'],
+  plugout: ['EASY', 'NORMAL', 'HARD', 'HAZARD'],
 };
 
 const CLASS_LADDER: readonly string[] = ['CLASS', 'EXCLASS', 'EXHARDCLASS'];
@@ -29,6 +32,10 @@ const CLASS_LADDER: readonly string[] = ['CLASS', 'EXCLASS', 'EXHARDCLASS'];
  */
 export function resolveGaugeShiftLadder(ruleset: RulesetId, courseKind?: RulesetCourseKind): readonly string[] {
   if (courseKind === undefined) return SINGLE_LADDERS[ruleset];
+  if (ruleset === 'plugout') {
+    const prefix = courseKind === 'grade' ? 'GRADE' : 'COURSE';
+    return [`${prefix}-EASY`, prefix, `${prefix}-HARD`, `${prefix}-HAZARD`];
+  }
   if (ruleset !== 'lr2') return CLASS_LADDER;
   return courseKind === 'grade'
     ? ['GRADE', 'GRADE-HARD', 'GRADE-DEATH']
@@ -41,6 +48,8 @@ const BOTTOM_GAUGE_IDS: Readonly<Record<RulesetId, Readonly<Record<GaugeShiftBot
   lr2: { 'ASSIST-EASY': 'EASY', EASY: 'EASY', GROOVE: 'GROOVE' },
   beatoraja: { 'ASSIST-EASY': 'ASSIST-EASY', EASY: 'EASY', GROOVE: 'NORMAL' },
   ____: { 'ASSIST-EASY': 'ASSISTED-EASY', EASY: 'EASY', GROOVE: 'NORMAL' },
+  // plugout has no ASSIST EASY either.
+  plugout: { 'ASSIST-EASY': 'EASY', EASY: 'EASY', GROOVE: 'NORMAL' },
 };
 
 /**

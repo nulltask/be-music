@@ -79,7 +79,7 @@ describe('findReplayNotSimulatedReason', () => {
   test('gauge auto-shift is carried under every ruleset (#933)', () => {
     for (const gaugeAutoShift of ['CONTINUE', 'SURVIVAL_TO_GROOVE', 'BEST_CLEAR', 'SELECT_TO_UNDER'] as const) {
       const autoShift = makeReplay({ judgeRuleset: 'beatoraja', gaugeAutoShift });
-      for (const ruleset of ['lr2', 'beatoraja', '____'] as const)
+      for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const)
         expect(findReplayNotSimulatedReason(autoShift, ruleset)).toBeUndefined();
     }
   });
@@ -130,12 +130,14 @@ describe('rejudgeReplay', () => {
   });
 
   test('rejudgeReplayRulesets keys each ruleset’s outcome', () => {
-    const outcomes = rejudgeReplayRulesets(FAILED_EARLY, ['lr2', 'beatoraja', '____']);
+    const outcomes = rejudgeReplayRulesets(FAILED_EARLY, ['lr2', 'beatoraja', '____', 'plugout']);
     expect(Object.fromEntries(Object.entries(outcomes).map(([ruleset, outcome]) => [ruleset, outcome.status]))).toEqual(
       {
         lr2: 'simulated',
         beatoraja: 'truncated',
         ____: 'not-simulated',
+        // DEATH reads as plugout's HAZARD, and 110 ms early is a BAD there too: it fails at the same point.
+        plugout: 'simulated',
       },
     );
   });

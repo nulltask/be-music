@@ -369,8 +369,8 @@ scratch で扱う FREE ZONE のチャンネルを持ちます。bmson の `mode_
 
 ## 互換ルールセット
 
-**このプレイヤーは独自の判定ロジックを持ちません。** すべてのプレイは 3 つの互換ルールセット
-`lr2`（デフォルト）/ `beatoraja` / `____` のいずれかで動作します（`PlayerOptions.judgeRuleset`）。
+**このプレイヤーは独自の判定ロジックを持ちません。** すべてのプレイは 4 つの互換ルールセット
+`lr2`（デフォルト）/ `beatoraja` / `____` / `plugout` のいずれかで動作します（`PlayerOptions.judgeRuleset`）。
 判定幅、押下がどのノートを取るか、ロングノートの扱い、空 POOR の規則、ゲージの種類とカーブ、スコア計算式は
 すべてルールセットが所有します。定数と出典は
 [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) にあり、
@@ -378,6 +378,10 @@ scratch で扱う FREE ZONE のチャンネルを持ちます。bmson の `mode_
 
 同じテーブルがライブエンジンとリプレイシミュレータの両方を駆動し、等価性テストが同一の記録入力列に対して
 両者の判定が 1 つずつ一致することを要求します。
+
+`plugout` は LRX 譜面のプレイヤーである plugout4 -ARCADE EDITION- に従います。ランクごとに固定の判定幅、終点を
+離して判定するチャージノーツ、EX 版を持つ NORMAL / EASY / HARD / HAZARD のゲージ、100,000 点満点のスコア、PERFECT
+までのランプです。規則とその出典は [ADR 0044](./adr/0044-plugout-ruleset.ja.md) にあります。
 
 以降の章は既定の **`lr2` ルールセット**についての記述です。
 

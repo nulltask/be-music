@@ -5,6 +5,7 @@ import {
   type ReplayPlay,
   type ReplayTempoChange,
 } from '@be-music/player-engine/replay';
+import type { TimedSampleTrigger } from '@be-music/chart-model';
 import type { BeMusicEvent } from '@be-music/chart-source';
 import { stretchAudioBuffers, type TimeStretchAlgorithm } from './time-stretch.ts';
 import type { WebAudioSessionSlicePlayback } from './web-audio-session.ts';
@@ -117,8 +118,9 @@ export function resolveSampleStretchRates(
 }
 
 /**
- * bmson slices of samples stretched by `rate` (played `rate` times as fast): each slice's offset and length shrink by
- * `rate`, so it still starts and ends on the same note. Other fields are kept; at rate 1 it is a plain copy.
+ * bmson slices (and LRX note windows) of samples stretched by `rate` (played `rate` times as fast): each slice's
+ * offset, length and ramps shrink by `rate`, so it still starts and ends on the same note. Other fields are kept; at
+ * rate 1 it is a plain copy.
  */
 export function stretchSlicePlayback<T extends WebAudioSessionSlicePlayback>(
   slices: ReadonlyMap<BeMusicEvent, T>,
@@ -131,6 +133,8 @@ export function stretchSlicePlayback<T extends WebAudioSessionSlicePlayback>(
       ...slice,
       offsetSeconds: slice.offsetSeconds / rate,
       ...(slice.durationSeconds !== undefined ? { durationSeconds: slice.durationSeconds / rate } : {}),
+      ...(slice.attackSeconds !== undefined ? { attackSeconds: slice.attackSeconds / rate } : {}),
+      ...(slice.releaseSeconds !== undefined ? { releaseSeconds: slice.releaseSeconds / rate } : {}),
     });
   }
   return stretched;
@@ -163,4 +167,28 @@ export async function stretchDecodedSamples(
     if (cancelled()) return;
     paths.forEach((path, index) => samples.set(path, stretched[index]!));
   }
+}
+
+/**
+ * The per-event playback of the triggers that carry their own (an LRX note's slice, gain, balance, rate and ramps), or
+ * `undefined` when none does.
+ */
+export function collectTriggerVoicePlayback(
+  triggers: readonly TimedSampleTrigger[],
+): Map<BeMusicEvent, WebAudioSessionSlicePlayback> | undefined {
+  let playback: Map<BeMusicEvent, WebAudioSessionSlicePlayback> | undefined;
+  for (const trigger of triggers) {
+    const voice: WebAudioSessionSlicePlayback = {
+      offsetSeconds: trigger.sampleOffsetSeconds,
+      ...(trigger.sampleDurationSeconds !== undefined ? { durationSeconds: trigger.sampleDurationSeconds } : {}),
+      ...(trigger.sampleGain !== undefined ? { gain: trigger.sampleGain } : {}),
+      ...(trigger.samplePan !== undefined ? { pan: trigger.samplePan } : {}),
+      ...(trigger.samplePlaybackRate !== undefined ? { rate: trigger.samplePlaybackRate } : {}),
+      ...(trigger.sampleAttackSeconds !== undefined ? { attackSeconds: trigger.sampleAttackSeconds } : {}),
+      ...(trigger.sampleReleaseSeconds !== undefined ? { releaseSeconds: trigger.sampleReleaseSeconds } : {}),
+    };
+    if (voice.offsetSeconds === 0 && Object.keys(voice).length === 1) continue;
+    (playback ??= new Map()).set(trigger.event, voice);
+  }
+  return playback;
 }

@@ -239,7 +239,7 @@ flowchart TD
 ## Browser loading model
 
 - Dropped paths are normalized with the shared `@be-music/shared-utils/core` path helpers.
-- Chart discovery accepts `.bms`, `.bme`, `.bml`, `.pms`, `.bmson`, and Nanasi Groove 2's `.n2s`.
+- Chart discovery accepts `.bms`, `.bme`, `.bml`, `.pms`, `.bmson`, Nanasi Groove 2's `.n2s`, and LRX `.lrs` (read with the `.lrh` and `.lrm` beside it).
 - File lookup is case-insensitive so browser drops work with LR2 and beatoraja asset references that differ only by letter case.
 - Large audio and video files stay as lazy `File` references by default. Image, skin, chart, and smaller metadata files are read into bytes during collection loading.
 - Folder walking and file reads use bounded concurrency and progress callbacks so large folders can load without flooding the browser's FileSystem APIs or UI update loop.

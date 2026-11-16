@@ -127,7 +127,7 @@ describe('bmson zero-total policy', () => {
     }
   });
 
-  test.each(['lr2', 'beatoraja', '____'] as const)('%s zero-note gauges remain finite', (id) => {
+  test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)('%s zero-note gauges remain finite', (id) => {
     const empty = { ...facts, notes: { normal: 0, long: { 1: 0, 2: 0, 3: 0 } } };
     const config = resolveRuleset(empty, id, { bmsonTotalMode: 'spec' });
     expect(Number.isFinite(config.effectiveTotal)).toBe(true);

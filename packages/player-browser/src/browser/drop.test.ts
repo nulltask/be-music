@@ -27,6 +27,9 @@ describe('drop helpers', () => {
     expect(isChartFilePath('song/main.BMSON')).toBe(true);
     expect(isChartFilePath('music/song/01_song_n.n2s')).toBe(true);
     expect(isChartFilePath('music/song.n2x')).toBe(false);
+    expect(isChartFilePath('song/001/01.lrs')).toBe(true);
+    expect(isChartFilePath('song/001/01.lrh')).toBe(false);
+    expect(isChartFilePath('song/001/_movie.lrm')).toBe(false);
     expect(isChartFilePath('theme/play_7.lr2skin')).toBe(false);
   });
 

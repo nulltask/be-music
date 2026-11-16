@@ -58,7 +58,7 @@ Each package's README covers its usage, options and compatibility status.
 - [`@be-music/chart-source`](./packages/chart-source/README.md): pure IR of BMS/bmson intermediate representation (JSON compatible) dedicated to Be-Music internal processing
 - [`@be-music/chart-model`](./packages/chart-model/README.md): chart semantics helper such as beat resolution, event order, long note resolution, etc.
 - [`@be-music/shared-utils`](./packages/shared-utils/README.md): Generic utilities reused across all packages, with narrow subpath exports for browser-safe core helpers and Node-facing helpers
-- [`@be-music/chart-parser`](./packages/chart-parser/README.md): `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / `.n2s` / JSON parser
+- [`@be-music/chart-parser`](./packages/chart-parser/README.md): `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / `.n2s` / LRX / JSON parser
 - [`@be-music/chart-writer`](./packages/chart-writer/README.md): Stringization from JSON to `.bms` / `.bmson`
 - [`@be-music/chart-audio-renderer`](./packages/chart-audio-renderer/README.md): Render the music score and output `.wav` / `.aiff`
 - [`@be-music/player-engine`](./packages/player-engine/README.md): Shared rules and playback engine: one play loop (manual, auto, replay), judgment, scoring, gauges and clear lamps, best records, course runs and NONSTOP, the replay format, and the runtime contracts hosts plug into

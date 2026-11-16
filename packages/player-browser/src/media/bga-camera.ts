@@ -20,7 +20,15 @@ export interface BGACameraFeedOptions {
   readonly mirror?: boolean;
 }
 
-export class BGACameraFeed {
+/** A picture the BGA frame shows in place of the chart's BGA planes: the camera, or an LRX chart's composited BGA. */
+export interface BGAFeed {
+  /** The texture to draw this frame, or `undefined` while there is none. */
+  texture(): Texture | undefined;
+  /** A 256x256 picture for a Be-Music Skin that composites the BGA itself. */
+  image(): HTMLCanvasElement | undefined;
+}
+
+export class BGACameraFeed implements BGAFeed {
   public readonly stream: MediaStream;
   public readonly video: HTMLVideoElement;
   /** Flip the picture left to right. Applies from the next frame. */

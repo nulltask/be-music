@@ -31,7 +31,12 @@ export interface PlayOptionItem<T> {
 }
 
 /** How the Options dialog names each source. */
-const SOURCE_LABELS: Readonly<Record<RulesetId, string>> = { lr2: 'LR2', beatoraja: 'beatoraja', ____: '????' };
+const SOURCE_LABELS: Readonly<Record<RulesetId, string>> = {
+  lr2: 'LR2',
+  beatoraja: 'beatoraja',
+  ____: '????',
+  plugout: 'plugout',
+};
 
 /** The source of each lane option only one source defines (ADR 0019's registry, as the Options dialog groups them). */
 const LANE_OPTION_SOURCES: Readonly<Record<string, RulesetId>> = {
@@ -129,6 +134,8 @@ export function battleModeItems(ruleset: RulesetId): PlayOptionItem<PlayOptions[
       { text: 'BATTLE (????)', value: '____:BATTLE' },
       ...(ruleset === '____' ? [{ text: '2P PLAY (????)', value: 'TWO-PLAYER' as const }] : []),
     ],
+    // plugout's two-player play is LR2's BATTLE, listed under LR2.
+    plugout: [],
   };
   return [
     { text: 'OFF', value: 'OFF' },
@@ -137,8 +144,19 @@ export function battleModeItems(ruleset: RulesetId): PlayOptionItem<PlayOptions[
   ];
 }
 
+/** plugout's names for its gauges (the select skin's NORMAL / HARD / HAZARD / EASY and their EX variants). */
+const PLUGOUT_GAUGE_NAMES: Partial<Readonly<Record<GaugeType, string>>> = {
+  GROOVE: 'NORMAL',
+  DEATH: 'HAZARD',
+  'EX-GROOVE': 'EXNORMAL',
+  'EX-HARD': 'EXHARD',
+  'EX-DEATH': 'EXHAZARD',
+  'EX-EASY': 'EX EASY',
+};
+
 /** A gauge's name as its source spells it: beatoraja's and AC's GROOVE is NORMAL, beatoraja's DEATH its HAZARD. */
 function gaugeName(source: RulesetId, type: GaugeType): string {
+  if (source === 'plugout') return PLUGOUT_GAUGE_NAMES[type] ?? formatGaugeLabel(type) ?? type;
   if (type === 'ASSIST-EASY') return source === '____' ? 'ASSISTED EASY' : 'ASSIST EASY';
   if (type === 'DEATH' && source === 'beatoraja') return 'HAZARD';
   if (type === 'GROOVE' && source !== 'lr2') return 'NORMAL';

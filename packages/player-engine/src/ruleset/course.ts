@@ -1,5 +1,6 @@
 import { createLR2GoodAttackGauge, createLR2PerfectAttackGauge } from './lr2-attack.ts';
 import type { GaugeGutsStep, GaugeSpec, JudgeWindowSetUs, RulesetId, RulesetWindowTables } from './definitions.ts';
+import { resolvePlugoutCourseGauge, resolvePlugoutGaugeId, resolvePlugoutGradeStageStart } from './plugout.ts';
 
 /**
  * Course play (LR2 grade / expert / nonstop courses and beatoraja courses): which gauge a stage runs on and how a
@@ -24,8 +25,11 @@ export function isCourseStageFailed(
   ruleset: string,
   gauge: { final: number; failedMidPlay?: boolean; source?: string },
 ): boolean {
-  const lr2 = (gauge.source ?? ruleset.split('/')[0]) === 'lr2';
-  return gauge.failedMidPlay === true || (lr2 ? gauge.final < 2 : gauge.final <= 0);
+  const source = gauge.source ?? ruleset.split('/')[0];
+  // plugout's course gauges fail as they empty, or (grade NORMAL / EASY) as their lives run out: a gauge left at 0 with
+  // lives to spare passes the stage.
+  if (source === 'plugout') return gauge.failedMidPlay === true;
+  return gauge.failedMidPlay === true || (source === 'lr2' ? gauge.final < 2 : gauge.final <= 0);
 }
 
 export interface RulesetCourseOptions {
@@ -176,6 +180,8 @@ export function resolveDefaultCourseGaugeSet(laneMode: string): CourseGaugeSet {
 export function resolveCourseGaugeId(rulesetId: RulesetId, kind: RulesetCourseKind, selectedGauge: string): string {
   if (rulesetId !== 'lr2' && ['P-ATTACK', 'G-ATTACK'].includes(selectedGauge))
     throw new RangeError('Attack gauges are available only for LR2.');
+  // plugout's course gauge follows the single-play gauge picked (`resolvePlugoutCourseGauge`).
+  if (rulesetId === 'plugout') return resolvePlugoutCourseGauge(resolvePlugoutGaugeId(selectedGauge), kind, 0).id;
   if (rulesetId === 'lr2') {
     const prefix = kind === 'grade' ? 'GRADE' : 'COURSE';
     switch (selectedGauge) {
@@ -217,15 +223,20 @@ export function resolveCourseGauge(
   course: RulesetCourseOptions,
   laneMode: string,
   damage: number,
+  noteCount = 0,
 ): GaugeSpec {
   if (rulesetId !== 'lr2' && ['P-ATTACK', 'G-ATTACK'].includes(gaugeId))
     throw new RangeError('Attack gauges are available only for LR2.');
   const spec =
     rulesetId === 'lr2'
       ? resolveLR2CourseGauge(gaugeId, damage)
-      : resolveClassGauge(gaugeId, course.gaugeSet ?? resolveDefaultCourseGaugeSet(laneMode));
-  const initial = course.initialGauge;
+      : rulesetId === 'plugout'
+        ? resolvePlugoutCourseGauge(gaugeId, course.kind, noteCount)
+        : resolveClassGauge(gaugeId, course.gaugeSet ?? resolveDefaultCourseGaugeSet(laneMode));
+  let initial = course.initialGauge;
   if (initial === undefined || !Number.isFinite(initial)) return spec;
+  // plugout starts a grade stage at 0.01 % at least, so a stage left on lives plays its gauge again.
+  if (rulesetId === 'plugout' && course.kind === 'grade') initial = resolvePlugoutGradeStageStart(initial);
   return { ...spec, initial: Math.min(spec.max, Math.max(spec.min, initial)) };
 }
 

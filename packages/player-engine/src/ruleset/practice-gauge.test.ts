@@ -29,7 +29,7 @@ test('PRACTICE lists the judge ruleset’s own gauges', () => {
 
 test('every ruleset’s gauges are a valid stored PRACTICE gauge, each once', () => {
   expect(new Set(PRACTICE_GAUGE_TYPES).size).toBe(PRACTICE_GAUGE_TYPES.length);
-  for (const ruleset of ['lr2', 'beatoraja', '____'] as const)
+  for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const)
     for (const gauge of resolvePracticeGaugeTypes(ruleset)) {
       expect(PRACTICE_GAUGE_TYPES).toContain(gauge);
       expect(isPracticeGaugeType(gauge, ruleset)).toBe(true);
@@ -45,7 +45,7 @@ test('each ruleset starts PRACTICE on its default recovery gauge', () => {
   expect(resolveDefaultPracticeGauge('lr2')).toBe('GROOVE');
   expect(resolveDefaultPracticeGauge('beatoraja')).toBe('NORMAL');
   expect(resolveDefaultPracticeGauge('____')).toBe('NORMAL');
-  for (const ruleset of ['lr2', 'beatoraja', '____'] as const)
+  for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const)
     expect(isPracticeGaugeType(resolveDefaultPracticeGauge(ruleset), ruleset)).toBe(true);
 });
 
