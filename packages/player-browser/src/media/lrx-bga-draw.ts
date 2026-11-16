@@ -19,13 +19,63 @@ export function resolveLRXBGAPivot(
   return [x + w * column, y + h * row];
 }
 
+/** A WebGL blend state: the equation and the source and destination factors, as WebGL names them. */
+export interface LRXBGABlend {
+  readonly equation: 'FUNC_ADD' | 'FUNC_REVERSE_SUBTRACT';
+  readonly source: 'ONE' | 'SRC_ALPHA' | 'DST_COLOR';
+  readonly destination: 'ONE_MINUS_SRC_ALPHA' | 'ONE_MINUS_SRC_COLOR' | 'SRC_COLOR';
+}
+
 /**
- * The canvas compositing for a note's `bld`: 0 alpha, 1 add, 3 multiply. A canvas has no subtract, so 2 draws as the
- * difference, which matches it wherever the picture is darker than what lies below.
+ * The blend state a note's `bld` draws with, as plugout's Direct3D 9 driver sets it for a 2D image (`plugout4.exe`
+ * 0x592c5c, `D3DRS_BLENDOP` / `SRCBLEND` / `DESTBLEND`). The source is the picture times the note's colour, alpha
+ * included (texture stage 0 modulates both):
+ *
+ * - 1 (Add): `src + dst × (1 − src)`, the source's alpha unused.
+ * - 2 (Sub): `dst × (1 − src) − src × α`, a reverse subtraction clamped at 0.
+ * - 3 (Mul): `src × α + dst × src`.
+ * - 4: `src × dst + dst × (1 − α)`.
+ * - Anything else, 0 (Alpha) among them: `src × α + dst × (1 − α)`.
  */
-export function resolveLRXBGAComposite(blend: number): GlobalCompositeOperation {
-  if (blend === 1) return 'lighter';
-  if (blend === 2) return 'difference';
-  if (blend === 3) return 'multiply';
-  return 'source-over';
+export function resolveLRXBGABlend(blend: number): LRXBGABlend {
+  switch (blend) {
+    case 1:
+      return { equation: 'FUNC_ADD', source: 'ONE', destination: 'ONE_MINUS_SRC_COLOR' };
+    case 2:
+      return { equation: 'FUNC_REVERSE_SUBTRACT', source: 'SRC_ALPHA', destination: 'ONE_MINUS_SRC_COLOR' };
+    case 3:
+      return { equation: 'FUNC_ADD', source: 'SRC_ALPHA', destination: 'SRC_COLOR' };
+    case 4:
+      return { equation: 'FUNC_ADD', source: 'DST_COLOR', destination: 'ONE_MINUS_SRC_ALPHA' };
+    default:
+      return { equation: 'FUNC_ADD', source: 'SRC_ALPHA', destination: 'ONE_MINUS_SRC_ALPHA' };
+  }
+}
+
+/**
+ * The four corners of a destination rectangle turned by `degrees` (clockwise on the y-down screen) about the pivot:
+ * top left, top right, bottom left, bottom right.
+ */
+export function resolveLRXBGAQuad(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  pivot: readonly [number, number],
+  degrees: number,
+): readonly [number, number][] {
+  const radians = (degrees * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const [px, py] = pivot;
+  return [
+    [x, y],
+    [x + w, y],
+    [x, y + h],
+    [x + w, y + h],
+  ].map(([cx, cy]) => {
+    const dx = cx! - px;
+    const dy = cy! - py;
+    return [px + dx * cos - dy * sin, py + dx * sin + dy * cos] as [number, number];
+  });
 }

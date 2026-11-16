@@ -3,6 +3,10 @@
  * layers on a 1280×720 screen, each cropped, placed, tinted, blended and rotated as its note says and eased between
  * keyframes (`sampleLRXBGA`), or the POOR image alone for half a second after a miss. It feeds the BGA frame through
  * the same {@link BGAFeed} the camera uses, so every play scene shows it in place of the chart's BMS BGA planes.
+ *
+ * It draws with WebGL, as plugout draws with Direct3D 9: each image is a quad whose texels are multiplied by the note's
+ * colour, blended into the screen by the same blend equation and factors plugout's driver sets for the note's `bld`
+ * (`resolveLRXBGABlend`), which a 2D canvas cannot express.
  */
 
 import { CanvasSource, Texture } from 'pixi.js';
@@ -16,14 +20,41 @@ import {
 } from '@be-music/chart-model';
 import type { BGAFeed } from './bga-camera.ts';
 import { fitBGACameraRect } from './bga-camera-fit.ts';
-import { resolveLRXBGAPivot, resolveLRXBGAComposite } from './lrx-bga-draw.ts';
+import { resolveLRXBGABlend, resolveLRXBGAPivot, resolveLRXBGAQuad } from './lrx-bga-draw.ts';
 
 /** The side of the square picture a Canvas skin gets, the BMS BGA canvas. */
 const SKIN_IMAGE_SIZE = 256;
 /** plugout shows the POOR image for 500 ms after a miss (0x4439b7). */
 export const LRX_POOR_SECONDS = 0.5;
 
-type Drawable = CanvasImageSource & { width?: number; height?: number };
+type Drawable = TexImageSource;
+
+const VERTEX_SHADER = `
+attribute vec2 aPosition;
+attribute vec2 aTexel;
+varying vec2 vTexel;
+void main() {
+  vTexel = aTexel;
+  gl_Position = vec4(aPosition.x / ${LRX_BGA_WIDTH}.0 * 2.0 - 1.0, 1.0 - aPosition.y / ${LRX_BGA_HEIGHT}.0 * 2.0, 0.0, 1.0);
+}`;
+
+const FRAGMENT_SHADER = `
+precision mediump float;
+uniform sampler2D uImage;
+uniform vec4 uColor;
+varying vec2 vTexel;
+void main() {
+  gl_FragColor = texture2D(uImage, vTexel) * uColor;
+}`;
+
+/** The WebGL objects the compositor draws with. */
+interface LRXBGAGL {
+  readonly gl: WebGLRenderingContext;
+  readonly buffer: WebGLBuffer;
+  readonly color: WebGLUniformLocation;
+  /** One texture per picture, a video's uploaded again each frame. */
+  readonly textures: Map<Drawable, WebGLTexture>;
+}
 
 export interface LRXBGACompositorSources {
   /** The images by BMP key, black kept (the base plane's textures). */
@@ -43,11 +74,10 @@ export interface LRXBGACompositorClock {
 
 export class LRXBGACompositor implements BGAFeed {
   private readonly canvas: HTMLCanvasElement;
-  private readonly context: CanvasRenderingContext2D | null;
+  private readonly gl: LRXBGAGL | undefined;
   private readonly source: CanvasSource;
   private readonly plain: Texture;
   private skinCanvas: HTMLCanvasElement | undefined;
-  private tintCanvas: HTMLCanvasElement | undefined;
   /** The cue each slot's video started for, so a video seeks once when its note begins. */
   private readonly videoCues = new Map<number, string>();
   private drawnAt: number | undefined;
@@ -62,7 +92,7 @@ export class LRXBGACompositor implements BGAFeed {
     this.sources = sources;
     this.clock = clock;
     this.canvas = Object.assign(document.createElement('canvas'), { width: LRX_BGA_WIDTH, height: LRX_BGA_HEIGHT });
-    this.context = this.canvas.getContext('2d');
+    this.gl = createLRXBGAGL(this.canvas);
     this.source = new CanvasSource({ resource: this.canvas });
     this.source.label = 'bga/lrx';
     this.plain = new Texture({ source: this.source, label: 'bga/lrx' });
@@ -98,10 +128,14 @@ export class LRXBGACompositor implements BGAFeed {
   public dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    const { plain, source } = this;
+    const { plain, source, gl } = this;
     const release = (): void => {
       plain.destroy(false);
       source.destroy();
+      if (gl !== undefined) {
+        for (const texture of gl.textures.values()) gl.gl.deleteTexture(texture);
+        gl.textures.clear();
+      }
     };
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(release));
     else setTimeout(release, 50);
@@ -109,23 +143,21 @@ export class LRXBGACompositor implements BGAFeed {
 
   /** Redraws the screen for the play's current second, once per second value. */
   private draw(): void {
-    const context = this.context;
-    if (context === null) return;
+    const gl = this.gl;
+    if (gl === undefined) return;
     const seconds = this.clock.seconds();
     if (this.drawnAt === seconds) return;
     this.drawnAt = seconds;
-    context.setTransform(1, 0, 0, 1, 0, 0);
-    context.globalAlpha = 1;
-    context.globalCompositeOperation = 'source-over';
-    context.fillStyle = '#000';
-    context.fillRect(0, 0, LRX_BGA_WIDTH, LRX_BGA_HEIGHT);
+    gl.gl.viewport(0, 0, LRX_BGA_WIDTH, LRX_BGA_HEIGHT);
+    gl.gl.clearColor(0, 0, 0, 1);
+    gl.gl.clear(gl.gl.COLOR_BUFFER_BIT);
     const poor = this.clock.showsPoor() ? sampleLRXBGA(this.program, 5, seconds, this.sizeOf) : undefined;
     if (poor !== undefined) {
-      this.drawSprite(context, 5, poor, seconds);
+      this.drawSprite(gl, 5, poor, seconds);
     } else {
       for (let slot = 0; slot < 5; slot++) {
         const sprite = sampleLRXBGA(this.program, slot, seconds, this.sizeOf);
-        if (sprite !== undefined) this.drawSprite(context, slot, sprite, seconds);
+        if (sprite !== undefined) this.drawSprite(gl, slot, sprite, seconds);
       }
     }
     this.source.update();
@@ -149,7 +181,7 @@ export class LRXBGACompositor implements BGAFeed {
     return { source: resource, width: texture.source.width, height: texture.source.height };
   }
 
-  private drawSprite(context: CanvasRenderingContext2D, slot: number, sprite: LRXBGASprite, seconds: number): void {
+  private drawSprite(gl: LRXBGAGL, slot: number, sprite: LRXBGASprite, seconds: number): void {
     const image = this.imageOf(slot, sprite.key);
     if (image === undefined) return;
     this.syncVideo(slot, sprite.key, image.source, seconds);
@@ -157,52 +189,62 @@ export class LRXBGACompositor implements BGAFeed {
     const [dx, dy, dw, dh] =
       sprite.dst ??
       (sprite.fill === 'screen' ? [0, 0, LRX_BGA_WIDTH, LRX_BGA_HEIGHT] : [0, 0, image.width, image.height]);
-    if (sw <= 0 || sh <= 0 || dw === 0 || dh === 0) return;
-    const [alpha, red, green, blue] = sprite.color;
-    if (alpha <= 0) return;
-    const picture =
-      red === 255 && green === 255 && blue === 255
-        ? image.source
-        : this.tint(image.source, sx, sy, sw, sh, red, green, blue);
-    const crop = picture === image.source ? [sx, sy, sw, sh] : [0, 0, sw, sh];
-    const [px, py] = resolveLRXBGAPivot(sprite.center, dx, dy, dw, dh);
-    context.save();
-    context.globalAlpha = Math.min(1, alpha / 255);
-    context.globalCompositeOperation = resolveLRXBGAComposite(sprite.blend);
-    context.translate(px, py);
-    context.rotate((sprite.rotation * Math.PI) / 180);
-    context.translate(-px, -py);
-    try {
-      context.drawImage(picture, crop[0]!, crop[1]!, crop[2]!, crop[3]!, dx, dy, dw, dh);
-    } catch {
-      // A video with no frame yet draws nothing this frame.
+    if (sw === 0 || sh === 0 || dw === 0 || dh === 0 || image.width <= 0 || image.height <= 0) return;
+    const texture = this.textureOf(gl, image.source);
+    if (texture === undefined) return;
+    const quad = resolveLRXBGAQuad(dx, dy, dw, dh, resolveLRXBGAPivot(sprite.center, dx, dy, dw, dh), sprite.rotation);
+    const u0 = sx / image.width;
+    const v0 = sy / image.height;
+    const u1 = (sx + sw) / image.width;
+    const v1 = (sy + sh) / image.height;
+    const texels = [
+      [u0, v0],
+      [u1, v0],
+      [u0, v1],
+      [u1, v1],
+    ] as const;
+    const vertices = new Float32Array(16);
+    for (let corner = 0; corner < 4; corner++) {
+      vertices.set([quad[corner]![0], quad[corner]![1], texels[corner]![0], texels[corner]![1]], corner * 4);
     }
-    context.restore();
+    const context = gl.gl;
+    context.bindBuffer(context.ARRAY_BUFFER, gl.buffer);
+    context.bufferData(context.ARRAY_BUFFER, vertices, context.STREAM_DRAW);
+    const [alpha, red, green, blue] = sprite.color;
+    context.uniform4f(gl.color, red / 255, green / 255, blue / 255, alpha / 255);
+    const blend = resolveLRXBGABlend(sprite.blend);
+    context.blendEquation(context[blend.equation]);
+    context.blendFunc(context[blend.source], context[blend.destination]);
+    context.bindTexture(context.TEXTURE_2D, texture);
+    context.drawArrays(context.TRIANGLE_STRIP, 0, 4);
   }
 
-  /** The cropped picture multiplied by the colour, its alpha kept. */
-  private tint(
-    source: Drawable,
-    sx: number,
-    sy: number,
-    sw: number,
-    sh: number,
-    red: number,
-    green: number,
-    blue: number,
-  ): HTMLCanvasElement {
-    const canvas = (this.tintCanvas ??= document.createElement('canvas'));
-    canvas.width = Math.max(1, Math.round(sw));
-    canvas.height = Math.max(1, Math.round(sh));
-    const context = canvas.getContext('2d')!;
-    context.globalCompositeOperation = 'source-over';
-    context.drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-    context.globalCompositeOperation = 'multiply';
-    context.fillStyle = `rgb(${red}, ${green}, ${blue})`;
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.globalCompositeOperation = 'destination-in';
-    context.drawImage(source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-    return canvas;
+  /** The picture's texture, uploaded once (a video every frame). */
+  private textureOf(gl: LRXBGAGL, source: Drawable): WebGLTexture | undefined {
+    const context = gl.gl;
+    let texture = gl.textures.get(source);
+    const fresh = texture === undefined;
+    if (texture === undefined) {
+      const created = context.createTexture();
+      if (created === null) return undefined;
+      texture = created;
+      gl.textures.set(source, texture);
+      context.bindTexture(context.TEXTURE_2D, texture);
+      context.texParameteri(context.TEXTURE_2D, context.TEXTURE_WRAP_S, context.CLAMP_TO_EDGE);
+      context.texParameteri(context.TEXTURE_2D, context.TEXTURE_WRAP_T, context.CLAMP_TO_EDGE);
+      context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MIN_FILTER, context.LINEAR);
+      context.texParameteri(context.TEXTURE_2D, context.TEXTURE_MAG_FILTER, context.LINEAR);
+    }
+    if (fresh || source instanceof HTMLVideoElement) {
+      context.bindTexture(context.TEXTURE_2D, texture);
+      try {
+        context.texImage2D(context.TEXTURE_2D, 0, context.RGBA, context.RGBA, context.UNSIGNED_BYTE, source);
+      } catch {
+        // A video with no frame yet draws nothing this frame.
+        return undefined;
+      }
+    }
+    return texture;
   }
 
   /** A video starts from the moment its note began, once, and keeps playing. */
@@ -220,4 +262,49 @@ export class LRXBGACompositor implements BGAFeed {
     }
     if (source.paused) void source.play().catch(() => {});
   }
+}
+
+/** A WebGL context on `canvas` with the compositor's program bound, or `undefined` where WebGL is unavailable. */
+function createLRXBGAGL(canvas: HTMLCanvasElement): LRXBGAGL | undefined {
+  const gl = canvas.getContext('webgl', {
+    alpha: false,
+    antialias: false,
+    depth: false,
+    premultipliedAlpha: false,
+    preserveDrawingBuffer: true,
+    stencil: false,
+  });
+  if (gl === null) return undefined;
+  const compile = (type: number, code: string): WebGLShader | undefined => {
+    const shader = gl.createShader(type);
+    if (shader === null) return undefined;
+    gl.shaderSource(shader, code);
+    gl.compileShader(shader);
+    return gl.getShaderParameter(shader, gl.COMPILE_STATUS) === true ? shader : undefined;
+  };
+  const vertex = compile(gl.VERTEX_SHADER, VERTEX_SHADER);
+  const fragment = compile(gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
+  const program = gl.createProgram();
+  const buffer = gl.createBuffer();
+  if (vertex === undefined || fragment === undefined || program === null || buffer === null) return undefined;
+  gl.attachShader(program, vertex);
+  gl.attachShader(program, fragment);
+  gl.linkProgram(program);
+  if (gl.getProgramParameter(program, gl.LINK_STATUS) !== true) return undefined;
+  gl.useProgram(program);
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  const position = gl.getAttribLocation(program, 'aPosition');
+  const texel = gl.getAttribLocation(program, 'aTexel');
+  gl.enableVertexAttribArray(position);
+  gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 16, 0);
+  gl.enableVertexAttribArray(texel);
+  gl.vertexAttribPointer(texel, 2, gl.FLOAT, false, 16, 8);
+  const color = gl.getUniformLocation(program, 'uColor');
+  if (color === null) return undefined;
+  gl.uniform1i(gl.getUniformLocation(program, 'uImage'), 0);
+  gl.activeTexture(gl.TEXTURE0);
+  // Texels keep their own colour where they are transparent, as a Direct3D texture does.
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  gl.enable(gl.BLEND);
+  return { gl, buffer, color, textures: new Map() };
 }
