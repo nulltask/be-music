@@ -279,6 +279,9 @@ describe('classifyReplayAssists', () => {
     expect(classOf({ randomLane: { p1: 'RANDOM-EX', p2: 'RANDOM-EX' } }, forced)).toBe('none');
     // Other assists of the player still count.
     expect(classOf({ randomLane: { p1: 'RANDOM-EX' }, autoScratch: true }, forced)).toBe('light');
+    // nanasigroove's RANDOM+, as a chart RANDOM+ is recorded since #1244, is no LR2 or beatoraja assist.
+    expect(classOf({ randomLane: { p1: 'RANDOM+', p2: 'RANDOM+' } }, forced)).toBe('none');
+    expect(classOf({ randomLane: { p1: 'RANDOM+' } })).toBe('none');
   });
 
   test('counts the 2P AUTO SCRATCH only on a chart with a 2P side', () => {

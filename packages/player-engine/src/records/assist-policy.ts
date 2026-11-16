@@ -155,7 +155,8 @@ export function classifyReplayAssists(replay: AssistReplay): AssistFinding[] {
   if (play.options?.practice === true) add({ option: 'practice', source: 'beatoraja', assistClass: 'no-save' });
 
   // A lane arrangement the chart forced (#844) is nanasigroove's, which has no assist class, and every play of the chart
-  // gets it: it is not the player's assist, whatever lane value the host recorded for it.
+  // gets it: it is not the player's assist, whatever lane value the host recorded for it. A chart RANDOM+ is recorded as
+  // nanasigroove's own `RANDOM+` since #1244, which no rule here classifies; older replays recorded it as RANDOM-EX.
   // The 2P lane option arranges nothing on a chart without a 2P side, and beatoraja builds its 2P modifier only for a
   // two-player mode (`BMSPlayer` L292), so it counts there only. LR2 caps the lamp for a 2P SCATTER or CONVERGE on any
   // chart (`random > 3`, OpenLR2 `LR2f.cpp` L9334), so LR2's own 2P values always count (#1080).
