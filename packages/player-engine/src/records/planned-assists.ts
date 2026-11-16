@@ -19,6 +19,7 @@ import {
  * The options a play is about to start with, in the fields a replay records them in (`BeMusicReplay.play`). The
  * counts a prepared chart gives (`mineModifierChangeCount`, `longNoteModifierChangeCount`, `scrollModifierChanged`,
  * `extraNoteChangeCount`, `sevenToNineApplied`) are not read: the plan says whether the option is on instead.
+ * `playerChartPlayOptions` holds the player's picks; a NOTES COPY counts only on a chart it copies.
  */
 export interface PlannedPlay extends Partial<
   Pick<
@@ -32,6 +33,7 @@ export interface PlannedPlay extends Partial<
     | 'options'
     | 'view'
     | 'randomLane'
+    | 'playerChartPlayOptions'
     | 'battleMode'
     | 'lr2Mania'
     | 'lr2ExtraMode'
@@ -67,12 +69,26 @@ const EVERY_CASE_CHART = {
 /** A chart on which none does: no 2P side, no generated note, one BPM. */
 const NO_CASE_CHART = { notes: [], bpmRange: { min: 1, max: 1 } } as unknown as AssistReplay['chart'];
 
+/** The player's picks as a play would run them: a NOTES COPY takes effect only on a 5 / 7 KEY chart outside a course. */
+function plannedPlayerOptions(
+  player: NonNullable<PlannedPlay['playerChartPlayOptions']>,
+  everyCase: boolean,
+): NonNullable<PlannedPlay['playerChartPlayOptions']> {
+  if (everyCase || (player.notes !== 'COPY' && player.notes !== 'DBLCOPY')) return player;
+  // Elsewhere COPY does nothing and DBLCOPY keeps its DOUBLE.
+  const { notes, ...others } = player;
+  return notes === 'DBLCOPY' ? { ...others, notes: 'DOUBLE' } : others;
+}
+
 function planAsReplay(plan: PlannedPlay, everyCase: boolean): AssistReplay {
-  const { extraNotes, sevenToNine, ...recorded } = plan;
+  const { extraNotes, sevenToNine, playerChartPlayOptions, ...recorded } = plan;
   const count = everyCase ? 1 : 0;
   return {
     play: {
       ...recorded,
+      ...(playerChartPlayOptions !== undefined
+        ? { playerChartPlayOptions: plannedPlayerOptions(playerChartPlayOptions, everyCase) }
+        : {}),
       mineModifierChangeCount: count,
       longNoteModifierChangeCount: count,
       scrollModifierChanged: everyCase,

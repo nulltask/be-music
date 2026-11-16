@@ -47,6 +47,7 @@ export type RecordConsequenceState = Pick<
   | 'lr2ExtraMode'
   | 'mineModifier'
   | 'crazyAddMine'
+  | 'crazyNotes'
   | 'scrollModifier'
   | 'longNoteModifier'
   | 'extraNoteDepth'
@@ -91,6 +92,8 @@ export function plannedPlayOf(state: RecordConsequenceState): PlannedPlay {
       addMines: state.lr2AddMines,
     } as NonNullable<PlannedPlay['lr2Mania']>,
     lr2ExtraMode: state.lr2ExtraMode,
+    // Only NOTES bears on the record: a COPY play keeps none on a chart it copies (#1243).
+    ...(state.crazyNotes !== 'OFF' ? { playerChartPlayOptions: { notes: state.crazyNotes } } : {}),
     mineModifier: state.crazyAddMine ? 'NANASI_ADD' : state.mineModifier,
     scrollModifier: state.scrollModifier,
     longNoteModifier: state.longNoteModifier,
@@ -122,6 +125,8 @@ const FINDING_NAMES: Readonly<Record<string, string>> = {
   'long-note:ADD_CN': 'ADD CN',
   'long-note:ADD_HCN': 'ADD HCN',
   'long-note:ADD_ALL': 'ADD ALL',
+  'nanasi-notes:COPY': 'NOTES COPY',
+  'nanasi-notes:DBLCOPY': 'NOTES DBLCOPY',
 };
 
 function names(findings: readonly AssistFinding[]): string {

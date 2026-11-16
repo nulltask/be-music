@@ -5,6 +5,7 @@ import {
   isChartPlayOptionDeclaration,
   isLegacyChartPlayOptionProgram,
   parseChartPlayOption,
+  playerChartPlayOptionsOf,
   withPlayerChartPlayOptions,
 } from './chart-play-options.ts';
 
@@ -115,4 +116,23 @@ test('hasChartPlayOptions', () => {
   expect(hasChartPlayOptions(undefined)).toBe(false);
   expect(hasChartPlayOptions({ version: 1, options: {} })).toBe(false);
   expect(hasChartPlayOptions({ version: 1, options: { hellJudge: true } })).toBe(true);
+});
+
+test('the selections a play ran with that the chart does not set came from the player (#1243)', () => {
+  expect(playerChartPlayOptionsOf({}, {})).toEqual({});
+  expect(
+    playerChartPlayOptionsOf({ random: 'MIRROR' }, { random: 'MIRROR', judge: 'GOOD2BAD', notes: 'COPY' }),
+  ).toEqual({
+    judge: 'GOOD2BAD',
+    notes: 'COPY',
+  });
+  // The chart's own choice wins within a family, so it is the chart's, also where the play narrowed it.
+  expect(
+    playerChartPlayOptionsOf({ judge: 'GREAT2BAD', notes: 'DBLCOPY' }, { judge: 'GREAT2BAD', notes: 'DOUBLE' }),
+  ).toEqual({});
+  expect(playerChartPlayOptionsOf({ judge: 'GREAT2BAD' }, { judge: 'GREAT2BAD', hellJudge: true })).toEqual({
+    hellJudge: true,
+  });
+  // A player's COPY a course stage left out took no effect.
+  expect(playerChartPlayOptionsOf({}, { notes: 'DOUBLE' })).toEqual({ notes: 'DOUBLE' });
 });

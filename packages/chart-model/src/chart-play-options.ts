@@ -167,6 +167,23 @@ export function withPlayerChartPlayOptions(
   return changed ? { version: CHART_PLAY_OPTION_PROGRAM_VERSION, options } : program;
 }
 
+/**
+ * The selections in `effective` that came from the player (#1243): the CRAZY gameplay options a play ran with that the
+ * chart's own `declared` options do not set, as {@link withPlayerChartPlayOptions} adds them. `effective` is the program
+ * narrowed to the play (a course stage leaves COPY out), so a selection that took no effect is not listed, and a value
+ * the play narrowed (DBLCOPY that kept only its DOUBLE) is listed as it ran.
+ */
+export function playerChartPlayOptionsOf(
+  declared: ChartPlayOptions,
+  effective: ChartPlayOptions,
+): PlayerChartPlayOptions {
+  const player: PlayerChartPlayOptions = {};
+  if (effective.judge !== undefined && declared.judge === undefined) player.judge = effective.judge;
+  if (effective.hellJudge === true && declared.hellJudge !== true) player.hellJudge = true;
+  if (effective.notes !== undefined && declared.notes === undefined) player.notes = effective.notes;
+  return player;
+}
+
 /** True when `program` forces anything. */
 export function hasChartPlayOptions(program: ChartPlayOptionProgram | undefined): boolean {
   return program !== undefined && Object.keys(program.options).length > 0;

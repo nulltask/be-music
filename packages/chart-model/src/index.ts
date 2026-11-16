@@ -252,6 +252,7 @@ export {
   isChartPlayOptionDeclaration,
   isLegacyChartPlayOptionProgram,
   parseChartPlayOption,
+  playerChartPlayOptionsOf,
   withPlayerChartPlayOptions,
   type ChartJudgeModifier,
   type ChartNotesOption,
