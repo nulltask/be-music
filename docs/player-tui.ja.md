@@ -44,7 +44,7 @@ TTY support がない場合や TUI 初期化に失敗した場合、player は t
 input path が単一 chart の場合、CLI はその chart を parse し、loading screen を準備し、gameplay を実行し、その後 result screen を表示します。
 単一 chart mode の result screen は replay を受け付けます。
 
-input path が directory の場合、CLI は `.bms`、`.bme`、`.bml`、`.pms`、`.bmson` file を再帰的に探索します。
+input path が directory の場合、CLI は `.bms`、`.bme`、`.bml`、`.pms`、`.bmson`、`.n2s`（ナナシグルーヴ2）file を再帰的に探索します。
 Music Select list を構築し、次の小さな state machine で遷移します。
 
 - `select`: chart browse、difficulty filter、play mode 変更、high-speed 変更、random entry 選択を扱います。

@@ -19,12 +19,14 @@ export interface ParsedChartCache {
 }
 
 /**
- * What of a chart's path its parse result depends on: bmson or BMS text, and the `.pms` extension that decides the
- * play variant. Two files with the same bytes under the same kind of name parse the same.
+ * What of a chart's path its parse result depends on: bmson, BMS text or a Nanasi Groove 2 `.n2s` container, and the
+ * `.pms` extension that decides the play variant (an `.n2s` chart is PMS too). Two files with the same bytes under the
+ * same kind of name parse the same.
  */
-export function parsedChartPathKind(path: string): 'bmson' | 'pms' | 'bms' {
+export function parsedChartPathKind(path: string): 'bmson' | 'n2s' | 'pms' | 'bms' {
   const lower = path.toLowerCase();
   if (lower.endsWith('.bmson')) return 'bmson';
+  if (lower.endsWith('.n2s')) return 'n2s';
   if (lower.endsWith('.pms')) return 'pms';
   return 'bms';
 }

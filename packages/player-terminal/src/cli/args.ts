@@ -431,7 +431,7 @@ function parseImageResizeAlgorithmArg(raw: string | undefined): ImageResizeAlgor
 export function printUsage(): void {
   process.stdout.write(
     [
-      'Usage: bms-player <input.(bms|bme|bml|pms|bmson|json)|directory> [options]',
+      'Usage: bms-player <input.(bms|bme|bml|pms|bmson|n2s|json)|directory> [options]',
       '',
       'Essential options:',
       '  --auto                    Enable auto play mode (default: off)',

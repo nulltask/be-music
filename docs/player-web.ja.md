@@ -237,7 +237,7 @@ flowchart TD
 ## Browser loading model
 
 - dropped path は共有の `@be-music/shared-utils/core` path helper で normalize します。
-- chart discovery は `.bms`, `.bme`, `.bml`, `.pms`, `.bmson` を受け付けます。
+- chart discovery は `.bms`, `.bme`, `.bml`, `.pms`, `.bmson`, ナナシグルーヴ2 の `.n2s` を受け付けます。
 - file lookup は case-insensitive です。大文字小文字だけが異なる LR2 / beatoraja 風の asset reference でも browser drop で解決できます。
 - 大きな audio / video file は既定で lazy な `File` reference のまま保持します。image、skin、chart、小さな metadata file は collection loading 中に bytes として読み込みます。
 - folder walking と file read は bounded concurrency と progress callback を使い、大きな folder でも browser の FileSystem API や UI update loop を過剰に詰まらせないようにします。

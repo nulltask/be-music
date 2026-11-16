@@ -16,6 +16,9 @@ test('parse/count/pack survives a structured-clone boundary and restores lazy ev
   expect(result.chart.bms.wavNameBytePrefixes).toEqual({ 'kick.wav': '6b69' });
   expect(result.chart.preservation.bms.sourceLines).toEqual([{ kind: 'header', command: 'WAV01', value: 'kick.wav' }]);
 });
+test('an .n2s path is read as a Nanasi Groove 2 container', () => {
+  expect(() => parseChartTask({ path: 'music/song/01_song_n.N2S', bytes: strToU8(TEXT) })).toThrow('missing ZEXA tag');
+});
 test('ZIP limits and skin filtering are applied inside the task', () => {
   const bytes = zipSync({ 'a.bms': strToU8(TEXT), '__MACOSX/junk': strToU8('junk') });
   const input = { bytes, limit: 4096, limitMessage: 'too big' };

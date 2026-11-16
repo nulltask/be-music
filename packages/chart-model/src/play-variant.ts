@@ -119,7 +119,7 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
     return usesPlayer2 ? '48' : '24';
   }
 
-  if (isPMSExtension(chart.chartPath)) {
+  if (isPMSChartPath(chart.chartPath)) {
     return '9';
   }
   // `#PLAYER 3` is "DP or 9-key", so the POPN-9 reading needs the That-Which-Must-Not-Be-Named 2P side (`21` / `26..29`) to be absent: a
@@ -156,8 +156,13 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
   return uses6or7 ? '7' : '5';
 }
 
-function isPMSExtension(chartPath: string | undefined): boolean {
-  return resolveChartPathExtension(chartPath) === '.pms';
+/**
+ * Whether a chart path (or a bare extension) names a PMS chart: `.pms`, or Nanasi Groove 2's `.n2s`, whose container
+ * holds a `.pms` file. This is the lane-mode input the play variant, the lane layout and the fingerprint read.
+ */
+export function isPMSChartPath(chartPath: string | undefined): boolean {
+  const extension = resolveChartPathExtension(chartPath);
+  return extension === '.pms' || extension === '.n2s';
 }
 
 /**

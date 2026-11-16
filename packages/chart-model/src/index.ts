@@ -148,7 +148,12 @@ export {
   type BeatResolver,
 } from './beats.ts';
 
-export { resolveChartPlayVariant, type ChartPlayVariant, type ChartPlayVariantInput } from './play-variant.ts';
+export {
+  isPMSChartPath,
+  resolveChartPlayVariant,
+  type ChartPlayVariant,
+  type ChartPlayVariantInput,
+} from './play-variant.ts';
 
 export {
   isBmsBGMVolumeChangeChannel,

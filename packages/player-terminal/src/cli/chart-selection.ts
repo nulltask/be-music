@@ -5,7 +5,7 @@ import { dirname, extname, relative, resolve } from 'node:path';
 import { isAbortError, throwIfAborted } from '@be-music/shared-utils/core';
 import { invokeWorkerizedFunction, workerize } from '@be-music/shared-utils/workerize';
 import { type BeMusicJSON, type BeMusicPlayLevel } from '@be-music/chart-source';
-import { decodeBMSText, parseChart, resolveBMSControlFlow } from '@be-music/chart-parser';
+import { decodeBMSText, parseChart, parseN2SBytes, resolveBMSControlFlow } from '@be-music/chart-parser';
 import { resolveChart, type ResolvedChart } from '@be-music/chart-model';
 import {
   estimateDifficultyFromNames,
@@ -117,7 +117,7 @@ export interface ListChartFilesOptions {
   signal?: AbortSignal;
 }
 
-const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
+const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson', '.n2s']);
 const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/7';
 const CHART_SELECTION_BUILD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism()));
 let buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
@@ -539,6 +539,9 @@ function parseChartSelectionSourceBuffer(filePath: string, sourceBuffer: Buffer)
   }
   if (extension === '.json') {
     return parseChart(decodeUTF8Buffer(sourceBuffer), 'json');
+  }
+  if (extension === '.n2s') {
+    return parseN2SBytes(sourceBuffer);
   }
   return parseChart(decodeBMSText(sourceBuffer).text);
 }

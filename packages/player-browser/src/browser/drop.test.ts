@@ -25,6 +25,8 @@ describe('drop helpers', () => {
   test('isChartFilePath recognizes supported chart extensions case-insensitively', () => {
     expect(isChartFilePath('song/main.bms')).toBe(true);
     expect(isChartFilePath('song/main.BMSON')).toBe(true);
+    expect(isChartFilePath('music/song/01_song_n.n2s')).toBe(true);
+    expect(isChartFilePath('music/song.n2x')).toBe(false);
     expect(isChartFilePath('theme/play_7.lr2skin')).toBe(false);
   });
 

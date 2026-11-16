@@ -22,7 +22,7 @@ Anything that changes judging, the gauge, timing, or how the notes look on their
 Both are computed from two inputs:
 
 1. the chart as Be-Music parses it (whose lane-mode inputs are its lanes, `#PLAYER 3`, and the bmson keyboard/generic `mode_hint`; section 3.5), and
-2. the chart's **file extension**, which is a lane-mode input (`.pms` makes a chart 9 KEY; section 3.5). An implementation must take it as an explicit input; any other or unknown extension counts as none.
+2. the chart's **file extension**, which is a lane-mode input (`.pms` makes a chart 9 KEY; section 3.5; Nanasi Groove 2's `.n2s`, a container around a `.pms` file, counts as `.pms`). An implementation must take it as an explicit input; any other or unknown extension counts as none.
 
 How each fingerprint is made (sections 3 to 5):
 

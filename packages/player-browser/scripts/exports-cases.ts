@@ -340,6 +340,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     run: () => {
       playerWebCoreAPI.parsedChartPathKind('Songs/Bench/main.bmson');
       playerWebCoreAPI.parsedChartPathKind('Songs/Bench/main.pms');
+      playerWebCoreAPI.parsedChartPathKind('music/bench/01_bench_n.n2s');
     },
   });
   define('player-browser.parsedChartCacheKey', {
