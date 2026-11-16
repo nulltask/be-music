@@ -337,6 +337,11 @@ export const OPTIONS_HELP_JA = html`
           に合わせてスクロール速度を一定に保ちます。MAXBPM、MINBPM、AVERAGE、STARTBPM、CONSTANT
           (LR2。どのルールでも選べます)。
         </dd>
+        <dt>WINDOW HOLD (beatoraja)</dt>
+        <dd>
+          プレイの開始から最後のノーツまで START を押しているものとして扱います。鍵盤を押すたびに、START +
+          その鍵盤と同じくハイスピードやレーンカバーも変わります。AUTO プレイとリプレイでは効きません。
+        </dd>
         <dt>Normal HI-SPEED (AC 32 measured)</dt>
         <dd>Hi-speed のスライダーの代わりに、AC で実測した 20 段階から速度を選びます。</dd>
         <dt>Normal HS level</dt>

@@ -531,6 +531,12 @@ export function buildPlayOptionsFolder(
   );
   this.hsFixController = selectBinding(hiSpeed, this.guiState, 'hsFix', 'HS-FIX', PLAY_OPTION_CHOICES.hsFix!);
   trackPlayOption(this.hsFixController.on('change', ({ value }) => this.setPlayOptions({ hsFix: value })));
+  // beatoraja's WINDOW HOLD: a play takes START as held until its last note (#1131). Read as the play starts.
+  trackPlayOption(
+    hiSpeed.addBinding(this.guiState, 'windowHold', { label: 'WINDOW HOLD (beatoraja)' }).on('change', ({ value }) => {
+      this.setPlayOptions({ windowHold: value });
+    }),
+  );
   trackPlayOption(
     selectBinding(covers, this.guiState, 'displayAreaInfo', 'Display area info', {
       OFF: 'OFF',

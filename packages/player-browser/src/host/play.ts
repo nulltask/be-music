@@ -671,6 +671,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       ...settings,
       ...(kit.family === 'built-in' && LIFT_SKINS.has(kit.skin.id) ? { coverKeys: true } : {}),
       controlScheme: resolveControlScheme(kit.family, settings.builtInControlScheme),
+      ...(playOptions.windowHold ? { windowHold: true } : {}),
       // beatoraja's GUIDE SE: the sound set's judgment sounds, when the player turned them on.
       ...(playOptions.guideSE ? { guideSounds: resolveGuideSounds(options.sounds) } : {}),
       judgeTimingAutoAdjust: playOptions.judgeTimingAutoAdjust,

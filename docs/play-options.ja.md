@@ -336,6 +336,17 @@ Play タブの Assist ページにある **GUIDE SE (beatoraja)** は、beatoraj
 
 [#1128](https://github.com/nulltask/be-music/issues/1128) で追跡しています。
 
+## WINDOW HOLD
+
+View タブの HS-FIX の隣にある **WINDOW HOLD (beatoraja)** をオンにすると、beatoraja の `isWindowHold` と同じく、プレイ中は START を押しているものとして扱います。プレイの開始から最後のノーツまで、鍵盤を押すたびに START + 鍵盤の操作も働きます（[`ControlInputProcessor` L155-L171](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/ControlInputProcessor.java#L155-L171)、`8320241d`）[V]。beatoraja はランチャーに名前を出すだけで説明はなく、追加されたときも説明はありませんでした（[exch-bms2/beatoraja#268](https://github.com/exch-bms2/beatoraja/pull/268)）。
+
+- **鍵盤を押したときの動き。** プレイのキー割り当てで START + その鍵盤が行う操作です。beatoraja の割り当てでは、奇数の鍵盤でハイスピードを下げ、偶数の鍵盤で上げ、ターンテーブルでレーンカバーを動かします。LR2 の割り当てでは、鍵盤 1 / 3 / 5 で下げ、2 / 4 で上げ、レーンカバーが出ているあいだは鍵盤 6 / 7 でそれを動かします。鍵盤はノーツも叩きます。
+- **START そのもの。** プレイ中は離されないので、START の 2 度押しでレーンカバーを切り替えることはできません。beatoraja の割り当てでは、SELECT + 鍵盤で表示時間を変えると同時に START + 鍵盤の操作も働きます。beatoraja が同じフレームで両方の処理を行うのに合わせています。
+- **効く場面。** beatoraja がこれらの操作を PLAY と PRACTICE でだけ行うので、プレイヤー自身のプレイでだけ効き、AUTO プレイとリプレイでは効きません。最後のノーツの後は離すので、START や SELECT でいつもどおりプレイを終えられます。
+- **記録。** 変わるのは表示（ハイスピードとカバー。表示の変更としてリプレイに記録します）だけなので、アシストの区分はなく、リプレイの再判定も変わりません。プレイの開始時に読み込み、プレイ中は変えられません。
+
+[#1131](https://github.com/nulltask/be-music/issues/1131) で追跡しています。
+
 ## BPM GUIDE
 
 Options ダイアログ の **BPM GUIDE (beatoraja)** をオンにします。既定はオフです。オンにすると、beatoraja 0.8.9 の `LaneRenderer` と同様に、この先のテンポ変化をレーン上に表示します。実際に BPM が変わる位置には緑の `BPM<n>`（現在と同じ BPM の指定は省略）、正の STOP の位置には黄色の `STOP <n>ms` を表示し、どちらも整数に切り捨てます。ラベルは STOP や負のスクロールを含めてノートと同じようにスクロールし、判定線を過ぎると消えます。
