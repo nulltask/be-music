@@ -26,15 +26,18 @@ export type LR2RecordSlot = 'd-battle' | 'sp-to-dp' | 'extra';
 /** The record a play keeps under a ruleset: a chart's ordinary record, or one of LR2's separate lamps. */
 export type RecordSlot = 'main' | LR2RecordSlot;
 
-/** Where an option comes from: a judge ruleset's source game, or Be-Music itself (its debug judge-window override). */
+/**
+ * Where an option comes from: a judge ruleset's source game, or Be-Music itself (its debug judge-window override, and its
+ * record rule for a player's nanasigroove NOTES COPY).
+ */
 export type AssistSource = RulesetId | 'be-music';
 
 /** One assisted option a play used, with the source that classifies it. */
 export interface AssistFinding {
   /**
    * What the option is: `auto-scratch`, `any-key`, `judge-window-override`, `custom-judge`, `bpm-guide`, `hs-fix-constant`,
-   * `practice`, `extra-notes`, `lr2-extra-mode`, `seven-to-nine`, `mine-remove`, `scroll-remove`, `long-note:<modifier>`
-   * or a lane or battle option's value (`H-RANDOM`, `SCATTER`, `BATTLE`, `D-BATTLE`, …).
+   * `practice`, `extra-notes`, `lr2-extra-mode`, `seven-to-nine`, `mine-remove`, `scroll-remove`, `long-note:<modifier>`,
+   * `nanasi-notes:<COPY|DBLCOPY>` or a lane or battle option's value (`H-RANDOM`, `SCATTER`, `BATTLE`, `D-BATTLE`, …).
    */
   option: string;
   source: AssistSource;
@@ -153,6 +156,14 @@ export function classifyReplayAssists(replay: AssistReplay): AssistFinding[] {
   if (usedHSFixConstant(play)) add({ option: 'hs-fix-constant', source: 'lr2', assistClass: 'light' });
   // PRACTICE is beatoraja's mode, offered under every ruleset (#933); it saves nothing whatever the ruleset.
   if (play.options?.practice === true) add({ option: 'practice', source: 'beatoraja', assistClass: 'no-save' });
+
+  // A player's nanasigroove NOTES COPY / DBLCOPY plays a single-play chart as a double-play one. A chart's record is of
+  // its own key mode, so the play keeps none: Be-Music's rule (#1243), since nanasigroove records every option's play.
+  // `playerChartPlayOptions` holds only what took effect, so a course stage, which leaves COPY out, is not caught. A
+  // chart that forces COPY is not the player's choice; its record is of the double-play chart.
+  const playerNotes = play.playerChartPlayOptions?.notes;
+  if (playerNotes === 'COPY' || playerNotes === 'DBLCOPY')
+    add({ option: `nanasi-notes:${playerNotes}`, source: 'be-music', assistClass: 'no-save' });
 
   // A lane arrangement the chart forced (#844) is nanasigroove's, which has no assist class, and every play of the chart
   // gets it: it is not the player's assist, whatever lane value the host recorded for it. A chart RANDOM+ is recorded as

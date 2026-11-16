@@ -455,6 +455,10 @@ function normalizeBMSExtensions(input: unknown, allowLongKeys: boolean): BeMusic
     idBase,
     allowLongKeys,
   );
+  const exWAVOverridden = normalizeBMSExtensionStringList(raw.exWAVOverridden)
+    .map((key) => normalizeObjectKey(key, idBase))
+    .filter((key) => key in normalized.exWAV);
+  if (exWAVOverridden.length > 0) normalized.exWAVOverridden = [...new Set(exWAVOverridden)];
   normalized.exBMP = normalizeIndexedBMSExtensionMap(
     raw.exBMP ?? raw.exBmp ?? raw.ex_bmp ?? raw.exbmp,
     idBase,

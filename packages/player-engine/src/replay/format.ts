@@ -1,4 +1,4 @@
-import type { ChartOptionProgram, ChartPlayOptionProgram } from '@be-music/chart-model';
+import type { ChartOptionProgram, ChartPlayOptionProgram, PlayerChartPlayOptions } from '@be-music/chart-model';
 import { parseChartOptionProgram, parseChartPlayOptionProgram } from './chart-options.ts';
 import {
   clampCustomJudgeRate,
@@ -328,6 +328,12 @@ export interface ReplayPlay {
    * `'lr2:RANDOM'` and the like, which read as `'RANDOM'` (`canonicalOptionValue`).
    */
   randomLane?: { p1?: string; p2?: string };
+  /**
+   * The nanasigroove CRAZY gameplay options the player chose that the play ran with (#1243): those of
+   * `chart.chartPlayOptions` the chart's own `#OPTION` does not set (`playerChartPlayOptionsOf`). Absent when the player
+   * added none. A player's NOTES COPY / DBLCOPY keeps no record (`classifyReplayAssists`).
+   */
+  playerChartPlayOptions?: PlayerChartPlayOptions;
   dpFlip?: boolean;
   /** Debug BAD-window override (`PlayerOptions.judgeWindowMs`) — simulations of such plays are non-standard. */
   judgeWindowOverrideMs?: number;
@@ -543,6 +549,10 @@ export function parseReplay(source: unknown): BeMusicReplay {
   const chart = parseChart(expectRecord(root.chart, 'chart'));
   const inputs = parseInputs(root.inputs);
   const play = parsePlay(expectRecord(root.play, 'play'));
+  // The player's selections are part of the program the play ran with.
+  for (const [key, value] of Object.entries(play.playerChartPlayOptions ?? {}))
+    if (chart.chartPlayOptions?.options[key as keyof PlayerChartPlayOptions] !== value)
+      throw new ReplayParseError(`play.playerChartPlayOptions.${key}: not in chart.chartPlayOptions`);
   const sourceIds = new Set(play.inputSources.map((source) => source.id));
   inputs.forEach((input, index) => {
     if (!sourceIds.has(input.source)) {
@@ -823,6 +833,19 @@ function parseControlInputs(value: unknown): ReplayControlInputEvent[] {
   });
 }
 
+/** The player's nanasigroove selections: GOOD2BAD / GREAT2BAD, HELLJUDGE and a NOTES conversion, as a player chooses them. */
+function parsePlayerChartPlayOptions(raw: unknown): PlayerChartPlayOptions {
+  const options = expectRecord(raw, 'play.playerChartPlayOptions');
+  const parsed: PlayerChartPlayOptions = {};
+  for (const [key, value] of Object.entries(options)) {
+    if (key === 'judge' && (value === 'GOOD2BAD' || value === 'GREAT2BAD')) parsed.judge = value;
+    else if (key === 'hellJudge' && value === true) parsed.hellJudge = true;
+    else if (key === 'notes' && (value === 'DOUBLE' || value === 'COPY' || value === 'DBLCOPY')) parsed.notes = value;
+    else throw new ReplayParseError(`play.playerChartPlayOptions.${key}: unsupported value`);
+  }
+  return parsed;
+}
+
 function parsePlay(play: Record<string, unknown>): ReplayPlay {
   const mode = play.mode;
   if (mode !== 'manual' && mode !== 'auto') {
@@ -987,6 +1010,8 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
       throw new ReplayParseError('play.scrollModifierChanged: expected boolean');
     parsed.scrollModifierChanged = play.scrollModifierChanged;
   }
+  if (play.playerChartPlayOptions !== undefined)
+    parsed.playerChartPlayOptions = parsePlayerChartPlayOptions(play.playerChartPlayOptions);
   if (play.mineModifier !== undefined) {
     if (!['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK', 'NANASI_ADD'].includes(play.mineModifier as string))
       throw new ReplayParseError(

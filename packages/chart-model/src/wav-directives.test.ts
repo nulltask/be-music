@@ -3,6 +3,7 @@ import {
   collectBMSExWAVVolumeMultipliers,
   collectBmsWAVVolumeMultipliers,
   parseBMSExWAV,
+  resolveBmsExWAVDeclarations,
   resolveBmsWAVResources,
   wavCmdVolumePercentToLinearGain,
 } from './wav-directives.ts';
@@ -45,16 +46,21 @@ test('EXWAV owns a shared slot, supplies EXWAV-only slots and preserves the auth
   expect(chart.resources.wav).toEqual({ '01': 'ordinary.wav', '03': 'fallback.wav' });
 });
 
-test.each(['v nope bad.wav', 'pv 0 bad.wav', 'p 3oops bad.wav', 'pp 0 1 bad.wav', 'x 1 bad.wav', 'v 1e3 bad.wav'])(
-  'malformed EXWAV does not replace a WAV filename: %s',
-  (raw) => {
-    const chart = createEmptyJSON('bms');
-    chart.resources.wav['01'] = 'fallback.wav';
-    chart.bms.exWAV['01'] = raw;
-    expect(parseBMSExWAV(raw)).toBeUndefined();
-    expect(resolveBmsWAVResources(chart)['01']).toBe('fallback.wav');
-  },
-);
+test.each([
+  'v nope bad.wav',
+  'pv 0 bad.wav',
+  'p 3oops bad.wav',
+  'x 1 bad.wav',
+  'v 1e3 bad.wav',
+  'r nope bad.wav',
+  'pvfrpv 0 0 100 1 0 0 bad.wav',
+])('malformed EXWAV does not replace a WAV filename: %s', (raw) => {
+  const chart = createEmptyJSON('bms');
+  chart.resources.wav['01'] = 'fallback.wav';
+  chart.bms.exWAV['01'] = raw;
+  expect(parseBMSExWAV(raw)).toBeUndefined();
+  expect(resolveBmsWAVResources(chart)['01']).toBe('fallback.wav');
+});
 
 test.each([
   [0, 0],
@@ -133,5 +139,30 @@ describe('EXWAV whitespace parameters', () => {
     });
     expect(multipliers.get('01')).toBeCloseTo(10 ** (-6 / 20));
     expect(multipliers.get('02')).toBe(multipliers.get('01'));
+  });
+});
+
+describe('nanasigroove 1.552 EXWAV reading (#1197)', () => {
+  test('a repeated flag reads another number that replaces the earlier one', () => {
+    expect(parseBMSExWAV('pp 0 1 twice.wav')).toEqual({ filename: 'twice.wav', pan: 1 });
+    expect(parseBMSExWAV('vpv -100 20 -300 a.wav')).toEqual({ filename: 'a.wav', pan: 20, volumeMillibels: -300 });
+  });
+
+  test('the r flag reads a decimal rate multiplier, after the other flags or alone', () => {
+    expect(parseBMSExWAV('fr 22050 1.5 a.wav')).toEqual({ filename: 'a.wav', frequencyHz: 22050, rate: 1.5 });
+    expect(parseBMSExWAV('R .5 b c.wav')).toEqual({ filename: 'b c.wav', rate: 0.5 });
+    // It takes no part in the volume, which stays unity.
+    expect([...collectBMSExWAVVolumeMultipliers({ '01': 'r 2 a.wav' })]).toEqual([]);
+  });
+
+  test('a later #WAV of the slot redefines its EXWAV, whose declaration stays as authored', () => {
+    const chart = createEmptyJSON('bms');
+    chart.resources.wav = { '01': 'later.wav', '02': 'earlier.wav' };
+    chart.bms.exWAV = { '01': 'v -600 extended.wav', '02': 'v -600 kept.wav' };
+    chart.bms.exWAVOverridden = ['01'];
+    expect(resolveBmsExWAVDeclarations(chart)).toEqual({ '02': 'v -600 kept.wav' });
+    expect(resolveBmsWAVResources(chart)).toEqual({ '01': 'later.wav', '02': 'kept.wav' });
+    expect([...collectBmsWAVVolumeMultipliers(chart)]).toEqual([['02', 10 ** (-6 / 20)]]);
+    expect(chart.bms.exWAV['01']).toBe('v -600 extended.wav');
   });
 });

@@ -44,3 +44,17 @@ test('rejects invalid native rates or non-finite modifier values', () => {
   expect(() => resolveBmsWAVPlayback({}, 0)).toThrow(RangeError);
   expect(() => resolveBmsWAVPlayback({ semitones: NaN }, 44100)).toThrow(RangeError);
 });
+
+test('EXWAV r multiplies the rate after f, read as nanasigroove clamps it, and a later #WAV drops it (#1197)', () => {
+  const json = createEmptyJSON('bms');
+  json.bms.exWAV = { '01': 'fr 22050 1.5 a.wav', '02': 'r 0 b.wav', '03': 'r 3 c.wav', '04': 'r 1.25 d.wav' };
+  json.resources.wav = { '04': 'd.wav' };
+  json.bms.exWAVOverridden = ['04'];
+  const modifiers = collectBmsWAVPlaybackModifiers(json);
+  expect(modifiers.get('01')).toEqual({ frequencyHz: 22050, rate: 1.5 });
+  expect(resolveBmsWAVPlayback(modifiers.get('01')!, 44100).playbackRate).toBe(0.75);
+  // At or below zero reads as 1, above 2 as 2.
+  expect(modifiers.get('02')).toEqual({ rate: 1 });
+  expect(resolveBmsWAVPlayback(modifiers.get('03')!, 44100).playbackRate).toBe(2);
+  expect(modifiers.has('04')).toBe(false);
+});

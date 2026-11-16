@@ -853,13 +853,19 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             // What the player sees at the start; the changes during the play go in as `view` commands. A play that
             // seeks records none: the engine discards its recorder at the first seek.
             // A chart's RANDOM / ADDMINE (#844) replaced the player's lane and mine options: record what was played.
-            recordReplay: resolveReplayRecording(
-              { ...ctx.options, ...ctx.chartPlay?.selection } as typeof ctx.options,
-              ctx.chart,
-              startReplayView(ctx),
-              ctx.playState.view.hiSpeed.player,
-              ctx.randomSeeds,
-            ),
+            // The player's own nanasigroove options are recorded apart from the chart's (#1243).
+            recordReplay: {
+              ...resolveReplayRecording(
+                { ...ctx.options, ...ctx.chartPlay?.selection } as typeof ctx.options,
+                ctx.chart,
+                startReplayView(ctx),
+                ctx.playState.view.hiSpeed.player,
+                ctx.randomSeeds,
+              ),
+              ...(ctx.chartPlay !== undefined && Object.keys(ctx.chartPlay.player).length > 0
+                ? { playerChartPlayOptions: ctx.chartPlay.player }
+                : {}),
+            },
             onReplayRecorded: ctx.practice
               ? undefined
               : (replay: BeMusicReplay) => {

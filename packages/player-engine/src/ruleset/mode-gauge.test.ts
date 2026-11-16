@@ -106,7 +106,8 @@ describe('beatoraja per-mode single gauges', () => {
         survival: false,
         guts: [],
       });
-      expect(spec.values).toEqual([0.3, 0.3, 0.15, ...losses[index]!]);
+      // beatoraja keeps its tables in Java `float` (#1090).
+      expect(spec.values).toEqual([0.3, 0.3, 0.15, ...losses[index]!].map(Math.fround));
     });
   });
 
@@ -126,12 +127,13 @@ describe('beatoraja per-mode single gauges', () => {
   ] as const)('%s %s uses its survival table', (mode, id, values, guts) => {
     const spec = gauge(mode, id);
     expect(spec).toMatchObject({ min: 0, max: 100, initial: 100, border: 0, survival: true });
-    expect(spec.values).toEqual(values);
+    expect(spec.values).toEqual(values.map(Math.fround));
     expect(spec.guts.length > 0).toBe(guts);
   });
 
   test('applies five-key EX-HARD MODIFY_DAMAGE rather than seven-key recovery limits', () => {
-    expect(gauge('5K', 'EX-HARD', 230).values[3]).toBeCloseTo(-11.1, 9);
+    // In Java `float`: -10 × 1.11f (#1090).
+    expect(gauge('5K', 'EX-HARD', 230).values[3]).toBe(Math.fround(-10 * Math.fround(1.11)));
     expect(gauge('5K', 'EX-HARD', 100).values[4]).toBeCloseTo(-200, 9);
   });
 

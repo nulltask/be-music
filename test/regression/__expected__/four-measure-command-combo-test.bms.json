@@ -133,6 +133,9 @@
       "materials": "demo.materials",
       "divideProp": "lane=2",
       "charset": "UTF-8",
+      "exWAVOverridden": [
+        "01"
+      ],
       "optionHeadersInControlFlow": true,
       "wavNameBytePrefixes": {
         "sample.wav": "7361",

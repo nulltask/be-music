@@ -361,6 +361,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
             speed steady against a BPM: MAXBPM, MINBPM, AVERAGE, STARTBPM, or CONSTANT (LR2, offered under every
             ruleset).
           </dd>
+          <dt>WINDOW HOLD (beatoraja)</dt>
+          <dd>
+            Takes START as held from the start of a play until its last note, so every key press also changes the
+            hi-speed or the lane cover as START + that key does. Not in AUTO play or a replay.
+          </dd>
           <dt>Normal HI-SPEED (AC 32 measured)</dt>
           <dd>Picks the speed from twenty levels measured on AC, instead of the Hi-speed slider.</dd>
           <dt>Normal HS level</dt>

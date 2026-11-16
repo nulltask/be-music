@@ -47,6 +47,16 @@ describe('classifyPlannedAssists', () => {
     expect(conditional({ autoScratch2P: true })).toEqual(['auto-scratch']);
     expect(conditional({ randomLane: { p2: 'H-RANDOM' } })).toEqual(['H-RANDOM']);
     expect(options({ randomLane: { p2: 'SCATTER' } })).toEqual(['SCATTER']);
+    // The player's NOTES COPY keeps no record only on a 5 / 7 KEY chart outside a course, which it copies (#1243).
+    expect(classifyPlannedAssists({ playerChartPlayOptions: { notes: 'DBLCOPY' } })).toMatchObject({
+      findings: [],
+      conditionalFindings: [{ option: 'nanasi-notes:DBLCOPY', assistClass: 'no-save' }],
+    });
+    expect(conditional({ playerChartPlayOptions: { notes: 'COPY', hellJudge: true } })).toEqual(['nanasi-notes:COPY']);
+    expect(classifyPlannedAssists({ playerChartPlayOptions: { notes: 'DOUBLE', judge: 'GOOD2BAD' } })).toEqual({
+      findings: [],
+      conditionalFindings: [],
+    });
   });
 
   test('a conditional finding is not repeated when it is already certain', () => {

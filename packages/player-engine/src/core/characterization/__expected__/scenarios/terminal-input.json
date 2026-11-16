@@ -17,7 +17,7 @@
       "combo": 1,
       "maxCombo": 1,
       "gauge": {
-        "current": 72.666667,
+        "current": 72.666665,
         "max": 100,
         "clearThreshold": 80,
         "initial": 20,
@@ -88,7 +88,7 @@
           "noteCount": 6,
           "maxCombo": 1,
           "djLevel": "D",
-          "gauge": {"type":"GROOVE","final":72.666667,"cleared":false},
+          "gauge": {"type":"GROOVE","final":72.666665,"cleared":false},
           "score": 75000
         }
       }
@@ -103,7 +103,7 @@
         "noteCount": 6,
         "maxCombo": 1,
         "djLevel": "D",
-        "gauge": {"type":"GROOVE","final":72.666667,"cleared":false},
+        "gauge": {"type":"GROOVE","final":72.666665,"cleared":false},
         "score": 75000
       },
       "beatoraja": {
@@ -156,12 +156,12 @@
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
-      "1260.000 PERFECT combo=1 ch=13 delta=0 gauge=46.666667",
-      "1400.000 BAD combo=0 ch=12 delta=-608 gauge=42.666667",
-      "1516.667 PERFECT combo=1 ch=11 delta=0 gauge=69.333333",
-      "2376.667 BAD combo=0 ch=16 delta=-125 gauge=65.333333",
-      "2610.000 POOR combo=0 ch=14 delta=110 gauge=59.333333",
-      "3600.000 GOOD combo=1 ch=15 delta=100 gauge=72.666667"
+      "1260.000 PERFECT combo=1 ch=13 delta=0 gauge=46.666666",
+      "1400.000 BAD combo=0 ch=12 delta=-608 gauge=42.666666",
+      "1516.667 PERFECT combo=1 ch=11 delta=0 gauge=69.333332",
+      "2376.667 BAD combo=0 ch=16 delta=-125 gauge=65.333332",
+      "2610.000 POOR combo=0 ch=14 delta=110 gauge=59.333332",
+      "3600.000 GOOD combo=1 ch=15 delta=100 gauge=72.666665"
     ],
     "ui": [
       "500.000 flash-lane 11",
@@ -255,7 +255,7 @@
       "combo": 1,
       "maxCombo": 1,
       "gauge": {
-        "current": 72.666667,
+        "current": 72.666665,
         "max": 100,
         "clearThreshold": 80,
         "initial": 20,
@@ -303,12 +303,12 @@
     ],
     "judges": [
       "0.000 READY combo=0 gauge=20",
-      "1250.000 PERFECT combo=1 ch=13 delta=0 gauge=46.666667",
-      "1400.000 BAD combo=0 ch=12 delta=-608 gauge=42.666667",
-      "1516.667 PERFECT combo=1 ch=11 delta=0 gauge=69.333333",
-      "2383.333 BAD combo=0 ch=16 delta=-125 gauge=65.333333",
-      "2616.667 POOR combo=0 ch=14 delta=100.001 gauge=59.333333",
-      "3600.000 GOOD combo=1 ch=15 delta=100 gauge=72.666667"
+      "1250.000 PERFECT combo=1 ch=13 delta=0 gauge=46.666666",
+      "1400.000 BAD combo=0 ch=12 delta=-608 gauge=42.666666",
+      "1516.667 PERFECT combo=1 ch=11 delta=0 gauge=69.333332",
+      "2383.333 BAD combo=0 ch=16 delta=-125 gauge=65.333332",
+      "2616.667 POOR combo=0 ch=14 delta=100.001 gauge=59.333332",
+      "3600.000 GOOD combo=1 ch=15 delta=100 gauge=72.666665"
     ],
     "ui": [
       "500.000 press-lane 11",

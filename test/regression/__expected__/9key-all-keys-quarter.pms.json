@@ -961,7 +961,7 @@
             "djLevel": "D",
             "gauge": {
               "type": "NORMAL",
-              "final": 5.972222,
+              "final": 5.972238,
               "cleared": false
             }
           },
@@ -1052,7 +1052,7 @@
               "combo": 0,
               "maxCombo": 8,
               "gauge": {
-                "current": 7.166667,
+                "current": 7.166685,
                 "max": 120,
                 "clearThreshold": 85,
                 "initial": 30,

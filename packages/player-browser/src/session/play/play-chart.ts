@@ -5,10 +5,12 @@ import {
   buildChartOptionTimeline,
   compileChartPlayOptions,
   isLegacyChartPlayOptionProgram,
+  playerChartPlayOptionsOf,
   withPlayerChartPlayOptions,
   type BGAOpacityTimelines,
   type ChartOptionDiagnostic,
   type ChartPlayOptionProgram,
+  type PlayerChartPlayOptions,
 } from '@be-music/chart-model';
 /**
  * Chart preparation for a play (`PlaySession`), whichever family draws it: resolves the chart's `#RANDOM` / `#SWITCH`
@@ -207,6 +209,8 @@ export interface PlayChartContext {
   chartPlay:
     | {
         program: ChartPlayOptionProgram | undefined;
+        /** The options of {@link program} the player added (#1243), which the replay records apart from the chart's. */
+        player: PlayerChartPlayOptions;
         selection: ChartPlaySelection;
         diagnostics: readonly ChartOptionDiagnostic[];
       }
@@ -371,12 +375,14 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // replay's recorded notes already hold their result, so only its recorded program is kept (for the engine's judging).
   // Its NOTES conversion (#932) runs in the engine's chart preparation; COPY makes the chart double-play (outside a course,
   // whose stages keep one key mode), so the arrangement maps onto the double-play lanes.
+  const declaredChartPlay =
+    arrangement === undefined ? compileChartPlayOptions(buildChartOptionTimeline(resolved)) : undefined;
   const chartPlayEffect =
-    arrangement === undefined
+    declaredChartPlay !== undefined
       ? resolveEffectiveChartPlayOptions(
           // The player's own GOOD2BAD / GREAT2BAD, HELLJUDGE and NOTES join where the chart sets none (#1177, #1184,
           // #1185).
-          withPlayerChartPlayOptions(compileChartPlayOptions(buildChartOptionTimeline(resolved)), {
+          withPlayerChartPlayOptions(declaredChartPlay, {
             ...(ctx.options.crazyJudge === 'GOOD2BAD' || ctx.options.crazyJudge === 'GREAT2BAD'
               ? { judge: ctx.options.crazyJudge }
               : {}),
@@ -390,8 +396,13 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
             course: ctx.options.course !== undefined,
           },
         )
-      : { program: arrangement.chart.chartPlayOptions, diagnostics: [] };
+      : { program: arrangement?.chart.chartPlayOptions, diagnostics: [] };
   const chartPlayProgram = chartPlayEffect.program;
+  // Which of them the player added: worked out from the chart's own options, or as the arrangement recorded it.
+  const playerChartPlay =
+    declaredChartPlay !== undefined
+      ? playerChartPlayOptionsOf(declaredChartPlay.options, chartPlayProgram?.options ?? {})
+      : { ...arrangement?.play.playerChartPlayOptions };
   const chartNotes = chartPlayProgram?.options.notes;
   const arrangedVariant = resolveChartNotesPlayVariant(playVariant, chartNotes);
   const chartArrangement = applyChartPlayOptions(
@@ -410,7 +421,12 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
     { doublePlay: ['10', '14', '48'].includes(arrangedVariant), hasScratch: arrangedVariant !== '9' },
   );
   const lanes = chartArrangement.selection;
-  ctx.chartPlay = { program: chartPlayProgram, selection: lanes, diagnostics: chartPlayEffect.diagnostics };
+  ctx.chartPlay = {
+    program: chartPlayProgram,
+    player: playerChartPlay,
+    selection: lanes,
+    diagnostics: chartPlayEffect.diagnostics,
+  };
   let resolvedPlay = resolveChart(resolved, {
     randomDraws,
     playVariant: playVariant,

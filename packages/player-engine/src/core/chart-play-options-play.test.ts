@@ -1,6 +1,6 @@
 import { expect, test, vi } from 'vite-plus/test';
 import { parseBMS } from '@be-music/chart-parser';
-import { classifyReplayAssists } from '../records/assist-policy.ts';
+import { classifyReplayAssists, resolveReplayRecordPolicy } from '../records/assist-policy.ts';
 import { checkReplayEligibility } from '../replay/eligibility.ts';
 import { parseReplay, serializeReplay } from '../replay/format.ts';
 import { simulateReplay } from '../replay/simulate.ts';
@@ -77,6 +77,14 @@ test("the player's own GOOD2BAD and HELLJUDGE join the chart's options, the char
     options: { playerChartPlayOptions: { judge: 'GREAT2BAD' } },
   });
   expect(chartWins.replay?.chart.chartPlayOptions?.options.judge).toBe('GOOD2BAD');
+  // The replay names which of the options were the player's (#1243): none where the chart won.
+  expect(parseReplay(serializeReplay(own.replay!)).play.playerChartPlayOptions).toEqual({
+    judge: 'GREAT2BAD',
+    hellJudge: true,
+  });
+  expect(chartWins.replay?.play.playerChartPlayOptions).toBeUndefined();
+  // They make the play harder, as nanasigroove records them: not an assist.
+  expect(classifyReplayAssists(own.replay!)).toEqual([]);
 });
 
 test('a recorded program wins over the source, so an older replay without one keeps its judgments', async () => {
@@ -129,6 +137,35 @@ test('NOTES COPY plays the chart as double play, and the replay re-simulates it 
   expect(result.summary?.perfect).toBe(4);
   expect(simulateReplay(saved, { ruleset: 'lr2' }).judge).toMatchObject({ pgreat: 4 });
   expect(classifyReplayAssists(saved)).toEqual([]);
+});
+
+test("the player's NOTES COPY plays as double play but keeps no record of the single-play chart (#1243)", async () => {
+  const single = parseBMS(['#BPM 120', '#00111:01', '#00116:01', ''].join('\n'));
+  const result = await observePlay({
+    driver: 'manual',
+    chart: single,
+    script: tap(2000, ['11', '16', '25', '26']),
+    options: { playerChartPlayOptions: { notes: 'COPY' } },
+  });
+  const saved = parseReplay(serializeReplay(result.replay!));
+  expect(saved.chart.laneMode).toBe('5 KEY DP');
+  expect(saved.chart.chartPlayOptions).toEqual({ version: 3, options: { notes: 'COPY' } });
+  expect(saved.play.playerChartPlayOptions).toEqual({ notes: 'COPY' });
+  expect(classifyReplayAssists(saved)).toEqual([
+    { option: 'nanasi-notes:COPY', source: 'be-music', assistClass: 'no-save' },
+  ]);
+  expect(resolveReplayRecordPolicy(saved)).toMatchObject({ keepsRecord: false, leaderboard: 'unranked' });
+  // Re-judging the replay gives the live play's judgments.
+  expect(result.summary?.perfect).toBe(4);
+  expect(simulateReplay(saved, { ruleset: 'lr2' }).judge).toMatchObject({ pgreat: 4 });
+  expect(simulateReplay(saved, { ruleset: 'beatoraja' }).judge).toMatchObject({ pgreat: 4 });
+  // A course stage leaves the player's COPY out as it leaves the chart's, so nothing is the player's there.
+  const stage = await observePlay({
+    driver: 'auto',
+    chart: single,
+    options: { playerChartPlayOptions: { notes: 'COPY' }, course: { kind: 'grade' } },
+  });
+  expect(stage.replay?.play.playerChartPlayOptions).toBeUndefined();
 });
 
 test('NOTES DOUBLE copies the lanes as nanasigroove does, and the replay re-simulates it (#1184)', async () => {

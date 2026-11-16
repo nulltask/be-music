@@ -74,11 +74,11 @@ describe('resolveCourseGauge', () => {
       id: 'CLASS',
       initial: 100,
       survival: true,
-      values: [0.15, 0.12, 0.06, -1.5, -3, -1.5],
+      values: [0.15, 0.12, 0.06, -1.5, -3, -1.5].map(Math.fround),
     });
-    expect(resolveCourseGauge('beatoraja', 'CLASS', { kind: 'grade' }, '9-key', 1).values).toEqual([
-      0.15, 0.12, 0.06, -1.5, -3, -3,
-    ]);
+    expect(resolveCourseGauge('beatoraja', 'CLASS', { kind: 'grade' }, '9-key', 1).values).toEqual(
+      [0.15, 0.12, 0.06, -1.5, -3, -3].map(Math.fround),
+    );
     expect(resolveCourseGauge('beatoraja', 'EXCLASS', { kind: 'grade', gaugeSet: 'lr2' }, '7-key-sp', 1)).toMatchObject(
       {
         id: 'EXCLASS',
@@ -86,9 +86,10 @@ describe('resolveCourseGauge', () => {
         guts: [{ threshold: 30, multiplier: 0.6 }],
       },
     );
-    expect(resolveCourseGauge('____', 'EXHARDCLASS', { kind: 'grade', gaugeSet: '5k' }, '7-key-sp', 1).values).toEqual([
-      0.01, 0.01, 0, -2.5, -5, -2.5,
-    ]);
+    // beatoraja's class gauge keeps its Java `float` table under any judge ruleset (#1090).
+    expect(resolveCourseGauge('____', 'EXHARDCLASS', { kind: 'grade', gaugeSet: '5k' }, '7-key-sp', 1).values).toEqual(
+      [0.01, 0.01, 0, -2.5, -5, -2.5].map(Math.fround),
+    );
   });
 
   test('a carried-in gauge value replaces the start value, clamped to the range', () => {

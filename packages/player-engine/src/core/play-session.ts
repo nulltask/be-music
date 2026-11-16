@@ -24,9 +24,11 @@ import {
   compileChartOptions,
   compileChartPlayOptions,
   isLegacyChartPlayOptionProgram,
+  playerChartPlayOptionsOf,
   resolveChartOptionsAt,
   withPlayerChartPlayOptions,
   type ChartOptionProgram,
+  type ChartPlayOptionProgram,
   isPlayLaneSoundChannel,
   type ResolvedChart,
 } from '@be-music/chart-model';
@@ -91,6 +93,9 @@ import { createRealtimeAudioCursor, type RealtimeAudioCursor } from './play-audi
 import { createChainSoundQueue, type ChainSoundQueue } from './chain-audio.ts';
 import type { JudgeStrategy } from './play-strategy.ts';
 import { resolvePracticePlayWindow } from './practice.ts';
+
+/** A program that forces nothing. */
+const EMPTY_CHART_PLAY_PROGRAM: ChartPlayOptionProgram = { version: 1, options: {} };
 
 /** A chart sound the realtime audio fires at its time. */
 type TimedChartSound = { readonly event: BeMusicEvent; readonly seconds: number };
@@ -217,17 +222,27 @@ export async function createPlaySession(
   let resolvedChart = options.preparedChart?.resolvedChart ?? resolveEngineChart(resolvedJSON, options);
   // The chart's gameplay program (#844, #932): the host's (a replay's recorded one), or compiled here and narrowed to what
   // takes effect in this play (`resolveEffectiveChartPlayOptions`).
-  const chartPlay =
+  // Without a host program the engine also knows which of its options the player added (#1243); a host that hands its
+  // own program records them through `recordReplay.playerChartPlayOptions`.
+  const declaredChartPlay =
     options.chartPlayOptionProgram !== undefined
-      ? { program: structuredClone(options.chartPlayOptionProgram), diagnostics: [] }
+      ? undefined
+      : compileChartPlayOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing));
+  const chartPlay =
+    declaredChartPlay === undefined
+      ? { program: structuredClone(options.chartPlayOptionProgram ?? EMPTY_CHART_PLAY_PROGRAM), diagnostics: [] }
       : resolveEffectiveChartPlayOptions(
-          withPlayerChartPlayOptions(
-            compileChartPlayOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing)),
-            options.playerChartPlayOptions,
-          ),
-          { playVariant: resolvedChart.playVariant, course: options.course !== undefined },
+          withPlayerChartPlayOptions(declaredChartPlay, options.playerChartPlayOptions),
+          {
+            playVariant: resolvedChart.playVariant,
+            course: options.course !== undefined,
+          },
         );
   const chartPlayOptions = chartPlay.program;
+  const playerChartPlayOptions =
+    declaredChartPlay === undefined
+      ? undefined
+      : playerChartPlayOptionsOf(declaredChartPlay.options, chartPlayOptions.options);
   const chartBaseSpeed = chartPlayOptions.options.baseSpeed ?? 1;
   const speed = playerSpeed * chartBaseSpeed;
   const tempoClock = createTempoClock(speed);
@@ -522,6 +537,7 @@ export async function createPlaySession(
               judgeRuleset: options.judgeRuleset,
               ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
               ...(options.course !== undefined ? { course: options.course } : {}),
+              ...(playerChartPlayOptions !== undefined ? { playerChartPlayOptions } : {}),
               ...hostPlaySettings,
               ...(options.scrollModifier !== undefined
                 ? {

@@ -64,3 +64,19 @@ nanasigroove は 24 / 48 KEY の DOUBLE を定めていないので、そこで�
 **プレイヤーも選べます。** Options ダイアログの **nanasigroove** フォルダーの **NOTES** で OFF・DOUBLE・COPY・DBLCOPY を選べます。譜面自身の `774:NOTES_*` が優先します（`withPlayerChartPlayOptions`）。Leaderboard は、譜面が指定しない系統にプレイヤーの GOOD2BAD / GREAT2BAD・HELLJUDGE・NOTES を足したプログラムのリプレイを受け付け、リプレイ自身の版でプログラムを絞り込みます。
 
 **リプレイ。** NOTES を持つプログラムは、[ADR 0033](./0033-chart-authored-gameplay-options.ja.md) の CRAZY オプションと同じく版 3 になります。版 1・2 のプログラムは上の読み方（キーレーンのあるすべてのキーモードでの鏡のレーンへの DOUBLE、地雷も写す COPY、倍にしてから写す DBLCOPY）を保つので、既存のリプレイと記録のノートは変わりません。
+
+## 追記: コースの規則は保つ（#1242）
+
+nanasigroove 1.552 には独自のコース（EXPERT モード）があります。マニュアル（`_RESOURCE/05_4_expert.html`、`05_5_exedit.html`）と `_datafiles/course/template.txt` は、テキスト形式の `.crs` ファイルを説明しています [C]。テンプレートは 1 つのコースに `.bms`・`.bme`・`.bml`・`.pms` のステージを並べているので、ステージ同士でキーモードがそろっている必要はありません。また `#OPTCHANGE_NOTES` / `#FIXED_NOTES` で、コースは NOTES をプレイヤーに任せるか、固定するか、ランダムに決めるかを選べます。そうしたコースで譜面自身の `774:NOTES_COPY` がどう動くかはどちらにも書かれておらず、ゲームも動かしていないので、分からないままです。
+
+Be-Music は `.crs` を読みません。Be-Music のコースは LR2 と beatoraja のコースで、それぞれ 1 つのキーモードのためのものです（LR2 の `line` や難易度表の `mode` から決まる `keyMode`。[course.ja.md](../course.ja.md)）。COPY でステージをダブルプレイ譜面にすると、LR2 や beatoraja のコースの意味を変えてしまいます。nanasigroove の対応は譜面の `#OPTION` のためのもので、それらのオプションを変えてはなりません（AGENTS.md）。そこで規則はそのまま保ちます。コースのステージは COPY を外し、DBLCOPY は DOUBLE を残し、宣言は `unsupported-option` と診断し、そのステージは譜面の記録を更新しません。リプレイとフィンガープリントは変わりません。
+
+プレイヤー自身の NOTES も同じ規則に従うので、黙って外すのをやめました。コースのバーでは、Options ダイアログが COPY と DBLCOPY を薄く表示して選べなくします。ステージでも効く DOUBLE は選べるままです。譜面のバーで選んだものは残り、次の譜面でまた効きます。
+
+## 追記: プレイヤーの NOTES COPY は記録を残さない（#1243）
+
+リプレイは、プレイで使ったプログラムだけを記録していました。このプログラムは `withPlayerChartPlayOptions` が譜面の `#OPTION` とプレイヤーの選択を合わせたものです。そのため、COPY を強制する譜面と、COPY を選んだプレイヤーとが同じに見え、7 KEY 譜面をプレイヤーの COPY で遊んだプレイがその譜面の記録に入っていました。
+
+nanasigroove 1.552 のマニュアルによると、FREE モードではすべてのオプションが使え、スコアも記録されます。記録しないのは AUTO と VISUAL だけで、AUTO-SC は EASY クリア扱いです [C]。NOTES や CRAZY に制限は書かれていません。一方 Be-Music の記録は、譜面とそのキーモードごとのものです。COPY を強制する譜面の記録はダブルプレイ譜面のもので、写しを外したコースのステージはそれを更新しません（上記）。プレイヤーの COPY で写したプレイも譜面のキーモードのプレイではないので、Be-Music はそれを `no-save`（出典 `be-music`、オプション `nanasi-notes:COPY` か `nanasi-notes:DBLCOPY`）とします。ローカルの記録は残さず、Leaderboard は順位に入れずに保存します。これは nanasigroove ではなく Be-Music の規則です。プレイヤーの DOUBLE・GOOD2BAD / GREAT2BAD・HELLJUDGE は譜面のキーモードを保ち、プレイを難しくするだけなので、nanasigroove が記録するとおり普通のプレイのままです。
+
+リプレイは、プレイヤーが足したオプションを `play.playerChartPlayOptions` に記録するようになりました（`playerChartPlayOptionsOf`）。効いたプログラムのうち譜面の宣言が指定していないものを、効いたとおりに記録します。そのため、プレイヤーの COPY を外したコースのステージは何も記録せず、DOUBLE だけが残った DBLCOPY は DOUBLE と記録します。どの値もプログラムの値と同じでなければなりません。Leaderboard は、このフィールドが play document の `playOptions` が宣言していないオプションをちょうど示しているかを確かめます。リプレイ形式はまだ開発用のリビジョンなので、版を上げずにこのフィールドを加えます（[ADR 0019](./0019-source-qualified-option-values.ja.md)）。プレイヤーの NOTES はまだリリースしていないので、このフィールドを欠いた以前のリプレイはありません。

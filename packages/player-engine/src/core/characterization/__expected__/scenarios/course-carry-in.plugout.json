@@ -142,7 +142,7 @@
         "noteCount": 11,
         "maxCombo": 6,
         "djLevel": "B",
-        "gauge": {"type":"EXCLASS","final":68.7,"cleared":true},
+        "gauge": {"type":"EXCLASS","final":68.700012,"cleared":true},
         "course": {"combo":4,"maxCombo":30}
       },
       "____": {
@@ -154,7 +154,7 @@
         "noteCount": 11,
         "maxCombo": 3,
         "djLevel": "B",
-        "gauge": {"type":"EXCLASS","final":65.67,"cleared":true},
+        "gauge": {"type":"EXCLASS","final":65.670013,"cleared":true},
         "course": {"combo":3,"maxCombo":30}
       },
       "plugout": {
@@ -583,7 +583,7 @@
         "noteCount": 11,
         "maxCombo": 11,
         "djLevel": "AAA",
-        "gauge": {"type":"EXCLASS","final":78.15,"cleared":true},
+        "gauge": {"type":"EXCLASS","final":78.150017,"cleared":true},
         "course": {"combo":18,"maxCombo":30}
       },
       "____": {
@@ -595,7 +595,7 @@
         "noteCount": 11,
         "maxCombo": 11,
         "djLevel": "AAA",
-        "gauge": {"type":"EXCLASS","final":78.15,"cleared":true},
+        "gauge": {"type":"EXCLASS","final":78.150017,"cleared":true},
         "course": {"combo":18,"maxCombo":30}
       },
       "plugout": {

@@ -1,6 +1,7 @@
 import { isBmsonRecoveryDisabled, type BmsonTotalMode } from './bmson-total.ts';
 import { applyChartGaugeModifiers, applyChartJudgeModifiers, type ChartJudgeModifiers } from './chart-judge.ts';
 import { applyCustomJudgeTables, type BeatorajaCustomJudge } from './custom-judge.ts';
+import { BEATORAJA_MODES, resolveBeatorajaMode } from './beatoraja-windows.ts';
 import { createLR2GoodAttackGauge, createLR2PerfectAttackGauge } from './lr2-attack.ts';
 import type { GaugeJudgeIndex } from './gauge.ts';
 import type { GaugeAutoShift, GaugeShiftBottom } from './gauge-type.ts';
@@ -169,6 +170,11 @@ export interface GaugeSpec {
    * are.
    */
   lives?: { initial: number; costs: readonly [number, number, number, number, number, number] };
+  /**
+   * beatoraja: the gauge, its deltas and every update run in Java `float` (`GrooveGauge.Gauge`), so each step rounds to
+   * float32. LR2 keeps HP and its deltas in `double` (#1090).
+   */
+  float32?: boolean;
 }
 
 export interface RulesetConfig {
@@ -355,56 +361,6 @@ function resolveBeatorajaJudgeRank(chart: RulesetChartFacts, rankTable: readonly
   return rankTable[2]!;
 }
 
-interface BeatorajaModeWindows {
-  note: readonly number[];
-  scratch?: readonly number[];
-  longNoteEnd: readonly number[];
-  longScratchEnd?: readonly number[];
-  rankTable: readonly number[];
-  /** Which judge windows scale with judgerank (`[PG, GR, GD, BD]`; MS is always fixed). */
-  scaled: readonly [boolean, boolean, boolean, boolean];
-}
-
-// beatoraja JudgeProperty flat tables: {PG late, PG early, GR..., GD..., BD..., MS late, MS early} in µs.
-const BEATORAJA_MODES: Record<'FIVEKEYS' | 'SEVENKEYS' | 'PMS' | 'KEYBOARD', BeatorajaModeWindows> = {
-  FIVEKEYS: {
-    note: [-20000, 20000, -50000, 50000, -100000, 100000, -150000, 150000, -150000, 500000],
-    scratch: [-30000, 30000, -60000, 60000, -110000, 110000, -160000, 160000, -160000, 500000],
-    longNoteEnd: [-120000, 120000, -150000, 150000, -200000, 200000, -250000, 250000],
-    longScratchEnd: [-130000, 130000, -160000, 160000, -110000, 110000, -260000, 260000],
-    rankTable: [25, 50, 75, 100, 125],
-    scaled: [true, true, true, true],
-  },
-  SEVENKEYS: {
-    note: [-20000, 20000, -60000, 60000, -150000, 150000, -280000, 220000, -150000, 500000],
-    scratch: [-30000, 30000, -70000, 70000, -160000, 160000, -290000, 230000, -160000, 500000],
-    longNoteEnd: [-120000, 120000, -160000, 160000, -200000, 200000, -280000, 220000],
-    longScratchEnd: [-130000, 130000, -170000, 170000, -210000, 210000, -290000, 230000],
-    rankTable: [25, 50, 75, 100, 125],
-    scaled: [true, true, true, true],
-  },
-  PMS: {
-    note: [-20000, 20000, -50000, 50000, -117000, 117000, -183000, 183000, -175000, 500000],
-    longNoteEnd: [-120000, 120000, -150000, 150000, -217000, 217000, -283000, 283000],
-    rankTable: [33, 50, 70, 100, 133],
-    scaled: [false, true, true, false],
-  },
-  KEYBOARD: {
-    note: [-30000, 30000, -90000, 90000, -200000, 200000, -320000, 240000, -200000, 650000],
-    longNoteEnd: [-160000, 25000, -200000, 75000, -260000, 140000, -320000, 240000],
-    rankTable: [25, 50, 75, 100, 125],
-    scaled: [true, true, true, true],
-  },
-};
-
-function resolveBeatorajaMode(laneMode: string): BeatorajaModeWindows {
-  if (laneMode.endsWith(' KEY GENERIC')) return BEATORAJA_MODES.KEYBOARD;
-  if (laneMode.startsWith('5') || laneMode.startsWith('10')) return BEATORAJA_MODES.FIVEKEYS;
-  if (laneMode.startsWith('9')) return BEATORAJA_MODES.PMS;
-  if (laneMode.startsWith('24') || laneMode.startsWith('48')) return BEATORAJA_MODES.KEYBOARD;
-  return BEATORAJA_MODES.SEVENKEYS;
-}
-
 /**
  * Applies beatoraja's `JudgeWindowRule.create` to one flat window table: scale the non-fixed judges by
  * `judgerank / 100`, clamp every leg to the resolved BAD leg, then enforce inner-to-outer monotonicity.
@@ -466,21 +422,21 @@ const _____NOTE: JudgeWindowSetUs = {
     [-116667, 116667],
     [-250000, 250000],
   ],
-  // Provisional (#1189): the That-Which-Must-Not-Be-Named empty-POOR window has never been measured precisely. beatoraja's MS window
-  // (late 150 ms / early 500 ms, `JudgeProperty` SEVENKEYS [V]) is borrowed as a donor value: evidence of beatoraja,
-  // not of this game.
+  // Provisional (#1189): the That-Which-Must-Not-Be-Named empty-POOR window is not known ("?" in https://iidx.org/compendium/gauges_and_timing
+  // [C]: "exact numbers for excessive POORs in IIDX are not precisely known"). beatoraja's MS window (late 150 ms /
+  // early 500 ms, `JudgeProperty` SEVENKEYS [V]) is borrowed as a donor value: evidence of beatoraja, not of this game.
   ms: [-150000, 500000],
 };
-// Provisional (#1189): That-Which-Must-Not-Be-Named CN release windows are "significantly wider" but unmeasured. beatoraja's SEVENKEYS
-// long-note end windows (`JudgeProperty` [V]) are borrowed as donor values, unscaled: evidence of beatoraja, not of this
-// game. `judge.test.ts` pins them to the donor, so a later measured value replaces them deliberately.
+// That-Which-Must-Not-Be-Named's CN release (#1189). Its one rule on record [C] (https://iidx.org/compendium/gauges_and_timing): the release
+// judgment "only has PGREAT; GREAT and GOODs get automatically upgraded to PGREAT", so a release inside the GOOD window
+// is a PGREAT and the PGREAT and GREAT windows reach as far as the GOOD one. A BAD or POOR head skips the tail
+// (`headBadSkipsTail`). The bounds stay provisional: no source gives them. beatoraja's SEVENKEYS long-note end GOOD
+// (±200 ms) and BAD (+220 / -280 ms) windows (`JudgeProperty` [V]) are borrowed unscaled as donor values, evidence of
+// beatoraja, not of this game; iidx.org's "±120, ±160, ±200, {+220, -280}" are beatoraja's too. `judge.test.ts` pins
+// them, so a later measured value replaces them deliberately.
+const _____LN_END_GOOD: WindowPairUs = [-200000, 200000];
 const _____LN_END: JudgeWindowSetUs = {
-  judges: [
-    [-120000, 120000],
-    [-160000, 160000],
-    [-200000, 200000],
-    [-280000, 220000],
-  ],
+  judges: [_____LN_END_GOOD, _____LN_END_GOOD, _____LN_END_GOOD, [-280000, 220000]],
 };
 
 const _____WINDOWS: RulesetWindowTables = {
@@ -546,14 +502,59 @@ export function resolveBeatorajaHardRecoverMultiplier(total: number, noteCount: 
 
 type GaugeValues = readonly [number, number, number, number, number, number];
 
-function totalModifier(values: GaugeValues, total: number, noteCount: number): GaugeValues {
-  return values.map((value) =>
-    value > 0 ? (value * total) / Math.max(1, noteCount) : value,
-  ) as unknown as GaugeValues;
+/**
+ * LR2's recovery gauges: PGREAT and GREAT gain `total / (float)notes` and GOOD `total / (float)(notes + notes)`, a
+ * float32 division, which EASY then multiplies by 1.2 in `double` (OpenLR2 `LR2f.cpp` L27658-L27684) [R]. Damage stays
+ * as given.
+ */
+function lr2RecoveryValues(
+  multiplier: number,
+  damage: readonly [number, number, number],
+  total: number,
+  noteCount: number,
+): GaugeValues {
+  const notes = Math.max(1, noteCount);
+  const gain = Math.fround(total / notes) * multiplier;
+  return [gain, gain, Math.fround(total / (notes + notes)) * multiplier, ...damage];
 }
 
-function scalePositive(values: GaugeValues, multiplier: number): GaugeValues {
-  return values.map((value) => (value > 0 ? value * multiplier : value)) as unknown as GaugeValues;
+const FLOAT_0_15 = Math.fround(0.15);
+
+/**
+ * beatoraja's gauge table as `GrooveGauge.Gauge` builds it in Java `float`: the base values are float constants, and
+ * TOTAL, LIMIT_INCREMENT and MODIFY_DAMAGE round to float32 where Java does (`GaugeModifier`, beatoraja `8320241d`) [V].
+ */
+function beatorajaGaugeValues(
+  modifier: 'total' | 'limit' | 'damage' | undefined,
+  base: GaugeValues,
+  total: number,
+  noteCount: number,
+): GaugeValues {
+  const notes = Math.max(1, noteCount);
+  const f32 = Math.fround;
+  let modify: (value: number) => number = (value) => value;
+  if (modifier === 'total') modify = (value) => (value > 0 ? f32((value * total) / notes) : value);
+  else if (modifier === 'limit') {
+    const pg = f32(Math.max(Math.min(FLOAT_0_15, (2 * total - 320) / notes), 0));
+    const scale = f32(pg / FLOAT_0_15);
+    modify = (value) => (value > 0 ? f32(value * scale) : value);
+  } else if (modifier === 'damage') {
+    const totals = [240, 230, 210, 200, 180, 160, 150, 130, 120, 0];
+    const multipliers = [1, 1.11, 1.25, 1.5, 1.666, 2, 2.5, 3.333, 5, 10].map(f32);
+    let index = 0;
+    while (index < totals.length - 1 && total < totals[index]!) index++;
+    let fix2 = 1;
+    let note = 1000;
+    let step = f32(0.002);
+    while (note > notes || note > 1) {
+      fix2 = f32(fix2 + f32(step * (note - Math.max(notes, Math.trunc(note / 2)))));
+      note = Math.trunc(note / 2);
+      step = f32(step * 2);
+    }
+    const scale = Math.max(multipliers[index]!, fix2);
+    modify = (value) => (value < 0 ? f32(value * scale) : value);
+  }
+  return base.map((value) => modify(f32(value))) as unknown as GaugeValues;
 }
 
 function scaleNegative(values: GaugeValues, multiplier: number): GaugeValues {
@@ -574,7 +575,7 @@ function resolveLR2Gauge(gaugeId: string, total: number, noteCount: number): Gau
         initial: 20,
         border: 80,
         survival: false,
-        values: totalModifier([1.2, 1.2, 0.6, -3.2, -4.8, -1.6], total, noteCount),
+        values: lr2RecoveryValues(1.2, [-3.2, -4.800000000000001, -1.6], total, noteCount),
         guts: [],
       };
     case 'HARD': {
@@ -631,7 +632,7 @@ function resolveLR2Gauge(gaugeId: string, total: number, noteCount: number): Gau
         initial: 20,
         border: 80,
         survival: false,
-        values: totalModifier([1.0, 1.0, 0.5, -4.0, -6.0, -2.0], total, noteCount),
+        values: lr2RecoveryValues(1, [-4.0, -6.0, -2.0], total, noteCount),
         guts: [],
       };
   }
@@ -732,24 +733,6 @@ const BEATORAJA_SINGLE_GAUGES: Record<BeatorajaGaugeCategory, readonly Beatoraja
 };
 const BEATORAJA_SINGLE_GAUGE_IDS = ['ASSIST-EASY', 'EASY', 'NORMAL', 'HARD', 'EX-HARD', 'HAZARD'];
 
-/** beatoraja MODIFY_DAMAGE, used by five-key EX-HARD (distinct from LR2's damage formula). */
-function beatorajaFiveKeyDamageMultiplier(total: number, noteCount: number): number {
-  const totals = [240, 230, 210, 200, 180, 160, 150, 130, 120, 0];
-  const multipliers = [1, 1.11, 1.25, 1.5, 1.666, 2, 2.5, 3.333, 5, 10];
-  let index = 0;
-  while (index < totals.length - 1 && total < totals[index]!) index++;
-  let countMultiplier = 1;
-  let notes = 1000;
-  let step = 0.002;
-  // Preserve upstream's OR condition and integer halving, including its treatment of sparse charts.
-  while (notes > noteCount || notes > 1) {
-    countMultiplier += step * (notes - Math.max(noteCount, Math.trunc(notes / 2)));
-    notes = Math.trunc(notes / 2);
-    step *= 2;
-  }
-  return Math.max(multipliers[index]!, countMultiplier);
-}
-
 function resolveBeatorajaGaugeCategory(laneMode: string): BeatorajaGaugeCategory {
   const mode = resolveBeatorajaMode(laneMode);
   return mode === BEATORAJA_MODES.FIVEKEYS
@@ -780,15 +763,19 @@ function resolveBeatorajaGauge(
           : BEATORAJA_SINGLE_GAUGES.SEVENKEYS;
   const index = BEATORAJA_SINGLE_GAUGE_IDS.indexOf(gaugeId);
   const [modifier, min, max, initial, border, base, guts = []] = rows[index >= 0 ? index : 2]!;
-  const values =
-    modifier === 'total'
-      ? totalModifier(base, total, noteCount)
-      : modifier === 'limit'
-        ? scalePositive(base, resolveBeatorajaHardRecoverMultiplier(total, noteCount))
-        : modifier === 'damage'
-          ? scaleNegative(base, beatorajaFiveKeyDamageMultiplier(total, noteCount))
-          : base;
-  return { id: index >= 0 ? gaugeId : 'NORMAL', min, max, initial, border, survival: min === 0, values, guts };
+  const values = beatorajaGaugeValues(modifier, base, total, noteCount);
+  const f32Guts = guts.map((step) => ({ ...step, multiplier: Math.fround(step.multiplier) }));
+  return {
+    id: index >= 0 ? gaugeId : 'NORMAL',
+    min,
+    max,
+    initial,
+    border,
+    survival: min === 0,
+    values,
+    guts: f32Guts,
+    float32: true,
+  };
 }
 
 function resolve____Gauge(gaugeId: string, noteCount: number): GaugeSpec {

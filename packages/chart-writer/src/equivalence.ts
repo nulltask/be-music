@@ -133,6 +133,7 @@ function areBMSExtensionsEqual(left: BeMusicJSON['bms'], right: BeMusicJSON['bms
     left.wavCmd === right.wavCmd &&
     areStringArraysEqual(left.wavCmds, right.wavCmds) &&
     areStringMapsEqual(left.exWAV, right.exWAV) &&
+    [...(left.exWAVOverridden ?? [])].sort().join() === [...(right.exWAVOverridden ?? [])].sort().join() &&
     areStringMapsEqual(left.exBMP, right.exBMP) &&
     areStringMapsEqual(left.bga, right.bga) &&
     areNumberMapsEqual(left.scroll, right.scroll) &&
