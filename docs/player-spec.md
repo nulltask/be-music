@@ -247,7 +247,8 @@ A lane holds at most one note per position, as in beatoraja, whose timeline keep
 When several notes start on the same lane and position (two BMS object lines writing the same cell, a tap on the start of a `#mmm51-69` / `#LNOBJ` long note, or layered bmson notes with the same `x` and `y`), only one is judged:
 
 - A long note wins over a tap. beatoraja also replaces a tap with a `5x` / `6x` long note that starts on it.
-- Otherwise the first note in event order wins: the lowest object ID for BMS, the first sound channel for bmson. For bmson this is the note beatoraja judges. For BMS, beatoraja keeps the later line of the file instead, but the IR does not record line order. LR2's choice is not known.
+- Otherwise, for BMS, the object from the later line of the file wins, as in beatoraja; LR2's choice is not known. A chart saved as JSON before line order was recorded keeps the earlier rule, the lowest object ID.
+- For bmson, the first sound channel's note wins. This is the note beatoraja judges.
 
 The other notes are not judged, drawn, or counted in `summary.total`. For BMS, their keysounds play at their own time as background audio in manual play (AUTO already sounds every play-lane object), unless they use the kept note's `#WAVxx`.
 For bmson, one judged note holds all constituent source events in `soundEvents`, including the representative `event`. Every slice sounds on that note's press, including early/late input, lane fallback and replay; a missed note sounds none. AUTO schedules all constituent slices at chart time. Only notes with the same length as the first sound channel's note layer onto it. A note of another length, including a tap stacked on a long note, is dropped with its sound, as beatoraja does ([BMSONDecoder](https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/BMSONDecoder.java#L243-L306), which logs a warning); the chart still loads.
@@ -958,7 +959,7 @@ Chart time re-bases on the play clock at the tempo in force, so a paused play st
 The judge state becomes the one a play from the start reaches at the target: the score, the gauge, the combos and the notes' judged marks are rebuilt from 0.
 The UI gets a `seek` command, the long notes held across the target again and a frame at the target with the next `generation`; the hold after the chart is re-armed.
 A play that seeks records no replay.
-Only AUTO play seeks for now; manual play and replays drop the command.
+AUTO play, manual play and replays all seek: manual play starts its judge state again at the target, and a replay rebuilds it by running the recorded inputs up to the target.
 
 ### `highSpeed`
 
