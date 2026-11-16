@@ -69,20 +69,26 @@ const EVERY_CASE_CHART = {
 /** A chart on which none does: no 2P side, no generated note, one BPM. */
 const NO_CASE_CHART = { notes: [], bpmRange: { min: 1, max: 1 } } as unknown as AssistReplay['chart'];
 
+/** The player's picks as a play would run them: a NOTES COPY takes effect only on a 5 / 7 KEY chart outside a course. */
+function plannedPlayerOptions(
+  player: NonNullable<PlannedPlay['playerChartPlayOptions']>,
+  everyCase: boolean,
+): NonNullable<PlannedPlay['playerChartPlayOptions']> {
+  if (everyCase || (player.notes !== 'COPY' && player.notes !== 'DBLCOPY')) return player;
+  // Elsewhere COPY does nothing and DBLCOPY keeps its DOUBLE.
+  const { notes, ...others } = player;
+  return notes === 'DBLCOPY' ? { ...others, notes: 'DOUBLE' } : others;
+}
+
 function planAsReplay(plan: PlannedPlay, everyCase: boolean): AssistReplay {
   const { extraNotes, sevenToNine, playerChartPlayOptions, ...recorded } = plan;
   const count = everyCase ? 1 : 0;
-  // A player's NOTES COPY takes effect only on a 5 / 7 KEY chart outside a course; elsewhere DBLCOPY keeps its DOUBLE.
-  const copies = playerChartPlayOptions?.notes === 'COPY' || playerChartPlayOptions?.notes === 'DBLCOPY';
-  const { notes, ...playerOthers } = playerChartPlayOptions ?? {};
-  const player =
-    everyCase || !copies
-      ? playerChartPlayOptions
-      : { ...playerOthers, ...(notes === 'DBLCOPY' ? { notes: 'DOUBLE' as const } : {}) };
   return {
     play: {
       ...recorded,
-      ...(player !== undefined ? { playerChartPlayOptions: player } : {}),
+      ...(playerChartPlayOptions !== undefined
+        ? { playerChartPlayOptions: plannedPlayerOptions(playerChartPlayOptions, everyCase) }
+        : {}),
       mineModifierChangeCount: count,
       longNoteModifierChangeCount: count,
       scrollModifierChanged: everyCase,
