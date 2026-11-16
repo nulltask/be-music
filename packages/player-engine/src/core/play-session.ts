@@ -625,9 +625,10 @@ export async function createPlaySession(
   const finalOptionCue = chartOptions.cues
     .filter((cue) => cue.timeUs <= (resolvedChart.reversal?.seconds ?? Infinity) * 1_000_000)
     .at(-1);
-  let textPlaybackEndSeconds =
-    options.practice === undefined && finalOptionCue ? finalOptionCue.timeUs / 1_000_000 + 1 : 0;
-  for (const stage of options.practice === undefined ? (options.chartTextStages ?? []) : []) {
+  // An LRX chart ends where plugout ends it, option text or not.
+  const textExtendsEnd = options.practice === undefined && playbackChart.fixedEnd !== true;
+  let textPlaybackEndSeconds = textExtendsEnd && finalOptionCue ? finalOptionCue.timeUs / 1_000_000 + 1 : 0;
+  for (const stage of textExtendsEnd ? (options.chartTextStages ?? []) : []) {
     const last = stage.timeline.cues.filter((cue) => cue.seconds <= (stage.freezeSeconds ?? Infinity)).at(-1);
     if (last)
       textPlaybackEndSeconds = Math.max(
@@ -661,6 +662,7 @@ export async function createPlaySession(
       stateSignals,
       uiSignals,
       totalSeconds: Math.max(playbackChart.totalSeconds, textPlaybackEndSeconds),
+      fixedEnd: playbackChart.fixedEnd === true,
       audioMode: mode,
     });
 

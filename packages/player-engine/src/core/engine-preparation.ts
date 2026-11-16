@@ -235,6 +235,8 @@ export async function initializePlaybackRuntimeResources(params: {
   stateSignals: PlayerStateSignals;
   uiSignals: PlayerUISignalBus;
   totalSeconds: number;
+  /** `totalSeconds` is the chart's own end, which a longer BGA does not extend. */
+  fixedEnd?: boolean;
   audioMode: 'auto' | 'manual';
 }): Promise<
   Awaited<ReturnType<typeof initializePlayerUIRuntime>> & {
@@ -256,6 +258,7 @@ export async function initializePlaybackRuntimeResources(params: {
       stateSignals: params.stateSignals,
       uiSignals: params.uiSignals,
       totalSeconds: params.totalSeconds,
+      fixedEnd: params.fixedEnd,
       onLoadProgress: progressReporter.reportUIProgress,
     }).then((initializedUIRuntime) => {
       progressReporter.markUIReady(initializedUIRuntime.uiEnabled);

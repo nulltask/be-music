@@ -60,6 +60,9 @@ BENCH_LRX_BGA_CHART.lrx = {
 };
 const lrxBGAChart = BENCH_LRX_BGA_CHART;
 const lrxBGAProgram = chartAPI.resolveLRXBGAProgram(BENCH_LRX_BGA_CHART, (beat) => beat / 2)!;
+const BENCH_LRX_END_CHART = createEmptyJSON('lrx');
+BENCH_LRX_END_CHART.lrx = { endTick: 960 };
+const lrxEndResolved = chartAPI.resolveChart(BENCH_LRX_END_CHART);
 const BENCH_BMSON_BGA = createEmptyJSON('bmson');
 BENCH_BMSON_BGA.bmson.bga = {
   header: [
@@ -545,6 +548,11 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart-model.resolveLRXBGAProgram', {
     run: () => {
       chartAPI.resolveLRXBGAProgram(lrxBGAChart, (beat) => beat / 2);
+    },
+  });
+  define('chart-model.resolveLRXPlayEndSeconds', {
+    run: () => {
+      chartAPI.resolveLRXPlayEndSeconds(lrxEndResolved);
     },
   });
   define('chart-model.sampleLRXBGA', {

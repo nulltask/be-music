@@ -341,3 +341,4 @@ export {
   type LRXBGAProgram,
   type LRXBGASprite,
 } from './lrx-bga.ts';
+export { LRX_PLAY_END_TAIL_SECONDS, resolveLRXPlayEndSeconds } from './lrx-play-end.ts';
