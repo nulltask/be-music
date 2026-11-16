@@ -5,6 +5,7 @@ import {
   type BeMusicEvent,
   type BeMusicJSON,
   type ChartDiagnostic,
+  type LRXBGACue,
   type LRXEventExtensions,
   type LRXExtensions,
 } from '@be-music/chart-source';
@@ -72,6 +73,16 @@ const BGA_CHANNELS: ReadonlyMap<number, string> = new Map([
   [201, '07'],
   [202, '0A'],
   [299, '06'],
+]);
+
+/** BGA channel → plugout's BGA slot: the base, four layers, and the POOR image. */
+const BGA_SLOTS: ReadonlyMap<number, number> = new Map([
+  [200, 0],
+  [201, 1],
+  [202, 2],
+  [203, 3],
+  [204, 4],
+  [299, 5],
 ]);
 
 /** `wcstol`: leading digits with an optional sign; anything unreadable is 0. */
@@ -220,6 +231,7 @@ export function parseLRX(files: LRXSourceFiles<string>): BeMusicJSON {
   };
   const soundEvents: Array<{ note: LRXNote; channel: string; extension?: LRXEventExtensions }> = [];
   const bgaEvents: Array<{ note: LRXNote; channel: string }> = [];
+  const bgaCues: Array<{ note: LRXNote; slot: number; id: number }> = [];
 
   for (let index = 0; index < notes.length; index++) {
     const note = notes[index]!;
@@ -276,15 +288,18 @@ export function parseLRX(files: LRXSourceFiles<string>): BeMusicJSON {
       continue;
     }
     if (channel >= 200 && channel < 300) {
-      const bgaChannel = BGA_CHANNELS.get(channel);
-      if (bgaChannel === undefined) {
+      const id = Math.trunc(note.value);
+      const slot = BGA_SLOTS.get(channel);
+      // plugout draws the base, layers 201–204 and the POOR image (0x443c95); the other layers it never shows.
+      if (slot === undefined) {
         unsupportedChannels.add(channel);
         continue;
       }
-      const id = Math.trunc(note.value);
       if (id < 0) continue;
       imageCount = Math.max(imageCount, id + 1);
-      bgaEvents.push({ note, channel: bgaChannel });
+      bgaCues.push({ note, slot, id });
+      const bgaChannel = BGA_CHANNELS.get(channel);
+      if (bgaChannel !== undefined) bgaEvents.push({ note, channel: bgaChannel });
     }
     // 300 (bar lines) became the measures; 303–308 and 310 up do nothing in plugout.
   }
@@ -310,6 +325,10 @@ export function parseLRX(files: LRXSourceFiles<string>): BeMusicJSON {
   for (const { note, channel, extension } of soundEvents)
     pushEvent(note, channel, keyOf(Math.trunc(note.value)), extension);
   for (const { note, channel } of bgaEvents) pushEvent(note, channel, keyOf(Math.trunc(note.value)));
+  const bga = bgaCues.map(({ note, slot, id }) => readBGACue(note, slot, id, keyOf(id)));
+  // The BMS BGA channels carry the plain images; a chart that moves, crops or chains them, or uses layer 203 / 204,
+  // keeps every cue with its transform.
+  if (bga.some((cue) => cue.slot === 3 || cue.slot === 4 || cue.src || cue.dst || cue.chain)) lrx.bga = bga;
 
   const bpmKeys = createBmsonValueKeyTable(bpmValues, keyBase);
   Object.assign(json.resources.bpm, bpmKeys.table);
@@ -440,4 +459,25 @@ function readSoundExtension(note: LRXNote): LRXEventExtensions | undefined {
   if (readFlag(note.attributes.get('rev'))) extension.reverse = true;
   if (readFlag(note.attributes.get('cn'))) extension.chain = true;
   return Object.keys(extension).length > 0 ? extension : undefined;
+}
+
+/**
+ * A BGA note with its transform, read as plugout reads it (0x4656c2): `sx` brings the source rectangle; `dx` brings
+ * the destination and with it the colour, blend, rotation, centre and easing, which plugout reads only then.
+ */
+function readBGACue(note: LRXNote, slot: number, id: number, key: string): LRXBGACue {
+  const cue: LRXBGACue = { slot, tick: note.start, image: id, key };
+  if (note.end > note.start) cue.endTick = note.end;
+  if (readFlag(note.attributes.get('cn'))) cue.chain = true;
+  const int = (name: string, fallback: number): number => readInt(note.attributes.get(name)) ?? fallback;
+  if (note.attributes.has('sx')) cue.src = [int('sx', 0), int('sy', 0), int('sw', 0), int('sh', 0)];
+  if (note.attributes.has('dx')) {
+    cue.dst = [int('dx', 0), int('dy', 0), int('dw', 0), int('dh', 0)];
+    cue.color = [int('a', 255), int('r', 255), int('g', 255), int('b', 255)];
+    cue.blend = int('bld', 0);
+    cue.rotation = int('rot', 0);
+    cue.center = int('ctr', 0);
+    cue.accel = int('acc', 0);
+  }
+  return cue;
 }

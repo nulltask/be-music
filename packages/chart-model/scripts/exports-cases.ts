@@ -51,6 +51,15 @@ function getBenchFingerprintDocument(
   return document;
 }
 
+const BENCH_LRX_BGA_CHART = createEmptyJSON('lrx');
+BENCH_LRX_BGA_CHART.lrx = {
+  bga: [
+    { slot: 0, tick: 0, image: 0, key: '01', dst: [0, 0, 640, 360], color: [255, 255, 255, 255], accel: 2 },
+    { slot: 0, tick: 480, endTick: 960, image: 3, key: '04', chain: true, dst: [640, 360, 640, 360] },
+  ],
+};
+const lrxBGAChart = BENCH_LRX_BGA_CHART;
+const lrxBGAProgram = chartAPI.resolveLRXBGAProgram(BENCH_LRX_BGA_CHART, (beat) => beat / 2)!;
 const BENCH_BMSON_BGA = createEmptyJSON('bmson');
 BENCH_BMSON_BGA.bmson.bga = {
   header: [
@@ -531,6 +540,21 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart-model.isPlayLaneSoundChannel', {
     run: () => {
       chartAPI.isPlayLaneSoundChannel('31');
+    },
+  });
+  define('chart-model.resolveLRXBGAProgram', {
+    run: () => {
+      chartAPI.resolveLRXBGAProgram(lrxBGAChart, (beat) => beat / 2);
+    },
+  });
+  define('chart-model.sampleLRXBGA', {
+    run: () => {
+      chartAPI.sampleLRXBGA(lrxBGAProgram, 0, 0.75, () => [256, 256]);
+    },
+  });
+  define('chart-model.easeLRXBGA', {
+    run: () => {
+      chartAPI.easeLRXBGA(0, 100, 0, 1, 0.5, 2);
     },
   });
   define('chart-model.playsAtKeysoundVolume', {

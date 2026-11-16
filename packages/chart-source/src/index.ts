@@ -15,7 +15,7 @@ export interface BmsonExtraFields {
 import { normalizeASCIIBase36Code, normalizeASCIIBase62Code } from '@be-music/shared-utils/core';
 import { cloneLRXExtensions, type LRXEventExtensions, type LRXExtensions } from './lrx.ts';
 
-export { LRX_TICKS_PER_BEAT, type LRXEventExtensions, type LRXExtensions } from './lrx.ts';
+export { LRX_TICKS_PER_BEAT, type LRXBGACue, type LRXEventExtensions, type LRXExtensions } from './lrx.ts';
 
 export const BMS_JSON_FORMAT = 'be-music-json/0.1.0' as const;
 

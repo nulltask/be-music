@@ -8,7 +8,7 @@ import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-sessi
  * The functions read and write the play's state through {@link PlayMediaContext}; the play session passes itself.
  */
 
-import type { TimedSampleTrigger } from '@be-music/chart-model';
+import { resolveLRXBGAProgram, type TimedSampleTrigger, type TimingResolver } from '@be-music/chart-model';
 import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
 import { resolveJudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { TimedPlayableNote } from '@be-music/player-engine/display';
@@ -16,6 +16,8 @@ import type { Texture } from 'pixi.js';
 import { loadPlaySamples, type PlaySampleWindow } from '../../chart/play-audio.ts';
 import type { PreparedPlaybackChartData } from '@be-music/player-engine';
 import { loadPlayBGA, releaseVideo } from '../../chart/play-bga.ts';
+import { LRX_POOR_SECONDS, LRXBGACompositor } from '../../media/lrx-bga-compositor.ts';
+import type { PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import type { LibraryChart } from '@be-music/player-scene-model';
 import type { BrowserAssetSource } from '../../collection/types.ts';
 import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
@@ -88,6 +90,12 @@ export interface PlayMediaContext {
   readonly bgaLayerTextures: Map<string, Texture>;
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string; dispose?: () => void }>;
   readonly bgaSubRegionOrigins: Map<string, { x: number; y: number }>;
+  readonly timingResolver: TimingResolver | undefined;
+  readonly engineFrame: Readonly<PlayerUIFramePayload> | undefined;
+  readonly lastPoorAt: number;
+  playClock(): number;
+  /** Set once the BGA images are loaded, for an LRX chart whose BGA only the compositor can draw. */
+  lrxBGA: LRXBGACompositor | undefined;
   /** Uploads `textures` to the GPU now (Pixi's `PrepareSystem`), so the first frame that draws them does not stall. */
   preparePixiUpload(textures: Iterable<Texture | undefined>): Promise<void>;
 }
@@ -295,6 +303,20 @@ export async function prepareBGA(ctx: PlayMediaContext): Promise<void> {
     isCancelled: () => ctx.disposed,
   });
   if (ctx.disposed) return;
+  // An LRX chart that moves, crops or chains its BGA, or uses layer 203 / 204, is drawn as plugout draws it.
+  const program =
+    ctx.timingResolver !== undefined ? resolveLRXBGAProgram(chart, ctx.timingResolver.beatToSeconds) : undefined;
+  if (program !== undefined) {
+    ctx.lrxBGA?.dispose();
+    ctx.lrxBGA = new LRXBGACompositor(
+      program,
+      { textures: ctx.bgaTextures, layerTextures: ctx.bgaLayerTextures, videos: ctx.bgaVideos },
+      {
+        seconds: () => ctx.engineFrame?.currentSeconds ?? 0,
+        showsPoor: () => ctx.lastPoorAt > 0 && ctx.playClock() - ctx.lastPoorAt < LRX_POOR_SECONDS * 1000,
+      },
+    );
+  }
   // Eager-upload every freshly loaded BGA texture (and any sub-region aliases registered above) so the first BGA
   // cue mid-chart doesn't stall on its own first sample. Mirrors the skin path in `prepare()`. This is fire-and-
   // forget from the prepareBGA callsite — `bgaReadyPromise` already gates chart start, and adding the upload to

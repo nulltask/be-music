@@ -99,6 +99,13 @@ export function collectPlayBGAResources(
   );
   for (const key of extras.base) base.add(key);
   for (const key of extras.layer) layer.add(key);
+  // An LRX chart drawn by the compositor can show any of its images: a keyframe chain counts its image id up.
+  if ((chart.lrx?.bga?.length ?? 0) > 0) {
+    for (const key of Object.keys(chart.resources.bmp)) {
+      base.add(key);
+      layer.add(key);
+    }
+  }
   const referenced = new Set<string>([...base, ...layer]);
   const paths = new Map<string, string>();
   for (const [key, path] of Object.entries(chart.resources.bmp)) {

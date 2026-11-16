@@ -160,17 +160,51 @@ describe('parseLRX', () => {
 
   test('warns about lane types and channels Be-Music cannot lay out', () => {
     const chart = parseLRX({
-      lrs: lrs('<n c="301" s="0" p="120" />', '<n c="8" s="0" p="0" />', '<n c="203" s="0" p="0" />'),
+      lrs: lrs('<n c="301" s="0" p="120" />', '<n c="8" s="0" p="0" />', '<n c="205" s="0" p="0" />'),
       lrh: lrh('lanetype="5"'),
     });
     expect(chart.diagnostics?.map((diagnostic) => [diagnostic.code, diagnostic.subject])).toEqual([
       ['unsupported-lane-type', '5'],
       ['unsupported-channel', '8'],
-      ['unsupported-channel', '203'],
+      // plugout draws layers 201–204 only.
+      ['unsupported-channel', '205'],
     ]);
     // The lane outside the table plays in the background.
     expect(chart.events.find((event) => event.value === '01' && event.channel === '01')).toBeDefined();
     expect(parseLRX({ lrs: lrs(), lrh: lrh('lanetype="9"') }).diagnostics?.[0]?.code).toBe('unsupported-lane-type');
+  });
+
+  test('keeps every BGA cue with its transform when the BMS channels cannot carry it', () => {
+    const plain = parseLRX({ lrs: lrs('<n c="301" s="0" p="120" />', '<n c="200" s="0" p="0" />') });
+    expect(plain.lrx?.bga).toBeUndefined();
+    const chart = parseLRX({
+      lrs: lrs(
+        '<n c="301" s="0" p="120" />',
+        '<n c="200" s="0" p="0" />',
+        '<n c="203" s="480" e="960" p="1" sx="1" sy="2" sw="3" sh="4" dx="5" dy="6" dw="7" dh="8" a="9" bld="1" rot="30" ctr="7" acc="2" />',
+        '<n c="203" s="960" p="2" cn="1" />',
+      ),
+    });
+    expect(chart.lrx?.bga).toEqual([
+      { slot: 0, tick: 0, image: 0, key: '01' },
+      {
+        slot: 3,
+        tick: 480,
+        endTick: 960,
+        image: 1,
+        key: '02',
+        src: [1, 2, 3, 4],
+        dst: [5, 6, 7, 8],
+        color: [9, 255, 255, 255],
+        blend: 1,
+        rotation: 30,
+        center: 7,
+        accel: 2,
+      },
+      { slot: 3, tick: 960, image: 2, key: '03', chain: true },
+    ]);
+    // Layer 203 has no BMS channel; the base stays on `04` for every other player.
+    expect(chart.events.filter((event) => event.channel === '04')).toHaveLength(1);
   });
 
   test('reads the BGA file: one id table for images and movies, base / layers / POOR', () => {

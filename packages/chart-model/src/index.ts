@@ -330,3 +330,14 @@ export {
   type ChartPlayfieldVisual,
 } from './chart-option-crazy.ts';
 export { resolveChartLegacyOptionAlias } from './chart-option-legacy.ts';
+
+export {
+  easeLRXBGA,
+  LRX_BGA_HEIGHT,
+  LRX_BGA_WIDTH,
+  resolveLRXBGAProgram,
+  sampleLRXBGA,
+  type LRXBGANode,
+  type LRXBGAProgram,
+  type LRXBGASprite,
+} from './lrx-bga.ts';
