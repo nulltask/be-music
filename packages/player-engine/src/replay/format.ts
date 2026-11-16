@@ -104,6 +104,11 @@ export interface ReplayNote {
   damage?: number;
   /** Generated mines carry no explosion sample. Valid only for mine notes. */
   silent?: boolean;
+  /**
+   * A note plugout judges but leaves out of its note count: an LRX chain note at the start of its lane. Only the
+   * `plugout` ruleset reads it.
+   */
+  uncounted?: true;
 }
 
 export type ReplayInputAction = 'down' | 'up';
@@ -735,6 +740,11 @@ function parseNote(value: unknown, index: number): ReplayNote {
         `chart.notes[${index}].generatedLongNote: expected a timed long note with a resolved mode`,
       );
     note.generatedLongNote = true;
+  }
+  if (record.uncounted !== undefined) {
+    if (record.uncounted !== true || (type !== 'normal' && type !== 'long'))
+      throw new ReplayParseError(`chart.notes[${index}].uncounted: expected true on a judged note`);
+    note.uncounted = true;
   }
   if (record.silent !== undefined) {
     if (type !== 'mine' || typeof record.silent !== 'boolean')

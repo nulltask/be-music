@@ -111,6 +111,8 @@ describe('parseLRX', () => {
       lrs: lrs(
         '<n c="301" s="0" p="120" />',
         '<n c="2" s="0" p="3" dmg="0" />',
+        // A note before it on lane 3, so the chain note follows in the background.
+        '<n c="3" s="0" p="7" />',
         '<n c="3" s="0" p="4" cn="1" />',
         '<n c="5" s="0" p="6" cn="1" dmg="0" />',
         '<n c="4" s="0" p="5" vol="64" pan="0" frq="22050" atk="10" rls="20" ost="30" len="40" rev="1" dmg="50" rcv="80" />',
@@ -172,6 +174,16 @@ describe('parseLRX', () => {
     // The lane outside the table plays in the background.
     expect(chart.events.find((event) => event.value === '01' && event.channel === '01')).toBeDefined();
     expect(parseLRX({ lrs: lrs(), lrh: lrh('lanetype="9"') }).diagnostics?.[0]?.code).toBe('unsupported-lane-type');
+  });
+
+  test('judges a chain note that starts its lane, as plugout does', () => {
+    const chart = parseLRX({
+      lrs: lrs('<n c="301" s="0" p="120" />', '<n c="1" s="0" p="0" cn="1" />', '<n c="1" s="480" p="1" cn="1" />'),
+    });
+    const byValue = new Map(chart.events.map((event) => [event.value, event]));
+    // The first is the lane's note; the second follows it in the background.
+    expect(byValue.get('01')).toMatchObject({ channel: '11', lrx: { chain: true } });
+    expect(byValue.get('02')).toMatchObject({ channel: '01', lrx: { chain: true, lane: '11' } });
   });
 
   test('keeps every BGA cue with its transform when the BMS channels cannot carry it', () => {

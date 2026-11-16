@@ -269,6 +269,8 @@ export interface RulesetConfig {
 export interface ResolveRulesetOptions {
   /** The notes AUTO SCRATCH plays. plugout leaves them out of judging and the note count (0x43e1a4). */
   autoScratchNotes?: RulesetNoteCounts;
+  /** Judged notes plugout leaves out of its note count: LRX chain notes that start their lane (0x43c071). */
+  uncountedNotes?: RulesetNoteCounts;
   /** bmson zero-total policy. Absent retains beatoraja-compatible recovery. */
   bmsonTotalMode?: BmsonTotalMode;
   /** Forces a specific ruleset-scoped gauge id (see the gauge tables), bypassing {@link selectedGauge} mapping. */
@@ -1420,7 +1422,7 @@ function resolveRulesetTables(
 
   if (rulesetId === 'plugout') {
     // Long notes count twice: the tail is a judgment of its own (0x43c050), and TOTAL's default counts it too.
-    const played = withoutRulesetNotes(chart, options.autoScratchNotes);
+    const played = withoutRulesetNotes(withoutRulesetNotes(chart, options.autoScratchNotes), options.uncountedNotes);
     const noteCount = countRulesetNotes(played, 'charge');
     const effectiveTotal = practice?.total ?? resolveEffectiveTotal('plugout', played, noteCount);
     return resolvePlugoutRuleset({

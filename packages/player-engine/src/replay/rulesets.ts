@@ -46,6 +46,22 @@ export function rulesetChartFactsFromReplay(replay: BeMusicReplay): RulesetChart
   return facts;
 }
 
+/** The recorded notes plugout leaves out of its count (`ReplayNote.uncounted`), other than AUTO SCRATCH's. */
+export function countReplayUncountedNotes(replay: BeMusicReplay): RulesetNoteCounts | undefined {
+  const auto =
+    replay.play.mode === 'auto'
+      ? new Set<string>()
+      : resolveAutoScratchChannels(replay.play, resolveScratchChannels(replay.chart.laneMode));
+  const long: Record<LongNoteMode, number> = { 1: 0, 2: 0, 3: 0 };
+  let normal = 0;
+  for (const note of replay.chart.notes) {
+    if (note.uncounted !== true || auto.has(note.channel)) continue;
+    if (note.type === 'normal') normal += 1;
+    else if (note.type === 'long') long[note.lnMode ?? replay.chart.lnMode] += 1;
+  }
+  return normal + long[1] + long[2] + long[3] > 0 ? { normal, long } : undefined;
+}
+
 /** The notes AUTO SCRATCH played in a recorded manual play, as the ruleset facts count them; none without it. */
 export function countReplayAutoScratchNotes(replay: BeMusicReplay): RulesetNoteCounts | undefined {
   if (replay.play.mode === 'auto') return undefined;
@@ -73,8 +89,10 @@ export function resolveRulesetConfig(
 ): RulesetConfig {
   const { course } = replay.play;
   const autoScratchNotes = countReplayAutoScratchNotes(replay);
+  const uncountedNotes = countReplayUncountedNotes(replay);
   return resolveRuleset(rulesetChartFactsFromReplay(replay), rulesetId, {
     ...(autoScratchNotes !== undefined ? { autoScratchNotes } : {}),
+    ...(uncountedNotes !== undefined ? { uncountedNotes } : {}),
     selectedGauge: replay.play.gauge,
     // Gauge auto-shift is carried (ADR 0019): it shifts along the target ruleset's own ladder.
     ...(replay.play.bottomShiftableGauge !== undefined

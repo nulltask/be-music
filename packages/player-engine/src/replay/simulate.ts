@@ -138,7 +138,12 @@ export function simulateReplay(replay: BeMusicReplay, options: SimulateReplayOpt
   }
   const config = resolveRulesetConfig(replay, options.ruleset, options);
   const endOnFailure =
-    options.endOnFailure ?? resolveGaugeEndOnFailure(replay.play.gaugeAutoShift, replay.play.endOnFailure === true);
+    options.endOnFailure ??
+    resolveGaugeEndOnFailure(
+      replay.play.gaugeAutoShift,
+      replay.play.endOnFailure === true,
+      replay.play.course === undefined ? config.gaugeSource : undefined,
+    );
   return new ReplaySimulation(replay, config, endOnFailure, options.onJudgment, options.onFailure).run();
 }
 

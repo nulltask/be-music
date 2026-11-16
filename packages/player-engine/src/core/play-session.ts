@@ -3,6 +3,7 @@ import { BmsonBGAController } from './bmson-bga.ts';
 import { resolveChartGaugeType } from '../ruleset/chart-gauge.ts';
 import { resolveChartJudgeOption } from '../ruleset/chart-judge.ts';
 import { countRulesetNotesOf } from '../ruleset/facts.ts';
+import type { TimedPlayableNote } from '../playable-notes.ts';
 import { ChartTextController } from './chart-text.ts';
 import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
 import { resolveEffectiveBattleMode } from './battle-mode.ts';
@@ -427,6 +428,7 @@ export async function createPlaySession(
             ),
           }
         : {}),
+      ...uncountedNotesOption(factsChart.scorableNotes, autoScratchChannels, resolvedChart.lnMode),
       ...(options.judgeAlgorithm !== undefined ? { judgeAlgorithm: options.judgeAlgorithm } : {}),
       bmsonTotalMode: options.bmsonTotalMode,
       ...(options.customJudge !== undefined ? { customJudge: options.customJudge } : {}),
@@ -454,7 +456,11 @@ export async function createPlaySession(
     },
   );
   reportResolvedRuleset(options, ruleset);
-  const endOnFailure = resolveGaugeEndOnFailure(options.gaugeAutoShift, options.endOnFailure);
+  const endOnFailure = resolveGaugeEndOnFailure(
+    options.gaugeAutoShift,
+    options.endOnFailure,
+    options.course === undefined ? ruleset.gaugeSource : undefined,
+  );
 
   const courseCarry = options.course !== undefined ? courseStageCarryCombo(options.course) : undefined;
   const { score, summary, resetScore: resetPrimaryScore } = createPlayerScore(ruleset, courseCarry);
@@ -966,6 +972,7 @@ function createSecondPlayer(
     options.judgeRuleset ?? 'lr2',
     {
       ...(autoScratchNotes.length > 0 ? { autoScratchNotes: countRulesetNotesOf(autoScratchNotes, chartLNMode) } : {}),
+      ...uncountedNotesOption(side.scorableNotes, autoScratchChannels, chartLNMode),
       bmsonTotalMode: options.bmsonTotalMode,
       ...(gauge !== undefined ? { selectedGauge: gauge } : {}),
       // Gauge auto-shift is the play's, so the second player's gauge shifts as the first's does (and as a replay of
@@ -982,7 +989,11 @@ function createSecondPlayer(
     score,
     summary,
     resetScore,
-    endOnFailure: resolveGaugeEndOnFailure(options.gaugeAutoShift, options.endOnFailure),
+    endOnFailure: resolveGaugeEndOnFailure(
+      options.gaugeAutoShift,
+      options.endOnFailure,
+      options.course === undefined ? ruleset.gaugeSource : undefined,
+    ),
     ...(gauge !== undefined ? { gauge } : {}),
   };
 }
@@ -1002,4 +1013,19 @@ function assertPracticeOptions(options: Readonly<PlayerOptions>): void {
     options.lr2ExtraMode === true
   )
     throw new RangeError('PRACTICE applies no chart modifier.');
+}
+
+/**
+ * The judged notes a play leaves out of plugout's note count (LRX chain notes that start their lane), as a ruleset
+ * option; none, or only those AUTO SCRATCH does not already leave out.
+ */
+function uncountedNotesOption(
+  notes: readonly TimedPlayableNote[],
+  autoScratchChannels: ReadonlySet<string> | undefined,
+  chartLNMode: ResolvedChart['lnMode'],
+): { uncountedNotes?: ReturnType<typeof countRulesetNotesOf> } {
+  const uncounted = notes.filter(
+    (note) => note.event.lrx?.chain === true && autoScratchChannels?.has(note.channel) !== true,
+  );
+  return uncounted.length > 0 ? { uncountedNotes: countRulesetNotesOf(uncounted, chartLNMode) } : {};
 }

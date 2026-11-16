@@ -155,10 +155,19 @@ export const GAUGE_AUTO_SHIFTS: readonly GaugeAutoShift[] = [
  * Whether a play ends when its survival gauge empties. NONE stops the play; every other policy keeps judging to the end:
  * CONTINUE on the emptied gauge, SURVIVAL TO GROOVE on the ruleset's default recovery gauge, BEST CLEAR / SELECT TO
  * UNDER on the parallel gauges of the ruleset's ladder. An omitted policy keeps the host-level `endOnFailure` contract.
+ * A single play on plugout's gauges (`singlePlayGaugeSource`) always plays on, as plugout does.
  */
-export function resolveGaugeEndOnFailure(policy: GaugeAutoShift | undefined, fallback = true): boolean {
+export function resolveGaugeEndOnFailure(
+  policy: GaugeAutoShift | undefined,
+  fallback = true,
+  singlePlayGaugeSource?: string,
+): boolean {
+  if (policy !== undefined && !GAUGE_AUTO_SHIFTS.includes(policy))
+    throw new RangeError(`Unknown gauge auto-shift policy: ${String(policy)}`);
+  // plugout plays a single chart to its end on an emptied survival gauge: the gauge stays at 0 and nothing stops the
+  // play (`plugout4.exe` 0x43a4f1; the single-play gauge path raises no event, unlike the course gauges').
+  if (singlePlayGaugeSource === 'plugout') return false;
   if (policy === undefined) return fallback;
-  if (!GAUGE_AUTO_SHIFTS.includes(policy)) throw new RangeError(`Unknown gauge auto-shift policy: ${String(policy)}`);
   return policy === 'NONE';
 }
 

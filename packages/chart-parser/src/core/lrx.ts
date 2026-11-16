@@ -232,6 +232,8 @@ export function parseLRX(files: LRXSourceFiles<string>): BeMusicJSON {
   const soundEvents: Array<{ note: LRXNote; channel: string; extension?: LRXEventExtensions }> = [];
   const bgaEvents: Array<{ note: LRXNote; channel: string }> = [];
   const bgaCues: Array<{ note: LRXNote; slot: number; id: number }> = [];
+  /** The lanes a judged note has reached so far, in chart order. */
+  const judgedLanes = new Set<string>();
 
   for (let index = 0; index < notes.length; index++) {
     const note = notes[index]!;
@@ -269,8 +271,13 @@ export function parseLRX(files: LRXSourceFiles<string>): BeMusicJSON {
       if (channel < 20 && lane === undefined) unsupportedChannels.add(channel);
       // A lane note with `dmg="0"` is an autoplayed background note; a chain note sits in the background too. Both keep
       // their lane (`lane`): a chain note follows the lane's preceding note, and a hidden note becomes the lane's sound.
-      const background = lane === undefined || extension?.damage === 0 || extension?.chain === true;
+      // A chain note with no note before it on its lane is judged as plugout judges it: the lane's judge cursor starts
+      // on it, though its note count leaves it out (0x43c000, 0x43c071).
+      const leadingChain =
+        extension?.chain === true && lane !== undefined && extension.damage !== 0 && !judgedLanes.has(lane);
+      const background = lane === undefined || extension?.damage === 0 || (extension?.chain === true && !leadingChain);
       if (background && lane !== undefined) extension!.lane = lane;
+      if (!background && lane !== undefined) judgedLanes.add(lane);
       // plugout's BGM group holds only the BGM columns' notes that keep a non-zero `dmg`; a background sound outside it
       // plays at the keysound volume.
       const bgmGroup = channel >= 100 && extension?.damage !== 0;
