@@ -210,6 +210,7 @@ function applyLR2RejudgeChain(
     const windows = judgeWindowsFor(config, note.channel, nowSec);
     const deltaUs = judgeDeltaUs(note.seconds, nowSec);
     if (deltaUs < windows.judges[3][0] || deltaUs > windows.judges[3][1]) break;
+    if (config.ruleset.multiBadAheadUs !== undefined && deltaUs >= config.ruleset.multiBadAheadUs) break;
     if (!markScorableJudged(state, note)) break;
     const judge = resolveManualTimedJudge((nowSec - note.seconds) * 1000, windows);
     emit({ kind: 'ui', command: { kind: 'flash-lane', channel: note.channel } });

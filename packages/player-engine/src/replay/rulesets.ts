@@ -5,12 +5,15 @@
  * this module only turns a {@link BeMusicReplay} into the neutral {@link RulesetChartFacts} the tables take, and
  * re-exports the ruleset surface the replay API has always exposed.
  */
+import { resolveAutoScratchChannels } from '../core/auto-scratch.ts';
 import { resolveChartJudgeOption } from '../ruleset/chart-judge.ts';
+import { resolveScratchChannels } from './scratch-channels.ts';
 import {
   createEmptyRulesetNoteCounts,
   resolveRuleset,
   type RulesetChartFacts,
   type RulesetConfig,
+  type RulesetNoteCounts,
 } from '../ruleset/index.ts';
 import type { LongNoteMode } from '@be-music/chart-model';
 import type { BeMusicReplay, ReplayCourseStage } from './format.ts';
@@ -43,6 +46,22 @@ export function rulesetChartFactsFromReplay(replay: BeMusicReplay): RulesetChart
   return facts;
 }
 
+/** The notes AUTO SCRATCH played in a recorded manual play, as the ruleset facts count them; none without it. */
+export function countReplayAutoScratchNotes(replay: BeMusicReplay): RulesetNoteCounts | undefined {
+  if (replay.play.mode === 'auto') return undefined;
+  const channels = resolveAutoScratchChannels(replay.play, resolveScratchChannels(replay.chart.laneMode));
+  if (channels.size === 0) return undefined;
+  const notes = createEmptyRulesetNoteCounts();
+  const long: Record<LongNoteMode, number> = { 1: 0, 2: 0, 3: 0 };
+  let normal = 0;
+  for (const note of replay.chart.notes) {
+    if (!channels.has(note.channel)) continue;
+    if (note.type === 'normal') normal += 1;
+    else if (note.type === 'long') long[note.lnMode ?? replay.chart.lnMode] += 1;
+  }
+  return normal + long[1] + long[2] + long[3] > 0 ? { ...notes, normal, long } : undefined;
+}
+
 /**
  * Resolves the ruleset a recorded play should be re-simulated under. Thin wrapper over {@link resolveRuleset}
  * that supplies the replay's own gauge pick and debug judge-window override.
@@ -53,7 +72,9 @@ export function resolveRulesetConfig(
   options: ResolveRulesetOptions = {},
 ): RulesetConfig {
   const { course } = replay.play;
+  const autoScratchNotes = countReplayAutoScratchNotes(replay);
   return resolveRuleset(rulesetChartFactsFromReplay(replay), rulesetId, {
+    ...(autoScratchNotes !== undefined ? { autoScratchNotes } : {}),
     selectedGauge: replay.play.gauge,
     // Gauge auto-shift is carried (ADR 0019): it shifts along the target ruleset's own ladder.
     ...(replay.play.bottomShiftableGauge !== undefined

@@ -1164,12 +1164,14 @@ for (const assistedSide of ['1P', '2P'] as const) {
       autoScratch2P: assistedSide === '2P',
       playVariant: '14' as const,
     };
+    // plugout's AUTO SCRATCH only sounds its notes: the assisted side is neither judged nor counted.
+    const assisted = ruleset === 'plugout' ? 0 : 1;
     const { summary, replay } = await runRecordedPlay(json, [], ruleset, settings);
-    expect([summary.perfect, summary.poor]).toEqual([1, 1]);
+    expect([summary.perfect, summary.poor, summary.total]).toEqual([assisted, 1, 1 + assisted]);
     expect(replay.play.autoScratch1P).toBe(settings.autoScratch1P);
     expect(replay.play.autoScratch2P).toBe(settings.autoScratch2P);
     const simulated = simulateReplay(replay, { ruleset });
-    expect([simulated.judge.pgreat, simulated.judge.poor]).toEqual([1, 1]);
+    expect([simulated.judge.pgreat, simulated.judge.poor, simulated.noteCount]).toEqual([assisted, 1, 1 + assisted]);
     const manualChannel = assistedSide === '1P' ? '26' : '16';
     const manual = await runRecordedPlay(
       json,
@@ -1177,8 +1179,8 @@ for (const assistedSide of ['1P', '2P'] as const) {
       ruleset,
       settings,
     );
-    expect([manual.summary.perfect, manual.summary.poor]).toEqual([2, 0]);
-    expect(simulateReplay(manual.replay, { ruleset }).judge.pgreat).toBe(2);
+    expect([manual.summary.perfect, manual.summary.poor]).toEqual([1 + assisted, 0]);
+    expect(simulateReplay(manual.replay, { ruleset }).judge.pgreat).toBe(1 + assisted);
   });
 }
 

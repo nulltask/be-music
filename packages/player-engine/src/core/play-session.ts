@@ -2,6 +2,7 @@ import { isSoftLanding } from './scroll-modifier.ts';
 import { BmsonBGAController } from './bmson-bga.ts';
 import { resolveChartGaugeType } from '../ruleset/chart-gauge.ts';
 import { resolveChartJudgeOption } from '../ruleset/chart-judge.ts';
+import { countRulesetNotesOf } from '../ruleset/facts.ts';
 import { ChartTextController } from './chart-text.ts';
 import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
 import { resolveEffectiveBattleMode } from './battle-mode.ts';
@@ -406,15 +407,26 @@ export async function createPlaySession(
   }
   // Two players judge one side each: each side's notes make its own judgment count and TOTAL.
   const twoPlayer = playbackChart.battleMode === 'TWO-PLAYER' || playbackChart.battleMode === 'COUPLE';
+  const factsChart = twoPlayer ? selectPlaybackChartSide(playbackChart, 1) : playbackChart;
+  // The notes AUTO SCRATCH plays, for a ruleset that leaves them out of the count (plugout).
+  const autoScratchChannels = autoScratch
+    ? resolveAutoScratchChannels(
+        options,
+        playbackChart.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
+      )
+    : undefined;
   const ruleset = resolveRuleset(
-    rulesetChartFactsFromChart(
-      resolvedJSON,
-      twoPlayer ? selectPlaybackChartSide(playbackChart, 1) : playbackChart,
-      judgeRankChanges,
-      options.stageRanks,
-    ),
+    rulesetChartFactsFromChart(resolvedJSON, factsChart, judgeRankChanges, options.stageRanks),
     options.judgeRuleset ?? 'lr2',
     {
+      ...(autoScratchChannels !== undefined && autoScratchChannels.size > 0
+        ? {
+            autoScratchNotes: countRulesetNotesOf(
+              factsChart.scorableNotes.filter((note) => autoScratchChannels.has(note.channel)),
+              resolvedChart.lnMode,
+            ),
+          }
+        : {}),
       ...(options.judgeAlgorithm !== undefined ? { judgeAlgorithm: options.judgeAlgorithm } : {}),
       bmsonTotalMode: options.bmsonTotalMode,
       ...(options.customJudge !== undefined ? { customJudge: options.customJudge } : {}),
@@ -447,7 +459,17 @@ export async function createPlaySession(
   const courseCarry = options.course !== undefined ? courseStageCarryCombo(options.course) : undefined;
   const { score, summary, resetScore: resetPrimaryScore } = createPlayerScore(ruleset, courseCarry);
   const secondPlayer = twoPlayer
-    ? createSecondPlayer(resolvedJSON, playbackChart, judgeRankChanges, options, selectedGauge, chartGauge, chartJudge)
+    ? createSecondPlayer(
+        resolvedJSON,
+        playbackChart,
+        judgeRankChanges,
+        options,
+        selectedGauge,
+        chartGauge,
+        chartJudge,
+        autoScratchChannels,
+        resolvedChart.lnMode,
+      )
     : undefined;
   if (secondPlayer !== undefined) summary.secondPlayer = secondPlayer.summary;
   const resetScore = (): void => {
@@ -933,12 +955,17 @@ function createSecondPlayer(
   selectedGauge: string | undefined,
   chartGauge: string | undefined,
   chartJudge: ReturnType<typeof resolveChartJudgeOption>,
+  autoScratchChannels: ReadonlySet<string> | undefined,
+  chartLNMode: ResolvedChart['lnMode'],
 ): SecondPlayer {
   const gauge = chartGauge ?? options.gauge2P ?? selectedGauge;
+  const side = selectPlaybackChartSide(playbackChart, 2);
+  const autoScratchNotes = side.scorableNotes.filter((note) => autoScratchChannels?.has(note.channel) === true);
   const ruleset = resolveRuleset(
-    rulesetChartFactsFromChart(resolvedJSON, selectPlaybackChartSide(playbackChart, 2), judgeRankChanges),
+    rulesetChartFactsFromChart(resolvedJSON, side, judgeRankChanges),
     options.judgeRuleset ?? 'lr2',
     {
+      ...(autoScratchNotes.length > 0 ? { autoScratchNotes: countRulesetNotesOf(autoScratchNotes, chartLNMode) } : {}),
       bmsonTotalMode: options.bmsonTotalMode,
       ...(gauge !== undefined ? { selectedGauge: gauge } : {}),
       // Gauge auto-shift is the play's, so the second player's gauge shifts as the first's does (and as a replay of

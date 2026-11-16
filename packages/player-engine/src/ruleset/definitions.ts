@@ -30,7 +30,7 @@ import {
   resolveCourseGaugeId,
   type RulesetCourseOptions,
 } from './course.ts';
-import { countBaseNotes, type RulesetChartFacts, type RulesetNoteCounts } from './facts.ts';
+import { countBaseNotes, withoutRulesetNotes, type RulesetChartFacts, type RulesetNoteCounts } from './facts.ts';
 import { isChargeLongNoteMode, resolveEffectiveLongNoteMode } from './long-note.ts';
 import { resolvePlugoutDefaultTotal, resolvePlugoutGauge, resolvePlugoutGaugeId } from './plugout.ts';
 import { resolvePlugoutRuleset } from './plugout-ruleset.ts';
@@ -184,6 +184,11 @@ export interface RulesetConfig {
   selection: BeatorajaJudgeAlgorithm;
   /** LR2: after a tap BAD, re-judge the next tap on that lane with the same press until a non-BAD stops it. */
   multiBad: boolean;
+  /**
+   * How far after the press, in µs, a note {@link multiBad} re-judges may lie (exclusive). Absent: the BAD window's early
+   * edge (LR2). plugout re-runs the press only on a note earlier than 3 ms after it (`plugout4.exe` 0x4407c4..0x4407fa).
+   */
+  multiBadAheadUs?: number;
   /** LR2: a long-note head is never judged as a LATE bad — the press is ignored instead. */
   ignoreLateBadOnLNHead: boolean;
   longNoteStyle: LongNoteStyle;
@@ -247,6 +252,8 @@ export interface RulesetConfig {
    * notes (`core/plugout-lane-sound.ts`). Audio only: no judgment or score depends on it.
    */
   laneSound?: 'plugout';
+  /** plugout: AUTO SCRATCH notes only sound; they are neither judged nor counted (0x43fa2e, 0x43e1a4). */
+  autoScratchUnjudged?: boolean;
   /**
    * Whether the ruleset's own result screen folds empty POORs into its POOR counter. LR2 does — OpenLR2's
    * `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch and LR2 exposes no separate stat —
@@ -260,6 +267,8 @@ export interface RulesetConfig {
 }
 
 export interface ResolveRulesetOptions {
+  /** The notes AUTO SCRATCH plays. plugout leaves them out of judging and the note count (0x43e1a4). */
+  autoScratchNotes?: RulesetNoteCounts;
   /** bmson zero-total policy. Absent retains beatoraja-compatible recovery. */
   bmsonTotalMode?: BmsonTotalMode;
   /** Forces a specific ruleset-scoped gauge id (see the gauge tables), bypassing {@link selectedGauge} mapping. */
@@ -1411,10 +1420,11 @@ function resolveRulesetTables(
 
   if (rulesetId === 'plugout') {
     // Long notes count twice: the tail is a judgment of its own (0x43c050), and TOTAL's default counts it too.
-    const noteCount = countRulesetNotes(chart, 'charge');
-    const effectiveTotal = practice?.total ?? resolveEffectiveTotal('plugout', chart, noteCount);
+    const played = withoutRulesetNotes(chart, options.autoScratchNotes);
+    const noteCount = countRulesetNotes(played, 'charge');
+    const effectiveTotal = practice?.total ?? resolveEffectiveTotal('plugout', played, noteCount);
     return resolvePlugoutRuleset({
-      chart,
+      chart: played,
       practice,
       gaugeId,
       gaugeSource,

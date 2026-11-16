@@ -120,4 +120,13 @@ describe('plugout long notes', () => {
   test('a BAD head settles the note without its tail', () => {
     expect(simulate(ln, [down(850_000), up(2_000_000)]).judge).toEqual(judged({ bad: 1 }));
   });
+
+  test('after a BAD the press judges the next note too, but only one it has reached', () => {
+    // Two notes 50 ms apart; a press 120 ms late on the first is a BAD, and the second, 70 ms before it, is a GOOD.
+    expect(simulate([note(1_000_000), note(1_050_000)], [down(1_120_000)]).judge).toEqual(judged({ bad: 1, good: 1 }));
+    // A press 150 ms early is a BAD; the next note, 50 ms after the first, lies ahead of it and waits for its own press.
+    expect(simulate([note(1_000_000), note(1_050_000)], [down(850_000), up(900_000), down(1_050_000)]).judge).toEqual(
+      judged({ bad: 1, pgreat: 1 }),
+    );
+  });
 });

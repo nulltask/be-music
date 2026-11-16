@@ -47,7 +47,9 @@ export function resolvePlugoutRuleset(parts: PlugoutRulesetParts): RulesetConfig
     // The lane's earliest unjudged note is judged (0x440110).
     selection: 'lowest',
     // A BAD re-runs the press on the next note only when that note is within 3 ms (0x4407c4); charts never stack so.
-    multiBad: false,
+    // After a BAD the same press judges the lane's next note too, if that note is less than 3 ms after the press.
+    multiBad: true,
+    multiBadAheadUs: 3000,
     ignoreLateBadOnLNHead: false,
     longNoteStyle: 'charge',
     lnEarlyRelease: 'worse-of-head-and-tail',
@@ -75,6 +77,7 @@ export function resolvePlugoutRuleset(parts: PlugoutRulesetParts): RulesetConfig
     plugoutScore: true,
     heldChargeTail: { note: 'BAD', scratch: 'PGREAT', earlyRelease: 'BAD' },
     laneSound: 'plugout',
+    autoScratchUnjudged: true,
     emptyPoorCountsInPoorDisplay: false,
   };
 }

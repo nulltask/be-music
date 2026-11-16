@@ -380,6 +380,8 @@ function startAutoScratchNote(
   notePlugoutLaneJudged(state, note.channel, note);
   const endSeconds = resolveLongNoteEndSeconds(note);
   emit({ kind: 'ui', command: { kind: 'flash-lane', channel: note.channel } });
+  // plugout's AUTO SCRATCH only sounds the note: no judgment, combo or gauge, and the note is not counted.
+  if (config.ruleset.autoScratchUnjudged === true) return;
   if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
     note.visibleUntilBeat = note.endBeat;
     emit({ kind: 'ui', command: { kind: 'hold-lane-until-beat', channel: note.channel, beat: note.endBeat } });
