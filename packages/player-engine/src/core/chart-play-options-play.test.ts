@@ -125,10 +125,38 @@ test('NOTES COPY plays the chart as double play, and the replay re-simulates it 
   const saved = parseReplay(serializeReplay(result.replay!));
   expect(saved.chart.laneMode).toBe('5 KEY DP');
   expect(saved.chart.notes.map((note) => note.channel).sort()).toEqual(['11', '16', '25', '26']);
-  expect(saved.chart.chartPlayOptions).toEqual({ version: 1, options: { notes: 'COPY' } });
+  expect(saved.chart.chartPlayOptions).toEqual({ version: 3, options: { notes: 'COPY' } });
   expect(result.summary?.perfect).toBe(4);
   expect(simulateReplay(saved, { ruleset: 'lr2' }).judge).toMatchObject({ pgreat: 4 });
   expect(classifyReplayAssists(saved)).toEqual([]);
+});
+
+test('NOTES DOUBLE copies the lanes as nanasigroove does, and the replay re-simulates it (#1184)', async () => {
+  // 5 KEY: the 1 reaches 3 and 5, the 2 reaches 4.
+  const doubled = parseBMS(['#BPM 120', '#OPTION 774:NOTES_DOUBLE', '#00111:01', '#00112:0001', ''].join('\n'));
+  const result = await observePlay({
+    driver: 'manual',
+    chart: doubled,
+    script: [...tap(2000, ['11', '13', '15']), ...tap(3000, ['12', '14'])],
+  });
+  expect(result.outcome).toBe('completed');
+  const saved = parseReplay(serializeReplay(result.replay!));
+  expect(saved.chart.chartPlayOptions).toEqual({ version: 3, options: { notes: 'DOUBLE' } });
+  expect(saved.chart.notes.map((note) => note.channel).sort()).toEqual(['11', '12', '13', '14', '15']);
+  expect(result.summary?.perfect).toBe(5);
+  expect(simulateReplay(saved, { ruleset: 'lr2' }).judge).toMatchObject({ pgreat: 5 });
+  expect(simulateReplay(saved, { ruleset: 'beatoraja' }).judge).toMatchObject({ pgreat: 5 });
+});
+
+test('a NOTES DOUBLE replay recorded before version 3 keeps the mirror-lane reading', async () => {
+  const doubled = parseBMS(['#BPM 120', '#00111:01', ''].join('\n'));
+  const result = await observePlay({
+    driver: 'auto',
+    chart: doubled,
+    options: { chartPlayOptionProgram: { version: 1, options: { notes: 'DOUBLE' } } },
+  });
+  const saved = parseReplay(serializeReplay(result.replay!));
+  expect(saved.chart.notes.map((note) => note.channel).sort()).toEqual(['11', '15']);
 });
 
 test('a course keeps its key mode: NOTES COPY is diagnosed and not recorded there (#932)', async () => {

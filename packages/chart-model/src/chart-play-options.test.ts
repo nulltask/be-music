@@ -17,12 +17,12 @@ test.each([
   ['774:CRAZY_GREAT2BAD', { judge: 'GREAT2BAD' }, 3],
   ['774:CRAZY_HELLJUDGE', { hellJudge: true }, 3],
   ['774:CRAZY_ADDMINE', { addMine: true }, 3],
-  ['774:NOTES_DOUBLE', { notes: 'DOUBLE' }, 1],
-  ['774:NOTES_COPY', { notes: 'COPY' }, 1],
-  ['774:NOTES_DBLCOPY', { notes: 'DBLCOPY' }, 1],
+  ['774:NOTES_DOUBLE', { notes: 'DOUBLE' }, 3],
+  ['774:NOTES_COPY', { notes: 'COPY' }, 3],
+  ['774:NOTES_DBLCOPY', { notes: 'DBLCOPY' }, 3],
   ['774:CRA-RHS2', { baseSpeed: 1.5 }, 2],
 ])('compiles %s (version %#)', (declaration, options, version) => {
-  // A CRAZY gameplay option takes nanasigroove's readings, version 3.
+  // A CRAZY gameplay option or a NOTES conversion takes nanasigroove's readings, version 3.
   expect(compileChartPlayOptions({ initial: [declaration] })).toEqual({ version, options });
 });
 
@@ -53,6 +53,16 @@ test("the player's judgment options join where the chart sets none, the chart wi
     version: 3,
     options: { judge: 'GREAT2BAD', hellJudge: true },
   });
+});
+
+test("the player's NOTES conversion joins where the chart sets none", () => {
+  const plain = { version: 1 as const, options: {} };
+  expect(withPlayerChartPlayOptions(plain, { notes: 'DBLCOPY' })).toEqual({
+    version: 3,
+    options: { notes: 'DBLCOPY' },
+  });
+  const chart = { version: 3 as const, options: { notes: 'DOUBLE' as const } };
+  expect(withPlayerChartPlayOptions(chart, { notes: 'COPY' })).toBe(chart);
 });
 
 test('later declarations win within a family, OFF clears it, and other families stay', () => {

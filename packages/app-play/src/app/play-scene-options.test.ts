@@ -173,6 +173,8 @@ describe('resolvePlaySceneOptions: a single play', () => {
       mineModifier: 'OFF',
       crazyJudge: 'OFF',
       crazyHellJudge: false,
+      crazyAddMine: false,
+      crazyNotes: 'OFF',
       noteDurationMs: 500,
       randomFixedLane1P: 0,
       randomFixedLane2P: 0,

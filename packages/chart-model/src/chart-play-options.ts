@@ -42,7 +42,8 @@ export interface ChartPlayOptions {
  * The recorded form: versioned, so a later profile never reinterprets an older replay. `notes` joined version 1 without a
  * bump. Version 2 records the chart’s BASE-SPEED while keeping the player tempo relative to it. Version 3 reads the
  * CRAZY gameplay options as nanasigroove 1.552 plays them: GOOD2BAD / GREAT2BAD change the gauge instead of the judge
- * windows, HELLJUDGE narrows each judgment by its own ratio, and ADDMINE places nanasigroove's mines. Versions 1 and 2
+ * windows, HELLJUDGE narrows each judgment by its own ratio, ADDMINE places nanasigroove's mines, and NOTES DOUBLE /
+ * COPY / DBLCOPY convert the chart as nanasigroove does. Versions 1 and 2
  * keep their earlier readings (`isLegacyChartPlayOptionProgram`).
  */
 export interface ChartPlayOptionProgram {
@@ -125,19 +126,23 @@ export function compileChartPlayOptions(timeline: Pick<ChartOptionTimeline, 'ini
     const patch = parseChartPlayOption(resolveChartLegacyOptionAlias(declaration) ?? declaration);
     if (patch !== undefined) options = patch(options);
   }
-  const crazy = options.judge !== undefined || options.hellJudge === true || options.addMine === true;
+  const crazy =
+    options.judge !== undefined ||
+    options.hellJudge === true ||
+    options.addMine === true ||
+    options.notes !== undefined;
   return { version: crazy ? CHART_PLAY_OPTION_PROGRAM_VERSION : options.baseSpeed === undefined ? 1 : 2, options };
 }
 
 /**
- * The CRAZY judgment options a player can select in place of a chart's (#1177, #1185). The player's ADDMINE is the mine
- * option `NANASI_ADD` in `@be-music/player-engine`.
+ * The CRAZY gameplay options a player can select in place of a chart's (#1177, #1184, #1185). The player's ADDMINE is
+ * the mine option `NANASI_ADD` in `@be-music/player-engine`.
  */
-export type PlayerChartPlayOptions = Pick<ChartPlayOptions, 'judge' | 'hellJudge'>;
+export type PlayerChartPlayOptions = Pick<ChartPlayOptions, 'judge' | 'hellJudge' | 'notes'>;
 
 /**
  * `program` with the player's CRAZY gameplay selections added where the chart sets none: the chart's own choice wins
- * within each family (GOOD2BAD / GREAT2BAD, HELLJUDGE), as nanasigroove lets a chart's `#OPTION` override the
+ * within each family (GOOD2BAD / GREAT2BAD, HELLJUDGE, NOTES), as nanasigroove lets a chart's `#OPTION` override the
  * player's. A program that gains a selection is version 3, whose readings are nanasigroove's.
  */
 export function withPlayerChartPlayOptions(
@@ -153,6 +158,10 @@ export function withPlayerChartPlayOptions(
   }
   if (player.hellJudge === true && options.hellJudge !== true) {
     options.hellJudge = true;
+    changed = true;
+  }
+  if (player.notes !== undefined && options.notes === undefined) {
+    options.notes = player.notes;
     changed = true;
   }
   return changed ? { version: CHART_PLAY_OPTION_PROGRAM_VERSION, options } : program;

@@ -1,17 +1,25 @@
-import type {
-  ChartNotesOption,
-  ChartOptionDiagnostic,
-  ChartPlayOptionProgram,
-  ChartPlayVariant,
-  ResolvedChart,
+import {
+  isLegacyChartPlayOptionProgram,
+  type ChartNotesOption,
+  type ChartOptionDiagnostic,
+  type ChartPlayOptionProgram,
+  type ChartPlayVariant,
+  type ResolvedChart,
 } from '@be-music/chart-model';
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
 import { duplicateBattleChart } from './battle-chart.ts';
 import { resolveLaneOptionChannels, type ChannelLike } from './lane-layout.ts';
+import { nanasiDoubleSupports } from './nanasi-notes-double.ts';
 
 /**
- * Chart-authored `774:NOTES_*` (#932; docs/adr/0035-chart-authored-notes-options.md). nanasigroove's catalog gives the
- * shape, not an algorithm, so the readings are Be-Music's own:
+ * Chart-authored `774:NOTES_*` (#932, #1184; docs/adr/0035-chart-authored-notes-options.md). A version 3 gameplay
+ * program plays nanasigroove's own conversions:
+ *
+ * - `DOUBLE`: nanasigroove's lane copies (`doubleNanasiChartNotes`), on 5 / 7 / 9 / 10 / 14 KEY.
+ * - `COPY`: the 5 / 7 KEY chart copied onto the 2P side, mirrored, without its mines; 10 / 14 KEY.
+ * - `DBLCOPY`: COPY, then DOUBLE on the double-play chart.
+ *
+ * Versions 1 and 2 keep Be-Music's earlier readings, which replays and records made under them depend on:
  *
  * - `DOUBLE`: every key note (scratch, wheel and FREE ZONE excluded) gains a partner on its mirror lane of the same side,
  *   key `i` of `n` on key `n + 1 - i`, unless something already occupies the mirror lane over the note's span. The
@@ -20,6 +28,9 @@ import { resolveLaneOptionChannels, type ChannelLike } from './lane-layout.ts';
  *   makes it a 10 / 14 KEY (double-play) chart (the catalog's DBM: `[11..15, 16]` → 2P `[15..11, 16]`). Elsewhere, and
  *   in a course, whose stages keep one key mode, it does nothing.
  * - `DBLCOPY`: DOUBLE, then COPY.
+ *
+ * Under both, COPY does nothing in a course (its stages keep one key mode) and DBLCOPY keeps its DOUBLE where its COPY
+ * cannot run.
  */
 
 /** Where a chart's options run: the variant its notes were authored for, and whether the play is a course stage. */
@@ -48,15 +59,19 @@ export function chartNotesDoubles(option: ChartNotesOption | undefined): boolean
 
 /**
  * The part of a declared NOTES conversion that takes effect: COPY only on a 5 / 7 KEY chart outside a course, DOUBLE on
- * every variant with key lanes. DBLCOPY keeps its DOUBLE where its COPY cannot run.
+ * the variants nanasigroove defines it for (`legacy`, a version 1 / 2 program: every variant with key lanes). DBLCOPY
+ * keeps its DOUBLE where its COPY cannot run.
  */
 export function resolveChartNotesOption(
   option: ChartNotesOption | undefined,
   context: ChartPlayOptionContext,
+  legacy = false,
 ): ChartNotesOption | undefined {
   if (option === undefined) return undefined;
   const copies = chartNotesCopies(option) && !context.course && context.playVariant in COPIED_VARIANTS;
-  const doubles = chartNotesDoubles(option) && DOUBLED_VARIANTS.has(context.playVariant);
+  const doubles =
+    chartNotesDoubles(option) &&
+    (legacy ? DOUBLED_VARIANTS.has(context.playVariant) : nanasiDoubleSupports(context.playVariant));
   return copies ? (doubles ? 'DBLCOPY' : 'COPY') : doubles ? 'DOUBLE' : undefined;
 }
 
@@ -81,7 +96,7 @@ export function resolveEffectiveChartPlayOptions(
 ): { program: ChartPlayOptionProgram; diagnostics: ChartOptionDiagnostic[] } {
   const declared = program.options.notes;
   if (declared === undefined) return { program, diagnostics: [] };
-  const effective = resolveChartNotesOption(declared, context);
+  const effective = resolveChartNotesOption(declared, context, isLegacyChartPlayOptionProgram(program));
   const { notes: _declared, ...options } = program.options;
   return {
     program: {
@@ -105,7 +120,7 @@ function toMicroseconds(seconds: number): number {
 }
 
 /**
- * DOUBLE in place: adds each key note's mirror-lane partner where the mirror lane is free over the note's span (no note,
+ * The version 1 / 2 DOUBLE in place: adds each key note's mirror-lane partner where the mirror lane is free over the note's span (no note,
  * long note or mine from its head to its tail, ends included). The partners are new notes with their own event identity
  * on the mirror lane (so a replay tells them apart), the same keysound and timing, and no long-note modifier mark (the
  * modifier's placements stay the originals'). Returns the number of notes added.
@@ -166,17 +181,19 @@ export function doubleChartNotes(
 }
 
 /**
- * COPY: the 5 / 7 KEY chart copied onto the 2P side (`duplicateBattleChart`, mines included), then the 2P keys mirrored,
- * so the 2P side is the 1P side's mirror image with the scratch on the 2P scratch. The chart becomes 10 / 14 KEY.
+ * COPY: the 5 / 7 KEY chart copied onto the 2P side (`duplicateBattleChart`), then the 2P keys mirrored, so the 2P side
+ * is the 1P side's mirror image with the scratch on the 2P scratch. The chart becomes 10 / 14 KEY. nanasigroove leaves
+ * the mines on 1P; the version 1 / 2 reading (`legacy`) copies them too.
  */
 export function copyChartNotes(
   source: ResolvedChart,
   notes: TimedPlayableNote[],
   mines: TimedLandmineNote[],
   invisible: TimedPlayableNote[],
+  legacy = false,
 ): { chart: ResolvedChart; changedObjectCount: number } {
   if (!(source.playVariant in COPIED_VARIANTS)) throw new RangeError('NOTES COPY requires a 5KEY or 7KEY chart.');
-  const copied = duplicateBattleChart(source, notes, mines, invisible, { duplicateMines: true });
+  const copied = duplicateBattleChart(source, notes, mines, invisible, { duplicateMines: legacy });
   const keys = resolveLaneOptionChannels('2P', copied.chart.playVariant);
   const mirror = new Map(keys.map((key, index) => [key, keys[keys.length - 1 - index]!]));
   for (const objects of [notes, mines, invisible] as Array<Array<{ channel: string; seconds: number }>>) {
