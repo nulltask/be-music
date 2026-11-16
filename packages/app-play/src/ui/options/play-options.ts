@@ -278,6 +278,15 @@ export function buildPlayOptionsFolder(
       .addBinding(this.guiState, 'crazyHellJudge', { label: 'HELLJUDGE (nanasigroove)' })
       .on('change', ({ value }) => this.setPlayOptions({ crazyHellJudge: value })),
   );
+  // nanasigroove's NOTES conversion (#1184); a chart's own `774:NOTES_*` wins.
+  trackPlayOption(
+    selectBinding(notes, this.guiState, 'crazyNotes', 'NOTES (nanasigroove)', {
+      OFF: 'OFF',
+      DOUBLE: 'DOUBLE',
+      COPY: 'COPY',
+      DBLCOPY: 'DBLCOPY',
+    }).on('change', ({ value }) => this.setPlayOptions({ crazyNotes: value })),
+  );
   this.refreshRulesetChoices();
   trackPlayOption(
     lanes.addBinding(this.guiState, 'dpFlip', { label: 'DP flip' }).on('change', ({ value }) => {

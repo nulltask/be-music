@@ -3,6 +3,7 @@ import { collectLR2SortObjects } from './lr2-sort-objects.ts';
 import {
   buildChartOptionTimeline,
   compileChartPlayOptions,
+  isLegacyChartPlayOptionProgram,
   withPlayerChartPlayOptions,
   type BGAOpacityTimelines,
   type ChartOptionDiagnostic,
@@ -184,6 +185,7 @@ export interface PlayChartContext {
       | 'mineModifier'
       | 'crazyJudge'
       | 'crazyHellJudge'
+      | 'crazyNotes'
       | 'autoScratch1P'
       | 'autoScratch2P'
     >
@@ -370,12 +372,16 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   const chartPlayEffect =
     arrangement === undefined
       ? resolveEffectiveChartPlayOptions(
-          // The player's own GOOD2BAD / GREAT2BAD and HELLJUDGE join where the chart sets none (#1177, #1185).
+          // The player's own GOOD2BAD / GREAT2BAD, HELLJUDGE and NOTES join where the chart sets none (#1177, #1184,
+          // #1185).
           withPlayerChartPlayOptions(compileChartPlayOptions(buildChartOptionTimeline(resolved)), {
             ...(ctx.options.crazyJudge === 'GOOD2BAD' || ctx.options.crazyJudge === 'GREAT2BAD'
               ? { judge: ctx.options.crazyJudge }
               : {}),
             ...(ctx.options.crazyHellJudge === true ? { hellJudge: true as const } : {}),
+            ...(ctx.options.crazyNotes !== undefined && ctx.options.crazyNotes !== 'OFF'
+              ? { notes: ctx.options.crazyNotes }
+              : {}),
           }),
           {
             playVariant,
@@ -494,6 +500,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
           }
         : {}),
       chartNotes,
+      chartNotesLegacy: chartPlayProgram !== undefined && isLegacyChartPlayOptionProgram(chartPlayProgram),
       // LR2 copies 1P's arranged lanes to 2P, mines included, when both players pick the same lane option (#1086). A
       // replay rebuilds its 2P mines only when it recorded them.
       twoPlayerMines: arrangement

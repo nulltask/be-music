@@ -3,6 +3,8 @@ import type { MineModifier, LongNoteModifier, ScrollModifier } from '@be-music/p
 
 /** The player's nanasigroove GOOD2BAD / GREAT2BAD choice. */
 export type CrazyJudgeOption = 'OFF' | 'GOOD2BAD' | 'GREAT2BAD';
+/** nanasigroove's NOTES conversion a player can pick (#1184). */
+export type CrazyNotesOption = 'OFF' | 'DOUBLE' | 'COPY' | 'DBLCOPY';
 import type { GaugePick, GaugeAutoShift, QualifiedOptionValue } from '@be-music/player-engine/ruleset';
 import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
@@ -260,6 +262,8 @@ export interface PlayOptions {
   crazyJudge: CrazyJudgeOption;
   /** nanasigroove's HELLJUDGE (#1185): every judgment's window narrowed by its own ratio. A chart's own wins. */
   crazyHellJudge: boolean;
+  /** nanasigroove's NOTES DOUBLE / COPY / DBLCOPY (#1184). A chart's own wins. */
+  crazyNotes: CrazyNotesOption;
   /** beatoraja timeline BPM/STOP/SCROLL removal or generated SCROLL, independent of visual CONSTANT. */
   scrollModifier: ScrollModifier;
   /** beatoraja ADD: change every 1..1024 section lines (default 4), with width 0..1 (default 0.5). */

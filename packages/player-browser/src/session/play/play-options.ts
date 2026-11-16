@@ -202,6 +202,8 @@ export interface PlaySessionOptions {
   crazyJudge?: import('@be-music/player-scene-model').PlayOptions['crazyJudge'];
   /** nanasigroove's HELLJUDGE the player picked; a chart's own wins. */
   crazyHellJudge?: boolean;
+  /** nanasigroove's NOTES conversion the player picked; a chart's own wins. */
+  crazyNotes?: import('@be-music/player-scene-model').PlayOptions['crazyNotes'];
   scrollModifier?: import('@be-music/player-scene-model').PlayOptions['scrollModifier'];
   scrollSection?: number;
   scrollRate?: number;
