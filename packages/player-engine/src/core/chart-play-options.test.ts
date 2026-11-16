@@ -22,10 +22,10 @@ test('without a program the player keeps every choice', () => {
 test.each([
   ['MIRROR', sp, 'MIRROR', undefined],
   ['RANDOM', sp, 'RANDOM', undefined],
-  ['RANDOM+', sp, 'RANDOM-EX', undefined],
+  ['RANDOM+', sp, 'RANDOM+', undefined],
   ['RANDOM+', { doublePlay: false, hasScratch: false }, 'RANDOM', undefined],
   ['ALL', sp, 'RANDOM', undefined],
-  ['ALL+', sp, 'RANDOM-EX', undefined],
+  ['ALL+', sp, 'RANDOM+', undefined],
   ['ALL', dp, 'OFF', { scratch: false }],
   ['ALL+', dp, 'OFF', { scratch: true }],
 ])('chart %s replaces both sides (%j)', (random, layout, perSide, crossSide) => {

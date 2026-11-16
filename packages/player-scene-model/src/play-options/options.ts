@@ -363,6 +363,8 @@ export type HiddenSuddenMode = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
 /**
  * Lane-option values; resolveRandomModes supplies the choices. A source-qualified S-RANDOM or CONVERGE runs its source's
  * algorithm under every ruleset, and a bare one the judge ruleset's own (ADR 0019). RANDOM is one option for every source.
+ * `RANDOM+` is nanasigroove's, which only a chart's `774:RANDOM_RANDOM+` selects (#1244): it is never offered to the
+ * player and never stands for an LR2 or beatoraja option.
  */
 export type RandomMode =
   | QualifiedOptionValue<'S-RANDOM' | 'CONVERGE'>
@@ -376,6 +378,7 @@ export type RandomMode =
   | 'ALL-SCR'
   | 'RANDOM-EX'
   | 'S-RANDOM-EX'
+  | 'RANDOM+'
   | 'RANDOM_PLAYABLE'
   | 'S_RANDOM_PLAYABLE'
   | 'CONVERGE'

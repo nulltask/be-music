@@ -34,6 +34,8 @@ export type CourseLaneOption =
   | 'ALL-SCR'
   | 'RANDOM-EX'
   | 'S-RANDOM-EX'
+  // nanasigroove's, which only a chart's `774:RANDOM_RANDOM+` selects (#1244).
+  | 'RANDOM+'
   | 'RANDOM_PLAYABLE'
   | 'S_RANDOM_PLAYABLE'
   | 'CONVERGE'
