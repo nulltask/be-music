@@ -1,11 +1,13 @@
 import { resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
-import { parseBMSExWAV, parseBmsWAVCmd } from './wav-directives.ts';
+import { parseBMSExWAV, parseBmsWAVCmd, resolveBmsExWAVDeclarations } from './wav-directives.ts';
 
 /** Authored sample effects, before the host's tempo and output sample-rate conversion. */
 export interface BmsWAVPlaybackModifiers {
   /** Semitones relative to the sample's original pitch. */
   semitones?: number;
   frequencyHz?: number;
+  /** EXWAV `r`: multiplies the rate after `frequencyHz`, as nanasigroove does (`nanasi.exe` 0x4d0984-0x4d09b8). */
+  rate?: number;
   pan?: number;
   /** Maximum sounding time after pitch conversion; absent means natural sample end. */
   durationSeconds?: number;
@@ -32,12 +34,15 @@ export function collectBmsWAVPlaybackModifiers(json: Pick<BeMusicJSON, 'bms'>): 
     if (command.param === 'pitch') entry.semitones = Math.max(0, Math.min(127, command.value)) - 60;
     else entry.durationSeconds = command.value > 0 ? command.value / 2000 : undefined;
   }
-  for (const [key, raw] of Object.entries(json.bms.exWAV)) {
+  for (const [key, raw] of Object.entries(resolveBmsExWAVDeclarations(json))) {
     const parsed = parseBMSExWAV(raw);
-    if (!parsed || (parsed.pan === undefined && parsed.frequencyHz === undefined)) continue;
+    if (!parsed || (parsed.pan === undefined && parsed.frequencyHz === undefined && parsed.rate === undefined))
+      continue;
     const entry = entryFor(key);
     if (parsed.pan !== undefined) entry.pan = Math.max(-10000, Math.min(10000, parsed.pan));
     if (parsed.frequencyHz !== undefined) entry.frequencyHz = Math.max(100, Math.min(100000, parsed.frequencyHz));
+    // nanasigroove reads a rate at or below 0 as 1 and caps it at 2 (`nanasi.exe` 0x4d070f-0x4d074f).
+    if (parsed.rate !== undefined) entry.rate = parsed.rate <= 0 ? 1 : Math.min(2, parsed.rate);
   }
   return result;
 }
@@ -61,7 +66,8 @@ export function resolveBmsWAVPlayback(
   return {
     playbackRate:
       2 ** ((modifiers.semitones ?? 0) / 12) *
-      (modifiers.frequencyHz === undefined ? 1 : modifiers.frequencyHz / nativeSampleRate),
+      (modifiers.frequencyHz === undefined ? 1 : modifiers.frequencyHz / nativeSampleRate) *
+      (modifiers.rate ?? 1),
     leftGain: pan > 0 ? attenuation(pan) : 1,
     rightGain: pan < 0 ? attenuation(-pan) : 1,
     maxDurationSeconds: modifiers.durationSeconds,

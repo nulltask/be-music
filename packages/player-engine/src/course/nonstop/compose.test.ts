@@ -667,3 +667,19 @@ test.each([1, 2])('historical mixed stitch %s does not activate newly recognized
   ).toEqual([1, 2]);
   expect(stage.bms.lnMode).toBeUndefined();
 });
+
+test('NONSTOP carries a stage EXWAV r rate and drops an EXWAV a later #WAV redefined (#1197)', () => {
+  const stage = bms(
+    '#BPM 120',
+    '#EXWAV01 fr 22050 1.5 rated.wav',
+    '#EXWAV02 v -600 ex.wav',
+    '#WAV02 plain.wav',
+    '#00111:0102',
+  );
+  const result = stitchNonstopCourse([{ chart: stage }], { connections: [] });
+  if (!result.ok) throw new Error('stitch failed');
+  const [rated, plain] = result.map.stages[0]!.wavKeys;
+  expect(result.chart.bms.exWAV[rated!]).toBe('fr 22050 1.5 rated.wav');
+  expect(result.chart.bms.exWAV[plain!]).toBeUndefined();
+  expect(result.chart.resources.wav[plain!]).toBe('plain.wav');
+});

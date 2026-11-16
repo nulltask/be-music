@@ -190,7 +190,7 @@
 - [x] すべての `#WAVCMD` 行を `bms.wavCmds` に保持し、browser・Node・オフライン再生で `01` の百分率音量を反映
 - [x] `#EXWAVxx` を parse し、`v` volume parameter を browser・Node・オフライン再生で反映
 
-`#EXWAVxx` は nanasigroove の空白区切りパラメーターをフラグ順に受け付けます。例は `pvf 0 -600 44100 sample.wav` です。従来の Be-Music のカンマ区切りも引き続き受け付けます。ファイル名はすべてのパラメーターの後から始まり、空白を含められます。有効な EXWAV は WAV がなくても読み込み、同じスロットに WAV がある場合も EXWAV のファイル名を優先します。不正な EXWAV は WAV を上書きしません。これは Be-Music の優先規則です。browser のデコード・再生、Node の再生・診断、オフライン描画で同じ解決関数を使います。NONSTOP は EXWAV のファイル名と WAVCMD のパラメーターをステージごとに変換します。browser・Node・オフラインは共通の[拡張音声規則](./adr/0024-extended-bms-audio.ja.md)でピッチ・発音時間の上限・pan/frequency を実行します。
+`#EXWAVxx` は nanasigroove の空白区切りパラメーターをフラグ順に受け付けます。例は `pvf 0 -600 44100 sample.wav` です。従来の Be-Music のカンマ区切りも引き続き受け付けます。ファイル名はすべてのパラメーターの後から始まり、空白を含められます。フラグは `p`・`v`・`f`・`r` を大文字・小文字を問わず 5 文字まで並べられ、同じ文字を繰り返すと後の値で置き換えます。これは nanasigroove 1.552 の読み方です。有効な EXWAV は WAV がなくても読み込みます。`#WAVxx` と `#EXWAVxx` はスロットを共有し、nanasigroove と同じくファイル内で後の行を優先します。後の `#WAV` は EXWAV の効果も外します。不正な EXWAV は WAV を上書きしません（Be-Music の読み方です。nanasigroove はこうした行を読み違えます）。browser のデコード・再生、Node の再生・診断、オフライン描画で同じ解決関数を使います。NONSTOP は EXWAV のファイル名と WAVCMD のパラメーターをステージごとに変換します。browser・Node・オフラインは共通の[拡張音声規則](./adr/0024-extended-bms-audio.ja.md)でピッチ・発音時間の上限・pan/frequency を実行します。
 
 - [x] `#BASEBPM` を `@be-music/chart-model` 経由で browser HS-FIX calibration の reference BPM として使用
 - [x] Browser player は `#BGAxx` sub-region BGA を描画する。SWBGA はキー入力連動の A5 エンジン状態だけで描画し、以前のキュー駆動ヘルパーは削除した。 静止画の多段参照は定義順に依存せず解決し、各段の配置位置を 256×256 キャンバス上で合成して、切り出し元と配置先の端を切り取る。完全に画面外となるベース／POOR は黒、オーバーレイは透明になる。明示的な BMP／EXBMP 定義は、その画像を読み込めない場合も同じ ID の BGA 参照より優先する。

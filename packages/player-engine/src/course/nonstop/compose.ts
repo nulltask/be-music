@@ -12,6 +12,7 @@ import {
   resolveChart,
   resolveBmsWAVResources,
   parseBMSExWAV,
+  resolveBmsExWAVDeclarations,
   parseBmsWAVCmd,
   volWAVToLinearGain,
   type ResolvedChart,
@@ -359,13 +360,15 @@ function stitchNonstopCourseAs(
         if (!Number.isFinite(intrinsicGain) || intrinsicGain < 0)
           throw new RangeError(`Invalid stage WAV gain: ${key}`);
         if (intrinsicGain !== 1) (chart.resources.wavGain ??= {})[stitched] = intrinsicGain;
-        const rawExWAV = source.bms.exWAV[key];
+        // Only an EXWAV no later #WAV of the slot redefined carries over (#1197).
+        const rawExWAV = resolveBmsExWAVDeclarations(source)[key];
         const exWAV = rawExWAV === undefined ? undefined : parseBMSExWAV(rawExWAV);
         if (exWAV && rawExWAV !== undefined) {
           const parameters = [
             ['p', exWAV.pan],
             ['v', exWAV.volumeMillibels],
             ['f', exWAV.frequencyHz],
+            ['r', exWAV.rate],
           ].filter((entry) => entry[1] !== undefined);
           chart.bms.exWAV[stitched] =
             `${parameters.map(([flag]) => flag).join('')} ${parameters.map(([, value]) => value).join(' ')} ${assetPath(index, 'wav', exWAV.filename)}`;

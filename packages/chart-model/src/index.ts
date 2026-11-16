@@ -185,6 +185,7 @@ export {
   exWAVVolumeMillibelsToLinearGain,
   parseBMSExWAV,
   parseBmsWAVCmd,
+  resolveBmsExWAVDeclarations,
   resolveBmsWAVResources,
   usesMonophonicWAVPlayback,
   volWAVToLinearGain,
