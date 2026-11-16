@@ -91,22 +91,26 @@ describe('That-Which-Must-Not-Be-Named provisional windows (#1189)', () => {
     expect(ac.note.ms).toEqual(donor.note.ms);
   });
 
-  test('the CN release windows are borrowed from beatoraja’s long-note end windows, for keys and scratch alike', () => {
+  test('a CN release has only PGREAT inside the GOOD window, whose bounds and the BAD window are the donor’s', () => {
     expect(ac.longNoteEnd.judges).toEqual([
-      [-120000, 120000],
-      [-160000, 160000],
+      [-200000, 200000],
+      [-200000, 200000],
       [-200000, 200000],
       [-280000, 220000],
     ]);
-    expect(ac.longNoteEnd.judges).toEqual(donor.longNoteEnd.judges);
+    // The GOOD and BAD bounds are borrowed from beatoraja's long-note end windows; its PGREAT and GREAT are not used.
+    expect(ac.longNoteEnd.judges[2]).toEqual(donor.longNoteEnd.judges[2]);
+    expect(ac.longNoteEnd.judges[3]).toEqual(donor.longNoteEnd.judges[3]);
     expect(ac.longScratchEnd).toBe(ac.longNoteEnd);
   });
 
   test.each([
     [120_000, 0],
-    [120_001, 1],
+    [120_001, 0],
     [-120_000, 0],
-    [160_001, 2],
+    [160_001, 0],
+    [200_000, 0],
+    [-200_000, 0],
     [200_001, 3],
     [220_000, 3],
     [220_001, RULESET_JUDGE_NONE],
