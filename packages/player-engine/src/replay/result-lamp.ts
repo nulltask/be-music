@@ -22,6 +22,7 @@ export function resolveRulesetResultLamp(
       perfect: pgreat,
       great,
       good,
+      emptyPoor: result.judge.emptyPoor,
       ...(result.fullCombo !== undefined ? { fullCombo: result.fullCombo } : {}),
     },
   });

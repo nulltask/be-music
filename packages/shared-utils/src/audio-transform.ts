@@ -86,6 +86,50 @@ export function resolveSampleSliceEnvelope(
 }
 
 /**
+ * {@link resolveSampleSliceEnvelope} widened by a voice's own ramps: an `attack` from silence at the window start and a
+ * `release` to silence past the window end (an LRX `atk` / `rls`), in the same unit. The ramps a cut needs stay as a
+ * minimum; a release only applies when the window stops before the file ends, and neither outlasts the audio there is.
+ */
+export function resolveSampleVoiceEnvelope(
+  offset: number,
+  length: number | undefined,
+  sourceLength: number,
+  fadeLength: number,
+  attack = 0,
+  release = 0,
+): SampleSliceEnvelope {
+  const slice = resolveSampleSliceEnvelope(offset, length, sourceLength, fadeLength);
+  const remaining = sourceLength - Math.max(0, offset);
+  if (!(remaining > 0)) return slice;
+  const played = length === undefined ? remaining : Math.min(Math.max(0, length), remaining);
+  return {
+    fadeIn: attack > 0 ? Math.max(slice.fadeIn, Math.min(attack, played)) : slice.fadeIn,
+    fadeOut:
+      release > 0 && played < remaining
+        ? Math.max(slice.fadeOut, Math.min(release, remaining - played))
+        : slice.fadeOut,
+  };
+}
+
+/**
+ * Left and right gains of a stereo balance `pan` from −1 (left) to 1 (right): the far channel fades out linearly while
+ * the near one stays at full gain, as FMOD's `setPan` acts on a stereo sound. Out-of-range values are clamped.
+ */
+export function resolveStereoBalance(pan: number): { left: number; right: number } {
+  const clamped = Number.isFinite(pan) ? Math.max(-1, Math.min(1, pan)) : 0;
+  return { left: clamped > 0 ? 1 - clamped : 1, right: clamped < 0 ? 1 + clamped : 1 };
+}
+
+/** `channel` read at a fractional frame `position` by linear interpolation; 0 outside it. */
+export function readSampleFrame(channel: Float32Array, position: number): number {
+  const lower = Math.floor(position);
+  if (lower < 0 || lower >= channel.length) return 0;
+  const fraction = position - lower;
+  const upper = lower + 1 < channel.length ? channel[lower + 1]! : 0;
+  return fraction === 0 ? channel[lower]! : channel[lower]! * (1 - fraction) + upper * fraction;
+}
+
+/**
  * The gain at `position` of a window `length` long (`Infinity` when it plays to the file's end) under `envelope`:
  * 0 → 1 over the fade-in, 1 → 0 over the fade-out past `length`, and 0 outside the window and its fade-out.
  */

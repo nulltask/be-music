@@ -1,3 +1,4 @@
+import { PLUGOUT_SCORE_MAX } from '../ruleset/plugout.ts';
 import { formatSeconds } from '../utils.ts';
 import { renderSummary, writeRuntimeEventLog } from './engine-trace.ts';
 import { PlayerInterruptedError, type PlayerSummary } from './engine-types.ts';
@@ -66,6 +67,8 @@ export function finishPlay(
       }),
     );
   }
-  writeOutput(renderSummary(summary, session.ruleset.moneyScore));
+  writeOutput(
+    renderSummary(summary, session.ruleset.plugoutScore === true ? PLUGOUT_SCORE_MAX : session.ruleset.moneyScore),
+  );
   return summary;
 }

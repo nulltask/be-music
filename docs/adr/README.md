@@ -73,3 +73,4 @@ Decisions that shape the code and would be costly to reverse, with why they were
 - [Treat chart-authored BASE-SPEED as the standard rate](./0041-chart-authored-base-speed.md)
 
 - [0043: Read LRX charts as their own source format](./0043-lrx-charts.md)
+- [0044: Judge plugout's rules as a ruleset of their own](./0044-plugout-ruleset.md)

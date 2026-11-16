@@ -6,7 +6,7 @@ import type { BGAOpacityTimelines } from '@be-music/chart-model';
  * bombs). A play view passes itself.
  */
 
-import type { BGACameraFeed } from '../../../media/bga-camera.ts';
+import type { BGAFeed } from '../../../media/bga-camera.ts';
 import type { ResolvedChart, TimingResolver, ChartPlayVariant } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import type { ScrollDistanceMapperLike, TimedLandmineNote, TimedPlayableNote } from '@be-music/player-engine/display';
@@ -155,7 +155,9 @@ export interface PlayfieldRuntime {
   readonly ghostSide?: '2P';
   readonly hasBGA: boolean;
   /** The camera shown in the BGA frame in place of the chart's BGA (`PlayScene.setBGACamera`), when one is. */
-  readonly bgaCamera?: BGACameraFeed | undefined;
+  readonly bgaCamera?: BGAFeed | undefined;
+  /** An LRX chart's composited BGA (`media/lrx-bga-compositor.ts`), shown when no camera is. */
+  readonly lrxBGA?: BGAFeed | undefined;
   readonly bgaTimeline: {
     base: BGACue[];
     layer: BGACue[];

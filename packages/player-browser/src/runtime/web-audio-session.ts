@@ -1,7 +1,7 @@
 import {
   isBmsBGMVolumeChangeChannel,
   isBMSKeyVolumeChangeChannel,
-  isPlayLaneSoundChannel,
+  playsAtKeysoundVolume,
   parseBMSDynamicVolumeGain,
   resolveBmsWAVResources,
   collectBmsWAVPlaybackModifiers,
@@ -18,7 +18,8 @@ import {
 import type { AudioSession, GuideSound } from '@be-music/player-engine';
 import {
   normalizePath,
-  resolveSampleSliceEnvelope,
+  resolveSampleVoiceEnvelope,
+  resolveStereoBalance,
   SAMPLE_SLICE_FADE_SECONDS,
   type SampleSliceEnvelope,
 } from '@be-music/shared-utils/core';
@@ -29,8 +30,13 @@ interface WebAudioSourceHandle {
   node: AudioBufferSourceNode;
   buffer: AudioBuffer;
   gain: GainNode | undefined;
-  /** The NONSTOP stage rate the sample plays at on top of the session's base rate (1 outside a stage). */
+  /**
+   * The rate the sample plays at on top of the session's base rate: its NONSTOP stage's rate (1 outside a stage) times
+   * its trigger's own (an LRX note's `frq`).
+   */
   stageRate: number;
+  /** The nodes of a stereo balance (an LRX note's `pan`) between the source and its bus, disconnected with it. */
+  balance?: readonly AudioNode[];
   startContextSeconds?: number;
 }
 
@@ -46,6 +52,16 @@ export interface WebAudioSessionSlicePlayback {
   offsetSeconds: number;
   durationSeconds?: number;
   sliceId?: string;
+  /** An LRX note's own gain, on top of the slot's. */
+  gain?: number;
+  /** An LRX note's stereo balance, −1 (left) to 1 (right). */
+  pan?: number;
+  /** An LRX note's own playback rate. */
+  rate?: number;
+  /** An LRX note's fade-in, in seconds of the sample. */
+  attackSeconds?: number;
+  /** An LRX note's fade-out past the end of `durationSeconds`, in seconds of the sample. */
+  releaseSeconds?: number;
 }
 
 /**
@@ -329,6 +345,10 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     return stage === undefined ? 1 : stageMixer!.rate(stage);
   };
 
+  /** A trigger's own rate (an LRX note's `frq`); 1 for any other. */
+  const voiceRateOf = (slice: WebAudioSessionSlicePlayback | undefined): number =>
+    slice?.rate !== undefined && slice.rate > 0 ? slice.rate : 1;
+
   const sliceRateOf = (sampleKey: string): number => {
     const stage = stageMixer?.stageOf(sampleKey);
     return stage === undefined ? 1 : (stageMixer?.sliceRate?.(stage) ?? 1);
@@ -353,6 +373,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     dynamicGain: number,
     withGainNode: boolean,
     partway = false,
+    voice?: WebAudioSessionSlicePlayback,
   ): WebAudioSourceHandle | undefined => {
     const buffer = sampleBuffer(path, sampleKey);
     if (!buffer) return undefined;
@@ -369,19 +390,39 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       if (bus === audioBus.keyMixer) bus = partway ? generation.partwayKey : generation.key;
       else if (bus === audioBus.bgmMixer) bus = partway ? generation.partwayBGM : generation.bgm;
     }
-    const rate = basePlaybackRate * stageRate;
+    const voiceRate = voice?.rate !== undefined && voice.rate > 0 ? voice.rate : 1;
+    const rate = basePlaybackRate * stageRate * voiceRate;
     if (rate !== 1) node.playbackRate.value = rate;
+    // An LRX note's balance: the far channel attenuated, the near one left alone.
+    const { left, right } = resolveStereoBalance(voice?.pan ?? 0);
+    let balance: AudioNode[] | undefined;
+    let output: AudioNode = bus;
+    if (left !== 1 || right !== 1) {
+      const splitter = audioContext.createChannelSplitter(2);
+      const merger = audioContext.createChannelMerger(2);
+      const leftGain = audioContext.createGain();
+      const rightGain = audioContext.createGain();
+      leftGain.gain.value = left;
+      rightGain.gain.value = right;
+      splitter.connect(leftGain, 0);
+      splitter.connect(rightGain, 1);
+      leftGain.connect(merger, 0, 0);
+      rightGain.connect(merger, 0, 1);
+      merger.connect(bus);
+      balance = [splitter, leftGain, rightGain, merger];
+      output = splitter;
+    }
     let gain: GainNode | undefined;
-    const combinedGain = (wavCmdVolumeMultipliers.get(sampleKey) ?? 1) * dynamicGain;
+    const combinedGain = (wavCmdVolumeMultipliers.get(sampleKey) ?? 1) * dynamicGain * (voice?.gain ?? 1);
     if (combinedGain !== 1 || withGainNode) {
       gain = audioContext.createGain();
       gain.gain.value = combinedGain;
       node.connect(gain);
-      gain.connect(bus);
+      gain.connect(output);
     } else {
-      node.connect(bus);
+      node.connect(output);
     }
-    return { node, buffer, gain, stageRate };
+    return { node, buffer, gain, stageRate: stageRate * voiceRate, ...(balance ? { balance } : {}) };
   };
 
   const disconnectSource = (handle: WebAudioSourceHandle): void => {
@@ -395,6 +436,13 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
         handle.gain.disconnect();
       } catch {
         // Same as above; source cleanup is best-effort.
+      }
+    }
+    for (const node of handle.balance ?? []) {
+      try {
+        node.disconnect();
+      } catch {
+        // Same as above.
       }
     }
   };
@@ -452,7 +500,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
 
     const buffer = sampleBuffer(path, sampleKey);
     if (!buffer) return;
-    const elapsed = elapsedSeconds > 0 ? elapsedInBuffer(sampleKey, elapsedSeconds) : 0;
+    const elapsed = elapsedSeconds > 0 ? elapsedInBuffer(sampleKey, elapsedSeconds) * voiceRateOf(slice) : 0;
     const sliceRate = sliceRateOf(sampleKey);
     const offsetSeconds = clampSampleOffset((slice?.offsetSeconds ?? 0) / sliceRate + elapsed, buffer.duration);
     const durationSeconds = clampSampleDuration(
@@ -460,16 +508,19 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       buffer.duration,
       offsetSeconds,
     );
-    const envelope = resolveSampleSliceEnvelope(
+    // An LRX note's attack only applies from its start; a seek past it plays on at full level.
+    const envelope = resolveSampleVoiceEnvelope(
       offsetSeconds,
       durationSeconds,
       buffer.duration,
       SAMPLE_SLICE_FADE_SECONDS,
+      elapsed > 0 ? 0 : (slice?.attackSeconds ?? 0),
+      slice?.releaseSeconds ?? 0,
     );
     const hasEnvelope = envelope.fadeIn > 0 || envelope.fadeOut > 0;
 
     const channel = normalizeChannel(event.channel);
-    const isPlayerLane = isPlayLaneSoundChannel(channel);
+    const isPlayerLane = playsAtKeysoundVolume(channel, event);
     const bus = isPlayerLane ? audioBus.keyMixer : audioBus.bgmMixer;
     const built = buildSourceNode(
       sampleKey,
@@ -478,6 +529,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       isPlayerLane ? currentKeyDynamicGain : currentBGMDynamicGain,
       hasEnvelope,
       elapsedSeconds > 0,
+      slice,
     );
     if (!built) return;
     const { node } = built;
@@ -521,10 +573,12 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     const sliceRate = sliceRateOf(sampleKey);
     const start = (slice?.offsetSeconds ?? 0) / sliceRate;
     const end = Math.min(
-      slice?.durationSeconds !== undefined ? start + slice.durationSeconds / sliceRate : buffer.duration,
+      slice?.durationSeconds !== undefined
+        ? start + slice.durationSeconds / sliceRate + (slice.releaseSeconds ?? 0)
+        : buffer.duration,
       buffer.duration,
     );
-    return start + elapsedInBuffer(sampleKey, elapsedSeconds) < end;
+    return start + elapsedInBuffer(sampleKey, elapsedSeconds) * voiceRateOf(slice) < end;
   };
 
   const applyDynamicVolumeEvent = (event: BeMusicEvent): void => {

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vite-plus/test';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import { classifyPlannedAssists, resolvePlannedRecordPolicy, type PlannedPlay } from './planned-assists.ts';
 
-const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
+const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____', 'plugout'];
 const options = (plan: PlannedPlay) => classifyPlannedAssists(plan).findings.map((finding) => finding.option);
 const conditional = (plan: PlannedPlay) =>
   classifyPlannedAssists(plan).conditionalFindings.map((finding) => finding.option);

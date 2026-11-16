@@ -174,7 +174,7 @@ export function writePlayableSampleTriggerEventLog(
   event: BeMusicEvent,
   seconds: number,
   resources: Readonly<Record<string, string>>,
-  source: 'auto-note' | 'auto-scratch' | 'manual-note' | 'lane-fallback' | 'mine-hit' | 'long-note-end',
+  source: 'auto-note' | 'auto-scratch' | 'manual-note' | 'lane-fallback' | 'mine-hit' | 'long-note-end' | 'chain-note',
   channel?: string,
   base: 36 | 62 = 36,
 ): void {
@@ -766,10 +766,12 @@ function formatGrooveGaugeStatus(summary: PlayerSummary): string {
   return summary.gauge?.cleared === true ? 'CLEAR' : 'FAILED';
 }
 
-export function renderSummary(summary: PlayerSummary, moneyScore: boolean): string {
+export function renderSummary(summary: PlayerSummary, moneyScore: boolean | number): string {
   const maxExScore = Math.max(0, summary.total * _____EX_SCORE_PER_PGREAT);
   const exScoreRate = maxExScore > 0 ? summary.exScore / maxExScore : 0;
-  const scoreRate = summary.score / LR2_MONEY_SCORE_MAX;
+  // `true` is LR2's money score; a number is a ruleset score's maximum (plugout's 100000).
+  const scoreMax = moneyScore === true ? LR2_MONEY_SCORE_MAX : moneyScore === false ? undefined : moneyScore;
+  const scoreRate = scoreMax !== undefined ? summary.score / scoreMax : 0;
   const gauge = summary.gauge;
   return (
     [
@@ -791,7 +793,9 @@ export function renderSummary(summary: PlayerSummary, moneyScore: boolean): stri
       `EX-SCORE: ${summary.exScore} / ${maxExScore} (${(exScoreRate * 100).toFixed(2)}%)`,
       // Only LR2 defines a money score; the other rulesets report EX-SCORE in this field, so printing a
       // percentage of 200000 there would be meaningless.
-      ...(moneyScore ? [`SCORE   : ${summary.score} / ${LR2_MONEY_SCORE_MAX} (${(scoreRate * 100).toFixed(2)}%)`] : []),
+      ...(scoreMax !== undefined
+        ? [`SCORE   : ${summary.score} / ${scoreMax} (${(scoreRate * 100).toFixed(2)}%)`]
+        : []),
     ].join('\n') + '\n'
   );
 }

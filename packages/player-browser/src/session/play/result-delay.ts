@@ -94,7 +94,12 @@ function resolveSamplePlaybackDurationSeconds(
   const slice = context.bmsonSlicePlayback?.get(event);
   const offsetSeconds = clampSampleOffset(slice?.offsetSeconds, buffer.duration);
   const durationSeconds = clampSampleDuration(slice?.durationSeconds, buffer.duration, offsetSeconds);
-  return durationSeconds ?? Math.max(0, buffer.duration - offsetSeconds);
+  const sampleSeconds =
+    durationSeconds !== undefined
+      ? Math.min(durationSeconds + (slice?.releaseSeconds ?? 0), buffer.duration - offsetSeconds)
+      : Math.max(0, buffer.duration - offsetSeconds);
+  // An LRX note's own rate plays its window faster or slower.
+  return sampleSeconds / (slice?.rate !== undefined && slice.rate > 0 ? slice.rate : 1);
 }
 
 function normalizeSamplePath(path: string): string {

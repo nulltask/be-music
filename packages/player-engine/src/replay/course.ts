@@ -529,8 +529,8 @@ function parseJudgeRankFacts(judgeRank: Record<string, unknown>, path: string): 
 
 function parseFacts(value: unknown, path: string): RulesetChartFacts {
   const facts = expectRecord(value, path);
-  if (facts.sourceFormat !== 'bms' && facts.sourceFormat !== 'bmson') {
-    throw new ReplayParseError(`${path}.sourceFormat: expected 'bms' | 'bmson'`);
+  if (facts.sourceFormat !== 'bms' && facts.sourceFormat !== 'bmson' && facts.sourceFormat !== 'lrx') {
+    throw new ReplayParseError(`${path}.sourceFormat: expected 'bms' | 'bmson' | 'lrx'`);
   }
   const lnMode = facts.lnMode;
   if (lnMode !== 1 && lnMode !== 2 && lnMode !== 3) {

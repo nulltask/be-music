@@ -46,7 +46,12 @@ import {
 } from './scroll-modifier.ts';
 import { addLongNotes, clampLongNoteRate, removeLongNoteTails, type LongNoteModifier } from './long-note-modifier.ts';
 import { throwIfAborted } from '@be-music/shared-utils/core';
-import { buildChartTextTimeline, resolveChart, type ResolvedChart } from '@be-music/chart-model';
+import {
+  buildChartTextTimeline,
+  resolveChart,
+  resolveLRXPlayEndSeconds,
+  type ResolvedChart,
+} from '@be-music/chart-model';
 import { normalizeChannel, type BeMusicJSON } from '@be-music/chart-source';
 import { type GrooveGaugeJudgmentKind } from './groove-gauge.ts';
 import {
@@ -146,6 +151,11 @@ export interface PreparedPlaybackChartData {
   invisibleNotes: TimedPlayableNote[];
   renderNotes: TimedPlayableNote[];
   totalSeconds: number;
+  /**
+   * `totalSeconds` is the chart's own end (an LRX chart's, `resolveLRXPlayEndSeconds`): option text, BGA and audio
+   * running longer do not extend it.
+   */
+  fixedEnd?: true;
   laneBindings: LaneBinding[];
   laneDisplayMode: string;
   activeFreeZoneChannels: ReadonlySet<string>;
@@ -474,6 +484,10 @@ export function preparePlaybackChart(
   let totalSeconds = Math.max(resolved.lastNoteSeconds, auxiliaryPlaybackEndSeconds, lastTextSeconds);
   for (const note of notes) totalSeconds = Math.max(totalSeconds, note.endSeconds ?? note.seconds);
   for (const mine of landmineNotes) totalSeconds = Math.max(totalSeconds, mine.seconds);
+  // An LRX chart plays for as long as plugout plays it: to its end-of-song note, else 3 s past its last sound note,
+  // whatever still sounds or shows then. A note still to be judged keeps the play going (`play-loop.ts`).
+  const lrxEndSeconds = resolveLRXPlayEndSeconds(resolved);
+  if (lrxEndSeconds !== undefined) totalSeconds = lrxEndSeconds;
   const practiceRange =
     options.practice !== undefined
       ? resolvePracticeRange(
@@ -491,6 +505,7 @@ export function preparePlaybackChart(
       ? resolvePracticePlayWindow(resolved, options.practice, practiceRange, practice?.carriedFromMs)
       : undefined;
   if (practiceWindow) totalSeconds = practiceWindow.endSeconds;
+  const fixedEnd = lrxEndSeconds !== undefined && practiceWindow === undefined;
   const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
   // A seamless PRACTICE loop draws the next round's notes past the range's end, so they come down the lane (#949).
   const loopShift =
@@ -569,6 +584,7 @@ export function preparePlaybackChart(
     invisibleNotes,
     renderNotes,
     totalSeconds,
+    ...(fixedEnd ? { fixedEnd } : {}),
     laneBindings,
     laneDisplayMode,
     activeFreeZoneChannels,
@@ -625,6 +641,7 @@ export async function initializePlayerUIRuntime({
   stateSignals,
   uiSignals,
   totalSeconds,
+  fixedEnd = false,
   onLoadProgress,
 }: {
   options: PlayerOptions;
@@ -639,6 +656,8 @@ export async function initializePlayerUIRuntime({
   stateSignals: PlayerStateSignals;
   uiSignals: PlayerUISignalBus;
   totalSeconds: number;
+  /** `totalSeconds` is the chart's own end, which a longer BGA does not extend. */
+  fixedEnd?: boolean;
   onLoadProgress: (ratio: number, message: string, detail?: string) => void;
 }): Promise<InitializedPlayerUIRuntime> {
   throwIfAborted(options.signal);
@@ -669,7 +688,7 @@ export async function initializePlayerUIRuntime({
     },
   });
   throwIfAborted(options.signal);
-  const updatedTotalSeconds = Math.max(totalSeconds, uiRuntime?.playbackEndSeconds ?? 0);
+  const updatedTotalSeconds = fixedEnd ? totalSeconds : Math.max(totalSeconds, uiRuntime?.playbackEndSeconds ?? 0);
   const uiEnabled = Boolean(uiRuntime?.tuiEnabled);
 
   return {

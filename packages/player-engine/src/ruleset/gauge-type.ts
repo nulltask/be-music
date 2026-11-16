@@ -14,6 +14,8 @@
  *   clears a single chart only with HP 80 or more at the end, as it checks GROOVE (OpenLR2 `LR2f.cpp` L1842-L1862).
  * - `'DEATH-CORRECTED'` — LR2's HAZARD that clears by surviving, without that 80 border. Under the other rulesets it
  *   reads as their DEATH.
+ * - `'EX-GROOVE'` / `'EX-EASY'` / `'EX-DEATH'` — plugout's EXNORMAL (clears only at 100 %), EX EASY and EXHAZARD; only
+ *   plugout has them. plugout's EXHARD is `'EX-HARD'`.
  */
 export type GaugeType =
   | 'GROOVE'
@@ -24,21 +26,52 @@ export type GaugeType =
   | 'EX-HARD'
   | 'ASSIST-EASY'
   | 'P-ATTACK'
-  | 'G-ATTACK';
+  | 'G-ATTACK'
+  | 'EX-GROOVE'
+  | 'EX-EASY'
+  | 'EX-DEATH';
 
 /** Every gauge type, in the order LR2's gauge button cycles them (`#SRC_BUTTON,type=40 / 41` cells 0..5). */
 export const LR2_GAUGE_TYPES: readonly GaugeType[] = ['GROOVE', 'HARD', 'DEATH', 'EASY', 'P-ATTACK', 'G-ATTACK'];
 
 /** Every accepted gauge pick; source-specific menus use resolveGaugeTypes. */
-export const GAUGE_TYPES: readonly GaugeType[] = [...LR2_GAUGE_TYPES, 'EX-HARD', 'ASSIST-EASY', 'DEATH-CORRECTED'];
+export const GAUGE_TYPES: readonly GaugeType[] = [
+  ...LR2_GAUGE_TYPES,
+  'EX-HARD',
+  'ASSIST-EASY',
+  'DEATH-CORRECTED',
+  'EX-GROOVE',
+  'EX-EASY',
+  'EX-DEATH',
+];
 /** LR2's menu: its own six gauges, then the corrected HAZARD. */
 const LR2_MENU_GAUGE_TYPES: readonly GaugeType[] = [...LR2_GAUGE_TYPES, 'DEATH-CORRECTED'];
 const BEATORAJA_GAUGE_TYPES: readonly GaugeType[] = ['GROOVE', 'HARD', 'EX-HARD', 'DEATH', 'EASY', 'ASSIST-EASY'];
 const ____GAUGE_TYPES: readonly GaugeType[] = ['GROOVE', 'HARD', 'EX-HARD', 'EASY', 'ASSIST-EASY'];
+/** plugout's four gauges, then their EX variants (NORMAL / HARD / HAZARD / EASY, the select skin's order). */
+const PLUGOUT_GAUGE_TYPES: readonly GaugeType[] = [
+  'GROOVE',
+  'HARD',
+  'DEATH',
+  'EASY',
+  'EX-GROOVE',
+  'EX-HARD',
+  'EX-DEATH',
+  'EX-EASY',
+];
 
-/** Source menu choices: LR2 has no EX-HARD; the AC menu has no DEATH pick. */
-export function resolveGaugeTypes(ruleset: 'lr2' | 'beatoraja' | '____'): readonly GaugeType[] {
-  return ruleset === 'lr2' ? LR2_MENU_GAUGE_TYPES : ruleset === 'beatoraja' ? BEATORAJA_GAUGE_TYPES : ____GAUGE_TYPES;
+/** Source menu choices: LR2 has no EX-HARD; the AC menu has no DEATH pick; plugout has no ASSIST EASY. */
+export function resolveGaugeTypes(ruleset: GaugeSource): readonly GaugeType[] {
+  switch (ruleset) {
+    case 'lr2':
+      return LR2_MENU_GAUGE_TYPES;
+    case 'beatoraja':
+      return BEATORAJA_GAUGE_TYPES;
+    case 'plugout':
+      return PLUGOUT_GAUGE_TYPES;
+    default:
+      return ____GAUGE_TYPES;
+  }
 }
 
 /** Whether `value` names a gauge type. */
@@ -47,9 +80,9 @@ export function isGaugeType(value: unknown): value is GaugeType {
 }
 
 /** The sources a gauge pick can name: the judge rulesets, whose gauge line-ups differ. */
-type GaugeSource = 'lr2' | 'beatoraja' | '____';
+type GaugeSource = 'lr2' | 'beatoraja' | '____' | 'plugout';
 
-const GAUGE_SOURCES: readonly GaugeSource[] = ['lr2', 'beatoraja', '____'];
+const GAUGE_SOURCES: readonly GaugeSource[] = ['lr2', 'beatoraja', '____', 'plugout'];
 
 /** A gauge of one source, whatever ruleset judges the play: `lr2:HARD`, `beatoraja:EX-HARD`, `____:EASY` (ADR 0019). */
 export type QualifiedGaugeType = `${GaugeSource}:${GaugeType}`;
@@ -122,10 +155,19 @@ export const GAUGE_AUTO_SHIFTS: readonly GaugeAutoShift[] = [
  * Whether a play ends when its survival gauge empties. NONE stops the play; every other policy keeps judging to the end:
  * CONTINUE on the emptied gauge, SURVIVAL TO GROOVE on the ruleset's default recovery gauge, BEST CLEAR / SELECT TO
  * UNDER on the parallel gauges of the ruleset's ladder. An omitted policy keeps the host-level `endOnFailure` contract.
+ * A single play on plugout's gauges (`singlePlayGaugeSource`) always plays on, as plugout does.
  */
-export function resolveGaugeEndOnFailure(policy: GaugeAutoShift | undefined, fallback = true): boolean {
+export function resolveGaugeEndOnFailure(
+  policy: GaugeAutoShift | undefined,
+  fallback = true,
+  singlePlayGaugeSource?: string,
+): boolean {
+  if (policy !== undefined && !GAUGE_AUTO_SHIFTS.includes(policy))
+    throw new RangeError(`Unknown gauge auto-shift policy: ${String(policy)}`);
+  // plugout plays a single chart to its end on an emptied survival gauge: the gauge stays at 0 and nothing stops the
+  // play (`plugout4.exe` 0x43a4f1; the single-play gauge path raises no event, unlike the course gauges').
+  if (singlePlayGaugeSource === 'plugout') return false;
   if (policy === undefined) return fallback;
-  if (!GAUGE_AUTO_SHIFTS.includes(policy)) throw new RangeError(`Unknown gauge auto-shift policy: ${String(policy)}`);
   return policy === 'NONE';
 }
 

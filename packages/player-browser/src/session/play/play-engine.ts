@@ -1,3 +1,4 @@
+import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
 /**
  * The engine side of a play on the built-in and LR2 play screens (`PlaySession`): launches the shared engine
  * (`runEngineDriver`) on the prepared chart, drains its UI signals each frame into the score, gauge, judgement, combo
@@ -168,9 +169,7 @@ export interface PlayEngineContext
   readonly audioBus: AudioBusHandle | undefined;
   readonly decodedSamples: Map<string, AudioBuffer>;
   readonly wavCmdVolumeMultipliers: Map<string, number>;
-  readonly bmsonSlicePlayback:
-    | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
-    | undefined;
+  readonly bmsonSlicePlayback: Map<BeMusicEvent, WebAudioSessionSlicePlayback> | undefined;
   readonly nonstopMixer: NonstopStageMixer | undefined;
   readonly replayTempo: ReplayTempo | undefined;
   readonly liveTempo: LiveTempo;

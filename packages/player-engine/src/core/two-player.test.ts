@@ -7,7 +7,7 @@ import { observePlay } from './characterization/harness.ts';
 const chart = (): ReturnType<typeof parseBMS> =>
   parseBMS('#PLAYER 1\n#BPM 120\n#TOTAL 200\n#WAV01 a.wav\n#00011:00010100');
 
-test.each(['lr2', 'beatoraja', '____'] as const)(
+test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
   '%s: two players judge their own side with their own score, combo and gauge',
   async (ruleset) => {
     const play = await observePlay({

@@ -382,8 +382,8 @@ The selected judge ruleset controls these rules independently of the drawing fam
 
 ## Compat rulesets
 
-**The player has no judge logic of its own.** Every play runs under one of three compat rulesets — `lr2` (the
-default), `beatoraja`, or `____` — chosen with `PlayerOptions.judgeRuleset`. The ruleset owns the judge windows,
+**The player has no judge logic of its own.** Every play runs under one of four compat rulesets — `lr2` (the
+default), `beatoraja`, `____`, or `plugout` — chosen with `PlayerOptions.judgeRuleset`. The ruleset owns the judge windows,
 which note a press resolves against, the long-note style, the empty-POOR rule, the gauge line-up and its curve,
 and the score formula. The tables and their primary sources live in
 [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) and are compared
@@ -391,6 +391,10 @@ side by side in [`docs/replay.md`](./replay.md).
 
 The same tables drive the live engine and the replay simulator, and an equivalence suite requires the two to
 agree judge for judge on the same recorded input stream.
+
+`plugout` follows plugout4 -ARCADE EDITION-, the player of LRX charts: fixed windows by rank, charge long notes whose
+end is a release, NORMAL / EASY / HARD / HAZARD gauges with EX variants, a score out of 100,000 and lamps up to
+PERFECT. Its rules and their sources are in [ADR 0044](./adr/0044-plugout-ruleset.md).
 
 The rest of this chapter describes the **`lr2` ruleset**, which is the default.
 

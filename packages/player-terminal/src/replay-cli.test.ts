@@ -49,7 +49,7 @@ describe('replay-cli', () => {
   test('parseReplayCLIArgs: defaults to all rulesets and collects files', () => {
     const args = parseReplayCLIArgs(['a.bmplay.json', 'b.bmplay.json']);
     expect(args.files).toEqual(['a.bmplay.json', 'b.bmplay.json']);
-    expect(args.rulesets).toEqual(['lr2', 'beatoraja', '____']);
+    expect(args.rulesets).toEqual(['lr2', 'beatoraja', '____', 'plugout']);
     expect(args.json).toBe(false);
     expect(args.help).toBe(false);
     expect(args.gauge).toBeUndefined();
@@ -72,7 +72,7 @@ describe('replay-cli', () => {
   });
 
   test('parseReplayCLIArgs: --ruleset=all restores every simulator', () => {
-    expect(parseReplayCLIArgs(['--ruleset=all']).rulesets).toEqual(['lr2', 'beatoraja', '____']);
+    expect(parseReplayCLIArgs(['--ruleset=all']).rulesets).toEqual(['lr2', 'beatoraja', '____', 'plugout']);
   });
 
   test('parseReplayCLIArgs: rejects unknown rulesets, algorithms, and options', () => {

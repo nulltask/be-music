@@ -694,14 +694,17 @@ export class ChartPreviewEngine {
       const durationSeconds =
         sampleDurationSeconds === undefined || !stretched ? sampleDurationSeconds : sampleDurationSeconds / rate;
       let source: AudioBufferSourceNode;
+      // An LRX note's own rate and gain; its balance and ramps are left to play.
+      const voiceRate = previewVoiceRate(trigger);
       try {
         source = this.audioContext.createBufferSource();
         source.buffer = buffer;
-        if (!stretched && rate !== 1) source.playbackRate.value = rate;
+        const sourceRate = (stretched ? 1 : rate) * voiceRate;
+        if (sourceRate !== 1) source.playbackRate.value = sourceRate;
       } catch {
         return;
       }
-      const handle = this.attachSource(source, level);
+      const handle = this.attachSource(source, level * (trigger.sampleGain ?? 1));
       if (!handle) return;
       source.onended = (): void => {
         if (activeBySlot.get(trigger.sampleKey) === handle) activeBySlot.delete(trigger.sampleKey);
@@ -798,10 +801,12 @@ export class ChartPreviewEngine {
       try {
         source = this.audioContext.createBufferSource();
         source.buffer = buffer;
+        const voiceRate = previewVoiceRate(trigger);
+        if (voiceRate !== 1) source.playbackRate.value = voiceRate;
       } catch {
         continue;
       }
-      const handle = this.attachSource(source, level);
+      const handle = this.attachSource(source, level * (trigger.sampleGain ?? 1));
       if (!handle) continue;
       const offset = trigger.sampleOffsetSeconds ?? 0;
       const when = startAt + Math.max(0, trigger.seconds - leadOffsetSeconds);
@@ -1051,4 +1056,9 @@ export function findFirstAudibleOffsetSeconds(
     }
   }
   return 0;
+}
+
+/** A trigger's own playback rate (an LRX note's `frq`), 1 for any other. */
+function previewVoiceRate(trigger: Pick<TimedSampleTrigger, 'samplePlaybackRate'>): number {
+  return trigger.samplePlaybackRate !== undefined && trigger.samplePlaybackRate > 0 ? trigger.samplePlaybackRate : 1;
 }

@@ -1,4 +1,5 @@
 import type { ReplayInputEvent } from '../replay/format.ts';
+import { createPlugoutLaneSoundState } from './plugout-lane-sound.ts';
 import { advanceJudgeState, finishJudgeState, nextTimedJudgmentUs } from './judge-core-advance.ts';
 import { markScorableJudged, markLandmineJudged, markInvisibleJudged } from './judge-core-score.ts';
 import { handleLanePress, handleLaneRelease, resolveAnyKeyPressChannels } from './judge-core-press.ts';
@@ -90,6 +91,7 @@ export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreSc
     remainingScorableNotes: config.scorableNotes.length,
     remainingLandmineNotes: config.landmineNotes.length,
     remainingInvisibleNotes: config.invisibleNotes.length,
+    ...(config.ruleset.laneSound === 'plugout' ? { plugoutLaneSounds: createPlugoutLaneSoundState() } : {}),
   };
   const from = config.practiceFromSeconds;
   if (from !== undefined && Number.isFinite(from) && from > 0) {

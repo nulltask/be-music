@@ -68,7 +68,7 @@ describe('manual play: a tap whose release is drained right after its press', ()
   ];
   const audio = { quantumMs: 128 / 48 };
 
-  test.each(['lr2', 'beatoraja', '____'] as const)(
+  test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
     '%s: logs the release no earlier than its press, and the replay and the simulator judge the play as it was judged',
     async (ruleset) => {
       const live = await observePlay({

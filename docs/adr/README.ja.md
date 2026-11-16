@@ -73,3 +73,4 @@
 - [譜面指定の BASE-SPEED を標準速度として扱う](./0041-chart-authored-base-speed.ja.md)
 
 - [0043: LRX 譜面を独自の形式として読む](./0043-lrx-charts.ja.md)
+- [0044: plugout の規則を独立した ruleset として判定する](./0044-plugout-ruleset.ja.md)

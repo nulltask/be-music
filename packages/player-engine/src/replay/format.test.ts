@@ -1049,3 +1049,10 @@ test('strict replay facts require normalized percentage TOTAL', () => {
   delete replay.play.bmsonTotalMode;
   expect(() => parseReplay(serializeReplay(replay))).not.toThrow();
 });
+
+test('an LRX chart is recorded as LRX and read back', () => {
+  const replay = makeReplay();
+  replay.chart.sourceFormat = 'lrx';
+  expect(parseReplay(serializeReplay(replay)).chart.sourceFormat).toBe('lrx');
+  expect(() => parseReplay({ ...replay, chart: { ...replay.chart, sourceFormat: 'lrs' } })).toThrow(/sourceFormat/);
+});

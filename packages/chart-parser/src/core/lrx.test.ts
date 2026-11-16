@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { parseLRX, parseLRXBytes, resolveLRXHeaderPath, resolveLRXMoviePath } from './lrx.ts';
+import { normalizeLRXEventExtensions } from './lrx-extensions.ts';
 import { parseChart } from './parser.ts';
 
 const lrs = (...lines: string[]) => `<?xml version="1.0"?>\r\n<LRS>\r\n${lines.join('\r\n')}\r\n</LRS>\r\n`;
@@ -110,14 +111,20 @@ describe('parseLRX', () => {
       lrs: lrs(
         '<n c="301" s="0" p="120" />',
         '<n c="2" s="0" p="3" dmg="0" />',
+        // A note before it on lane 3, so the chain note follows in the background.
+        '<n c="3" s="0" p="7" />',
         '<n c="3" s="0" p="4" cn="1" />',
+        '<n c="5" s="0" p="6" cn="1" dmg="0" />',
         '<n c="4" s="0" p="5" vol="64" pan="0" frq="22050" atk="10" rls="20" ost="30" len="40" rev="1" dmg="50" rcv="80" />',
       ),
       lrh: lrh('lanetype="1"'),
     });
     const byValue = new Map(chart.events.map((event) => [event.value, event]));
-    expect(byValue.get('04')).toMatchObject({ channel: '01', lrx: { damage: 0 } });
-    expect(byValue.get('05')).toMatchObject({ channel: '01', lrx: { chain: true } });
+    expect(byValue.get('04')).toMatchObject({ channel: '01', lrx: { damage: 0, lane: '12', keyVolume: true } });
+    // A chain note remembers its lane, for chart-model to tie it to the lane's preceding note.
+    expect(byValue.get('05')).toMatchObject({ channel: '01', lrx: { chain: true, lane: '13', keyVolume: true } });
+    // A hidden chain note keeps its lane too; chart-model ties it to nothing, since plugout keeps it out of the lane.
+    expect(byValue.get('07')!.lrx).toEqual({ chain: true, damage: 0, lane: '15', keyVolume: true });
     expect(byValue.get('06')).toMatchObject({
       channel: '14',
       lrx: {
@@ -155,17 +162,61 @@ describe('parseLRX', () => {
 
   test('warns about lane types and channels Be-Music cannot lay out', () => {
     const chart = parseLRX({
-      lrs: lrs('<n c="301" s="0" p="120" />', '<n c="8" s="0" p="0" />', '<n c="203" s="0" p="0" />'),
+      lrs: lrs('<n c="301" s="0" p="120" />', '<n c="8" s="0" p="0" />', '<n c="205" s="0" p="0" />'),
       lrh: lrh('lanetype="5"'),
     });
     expect(chart.diagnostics?.map((diagnostic) => [diagnostic.code, diagnostic.subject])).toEqual([
       ['unsupported-lane-type', '5'],
       ['unsupported-channel', '8'],
-      ['unsupported-channel', '203'],
+      // plugout draws layers 201–204 only.
+      ['unsupported-channel', '205'],
     ]);
     // The lane outside the table plays in the background.
     expect(chart.events.find((event) => event.value === '01' && event.channel === '01')).toBeDefined();
     expect(parseLRX({ lrs: lrs(), lrh: lrh('lanetype="9"') }).diagnostics?.[0]?.code).toBe('unsupported-lane-type');
+  });
+
+  test('judges a chain note that starts its lane, as plugout does', () => {
+    const chart = parseLRX({
+      lrs: lrs('<n c="301" s="0" p="120" />', '<n c="1" s="0" p="0" cn="1" />', '<n c="1" s="480" p="1" cn="1" />'),
+    });
+    const byValue = new Map(chart.events.map((event) => [event.value, event]));
+    // The first is the lane's note; the second follows it in the background.
+    expect(byValue.get('01')).toMatchObject({ channel: '11', lrx: { chain: true } });
+    expect(byValue.get('02')).toMatchObject({ channel: '01', lrx: { chain: true, lane: '11' } });
+  });
+
+  test('keeps every BGA cue with its transform when the BMS channels cannot carry it', () => {
+    const plain = parseLRX({ lrs: lrs('<n c="301" s="0" p="120" />', '<n c="200" s="0" p="0" />') });
+    expect(plain.lrx?.bga).toBeUndefined();
+    const chart = parseLRX({
+      lrs: lrs(
+        '<n c="301" s="0" p="120" />',
+        '<n c="200" s="0" p="0" />',
+        '<n c="203" s="480" e="960" p="1" sx="1" sy="2" sw="3" sh="4" dx="5" dy="6" dw="7" dh="8" a="9" bld="1" rot="30" ctr="7" acc="2" />',
+        '<n c="203" s="960" p="2" cn="1" />',
+      ),
+    });
+    expect(chart.lrx?.bga).toEqual([
+      { slot: 0, tick: 0, image: 0, key: '01' },
+      {
+        slot: 3,
+        tick: 480,
+        endTick: 960,
+        image: 1,
+        key: '02',
+        src: [1, 2, 3, 4],
+        dst: [5, 6, 7, 8],
+        color: [9, 255, 255, 255],
+        blend: 1,
+        rotation: 30,
+        center: 7,
+        accel: 2,
+      },
+      { slot: 3, tick: 960, image: 2, key: '03', chain: true },
+    ]);
+    // Layer 203 has no BMS channel; the base stays on `04` for every other player.
+    expect(chart.events.filter((event) => event.channel === '04')).toHaveLength(1);
   });
 
   test('reads the BGA file: one id table for images and movies, base / layers / POOR', () => {
@@ -250,5 +301,36 @@ describe('parseChartFile', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('LRX background volume', () => {
+  test('only the BGM columns with a non-zero dmg play at the BGM volume, as plugout groups them', () => {
+    const chart = parseLRX({
+      lrs: lrs(
+        '<n c="301" s="0" p="120" />',
+        '<n c="100" s="0" p="0" />',
+        '<n c="150" s="0" p="1" dmg="0" />',
+        '<n c="20" s="0" p="2" />',
+        '<n c="1" s="0" p="3" />',
+      ),
+    });
+    const byValue = new Map(chart.events.map((event) => [event.value, event]));
+    expect(byValue.get('01')!.lrx?.keyVolume).toBeUndefined();
+    expect(byValue.get('02')!.lrx?.keyVolume).toBe(true);
+    expect(byValue.get('03')!.lrx?.keyVolume).toBe(true);
+    // A lane note is a keysound by its lane; it needs no flag.
+    expect(byValue.get('04')!.lrx?.keyVolume).toBeUndefined();
+  });
+});
+
+describe('normalizeLRXEventExtensions', () => {
+  test("keeps a chain note's lane when reading Be-Music JSON back", () => {
+    expect(normalizeLRXEventExtensions({ chain: true, lane: '13', keyVolume: true, other: 1 })).toEqual({
+      chain: true,
+      lane: '13',
+      keyVolume: true,
+    });
+    expect(normalizeLRXEventExtensions({ lane: 13 })).toBeUndefined();
   });
 });

@@ -110,6 +110,7 @@ function makeNote(row: { seconds: number; beat: number; event: BeMusicEvent }, c
     event: { measure: row.event.measure, position: [...row.event.position], channel, value: GENERATED_NOTE_VALUE },
     soundEvents: undefined,
     endSoundEvent: undefined,
+    chainSounds: undefined,
     channel,
     beat: row.beat,
     endBeat: undefined,
