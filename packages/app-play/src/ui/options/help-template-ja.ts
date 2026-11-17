@@ -508,7 +508,7 @@ export const OPTIONS_HELP_JA = html`
         <dt>NONSTOP placement</dt>
         <dd>NONSTOP のコースを意図どおりにつなぐか、LR2 の挙動 (不具合も含む) のとおりにつなぐか。</dd>
         <dt>Table URL</dt>
-        <dd>コースを読み込む難易度表の URL。</dd>
+        <dd>コースを読み込む難易度表の URL。追加するまでは著名な難易度表を読み込みます。</dd>
         <dt>Import table courses</dt>
         <dd>Table URL の難易度表からコースを読み込みます。次に開いたときにも読み込みます。</dd>
       </dl>
