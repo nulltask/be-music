@@ -9,6 +9,7 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [BMS implementation specification](./bms-spec.md)
 - [bmson implementation specification](./bmson-spec.md)
 - [BMS / bmson compatibility notes (de jure vs de facto)](./format-compat.md)
+- [Be-Music-specific interpretations and behaviour](./be-music-behaviour.md)
 - [Bemuse implementation specification](./bemuse-spec.md)
 - [Player implementation specification](./player-spec.md)
 - [Terminal player implementation notes](./player-tui.md)
