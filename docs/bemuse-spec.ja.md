@@ -35,7 +35,7 @@ Options → Library & records → Bemuse music servers でサーバー URL を�
 - 譜面ファイルは Cache Storage（`be-music-bemuse-charts`）に保存し、index の `charts[].md5` とバイト列が一致する間だけ使い回す。2 回目以降の起動では index だけを取得し、譜面は取得しない。
 - パッケージ内の音声ファイルは、プレイが開いたときに `*.bemuse` チャンクから切り出す。最近のチャンクの payload は保持する（32 チャンク）が、切り出したファイルのバイト列は保持しない。
 - パッケージ外のファイルは Bemuse に従う。パッケージのある曲は `fallbackPattern`（`/\.(?:png|jpg|webm|mp4|m4v)/`）に一致する名前だけをパッケージの横から読み、`bemusepack_url: null` の曲はすべてのファイルを読む。音声は `SamplesLoader` が試す名前（`.ogg`、`.m4a`、`.flac`、`.mp3`、元の名前）で読む。サーバーはファイル一覧を出せないので、譜面が名指すファイルは譜面テキストから読む（`scanChartFileReferences`）。
-- ブラウザが遮ったリクエスト（CORS ヘッダなし）はプレイヤーのプロキシ（`/__url-load-proxy`）経由で送り直し、以後そのオリジンへのリクエストは直接プロキシに送る（`services/bemuse-fetch.ts`）。
+- ブラウザが遮ったリクエスト（CORS ヘッダなし）はプレイヤーのプロキシ（`/__url-load-proxy`）経由で送り直し、プロキシがサーバーに届いたら以後そのオリジンへのリクエストは直接プロキシに送る（`services/bemuse-fetch.ts`）。そのオリジンは `localStorage`（`be-music.bemuse-proxied-origins`、最新 64 件）に保存し、nekokan のサーバーのオリジン（`KNOWN_PROXIED_BEMUSE_ORIGINS`）は初回からプロキシに送る。これにより、ブラウザが CORS エラーを記録するのは訪問のたびではなく、1 つのオリジンにつき多くて 1 回になる。
 
 index が譜面以外に持つ曲の情報は、解析後の譜面に載せる（`applyBemuseSongExtras`）。譜面が持たないものだけを埋める。いずれも譜面フィンガープリントには含まれず（BGA・動画・プレビュー・音量は対象外）、譜面ファイルは配信されたままなので、ハッシュと記録はディスクから読んだ同じ譜面と同じになる。
 
