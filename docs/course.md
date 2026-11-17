@@ -73,7 +73,7 @@ The table header (`header.json`) carries courses the way jbmstable-parser reads 
 - `course` as one group (`Course[]`);
 - otherwise the legacy `grade` list. Its courses all get `grade_mirror` and `gauge_lr2`.
 
-A course takes its stages from `charts` (full table elements, which may carry `sha256`) or from `md5`. One whose charts lack a hash is skipped, and a stage without a title becomes `course N`, as beatoraja's `CourseData.validate` names it. The header's `mode` (`beat-7k`, `popn-9k`, …) sets `keyMode`.
+A course takes its stages from `charts` (full table elements, which may carry `sha256`) or from `md5`. One whose charts lack a hash is skipped, and a stage without a title becomes `course N`, as beatoraja's `CourseData.validate` names it. Some tables (Stardust, for one) add `song_title` beside `md5`, the stages' titles in the same order: it is no part of beatoraja's format, which ignores it, and Be-Music reads it only for a stage's title, which shows while the stage is not in the library. The header's `mode` (`beat-7k`, `popn-9k`, …) sets `keyMode`.
 
 #### Loading a table from its URL
 

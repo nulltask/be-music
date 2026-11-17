@@ -73,7 +73,7 @@ beatoraja の**ランダムコース**（`RandomCourseData`）は、曲データ
 - `course` が 1 グループ（`Course[]`）。
 - どちらでもなければ旧形式の `grade` リスト。そのコースにはすべて `grade_mirror` と `gauge_lr2` を付けます。
 
-コースはステージを `charts`（`sha256` を持ちうる表の要素そのもの）または `md5` から取ります。`charts` に hash のない譜面があるコースは読み飛ばします。タイトルのないステージは、beatoraja の `CourseData.validate` と同じく `course N` になります。ヘッダーの `mode`（`beat-7k`、`popn-9k` など）が `keyMode` になります。
+コースはステージを `charts`（`sha256` を持ちうる表の要素そのもの）または `md5` から取ります。`charts` に hash のない譜面があるコースは読み飛ばします。タイトルのないステージは、beatoraja の `CourseData.validate` と同じく `course N` になります。表によっては（Stardust など）`md5` の横に、同じ順でステージの曲名を並べた `song_title` を持ちます。これは beatoraja の形式にはなく beatoraja は読みませんが、Be-Music はステージのタイトルとしてだけ読みます。タイトルはステージがライブラリにない間だけ表示されます。ヘッダーの `mode`（`beat-7k`、`popn-9k` など）が `keyMode` になります。
 
 #### URL から表を読む
 
