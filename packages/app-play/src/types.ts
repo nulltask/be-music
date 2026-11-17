@@ -176,6 +176,11 @@ export interface PlayerGUIState extends PlayTempoSettings {
    */
   replayDeviceNames: boolean;
   /**
+   * Whether a Bemuse server song plays at the volume its ReplayGain (`replaygain` in the server's index) sets, as
+   * Bemuse plays it. On by default; off plays the charts at their own `#VOLWAV`. Read as a play starts.
+   */
+  bemuseReplayGain: boolean;
+  /**
    * Each replay slot's auto-save rule (beatoraja's `autosavereplay`), applied as a result opens against the best record
    * before the play (`DEFAULT_REPLAY_AUTO_SAVE_RULES` until the player picks others); `never` leaves the slot to be
    * saved by hand.
