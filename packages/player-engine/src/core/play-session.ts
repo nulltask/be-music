@@ -165,6 +165,11 @@ export interface PlaySession {
   readonly applyJudgeEffect: JudgeCoreEffectSink;
   /** Ends a judging pass of a manual play: LR2's automatic judge timing steps here (`JudgeEffectHandler`). */
   readonly settleJudgeTiming: () => void;
+  /**
+   * Queues a realtime sound due at chart second `seconds` to the audio session: at its due time on the output clock when
+   * the session schedules ahead (`AudioSession.scheduleEventAt`), otherwise at once (`triggerEvent`).
+   */
+  readonly queueAudioEvent: (event: BeMusicEvent, seconds: number) => void;
   /** The chart's volume changes (`#97` / `#98`), queued against the audio write head. */
   readonly volumeChanges: RealtimeAudioCursor<TimedChartSound>;
   /** The chart's background sounds, queued against the audio write head. */
@@ -862,17 +867,27 @@ export async function createPlaySession(
 
   // Realtime audio goes only to a session that takes it; without one nothing is queued (or traced).
   const queuesAudio = audioSession?.triggerEvent !== undefined;
+  // The engine queues these as its write head reaches them; a session that schedules ahead gets each one's due time on
+  // its output clock, so it sounds when due rather than on the tick that reached it.
+  const queueAudioEvent = (event: BeMusicEvent, seconds: number): void => {
+    const clock = session?.clock;
+    if (clock !== undefined && audioSession?.scheduleEventAt !== undefined) {
+      audioSession.scheduleEventAt(event, clock.sourceMsAt(tempoClock.clockMsAt(seconds)) / 1000);
+      return;
+    }
+    audioSession?.triggerEvent?.(event);
+  };
   const volumeChanges = createRealtimeAudioCursor(queuesAudio ? volumeEvents : [], (change) => {
     if (!uiEnabled) {
       writeRealtimeVolumeEventLog(writeOutput, change.seconds, change.event);
     }
-    audioSession!.triggerEvent!(change.event);
+    queueAudioEvent(change.event, change.seconds);
   });
   const backgroundAudio = createRealtimeAudioCursor(queuesAudio ? backgroundTriggers : [], (trigger) => {
     if (!uiEnabled) {
       writeRealtimeTriggeredEventLog(writeOutput, trigger, wavResources[trigger.sampleKey], 'realtime');
     }
-    audioSession!.triggerEvent!(trigger.event);
+    queueAudioEvent(trigger.event, trigger.seconds);
   });
 
   session = {
@@ -920,6 +935,7 @@ export async function createPlaySession(
     chartOptions,
     applyJudgeEffect,
     settleJudgeTiming: () => applyJudgeEffect.settleJudgeTiming(),
+    queueAudioEvent,
     volumeChanges,
     backgroundAudio,
     chainSounds,

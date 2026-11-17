@@ -952,11 +952,10 @@ export class PlayerWebApp {
 
   /**
    * Shows the select screen (`SelectRoute.showSelect`): at start-up, and on every way back to it. The decoded samples
-   * kept for a quick retry go: the next play is most likely another chart, and they would sit through the select
-   * screen.
+   * of the play stay while the cursor is on a chart of its track, so another chart of it plays without decoding them
+   * again; a focus on any other chart releases them (`AudioServicePreview.focus`).
    */
   private async showSelect(): Promise<void> {
-    this.audio.chartSamples.release();
     await this.selectRoute.showSelect();
     this.library.selectShown();
     // A RANDOM MIX run that just ended offers to save its course over the select screen.

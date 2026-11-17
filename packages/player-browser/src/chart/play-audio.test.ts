@@ -280,19 +280,45 @@ describe('loadPlaySamples', () => {
       expect(retrySamples.get('kick.wav')).toBe(firstSamples.get('kick.wav'));
     });
 
-    test('another chart decodes its own samples and releases the last chart', async () => {
+    test('another chart of the track decodes only the files it does not share', async () => {
+      const sampleCache = createChartSampleCache();
+      const first = new Map<string, AudioBuffer>();
+      await load({ audioContext: fakeAudioContext(), samples: first, sampleCache });
+      const hyper = fakeAudioContext();
+      const hyperSamples = new Map<string, AudioBuffer>();
+      await load({
+        audioContext: hyper,
+        chart: chartWithWAVs({ '01': 'kick.wav', '02': 'hat.wav' }),
+        chartPath: 'Songs/a/hyper.bms',
+        samples: hyperSamples,
+        sampleCache,
+      });
+      expect(hyper.decoded).toEqual(['hat.wav']);
+      expect(hyperSamples.get('kick.wav')).toBe(first.get('kick.wav'));
+      expect(sampleCache.key?.chartPath).toBe('Songs/a/hyper.bms');
+      // The snare only the first chart played went before the hyper decoded.
+      expect(sampleCache.size).toBe(2);
+    });
+
+    test('a same-named path that resolves to another file decodes again', async () => {
+      // Each chart's paths resolve beside it, as `resolveChartAudioAsset` does.
+      mocks.resolveChartAudioAsset.mockImplementation(
+        (_source, chartPath: string, path: string) => `${chartPath.slice(0, chartPath.lastIndexOf('/'))}/${path}`,
+      );
       const sampleCache = createChartSampleCache();
       await load({ audioContext: fakeAudioContext(), sampleCache });
       const other = fakeAudioContext();
-      await load({
-        audioContext: other,
-        chart: chartWithWAVs({ '01': 'kick.wav' }),
-        chartPath: 'Songs/a/hyper.bms',
-        sampleCache,
-      });
-      expect(other.decoded).toEqual(['kick.wav']);
-      expect(sampleCache.key?.chartPath).toBe('Songs/a/hyper.bms');
-      expect(sampleCache.size).toBe(1);
+      await load({ audioContext: other, chartPath: 'Songs/b/main.bms', sampleCache });
+      expect(other.decoded.sort()).toEqual(['Songs/b/kick.wav', 'Songs/b/snare.wav']);
+      expect(sampleCache.size).toBe(2);
+    });
+
+    test('another source decodes everything again', async () => {
+      const sampleCache = createChartSampleCache();
+      await load({ audioContext: fakeAudioContext(), sampleCache });
+      const other = fakeAudioContext();
+      await load({ audioContext: other, source: {} as BrowserAssetSource, sampleCache });
+      expect(other.decoded.sort()).toEqual(['kick.wav', 'snare.wav']);
     });
 
     test('decodes again at another context sample rate', async () => {
