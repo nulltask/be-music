@@ -142,6 +142,17 @@ describe('RecordsService record lookups', () => {
     ruleset.current = '____';
     expect(service.lookupChartBestRecord(chartEntry)).toBeUndefined();
   });
+
+  test('answers by the hashes the load kept with the chart at once, without hashing it', () => {
+    const service = records(library({ 'a.bms': 'abc' }));
+    service.chartBestRecords.set('lr2:path:a.bms', { lamp: 'EASY' });
+    service.chartBestRecords.set(`lr2:sha256:${ABC_SHA256}`, { lamp: 'HARD' });
+    const chartEntry = chart('a');
+    seedChartFileHashes(chartEntry.chart, { sha256: ABC_SHA256, md5: ABC_MD5 });
+    expect(service.lookupChartBestRecord(chartEntry)?.lamp).toBe('HARD');
+    expect(service.peekChartBestRecord(chartEntry)?.lamp).toBe('HARD');
+    expect(hashChart).not.toHaveBeenCalled();
+  });
 });
 
 describe('RecordsService record peeks', () => {
