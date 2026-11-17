@@ -438,6 +438,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseAPI.parseLR2CourseFile(benchLR2Course);
     },
   });
+  const benchN2XList = `<bmslist>${Array.from(
+    { length: 16 },
+    (_, index) =>
+      `<bms><file>song${index}\\0${index % 4}_chart.n2s</file><condition><target_ex_score>1</target_ex_score></condition></bms>`,
+  ).join('')}</bmslist>`;
+  define('player-engine.course.parseN2XCourseFile', {
+    run: () => {
+      courseAPI.parseN2XCourseFile(benchN2XList, 'bench');
+    },
+  });
   const benchLR2Parsed = courseAPI.parseLR2CourseFile(benchLR2Course)[0]!;
   define('player-engine.course.countLR2UnplayedStages', {
     run: () => {

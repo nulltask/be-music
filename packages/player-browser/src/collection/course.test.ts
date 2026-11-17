@@ -9,6 +9,7 @@ import {
 import type { BestRecord } from '@be-music/player-engine/records';
 import { describe, expect, test } from 'vite-plus/test';
 import {
+  bindCourseStagePaths,
   createCourseChartRecord,
   createRandomCourseEntry,
   createChartHashLookup,
@@ -47,6 +48,7 @@ describe('course files', () => {
     expect(isCourseFilePath('folder/readme.txt')).toBe(false);
     expect(isCourseFilePath('skin/select.json')).toBe(false);
     expect(isCourseFilePath('songs/chart.bms')).toBe(false);
+    expect(isCourseFilePath('Toy Musical 3/music/amanas.N2X')).toBe(true);
   });
 
   test('readCourseFile reads both formats into a group named after the file', () => {
@@ -277,5 +279,65 @@ describe('resolveCourseFolders', () => {
       { title: 'Song B', chart: b },
     ]);
     expect(folder!.courses![1]!.stages[1]).toEqual({ title: 'Gone' });
+  });
+});
+
+describe('Nanasi Groove 2 chart lists', () => {
+  const LIST =
+    '<bmslist><bms><file>amanas\\00_esp_5btn.n2s</file></bms><bms><file>..\\extra\\b.n2s</file></bms></bmslist>';
+
+  function listChart(id: string, chartPath: string, title: string): LibraryChart {
+    return { ...chartEntry(id, title), chartPath };
+  }
+
+  test('readCourseFile reads an .n2x list as one course whose stages name charts by path from the drop root', () => {
+    expect(readCourseFile('TM3/music/amanas.n2x', new TextEncoder().encode(LIST))).toEqual([
+      {
+        label: 'amanas',
+        courses: [
+          expect.objectContaining({
+            name: 'amanas',
+            kind: 'expert',
+            stages: [
+              { path: 'TM3/music/amanas/00_esp_5btn.n2s', title: '00_esp_5btn' },
+              { path: 'TM3/extra/b.n2s', title: 'b' },
+            ],
+          }),
+        ],
+      },
+    ]);
+    expect(readCourseFile('TM3/setting.n2x', new TextEncoder().encode('<setting />'))).toEqual([]);
+  });
+
+  test('bindCourseStagePaths gives each path stage the hashes and title of the chart at that path', () => {
+    const groups = readCourseFile('TM3/music/amanas.n2x', new TextEncoder().encode(LIST));
+    const esp = listChart('esp', 'TM3/Music/Amanas/00_esp_5btn.n2s', 'ESP');
+    const bound = bindCourseStagePaths(groups, [{ chart: esp, md5: MD5_A.toUpperCase(), sha256: SHA_B }]);
+    expect(bound[0]!.courses[0]!.stages).toEqual([
+      { md5: MD5_A, sha256: SHA_B, title: 'ESP', path: 'TM3/music/amanas/00_esp_5btn.n2s' },
+      { path: 'TM3/extra/b.n2s', title: 'b' },
+    ]);
+    const folders = resolveCourseFolders(bound, createChartHashLookup([{ chart: esp, md5: MD5_A, sha256: SHA_B }]));
+    expect(folders[0]!.courses![0]).toMatchObject({ playable: false, stages: [{ chart: esp }, { title: 'b' }] });
+  });
+
+  test('bindCourseStagePaths matches a chart loaded from another root by the end of its path', () => {
+    const groups = readCourseFile('TM3/music/amanas.n2x', new TextEncoder().encode(LIST));
+    const esp = listChart('esp', 'music/amanas/00_esp_5btn.n2s', 'ESP');
+    const b = listChart('b', 'pack/TM3/extra/b.n2s', 'B');
+    const bound = bindCourseStagePaths(groups, [
+      { chart: esp, md5: MD5_A },
+      { chart: b, sha256: SHA_B },
+    ]);
+    expect(bound[0]!.courses[0]!.stages.map((stage) => stage.md5 ?? stage.sha256)).toEqual([MD5_A, SHA_B]);
+  });
+
+  test('bindCourseStagePaths leaves courses without path stages as they are', () => {
+    const groups = readCourseFile(
+      'course/expert.json',
+      new TextEncoder().encode(JSON.stringify([{ name: 'E', hash: [{ md5: MD5_A }] }])),
+    );
+    const bound = bindCourseStagePaths(groups, []);
+    expect(bound[0]).toBe(groups[0]);
   });
 });

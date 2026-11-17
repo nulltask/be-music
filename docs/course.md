@@ -2,7 +2,7 @@
 
 # Courses and dan certification
 
-A **course** chains several charts into one run. The best-known kind is **dan certification (段位認定)**: the stages are played back to back on one shared class gauge, and the whole run gets a single result. LR2 and beatoraja each define courses in their own formats, and difficulty tables publish theirs inside the table header. Be-Music reads all three into one model, `CourseDefinition` in `@be-music/player-engine/course`, so nothing downstream needs to know where a course came from.
+A **course** chains several charts into one run. The best-known kind is **dan certification (段位認定)**: the stages are played back to back on one shared class gauge, and the whole run gets a single result. LR2 and beatoraja each define courses in their own formats, and difficulty tables publish theirs inside the table header. Be-Music reads all three, and Nanasi Groove 2's chart lists as well, into one model, `CourseDefinition` in `@be-music/player-engine/course`, so nothing downstream needs to know where a course came from.
 
 This document defines the course model, format mappings, play rules, records and replays. See the [browser player specification](./player-web.md#courses-and-dan-certification) for scene transitions.
 
@@ -11,21 +11,22 @@ flowchart LR
   lr2[".lr2crs<br/>(LR2, XML)"] -->|parseLR2CourseFile| def["CourseDefinition"]
   bjson["course/*.json<br/>(beatoraja)"] -->|parseBeatorajaCourseFile| def
   table["table header.json<br/>course / grade"] -->|parseTableHeaderCourses| def
+  n2x[".n2x<br/>(Nanasi Groove 2)"] -->|parseN2XCourseFile| def
   def -->|"resolveCourseStages<br/>(by SHA-256, then MD5)"| resolved["ResolvedCourse<br/>stages + playable"]
 ```
 
 ## The course model
 
-| Field         | Meaning                                                                                                                                                                                      |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`        | Course title.                                                                                                                                                                                |
-| `kind`        | `grade` (dan certification), `expert` (chained stages on the player's gauge) or `nonstop` (stages stitched into one continuous play).                                                        |
-| `stages`      | The charts in order, each by chart-file `md5` and / or `sha256` (lower-case hex), with an optional `title` and `artist` to show for a chart that is not found locally.                       |
-| `constraints` | beatoraja's course constraints by their table-header name (below). Unknown names are dropped and only the first constraint of each group is kept, as beatoraja's `CourseData.validate` does. |
-| `trophies`    | beatoraja trophies, easiest first: `{ name, missRate, scoreRate }`. A result earns the last trophy whose BP rate is at most `missRate` % and whose score rate is at least `scoreRate` %.     |
-| `release`     | beatoraja's `release`. `false` keeps the course's scores off any ranking.                                                                                                                    |
-| `keyMode`     | The key mode the course is meant for, when the source says (LR2 `line`, table `mode`).                                                                                                       |
-| `source`      | Which format the course came from, with the raw LR2 hash for `.lr2crs`.                                                                                                                      |
+| Field         | Meaning                                                                                                                                                                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | Course title.                                                                                                                                                                                                                             |
+| `kind`        | `grade` (dan certification), `expert` (chained stages on the player's gauge) or `nonstop` (stages stitched into one continuous play).                                                                                                     |
+| `stages`      | The charts in order, each by chart-file `md5` and / or `sha256` (lower-case hex), with an optional `title` and `artist` to show for a chart that is not found locally. An `.n2x` stage names its chart by `path` until the host finds it. |
+| `constraints` | beatoraja's course constraints by their table-header name (below). Unknown names are dropped and only the first constraint of each group is kept, as beatoraja's `CourseData.validate` does.                                              |
+| `trophies`    | beatoraja trophies, easiest first: `{ name, missRate, scoreRate }`. A result earns the last trophy whose BP rate is at most `missRate` % and whose score rate is at least `scoreRate` %.                                                  |
+| `release`     | beatoraja's `release`. `false` keeps the course's scores off any ranking.                                                                                                                                                                 |
+| `keyMode`     | The key mode the course is meant for, when the source says (LR2 `line`, table `mode`).                                                                                                                                                    |
+| `source`      | Which format the course came from, with the raw LR2 hash for `.lr2crs`.                                                                                                                                                                   |
 
 ### Constraints
 
@@ -64,6 +65,15 @@ An array of `CourseData` objects, or a single object (beatoraja's fallback read)
 - `kind` is `grade` with an option-group constraint and `expert` otherwise.
 
 beatoraja's **random courses** (`RandomCourseData`) draw each stage from the charts an SQL `WHERE` clause selects in its song database. `parseBeatorajaRandomCourseData` reads `name`, `stage[].sql` (kept as `filter`), `constraint`, `rconstraint` (`distinct`) and `trophy`; drawing the charts is the host's job.
+
+### Nanasi Groove 2 `.n2x` chart lists
+
+Toy Musical 3 lists its charts in `.n2x` files: a ZEXA container (the `.n2s` layout, [format-compat §2.20](format-compat.md#220-nanasi-groove-2-n2s-containers)) holding one UTF-8 XML file. A list is a `<bmslist>` of `<bms>` entries, each a chart `<file>` relative to the list's folder (with `\` separators), mostly with unlock `<condition>`s. Nanasi Groove 2 offers a list's charts to choose from at a stage of its modes; Be-Music has no such mode, so it reads each list as a course instead. The other `.n2x` files (skins, modes, settings, `bms_information`) hold no list and are skipped.
+
+- **Course.** One EXPERT course per list, named after the file without its extension (`amanas.n2x` → `amanas`), in a folder of the same name. Its stages are the list's entries in order, every one of them: the unlock conditions are not read.
+- **Stages.** A stage names its chart by `path`, resolved against the list's folder (`parseN2XCourseFile`, `readCourseFile`). When the charts are in, the host gives it the hashes and title of the chart at that path (`bindCourseStagePaths`), so it is found, recorded and replayed like any stage. The path matches a chart's path ignoring case, else the first chart whose path ends with it, or that it ends with, at a folder boundary. Until then a stage shows its file name without the extension.
+- **Missing charts.** A stage whose chart the drop does not hold stays missing, and the course cannot start, as with every course. Toy Musical 3's `extra1`–`extra3` and `stagelist` lists name developer charts (`___dev\foon_*.pms`) that it does not ship, so those courses list but cannot start.
+- **Length.** A list has no stage limit: Toy Musical 3's `free` list makes a course of more than 1,200 stages.
 
 ### Difficulty-table headers
 
@@ -209,7 +219,7 @@ flowchart TD
 
 ## Finding the stages
 
-`resolveCourseStages(course, lookup)` matches each stage to a local chart: by SHA-256 when the stage has one, else by MD5, as beatoraja's `TableBar` does. A stage carrying both falls back to its MD5 when no chart has the SHA-256. A course with a missing stage is still listed, but it is not `playable`; LR2 shows such a stage as a song you do not own, and beatoraja refuses to start the course.
+`resolveCourseStages(course, lookup)` matches each stage to a local chart: by SHA-256 when the stage has one, else by MD5, as beatoraja's `TableBar` does. A stage carrying both falls back to its MD5 when no chart has the SHA-256. A course with a missing stage is still listed, but it is not `playable`; LR2 shows such a stage as a song you do not own, and beatoraja refuses to start the course. A stage still named only by `path` (an `.n2x` stage the host found no chart for) is missing.
 
 ## Making a course
 
