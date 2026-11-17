@@ -1,8 +1,10 @@
 import type { CourseDefinitionGroup } from '@be-music/player-browser/collection';
-import { describe, expect, test } from 'vite-plus/test';
+import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import {
   COURSE_TABLE_URLS_STORAGE_KEY,
+  DEFAULT_COURSE_TABLE_URLS,
   describeCourseTableImportError,
+  fetchCourseTableText,
   importCourseTable,
   isTableHeaderFilePath,
   mergeCourseGroup,
@@ -43,16 +45,38 @@ describe('course table URLs', () => {
     ]);
   });
 
-  test('rememberCourseTableURL stores each URL once', () => {
+  test('the well-known tables are distinct https page URLs', () => {
+    expect(DEFAULT_COURSE_TABLE_URLS.length).toBeGreaterThan(0);
+    expect(new Set(DEFAULT_COURSE_TABLE_URLS).size).toBe(DEFAULT_COURSE_TABLE_URLS.length);
+    for (const url of DEFAULT_COURSE_TABLE_URLS) {
+      expect(normalizeCourseTableURL(url)).toBe(url);
+      expect(new URL(url).protocol).toBe('https:');
+    }
+  });
+
+  test('reads the well-known tables until a list is stored, and keeps a stored empty list empty', () => {
     const storage = memoryStorage();
+    expect(readStoredCourseTableURLs(storage)).toEqual(DEFAULT_COURSE_TABLE_URLS);
+    storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, '[]');
     expect(readStoredCourseTableURLs(storage)).toEqual([]);
+    expect(readStoredCourseTableURLs(undefined)).toEqual([]);
+  });
+
+  test('rememberCourseTableURL stores each URL once, after the well-known tables on first use', () => {
+    const storage = memoryStorage();
     rememberCourseTableURL('https://a.example/t.html', storage);
-    expect(rememberCourseTableURL('https://a.example/t.html', storage)).toEqual(['https://a.example/t.html']);
+    expect(rememberCourseTableURL('https://a.example/t.html', storage)).toEqual([
+      ...DEFAULT_COURSE_TABLE_URLS,
+      'https://a.example/t.html',
+    ]);
     rememberCourseTableURL('https://b.example/h.json', storage);
     expect(JSON.parse(storage.getItem(COURSE_TABLE_URLS_STORAGE_KEY)!)).toEqual([
+      ...DEFAULT_COURSE_TABLE_URLS,
       'https://a.example/t.html',
       'https://b.example/h.json',
     ]);
+    storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, '[]');
+    expect(rememberCourseTableURL(DEFAULT_COURSE_TABLE_URLS[0]!, storage)).toEqual([DEFAULT_COURSE_TABLE_URLS[0]]);
   });
 
   test('blocked storage reads as empty and still returns the URL', () => {
@@ -121,6 +145,35 @@ describe('importCourseTable', () => {
   test('describes a blocked fetch with what to do instead', () => {
     expect(describeCourseTableImportError(new TypeError('Failed to fetch'))).toMatch(/drop it here/u);
     expect(describeCourseTableImportError(new Error('HTTP 404'))).toBe('Course table import failed: HTTP 404');
+  });
+});
+
+describe('fetchCourseTableText', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test('fetches a cross-origin table through the same-origin proxy and a same-origin one directly', async () => {
+    vi.stubGlobal('location', { href: 'https://play.example/' });
+    const fetch = vi.fn(async () => new Response('{}'));
+    vi.stubGlobal('fetch', fetch);
+    await expect(fetchCourseTableText('https://table.example/sl/table.html')).resolves.toBe('{}');
+    expect(fetch).toHaveBeenLastCalledWith(
+      'https://play.example/__url-load-proxy?url=https%3A%2F%2Ftable.example%2Fsl%2Ftable.html',
+    );
+    await fetchCourseTableText('https://play.example/tables/header.json');
+    expect(fetch).toHaveBeenLastCalledWith('https://play.example/tables/header.json');
+  });
+
+  test('rejects a failed response with its status', async () => {
+    vi.stubGlobal('location', { href: 'https://play.example/' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('bad gateway', { status: 502 })),
+    );
+    await expect(fetchCourseTableText('https://table.example/h.json')).rejects.toThrow(
+      'HTTP 502 for https://table.example/h.json',
+    );
   });
 });
 

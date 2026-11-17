@@ -1,7 +1,8 @@
 // `/__url-load-proxy?url=<https URL>`: fetches an archive from another origin for the player's `?music=` and the embed's
-// `?track=`, whose hosts often send no CORS headers. The browser may keep the response but revalidates it on every use
-// (`no-cache`): the upstream's ETag / Last-Modified pass through, and so do the browser's If-None-Match /
-// If-Modified-Since, so an unchanged archive comes back as a 304 instead of downloading again.
+// `?track=`, and a difficulty table's page and header for the course import, whose hosts often send no CORS headers.
+// The browser may keep the response but revalidates it on every use (`no-cache`): the upstream's ETag / Last-Modified
+// pass through, and so do the browser's If-None-Match / If-Modified-Since, so an unchanged archive comes back as a 304
+// instead of downloading again.
 
 /** The validators the proxy carries from the browser to the upstream. */
 const CONDITIONAL_REQUEST_HEADERS = ['if-none-match', 'if-modified-since'] as const;

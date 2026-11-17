@@ -534,7 +534,9 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dt>NONSTOP placement</dt>
           <dd>Stitches NONSTOP courses as intended, or exactly as LR2 does, quirks included.</dd>
           <dt>Table URL</dt>
-          <dd>The URL of a difficulty table whose courses to import.</dd>
+          <dd>
+            The URL of a difficulty table whose courses to import. Well-known tables are imported until you add one.
+          </dd>
           <dt>Import table courses</dt>
           <dd>Imports the courses of the table at Table URL; it is imported again on later visits.</dd>
         </dl>

@@ -295,6 +295,17 @@ const en = {
     close: 'Close',
     stageMissing: (name: string, count: number) =>
       count === 1 ? `${name}: 1 stage is not in the collection` : `${name}: ${count} stages are not in the collection`,
+    missingStages: {
+      title: 'Stages missing',
+      hint: (name: string) =>
+        `${name} needs these charts. Open their pages to download them, then load them to play the course.`,
+      stage: (stage: number) => `Stage ${stage}`,
+      looking: 'Looking up download pages…',
+      noLink: 'No download page listed',
+      song: 'Song',
+      diff: 'Chart',
+      pack: 'Pack',
+    },
     randomNoChart: (name: string, stage: number) => `${name}: stage ${stage} matches no chart`,
     randomBadFilter: (name: string, stage: number, error: string) =>
       `${name}: stage ${stage} has an invalid filter (${error})`,
@@ -711,6 +722,16 @@ const ja: typeof en = {
     irOn: 'IR ON: ランキング対象。つなぎ方と制限は変更できません',
     close: '閉じる',
     stageMissing: (name, count) => `${name}: ${count} ステージがコレクションにありません`,
+    missingStages: {
+      title: 'ステージがありません',
+      hint: (name) => `${name} を遊ぶには次の譜面が必要です。ページを開いてダウンロードし、読み込んでください。`,
+      stage: (stage) => `ステージ ${stage}`,
+      looking: 'ダウンロードページを探しています…',
+      noLink: 'ダウンロードページが載っていません',
+      song: '本体',
+      diff: '差分',
+      pack: 'パック',
+    },
     randomNoChart: (name, stage) => `${name}: ステージ ${stage} に一致する譜面がありません`,
     randomBadFilter: (name, stage, error) => `${name}: ステージ ${stage} のフィルタが不正です（${error}）`,
     nonstopLayout: (name, stage) => `${name}: NONSTOP の全ステージは同じ汎用キーボード配置である必要があります${stage}`,

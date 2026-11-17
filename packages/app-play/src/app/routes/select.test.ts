@@ -149,6 +149,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     library: {
       collection: { sources: [], charts: options.charts ?? [chartEntry('a')], errors: [] } as BrowserChartCollection,
       reloadCharts: vi.fn(async () => {}),
+      titleMissingCourseStages: vi.fn(async () => {}),
     },
     records: {
       lookupChartBestRecord: vi.fn<SelectRouteDeps['records']['lookupChartBestRecord']>(() => undefined),
@@ -521,6 +522,17 @@ describe('SelectRoute: what the screen tells the app', () => {
     expect(h.deps.showChartDiagnostics).toHaveBeenLastCalledWith(chart.chart, chart.chartPath);
     focus?.(undefined);
     expect(h.deps.showChartDiagnostics).toHaveBeenLastCalledWith(undefined, undefined);
+  });
+
+  test('a focused course asks the library to title the stages it is missing; a chart does not', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    const { focus } = lastMade(h).options.on;
+    focus?.({ kind: 'chart', chart: chartEntry('a') });
+    expect(h.deps.library.titleMissingCourseStages).not.toHaveBeenCalled();
+    const course = { id: 'Table#0', stages: [{ title: 'course 1' }], playable: false } as unknown as LibraryCourse;
+    focus?.({ kind: 'course', course });
+    expect(h.deps.library.titleMissingCourseStages).toHaveBeenCalledWith(course);
   });
 
   test('a chart started goes to its decide screen, with AUTO only from the skin’s AUTO', async () => {

@@ -38,6 +38,7 @@ import { COURSE_REPLAY_FILE_SUFFIX, REPLAY_FILE_SUFFIX } from '@be-music/player-
 import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
 import {
   describeCourseTableImportError,
+  fetchCourseTableText,
   importCourseTable,
   isTableHeaderFilePath,
   mergeCourseGroup,
@@ -45,6 +46,14 @@ import {
   readTableHeaderFile,
   rememberCourseTableURL,
 } from '../course-table-import.ts';
+import {
+  describeMissingCourseStages,
+  parseTableSongIndex,
+  withTableSongTitles,
+  type MissingCourseStage,
+  type TableSongIndex,
+} from '../course-table-songs.ts';
+import type { CourseDefinition } from '@be-music/player-engine/course';
 import { navigationAfterDrop } from '../drop-navigation.ts';
 import {
   applyLoadProgress,
@@ -133,6 +142,12 @@ export class LibraryService {
    * resolved into `collection.courseFolders`.
    */
   private courseGroups: CourseDefinitionGroup[] = [];
+  /** The song list (`data_url`) of the difficulty table each imported course came from. */
+  private readonly courseTableDataURLs = new WeakMap<CourseDefinition, string>();
+  /** Table song lists being fetched or fetched this session, by URL: fetched once, when a course of the table needs it. */
+  private readonly tableSongIndexes = new Map<string, Promise<TableSongIndex>>();
+  /** The table song lists that arrived, by URL, whose titles the course folders show. */
+  private readonly loadedSongIndexes = new Map<string, TableSongIndex>();
   /** Session-only draws, oldest first across every source folder. */
   private keptRandomCourses: Array<{ folderLabel: string; course: LibraryCourse }> = [];
   private nextDrawId = 0;
@@ -473,7 +488,8 @@ export class LibraryService {
     for (const url of urls) {
       this.setStatus('Fetching course table…');
       try {
-        const { group } = await importCourseTable(url);
+        const { group, dataURL } = await importCourseTable(url);
+        if (dataURL !== undefined) for (const course of group.courses) this.courseTableDataURLs.set(course, dataURL);
         this.courseGroups = mergeCourseGroup(this.courseGroups, group);
         if (remember) rememberCourseTableURL(url);
         imported += 1;
@@ -490,6 +506,57 @@ export class LibraryService {
     const showing = this.showing();
     const busy = this.elements.shell.classList.contains('playing') || showing === 'result' || showing === 'decide';
     if (!busy) await this.showSelect();
+  }
+
+  /**
+   * The stages `course` is missing from the collection, with the download pages its difficulty table's song list names
+   * for them. The list is fetched (through the proxy) the first time a course of that table needs it; a course from
+   * elsewhere, or a list that cannot be fetched, gives the stages without links.
+   */
+  public async findMissingCourseStages(course: LibraryCourse): Promise<MissingCourseStage[]> {
+    const dataURL = this.courseTableDataURLs.get(course.definition);
+    const songs = dataURL !== undefined ? await this.tableSongIndex(dataURL) : undefined;
+    return describeMissingCourseStages(course, songs);
+  }
+
+  /**
+   * Titles the stages a focused course is missing from the collection by its difficulty table's song list, in place of
+   * the course's placeholders (beatoraja's `course N`): the list is fetched the first time a course of that table that
+   * cannot start is focused, and then every course of the table shows its songs' titles.
+   */
+  public async titleMissingCourseStages(course: LibraryCourse): Promise<void> {
+    if (course.playable || course.random !== undefined) return;
+    const dataURL = this.courseTableDataURLs.get(course.definition);
+    if (dataURL === undefined || this.loadedSongIndexes.has(dataURL)) return;
+    await this.tableSongIndex(dataURL);
+  }
+
+  /**
+   * A difficulty table's song list, fetched through the proxy once and kept for the session; `undefined` when it cannot
+   * be fetched, which is asked again next time. The first time a list arrives, the course folders are listed again with
+   * its titles.
+   */
+  private async tableSongIndex(dataURL: string): Promise<TableSongIndex | undefined> {
+    const loaded = this.loadedSongIndexes.get(dataURL);
+    if (loaded !== undefined) return loaded;
+    let pending = this.tableSongIndexes.get(dataURL);
+    if (pending === undefined) {
+      pending = fetchCourseTableText(dataURL).then(parseTableSongIndex);
+      this.tableSongIndexes.set(dataURL, pending);
+    }
+    let songs: TableSongIndex;
+    try {
+      songs = await pending;
+    } catch (error) {
+      this.tableSongIndexes.delete(dataURL);
+      dropLog.warn(`course table song list failed: ${dataURL}`, error);
+      return undefined;
+    }
+    if (!this.loadedSongIndexes.has(dataURL)) {
+      this.loadedSongIndexes.set(dataURL, songs);
+      await this.relistCourseFolders();
+    }
+    return songs;
   }
 
   /**
@@ -512,15 +579,31 @@ export class LibraryService {
     this.collection = {
       ...this.collection,
       courseFolders: [
-        ...resolveCourseFolders(this.courseGroups, createChartHashLookup(hashed)),
+        ...resolveCourseFolders(this.courseGroups, createChartHashLookup(hashed)).map((folder) =>
+          folder.courses === undefined
+            ? folder
+            : { ...folder, courses: folder.courses.map((course) => this.withSongTitles(course)) },
+        ),
         ...resolveCourseMakerFolders(this.courseMaker.courses, createChartHashLookup(hashed)),
       ],
     };
     this.appendKeptRandomCourses();
   }
 
+  /** A course with its missing stages titled by its table's song list, once the list has arrived. */
+  private withSongTitles(course: LibraryCourse): LibraryCourse {
+    const dataURL = this.courseTableDataURLs.get(course.definition);
+    const songs = dataURL !== undefined ? this.loadedSongIndexes.get(dataURL) : undefined;
+    return songs !== undefined ? withTableSongTitles(course, songs) : course;
+  }
+
   /** Relists the course folders after the player's own courses changed, keeping the select screen where it was. */
   public async refreshMadeCourses(): Promise<void> {
+    await this.relistCourseFolders();
+  }
+
+  /** Relists the course folders, keeping the select screen where it was. */
+  private async relistCourseFolders(): Promise<void> {
     await this.refreshCourseFolders();
     const view = this.selectView();
     if (view === undefined) return;
