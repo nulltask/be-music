@@ -2,6 +2,9 @@ import type { CourseDefinitionGroup } from '@be-music/player-browser/collection'
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import {
   COURSE_TABLE_URLS_STORAGE_KEY,
+  REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY,
+  removedDefaultCourseTableURLs,
+  storeCourseTableURLs,
   DEFAULT_COURSE_TABLE_URLS,
   describeCourseTableImportError,
   createCachedCourseTableFetchText,
@@ -87,6 +90,24 @@ describe('course table URLs', () => {
       ...DEFAULT_COURSE_TABLE_URLS,
       'https://c.example/t.html',
     ]);
+  });
+
+  test('storeCourseTableURLs records the removed well-known tables, so even an empty list stays empty', () => {
+    const storage = memoryStorage();
+    const [first, second, ...rest] = DEFAULT_COURSE_TABLE_URLS;
+    expect(storeCourseTableURLs([second!, ...rest, 'https://a.example/t.html', 'nope'], storage)).toEqual([
+      second,
+      ...rest,
+      'https://a.example/t.html',
+    ]);
+    expect(JSON.parse(storage.getItem(REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY)!)).toEqual([first]);
+    expect(readStoredCourseTableURLs(storage)).toEqual([second, ...rest, 'https://a.example/t.html']);
+    expect(storeCourseTableURLs([], storage)).toEqual([]);
+    expect(readStoredCourseTableURLs(storage)).toEqual([]);
+    // Adding a removed well-known table back takes it off the removed list.
+    expect(rememberCourseTableURL(first!, storage)).toEqual([first]);
+    expect(JSON.parse(storage.getItem(REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY)!)).toEqual([second, ...rest]);
+    expect(removedDefaultCourseTableURLs(DEFAULT_COURSE_TABLE_URLS)).toEqual([]);
   });
 
   test('blocked storage reads as empty and still returns the URL', () => {

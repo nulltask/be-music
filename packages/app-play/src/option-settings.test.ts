@@ -287,6 +287,7 @@ describe('captureOptionSettings', () => {
       compressorTuning: defaultCompressorTunings(),
       skinSettings: { test: { glow: false, offset: 5, theme: 'light' } },
       courseTableURLs: ['https://example.com/courses.json'],
+      removedDefaultCourseTableURLs: ['https://stellabms.xyz/st/table.html'],
       bemuseServerURLs: ['https://example.com/server/index.json'],
       replaySlotAutoSave1: 'always',
       replaySlotAutoSave2: 'never',
@@ -313,6 +314,7 @@ describe('captureOptionSettings', () => {
       'compressorTuning',
       'skinSettings',
       'courseTableURLs',
+      'removedDefaultCourseTableURLs',
       'bemuseServerURLs',
     ] as const) {
       expect(legacy[key], key).toEqual(expected[key]);

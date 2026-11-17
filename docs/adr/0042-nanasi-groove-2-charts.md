@@ -8,4 +8,4 @@ Toy Musical 3 ships its charts only as `.n2s` files for Nanasi Groove 2, the pla
 
 `.n2s` counts as `.pms` wherever the extension is a lane-mode input (`isPMSChartPath`): the play variant, the 9 KEY layout and the fingerprint. An `.n2s` chart and the `.pms` file inside it get one fingerprint.
 
-The five-button charts are PMS files that use only the centre lanes `13`–`15` and `22`–`23`. Nanasi Groove 2 plays them on its nine-button layout too, so Be-Music needs no separate mode for them. The `.n2x` lists and settings beside the charts (course lists, unlock conditions, play-level overrides) are not read.
+The five-button charts are PMS files that use only the centre lanes `13`–`15` and `22`–`23`. Nanasi Groove 2 plays them on its nine-button layout too, so Be-Music needs no separate mode for them. The `.n2x` lists and settings beside the charts (course lists, unlock conditions, play-level overrides) are not read, except that a chart list (`bmslist`) is read as a course without its unlock conditions ([course.md](../course.md#nanasi-groove-2-n2x-chart-lists)).

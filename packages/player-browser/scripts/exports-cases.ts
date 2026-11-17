@@ -130,6 +130,13 @@ const BENCH_COURSE_DEFINITION = parseBeatorajaCourseData({
 const BENCH_COURSE_GROUPS = [{ label: 'Bench', courses: [BENCH_COURSE_DEFINITION] }];
 const BENCH_HASHED_SONGS = [{ chart: BENCH_SONG, md5: BENCH_SONG_MD5 }];
 const BENCH_COURSE_LOOKUP = playerWebCoreAPI.createChartHashLookup(BENCH_HASHED_SONGS);
+/** An `.n2x` list naming the bench chart and a chart the drop does not hold. */
+const BENCH_N2X_GROUPS = playerWebCoreAPI.readCourseFile(
+  'list.n2x',
+  new TextEncoder().encode(
+    `<bmslist><bms><file>${BENCH_SONG.chartPath}</file></bms><bms><file>missing.n2s</file></bms></bmslist>`,
+  ),
+);
 const BENCH_RANDOM_COURSE = parseBeatorajaRandomCourseData({
   name: 'Bench Random',
   stage: [{ sql: 'level >= 0' }],
@@ -594,6 +601,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.readCourseFile', {
     run: () => {
       playerWebCoreAPI.readCourseFile('Songs/dan.lr2crs', BENCH_LR2CRS_BYTES);
+    },
+  });
+  define('player-browser.bindCourseStagePaths', {
+    run: () => {
+      playerWebCoreAPI.bindCourseStagePaths(BENCH_N2X_GROUPS, BENCH_HASHED_SONGS);
     },
   });
   define('player-browser.createChartHashLookup', {

@@ -5,6 +5,7 @@
 import { logger } from '@be-music/player-browser';
 import {
   BrowserChartCollectionStore,
+  bindCourseStagePaths,
   createChartHashLookup,
   describeChartCollection,
   isCourseFilePath,
@@ -149,6 +150,10 @@ export class LibraryService {
    * resolved into `collection.courseFolders`.
    */
   private courseGroups: CourseDefinitionGroup[] = [];
+  /** The course group label of each difficulty table imported by URL this session, by its URL. */
+  private readonly courseTableLabels = new Map<string, string>();
+  /** Called when a difficulty table imports or is removed (the Options dialog's table list names them). */
+  private readonly courseTableListeners = new Set<() => void>();
   /** The song list (`data_url`) of the difficulty table each imported course came from. */
   private readonly courseTableDataURLs = new WeakMap<CourseDefinition, string>();
   /** Table song lists being fetched or fetched this session, by URL: fetched once, when a course of the table needs it. */
@@ -325,7 +330,7 @@ export class LibraryService {
       await this.startReplayReplayFromFile(replayFiles[0]!);
       return;
     }
-    // Course files (LR2 `.lr2crs`, beatoraja `course/*.json`) list charts by hash; they are read here and matched
+    // Course files (LR2 `.lr2crs`, beatoraja `course/*.json`, Nanasi Groove 2 `.n2x` lists) are read here and matched
     // against the collection once its songs are in.
     const courseFiles = files.filter((file) => isCourseFilePath(file.webkitRelativePath || file.name));
     files = files.filter((file) => !isCourseFilePath(file.webkitRelativePath || file.name));
@@ -495,22 +500,25 @@ export class LibraryService {
   /**
    * Imports the courses of difficulty tables by URL into `courseGroups` (replacing a group with the same label), then
    * matches them against the collection. With `remember`, a table that imported is stored to be imported again on load.
-   * Without `relist`, the select screen is left as it is, for a caller that lists it itself.
+   * Returns the URLs that imported. Without `relist`, the select screen is left as it is, for a caller that lists it
+   * itself.
    */
   public async importCourseTables(
     urls: readonly string[],
     remember: boolean,
     { relist = true }: { relist?: boolean } = {},
-  ): Promise<void> {
-    let imported = 0;
+  ): Promise<string[]> {
+    const imported: string[] = [];
     for (const url of urls) {
       this.setStatus('Fetching course table…');
       try {
         const { group, dataURL } = await importCourseTable(url, this.tableFetchText());
         if (dataURL !== undefined) for (const course of group.courses) this.courseTableDataURLs.set(course, dataURL);
         this.courseGroups = mergeCourseGroup(this.courseGroups, group);
+        this.courseTableLabels.set(url, group.label);
         if (remember) rememberCourseTableURL(url);
-        imported += 1;
+        imported.push(url);
+        this.notifyCourseTableListeners();
         dropLog.info(`course table: ${url} · ${group.label} · courses=${group.courses.length}`);
         this.setStatus(`Course table: ${group.label} (${group.courses.length} courses)`);
       } catch (error) {
@@ -518,13 +526,43 @@ export class LibraryService {
         this.setStatus(describeCourseTableImportError(error));
       }
     }
-    if (imported === 0) return;
+    if (imported.length === 0) return imported;
     await this.refreshCourseFolders();
-    if (!relist) return;
+    if (!relist) return imported;
     // Re-list the select screen so the new folders show; mid-play they show the next time it opens.
     const showing = this.showing();
     const busy = this.elements.shell.classList.contains('playing') || showing === 'result' || showing === 'decide';
     if (!busy) await this.showSelect();
+    return imported;
+  }
+
+  /** Calls `listener` whenever a difficulty table imports or is removed; returns the unsubscribe. */
+  public onCourseTablesChange(listener: () => void): () => void {
+    this.courseTableListeners.add(listener);
+    return () => this.courseTableListeners.delete(listener);
+  }
+
+  private notifyCourseTableListeners(): void {
+    for (const listener of this.courseTableListeners) listener();
+  }
+
+  /** The name of the difficulty table imported from `url` this session (its course group's label). */
+  public courseTableLabel(url: string): string | undefined {
+    return this.courseTableLabels.get(url);
+  }
+
+  /**
+   * Takes the courses of the difficulty table imported from `url` off the select screen. A group another imported URL
+   * shares (the same table under two URLs) stays.
+   */
+  public async removeCourseTable(url: string): Promise<void> {
+    const label = this.courseTableLabels.get(url);
+    if (label === undefined) return;
+    this.courseTableLabels.delete(url);
+    this.notifyCourseTableListeners();
+    if ([...this.courseTableLabels.values()].includes(label)) return;
+    this.courseGroups = this.courseGroups.filter((group) => group.label !== label);
+    await this.relistCourseFolders();
   }
 
   /** Reads a difficulty table's files through the kept copies, asking again for those kept before the last reload. */
@@ -609,10 +647,12 @@ export class LibraryService {
     this.collection = {
       ...this.collection,
       courseFolders: [
-        ...resolveCourseFolders(this.courseGroups, createChartHashLookup(hashed)).map((folder) =>
-          folder.courses === undefined
-            ? folder
-            : { ...folder, courses: folder.courses.map((course) => this.withSongTitles(course)) },
+        // An `.n2x` list names its charts by path: they take the hashes of the charts at those paths first.
+        ...resolveCourseFolders(bindCourseStagePaths(this.courseGroups, hashed), createChartHashLookup(hashed)).map(
+          (folder) =>
+            folder.courses === undefined
+              ? folder
+              : { ...folder, courses: folder.courses.map((course) => this.withSongTitles(course)) },
         ),
         ...resolveCourseMakerFolders(this.courseMaker.courses, createChartHashLookup(hashed)),
       ],
