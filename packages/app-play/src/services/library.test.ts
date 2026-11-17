@@ -1,3 +1,4 @@
+import { BEMUSE_SERVER_URLS_STORAGE_KEY } from '../bemuse-server.ts';
 import { readDropEntries, type BrowserChartCollection } from '@be-music/player-browser/collection';
 import type { SceneKind, SelectScene } from '@be-music/player-browser/host';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
@@ -185,7 +186,11 @@ describe('LibraryService difficulty tables', () => {
   });
 
   test('imports the tables of an earlier visit again once the first select screen is up', async () => {
-    stubStorage({ [COURSE_TABLE_URLS_STORAGE_KEY]: JSON.stringify([TABLE_HEADER]) });
+    // No Bemuse servers: the defaults would load first.
+    stubStorage({
+      [COURSE_TABLE_URLS_STORAGE_KEY]: JSON.stringify([TABLE_HEADER]),
+      [BEMUSE_SERVER_URLS_STORAGE_KEY]: '[]',
+    });
     const fetch = stubFetch({ [TABLE_HEADER]: tableHeader() });
     const { library, folders } = harness();
     let ready!: () => void;

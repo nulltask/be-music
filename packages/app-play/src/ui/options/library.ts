@@ -4,6 +4,7 @@ import type { OptionContainer } from '../options-controls.ts';
 import { storeChartBestRecords } from '../../chart-best-records.ts';
 import { LocalDataPanel } from '../../local-data-panel.ts';
 import { parseURLMediaParams } from '../../url-load.ts';
+import { mountBemuseServerManager } from './bemuse-servers.ts';
 import type { ReplayAutoSaveRule } from '../../services/replay-slots.ts';
 import { OPTION_FOLDERS, type OptionFolderSpec } from './folders.ts';
 import type { OptionsDialog } from './index.ts';
@@ -34,6 +35,13 @@ export function buildLibraryFolder(
   const folderManager = document.createElement('div');
   folderManager.dataset.rememberedFolderManager = '';
   library.addElement(folderManager);
+  const bemuseServers = document.createElement('div');
+  library.addElement(bemuseServers);
+  mountBemuseServerManager(bemuseServers, {
+    library: this.library,
+    setStatus: (text) => this.setStatus(text),
+    saveSettings: () => this.scheduleSettingsSave(),
+  });
 
   const urlParams = parseURLMediaParams(window.location.href);
   const urls = {
