@@ -217,6 +217,7 @@ export class LR2SelectView implements SelectView {
     this.readme.attach(
       () => host.domRoot,
       () => this.emit?.({ type: 'readtext' }),
+      (index) => this.emit?.({ type: 'readtext-tab', index }),
     );
     this.attached = true;
   }

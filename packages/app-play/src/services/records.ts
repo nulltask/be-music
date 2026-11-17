@@ -5,6 +5,7 @@
 import {
   computeChartFileHashes,
   resolveChartSource,
+  seededChartFileHashes,
   type BrowserChartCollection,
   type ChartFileHashes,
 } from '@be-music/player-browser/collection';
@@ -74,6 +75,9 @@ export class RecordsService {
    * the whole library on a dropped log stays cheap.
    */
   public async resolveChartHashes(chartEntry: LibraryChart): Promise<ChartFileHashes | undefined> {
+    // The hashes the load kept with the chart, when it hashed the file or took its parse from the cache.
+    const seeded = seededChartFileHashes(chartEntry.chart);
+    if (seeded !== undefined) return seeded;
     const cached = this.chartHashCache.get(chartEntry.id);
     if (cached !== undefined) {
       return cached ?? undefined;

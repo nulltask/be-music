@@ -475,7 +475,14 @@ export function isMaliciousAssetPath(path: string): boolean {
   return false;
 }
 
+/**
+ * What makes a path need normalizing: a backslash, a leading or trailing or doubled slash, or a `.` / `..` segment.
+ * Nearly every path of a dropped folder has none, and a library loads hundreds of thousands of them.
+ */
+const UNNORMALIZED_PATH = /\\|^\/|\/\/|\/$|(?:^|\/)\.\.?(?:\/|$)/;
+
 export function normalizePath(path: string): string {
+  if (!UNNORMALIZED_PATH.test(path)) return path;
   const segments = path.replaceAll('\\', '/').split('/');
   const normalizedSegments: string[] = [];
   for (const segment of segments) {

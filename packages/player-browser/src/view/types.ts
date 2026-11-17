@@ -163,6 +163,14 @@ export type SelectCourseMakerAction =
   | { readonly kind: 'default-connection'; readonly step: 1 | -1 }
   | { readonly kind: 'random-mix'; readonly setting: LR2RandomMixSetting; readonly step: 1 | -1 };
 
+/** The README dialog's texts: the text files of a chart's folder, the likeliest README first, and the one shown. */
+export interface SelectReadText {
+  readonly chart: LibraryChart;
+  readonly files: readonly { readonly name: string; readonly text: string }[];
+  /** The file shown: an index into {@link files}. */
+  readonly selected: number;
+}
+
 /** What the select screen draws. */
 export interface SelectFrame {
   readonly clock: SceneClock;
@@ -189,8 +197,11 @@ export interface SelectFrame {
   readonly searchError?: string;
   /** When the player started the bar under the cursor: a skin's launch outro counts from it, and input waits. */
   readonly startedAtMs?: number;
-  /** The README dialog: the text file shown for a chart. */
-  readonly readText?: { readonly chart: LibraryChart; readonly text: string };
+  /**
+   * The README dialog: the text files of a chart's folder, the likeliest README first, and the one shown (an index into
+   * `files`).
+   */
+  readonly readText?: SelectReadText;
   /** The course maker, when the player makes courses (LR2's course-maker ops, texts and buttons). */
   readonly courseMaker?: SelectCourseMakerState;
   /**
@@ -227,6 +238,8 @@ export type SelectIntent =
   | { readonly type: 'search' }
   /** Show the text file of the chart under the cursor, or close the one shown. */
   | { readonly type: 'readtext' }
+  /** Show another of the README dialog's text files (an index into `SelectReadText`'s `files`). */
+  | { readonly type: 'readtext-tab'; readonly index: number }
   /** The course maker (LR2's buttons and course name). */
   | { readonly type: 'course-maker'; readonly action: SelectCourseMakerAction }
   /** Open the skin's options. */

@@ -79,3 +79,70 @@ export function restorePackedCollectionChart(
   for (const value of values) strings.idOf(value);
   defineLazyEvents(chart, packed, strings);
 }
+
+/**
+ * The fields of a chart a listing does not read, as JSON text: its resources, measures, format sections and
+ * preservation. See {@link deferChartFields}.
+ */
+export interface DeferredChartFields {
+  /** The fields' names, in the chart's own order. */
+  readonly keys: readonly string[];
+  /** The fields, as one JSON object. */
+  readonly json: string;
+}
+
+/** What a chart list reads of every chart, kept as it is: its headers. `events` is packed on its own. */
+const RESIDENT_CHART_FIELDS = new Set(['format', 'sourceFormat', 'metadata', 'events']);
+
+/**
+ * Takes the fields a listing does not read out of `chart` and returns them as JSON text. A library keeps every chart
+ * it lists, and copies each one whenever it crosses a worker or the parsed-chart cache; text is copied as it is, where
+ * the objects it stands for are rebuilt one by one, so a library of thousands of charts loads in a fraction of the
+ * time. {@link restoreDeferredChartFields} puts the fields back, parsed when one is first read.
+ */
+export function deferChartFields(chart: BeMusicJSON): DeferredChartFields {
+  const record = chart as unknown as Record<string, unknown>;
+  const fields: Record<string, unknown> = {};
+  const keys: string[] = [];
+  for (const key of Object.keys(record)) {
+    if (RESIDENT_CHART_FIELDS.has(key) || record[key] === undefined) continue;
+    fields[key] = record[key];
+    keys.push(key);
+    delete record[key];
+  }
+  return { keys, json: JSON.stringify(fields) };
+}
+
+/**
+ * Puts the fields {@link deferChartFields} took out back on `chart`, as accessors that parse the text the first time
+ * any of them is read; from then on they are plain values. Assigning one replaces it.
+ */
+export function restoreDeferredChartFields(chart: BeMusicJSON, deferred: DeferredChartFields | undefined): void {
+  if (deferred === undefined) return;
+  const record = chart as unknown as Record<string, unknown>;
+  let json: string | undefined = deferred.json;
+  const pending = new Set(deferred.keys);
+  const settle = (): void => {
+    if (json === undefined) return;
+    const fields = JSON.parse(json) as Record<string, unknown>;
+    json = undefined;
+    for (const key of pending) {
+      Object.defineProperty(record, key, { configurable: true, enumerable: true, writable: true, value: fields[key] });
+    }
+    pending.clear();
+  };
+  for (const key of deferred.keys) {
+    Object.defineProperty(record, key, {
+      configurable: true,
+      enumerable: true,
+      get(): unknown {
+        settle();
+        return record[key];
+      },
+      set(value: unknown) {
+        pending.delete(key);
+        Object.defineProperty(record, key, { configurable: true, enumerable: true, writable: true, value });
+      },
+    });
+  }
+}

@@ -1,27 +1,5 @@
 import { expect, test, vi } from 'vite-plus/test';
-import { captureDroppedFolders, readRememberedFolder, type RememberedFolder } from './remembered-folder.ts';
-
-test('keeps the folder path and opens assets only on demand', async () => {
-  const getFile = vi.fn(async () => new File(['audio'], 'kick.wav'));
-  const folder = {
-    name: 'Pack',
-    async *values() {
-      yield {
-        kind: 'directory',
-        name: 'Track',
-        async *values() {
-          yield { kind: 'file', name: 'kick.wav', getFile };
-        },
-      };
-    },
-  } as unknown as RememberedFolder;
-
-  const [file] = await readRememberedFolder(folder);
-  expect(file?.webkitRelativePath).toBe('Pack/Track/kick.wav');
-  expect(getFile).not.toHaveBeenCalled();
-  await expect(file?.text()).resolves.toBe('audio');
-  expect(getFile).toHaveBeenCalledOnce();
-});
+import { captureDroppedFolders } from './remembered-folder.ts';
 
 test('captures directory handles before the drop expires and skips unsupported or failed items', async () => {
   const folder = { kind: 'directory', name: 'Pack' };

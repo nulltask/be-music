@@ -95,6 +95,8 @@ describe('resolveSelectKeyAction', () => {
     const open: SelectKeyState = { panel: undefined, readTextOpen: true };
     expect(resolveSelectKeyAction(down('Enter'), open)).toEqual({ type: 'readtext-close' });
     expect(resolveSelectKeyAction(down('Backspace'), open)).toEqual({ type: 'readtext-close' });
+    expect(resolveSelectKeyAction(down('ArrowLeft'), open)).toEqual({ type: 'readtext-tab', step: -1 });
+    expect(resolveSelectKeyAction(down('ArrowRight'), open)).toEqual({ type: 'readtext-tab', step: 1 });
     expect(resolveSelectKeyAction(down('ArrowDown'), open)).toEqual({
       type: 'readtext-scroll',
       delta: READTEXT_LINE_SCROLL,

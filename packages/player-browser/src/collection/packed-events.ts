@@ -62,17 +62,24 @@ export class PackedEventStrings {
   }
 }
 
+/** A column of signed integers, as narrow as its values allow. */
+export type PackedIntegers = Int8Array | Int16Array | Int32Array;
+/** A column of string-table ids, as narrow as its largest id allows. */
+export type PackedIds = Uint8Array | Uint16Array | Uint32Array;
+
 /**
- * Column-oriented copy of a chart's `events`: about 20 bytes per event instead of the ~130 bytes an event object, its
- * `position` tuple and their headers take on the heap.
+ * Column-oriented copy of a chart's `events`. Each column is as narrow as its values allow, which for a typical chart
+ * comes to 6 to 10 bytes per event (20 at the widest) instead of the ~130 bytes an event object, its `position` tuple
+ * and their headers take on the heap. Every chart of a library keeps its columns for as long as it is listed, and a
+ * library read from the parsed-chart cache copies them all, so their size is what the library weighs.
  */
 export interface PackedEvents {
   readonly length: number;
-  readonly measures: Int32Array;
-  readonly channels: Uint32Array;
-  readonly values: Uint32Array;
-  readonly numerators: Int32Array | Float64Array;
-  readonly denominators: Int32Array | Float64Array;
+  readonly measures: PackedIntegers;
+  readonly channels: PackedIds;
+  readonly values: PackedIds;
+  readonly numerators: PackedIntegers | Float64Array;
+  readonly denominators: PackedIntegers | Float64Array;
   /** bmson per-note extensions, by event index. Only bmson charts carry them. */
   readonly bmson: ReadonlyMap<number, BmsonEventExtensions> | undefined;
   /** LRX per-note values, by event index. Only LRX charts carry them. */
@@ -119,7 +126,41 @@ export function packEvents(events: readonly BeMusicEvent[], strings: PackedEvent
       lrx.set(index, event.lrx);
     }
   }
-  return { length, measures, channels, values, numerators, denominators, bmson, ...(lrx ? { lrx } : {}) };
+  return {
+    length,
+    measures: narrowIntegers(measures),
+    channels: narrowIds(channels),
+    values: narrowIds(values),
+    numerators: numerators instanceof Int32Array ? narrowIntegers(numerators) : numerators,
+    denominators: denominators instanceof Int32Array ? narrowIntegers(denominators) : denominators,
+    bmson,
+    ...(lrx ? { lrx } : {}),
+  };
+}
+
+/** `column` in the narrowest signed type that holds every one of its values. */
+function narrowIntegers(column: Int32Array): PackedIntegers {
+  let minimum = 0;
+  let maximum = 0;
+  for (let index = 0; index < column.length; index += 1) {
+    const value = column[index]!;
+    if (value < minimum) minimum = value;
+    else if (value > maximum) maximum = value;
+  }
+  if (minimum >= -0x80 && maximum <= 0x7f) return new Int8Array(column);
+  if (minimum >= -0x8000 && maximum <= 0x7fff) return new Int16Array(column);
+  return column;
+}
+
+/** `column` in the narrowest unsigned type that holds its largest id. */
+function narrowIds(column: Uint32Array): PackedIds {
+  let maximum = 0;
+  for (let index = 0; index < column.length; index += 1) {
+    if (column[index]! > maximum) maximum = column[index]!;
+  }
+  if (maximum <= 0xff) return new Uint8Array(column);
+  if (maximum <= 0xffff) return new Uint16Array(column);
+  return column;
 }
 
 /** Rebuilds the event objects {@link packEvents} packed, with the same fields in the same order. */

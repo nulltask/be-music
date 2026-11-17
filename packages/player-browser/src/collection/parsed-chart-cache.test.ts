@@ -1,9 +1,10 @@
-import { describe, expect, test } from 'vite-plus/test';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import { sha256HexAsync } from '@be-music/shared-utils/hash';
 import type { ParseChartTaskResult } from '../compute/tasks.ts';
 import {
   parseChartThroughCache,
   parsedChartCacheKey,
+  readParsedCharts,
   parsedChartPathKind,
   type ParsedChartCache,
 } from './parsed-chart-cache.ts';
@@ -68,6 +69,15 @@ describe('parseChartThroughCache', () => {
     expect(cache.gets).toEqual([key, key]);
   });
 
+  test('tells the key it worked out, whether the chart was cached or parsed', async () => {
+    const cache = memoryCache();
+    const keys: string[] = [];
+    await parseChartThroughCache({ path: 'a.bms', bytes: BMS }, cache, (key) => keys.push(key));
+    await parseChartThroughCache({ path: 'a.bms', bytes: BMS }, cache, (key) => keys.push(key));
+    const key = `${await sha256HexAsync(BMS)}:bms`;
+    expect(keys).toEqual([key, key]);
+  });
+
   test('keys an LRX chart by its header and BGA file too', async () => {
     const cache = memoryCache();
     const lrs = new TextEncoder().encode('<LRS><n c="301" s="0" p="120" /><n c="1" s="0" p="0" /></LRS>');
@@ -105,5 +115,41 @@ describe('parseChartThroughCache', () => {
     };
     const result = await parseChartThroughCache({ path: 'a.bms', bytes: BMS }, failing);
     expect(result.chart.metadata.title).toBe('cached');
+  });
+});
+
+describe('readParsedCharts', () => {
+  test('reads the charts kept under the keys, in their order, with no chart for a key the cache lacks', async () => {
+    const cache = memoryCache();
+    const parsed = await parseChartThroughCache({ path: 'a.bms', bytes: BMS }, cache);
+    const key = `${await sha256HexAsync(BMS)}:bms`;
+    cache.entries.set('broken', { broken: true } as unknown as ParseChartTaskResult);
+    cache.gets.length = 0;
+    const charts = await readParsedCharts(cache, ['missing', key, 'broken']);
+    expect(charts.map((chart) => chart?.scored)).toEqual([undefined, parsed.scored, undefined]);
+    expect(cache.gets).toEqual(['missing', key, 'broken']);
+  });
+
+  test('asks a cache that reads many keys at once only once', async () => {
+    const cache = memoryCache();
+    const parsed = await parseChartThroughCache({ path: 'a.bms', bytes: BMS }, cache);
+    const key = `${await sha256HexAsync(BMS)}:bms`;
+    cache.gets.length = 0;
+    const getMany = vi.fn(async (keys: readonly string[]) => keys.map((each) => cache.entries.get(each)));
+    const charts = await readParsedCharts({ ...cache, getMany }, [key, 'missing']);
+    expect(charts.map((chart) => chart?.scored)).toEqual([parsed.scored, undefined]);
+    expect(getMany).toHaveBeenCalledTimes(1);
+    expect(cache.gets).toEqual([]);
+  });
+
+  test('has no chart without a cache, or when the cache fails', async () => {
+    expect(await readParsedCharts(undefined, ['a', 'b'])).toEqual([undefined, undefined]);
+    const failing: ParsedChartCache = {
+      get: () => Promise.reject(new Error('read failed')),
+      set: () => Promise.resolve(),
+    };
+    expect(await readParsedCharts(failing, ['a'])).toEqual([undefined]);
+    const failingMany: ParsedChartCache = { ...failing, getMany: () => Promise.reject(new Error('read failed')) };
+    expect(await readParsedCharts(failingMany, ['a'])).toEqual([undefined]);
   });
 });

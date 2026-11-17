@@ -1,5 +1,3 @@
-import { DeferredDroppedFile, type BrowserDroppedFile, type LoadProgress } from '@be-music/player-browser/collection';
-
 interface LocalDirectoryHandle extends FileSystemDirectoryHandle {
   queryPermission(options: { mode: 'read' }): Promise<PermissionState>;
   requestPermission(options: { mode: 'read' }): Promise<PermissionState>;
@@ -32,41 +30,6 @@ export async function captureDroppedFolders(transfer: DataTransfer): Promise<Rem
     }),
   );
   return handles.filter((handle): handle is RememberedFolder => handle?.kind === 'directory');
-}
-
-export async function readRememberedFolder(
-  folder: RememberedFolder,
-  onProgress?: (progress: LoadProgress) => void,
-): Promise<BrowserDroppedFile[]> {
-  const files: BrowserDroppedFile[] = [];
-  onProgress?.({ phase: 'enumerating', current: 0, total: -1 });
-  async function walk(directory: RememberedFolder, prefix: string): Promise<void> {
-    for await (const handle of directory.values()) {
-      const path = `${prefix}/${handle.name}`;
-      if (handle.kind === 'directory') {
-        await walk(handle as RememberedFolder, path);
-      } else {
-        const file = handle as FileSystemFileHandle;
-        files.push(
-          new DeferredDroppedFile(
-            {
-              name: file.name,
-              file: (resolve, reject) => {
-                void file.getFile().then(resolve, reject);
-              },
-            },
-            path,
-          ),
-        );
-        if ((files.length & 0x1f) === 1) {
-          onProgress?.({ phase: 'enumerating', current: files.length, total: -1, label: path });
-        }
-      }
-    }
-  }
-  await walk(folder, folder.name);
-  onProgress?.({ phase: 'enumerating', current: files.length, total: files.length });
-  return files;
 }
 
 export async function storedFolders(folders?: readonly RememberedFolder[]): Promise<RememberedFolder[]> {

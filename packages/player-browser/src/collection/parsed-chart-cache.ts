@@ -11,6 +11,11 @@ import { parseChartTask, type ParseChartTaskInput, type ParseChartTaskResult } f
 export interface ParsedChartCache {
   get(key: string): Promise<ParseChartTaskResult | undefined>;
   /**
+   * The values of `keys`, in their order, read together: a host whose lookups each cost a round trip (IndexedDB)
+   * answers a library's worth of keys in one. Without it the keys are looked up one by one.
+   */
+  getMany?(keys: readonly string[]): Promise<Array<ParseChartTaskResult | undefined>>;
+  /**
    * Keeps a parse result. The loader goes on to change the chart it holds once the returned promise settles, so the
    * implementation must have copied `value` by then (IndexedDB's `put` copies it when it is called); it need not wait
    * for the write to land.
@@ -38,23 +43,64 @@ export function parsedChartCacheKey(sha256: string, path: string): string {
 }
 
 /**
+ * The cache keys of chart files a host has seen before, by chart path, so a file it knows is unchanged (the same size
+ * and modification time as when it was last read) is looked up in the {@link ParsedChartCache} without being read and
+ * hashed again. The collection loader asks {@link ChartCacheKeyBook.known} before reading a chart file and reports
+ * every key it works out from a file's bytes to {@link ChartCacheKeyBook.learned}.
+ */
+export interface ChartCacheKeyBook {
+  /** The key the chart file at `path` had when it was last read, when the file is known not to have changed since. */
+  known(path: string): string | undefined;
+  /** The key of the chart file at `path`, worked out from its bytes now. */
+  learned(path: string, key: string): void;
+}
+
+/**
+ * The charts kept under `keys`, in their order: the charts a {@link ChartCacheKeyBook} names, without their files'
+ * bytes. A key the cache has nothing for (or cannot read) gives `undefined`.
+ */
+export async function readParsedCharts(
+  cache: ParsedChartCache | undefined,
+  keys: readonly string[],
+): Promise<Array<ParseChartTaskResult | undefined>> {
+  if (cache === undefined || keys.length === 0) return keys.map(() => undefined);
+  let values: readonly unknown[];
+  try {
+    values =
+      cache.getMany !== undefined
+        ? await cache.getMany(keys)
+        : await Promise.all(keys.map((key) => cache.get(key).catch(() => undefined)));
+  } catch {
+    return keys.map(() => undefined);
+  }
+  return keys.map((_, index) => {
+    const value = values[index];
+    return isParseChartTaskResult(value) ? value : undefined;
+  });
+}
+
+/**
  * Parses a chart file, through `cache` when one is given: a chart already parsed under the same key comes back from
- * the cache, and a chart parsed now is kept in it. Hashing or cache failures fall back to parsing.
+ * the cache, and a chart parsed now is kept in it. Hashing or cache failures fall back to parsing. `onKey` receives
+ * the file's cache key once it is worked out.
  */
 export async function parseChartThroughCache(
   input: ParseChartTaskInput,
   cache: ParsedChartCache | undefined,
+  onKey?: (key: string) => void,
 ): Promise<ParseChartTaskResult> {
   let key: string | undefined;
   if (cache !== undefined) {
     try {
-      key = parsedChartCacheKey(await sha256HexAsync(input.bytes), input.path);
+      let hashed = parsedChartCacheKey(await sha256HexAsync(input.bytes), input.path);
       // An LRX chart also reads its header and BGA file, so those take part in the key.
       if (input.siblings !== undefined) {
         for (const sibling of [input.siblings.lrh, input.siblings.lrm]) {
-          key += `:${sibling === undefined ? '-' : await sha256HexAsync(sibling)}`;
+          hashed += `:${sibling === undefined ? '-' : await sha256HexAsync(sibling)}`;
         }
       }
+      key = hashed;
+      onKey?.(hashed);
       const cached = await cache.get(key);
       if (isParseChartTaskResult(cached)) return cached;
     } catch {
