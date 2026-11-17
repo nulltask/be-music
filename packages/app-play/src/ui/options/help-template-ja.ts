@@ -507,10 +507,11 @@ export const OPTIONS_HELP_JA = html`
         <dd>自分で作ったコースの名前の変更、削除、書き出し。</dd>
         <dt>NONSTOP placement</dt>
         <dd>NONSTOP のコースを意図どおりにつなぐか、LR2 の挙動 (不具合も含む) のとおりにつなぐか。</dd>
-        <dt>Table URL</dt>
-        <dd>コースを読み込む難易度表の URL。追加するまでは著名な難易度表を読み込みます。</dd>
-        <dt>Import table courses</dt>
-        <dd>Table URL の難易度表からコースを読み込みます。次に開いたときにも読み込みます。</dd>
+        <dt>難易度表</dt>
+        <dd>
+          コースを並べる難易度表の一覧。プレイヤーを開くたびに取り込み直します。表のページかヘッダー JSON の URL
+          で追加し、削除するとその表のコースが選曲画面から消えます。外した有名な表は「既定の表を追加」で戻せます。
+        </dd>
       </dl>
     </section>
     <section class="help-menu-folder">

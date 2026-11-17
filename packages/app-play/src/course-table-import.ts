@@ -8,6 +8,8 @@ import { resolveURLLoadFetchURL } from './url-load.ts';
 
 /** `localStorage` key of the difficulty-table URLs whose courses are imported again on load. */
 export const COURSE_TABLE_URLS_STORAGE_KEY = `${PLAYER_STORAGE_PREFIX}course-table-urls`;
+/** `localStorage` key of the well-known tables ({@link DEFAULT_COURSE_TABLE_URLS}) the player removed from the list. */
+export const REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY = `${PLAYER_STORAGE_PREFIX}course-table-removed-defaults`;
 
 /**
  * Well-known difficulty tables whose headers list courses, imported until the player stores a list of their own. Each
@@ -67,18 +69,46 @@ export function parseStoredCourseTableURLs(raw: string | null | undefined): stri
 }
 
 /**
- * The remembered table URLs, or {@link DEFAULT_COURSE_TABLE_URLS} while none is stored; empty when storage is blocked.
- * A stored empty list reads as none: players have no way to empty the list, and builds before the well-known tables
- * stored one with every Options save (and synced it to their account), so it says nothing about the tables they want.
+ * The remembered table URLs: the stored list, or {@link DEFAULT_COURSE_TABLE_URLS} while none is stored, less the
+ * well-known tables the player removed. Empty when storage is blocked. A stored empty list reads as none: builds before
+ * the well-known tables stored one with every Options save (and synced it to their account), so it says nothing about
+ * the tables the player wants; removing the last table records the removed well-known tables instead.
  */
 export function readStoredCourseTableURLs(storage: Pick<Storage, 'getItem'> | undefined = defaultStorage()): string[] {
   if (storage === undefined) return [];
   try {
     const urls = parseStoredCourseTableURLs(storage.getItem(COURSE_TABLE_URLS_STORAGE_KEY));
-    return urls.length > 0 ? urls : [...DEFAULT_COURSE_TABLE_URLS];
+    const removed = parseStoredCourseTableURLs(storage.getItem(REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY));
+    return (urls.length > 0 ? urls : [...DEFAULT_COURSE_TABLE_URLS]).filter((url) => !removed.includes(url));
   } catch {
     return [];
   }
+}
+
+/** The well-known tables `urls` lacks: what a stored list records as removed, so an empty list stays empty. */
+export function removedDefaultCourseTableURLs(urls: readonly string[]): string[] {
+  return DEFAULT_COURSE_TABLE_URLS.filter((url) => !urls.includes(url));
+}
+
+/**
+ * Stores `urls` as the remembered tables, with the well-known tables it lacks as removed, and returns what was stored;
+ * blocked storage keeps it for this session.
+ */
+export function storeCourseTableURLs(
+  urls: readonly string[],
+  storage: Pick<Storage, 'setItem'> | undefined = defaultStorage(),
+): string[] {
+  const stored = parseStoredCourseTableURLs(JSON.stringify(urls));
+  try {
+    storage?.setItem(COURSE_TABLE_URLS_STORAGE_KEY, JSON.stringify(stored));
+    storage?.setItem(
+      REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY,
+      JSON.stringify(removedDefaultCourseTableURLs(stored)),
+    );
+  } catch {
+    // Private windows / blocked storage: the list still applies for this session.
+  }
+  return stored;
 }
 
 /** Adds `url` to the remembered table URLs (once) and returns the new list; blocked storage keeps it for this session. */
@@ -87,13 +117,8 @@ export function rememberCourseTableURL(
   storage: Pick<Storage, 'getItem' | 'setItem'> | undefined = defaultStorage(),
 ): string[] {
   const urls = readStoredCourseTableURLs(storage);
-  if (!urls.includes(url)) urls.push(url);
-  try {
-    storage?.setItem(COURSE_TABLE_URLS_STORAGE_KEY, JSON.stringify(urls));
-  } catch {
-    // Private windows / blocked storage: the import still applies for this session.
-  }
-  return urls;
+  if (urls.includes(url)) return urls;
+  return storeCourseTableURLs([...urls, url], storage);
 }
 
 /** `groups` with `group` added, replacing the group that has the same label in place. */

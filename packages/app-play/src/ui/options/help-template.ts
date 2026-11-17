@@ -533,12 +533,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Renames, deletes and exports the courses you made.</dd>
           <dt>NONSTOP placement</dt>
           <dd>Stitches NONSTOP courses as intended, or exactly as LR2 does, quirks included.</dd>
-          <dt>Table URL</dt>
+          <dt>Difficulty tables</dt>
           <dd>
-            The URL of a difficulty table whose courses to import. Well-known tables are imported until you add one.
+            The difficulty tables whose courses are listed, imported again each time you open the player. Add one by its
+            page or header JSON URL, remove one to take its courses off the select screen, and add the well-known tables
+            back with Add default tables.
           </dd>
-          <dt>Import table courses</dt>
-          <dd>Imports the courses of the table at Table URL; it is imported again on later visits.</dd>
         </dl>
       </section>
       <section class="help-menu-folder">

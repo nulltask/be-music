@@ -209,8 +209,6 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Skip stage results': 'ステージのリザルトを飛ばす',
   'My courses…': 'マイコース…',
   'NONSTOP placement': 'NONSTOP の配置',
-  'Table URL': '難易度表の URL',
-  'Import table courses': '難易度表のコースを読み込む',
   // Skin & display
   'Confirm before using a dropped skin': 'ドロップしたスキンを使う前に確認する',
   'Skin system': 'スキンの種類',

@@ -17,7 +17,11 @@ import {
   type DifficultyFilter,
   type KeysFilter,
 } from '@be-music/player-scene-model';
-import { COURSE_TABLE_URLS_STORAGE_KEY, parseStoredCourseTableURLs } from './course-table-import.ts';
+import {
+  COURSE_TABLE_URLS_STORAGE_KEY,
+  REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY,
+  parseStoredCourseTableURLs,
+} from './course-table-import.ts';
 import { BEMUSE_SERVER_URLS_STORAGE_KEY, parseStoredBemuseServerURLs } from './bemuse-server.ts';
 import { parseCompressorTunings, type CompressorTuning } from './compressor-tuning.ts';
 import { parseStoredHiSpeed, HI_SPEED_STORAGE_KEY } from './hi-speed-storage.ts';
@@ -220,6 +224,8 @@ export interface OptionSettings {
   compressorTuning: Record<TunableCompressor, CompressorTuning>;
   skinSettings: Record<string, Record<string, StoredSkinSettingValue>>;
   courseTableURLs: string[];
+  /** The well-known difficulty tables the player removed, so that removing the last table leaves the list empty. */
+  removedDefaultCourseTableURLs: string[];
   /** The registered Bemuse music servers (Options → Library & records), as index URLs. */
   bemuseServerURLs: string[];
 }
@@ -263,6 +269,7 @@ const LEGACY_KEYS = [
   COMPRESSOR_TUNING_KEY,
   SKIN_SETTINGS_KEY,
   COURSE_TABLE_URLS_STORAGE_KEY,
+  REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY,
   BEMUSE_SERVER_URLS_STORAGE_KEY,
 ] as const;
 
@@ -557,6 +564,11 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   if (Array.isArray(raw.courseTableURLs)) {
     settings.courseTableURLs = parseStoredCourseTableURLs(JSON.stringify(raw.courseTableURLs));
   }
+  if (Array.isArray(raw.removedDefaultCourseTableURLs)) {
+    settings.removedDefaultCourseTableURLs = parseStoredCourseTableURLs(
+      JSON.stringify(raw.removedDefaultCourseTableURLs),
+    );
+  }
   if (Array.isArray(raw.bemuseServerURLs)) {
     settings.bemuseServerURLs = parseStoredBemuseServerURLs(JSON.stringify(raw.bemuseServerURLs));
   }
@@ -626,6 +638,11 @@ export function optionSettingsFromLegacy(
   if (skinSettings.size > 0) settings.skinSettings = Object.fromEntries(skinSettings);
   if (storage?.getItem(COURSE_TABLE_URLS_STORAGE_KEY) != null) {
     settings.courseTableURLs = parseStoredCourseTableURLs(storage.getItem(COURSE_TABLE_URLS_STORAGE_KEY));
+  }
+  if (storage?.getItem(REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY) != null) {
+    settings.removedDefaultCourseTableURLs = parseStoredCourseTableURLs(
+      storage.getItem(REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY),
+    );
   }
   if (storage?.getItem(BEMUSE_SERVER_URLS_STORAGE_KEY) != null) {
     settings.bemuseServerURLs = parseStoredBemuseServerURLs(storage.getItem(BEMUSE_SERVER_URLS_STORAGE_KEY));
@@ -818,6 +835,7 @@ export function captureOptionSettings(
     compressorTuning: Record<TunableCompressor, CompressorTuning>;
     skinSettings: ReadonlyMap<string, Record<string, StoredSkinSettingValue>>;
     courseTableURLs: readonly string[];
+    removedDefaultCourseTableURLs: readonly string[];
     bemuseServerURLs: readonly string[];
     workerCount: number;
     updatedAt?: number;
@@ -988,6 +1006,7 @@ export function captureOptionSettings(
     compressorTuning: extras.compressorTuning,
     skinSettings: Object.fromEntries(extras.skinSettings),
     courseTableURLs: [...extras.courseTableURLs],
+    removedDefaultCourseTableURLs: [...extras.removedDefaultCourseTableURLs],
     bemuseServerURLs: [...extras.bemuseServerURLs],
   };
   return { version: DOCUMENT_VERSION, updatedAt: extras.updatedAt ?? Date.now(), settings: pickSettings(settings) };
@@ -1035,6 +1054,12 @@ export function writeOptionSettings(document: OptionSettingsDocument, storage: S
     }
     if (settings.courseTableURLs)
       storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, JSON.stringify(settings.courseTableURLs));
+    if (settings.removedDefaultCourseTableURLs) {
+      storage.setItem(
+        REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY,
+        JSON.stringify(settings.removedDefaultCourseTableURLs),
+      );
+    }
     if (settings.bemuseServerURLs)
       storage.setItem(BEMUSE_SERVER_URLS_STORAGE_KEY, JSON.stringify(settings.bemuseServerURLs));
   } catch {

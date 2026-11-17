@@ -1,8 +1,11 @@
 import type { OptionContainer } from '../options-controls.ts';
-import { describe, expect, test, vi } from 'vite-plus/test';
+import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { PlayerGUIState } from '../../types.ts';
 import { applyNonstopPlacement, buildCourseFolder } from './course.ts';
 import type { OptionsDialog } from './index.ts';
+
+// The table list is a Lit view with its own DOM; these tests cover the folder's controls.
+vi.mock('./course-tables.ts', () => ({ mountCourseTableManager: vi.fn() }));
 
 /** A stand-in for an Options control bound to `object[property]`. */
 class FakeController {
@@ -42,6 +45,9 @@ class FakeFolder {
     return controller;
   }
 
+  public addElement(_content: unknown) {
+    return {};
+  }
   public addButton(_params: { title: string }) {
     return { on: () => undefined };
   }
@@ -73,9 +79,14 @@ function buildFolder() {
     },
   };
   const folder = new FakeFolder();
+  vi.stubGlobal('document', { createElement: () => ({}) });
   buildCourseFolder.call(menu as unknown as OptionsDialog, folder as unknown as OptionContainer);
   return { settings, refreshSelectRecords, tracked, folder };
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('applyNonstopPlacement', () => {
   test('keeps the placement and has the select screen draw its records again', () => {
