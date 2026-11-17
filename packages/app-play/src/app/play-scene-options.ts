@@ -28,6 +28,7 @@ export type PlaySceneGUIState = Pick<
   | 'actionKeys'
   | 'builtInControlScheme'
   | 'replayView'
+  | 'replayDeviceNames'
   | 'tempoEnabled'
   | 'tempoPercent'
   | 'tempoPitchMode'
@@ -220,6 +221,8 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
       ? { chartSHA256: input.chartHashes.sha256, chartMD5: input.chartHashes.md5 }
       : {}),
     replayRecorder: input.replayRecorder,
+    // The controllers' own names go in the replay only when the player opted in (latched at song start).
+    ...(guiState.replayDeviceNames ? { replayDeviceNames: true } : {}),
     // What the replay shows of the recorded view (the Options dialog's "Replay / ghost" toggles, latched at song start).
     replayView: { ...guiState.replayView },
     audioVolumes: { key: guiState.keyVolume / 100, bgm: guiState.bgmVolume / 100 },

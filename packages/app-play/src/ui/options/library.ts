@@ -62,6 +62,16 @@ export function buildLibraryFolder(
     .on('change', ({ value }) => {
       this.guiState.autoSaveReplay = value;
     });
+  // Off by default: a replay then records each input's coarse device class only. On, it also keeps each controller's
+  // `Gamepad.id`, which often names its vendor and product ids, in every replay it records (files, slots, Leaderboard).
+  // Read as a play starts, so it is locked while one runs.
+  this.trackPlayOption(
+    library
+      .addBinding(this.guiState, 'replayDeviceNames', { label: 'Record device names in replays' })
+      .on('change', ({ value }) => {
+        this.guiState.replayDeviceNames = value;
+      }),
+  );
   // Slots select a replay from history when its result meets the rule or the player assigns it by hand.
   const slots = addFolder(library, OPTION_FOLDERS.replaySlots);
   for (const slot of [1, 2, 3, 4] as const) {

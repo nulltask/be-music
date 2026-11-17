@@ -657,6 +657,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Loads the ZIPs at the two URLs above.</dd>
           <dt>Auto-save replays</dt>
           <dd>Downloads each finished play's replay.</dd>
+          <dt>Record device names in replays</dt>
+          <dd>
+            Off by default. When on, a replay also keeps each controller's own name as the browser reports it, which
+            often includes its vendor and product ids. Keyboards and touch have none. The name goes wherever the replay
+            goes, Leaderboard submissions included; judging never reads it.
+          </dd>
           <dt>Clear best records</dt>
           <dd>Deletes the best records kept in this browser (asks first).</dd>
           <dt>Local data…</dt>

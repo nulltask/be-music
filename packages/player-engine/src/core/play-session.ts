@@ -501,7 +501,8 @@ export async function createPlaySession(
   const replayRecorder =
     options.onReplayRecorded && options.practice === undefined
       ? (() => {
-          const { chartSHA256, chartMD5, recorder, sourceChart, ...hostPlaySettings } = options.recordReplay ?? {};
+          const { chartSHA256, chartMD5, recorder, sourceChart, includeDeviceNames, ...hostPlaySettings } =
+            options.recordReplay ?? {};
           return createReplayRecorder({
             json: resolvedJSON,
             chartOptions,
@@ -512,6 +513,7 @@ export async function createPlaySession(
             chartSHA256,
             chartMD5,
             recorder,
+            ...(includeDeviceNames === true ? { includeDeviceNames: true } : {}),
             laneModeExtension: options.laneModeExtension,
             // The chart the engine was handed is the source when it resolved the control flow itself.
             sourceChart: sourceChart ?? json,

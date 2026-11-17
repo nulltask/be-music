@@ -284,6 +284,13 @@ describe('replay format', () => {
     expect(() => parseReplay(withSources([turntable]))).toThrow(/\.direction: expected 'up' \| 'down' on a turntable/);
     expect(() => parseReplay(withSources([{ ...turntable, direction: 'left' }]))).toThrow(/\.direction:/);
     expect(() => parseReplay(withSources([{ ...key, direction: 'up' }]))).toThrow(/only a turntable source/);
+    // A device name (recorded only when the player opted in) is kept when well-formed.
+    const pad = { ...turntable, direction: 'up', deviceName: 'Controller (Vendor: 1ccf Product: 1018)' };
+    expect(parseReplay(withSources([pad])).play.inputSources).toEqual([pad]);
+    expect(() => parseReplay(withSources([{ ...pad, deviceName: '' }]))).toThrow(/\.deviceName:/);
+    expect(() => parseReplay(withSources([{ ...pad, deviceName: 'x'.repeat(129) }]))).toThrow(/\.deviceName:/);
+    expect(() => parseReplay(withSources([{ ...pad, deviceName: 'pad\n' }]))).toThrow(/\.deviceName:/);
+    expect(() => parseReplay(withSources([{ ...pad, deviceName: 1018 }]))).toThrow(/\.deviceName:/);
     // Fields that are not part of a source are not kept.
     expect(
       parseReplay(withSources([{ ...turntable, direction: 'up', gamepadId: 'Vendor 045e' }])).play.inputSources,

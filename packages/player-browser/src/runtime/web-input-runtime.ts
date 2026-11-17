@@ -228,18 +228,22 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
             : buttonPressed(pad.buttons[buttonIndex]);
         const previous = gamepadButtons.get(key);
         if ((previous?.pressed ?? false) === pressed) continue;
+        // `deviceName` is the pad's `Gamepad.id`; the replay keeps it only when the player opted in
+        // (`ReplayRecordingOptions.includeDeviceNames`), and judging never reads it.
         const source: InputSource =
           scratchDirection === undefined
             ? {
                 kind: 'button',
                 device: 'controller',
                 label: isDpad ? `p${sidePrefix}-dpad` : `p${sidePrefix}-b${buttonIndex}`,
+                ...(pad.id !== '' ? { deviceName: pad.id } : {}),
               }
             : {
                 kind: 'turntable',
                 device: 'controller',
                 label: `p${sidePrefix}-tt`,
                 direction: scratchDirection,
+                ...(pad.id !== '' ? { deviceName: pad.id } : {}),
               };
         const code = isAxis
           ? `gamepad-axis-x-${scratchDirection}`

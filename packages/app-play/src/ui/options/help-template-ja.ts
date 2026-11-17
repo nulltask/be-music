@@ -630,6 +630,12 @@ export const OPTIONS_HELP_JA = html`
         <dd>上の 2 つの URL の ZIP を読み込みます。</dd>
         <dt>Auto-save replays</dt>
         <dd>プレイが終わるたびにリプレイをダウンロードします。</dd>
+        <dt>Record device names in replays</dt>
+        <dd>
+          既定はオフです。オンにすると、ブラウザが報告するコントローラーの名前 (多くはベンダー ID と製品 ID を含みます)
+          もリプレイに記録します。キーボードとタッチには名前がありません。名前はリプレイと一緒に、Leaderboard
+          への送信にも含まれます。判定には使いません。
+        </dd>
         <dt>Clear best records</dt>
         <dd>このブラウザのベスト記録を消します (確認があります)。</dd>
         <dt>Local data…</dt>

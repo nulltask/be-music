@@ -70,6 +70,7 @@ export interface OptionSettings {
   ghost: PlayerGUIState['ghost'];
   ghostMode: PlayerGUIState['ghostMode'];
   autoSaveReplay: boolean;
+  replayDeviceNames: boolean;
   replaySlotAutoSave1: ReplayAutoSaveRule;
   replaySlotAutoSave2: ReplayAutoSaveRule;
   replaySlotAutoSave3: ReplayAutoSaveRule;
@@ -333,6 +334,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'compressorMaster', booleanOf(raw.compressorMaster));
   assign(settings, 'showInvisibleNotes', booleanOf(raw.showInvisibleNotes));
   assign(settings, 'autoSaveReplay', booleanOf(raw.autoSaveReplay));
+  assign(settings, 'replayDeviceNames', booleanOf(raw.replayDeviceNames));
   assign(settings, 'replaySlotAutoSave1', oneOf(raw.replaySlotAutoSave1, REPLAY_AUTO_SAVE_RULES));
   assign(settings, 'replaySlotAutoSave2', oneOf(raw.replaySlotAutoSave2, REPLAY_AUTO_SAVE_RULES));
   assign(settings, 'replaySlotAutoSave3', oneOf(raw.replaySlotAutoSave3, REPLAY_AUTO_SAVE_RULES));
@@ -649,6 +651,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('ghost');
   assignState('ghostMode');
   assignState('autoSaveReplay');
+  assignState('replayDeviceNames');
   assignState('replaySlotAutoSave1');
   assignState('replaySlotAutoSave2');
   assignState('replaySlotAutoSave3');
@@ -821,6 +824,7 @@ export function captureOptionSettings(
     ghost: state.ghost,
     ghostMode: state.ghostMode,
     autoSaveReplay: state.autoSaveReplay,
+    replayDeviceNames: state.replayDeviceNames,
     replaySlotAutoSave1: state.replaySlotAutoSave1,
     replaySlotAutoSave2: state.replaySlotAutoSave2,
     replaySlotAutoSave3: state.replaySlotAutoSave3,

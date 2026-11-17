@@ -126,6 +126,16 @@ function rereplay(tempo: number | null = 1.2): BeMusicReplay {
 }
 
 describe('resolvePlaySceneOptions: a single play', () => {
+  test('records device names in the replay only when the player opted in', () => {
+    expect(resolvePlaySceneOptions(input()).settings).not.toHaveProperty('replayDeviceNames');
+    expect(resolvePlaySceneOptions(input({ guiState: gui({ replayDeviceNames: false }) })).settings).not.toHaveProperty(
+      'replayDeviceNames',
+    );
+    expect(
+      resolvePlaySceneOptions(input({ guiState: gui({ replayDeviceNames: true }) })).settings.replayDeviceNames,
+    ).toBe(true);
+  });
+
   test('takes the Options dialog’s picks, the play options in force and the slider’s tempo', () => {
     const { autoPlay, tempo, settings, course } = resolvePlaySceneOptions(input({ chartHashes: HASHES }));
     expect(autoPlay).toBe(false);

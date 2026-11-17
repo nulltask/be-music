@@ -43,8 +43,9 @@ export type PlayerInputCommand =
       /**
        * The physical input behind the press (`input-source.ts`): a touch zone, a controller button, or one direction of
        * a turntable. Omitted for keys: the engine takes a keyboard source from the first token (each physical key is
-       * its own source). The replay records it and beatoraja's scratch rules key a scratch hold by it. Never put
-       * device-identifying data (a `Gamepad.id`, vendor or product ids) in it.
+       * its own source). The replay records it and beatoraja's scratch rules key a scratch hold by it. Device-identifying
+       * data goes only in its `deviceName` (a `Gamepad.id`), which the replay keeps only when the player opted in
+       * (`ReplayRecordingOptions.includeDeviceNames`); never put it in the label.
        */
       source?: InputSource;
       /**
