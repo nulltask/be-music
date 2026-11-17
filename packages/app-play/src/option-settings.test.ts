@@ -286,6 +286,7 @@ describe('captureOptionSettings', () => {
       compressorTuning: defaultCompressorTunings(),
       skinSettings: { test: { glow: false, offset: 5, theme: 'light' } },
       courseTableURLs: ['https://example.com/courses.json'],
+      bemuseServerURLs: ['https://example.com/server/index.json'],
       replaySlotAutoSave1: 'always',
       replaySlotAutoSave2: 'never',
       replaySlotAutoSave3: 'score-update',
@@ -306,7 +307,13 @@ describe('captureOptionSettings', () => {
       if (key in restored) expect(restored[key as keyof PlayerGUIState], key).toEqual(expected[key]);
     }
     const legacy = optionSettingsFromLegacy(storage, 43).settings;
-    for (const key of ['workerCount', 'compressorTuning', 'skinSettings', 'courseTableURLs'] as const) {
+    for (const key of [
+      'workerCount',
+      'compressorTuning',
+      'skinSettings',
+      'courseTableURLs',
+      'bemuseServerURLs',
+    ] as const) {
       expect(legacy[key], key).toEqual(expected[key]);
     }
   });

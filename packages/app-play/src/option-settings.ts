@@ -18,6 +18,7 @@ import {
   type KeysFilter,
 } from '@be-music/player-scene-model';
 import { COURSE_TABLE_URLS_STORAGE_KEY, parseStoredCourseTableURLs } from './course-table-import.ts';
+import { BEMUSE_SERVER_URLS_STORAGE_KEY, parseStoredBemuseServerURLs } from './bemuse-server.ts';
 import { parseCompressorTunings, type CompressorTuning } from './compressor-tuning.ts';
 import { parseStoredHiSpeed, HI_SPEED_STORAGE_KEY } from './hi-speed-storage.ts';
 import { parseStoredPlayTempoSettings, PLAY_TEMPO_STORAGE_KEY, type PlayTempoSettings } from './play-tempo-settings.ts';
@@ -218,6 +219,8 @@ export interface OptionSettings {
   compressorTuning: Record<TunableCompressor, CompressorTuning>;
   skinSettings: Record<string, Record<string, StoredSkinSettingValue>>;
   courseTableURLs: string[];
+  /** The registered Bemuse music servers (Options → Library & records), as index URLs. */
+  bemuseServerURLs: string[];
 }
 
 /** The document in `localStorage` and on the player origin. `settings` holds only the fields that were saved. */
@@ -259,6 +262,7 @@ const LEGACY_KEYS = [
   COMPRESSOR_TUNING_KEY,
   SKIN_SETTINGS_KEY,
   COURSE_TABLE_URLS_STORAGE_KEY,
+  BEMUSE_SERVER_URLS_STORAGE_KEY,
 ] as const;
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
@@ -551,6 +555,9 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   if (Array.isArray(raw.courseTableURLs)) {
     settings.courseTableURLs = parseStoredCourseTableURLs(JSON.stringify(raw.courseTableURLs));
   }
+  if (Array.isArray(raw.bemuseServerURLs)) {
+    settings.bemuseServerURLs = parseStoredBemuseServerURLs(JSON.stringify(raw.bemuseServerURLs));
+  }
   return settings;
 }
 
@@ -617,6 +624,9 @@ export function optionSettingsFromLegacy(
   if (skinSettings.size > 0) settings.skinSettings = Object.fromEntries(skinSettings);
   if (storage?.getItem(COURSE_TABLE_URLS_STORAGE_KEY) != null) {
     settings.courseTableURLs = parseStoredCourseTableURLs(storage.getItem(COURSE_TABLE_URLS_STORAGE_KEY));
+  }
+  if (storage?.getItem(BEMUSE_SERVER_URLS_STORAGE_KEY) != null) {
+    settings.bemuseServerURLs = parseStoredBemuseServerURLs(storage.getItem(BEMUSE_SERVER_URLS_STORAGE_KEY));
   }
   return { version: DOCUMENT_VERSION, updatedAt, settings };
 }
@@ -805,6 +815,7 @@ export function captureOptionSettings(
     compressorTuning: Record<TunableCompressor, CompressorTuning>;
     skinSettings: ReadonlyMap<string, Record<string, StoredSkinSettingValue>>;
     courseTableURLs: readonly string[];
+    bemuseServerURLs: readonly string[];
     workerCount: number;
     updatedAt?: number;
   },
@@ -973,6 +984,7 @@ export function captureOptionSettings(
     compressorTuning: extras.compressorTuning,
     skinSettings: Object.fromEntries(extras.skinSettings),
     courseTableURLs: [...extras.courseTableURLs],
+    bemuseServerURLs: [...extras.bemuseServerURLs],
   };
   return { version: DOCUMENT_VERSION, updatedAt: extras.updatedAt ?? Date.now(), settings: pickSettings(settings) };
 }
@@ -1019,6 +1031,8 @@ export function writeOptionSettings(document: OptionSettingsDocument, storage: S
     }
     if (settings.courseTableURLs)
       storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, JSON.stringify(settings.courseTableURLs));
+    if (settings.bemuseServerURLs)
+      storage.setItem(BEMUSE_SERVER_URLS_STORAGE_KEY, JSON.stringify(settings.bemuseServerURLs));
   } catch {
     // Blocked or full storage: the visit still has the values in memory.
   }
