@@ -68,6 +68,8 @@ export interface TestAudioSessionOptions {
    * while the wall clock (`pressedAt`) moves smoothly. Without it the audible clock moves smoothly too.
    */
   quantumMs?: number;
+  /** Whether the session places the realtime sounds at their due time (`scheduleEventAt`), as the web session does. */
+  schedulesAhead?: boolean;
 }
 
 export interface CharacterizationPlay {
@@ -250,6 +252,12 @@ function createTestAudioSession(
           }),
         }),
     triggerEvent: (event) => entry(`trigger ${formatEvent(event)}`),
+    ...(options.schedulesAhead === true
+      ? {
+          scheduleEventAt: (event: BeMusicEvent, outputSeconds: number) =>
+            entry(`schedule ${formatEvent(event)} @${formatNumber(outputSeconds)}`),
+        }
+      : {}),
     seek: (seconds) => entry(`seek ${formatNumber(seconds)}`),
     triggerEventAt: (event, offsetSeconds) => entry(`trigger-at ${formatEvent(event)} +${formatNumber(offsetSeconds)}`),
     stopChannel: (channel) => entry(`stop ${channel}`),

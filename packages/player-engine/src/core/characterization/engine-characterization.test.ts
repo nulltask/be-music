@@ -362,6 +362,31 @@ describe('engine characterization: play scenarios', () => {
     await expectSnapshot('scenarios/audio-clock', observations);
   });
 
+  test('a session that schedules ahead gets each realtime sound at its due time on the output clock', async () => {
+    const chart = basicChart();
+    const play = { chart, audio: { writeAheadMs: 50, schedulesAhead: true } };
+    for (const observation of [
+      await observePlay({ ...play, driver: 'auto' }),
+      await observePlay({ ...play, driver: 'manual', script: BASIC_SCRIPT }),
+    ]) {
+      const scheduled = observation.audio
+        .map((line) => /^(\S+) schedule (.+) @(\S+)$/.exec(line))
+        .filter((match): match is RegExpExecArray => match !== null)
+        .map(([, at, event, due]) => ({ atMs: parseFloat(at!), event: event!, dueMs: Number(due) * 1000 }));
+      // The BGM and volume changes of both measures (0 s and 2 s) go through `scheduleEventAt`, none through `triggerEvent`.
+      expect(scheduled.map(({ event, dueMs }) => `${event} @${dueMs}`)).toEqual(
+        expect.arrayContaining([expect.stringMatching(/ @0$/), expect.stringMatching(/ @2000$/)]),
+      );
+      expect(observation.audio.filter((line) => / trigger (?:01|97|98):/.test(line))).toEqual([]);
+      expect(scheduled.filter(({ event }) => /^(?:01|97|98):/.test(event)).length).toBe(4);
+      for (const { atMs, dueMs } of scheduled) {
+        // Queued once the write head reached it: never after it is due, and at most a tick past the write-ahead before.
+        expect(atMs).toBeLessThanOrEqual(dueMs + 1e-6);
+        expect(dueMs - atMs).toBeLessThanOrEqual(50 + 1000 / 60 + 1e-6);
+      }
+    }
+  });
+
   test('AUTO play started partway (startAtSeconds)', async () => {
     // 2.2 s: past the basic chart's first eight notes and both BGM starts; 1.6 s: inside the charge note on 12.
     const observations = {

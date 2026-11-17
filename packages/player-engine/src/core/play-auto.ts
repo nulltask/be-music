@@ -105,7 +105,7 @@ function createAutoJudge(session: PlaySession): PlayJudge {
             idBase,
           );
         }
-        audioSession?.triggerEvent?.(event);
+        session.queueAudioEvent(event, note.seconds);
       }
     },
     (seconds) => clampToReversal(autoJudge.config, seconds),
