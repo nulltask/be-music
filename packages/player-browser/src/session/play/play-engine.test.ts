@@ -20,7 +20,12 @@ import {
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { LongNoteTracker } from './long-note-tracker.ts';
 import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
-import { applyFinalSummary, drainSharedEngineSignals, type PlayEngineContext } from './play-engine.ts';
+import {
+  applyFinalSummary,
+  drainSharedEngineSignals,
+  finishPlayOnExit,
+  type PlayEngineContext,
+} from './play-engine.ts';
 import { getResultData } from './play-ending.ts';
 
 /** The chart's length the graphs are taken over, in seconds. */
@@ -512,4 +517,82 @@ test('scratch input reverses its marker without jumping at the direction change'
   play.step(1.12, {}, [], [{ kind: 'scratch-spin', channels: ['16'], spin: 'ccw' }]);
   expect(play.ctx.scratchInputs.get('16')?.angle).toBeCloseTo((Math.PI / 2) * (1 - Math.exp(-1)));
   expect(play.ctx.scratchInputs.get('16')?.direction).toBe(-1);
+});
+
+describe('ESC on a play whose notes are all judged', () => {
+  /** A play of 4 notes in its last bars, with the outro's members `finishPlayOnExit` reaches. */
+  function createEndingPlay() {
+    const h = createPlay({ total: 4 });
+    const onChartFinished = vi.fn();
+    const onExit = vi.fn();
+    const hold = new AbortController();
+    Object.assign(h.ctx, {
+      options: { ...h.ctx.options, onChartFinished, onExit },
+      sharedEngineInputSignals: {},
+      chartEndHold: hold,
+      exiting: false,
+      chartEnded: false,
+      notes: [{ beat: 8, seconds: 4 }],
+      timingResolver: { beatToSeconds: (beat: number) => beat / 2 },
+      tempo: 1,
+      theme: { ...h.ctx.theme, timing: () => ({ fadeOutMs: 500, closeMs: 0 }) },
+      getResultData: () => ({ cleared: true }),
+    });
+    /** The engine's frame at `seconds`, with `judged` of the 4 notes judged. */
+    const judgedAt = (seconds: number, judged: number): void => {
+      h.step(seconds, { counts: { perfect: judged } });
+      h.ctx.engineFrame = { ...h.ctx.engineFrame!, judgedNoteCount: judged };
+    };
+    return { ...h, hold, judgedAt, onChartFinished, onExit };
+  }
+
+  test('leaves a play with notes still to judge to the host', () => {
+    const h = createEndingPlay();
+    h.judgedAt(3, 3);
+    expect(finishPlayOnExit(h.ctx)).toBe(false);
+    expect(h.ctx.exiting).toBe(false);
+    expect(h.hold.signal.aborted).toBe(false);
+  });
+
+  test('skips the lead-out, fades out, lets the engine go and shows the result', () => {
+    const h = createEndingPlay();
+    h.judgedAt(4.2, 4);
+    expect(finishPlayOnExit(h.ctx)).toBe(true);
+    // No lead-out: the fade-out starts with the ESC.
+    expect(h.events).toContain('exit-fade-out');
+    expect(h.hold.signal.aborted).toBe(false);
+    vi.advanceTimersByTime(500);
+    // The fade-out is over: the engine's hold is let go, and the result waits for its final summary.
+    expect(h.hold.signal.aborted).toBe(true);
+    expect(h.ctx.onHeldPlayEnded).toBeDefined();
+    h.ctx.onHeldPlayEnded!(summary({ perfect: 4 }, 100));
+    expect(h.onChartFinished).toHaveBeenCalledOnce();
+    expect(h.onExit).not.toHaveBeenCalled();
+  });
+
+  test('ignores a second ESC during the fade-out', () => {
+    const h = createEndingPlay();
+    h.judgedAt(4.2, 4);
+    expect(finishPlayOnExit(h.ctx)).toBe(true);
+    expect(finishPlayOnExit(h.ctx)).toBe(true);
+    expect(h.events.filter((kind) => kind === 'exit-fade-out')).toHaveLength(1);
+    vi.advanceTimersByTime(500);
+    expect(h.onExit).not.toHaveBeenCalled();
+  });
+
+  test('cuts short a lead-out already under way', () => {
+    const h = createEndingPlay();
+    h.judgedAt(6, 4);
+    const fade = vi.fn();
+    Object.assign(h.ctx, { chartEnded: true, chartEndFade: fade });
+    expect(finishPlayOnExit(h.ctx)).toBe(true);
+    expect(fade).toHaveBeenCalledOnce();
+  });
+
+  test('leaves a looping PRACTICE play to the host', () => {
+    const h = createEndingPlay();
+    Object.assign(h.ctx.options, { practiceRange: { startSeconds: 0 } });
+    h.judgedAt(4.2, 4);
+    expect(finishPlayOnExit(h.ctx)).toBe(false);
+  });
 });

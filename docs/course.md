@@ -389,7 +389,7 @@ lr2oraja and LR2oraja Endless Dream play courses on beatoraja's `GAUGE_LR2` clas
 
 A survival gauge that empties ends the play there (`PlayerOptions.endOnFailure`, default `true`), so a course stage ends the moment its gauge empties, and the course is failed. The judgment that emptied the gauge is the last one counted.
 
-A stage given up with ESC also ends the course as a failed run. This departs from LR2 on purpose: `LR2body.exe` shows the given-up stage's result as FAILED and, when the gauge is still at 2 % or more and stages remain, goes on to the next stage (the course lamp is FAILED in the end, since a stage was left unplayed); with no GOOD or better judged it returns to the select screen without saving. Be-Music treats ESC as giving up the course.
+A stage given up with ESC also ends the course as a failed run. This departs from LR2 on purpose: `LR2body.exe` shows the given-up stage's result as FAILED and, when the gauge is still at 2 % or more and stages remain, goes on to the next stage (the course lamp is FAILED in the end, since a stage was left unplayed); with no GOOD or better judged it returns to the select screen without saving. Be-Music treats ESC as giving up the course. An ESC once every note of the stage is judged does not give it up: the stage finishes, as beatoraja's `BMSPlayer.stopPlay` finishes it, and the course goes on (a NONSTOP run only finishes this way after the last note of its last stage).
 
 A course stage cannot be ranked as a single-chart play: `checkReplayEligibility` marks it `unranked` as `course-stage`, and the Leaderboard stores such a play without ranking it.
 

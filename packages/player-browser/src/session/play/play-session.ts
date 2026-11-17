@@ -50,7 +50,7 @@ import { prepareChart } from './play-chart.ts';
 import { prepareGhost } from './ghost/prepare-ghost.ts';
 import { toPlayOptionMismatch } from './play-option-mismatch.ts';
 import { beginExitSequence, getResultData } from './play-ending.ts';
-import { interruptSharedEngine, launchSharedEngine, stopSharedEngine } from './play-engine.ts';
+import { finishPlayOnExit, interruptSharedEngine, launchSharedEngine, stopSharedEngine } from './play-engine.ts';
 import { chartSecondsFromFrame } from './play-clock.ts';
 import { seekPlay } from './play-seek.ts';
 import {
@@ -386,8 +386,12 @@ export class PlaySession extends PlaySessionState {
     });
   }
 
-  /** Leaves the play the way Escape does: the theme's fade-out runs, then the host's `onExit` fires. */
+  /**
+   * Leaves the play the way Escape does: the theme's fade-out runs, then the host's `onExit` fires. Once every note is
+   * judged it finishes the play instead, and the result shows (`finishPlayOnExit`).
+   */
   public requestExit(): void {
+    if (finishPlayOnExit(this)) return;
     beginExitSequence(this, () => {
       // The quit key held through the fade-out plays the chart again (That-Which-Must-Not-Be-Named PC's quick retry).
       if (isQuickRetryHeld(this, performance.now())) {

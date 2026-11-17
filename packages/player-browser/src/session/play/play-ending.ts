@@ -11,7 +11,7 @@ import type { TimingResolver } from '@be-music/chart-model';
 import type { PlayerSummary } from '@be-music/player-engine';
 import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import type { ScoreSummary } from '@be-music/player-engine/ruleset';
-import type { PlayerGaugeSummary } from '@be-music/player-engine/signals';
+import type { PlayerGaugeSummary, PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import {
   gaugePercent,
   playResultFromPlayState,
@@ -29,7 +29,8 @@ import { resolvePostChartResultDelayMs } from './result-delay.ts';
  *
  * - A play that reaches its end holds the scene for a lead-out after the last note (`resolvePostChartResultDelayMs`,
  *   in chart time), then runs the theme / skin fade-out (LR2 timer 2, beatoraja `TIMER_FADEOUT`), then shows the
- *   result. Escape and F5 run the same fade-out.
+ *   result. Escape and F5 run the same fade-out. Escape once every note is judged ({@link isEveryNoteJudged}) ends the
+ *   play this way too, skipping what is left of the lead-out, rather than giving it up.
  * - A play cut short by its gauge emptying (a course stage, a HARD gauge ending on failure) stops at once, as LR2 and
  *   beatoraja do: no lead-out and no fade-out timer; the failure moment (LR2 timer 3, beatoraja `TIMER_FAILED`) starts,
  *   the sound fades out over the close (Be-Music's choice: LR2 and beatoraja cut it), and the result shows after the
@@ -105,6 +106,24 @@ export function resolvePlayEnding(input: PlayEndingInput): PlayEnding {
     failed,
     leadOutMs: chartToElapsedSeconds(resolvePostChartResultDelayMs(notes, input.timing, currentSeconds), input.tempo),
   };
+}
+
+/**
+ * Whether the engine's frame has judged every note of the play: its scored judgments (`judgedNoteCount`, which leaves
+ * out empty POORs and mine hits) reach the chart's judgment count, and so do a two-player play's 2P judgments. ESC
+ * from then on finishes the play rather than giving it up, as beatoraja does (`BMSPlayer.stopPlay` moves to
+ * `STATE_FINISHED` once the judged notes reach the chart's note count). A chart with nothing to judge never counts.
+ */
+export function isEveryNoteJudged(
+  frame: Pick<PlayerUIFramePayload, 'summary' | 'summary2P' | 'judgedNoteCount'> | undefined,
+): boolean {
+  if (frame === undefined || frame.judgedNoteCount === undefined) return false;
+  if (frame.summary.total <= 0 || frame.judgedNoteCount < frame.summary.total) return false;
+  const second = frame.summary2P;
+  if (second === undefined) return true;
+  // The 2P summary carries no judged count of its own: its POORs may include mine hits, so this can run ahead of the
+  // last 2P note on a chart with mines.
+  return second.perfect + second.great + second.good + second.bad + second.poor >= second.total;
 }
 
 /** The scene's members the ending reads and writes: the play session's members of these names. */

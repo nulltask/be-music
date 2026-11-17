@@ -73,6 +73,7 @@ When no chart file is present, the whole drop is treated as a theme candidate. L
 Double-click the playfield to toggle the player into fullscreen; `Esc` leaves fullscreen before it runs the usual scene action.
 On Chrome and Edge the player locks `Esc` with the Keyboard Lock API while fullscreen: a short `Esc` press keeps its usual scene action (quitting the play included), and a long press leaves fullscreen.
 Holding `Backspace` for 0.5 s during play quits it the same way `Esc` does; a tap does nothing. It works in fullscreen on every browser, Keyboard Lock or not.
+Once every note of the play is judged, `Esc` (and the `Backspace` hold) finishes the play instead of quitting it, as beatoraja does: what is left of the lead-out after the last note is skipped, the fade-out runs and the result shows. Another `Esc` during that fade-out is ignored.
 
 ### Loading placeholders
 

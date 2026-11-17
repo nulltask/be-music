@@ -330,8 +330,10 @@ export interface PlayerPlayRuntime {
    * Keeps a play open after its chart is over, so the player's keys still light the lanes (and the chart's remaining
    * background sounds still play) while the host shows its outro. When the chart is over — every note judged and the
    * judge windows passed — `onSettled` runs once; the play then carries on until `signal` aborts, and only then ends
-   * normally (its summary and replay as usual; aborting this signal is not an interrupt). Without it a play ends as
-   * soon as its chart is over. Manual, replay and AUTO play alike.
+   * normally (its summary and replay as usual; aborting this signal is not an interrupt). Aborting it before the chart
+   * is over ends the play once nothing is left to judge, ahead of the judge windows and the chart's remaining
+   * background sounds (the host finishing a play whose notes are all judged). Without it a play ends as soon as its
+   * chart is over. Manual, replay and AUTO play alike.
    */
   holdAfterChart?: { signal: AbortSignal; onSettled?: () => void };
   audioBaseDir?: string;

@@ -142,7 +142,9 @@ TypeScript 型・シリアライザ・防御的パーサは
 します。`PlayerOptions.onReplayRecorded` を設定すると記録が有効になり、エンジンは prepared chart を
 スナップショットし、判定対象の押下（`lane-input`）と解放（`kitty-state` release。解放を伝えない入力では
 エンジンが推定した解放、[解放のない入力](#解放のない入力)）を `pressedAt` 補正済みの譜面相対時刻で記録し、空 POOR を native キャッシュ用にカウントし、`autoPlay` / `manualPlay` の解決直前
-（ESC 中断時を含む）に組み上がった `BeMusicReplay` をコールバックへ渡します。エンジンが知り得ない
+（ESC 中断時を含む）に組み上がった `BeMusicReplay` をコールバックへ渡します。すべてのノートの判定が済んだあとの
+ESC は中断ではありません。ホストが `holdAfterChart` を早めに放し、判定するものがなくなった時点でプレイは完了として
+終わります。エンジンが知り得ない
 ホスト側設定（選択ゲージ、レーンオプションのラベル、DP FLIP、自由形式の `native` 追加情報、fingerprint の
 計算元になる元の譜面）は `PlayerOptions.recordReplay` で渡します。`#RANDOM` / `#SWITCH` の draws は、エンジンが
 もともと必要とする `PlayerOptions.randomDraws` から取ります。
@@ -525,7 +527,7 @@ flowchart TD
 - **NONSTOP のプレイは 1 譜面として再生します。** LR2 が NONSTOP のコースを再生するのと同じです（`LR2f.cpp` L18116-L18117、`Main.cpp` M806）。記録どおりに（`nonstop.placement`、`nonstop.stitch`、各ステージの `randomDraws`）コースをつなぎ直し、`nonstop.replay` を再生します。
 - **何も残しません。** コースのリプレイは、ステージやコースのベスト、ランプ、トロフィー、プレイ回数を更新せず、リプレイを保存せず、Leaderboard にも送りません。LR2 もリプレイのときはコースリザルトの保存から早く戻ります（`LR2f.cpp` L9599）。beatoraja の `CourseResult.updateScoreDatabase` はモードを確かめずに書くので、コースのリプレイでもプレイ回数やクリア回数が増えますが、Be-Music はこれに倣いません。
 - **リザルトはリプレイであることを示します。** リプレイのプレイと、そこから続くすべてのリザルト（各ステージ、コース、NONSTOP）は `PlayResult.fromReplay` を持ち、LR2 スキンはプレイ画面とリザルト画面で REPLAY OFF（op 82）の代わりに REPLAY PLAYING（op 84）を点けます。LR2 も op 84 をリプレイの間ずっと点けたままにします（`LR2f.cpp` L4740-L4741）。
-- 再生中の ESC は、ドロップしたリプレイと同じく再生を止めて選曲画面に戻ります。NONSTOP のリプレイでは F5 や R でもう一度再生します。
+- 再生中の ESC は、ドロップしたリプレイと同じく再生を止めて選曲画面に戻ります。NONSTOP のリプレイでは F5 や R でもう一度再生します。ステージ（NONSTOP のリプレイでは結合した譜面）のノートの判定がすべて済んだあとは、ライブのプレイと同じく ESC でステージを終え、次のステージかリザルトへ進みます。
 
 ## CLI
 

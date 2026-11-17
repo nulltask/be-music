@@ -140,7 +140,7 @@ Recording is engine-owned so every host (browser LR2 / beatoraja scenes, and any
 implementation. `PlayerOptions.onReplayRecorded` enables it: the engine snapshots its prepared chart, records
 every judged press (`lane-input`) and release (`kitty-state` release) with `pressedAt`-corrected chart-relative
 timestamps — for input without releases, the releases it inferred ([Input without key releases](#input-without-key-releases)) — counts empty POORs for the native cache, and hands the assembled `BeMusicReplay` to the callback right
-before `autoPlay` / `manualPlay` resolves — including the ESC (aborted) exit. `PlayerOptions.recordReplay` carries
+before `autoPlay` / `manualPlay` resolves — including the ESC (aborted) exit. An ESC once every note is judged is not an abort: the host lets go of `holdAfterChart` early, and the play ends complete as soon as nothing is left to judge. `PlayerOptions.recordReplay` carries
 the host-declared settings the engine cannot know (selected gauge, lane-shuffle labels, DP flip, freeform
 `native` extras, and the source chart the fingerprints are computed from). The `#RANDOM` / `#SWITCH` draws come from
 `PlayerOptions.randomDraws`, which the engine needs anyway.
@@ -554,7 +554,7 @@ flowchart TD
 - **A NONSTOP run plays as one chart**, as LR2 replays a NONSTOP course (`LR2f.cpp` L18116-L18117, `Main.cpp` M806): the course is stitched again as recorded (`nonstop.placement`, `nonstop.stitch` and each stage's `randomDraws`) and `nonstop.replay` plays on it.
 - **Nothing is kept.** A course replay updates no stage or course best, lamp, trophy or play count, saves no replay and submits nothing to the Leaderboard, as LR2's course-result save returns early for a replay (`LR2f.cpp` L9599). beatoraja's `CourseResult.updateScoreDatabase` writes with no mode guard, so a course replay there bumps play and clear counts; Be-Music does not follow it.
 - **The results say they are a replay.** A replay's play and every result it leads to (each stage's, the course's or the NONSTOP run's) carry `PlayResult.fromReplay`, and the LR2 skin lights REPLAY PLAYING (op 84) instead of REPLAY OFF (op 82) on the play and result screens, as LR2 keeps op 84 on for the whole replay (`LR2f.cpp` L4740-L4741).
-- ESC during the playback stops it and goes back to the select screen, as ESC stops a dropped replay; F5 or R on a NONSTOP replay plays it again.
+- ESC during the playback stops it and goes back to the select screen, as ESC stops a dropped replay; F5 or R on a NONSTOP replay plays it again. Once every note of the stage (of the stitched chart, on a NONSTOP replay) is judged, ESC finishes the stage instead, as it does in a live play: the run goes on to its next stage or its result.
 
 ## CLI
 

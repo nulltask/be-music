@@ -62,7 +62,7 @@ import type { LiveTempo } from './live-tempo.ts';
 import { logger } from '../../logger.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import type { BeMusicJudgmentKind } from '../../skin/be-music/types.ts';
-import { beginExitSequence, resolvePlayEnding, type PlayEndingContext } from './play-ending.ts';
+import { beginExitSequence, isEveryNoteJudged, resolvePlayEnding, type PlayEndingContext } from './play-ending.ts';
 import { advanceJudgeSideTimings, type PlayPresentation } from './play-presentation.ts';
 import { resolveSeekWaiters, settleSeekWaiters } from './play-seek.ts';
 import { applyPlayEvent } from './play-state.ts';
@@ -193,6 +193,8 @@ export interface PlayEngineContext
   chartEnded: boolean;
   chartEndTimeout: number | undefined;
   chartEndGate?: (seconds: number) => void;
+  /** Starts the outro's fade-out at once, skipping what is left of the lead-out; set while the lead-out runs. */
+  chartEndFade?: (() => void) | undefined;
   replay: BeMusicReplay | undefined;
   readonly replayWaiters: Array<(replay: BeMusicReplay) => void>;
   replayViewCursor: ReplayViewCursor | undefined;
@@ -1162,6 +1164,7 @@ function applyEngineSeek(ctx: PlayEngineContext, command: Extract<PlayerUIComman
     ctx.chartEndTimeout = undefined;
   }
   ctx.chartEndGate = undefined;
+  ctx.chartEndFade = undefined;
   ctx.chartEnded = false;
   ctx.sharedEngineChartSettled = false;
   ctx.onHeldPlayEnded = undefined;
@@ -1259,6 +1262,7 @@ function handleSharedEngineChartFinished(
   // Families without a music-end stage retain the two-measure lead-out. A family with that stage waits on the
   // engine's chart clock, then holds its finish margin on the scene clock before fading.
   const beginFade = () => {
+    ctx.chartEndFade = undefined;
     ctx.chartEndTimeout = undefined;
     if (ctx.disposed || ctx.exiting) return;
     drainSharedEngineSignals(ctx);
@@ -1309,11 +1313,44 @@ function handleSharedEngineChartFinished(
   } else {
     ctx.chartEndTimeout = window.setTimeout(beginFade, ending.leadOutMs);
   }
+  ctx.chartEndFade = () => {
+    if (ctx.chartEndTimeout !== undefined) window.clearTimeout(ctx.chartEndTimeout);
+    ctx.chartEndGate = undefined;
+    beginFade();
+  };
+}
+
+/**
+ * Takes an ESC (and the other ways out that act as it) on a play whose notes are all judged: the play finishes instead
+ * of being given up, so its result shows, as beatoraja's `BMSPlayer.stopPlay` does (once the judged notes reach the
+ * chart's note count it moves to `STATE_FINISHED` and starts `TIMER_FADEOUT`; a second ESC while that fade-out or the
+ * failure close runs is ignored). What is left of the lead-out is skipped: the fade-out runs at once, the engine's hold
+ * is let go, and the play ends complete with its replay as usual. Returns `false` when the ESC is the host's to take
+ * (a play with notes still to judge, a looping PRACTICE play, or one already handed over).
+ */
+export function finishPlayOnExit(ctx: PlayEngineContext): boolean {
+  if (ctx.disposed || ctx.sharedEngineInterrupt !== undefined) return false;
+  if (ctx.chartEnded) {
+    // The outro is under way: its fade-out (or a failed play's close) leads to the result, which ESC does not cut.
+    if (ctx.exiting) return true;
+    const fade = ctx.chartEndFade;
+    if (fade === undefined) return false;
+    fade();
+    return true;
+  }
+  if (ctx.exiting || ctx.sharedEngineInputSignals === undefined) return false;
+  // A looping PRACTICE play never reaches its end: ESC leaves it.
+  if (!ctx.options.replay && ctx.options.practiceRange !== undefined) return false;
+  if (!isEveryNoteJudged(ctx.engineFrame)) return false;
+  handleSharedEngineChartFinished(ctx, undefined, true);
+  ctx.chartEndFade?.();
+  return true;
 }
 
 /** Stops the shared engine as the play is disposed (`PlaySession.dispose`) and lets go of its buses. */
 export function stopSharedEngine(ctx: PlayEngineContext): void {
   ctx.chartEndGate = undefined;
+  ctx.chartEndFade = undefined;
   // Abort the shared engine driver BEFORE the audio session tear-down so engine ticks don't fire fresh
   // sample triggers onto a session that's about to lose its bus references. The engine catches the abort via
   // `throwIfAborted` and unwinds; our launchSharedEngine catch swallows the resulting `AbortError` because

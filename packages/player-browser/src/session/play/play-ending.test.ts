@@ -1,6 +1,13 @@
+import type { PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { PlayViewTiming } from '../../view/types.ts';
-import { beginExitSequence, resolvePlayEnding, type PlayEndingContext, type PlayEndingInput } from './play-ending.ts';
+import {
+  beginExitSequence,
+  isEveryNoteJudged,
+  resolvePlayEnding,
+  type PlayEndingContext,
+  type PlayEndingInput,
+} from './play-ending.ts';
 import type { PlayMoment } from './play-session-theme.ts';
 
 const timing = { beatToSeconds: (beat: number) => beat * 0.5 };
@@ -184,5 +191,30 @@ describe('beginExitSequence', () => {
     exit.dispose();
     vi.advanceTimersByTime(1000);
     expect(exit.callback).not.toHaveBeenCalled();
+  });
+});
+
+describe('isEveryNoteJudged', () => {
+  const counts = (
+    total: number,
+    judged: Partial<Record<'perfect' | 'great' | 'good' | 'bad' | 'poor', number>> = {},
+  ): PlayerUIFramePayload['summary'] =>
+    ({ total, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, ...judged }) as PlayerUIFramePayload['summary'];
+
+  test("holds once the judged notes reach the chart's judgment count", () => {
+    expect(isEveryNoteJudged({ summary: counts(4), judgedNoteCount: 3 })).toBe(false);
+    expect(isEveryNoteJudged({ summary: counts(4), judgedNoteCount: 4 })).toBe(true);
+  });
+
+  test('never holds without a judged count or with nothing to judge', () => {
+    expect(isEveryNoteJudged(undefined)).toBe(false);
+    expect(isEveryNoteJudged({ summary: counts(4) })).toBe(false);
+    expect(isEveryNoteJudged({ summary: counts(0), judgedNoteCount: 0 })).toBe(false);
+  });
+
+  test("waits for a two-player play's 2P notes too", () => {
+    const frame = { summary: counts(4), judgedNoteCount: 4 };
+    expect(isEveryNoteJudged({ ...frame, summary2P: counts(3, { perfect: 1, poor: 1 }) })).toBe(false);
+    expect(isEveryNoteJudged({ ...frame, summary2P: counts(3, { perfect: 1, great: 1, poor: 1 }) })).toBe(true);
   });
 });
