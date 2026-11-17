@@ -273,7 +273,8 @@ describe('LibraryService missing course stages', () => {
 
 describe('LibraryService well-known difficulty tables', () => {
   test('imports the well-known tables on a first visit, through the same-origin proxy', async () => {
-    stubStorage();
+    // No Bemuse servers: their defaults would load first.
+    stubStorage({ [BEMUSE_SERVER_URLS_STORAGE_KEY]: '[]' });
     vi.stubGlobal('location', { href: 'https://play.example/' });
     const fetch = stubFetch({ [DEFAULT_COURSE_TABLE_URLS[0]!]: tableHeader() });
     const { library, folders } = harness();
