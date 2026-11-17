@@ -67,14 +67,15 @@ export function parseStoredCourseTableURLs(raw: string | null | undefined): stri
 }
 
 /**
- * The remembered table URLs: {@link DEFAULT_COURSE_TABLE_URLS} until a list is stored (an empty stored list stays
- * empty), and empty when storage is blocked.
+ * The remembered table URLs, or {@link DEFAULT_COURSE_TABLE_URLS} while none is stored; empty when storage is blocked.
+ * A stored empty list reads as none: players have no way to empty the list, and builds before the well-known tables
+ * stored one with every Options save (and synced it to their account), so it says nothing about the tables they want.
  */
 export function readStoredCourseTableURLs(storage: Pick<Storage, 'getItem'> | undefined = defaultStorage()): string[] {
+  if (storage === undefined) return [];
   try {
-    const raw = storage?.getItem(COURSE_TABLE_URLS_STORAGE_KEY);
-    if (raw === null || raw === undefined) return storage === undefined ? [] : [...DEFAULT_COURSE_TABLE_URLS];
-    return parseStoredCourseTableURLs(raw);
+    const urls = parseStoredCourseTableURLs(storage.getItem(COURSE_TABLE_URLS_STORAGE_KEY));
+    return urls.length > 0 ? urls : [...DEFAULT_COURSE_TABLE_URLS];
   } catch {
     return [];
   }

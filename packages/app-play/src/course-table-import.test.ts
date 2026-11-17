@@ -54,11 +54,16 @@ describe('course table URLs', () => {
     }
   });
 
-  test('reads the well-known tables until a list is stored, and keeps a stored empty list empty', () => {
+  test('reads the well-known tables until a list is stored, and reads a stored empty list as none', () => {
     const storage = memoryStorage();
     expect(readStoredCourseTableURLs(storage)).toEqual(DEFAULT_COURSE_TABLE_URLS);
+    // Earlier builds stored an empty list with every Options save, and synced it to the account.
     storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, '[]');
-    expect(readStoredCourseTableURLs(storage)).toEqual([]);
+    expect(readStoredCourseTableURLs(storage)).toEqual(DEFAULT_COURSE_TABLE_URLS);
+    storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, '["nope"]');
+    expect(readStoredCourseTableURLs(storage)).toEqual(DEFAULT_COURSE_TABLE_URLS);
+    storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, '["https://a.example/t.html"]');
+    expect(readStoredCourseTableURLs(storage)).toEqual(['https://a.example/t.html']);
     expect(readStoredCourseTableURLs(undefined)).toEqual([]);
   });
 
@@ -76,7 +81,10 @@ describe('course table URLs', () => {
       'https://b.example/h.json',
     ]);
     storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, '[]');
-    expect(rememberCourseTableURL(DEFAULT_COURSE_TABLE_URLS[0]!, storage)).toEqual([DEFAULT_COURSE_TABLE_URLS[0]]);
+    expect(rememberCourseTableURL('https://c.example/t.html', storage)).toEqual([
+      ...DEFAULT_COURSE_TABLE_URLS,
+      'https://c.example/t.html',
+    ]);
   });
 
   test('blocked storage reads as empty and still returns the URL', () => {
