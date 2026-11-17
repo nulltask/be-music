@@ -1,11 +1,12 @@
 /**
  * The select screen's README dialog, the same for every skin family: `<be-music-readme-dialog>` from
  * `@be-music/player-ui`, laid over the stage in the host's DOM layer. The session decides when it shows and with what
- * text (`SelectFrame`'s `readText`); the dialog shows it, scrolls it for the keys, and asks to close (its close button,
- * Escape, a click on the backdrop), which the view turns into a `readtext` intent.
+ * texts (`SelectFrame`'s `readText`); the dialog shows the one selected, with a tab for each of the folder's text files
+ * when there are several, scrolls it for the keys, and asks to close (its close button, Escape, a click on the backdrop)
+ * or for another tab, which the view turns into `readtext` and `readtext-tab` intents.
  */
 
-import { defineBeMusicElements, type BeMusicReadmeDialogElement } from '@be-music/player-ui';
+import { defineBeMusicElements, type BeMusicReadmeDialogElement, type BeMusicUIEvent } from '@be-music/player-ui';
 import { basecoatTheme } from '@be-music/player-ui/themes/basecoat';
 import type { SelectFrame } from '../types.ts';
 
@@ -16,6 +17,7 @@ export class SelectReadmeDialog {
   /** Where the dialog goes (the host's DOM layer), while the view is attached. */
   private parent: (() => HTMLElement) | undefined;
   private requestClose: () => void = () => {};
+  private requestTab: (index: number) => void = () => {};
 
   /** Whether the dialog is showing a text. */
   public get open(): boolean {
@@ -24,14 +26,15 @@ export class SelectReadmeDialog {
 
   /**
    * Lets the dialog show in `parent` (the host's DOM layer, read only once a text shows); `requestClose` runs when the
-   * player asks to close it.
+   * player asks to close it, and `requestTab` when they choose another of its text files.
    */
-  public attach(parent: () => HTMLElement, requestClose: () => void): void {
+  public attach(parent: () => HTMLElement, requestClose: () => void, requestTab: (index: number) => void): void {
     this.parent = parent;
     this.requestClose = requestClose;
+    this.requestTab = requestTab;
   }
 
-  /** Shows a text, from its top each time it is opened; `undefined` closes the dialog. */
+  /** Shows the selected text, from its top each time it is opened or switched to; `undefined` closes the dialog. */
   public show(readText: SelectFrame['readText']): void {
     if (readText === this.shown) return;
     const element = readText === undefined ? this.element : this.mount();
@@ -39,7 +42,9 @@ export class SelectReadmeDialog {
     this.shown = readText;
     element.subheading =
       readText === undefined ? '' : [readText.chart.title, readText.chart.subtitle].filter(Boolean).join(' ');
-    element.text = readText?.text;
+    element.tabs = readText?.files.map((file) => file.name) ?? [];
+    element.selectedTab = readText?.selected ?? 0;
+    element.text = readText?.files[readText.selected]?.text;
   }
 
   /** Scrolls the text by `delta` CSS pixels (positive: down), stopping at either end. */
@@ -51,6 +56,7 @@ export class SelectReadmeDialog {
   public detach(): void {
     this.parent = undefined;
     this.requestClose = () => {};
+    this.requestTab = () => {};
     this.shown = undefined;
     if (this.element !== undefined) {
       this.element.text = undefined;
@@ -69,6 +75,9 @@ export class SelectReadmeDialog {
       defineBeMusicElements(registry, { theme: basecoatTheme });
       element = parent.ownerDocument.createElement('be-music-readme-dialog');
       element.addEventListener('readme-close', () => this.requestClose());
+      element.addEventListener('readme-tab', (event) =>
+        this.requestTab((event as BeMusicUIEvent<'readme-tab'>).detail.index),
+      );
       this.element = element;
     }
     if (element.parentElement !== parent) parent.append(element);

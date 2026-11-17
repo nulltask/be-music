@@ -16,9 +16,11 @@ import {
   splitDroppedChartAndThemeFiles,
   type BrowserDroppedFile,
   type BrowserChartCollection,
+  type ChartCacheKeyBook,
   type ChartFileHashes,
   type CourseDefinitionGroup,
   type CourseMaker,
+  type LoadProgress,
 } from '@be-music/player-browser/collection';
 import { applyChartLevelEdits, readChartLevelEdits } from '../chart-level-edits.ts';
 import { createIndexedDBParsedChartCache, currentParsedChartBuildStamp } from './parsed-chart-database.ts';
@@ -61,6 +63,9 @@ import {
 } from '../loading-overlay.ts';
 import type { PlayerWebElements } from '../types.ts';
 import { expandZipToFiles, fetchZipAsFile, fetchZipAsFiles, parseURLMediaParams } from '../url-load.ts';
+import { bemuseServerLabel, readStoredBemuseServerURLs } from '../bemuse-server.ts';
+import { readBemuseServerFiles } from './bemuse-servers.ts';
+import { BemuseSongExtrasRegistry } from '../bemuse-song-extras.ts';
 import { isDroppedArchive, sortDroppedArchives } from './drop-archives.ts';
 
 const dropLog = logger('drop');
@@ -103,10 +108,14 @@ export interface LibraryServiceOptions {
   readonly applyDroppedSkin: (family: SkinFamilyId) => void | Promise<void>;
 }
 
-interface LibraryLoadOrigin {
+export interface LibraryLoadOrigin {
   readonly showLibraryRoot?: boolean;
   readonly entries?: readonly FileSystemEntry[];
   readonly readFiles?: () => Promise<BrowserDroppedFile[]>;
+  /** The cache keys of the load's chart files, so the ones known unchanged are listed without being read. */
+  readonly chartKeys?: ChartCacheKeyBook;
+  /** The load's charts are in the library: after the first load, and after each time they are read again. */
+  readonly onLoaded?: () => void;
 }
 
 /** The charts and courses the select screen lists, and the loads that add to them. */
@@ -118,7 +127,14 @@ export class LibraryService {
   public collection: BrowserChartCollection = { sources: [], charts: [], errors: [] };
   /** Every load of charts, for the folder reload (`reloadCharts`): a drop's entries, or the files themselves. */
   private readonly chartLoads: (LibraryLoadOrigin & { readonly files: BrowserDroppedFile[] })[] = [];
-  private readonly collectionStore = new BrowserChartCollectionStore();
+  private collectionStore = new BrowserChartCollectionStore();
+  /** The songs of the Bemuse servers loaded, whose preview, video, images and gain go onto their charts. */
+  private readonly bemuseSongs = new BemuseSongExtrasRegistry();
+  /** The library changed on disk while no select screen showed; it is read again when one does ({@link selectShown}). */
+  private refreshPending = false;
+  private refreshing: Promise<void> | undefined;
+  /** The last change to the collection in line: a load and a re-read each start once the one before is in. */
+  private collectionWork: Promise<unknown> = Promise.resolve();
   /** Charts parsed on an earlier visit, by the SHA-256 of their files: a folder dropped again is not parsed again. */
   private readonly parsedChartCache = createIndexedDBParsedChartCache(currentParsedChartBuildStamp());
   /**
@@ -235,8 +251,10 @@ export class LibraryService {
     const mediaParams = parseURLMediaParams(href);
     // Difficulty tables imported in an earlier visit are imported again, after the URL load so their stages match it.
     const storedCourseTables = readStoredCourseTableURLs();
+    const bemuseServers = readStoredBemuseServerURLs();
     return ready.then(async () => {
       if (mediaParams.musicURL || mediaParams.skinURL) await this.loadFromURL(mediaParams);
+      if (bemuseServers.length > 0) await this.loadBemuseServers(bemuseServers);
       if (storedCourseTables.length > 0) await this.importCourseTables(storedCourseTables, false);
     });
   }
@@ -636,6 +654,47 @@ export class LibraryService {
   }
 
   /**
+   * Lists the songs of Bemuse music servers (their `index.json` or `bemuse-song.json` URLs), each server as a folder of
+   * the library. Charts are fetched as the songs list, sound files as a song is played (`readBemuseServerFiles`); the
+   * folder reload reads a server's index again. A server that cannot be read only says so, so a dead server never
+   * wedges the boot.
+   */
+  public async loadBemuseServers(indexURLs: readonly string[]): Promise<void> {
+    if (indexURLs.length === 0) return;
+    showLoadingOverlay(this.elements);
+    await this.leaveSelect();
+    try {
+      for (const indexURL of indexURLs) {
+        const label = bemuseServerLabel(indexURL);
+        this.setStatus(`Fetching Bemuse server ${label}…`);
+        try {
+          const read = async () => {
+            const server = await readBemuseServerFiles(indexURL);
+            this.bemuseSongs.remember(server.songs);
+            return server;
+          };
+          const server = await read();
+          for (const { track, reason } of server.skipped)
+            dropLog.warn(`Bemuse server ${label}: skipped ${track}: ${reason}`);
+          dropLog.info(`Bemuse server ${label}: songs=${server.songs.length} skipped=${server.skipped.length}`);
+          if (server.files.length === 0) {
+            this.setStatus(`Bemuse server ${label} has no songs Be-Music can play`);
+            continue;
+          }
+          await this.loadCharts(server.files, { readFiles: async () => (await read()).files });
+        } catch (error) {
+          dropLog.warn(`Bemuse server failed: ${indexURL}`, error);
+          this.setStatus(`Bemuse server ${label} failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      if (this.courseGroups.length > 0) await this.refreshCourseFolders();
+      await this.showSelect();
+    } finally {
+      hideLoadingOverlay(this.elements);
+    }
+  }
+
+  /**
    * Reads the library's charts again, as LR2's and beatoraja's folder reload does: a dropped folder is walked again, so
    * charts added, changed or removed on disk since show up; picked files and archives are read again as they were. The
    * select screen then shows the new library. Without a load to read again it only says so.
@@ -646,6 +705,59 @@ export class LibraryService {
       return;
     }
     this.setStatus('Reloading charts...');
+    await this.readChartsAgain((progress) => applyLoadProgress(this.elements, progress));
+    await this.showSelect();
+    this.setStatus(describeChartCollection(this.collection));
+  }
+
+  /**
+   * Reads the library's charts again without leaving the screen: a remembered folder listed from its snapshot turned
+   * out to have changed on disk. The select screen, when it is the one showing, keeps its place; any other screen goes
+   * on with the charts it has, and the library is read again when the select screen next shows ({@link selectShown}).
+   */
+  public refreshCharts(): Promise<void> {
+    if (this.showing() !== 'select') {
+      this.refreshPending = true;
+      return Promise.resolve();
+    }
+    this.refreshPending = false;
+    // One at a time: a second change found meanwhile is read once the first read is in.
+    const refresh = (this.refreshing ?? Promise.resolve()).then(async () => {
+      await this.readChartsAgain();
+      const view = this.selectView();
+      if (view === undefined || this.showing() !== 'select') return;
+      const navigation = view.snapshot();
+      view.setLibrary(this.collection);
+      view.restore(navigation);
+      this.elements.shell.classList.toggle('empty', this.collection.charts.length === 0);
+      this.setStatus(describeChartCollection(this.collection));
+    });
+    this.refreshing = refresh.catch(() => undefined);
+    return refresh;
+  }
+
+  /** The select screen shows: a change on disk found during a play is read now ({@link refreshCharts}). */
+  public selectShown(): void {
+    if (!this.refreshPending) return;
+    void this.refreshCharts().catch((error: unknown) => dropLog.warn('library refresh failed', error));
+  }
+
+  /**
+   * Reads every load again into a new collection, which replaces the library's once it is whole: until then the
+   * screens go on with the charts they have.
+   */
+  private readChartsAgain(onProgress?: (progress: LoadProgress) => void): Promise<void> {
+    return this.changeCollection(() => this.readLoadsAgain(onProgress));
+  }
+
+  /** Runs `work`, which changes the collection, once every change before it is in. */
+  private changeCollection<T>(work: () => Promise<T>): Promise<T> {
+    const done = this.collectionWork.then(work);
+    this.collectionWork = done.catch(() => undefined);
+    return done;
+  }
+
+  private async readLoadsAgain(onProgress?: (progress: LoadProgress) => void): Promise<void> {
     const loads = [...this.chartLoads];
     const groups: BrowserDroppedFile[][] = [];
     for (const load of loads) {
@@ -668,21 +780,30 @@ export class LibraryService {
       });
       groups.push(splitDroppedChartAndThemeFiles(files).chartFiles);
     }
-    this.collection = await this.collectionStore.loadFromFiles([]);
-    for (const files of groups) {
+    const store = new BrowserChartCollectionStore();
+    for (const [index, files] of groups.entries()) {
       if (files.length === 0) continue;
-      this.collection = await this.collectionStore.appendFromFiles(files, {
-        onProgress: (progress) => applyLoadProgress(this.elements, progress),
+      const { chartKeys } = loads[index]!;
+      await store.appendFromFiles(files, {
+        ...(onProgress !== undefined ? { onProgress } : {}),
         parsedChartCache: this.parsedChartCache,
+        ...(chartKeys !== undefined ? { chartKeys } : {}),
       });
     }
+    this.collectionStore = store;
+    this.collection = store.collection;
     applyChartLevelEdits(this.collection.charts, readChartLevelEdits(globalThis.localStorage));
-    if (this.courseGroups.length > 0) await this.refreshCourseFolders();
-    await this.showSelect();
-    this.setStatus(describeChartCollection(this.collection));
+    this.bemuseSongs.apply(this.collection.charts);
+    // The player's own courses are listed again too, with any course files'.
+    await this.refreshCourseFolders();
+    for (const load of loads) load.onLoaded?.();
   }
 
-  private async loadCharts(files: BrowserDroppedFile[], origin: LibraryLoadOrigin = {}): Promise<void> {
+  private loadCharts(files: BrowserDroppedFile[], origin: LibraryLoadOrigin = {}): Promise<void> {
+    return this.changeCollection(() => this.appendCharts(files, origin));
+  }
+
+  private async appendCharts(files: BrowserDroppedFile[], origin: LibraryLoadOrigin): Promise<void> {
     // Kept for the folder reload: the drop's entries walk its folders again, other files are read again as they are.
     this.chartLoads.push({ ...origin, files });
     this.setStatus('Loading charts...');
@@ -693,9 +814,12 @@ export class LibraryService {
     this.collection = await this.collectionStore.appendFromFiles(files, {
       onProgress: (progress) => applyLoadProgress(this.elements, progress),
       parsedChartCache: this.parsedChartCache,
+      ...(origin.chartKeys !== undefined ? { chartKeys: origin.chartKeys } : {}),
     });
+    origin.onLoaded?.();
     // The player's own difficulties and levels (LR2's F3 level edit) go over the charts' own.
     applyChartLevelEdits(this.collection.charts, readChartLevelEdits(globalThis.localStorage));
+    this.bemuseSongs.apply(this.collection.charts);
     // Suppress the "0 charts loaded" reading — that text reads like a parse error to the user. The post-load status
     // text is set by `processIncomingFiles` once both theme + songs land, so a mid-flight transient is plenty.
     if (this.collection.charts.length > 0) {

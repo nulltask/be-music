@@ -194,6 +194,35 @@ flowchart TD
 
 **ライブラリと記録。** ドロップと Options ダイアログ の Open folder / Open files での選択を `app/drop-target.ts` が受け取ります。読み込み中の表示を出し、選曲画面を stage から外してからファイルを読みます。ブラウザはハンドラーが返るとドロップの中身を空にするので、ドロップの項目はハンドラーが最初に何かを待つ前に読みます。読んだものは `services/library.ts` が振り分けてライブラリを保ちます。譜面は曲のコレクションに、テーマのファイルは LR2 と beatoraja のテーマの読み込みに、コースファイルと保存した表のヘッダーはコースのフォルダーに、リプレイはリプレイに回します。ドロップまたは選択した ZIP アーカイブは、展開せずに中央ディレクトリから読んだエントリーの一覧で振り分けます（`services/drop-archives.ts`）。譜面を含むものは `?music=` のアーカイブと同じく丸ごと曲のコレクションに、それ以外（スキン、リプレイ、コースファイル）は `?skin=` のアーカイブと同じく展開してドロップの残りと一緒に振り分けます。`?music=` / `?skin=` のアーカイブの読み込みと、URL からの難易度表の取り込みもここで行います。[ベスト記録](#ベスト記録)と、そのキーになる譜面のハッシュは `services/records.ts` が、[プレイヤーが作るコース](#コースと段位認定)は `services/course-maker.ts` が持ちます。
 
+**記憶したフォルダー。** Open folder で開いたフォルダー、またはブラウザーがディレクトリハンドルを渡すドロップで読み込んだフォルダーは記憶され（IndexedDB `be-music-folders`）、次回の起動時に、最初の選曲画面が出る前にもう一度一覧にします。この起動を短くするために 3 つの仕組みがあり、譜面ファイルを 1 つも読まず、フォルダーの走査も待ちません。
+
+- **パース済み譜面**（`be-music-charts`、`services/parsed-chart-database.ts`）: 各譜面のパース結果を、ファイルの SHA-256 をキーに保存します。新しいビルドでは消去します。
+- **フォルダーのスナップショット**（`be-music-folder-snapshots`、`services/folder-snapshots.ts`）: 前回読み込んだ時点の、各フォルダーのファイル一覧と、譜面ファイルごとのサイズ、更新日時、パース済み譜面のキーです。
+- **一覧そのもの**（`services/folder-listing.ts`）: 全ファイルのパスです。専用の worker（`folder-listing-worker.ts`）で走査し、一覧にあるファイルは最初に読まれるときにだけフォルダーのハンドルから開きます。
+
+```mermaid
+sequenceDiagram
+  participant Page as ページ
+  participant Snapshots as スナップショット
+  participant Cache as パース済み譜面
+  participant Worker as 走査 worker
+  Page->>Snapshots: フォルダーのスナップショットを読む
+  Snapshots-->>Page: 一覧 + 譜面のキー
+  Page->>Cache: キーで譜面を読む（まとめて）
+  Cache-->>Page: パース済み譜面
+  Note over Page: 選曲画面を表示
+  Page->>Worker: フォルダーを走査
+  Worker-->>Page: 現在の一覧
+  alt スナップショットから変化あり
+    Page->>Page: その場でライブラリを読み直す
+    Page->>Snapshots: 新しいスナップショットを保存
+  end
+```
+
+スナップショットのないフォルダー（初回）は、先に走査してから譜面を読み、ハッシュを計算してパースします。譜面が揃った時点でスナップショットを保存します。裏の走査は、一覧と、譜面ファイルごとのサイズと更新日時をスナップショットと比べます。違いがあれば、選曲画面の位置を保ったままライブラリを読み直します（`LibraryService.refreshCharts`）。キーを再び使うのは、キーを求めたときとサイズも更新日時も同じファイルだけなので、読むのは変化した譜面ファイルだけです。プレイ中は、選曲画面に戻るまで読み直しを待ちます。読めなくなったフォルダーはその旨を表示し、その譜面はライブラリから外れます。走査が終わるまでの一覧はスナップショットのものです。前回の起動以降にディスク上で編集した譜面は、その間だけ古いヘッダーで表示されます。LRX の譜面は、キーが隣のファイルにも依存するため、毎回読みます。
+
+譜面が worker やパース済み譜面のキャッシュを通るときは、ほぼヘッダーだけの大きさです。イベントは値が収まる最小の幅の列に詰め（`packed-events.ts`）、一覧が読まないフィールド（リソース、小節、形式ごとのセクション、preservation）は JSON テキストのまま運び、どれかを最初に読むときにパースします（`deferChartFields`）。数千譜面のライブラリをキャッシュから取り出す時間は、譜面のオブジェクトを組み立てる場合の数分の一になり、一度もフォーカスしない譜面のオブジェクトは作られません。パース結果は譜面ファイルの MD5 も持ち、キャッシュのキーはファイルの SHA-256 で始まるので、ローダーは両方のハッシュを譜面と一緒に保持します（`seedChartFileHashes`）。コースのステージの照合やベスト記録の参照（`RecordsService.resolveChartHashes`）で、譜面ファイルを読み直すことはありません。
+
 **テーマ。** ドロップが持ってきたテーマは `services/themes/` が持ちます。`lr2.ts` はこれまでのドロップの LR2 テーマをすべて持ち、そのうち 1 つを読み込みます。そのスキン、BGM、システム音と、コース用に読み直したスキンです。`beatoraja.ts` は beatoraja のテーマを持ち、そのエントリを scene kit として読み込みます。どのエントリを読むかはスキンの種類ごとに Options ダイアログ で選んだもの、オプションはプレイヤーが選んだものです。`built-in.ts` は標準のファミリーが描く Be-Music Skin と、その保存した設定、追加したスキンを持ちます。各画面をどのファミリーが描くか（Options ダイアログ の Skin system、選んでいなければ beatoraja、LR2、標準の順）と、そのときの kit と選曲画面の音は `app/family-kits.ts` が決めます。
 
 **リプレイ履歴とスロット。** `ReplaySlotStore` は履歴のメタデータとスロットの割り当てをメモリーに持ち、必要に応じて IndexedDB から圧縮されたリプレイを読み込みます。`ResultReplaySlots` は対象のリプレイを1回保存し、スロットの条件を適用します。選曲画面の Lit パネルはすべてのスキンで履歴の再生とダウンロードを提供します。beatoraja はスロットの操作を独自に描画します。[リプレイスロット](./replay.ja.md#リプレイスロット)を参照してください。
@@ -240,7 +269,7 @@ flowchart TD
 - chart discovery は `.bms`, `.bme`, `.bml`, `.pms`, `.bmson`, ナナシグルーヴ2 の `.n2s`, LRX の `.lrs`（隣の `.lrh` と `.lrm` も読みます）を受け付けます。
 - file lookup は case-insensitive です。大文字小文字だけが異なる LR2 / beatoraja 風の asset reference でも browser drop で解決できます。
 - 大きな audio / video file は既定で lazy な `File` reference のまま保持します。image、skin、chart、小さな metadata file は collection loading 中に bytes として読み込みます。
-- folder walking と file read は bounded concurrency と progress callback を使い、大きな folder でも browser の FileSystem API や UI update loop を過剰に詰まらせないようにします。
+- folder walking と file read は bounded concurrency と progress callback を使い、大きな folder でも browser の FileSystem API や UI update loop を過剰に詰まらせないようにします。 譜面ファイルの読み込みはパースと並行して進みます。パース用 worker の数より多くの譜面を同時に扱い、残りは worker pool が待ち行列に入れます。
 - parse error は drop 全体を abort せず、collection に蓄積します。
 
 演奏と選曲プレビューは、候補音声の読み込みやデコードに失敗すると、次の異なる素材を試します。探索順は既存の Opus → Ogg → MP3 → WAV → M4A → 宣言されたパスを維持し、フォルダー探索・大文字小文字を区別しない照合・`#PATH_WAV` も適用します。読み込みが中断されたり選曲が変わったりした場合は、次の候補を試しません。NONSTOP の音声は、連結後のリソースパスをキーとする `BrowserAssetSource.audioFallbacks` に各ステージの候補列を保持し、元のステージの別フォルダーにある形式にも切り替えます。デコード結果は引き続き譜面で宣言されたリソース名をキーに保持します。

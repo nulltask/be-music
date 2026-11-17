@@ -191,6 +191,15 @@ textarea {
   flex: 1 1 auto;
   overflow-wrap: anywhere;
 }
+.bemuse-server-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.bemuse-server-form input {
+  flex: 1 1 12rem;
+  min-inline-size: 0;
+}
 .options-body {
   display: flex;
   flex-direction: column;

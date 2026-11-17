@@ -44,6 +44,17 @@ const DATABASES: Readonly<Record<string, { description: string; stores: Readonly
       meta: 'The build that parsed them',
     },
   },
+  'be-music-folders': {
+    description: 'Folders you opened or dropped, to open them again on the next visit',
+    stores: { folders: 'The remembered folders' },
+  },
+  'be-music-folder-snapshots': {
+    description: 'What each remembered folder held when it was last loaded, so its charts are listed at once',
+    stores: {
+      folders: 'The folders that have a snapshot',
+      snapshots: 'Each folder’s file listing, and the size, modification time and parse key of its chart files',
+    },
+  },
 };
 
 /** One `localStorage` entry. */

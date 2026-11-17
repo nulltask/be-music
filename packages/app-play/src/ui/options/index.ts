@@ -30,6 +30,7 @@ import { paneOptions, type PaneBinding } from '../../pane-controls.ts';
 import { migrateOptionValue, practiceReadsJudgeRankAndTotal, type GaugePick } from '@be-music/player-engine/ruleset';
 import { readStoredCompressorTunings, type CompressorTuning } from '../../compressor-tuning.ts';
 import { readStoredCourseTableURLs } from '../../course-table-import.ts';
+import { readStoredBemuseServerURLs } from '../../bemuse-server.ts';
 import { captureOptionSettings } from '../../option-settings.ts';
 import { optionSettingsSync } from '../../option-settings-sync.ts';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
@@ -100,8 +101,11 @@ export interface OptionsDialogDeps {
   readonly silentMode: SilentModeSetting;
   /** The Leaderboard panel, which fills its own folder. */
   readonly leaderboard: Pick<LeaderboardPanel, 'buildFolder'>;
-  /** The library service: "Import table courses" and "Load from URLs" add to the library through it. */
-  readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
+  /**
+   * The library service: "Import table courses", "Load from URLs" and the Bemuse music servers add to the library through
+   * it.
+   */
+  readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL' | 'loadBemuseServers'>;
   /** The records service, whose best records "Clear best records" empties. */
   readonly records: Pick<RecordsService, 'chartBestRecords'>;
   /** The course-maker service, whose card "My courses…" opens. */
@@ -185,7 +189,7 @@ export class OptionsDialog {
   public readonly guiState: PlayerGUIState;
   public readonly sceneHost: PixiSceneHost;
   public readonly silentMode: SilentModeSetting;
-  public readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
+  public readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL' | 'loadBemuseServers'>;
   public readonly records: Pick<RecordsService, 'chartBestRecords'>;
   public readonly courseMaker: Pick<CourseMakerService, 'panel'>;
   public readonly skinSettings: StoredSkinSettings;
@@ -544,6 +548,7 @@ export class OptionsDialog {
       compressorTuning: this.compressorTunings,
       skinSettings: this.skinSettings,
       courseTableURLs: readStoredCourseTableURLs(),
+      bemuseServerURLs: readStoredBemuseServerURLs(),
       workerCount: getBrowserWorkerCount(),
     });
     optionSettingsSync.save(document);

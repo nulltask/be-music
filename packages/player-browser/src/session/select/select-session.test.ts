@@ -506,12 +506,40 @@ describe('SelectSession README dialog', () => {
       browse: { folderPath: ['pack'], cursors: [1, 0] },
     });
     intent({ type: 'readtext' });
-    await vi.waitFor(() => expect(advance(10).readText?.text).toBe('notes'));
+    await vi.waitFor(() => expect(advance(10).readText?.files).toEqual([{ name: 'readme.txt', text: 'notes' }]));
     key('ArrowDown');
     expect(advance(10).events).toEqual([{ kind: 'readtext-scroll', delta: 36 }]);
     key('Enter');
     expect(advance(10).readText).toBeUndefined();
     expect(cues()).toEqual(['optionOpen', 'optionClose']);
+  });
+
+  it('opens on the likeliest README of several text files and switches between them on ← and → and the tabs', async () => {
+    const library = makeLibrary({
+      'pack/readme_bga.txt': new TextEncoder().encode('BGA notes'),
+      'pack/readme.txt': new TextEncoder().encode('chart notes'),
+      'pack/score.txt': new TextEncoder().encode('[Start of Score]'),
+    });
+    const { intent, key, advance, cues } = createSession({
+      library,
+      browse: { folderPath: ['pack'], cursors: [1, 0] },
+    });
+    intent({ type: 'readtext' });
+    await vi.waitFor(() => expect(advance(10).readText?.selected).toBe(0));
+    expect(advance(10).readText?.files.map((file) => file.name)).toEqual(['readme.txt', 'readme_bga.txt', 'score.txt']);
+    key('ArrowRight');
+    expect(advance(10).readText?.selected).toBe(1);
+    key('ArrowLeft');
+    key('ArrowLeft');
+    // Wraps around from the first tab to the last.
+    expect(advance(10).readText?.selected).toBe(2);
+    intent({ type: 'readtext-tab', index: 0 });
+    expect(advance(10).readText?.selected).toBe(0);
+    // A tab out of range, or the one shown, changes nothing.
+    intent({ type: 'readtext-tab', index: 0 });
+    intent({ type: 'readtext-tab', index: 1.5 });
+    expect(advance(10).readText?.selected).toBe(0);
+    expect(cues()).toEqual(['optionOpen', 'optionChange', 'optionChange', 'optionChange', 'optionChange']);
   });
 
   it('plays the option-change cue for a chart with no text file, and leaves a host’s readtext to the host', async () => {

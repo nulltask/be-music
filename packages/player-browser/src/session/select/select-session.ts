@@ -58,6 +58,7 @@ import type {
   SelectCourseMakerAction,
   SelectCourseMakerState,
   SelectFrame,
+  SelectReadText,
   SelectIntent,
   SelectRecords,
   SelectViewEvent,
@@ -69,7 +70,7 @@ import { DEFAULT_CONTROL_ACTIONS, type ControlActionMap } from '../controls/cont
 import { controlButtonsOfKey, DEFAULT_CONTROL_BUTTONS } from '../controls/control-buttons.ts';
 import { createControlButtonTracker, isStartAndSelectDown } from '../controls/button-tracker.ts';
 import { openLibrary, restoreSelectBrowse, SELECT_POLICIES, type SelectPolicy } from './select-policy.ts';
-import { findReadtextForChart } from '../../collection/readtext.ts';
+import { findReadtextsForChart } from '../../collection/readtext.ts';
 
 /** A bar the player starts: a chart or a course. */
 export type SelectStartEntry = Exclude<LibraryEntry, { kind: 'folder' }>;
@@ -244,7 +245,7 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
   /** When the panel key that opened the panel went down, while it is still held. */
   private panelPressedAtMs: number | undefined;
   private searchEditing = false;
-  private readText: { readonly chart: LibraryChart; readonly text: string } | undefined;
+  private readText: SelectReadText | undefined;
   /** Bumped by each README lookup, so a lookup that lands after a newer one (or a close) is dropped. */
   private readTextLookup = 0;
   private launch: PendingLaunch | undefined;
@@ -558,6 +559,9 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       case 'readtext-close':
         this.closeReadText(true);
         return true;
+      case 'readtext-tab':
+        if (this.readText !== undefined) this.selectReadText(this.readText.selected + action.step);
+        return true;
       case 'swallow':
         return false;
     }
@@ -604,6 +608,9 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
         return;
       case 'readtext':
         this.toggleReadText();
+        return;
+      case 'readtext-tab':
+        this.selectReadText(intent.index);
         return;
       case 'course-maker':
         this.runCourseMaker(intent.action);
@@ -1119,17 +1126,30 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     }
     const lookup = ++this.readTextLookup;
     const library = this.library;
-    void findReadtextForChart(library, chart).then((text) => {
+    void findReadtextsForChart(library, chart).then((files) => {
       if (lookup !== this.readTextLookup || this.disposed) return;
-      if (text === undefined) {
+      if (files.length === 0) {
         // No text file: a short cue says the click registered.
         this.playCue('optionChange');
         return;
       }
-      this.readText = { chart, text };
+      // The likeliest README comes first.
+      this.readText = { chart, files, selected: 0 };
       this.playCue('optionOpen');
       this.changed();
     });
+  }
+
+  /** Shows the README dialog's text file at `index`, wrapping around either end. */
+  private selectReadText(index: number): void {
+    const readText = this.readText;
+    if (readText === undefined || readText.files.length < 2 || !Number.isInteger(index)) return;
+    const count = readText.files.length;
+    const selected = ((index % count) + count) % count;
+    if (selected === readText.selected) return;
+    this.readText = { ...readText, selected };
+    this.playCue('optionChange');
+    this.changed();
   }
 
   private closeReadText(cue: boolean): void {

@@ -59,6 +59,8 @@ import { RecordingService } from '../services/recording.ts';
 import { StatusLine } from '../services/status.ts';
 import { CourseMakerService } from '../services/course-maker.ts';
 import { LibraryService } from '../services/library.ts';
+import { listFolderInWorker } from '../services/folder-listing.ts';
+import { createIndexedDBFolderSnapshotStore } from '../services/folder-snapshots.ts';
 import { RecordsService } from '../services/records.ts';
 import { CourseRunService } from '../services/courses.ts';
 import { BeatorajaThemeService } from '../services/themes/beatoraja.ts';
@@ -416,6 +418,17 @@ export class PlayerWebApp {
       elements,
       leaveSelect: () => this.leaveSelect(),
       processIncomingFiles: (files, origin) => this.library.processIncomingFiles(files, origin),
+      refreshCharts: () => this.library.refreshCharts(),
+      folders: {
+        // A remembered folder is walked off the page's thread.
+        list: (folder, onProgress) =>
+          listFolderInWorker(
+            () => new Worker(new URL('../folder-listing-worker.ts', import.meta.url), { type: 'module' }),
+            folder,
+            onProgress,
+          ),
+        snapshots: createIndexedDBFolderSnapshotStore(),
+      },
       resumeSelect: () => (this.router.current ? Promise.resolve() : this.showSelect()),
       setStatus: (text) => this.status.set(text),
       loadPickedFiles: (files) => this.library.loadPickedFiles(files),
@@ -761,9 +774,13 @@ export class PlayerWebApp {
     // The replay slots load once; the select screen draws them again whenever they change.
     void this.replaySlots.store.load();
     this.replaySlots.store.subscribe(() => this.selectView?.refreshRecords());
-    // The first scene shown mounts the Pixi host (`mountStage`). Keep its promise so URL auto-load (below) drives its own
-    // `showSelect` only once the first select screen is up.
-    const initialSelectReady = this.showSelect();
+    // The first scene shown mounts the Pixi host (`mountStage`), which starts now, while the remembered folders are
+    // listed: the first select screen then opens on their charts. Keep its promise so URL auto-load (below) drives its
+    // own `showSelect` only once the first select screen is up.
+    void this.mountStage().catch(() => undefined);
+    const initialSelectReady = this.dropTarget
+      .restoreFolder()
+      .then(() => (this.router.current ? undefined : this.showSelect()));
     // A page put away (closed, or into the back/forward cache) keeps no decoded samples for a retry.
     window.addEventListener('pagehide', () => this.audio.chartSamples.release());
 
@@ -821,10 +838,7 @@ export class PlayerWebApp {
 
     // `?music=<url.zip>` / `?skin=<url.zip>` auto-load, then the difficulty tables imported in an earlier visit, once the
     // first select screen is up.
-    void this.library.autoLoad(
-      window.location.href,
-      initialSelectReady.then(() => this.dropTarget.restoreFolder()),
-    );
+    void this.library.autoLoad(window.location.href, initialSelectReady);
   }
 
   /**
@@ -943,6 +957,7 @@ export class PlayerWebApp {
   private async showSelect(): Promise<void> {
     this.audio.chartSamples.release();
     await this.selectRoute.showSelect();
+    this.library.selectShown();
     // A RANDOM MIX run that just ended offers to save its course over the select screen.
     void this.courseRoute.offerRandomMixSave();
   }

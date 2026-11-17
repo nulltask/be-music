@@ -23,9 +23,30 @@ This document defines how `packages/chart-parser` / `packages/chart-writer` / `p
 
 ## Compliance status summary
 
-- Compatibility level: Not supported
+- Compatibility level: Partially supported (the web player reads Bemuse music servers; the parser, CLI and writer do not)
 - Policy: Treat bemuse as a "distribution container" rather than a "musical score format"
 - Conversion policy: `sourceFormat` of `@be-music/chart-source` maintains `bms` / `bmson`, bemuse is absorbed in the input resolution layer
+
+## Web player (`@be-music/app-play`)
+
+Options → Library & records → Bemuse music servers registers server URLs. Until the player changes the list, it holds the public servers (`DEFAULT_BEMUSE_SERVER_URLS`): Bemuse's official server (`music4.bemuse.ninja/server`) and the servers Bemuse's documentation and server list ([bemuse-meta `servers.yml`](https://github.com/bemusic/bemuse-meta/blob/master/servers.yml)) link that still serve songs — `flicknote.bemuse.ninja`, METTATUNES and The Forgetalia on `bmson.nekokan.dyndns.info` (read through the proxy: they send no CORS header) and `yuinore.net/bms`. "Add default servers" registers the ones a list lacks. The URLs are stored in `localStorage` (`be-music.bemuse-server-urls`), carried to the player's other browsers with the Options settings (`bemuseServerURLs`), and loaded each time the player opens. A server URL resolves to its index as Bemuse resolves `?server=` (`bemuseServerIndexURL`).
+
+- Each server becomes a library folder `Bemuse <host/path>/<song folder>/…` of deferred files (`services/bemuse-servers.ts`). Listing fetches `index.json`, each song's `assets/metadata.json` and its chart files.
+- Chart files are kept in Cache Storage (`be-music-bemuse-charts`) and used again only while their bytes have the `charts[].md5` the index lists, so opening the player again fetches the indexes but not the charts.
+- A packed sound file is cut out of its `*.bemuse` chunk when a play opens it. Recent chunk payloads are kept (32 chunks); the file bytes themselves are not.
+- Files outside the package follow Bemuse: a packaged song serves only names matching `fallbackPattern` (`/\.(?:png|jpg|webm|mp4|m4v)/`) beside its package, and a song with `bemusepack_url: null` serves every file, a sound under the names `SamplesLoader` tries (`.ogg`, `.m4a`, `.flac`, `.mp3`, then the name). The files a chart names are read from its text (`scanChartFileReferences`), since a server cannot list its files.
+- A request the browser blocks (no CORS header) is sent again through the player's proxy (`/__url-load-proxy`), and later requests to that origin go there directly (`services/bemuse-fetch.ts`).
+
+What the index says about a song beyond its charts goes onto the parsed charts (`applyBemuseSongExtras`), filling only what a chart leaves out. None of it is part of the chart fingerprint (BGA, video, preview and volume are excluded), and the chart files stay as served, so their hashes and records are those of the same chart read from disk.
+
+| Field                                         | Bemuse                                                                                          | Be-Music                                                                                                                       |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `preview_url` (default `_bemuse_preview.mp3`) | Plays on the song list; none for a tutorial                                                     | The preview of a chart without `#PREVIEW` / `preview_music`. The default file is used only when a HEAD request finds it.       |
+| `video_url` / `video_file`, `video_offset`    | Plays the video from its start at chart second `video_offset`; never shows a chart's BGA images | A BGA cue at that second, added only when the chart has no BGA the song serves (Be-Music shows a chart's own BGA when it can). |
+| `eyecatch_image_url`                          | Shown while the song loads                                                                      | The chart's `#STAGEFILE` when it has none                                                                                      |
+| `back_image_url`                              | Shown behind the play                                                                           | The chart's `#BACKBMP` when it has none                                                                                        |
+| `replaygain`                                  | Sound volume `10^((gain + 4) / 20)`, `-12.2 dB` when missing or not `"<n> dB"`                  | The same gain, multiplied into the chart's `#VOLWAV` gain (kept inside `0 < n < 200`)                                          |
+| `preview_start`                               | Not used by the player (used when the preview file is made)                                     | Not used                                                                                                                       |
 
 ## Format overview
 
@@ -91,7 +112,7 @@ Extraction formula:
 - [ ] `bemuse-song.json` Accept single input
 - [ ] `?server=<url>` resolves by auto-completion when `index.json` is omitted.
 - [ ] Resolve `?server=<url/to/bemuse-song.json>` as single-song server
-- [ ] Resolve `undefined/null/string` in `bemusepack_url` according to rules.
+- [x] Resolve `undefined/null/string` in `bemusepack_url` according to rules. (web player)
 - [ ] Solved by decomposing `bemusepack_url` string into `assetsBase` and `metadataFilename`
 - [ ] Read `assets/metadata.json` and refer to `files[].name` case-insensitively
 - [ ] Verify `BEMUSEPACK` / `metadataLength` of `*.bemuse`
@@ -117,14 +138,14 @@ Extraction formula:
 
 ### player / chart-audio-renderer
 
-- [ ] Accept `index.json` / `bemuse-song.json` as input
-- [ ] keysound resolved from `assets/metadata.json` + `*.bemuse`
-- [ ] Images/videos that are not included in the package fallback to base resources
+- [x] Accept `index.json` / `bemuse-song.json` as input (web player)
+- [x] keysound resolved from `assets/metadata.json` + `*.bemuse` (web player)
+- [x] Images/videos that are not included in the package fallback to base resources (web player)
 - [ ] Apply caching strategy using `refs[].hash` as key
-- [ ] Fixed target extension of image/video fallback to `png|jpg|webm|mp4|m4v`
-- [ ] `preview_url` Resolved default value `_bemuse_preview.mp3` when not specified.
-- [ ] Apply rule that `video_url` overwrites `video_file`
-- [ ] Reflect `video_offset` to the video playback start position
+- [x] Fixed target extension of image/video fallback to `png|jpg|webm|mp4|m4v` (web player)
+- [x] `preview_url` Resolved default value `_bemuse_preview.mp3` when not specified. (web player)
+- [x] Apply rule that `video_url` overwrites `video_file` (web player)
+- [x] Reflect `video_offset` to the video playback start position (web player)
 
 ## MVP Acceptance Criteria
 
