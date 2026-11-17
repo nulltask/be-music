@@ -1,5 +1,6 @@
 // The song list a difficulty table publishes behind its header's `data_url`, read for the download pages of the stages
 // a course is missing. Only the links are kept: the list's levels and comments do not become folders.
+import type { CourseStageRef } from '@be-music/player-engine/course';
 import type { LibraryCourse } from '@be-music/player-scene-model';
 
 /** Where one of a table's songs can be found: its download page, its chart (差分) page, and the pack it ships in. */
@@ -118,9 +119,7 @@ export function describeMissingCourseStages(course: LibraryCourse, songs?: Table
   course.stages.forEach((stage, index) => {
     if (stage.chart !== undefined) return;
     const ref = course.definition.stages[index];
-    const song =
-      (ref?.sha256 !== undefined ? songs?.get(ref.sha256.toLowerCase()) : undefined) ??
-      (ref?.md5 !== undefined ? songs?.get(ref.md5.toLowerCase()) : undefined);
+    const song = findStageSong(ref, songs);
     const title = song?.title ?? ref?.title ?? stage.title;
     missing.push({
       stage: index + 1,
@@ -130,4 +129,30 @@ export function describeMissingCourseStages(course: LibraryCourse, songs?: Table
     });
   });
   return missing;
+}
+
+/** The song `songs` lists for a stage, by its SHA-256, then its MD5. */
+function findStageSong(ref: CourseStageRef | undefined, songs: TableSongIndex | undefined): TableSongLinks | undefined {
+  if (ref === undefined || songs === undefined) return undefined;
+  return (
+    (ref.sha256 !== undefined ? songs.get(ref.sha256.toLowerCase()) : undefined) ??
+    (ref.md5 !== undefined ? songs.get(ref.md5.toLowerCase()) : undefined)
+  );
+}
+
+/**
+ * `course` with each stage the collection lacks titled as its table's song list names it, so the select screen shows
+ * the song in place of the course's placeholder (beatoraja's `course N`). Only what is shown changes: the definition
+ * (and so the course's records and replays) is kept. The course itself comes back when no title changes.
+ */
+export function withTableSongTitles(course: LibraryCourse, songs: TableSongIndex): LibraryCourse {
+  let changed = false;
+  const stages = course.stages.map((stage, index) => {
+    if (stage.chart !== undefined) return stage;
+    const title = findStageSong(course.definition.stages[index], songs)?.title;
+    if (title === undefined || title === stage.title) return stage;
+    changed = true;
+    return { ...stage, title };
+  });
+  return changed ? { ...course, stages } : course;
 }

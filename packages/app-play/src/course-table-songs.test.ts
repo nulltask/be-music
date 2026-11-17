@@ -1,6 +1,6 @@
 import type { LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
 import { describe, expect, test } from 'vite-plus/test';
-import { describeMissingCourseStages, parseTableSongIndex } from './course-table-songs.ts';
+import { describeMissingCourseStages, parseTableSongIndex, withTableSongTitles } from './course-table-songs.ts';
 
 const MD5_A = '0123456789abcdef0123456789abcdef';
 const MD5_B = 'fedcba9876543210fedcba9876543210';
@@ -91,5 +91,41 @@ describe('describeMissingCourseStages', () => {
       { stage: 3, title: 'NOT FOUND', links: [] },
       { stage: 4, title: 'NOT FOUND', links: [] },
     ]);
+  });
+});
+
+describe('withTableSongTitles', () => {
+  const owned = { title: 'Owned' } as LibraryChart;
+  const course: LibraryCourse = {
+    id: 'Table#0',
+    definition: {
+      name: 'Dan 1',
+      kind: 'grade',
+      stages: [{ md5: MD5_A, title: 'course 1' }, { md5: MD5_B, title: 'course 2' }, { sha256: SHA_C }],
+      constraints: [],
+      trophies: [],
+      release: true,
+      source: { format: 'table', legacyGrade: false },
+    },
+    stages: [{ title: 'Owned', chart: owned }, { title: 'course 2' }, { title: 'NOT FOUND' }],
+    playable: false,
+  };
+
+  test('titles the missing stages the song list names, keeping owned stages and the definition', () => {
+    const titled = withTableSongTitles(
+      course,
+      new Map([
+        [MD5_A, { title: 'Listed A' }],
+        [MD5_B, { title: 'Song B' }],
+      ]),
+    );
+    expect(titled.stages.map((stage) => stage.title)).toEqual(['Owned', 'Song B', 'NOT FOUND']);
+    expect(titled.stages[0]).toBe(course.stages[0]);
+    expect(titled.definition).toBe(course.definition);
+  });
+
+  test('gives the course itself back when no title changes', () => {
+    expect(withTableSongTitles(course, new Map())).toBe(course);
+    expect(withTableSongTitles(course, new Map([[MD5_B, { title: 'course 2' }]]))).toBe(course);
   });
 });

@@ -238,6 +238,21 @@ describe('LibraryService missing course stages', () => {
     expect(fetch.mock.calls.map(([url]) => proxiedURL(url as string))).toEqual([TABLE_HEADER, TABLE_DATA]);
   });
 
+  test("titles a focused course's missing stages by its table's song list, for every course of the table", async () => {
+    stubStorage();
+    const fetch = stubFetch({ [TABLE_HEADER]: header, [TABLE_DATA]: songs });
+    const { library } = harness();
+    await library.importCourseTables([TABLE_HEADER], false);
+    expect(courseOf(library).stages.map((stage) => stage.title)).toEqual(['course 1']);
+    await library.titleMissingCourseStages(courseOf(library));
+    expect(courseOf(library).stages.map((stage) => stage.title)).toEqual(['Song A']);
+    // The definition keeps the table's own title: only what the select screen shows changes.
+    expect(courseOf(library).definition.stages[0]!.title).toBe('course 1');
+    await library.titleMissingCourseStages(courseOf(library));
+    await library.findMissingCourseStages(courseOf(library));
+    expect(fetch.mock.calls.map(([url]) => proxiedURL(url as string))).toEqual([TABLE_HEADER, TABLE_DATA]);
+  });
+
   test('lists the stages without pages when the song list cannot be fetched, and asks again next time', async () => {
     stubStorage();
     const fetch = stubFetch({ [TABLE_HEADER]: header });

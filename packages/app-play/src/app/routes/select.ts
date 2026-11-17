@@ -60,7 +60,7 @@ export interface SelectRouteDeps {
   /** The page: the shell's `playing` and `empty` classes. */
   readonly elements: Pick<PlayerWebElements, 'shell'>;
   /** The library the screen lists. */
-  readonly library: Pick<LibraryService, 'collection' | 'reloadCharts'>;
+  readonly library: Pick<LibraryService, 'collection' | 'reloadCharts' | 'titleMissingCourseStages'>;
   /** The best records the screen shows on its bars. */
   readonly records: Pick<
     RecordsService,
@@ -306,6 +306,8 @@ export class SelectRoute {
         // Every skin can open history. Beatoraja draws its own slot controls.
         focus: (entry) => {
           this.replaySlotsPanel.showSelect(entry, kit.family !== 'beatoraja');
+          // A difficulty table's course that cannot start: its song list titles the stages it is missing.
+          if (entry?.kind === 'course') void this.library.titleMissingCourseStages(entry.course);
           // "Ghost status" says whether a play of the bar would show the picked ghost.
           const chart = entry?.kind === 'chart' ? entry : undefined;
           this.showChartDiagnostics(chart?.chart.chart, chart?.chart.chartPath);

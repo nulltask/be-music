@@ -47,6 +47,7 @@ import {
 import {
   describeMissingCourseStages,
   parseTableSongIndex,
+  withTableSongTitles,
   type MissingCourseStage,
   type TableSongIndex,
 } from '../course-table-songs.ts';
@@ -127,8 +128,10 @@ export class LibraryService {
   private courseGroups: CourseDefinitionGroup[] = [];
   /** The song list (`data_url`) of the difficulty table each imported course came from. */
   private readonly courseTableDataURLs = new WeakMap<CourseDefinition, string>();
-  /** Table song lists fetched this session, by URL: fetched once, when a course of the table is missing a stage. */
+  /** Table song lists being fetched or fetched this session, by URL: fetched once, when a course of the table needs it. */
   private readonly tableSongIndexes = new Map<string, Promise<TableSongIndex>>();
+  /** The table song lists that arrived, by URL, whose titles the course folders show. */
+  private readonly loadedSongIndexes = new Map<string, TableSongIndex>();
   /** Session-only draws, oldest first across every source folder. */
   private keptRandomCourses: Array<{ folderLabel: string; course: LibraryCourse }> = [];
   private nextDrawId = 0;
@@ -494,20 +497,48 @@ export class LibraryService {
    */
   public async findMissingCourseStages(course: LibraryCourse): Promise<MissingCourseStage[]> {
     const dataURL = this.courseTableDataURLs.get(course.definition);
-    if (dataURL === undefined) return describeMissingCourseStages(course);
-    let songs = this.tableSongIndexes.get(dataURL);
-    if (songs === undefined) {
-      songs = fetchCourseTableText(dataURL).then(parseTableSongIndex);
-      this.tableSongIndexes.set(dataURL, songs);
+    const songs = dataURL !== undefined ? await this.tableSongIndex(dataURL) : undefined;
+    return describeMissingCourseStages(course, songs);
+  }
+
+  /**
+   * Titles the stages a focused course is missing from the collection by its difficulty table's song list, in place of
+   * the course's placeholders (beatoraja's `course N`): the list is fetched the first time a course of that table that
+   * cannot start is focused, and then every course of the table shows its songs' titles.
+   */
+  public async titleMissingCourseStages(course: LibraryCourse): Promise<void> {
+    if (course.playable || course.random !== undefined) return;
+    const dataURL = this.courseTableDataURLs.get(course.definition);
+    if (dataURL === undefined || this.loadedSongIndexes.has(dataURL)) return;
+    await this.tableSongIndex(dataURL);
+  }
+
+  /**
+   * A difficulty table's song list, fetched through the proxy once and kept for the session; `undefined` when it cannot
+   * be fetched, which is asked again next time. The first time a list arrives, the course folders are listed again with
+   * its titles.
+   */
+  private async tableSongIndex(dataURL: string): Promise<TableSongIndex | undefined> {
+    const loaded = this.loadedSongIndexes.get(dataURL);
+    if (loaded !== undefined) return loaded;
+    let pending = this.tableSongIndexes.get(dataURL);
+    if (pending === undefined) {
+      pending = fetchCourseTableText(dataURL).then(parseTableSongIndex);
+      this.tableSongIndexes.set(dataURL, pending);
     }
+    let songs: TableSongIndex;
     try {
-      return describeMissingCourseStages(course, await songs);
+      songs = await pending;
     } catch (error) {
-      // Ask again next time: the list may be back.
       this.tableSongIndexes.delete(dataURL);
       dropLog.warn(`course table song list failed: ${dataURL}`, error);
-      return describeMissingCourseStages(course);
+      return undefined;
     }
+    if (!this.loadedSongIndexes.has(dataURL)) {
+      this.loadedSongIndexes.set(dataURL, songs);
+      await this.relistCourseFolders();
+    }
+    return songs;
   }
 
   /**
@@ -530,15 +561,31 @@ export class LibraryService {
     this.collection = {
       ...this.collection,
       courseFolders: [
-        ...resolveCourseFolders(this.courseGroups, createChartHashLookup(hashed)),
+        ...resolveCourseFolders(this.courseGroups, createChartHashLookup(hashed)).map((folder) =>
+          folder.courses === undefined
+            ? folder
+            : { ...folder, courses: folder.courses.map((course) => this.withSongTitles(course)) },
+        ),
         ...resolveCourseMakerFolders(this.courseMaker.courses, createChartHashLookup(hashed)),
       ],
     };
     this.appendKeptRandomCourses();
   }
 
+  /** A course with its missing stages titled by its table's song list, once the list has arrived. */
+  private withSongTitles(course: LibraryCourse): LibraryCourse {
+    const dataURL = this.courseTableDataURLs.get(course.definition);
+    const songs = dataURL !== undefined ? this.loadedSongIndexes.get(dataURL) : undefined;
+    return songs !== undefined ? withTableSongTitles(course, songs) : course;
+  }
+
   /** Relists the course folders after the player's own courses changed, keeping the select screen where it was. */
   public async refreshMadeCourses(): Promise<void> {
+    await this.relistCourseFolders();
+  }
+
+  /** Relists the course folders, keeping the select screen where it was. */
+  private async relistCourseFolders(): Promise<void> {
     await this.refreshCourseFolders();
     const view = this.selectView();
     if (view === undefined) return;
