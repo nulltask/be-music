@@ -11,7 +11,8 @@ import {
 import type { PlayerInputCommand } from '../input-signal-bus.ts';
 import type { PlayerUICommand, PlayerUIFrameNote, PlayerUIFramePayload } from '../ui-signal-bus.ts';
 import type { BeMusicReplay, ReplayRulesetResult } from '../../replay/format.ts';
-import { simulateReplayRulesets } from '../../replay/simulate.ts';
+import { findReplayNotSimulatedReason, type ReplayNotSimulatedReason } from '../../replay/rejudge.ts';
+import { REPLAY_SIMULATOR_RULESETS, simulateReplay } from '../../replay/simulate.ts';
 import { createVirtualClock } from './virtual-clock.ts';
 
 /**
@@ -105,8 +106,10 @@ export interface PlayObservation {
   endedAtMs: number;
   summary?: PlayerSummary;
   replay?: BeMusicReplay;
-  /** `simulateReplay` of the recorded log under each ruleset. */
+  /** `simulateReplay` of the recorded log under each ruleset that can read it. */
   simulated?: Record<string, ReplayRulesetResult>;
+  /** Why a ruleset cannot read the recorded log (a bare gauge it lacks), as re-judging reports it. */
+  notSimulated?: Record<string, ReplayNotSimulatedReason>;
   /** The audio session's calls. */
   audio: string[];
   /** Judgment cues (`publishJudgeCombo`), with the gauge as it stood then. */
@@ -495,7 +498,7 @@ export async function observePlay(
     outcome,
     endedAtMs: Math.round(endedAtMs * 1000) / 1000,
     ...(summary === undefined ? {} : { summary }),
-    ...(replay === undefined ? {} : { replay, simulated: simulateReplayRulesets(replay) }),
+    ...(replay === undefined ? {} : { replay, ...simulateReadableRulesets(replay) }),
     audio,
     judges,
     ui,
@@ -583,4 +586,19 @@ export function formatSnapshot(value: unknown, indent = ''): string {
   const entries = Object.entries(value).filter(([, child]) => child !== undefined);
   const lines = entries.map(([key, child]) => `${inner}${JSON.stringify(key)}: ${formatSnapshot(child, inner)}`);
   return `{\n${lines.join(',\n')}\n${indent}}`;
+}
+
+/**
+ * The recorded log re-simulated under each ruleset that can read it, and why the others cannot: a ruleset that lacks
+ * the replay's bare gauge refuses it, as `rejudgeReplay` reports, instead of playing a lookalike.
+ */
+function simulateReadableRulesets(replay: BeMusicReplay): Pick<PlayObservation, 'simulated' | 'notSimulated'> {
+  const simulated: Record<string, ReplayRulesetResult> = {};
+  const notSimulated: Record<string, ReplayNotSimulatedReason> = {};
+  for (const ruleset of REPLAY_SIMULATOR_RULESETS) {
+    const reason = findReplayNotSimulatedReason(replay, ruleset);
+    if (reason === undefined) simulated[ruleset] = simulateReplay(replay, { ruleset });
+    else notSimulated[ruleset] = reason;
+  }
+  return { simulated, ...(Object.keys(notSimulated).length === 0 ? {} : { notSimulated }) };
 }

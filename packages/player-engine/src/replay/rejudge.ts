@@ -79,9 +79,9 @@ export function findReplayNotSimulatedReason(
   player: 1 | 2 = 1,
 ): ReplayNotSimulatedReason | undefined {
   const gauge = player === 2 ? (replay.play.gauge2P ?? replay.play.gauge) : replay.play.gauge;
-  // The played ruleset ran this gauge live, whatever its menu offers.
-  if (ruleset !== playedRuleset(replay) && !definesGauge(ruleset, gauge, replay.play.course !== undefined))
-    return 'gauge';
+  // Under the played ruleset too: the engine refuses a bare gauge its ruleset lacks, so only a replay recorded before
+  // that (a bare DEATH under That-Which-Must-Not-Be-Named, once played as EX-HARD) fails here, and it is reported.
+  if (!definesGauge(ruleset, gauge, replay.play.course !== undefined)) return 'gauge';
   if (ruleset === 'beatoraja') return undefined;
   if (replay.play.customJudge !== undefined) return 'custom-judge';
   return undefined;
@@ -118,7 +118,7 @@ function findFailureStop(replay: BeMusicReplay, options: Omit<SimulateReplayOpti
 
 /**
  * Re-judges `replay` under `options.ruleset` by ADR 0019's declared rules. Under the played ruleset the replay is
- * simulated as recorded. Under another ruleset:
+ * simulated as recorded, unless it carries a bare gauge the engine now refuses there. Under another ruleset:
  *
  * - a gauge or option the ruleset cannot read makes it `not-simulated` (see {@link ReplayNotSimulatedReason});
  * - a run that stopped where its survival gauge emptied is judged only up to that point, and is `truncated` when this

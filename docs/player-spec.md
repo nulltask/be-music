@@ -670,7 +670,8 @@ split.
 
 - The gauge is picked with `PlayerOptions.gauge`, spelled in LR2's names (`GROOVE` / `EASY` / `HARD` / `DEATH`),
   and each ruleset maps that pick onto its own line-up: `GROOVE` is beatoraja's `NORMAL`, `DEATH` its `HAZARD`,
-  and That-Which-Must-Not-Be-Named — which has no HAZARD equivalent — folds `DEATH` onto `EX-HARD`.
+  and That-Which-Must-Not-Be-Named — which has no HAZARD equivalent — refuses a bare `DEATH` outside a course,
+  as LR2 refuses `EX-HARD` (its course gauges take it as EXHARDCLASS).
 - The ruleset owns the curve: per-judge deltas, TOTAL scaling, guts softening, the death border, and the clear
   rule (a threshold for the recovery gauges, "never bottomed out" for the survival gauges).
 - The selected gauge governs the run. It is not a colour: HARD really drains, and a HARD run that bottoms out

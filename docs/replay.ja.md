@@ -417,8 +417,9 @@ flowchart TD
   `gauge` です（beatoraja での `P-ATTACK`、LR2 での `EX-HARD` と `ASSIST-EASY`、コース以外の ???? での
   `DEATH`）。似たゲージには読み替えません。CUSTOM JUDGE を使ったリプレイは、CUSTOM JUDGE が
   beatoraja だけのものなので `custom-judge` です。ゲージオートシフトは理由にならず、対象のゲージの並びで持ち越します
-  （[プレイオプション](./play-options.ja.md#ゲージオートシフト)）。プレイしたルールセットは
-  常に自分のゲージで判定します。参照元つきのゲージ（`play.gauge: "lr2:P-ATTACK"`）も理由になりません。
+  （[プレイオプション](./play-options.ja.md#ゲージオートシフト)）。エンジンはルールセットにない素のゲージを拒否するので、
+  プレイしたルールセットは自分のリプレイを読めます。その拒否の前に記録したリプレイ（???? で EX-HARD として
+  遊んだ素の `DEATH`）だけは、プレイしたルールセットでも `gauge` です。参照元つきのゲージ（`play.gauge: "lr2:P-ATTACK"`）も理由になりません。
   どのルールセットでも、その参照元のゲージ・ラダー・コースゲージで再判定し、結果の `gauge.source` に参照元を
   記録します（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)）。
 - **truncated**: サバイバルゲージが空になった所でプレイが終わり（`play.endOnFailure`）、対象のゲージならそこを

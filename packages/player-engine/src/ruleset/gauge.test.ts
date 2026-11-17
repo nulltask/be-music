@@ -308,7 +308,8 @@ test('LR2 HAZARD needs HP 80 at the end of a single chart; the corrected HAZARD 
   expect(full.cleared()).toBe(true);
   // Under the other rulesets the corrected HAZARD is their own DEATH.
   expect(resolveRuleset(chart, 'beatoraja', { selectedGauge: 'DEATH-CORRECTED' }).gauge.id).toBe('HAZARD');
-  expect(resolveRuleset(chart, '____', { selectedGauge: 'DEATH-CORRECTED' }).gauge.id).toBe('EX-HARD');
+  // That-Which-Must-Not-Be-Named has neither outside a course, and refuses them instead of playing EX-HARD.
+  expect(() => resolveRuleset(chart, '____', { selectedGauge: 'DEATH-CORRECTED' })).toThrow(RangeError);
 });
 
 describe('gauge precision (#1090)', () => {

@@ -450,7 +450,8 @@ flowchart TD
   defines (`P-ATTACK` under beatoraja, `EX-HARD` or `ASSIST-EASY` under LR2, `DEATH` under ???? outside a course); it is
   never mapped to a lookalike. `custom-judge` when the replay used CUSTOM JUDGE, which stays beatoraja's. Gauge
   auto-shift is no reason: it is carried, along the target's own gauge ladder ([Play options](./play-options.md#gauge-auto-shift)).
-  The played ruleset always simulates its own gauge. A source-qualified gauge (`play.gauge: "lr2:P-ATTACK"`) is no
+  The played ruleset reads its own replays, since the engine refuses a bare gauge its ruleset lacks; only a replay
+  recorded before that refusal (a bare `DEATH` played as EX-HARD under ????) is `gauge` there too. A source-qualified gauge (`play.gauge: "lr2:P-ATTACK"`) is no
   reason either: every ruleset re-judges it on that source's gauge, ladder and course gauges, and the result names the
   source in `gauge.source` ([ADR 0019](./adr/0019-source-qualified-option-values.md)).
 - **truncated**: the play ended where its survival gauge emptied (`play.endOnFailure`), and the target's gauge would have

@@ -61,6 +61,9 @@ describe('findReplayNotSimulatedReason', () => {
     expect(findReplayNotSimulatedReason(makeReplay({ gauge: 'DEATH', course: { kind: 'grade' } }), '____')).toBe(
       undefined,
     );
+    // A bare DEATH recorded under That-Which-Must-Not-Be-Named before the engine refused it is reported under its own
+    // ruleset too, not played as the EX-HARD it once was.
+    expect(findReplayNotSimulatedReason(makeReplay({ gauge: 'DEATH', judgeRuleset: '____' }), '____')).toBe('gauge');
     // The second player's own gauge decides for that side.
     const couple = makeReplay({ gauge: 'GROOVE', gauge2P: 'G-ATTACK', battleMode: 'TWO-PLAYER' });
     expect(findReplayNotSimulatedReason(couple, 'beatoraja', 1)).toBeUndefined();

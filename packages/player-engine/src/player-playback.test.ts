@@ -464,11 +464,22 @@ describe('player', () => {
       audio: false,
       tui: false,
       judgeRuleset: '____',
-      gauge: 'DEATH',
+      gauge: 'EX-HARD',
     });
-    // That-Which-Must-Not-Be-Named has no HAZARD-style gauge; `'DEATH'` folds onto its hardest survival gauge.
     expect(____.gauge?.type).toBe('EX-HARD');
     expect(____.gauge?.survival).toBe(true);
+    // That-Which-Must-Not-Be-Named has no HAZARD-style gauge, and refuses a bare `'DEATH'` rather than playing EX-HARD.
+    await expect(
+      autoPlay(json, {
+        auto: true,
+        speed: 48,
+        leadInMs: 0,
+        audio: false,
+        tui: false,
+        judgeRuleset: '____',
+        gauge: 'DEATH',
+      }),
+    ).rejects.toThrow(RangeError);
   });
 
   function sixteenMissesChart(): BeMusicJSON {
