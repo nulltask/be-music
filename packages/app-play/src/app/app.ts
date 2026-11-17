@@ -381,6 +381,7 @@ export class PlayerWebApp {
     this.library = new LibraryService({
       elements,
       resolveChartHashes: (chartEntry) => this.records.resolveChartHashes(chartEntry),
+      bemuseReplayGain: () => this.guiState.bemuseReplayGain,
       courseMaker: this.courseMaker.maker,
       selectView: () => this.selectView,
       showing: () => this.router.current?.identity.kind,

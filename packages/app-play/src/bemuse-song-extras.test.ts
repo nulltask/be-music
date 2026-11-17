@@ -4,6 +4,7 @@ import { describe, expect, test } from 'vite-plus/test';
 import {
   BemuseSongExtrasRegistry,
   applyBemuseSongExtras,
+  bemuseGainedVolWAV,
   beatAtSeconds,
   chartHasServedBGA,
   type BemuseSongExtras,
@@ -91,5 +92,39 @@ describe('BemuseSongExtrasRegistry', () => {
     registry.apply(charts);
     expect(chart.bms.volWAV).toBeCloseTo(50);
     expect(other.bms.volWAV).toBeUndefined();
+  });
+
+  test('turns the ReplayGain on and off on charts already given their extras', () => {
+    let replayGain = false;
+    const registry = new BemuseSongExtrasRegistry(() => replayGain);
+    registry.remember([{ folder: 'Bemuse ex.com/song', files: new Set(), extras: extras({ gain: 0.5 }) }]);
+    const plain = parseBMS(BPM120);
+    const loud = parseBMS(`${BPM120}#VOLWAV 80\n`);
+    const charts = [
+      { chartPath: 'Bemuse ex.com/song/a.bms', chart: plain },
+      { chartPath: 'Bemuse ex.com/song/b.bms', chart: loud },
+    ];
+    registry.apply(charts);
+    expect(plain.bms.volWAV).toBeUndefined();
+    expect(loud.bms.volWAV).toBe(80);
+    replayGain = true;
+    registry.refreshReplayGain(charts);
+    registry.refreshReplayGain(charts);
+    expect(plain.bms.volWAV).toBeCloseTo(50);
+    expect(loud.bms.volWAV).toBeCloseTo(40);
+    replayGain = false;
+    registry.refreshReplayGain(charts);
+    expect(plain.bms.volWAV).toBeUndefined();
+    expect(loud.bms.volWAV).toBe(80);
+  });
+});
+
+describe('bemuseGainedVolWAV', () => {
+  test('multiplies the gain into #VOLWAV inside its range, and leaves it for a gain of 1 or none', () => {
+    expect(bemuseGainedVolWAV(undefined, 0.5)).toBeCloseTo(50);
+    expect(bemuseGainedVolWAV(150, 2)).toBe(199.99);
+    expect(bemuseGainedVolWAV(80, 1)).toBe(80);
+    expect(bemuseGainedVolWAV(undefined, Number.NaN)).toBeUndefined();
+    expect(bemuseGainedVolWAV(80, 0)).toBe(80);
   });
 });

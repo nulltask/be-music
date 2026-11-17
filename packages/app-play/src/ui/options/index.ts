@@ -105,7 +105,10 @@ export interface OptionsDialogDeps {
    * The library service: "Import table courses", "Load from URLs" and the Bemuse music servers add to the library through
    * it.
    */
-  readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL' | 'loadBemuseServers'>;
+  readonly library: Pick<
+    LibraryService,
+    'importCourseTables' | 'loadFromURL' | 'loadBemuseServers' | 'refreshBemuseReplayGain'
+  >;
   /** The records service, whose best records "Clear best records" empties. */
   readonly records: Pick<RecordsService, 'chartBestRecords'>;
   /** The course-maker service, whose card "My courses…" opens. */
@@ -189,7 +192,10 @@ export class OptionsDialog {
   public readonly guiState: PlayerGUIState;
   public readonly sceneHost: PixiSceneHost;
   public readonly silentMode: SilentModeSetting;
-  public readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL' | 'loadBemuseServers'>;
+  public readonly library: Pick<
+    LibraryService,
+    'importCourseTables' | 'loadFromURL' | 'loadBemuseServers' | 'refreshBemuseReplayGain'
+  >;
   public readonly records: Pick<RecordsService, 'chartBestRecords'>;
   public readonly courseMaker: Pick<CourseMakerService, 'panel'>;
   public readonly skinSettings: StoredSkinSettings;
