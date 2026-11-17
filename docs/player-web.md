@@ -196,6 +196,35 @@ An arrow points from a module to one it makes or uses. The app also makes the sc
 
 **Library and records.** `app/drop-target.ts` takes a drop or a pick from the Options dialog's Open folder / Open files: it shows the loading overlay, takes the select screen off the stage and reads the files, a drop's items before its handler first waits on anything, since the browser empties a drop once the handler returns. `services/library.ts` sorts what was read and keeps the library: charts go to the song collection, theme files to the LR2 and beatoraja theme loaders, course files and saved table headers to the course folders, and replays to a replay. A ZIP archive, dropped or picked, is sorted by its entry list, read from its central directory without inflating it (`services/drop-archives.ts`): one that holds a chart goes to the song collection whole, as a `?music=` archive does, and any other (a skin, replays, course files) is expanded and sorted with the rest of the drop, as a `?skin=` archive is. It also loads the `?music=` / `?skin=` archives and imports difficulty tables by URL. `services/records.ts` keeps the [best records](#best-records) and the chart hashes they are keyed by, and `services/course-maker.ts` the [courses the player makes](#courses-and-dan-certification).
 
+**Remembered folders.** A folder opened with Open folder, or dropped where the browser hands out its directory handle, is remembered (IndexedDB `be-music-folders`) and listed again on the next visit, before the first select screen shows. Three stores keep that start short, so that it reads no chart file and does not wait on the folder:
+
+- **Parsed charts** (`be-music-charts`, `services/parsed-chart-database.ts`): each chart's parse, by the SHA-256 of its file. A new build clears it.
+- **Folder snapshots** (`be-music-folder-snapshots`, `services/folder-snapshots.ts`): each folder's file listing, and the size, modification time and parsed-chart key of each chart file, as of the last load.
+- **The listing itself** (`services/folder-listing.ts`): every file's path, walked in a worker of its own (`folder-listing-worker.ts`), and a listed file opens through the folder's handle only when it is first read.
+
+```mermaid
+sequenceDiagram
+  participant Page
+  participant Snapshots as Folder snapshots
+  participant Cache as Parsed charts
+  participant Worker as Listing worker
+  Page->>Snapshots: read the folder's snapshot
+  Snapshots-->>Page: listing + chart keys
+  Page->>Cache: read the charts by key (batched)
+  Cache-->>Page: parsed charts
+  Note over Page: select screen shows
+  Page->>Worker: walk the folder
+  Worker-->>Page: listing as it is now
+  alt changed since the snapshot
+    Page->>Page: read the library again in place
+    Page->>Snapshots: keep the new snapshot
+  end
+```
+
+A folder without a snapshot (its first visit) is walked first and its charts are read, hashed and parsed; the snapshot is kept once they are in. The background walk compares the listing and each chart file's size and modification time with the snapshot. When they differ, the library is read again where the select screen stands, which keeps its place (`LibraryService.refreshCharts`); only the changed chart files are read, since a key is offered again only for a file as large and as old as when it was worked out. During a play the re-read waits until the select screen shows again. A folder that can no longer be read is reported and its charts leave the library. Until the walk is done, the list is the snapshot's: a chart edited on disk since the last visit shows its old header for those moments. An LRX chart is always read, as its key also depends on the files beside it.
+
+A chart crosses a worker and the parsed-chart cache as little more than its headers: its events are packed into columns as narrow as their values allow (`packed-events.ts`), and the fields a list does not read (resources, measures, format sections, preservation) travel as JSON text that is parsed when one of them is first read (`deferChartFields`). A library of thousands of charts is copied out of the cache in a fraction of the time the charts' objects would take, and a chart that is never focused never has them built. The parse also carries the MD5 of the chart file, and its cache key starts with the file's SHA-256, so the loader keeps both hashes with the chart (`seedChartFileHashes`): matching course stages and looking up best records (`RecordsService.resolveChartHashes`) reads no chart file again.
+
 **Themes.** The themes a drop brings are kept in `services/themes/`. `lr2.ts` holds every LR2 theme the drops brought and mounts one: its skins, BGM and system sounds, and its skins parsed again for a course. `beatoraja.ts` holds the beatoraja theme and loads its entries as scene kits, each by the entry the Options dialog picked for its skin type and with the player's options for it. `built-in.ts` holds the Be-Music Skin the built-in family draws with, its stored settings and the skins added. `app/family-kits.ts` picks the family that draws each screen (the Options dialog's Skin system, or beatoraja, then LR2, then built-in) and the kit and select-screen sounds it draws with.
 
 **Replay history and slots.** `ReplaySlotStore` keeps history metadata and slot selections in memory and reads compressed payloads from IndexedDB on demand. `ResultReplaySlots` writes each eligible replay once and applies the current slot rules. The select screen’s Lit panel lists history with playback and downloads on every skin. Beatoraja continues to render its own slot controls. See [Replay slots](./replay.md#replay-slots).
@@ -242,7 +271,7 @@ flowchart TD
 - Chart discovery accepts `.bms`, `.bme`, `.bml`, `.pms`, `.bmson`, Nanasi Groove 2's `.n2s`, and LRX `.lrs` (read with the `.lrh` and `.lrm` beside it).
 - File lookup is case-insensitive so browser drops work with LR2 and beatoraja asset references that differ only by letter case.
 - Large audio and video files stay as lazy `File` references by default. Image, skin, chart, and smaller metadata files are read into bytes during collection loading.
-- Folder walking and file reads use bounded concurrency and progress callbacks so large folders can load without flooding the browser's FileSystem APIs or UI update loop.
+- Folder walking and file reads use bounded concurrency and progress callbacks so large folders can load without flooding the browser's FileSystem APIs or UI update loop. Chart files are read while others are parsed: more charts are in flight than there are parse workers, and the worker pool queues the rest.
 - Parse errors are accumulated in the collection instead of aborting the whole drop.
 
 Gameplay and select previews try the next distinct audio asset when reading or decoding a codec candidate fails. The existing order stays Opus → Ogg → MP3 → WAV → M4A → the declared path; folder lookup, case-insensitive matching and `#PATH_WAV` still apply. A cancelled or superseded load stops before the next attempt. NONSTOP sources retain each stage's candidate chain in `BrowserAssetSource.audioFallbacks`, keyed by its stitched resource path, so failed codecs can still fall back across original stage folders. Decoded samples remain keyed by the chart's declared resource name.

@@ -34,6 +34,7 @@ describe('createIndexedDBParsedChartCache', () => {
     } as unknown as IDBFactory;
     const cache = createIndexedDBParsedChartCache('stamp', factory)!;
     expect(await cache.get('abc:bms')).toBeUndefined();
+    expect(await cache.getMany!(['abc:bms', 'def:pms'])).toEqual([undefined, undefined]);
     await expect(cache.set('abc:bms', {} as never)).resolves.toBeUndefined();
   });
 });

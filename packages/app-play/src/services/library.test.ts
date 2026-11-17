@@ -52,6 +52,7 @@ function fakeElement(): HTMLDivElement {
       add: (name: string) => classes.add(name),
       remove: (name: string) => classes.delete(name),
       contains: (name: string) => classes.has(name),
+      toggle: (name: string, on: boolean) => (on ? classes.add(name) : classes.delete(name)),
     },
     setAttribute: () => {},
     style: {},
@@ -493,6 +494,68 @@ describe('the folder reload', () => {
     await library.reloadCharts();
     expect(library.collection.charts.map((chart) => chart.title).sort()).toEqual(['alpha', 'beta']);
     expect(shown.length).toBeGreaterThan(1);
+  });
+
+  test('reads a changed folder again where the select screen stands, and swaps the library in whole', async () => {
+    const navigation = { folderPath: ['pack'] } as unknown as BrowseSnapshot;
+    const view = { snapshot: vi.fn(() => navigation), setLibrary: vi.fn(), restore: vi.fn() };
+    const { library, shown, statuses } = harness({ selectView: () => view as unknown as SelectScene });
+    const files = new Map([['a.bms', bms('alpha')]]);
+    const entry = folderEntry('pack', files);
+    const onLoaded = vi.fn();
+    await library.processIncomingFiles(await readDropEntries([entry]), { entries: [entry], onLoaded });
+    expect(onLoaded).toHaveBeenCalledTimes(1);
+    const before = library.collection;
+    const shows = shown.length;
+    files.set('b.bms', bms('beta'));
+    const refreshed = library.refreshCharts();
+    // Until the charts are read again, the screens go on with the ones they have.
+    expect(library.collection).toBe(before);
+    await refreshed;
+    expect(library.collection.charts.map((chart) => chart.title).sort()).toEqual(['alpha', 'beta']);
+    expect(library.collection.charts.map((chart) => chart.id).sort()[0]).toBe(before.charts[0]!.id);
+    expect(onLoaded).toHaveBeenCalledTimes(2);
+    // The select screen keeps its place instead of being shown again.
+    expect(shown.length).toBe(shows);
+    expect(view.setLibrary).toHaveBeenCalledWith(library.collection);
+    expect(view.restore).toHaveBeenCalledWith(navigation);
+    expect(statuses.at(-1)).toBe('2 charts loaded');
+  });
+
+  test('leaves a play alone, and reads the changed folder once the select screen shows again', async () => {
+    const view = { snapshot: vi.fn(() => ({})), setLibrary: vi.fn(), restore: vi.fn() };
+    const { library, showing } = harness({ selectView: () => view as unknown as SelectScene });
+    const files = new Map([['a.bms', bms('alpha')]]);
+    const entry = folderEntry('pack', files);
+    await library.processIncomingFiles(await readDropEntries([entry]), { entries: [entry] });
+    files.set('b.bms', bms('beta'));
+    showing.current = 'play';
+    await library.refreshCharts();
+    library.selectShown();
+    expect(library.collection.charts).toHaveLength(1);
+    expect(view.setLibrary).not.toHaveBeenCalled();
+    showing.current = 'select';
+    library.selectShown();
+    await vi.waitFor(() => expect(library.collection.charts).toHaveLength(2));
+    await vi.waitFor(() => expect(view.setLibrary).toHaveBeenCalledWith(library.collection));
+    // Read once: the next showing has nothing left to read.
+    view.setLibrary.mockClear();
+    library.selectShown();
+    await Promise.resolve();
+    expect(view.setLibrary).not.toHaveBeenCalled();
+  });
+
+  test('a load that starts while the charts are read again waits for them, and adds to the new library', async () => {
+    const { library } = harness();
+    const first = folderEntry('first', new Map([['a.bms', bms('alpha')]]));
+    const second = folderEntry('second', new Map([['b.bms', bms('beta')]]));
+    await library.processIncomingFiles(await readDropEntries([first]), { entries: [first] });
+    const refreshed = library.refreshCharts();
+    const loaded = library.processIncomingFiles(await readDropEntries([second]), { entries: [second] });
+    await Promise.all([refreshed, loaded]);
+    expect(library.collection.charts.map((chart) => chart.title).sort()).toEqual(['alpha', 'beta']);
+    await library.reloadCharts();
+    expect(library.collection.charts.map((chart) => chart.title).sort()).toEqual(['alpha', 'beta']);
   });
 
   test('says so when there is nothing to reload', async () => {

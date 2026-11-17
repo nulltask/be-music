@@ -1,4 +1,8 @@
-import { computeChartFileHashes, type BrowserChartCollection } from '@be-music/player-browser/collection';
+import {
+  computeChartFileHashes,
+  seedChartFileHashes,
+  type BrowserChartCollection,
+} from '@be-music/player-browser/collection';
 import type { RecordPlay } from '@be-music/player-engine/records';
 import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import type { RulesetId } from '@be-music/player-engine/ruleset';
@@ -83,6 +87,15 @@ describe('RecordsService chart hashes', () => {
     expect(third).toEqual(first);
     expect(await service.resolveChartSHA256(chartEntry)).toBe(ABC_SHA256);
     expect(hashChart).toHaveBeenCalledTimes(1);
+  });
+
+  test('takes the hashes the load kept with the chart, without reading its file', async () => {
+    const service = records(library({ 'a.bms': 'abc' }));
+    const chartEntry = chart('a');
+    seedChartFileHashes(chartEntry.chart, { sha256: 'f'.repeat(64), md5: 'e'.repeat(32) });
+    expect(await service.resolveChartHashes(chartEntry)).toEqual({ sha256: 'f'.repeat(64), md5: 'e'.repeat(32) });
+    expect(await service.resolveChartSHA256(chartEntry)).toBe('f'.repeat(64));
+    expect(hashChart).not.toHaveBeenCalled();
   });
 
   test('keeps a chart that cannot be hashed as unhashed, without hashing it again', async () => {

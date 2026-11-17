@@ -1,6 +1,21 @@
 import type { BrowserDroppedFile } from '@be-music/player-browser/collection';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { DropTarget, type DropTargetOptions } from './drop-target.ts';
+import type { FolderListing } from '../services/folder-listing.ts';
+import type { FolderSnapshot, FolderSnapshotStore } from '../services/folder-snapshots.ts';
+import type { LibraryLoadOrigin } from '../services/library.ts';
+import type { RememberedFolder } from '../services/remembered-folder.ts';
+
+// The remembered folders' own store and the browser's pickers: the folders are handed in by each test.
+const remembered = vi.hoisted(() => ({ saved: [] as unknown[], dropped: [] as unknown[] }));
+vi.mock('../services/remembered-folder.ts', () => ({
+  pickRememberedFolder: () => undefined,
+  captureDroppedFolders: async () => remembered.dropped,
+  storedFolders: async (folders?: readonly unknown[]) => {
+    if (folders) remembered.saved = [...folders];
+    return [...remembered.saved];
+  },
+}));
 
 // These fixtures test synchronous drop reads and overlay lifecycle without a browser DOM.
 // Real Lit rendering is covered by the browser suites; retain the controller's other DOM effects here.
@@ -75,6 +90,8 @@ function harness(overrides: Partial<DropTargetOptions> = {}) {
     recordLoad: vi.fn(),
     resumeSelect: vi.fn(async () => {}),
     setStatus: vi.fn(),
+    refreshCharts: vi.fn(async () => {}),
+    folders: { list: vi.fn(async () => ({ text: '', fileCount: 0, charts: [] })), snapshots: undefined },
     ...overrides,
   };
   return { target: new DropTarget(options), options, elements, loaded };
@@ -140,5 +157,167 @@ describe('DropTarget.handleDrop', () => {
     await expect(target.handleDrop(fakeDrop([new File(['x'], 'a.bms')]).transfer)).rejects.toThrow('unreadable');
     expect(elements.loadingOverlay.classList.contains('visible')).toBe(false);
     expect(options.recordLoad).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** A folder the player granted, by name: the tests list it through `folders.list`, never through the handle. */
+function grantedFolder(name: string): RememberedFolder {
+  const folder = {
+    kind: 'directory',
+    name,
+    queryPermission: async () => 'granted',
+    requestPermission: async () => 'granted',
+    isSameEntry: async (other: unknown) => other === folder,
+  };
+  return folder as unknown as RememberedFolder;
+}
+
+const listingOf = (name: string, charts: Record<string, number>): FolderListing => ({
+  text: [`${name}/`, ...Object.keys(charts)].join('\n'),
+  fileCount: Object.keys(charts).length,
+  charts: Object.entries(charts)
+    .filter(([file]) => file.endsWith('.bms'))
+    .map(([file, size]) => ({ path: `${name}/${file}`, size, lastModified: 1 })),
+});
+
+function memorySnapshots(initial?: FolderSnapshot): FolderSnapshotStore & { kept: FolderSnapshot | undefined } {
+  const store = {
+    kept: initial,
+    read: async () => store.kept,
+    write: async (_folder: unknown, snapshot: FolderSnapshot) => {
+      store.kept = snapshot;
+    },
+    prune: vi.fn(async () => {}),
+  };
+  return store;
+}
+
+describe('remembered folders', () => {
+  beforeEach(() => {
+    remembered.saved = [];
+    remembered.dropped = [];
+    vi.stubGlobal('indexedDB', {});
+    vi.stubGlobal('window', {});
+  });
+
+  /** A harness whose library reports a key for every chart it is handed, as a load does. */
+  function folderHarness(
+    listings: FolderListing[],
+    snapshots = memorySnapshots(),
+    load?: (files: BrowserDroppedFile[], origin: LibraryLoadOrigin) => void,
+  ) {
+    const origins: LibraryLoadOrigin[] = [];
+    const list = vi.fn(async () => {
+      const next = listings.shift();
+      if (next === undefined) throw new Error('gone');
+      return next;
+    });
+    const built = harness({
+      folders: { list, snapshots },
+      processIncomingFiles: vi.fn(async (files: BrowserDroppedFile[], origin: LibraryLoadOrigin = {}) => {
+        origins.push(origin);
+        built.loaded.push(files.map((file) => file.webkitRelativePath));
+        if (load !== undefined) return load(files, origin);
+        for (const file of files) {
+          if (file.name.endsWith('.bms')) origin.chartKeys?.learned(file.webkitRelativePath, `key:${file.name}`);
+        }
+        origin.onLoaded?.();
+      }),
+    });
+    return { ...built, list, snapshots, origins };
+  }
+
+  test('walks a remembered folder that has no snapshot, and keeps one once its charts are in', async () => {
+    remembered.saved = [grantedFolder('Pack')];
+    const { target, loaded, list, snapshots, options } = folderHarness([
+      listingOf('Pack', { 'a.bms': 10, 'kick.wav': 3 }),
+    ]);
+    await target.restoreFolder();
+    expect(loaded).toEqual([['Pack/a.bms', 'Pack/kick.wav']]);
+    await vi.waitFor(() => expect(snapshots.kept).toBeDefined());
+    expect(snapshots.kept).toEqual({
+      version: 1,
+      text: 'Pack/\na.bms\nkick.wav',
+      fileCount: 2,
+      charts: [{ path: 'Pack/a.bms', size: 10, lastModified: 1, key: 'key:a.bms' }],
+    });
+    // A folder just walked is not walked a second time.
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(options.refreshCharts).not.toHaveBeenCalled();
+  });
+
+  test('lists a folder from its snapshot at once, then walks it and leaves an unchanged library alone', async () => {
+    remembered.saved = [grantedFolder('Pack')];
+    const listing = listingOf('Pack', { 'a.bms': 10 });
+    const snapshot: FolderSnapshot = { version: 1, ...listing, charts: [{ ...listing.charts[0]!, key: 'kept' }] };
+    const walksBeforeListing: number[] = [];
+    const { target, loaded, list, options } = folderHarness([listing], memorySnapshots(snapshot), (_files, origin) => {
+      // The charts are listed before the folder is touched, under the keys the snapshot kept.
+      walksBeforeListing.push(list.mock.calls.length);
+      expect(origin.chartKeys?.known('Pack/a.bms')).toBe('kept');
+    });
+    await target.restoreFolder();
+    expect(walksBeforeListing).toEqual([0]);
+    expect(loaded).toEqual([['Pack/a.bms']]);
+    await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(1));
+    expect(options.refreshCharts).not.toHaveBeenCalled();
+  });
+
+  test('has the library read a folder again when it changed since its snapshot', async () => {
+    remembered.saved = [grantedFolder('Pack')];
+    const before = listingOf('Pack', { 'a.bms': 10 });
+    const { target, origins, options, list } = folderHarness(
+      [listingOf('Pack', { 'a.bms': 10, 'b.bms': 20 })],
+      memorySnapshots({ version: 1, ...before }),
+    );
+    await target.restoreFolder();
+    await vi.waitFor(() => expect(options.refreshCharts).toHaveBeenCalledTimes(1));
+    // The library reads the folder from the walk that found the change.
+    const files = await origins[0]!.readFiles!();
+    expect(files.map((file) => file.webkitRelativePath)).toEqual(['Pack/a.bms', 'Pack/b.bms']);
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
+  test('reports a folder that is gone, and has the library drop its charts', async () => {
+    remembered.saved = [grantedFolder('Pack')];
+    const before = listingOf('Pack', { 'a.bms': 10 });
+    const { target, origins, options } = folderHarness([], memorySnapshots({ version: 1, ...before }));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await target.restoreFolder();
+    await vi.waitFor(() => expect(options.refreshCharts).toHaveBeenCalledTimes(1));
+    expect(options.setStatus).toHaveBeenCalled();
+    expect(await origins[0]!.readFiles!()).toEqual([]);
+    vi.restoreAllMocks();
+  });
+
+  test('leaves a folder that needs its permission asked again for the reconnect button', async () => {
+    const folder = grantedFolder('Pack');
+    (folder as unknown as { queryPermission: () => Promise<string> }).queryPermission = async () => 'prompt';
+    remembered.saved = [folder];
+    const { target, loaded, list } = folderHarness([]);
+    await target.restoreFolder();
+    expect(loaded).toEqual([]);
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  test("keeps a dropped folder's snapshot from the keys of the charts its drop loaded", async () => {
+    const folder = grantedFolder('Pack');
+    remembered.dropped = [folder];
+    const { target, snapshots } = folderHarness(
+      [listingOf('Pack', { 'a.bms': 8, 'a.wav': 1 })],
+      memorySnapshots(),
+      (_files, origin) => {
+        // A drop reads every file: no key is offered, and the keys it works out are kept by the folder's path.
+        expect(origin.chartKeys?.known('Pack/a.bms')).toBeUndefined();
+        origin.chartKeys?.learned('Pack/a.bms', 'dropped-key');
+        origin.chartKeys?.learned('Other/a.bms', 'stray');
+      },
+    );
+    const drop = fakeDrop([new File(['#TITLE a'], 'a.bms'), new File(['x'], 'a.wav')]);
+    await target.handleDrop(drop.transfer);
+    await vi.waitFor(() => expect(snapshots.kept).toBeDefined());
+    expect(remembered.saved).toEqual([folder]);
+    expect(snapshots.kept?.charts).toEqual([{ path: 'Pack/a.bms', size: 8, lastModified: 1, key: 'dropped-key' }]);
+    expect(snapshots.prune).toHaveBeenCalledWith([folder]);
   });
 });
