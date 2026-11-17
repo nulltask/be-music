@@ -138,6 +138,7 @@ export class DOMSelectView
     this.readme.attach(
       () => host.domRoot,
       () => this.emit({ type: 'readtext' }),
+      (index) => this.emit({ type: 'readtext-tab', index }),
     );
   }
 
