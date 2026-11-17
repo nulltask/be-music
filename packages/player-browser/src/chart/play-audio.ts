@@ -74,9 +74,9 @@ export interface LoadPlaySamplesOptions {
    */
   window?: PlaySampleWindow;
   /**
-   * The decoded samples of the chart played last (`AudioService.chartSamples`). A play of the same chart takes its
-   * decodes from there and decodes only what is missing; a play of another chart releases them first. Without it,
-   * every sample decodes.
+   * The decoded samples of the chart played last (`AudioService.chartSamples`). A play takes the decodes of the files
+   * its `#WAV` paths resolve to from there and decodes only what is missing; the cache lets go of the rest first.
+   * Without it, every sample decodes.
    */
   sampleCache?: ChartSampleCache;
 }
@@ -169,17 +169,26 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
   const concurrency = resolveAudioDecodeConcurrency(
     typeof navigator === 'undefined' ? undefined : navigator.hardwareConcurrency,
   );
-  const lease = options.sampleCache?.claim({
-    source,
-    chartPath,
-    pathPrefix,
-    sampleRate: audioContext.sampleRate,
-  });
+  // The file each path resolves to first: what the cache keeps a decode under, so another chart of the track that
+  // resolves a path to the same file takes its decode, and one that resolves it elsewhere does not.
+  const firstFiles = new Map<string, BrowserAssetEntry>();
+  if (options.sampleCache !== undefined) {
+    for (const path of wavPaths) {
+      const entry = resolveChartAudioAsset(source, chartPath, path, { pathPrefix });
+      if (entry !== undefined) firstFiles.set(path, entry);
+    }
+  }
+  const lease = options.sampleCache?.claim(
+    { source, chartPath, sampleRate: audioContext.sampleRate },
+    firstFiles.values(),
+  );
+  if (lease !== undefined) log.debug('cached samples', { reused: lease.reused, files: firstFiles.size });
   const decodePaths = windowPaths === undefined ? wavPaths : wavPaths.filter((path) => windowPaths.has(path));
   await runWithConcurrency(decodePaths, concurrency, async (path) => {
     if (isCancelled()) return;
     const ringsFrom = windowPaths?.get(path);
-    const cached = lease?.get(path);
+    const file = firstFiles.get(path);
+    const cached = file === undefined ? undefined : lease?.get(file);
     // A path that needs its native rate decodes again when the cached decode has none (its `#EXWAV` changed branch).
     if (cached !== undefined && (!nativeRatePaths.has(path) || cached.nativeSampleRate !== undefined)) {
       if (cached.nativeSampleRate !== undefined) nativeRates.set(path, cached.nativeSampleRate);
@@ -214,7 +223,11 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
           }
         }
         // Kept even when the play was abandoned meanwhile: an F5 during loading picks up from here.
-        lease?.set(path, nativeSampleRate !== undefined ? { buffer: decoded, nativeSampleRate } : { buffer: decoded });
+        if (file !== undefined)
+          lease?.set(
+            file,
+            nativeSampleRate !== undefined ? { buffer: decoded, nativeSampleRate } : { buffer: decoded },
+          );
         if (isCancelled()) return;
         // Keep the declared WAV name as the key even when an alternate codec supplied the PCM.
         samples.set(decodedSampleKey(path), decoded);
@@ -225,9 +238,6 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
       }
     }
   });
-  // A play that loaded every sample leaves the cache with only those: no other `#RANDOM` branch's samples stay behind.
-  // A play of part of the chart keeps the rest of its decodes too, for the next play of it.
-  if (!isCancelled()) lease?.retain(wavPaths);
   const stretchResources: Record<string, string> = {};
   for (const [key, path] of Object.entries(wavResources)) {
     const modifiers = playbackModifiers.get(key);
