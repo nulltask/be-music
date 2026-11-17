@@ -8,6 +8,12 @@
 const CONDITIONAL_REQUEST_HEADERS = ['if-none-match', 'if-modified-since'] as const;
 /** The validators the proxy carries from the upstream back to the browser. */
 const VALIDATOR_RESPONSE_HEADERS = ['etag', 'last-modified'] as const;
+/**
+ * The User-Agent the proxy names itself with upstream. A Worker's fetch sends none, and some hosts (忍者ホームページ, which
+ * serves the NEW GENERATION difficulty tables) answer a request without one with 403. It names the service only, never
+ * the player.
+ */
+export const URL_LOAD_PROXY_USER_AGENT = 'Be-Music URL proxy (+https://play.be-music.app)';
 
 export function resolveURLLoadProxyTarget(rawURL: string | null): URL {
   if (!rawURL) {
@@ -38,17 +44,17 @@ export async function serveURLLoadProxy(
     return new Response(error instanceof Error ? error.message : 'invalid proxy target', { status: 400 });
   }
 
-  const conditional = new Headers();
+  const upstreamHeaders = new Headers({ 'user-agent': URL_LOAD_PROXY_USER_AGENT });
   for (const name of CONDITIONAL_REQUEST_HEADERS) {
     const value = request.headers.get(name);
-    if (value !== null) conditional.set(name, value);
+    if (value !== null) upstreamHeaders.set(name, value);
   }
 
   let upstream: Response;
   try {
     upstream = await fetcher(target, {
       method: request.method === 'HEAD' ? 'HEAD' : 'GET',
-      headers: conditional,
+      headers: upstreamHeaders,
       redirect: 'follow',
     });
   } catch (error) {

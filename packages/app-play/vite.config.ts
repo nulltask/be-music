@@ -36,6 +36,9 @@ const ffmpegCoreVersion = (
   JSON.parse(readFileSync(resolve(ffmpegCorePackageRoot, 'package.json'), 'utf8')) as { version: string }
 ).version;
 const URL_LOAD_PROXY_PATH = '/__url-load-proxy';
+// The same User-Agent the deployed proxy sends (`packages/worker-play/src/url-load-proxy.ts`), so the dev server meets
+// a host that refuses a request without one, or keys on it, the way production does.
+const URL_LOAD_PROXY_USER_AGENT = 'Be-Music URL proxy (+https://play.be-music.app)';
 
 const appPackageJSON = resolve(import.meta.dirname, 'package.json');
 const playerBrowserPackageJSON = resolve(repositoryDir, 'packages/player-browser/package.json');
@@ -190,6 +193,7 @@ function urlLoadProxyPlugin(): Plugin {
           try {
             upstream = await fetch(target, {
               method: req.method === 'HEAD' ? 'HEAD' : 'GET',
+              headers: { 'user-agent': URL_LOAD_PROXY_USER_AGENT },
               redirect: 'follow',
             });
           } catch (error) {

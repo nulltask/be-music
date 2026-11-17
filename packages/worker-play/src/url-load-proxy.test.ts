@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { resolveURLLoadProxyTarget, serveURLLoadProxy } from './url-load-proxy.ts';
+import { resolveURLLoadProxyTarget, serveURLLoadProxy, URL_LOAD_PROXY_USER_AGENT } from './url-load-proxy.ts';
 
 const ARCHIVE = 'https://example.com/song.zip';
 const proxyURL = (url: string) => `https://play.be-music.app/__url-load-proxy?url=${encodeURIComponent(url)}`;
@@ -51,10 +51,18 @@ describe('serveURLLoadProxy', () => {
     expect(response.headers.get('etag')).toBe('"v2"');
   });
 
-  test('forwards no other browser header, such as cookies', async () => {
+  test('forwards no other browser header, such as cookies or the browser User-Agent', async () => {
     const { requests, fetcher } = upstream('"v1"');
-    await serveURLLoadProxy(new Request(proxyURL(ARCHIVE), { headers: { cookie: 'session=1' } }), fetcher);
-    expect([...requests[0]!.headers.keys()]).toEqual([]);
+    const request = new Request(proxyURL(ARCHIVE), { headers: { cookie: 'session=1', 'user-agent': 'Browser/1.0' } });
+    await serveURLLoadProxy(request, fetcher);
+    expect([...requests[0]!.headers.keys()]).toEqual(['user-agent']);
+    expect(requests[0]!.headers.get('user-agent')).toBe(URL_LOAD_PROXY_USER_AGENT);
+  });
+
+  test('names itself upstream, since some hosts refuse a request without a User-Agent', async () => {
+    const { requests, fetcher } = upstream('"v1"');
+    await serveURLLoadProxy(new Request(proxyURL(ARCHIVE)), fetcher);
+    expect(requests[0]!.headers.get('user-agent')).toBe('Be-Music URL proxy (+https://play.be-music.app)');
   });
 
   test('tells a HEAD request the archive size, unless it travels compressed', async () => {
