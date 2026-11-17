@@ -12,6 +12,8 @@ export interface TableHeaderCourses {
   courses: CourseDefinition[];
   /** The header JSON's resolved URL. */
   headerURL: string;
+  /** The header's `data_url` (the table's song list) resolved against {@link headerURL}, when it names a valid one. */
+  dataURL?: string;
 }
 
 const META_TAG_PATTERN = /<meta\b([^>]*)>/giu;
@@ -99,9 +101,21 @@ export async function fetchTableHeaderCourses(url: string, fetchText: TableFetch
     header = parseJSONObject(await fetchText(resolved));
     if (header === undefined) throw new Error(`The difficulty-table header at ${resolved} is not a JSON object`);
   }
+  const dataURL = resolveDataURL(header.data_url, headerURL);
   return {
     label: nonEmptyString(header.name) ?? nonEmptyString(header.symbol) ?? hostOf(url),
     courses: parseTableHeaderCourses(header).flat(),
     headerURL,
+    ...(dataURL !== undefined ? { dataURL } : {}),
   };
+}
+
+function resolveDataURL(value: unknown, headerURL: string): string | undefined {
+  const raw = nonEmptyString(value);
+  if (raw === undefined) return undefined;
+  try {
+    return new URL(raw, headerURL).href;
+  } catch {
+    return undefined;
+  }
 }
