@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'vite-plus/test';
 import type { BrowserAssetSource } from './types.ts';
-import { computeChartFileHashes, computeChartFileSHA256, computeSHA256Hex } from './chart-hash.ts';
+import {
+  chartFileHashesOfCacheKey,
+  computeChartFileHashes,
+  computeChartFileSHA256,
+  computeSHA256Hex,
+  seedChartFileHashes,
+  seededChartFileHashes,
+} from './chart-hash.ts';
+import { parseBMS } from '@be-music/chart-parser';
 import { md5HexOfBytes } from './md5.ts';
 
 const encoder = new TextEncoder();
@@ -41,5 +49,27 @@ describe('chart-hash', () => {
     });
     expect(await computeChartFileHashes(makeSource({}), 'songs/missing.bms')).toBeUndefined();
     expect(await computeChartFileHashes(undefined, 'songs/missing.bms')).toBeUndefined();
+  });
+});
+
+describe('file hashes kept with a chart', () => {
+  const SHA256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+  const MD5 = '900150983cd24fb0d6963f7d28e17f72';
+
+  test('reads them off a parsed-chart cache key and the MD5 kept beside the parse', () => {
+    expect(chartFileHashesOfCacheKey(`${SHA256}:bms`, MD5)).toEqual({ sha256: SHA256, md5: MD5 });
+    expect(chartFileHashesOfCacheKey(`${SHA256}:lrx:${SHA256}:-`, MD5)).toEqual({ sha256: SHA256, md5: MD5 });
+    expect(chartFileHashesOfCacheKey(undefined, MD5)).toBeUndefined();
+    expect(chartFileHashesOfCacheKey(`${SHA256}:bms`, undefined)).toBeUndefined();
+    expect(chartFileHashesOfCacheKey('not-a-hash:bms', MD5)).toBeUndefined();
+    expect(chartFileHashesOfCacheKey(`${SHA256}:bms`, 'short')).toBeUndefined();
+  });
+
+  test('keeps them by the chart, and has none for a chart that was given none', () => {
+    const chart = parseBMS('#TITLE a');
+    expect(seededChartFileHashes(chart)).toBeUndefined();
+    seedChartFileHashes(chart, { sha256: SHA256, md5: MD5 });
+    expect(seededChartFileHashes(chart)).toEqual({ sha256: SHA256, md5: MD5 });
+    expect(seededChartFileHashes(parseBMS('#TITLE a'))).toBeUndefined();
   });
 });
