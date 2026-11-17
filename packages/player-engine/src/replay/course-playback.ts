@@ -73,9 +73,10 @@ export interface CourseReplayStagePlayback {
 
 /**
  * The stage replays a course replay plays back, in order, up to where the recorded run stopped: the first stage given
- * up (`play.aborted`) or failed (its recorded gauge, `isCourseStageFailed`), else the last stage played. The last entry
- * says how the run ended; every other one is `next`. A stage without a recorded result (`results` is a regenerable
- * cache) goes on unless it is the last stage played.
+ * up (`play.aborted`) that the run did not go on after (LR2's course gauges go on past one,
+ * `courseGoesOnAfterGivingUp`), or failed (its recorded gauge, `isCourseStageFailed`), else the last stage played. The
+ * last entry says how the run ended; every other one is `next`. A stage without a recorded result (`results` is a
+ * regenerable cache) goes on unless it is the last stage played.
  */
 export function planCourseReplayPlayback(courseLog: Pick<BeMusicCourseReplay, 'stages'>): CourseReplayStagePlayback[] {
   const plan: CourseReplayStagePlayback[] = [];
@@ -83,9 +84,13 @@ export function planCourseReplayPlayback(courseLog: Pick<BeMusicCourseReplay, 's
     if (!entry.played) break;
     const { replay } = entry;
     const native = replay.results?.native;
+    // A stage given up that the recorded run went on after plays back as one that goes on: the log says it did.
+    const wentOn = courseLog.stages[index + 1]?.played === true;
     const end: CourseReplayStageEnd =
       replay.play.aborted === true
-        ? 'given-up'
+        ? wentOn
+          ? 'next'
+          : 'given-up'
         : native !== undefined && isCourseStageFailed(replay.play.judgeRuleset ?? 'lr2', native.gauge)
           ? 'failed'
           : 'next';

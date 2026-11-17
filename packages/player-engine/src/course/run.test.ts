@@ -95,16 +95,63 @@ describe('CourseRun', () => {
     expect(course.nextStage()!.course.carryIn).toEqual({ gauge: 90, combo: 0, maxCombo: 7 });
   });
 
-  test('records a stage given up with ESC and ends the run there', () => {
+  test('records a stage given up with ESC and ends the run there, under a gauge whose rule does not go on', () => {
     const course = run([]);
     course.recordStage(stageLog({}));
-    course.giveUp(stageLog({ gauge: { type: 'GRADE', final: 70, cleared: true } }, { aborted: true }));
+    expect(
+      course.giveUp(
+        stageLog({ gauge: { type: 'CLASS', final: 70, cleared: true } }, { aborted: true, judgeRuleset: 'beatoraja' }),
+      ),
+    ).toBe('finished');
     expect(course.finished).toBe(true);
     expect(course.stagesPlayed).toBe(2);
     expect(course.nextStage()).toBeUndefined();
     // Nothing more is recorded once the run is over.
     expect(course.recordStage(stageLog({}))).toBe('finished');
     expect(course.stagesPlayed).toBe(2);
+  });
+
+  test("goes on past a stage given up on LR2's course gauge while the gauge holds, as LR2 does", () => {
+    const course = run([]);
+    course.recordStage(stageLog({}));
+    expect(course.giveUp(stageLog({ gauge: { type: 'GRADE', final: 70, cleared: true } }, { aborted: true }))).toBe(
+      'next',
+    );
+    expect(course.finished).toBe(false);
+    // The next stage starts from the gauge the stage was given up at.
+    expect(course.nextStage()?.course.carryIn?.gauge).toBe(70);
+    // A gauge of LR2's source keeps the rule under another ruleset's judging (#1171).
+    const qualified = run([]);
+    expect(
+      qualified.giveUp(
+        stageLog(
+          { gauge: { type: 'GRADE', source: 'lr2', final: 70, cleared: true } },
+          { aborted: true, judgeRuleset: 'beatoraja' },
+        ),
+      ),
+    ).toBe('next');
+  });
+
+  test("ends on a stage given up on LR2's course gauge below 2 %, with no GOOD or better, or as the last stage", () => {
+    const low = run([]);
+    expect(low.giveUp(stageLog({ gauge: { type: 'GRADE', final: 1.5, cleared: true } }, { aborted: true }))).toBe(
+      'finished',
+    );
+    const nothingHit = run([]);
+    const missed = { pgreat: 0, great: 0, good: 0, bad: 3, poor: 4, emptyPoor: 0 };
+    expect(nothingHit.giveUp(stageLog({ judge: missed }, { aborted: true }))).toBe('finished');
+    const last = run([]);
+    last.recordStage(stageLog({}));
+    last.recordStage(stageLog({}));
+    expect(last.giveUp(stageLog({}, { aborted: true }))).toBe('finished');
+    expect(last.finished).toBe(true);
+  });
+
+  test('an endless run ends on a stage given up whatever its gauge, since ESC is how it stops', () => {
+    const definition = { ...run().definition, stages: run().definition.stages.slice(0, 1) };
+    const endless = new CourseRun(definition, [run().stages[0]!], { endless: true });
+    expect(endless.goesOnAfterGivingUp(stageLog({}, { aborted: true }))).toBe(false);
+    expect(endless.giveUp(stageLog({}, { aborted: true }))).toBe('finished');
   });
 
   test('ends on a failed stage and after the last stage', () => {

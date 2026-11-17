@@ -766,16 +766,19 @@ describe('PlayRoute: where a play leads', () => {
     expect(h.deps.leaderboard.maybeSubmit).not.toHaveBeenCalled();
   });
 
-  test('Escape gives a course up: the stage is recorded with its replay, and the course result shows', async () => {
+  test('Escape gives a course stage up: the stage is recorded with its replay, and the course goes on or ends', async () => {
     const h = await harness();
     const active = h.deps.courses.beginRun(course());
     const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)! });
     const replay = { play: { mode: 'manual', aborted: true } } as unknown as BeMusicReplay;
     play.waitForReplay.mockResolvedValueOnce(replay);
     play.options.on.exit();
-    await vi.waitFor(() => expect(h.deps.courseRoute.showCourseResult).toHaveBeenCalledOnce());
+    // The course route plays the next stage or shows the course result, as the run says.
+    await vi.waitFor(() => expect(h.deps.courseRoute.continueCourse).toHaveBeenCalledOnce());
     expect(h.deps.testHook.recordReplay).toHaveBeenCalledWith(replay);
     expect(h.deps.courses.active).toBe(active);
+    // A stage with no result to go on from ends the run.
+    expect(active.run.finished).toBe(true);
     expect(h.deps.showSelect).not.toHaveBeenCalled();
   });
 
@@ -944,7 +947,7 @@ test('an interrupted practice stage keeps its live outcome without a replay', as
   };
   play.progress.mockReturnValue({ ...resultOf(chartEntry('a')), practice: true, stageOutcome: outcome });
   play.options.on.exit();
-  await vi.waitFor(() => expect(h.deps.courseRoute.showCourseResult).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(h.deps.courseRoute.continueCourse).toHaveBeenCalledOnce());
   expect(active.run.practice).toBe(true);
   expect(active.run.stagesPlayed).toBe(1);
   expect(() => active.run.buildReplay()).toThrow('practice course');

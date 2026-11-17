@@ -457,7 +457,9 @@ flowchart TD
 - **truncated**: the play ended where its survival gauge emptied (`play.endOnFailure`), and the target's gauge would have
   survived that point. The run is judged only up to it (`stoppedAtUs`, where the played ruleset's gauge emptied): no input
   is synthesized and no later note is missed. A course is truncated the same way when its played run stopped at a failed
-  stage the target's gauge survives. A truncated result is not ranked.
+  stage the target's gauge survives, and when it stopped at a stage given up that the target's course gauge goes on past
+  (LR2's, [Courses — Ending on failure](./course.md#ending-on-failure)). A course re-simulated under a target whose gauge
+  ends the run there stops at that stage. A truncated result is not ranked.
 - **simulated**: everything else, including a target whose gauge empties by the same point.
 
 `SimulateReplayOptions.onFailure` hears the chart time of the judgment that first empties a survival gauge. Tracked in [#933](https://github.com/nulltask/be-music/issues/933).

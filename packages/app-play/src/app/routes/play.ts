@@ -443,8 +443,9 @@ export class PlayRoute {
       // A tempo change during the play (the tempo slider in pitch mode, or a replay following its log).
       onTempoChange: (changed: number) => this.followLiveTempo(changed),
       onExit: () => {
-        // ESC gives a running course up: the run is kept as a failed one (as LR2 records it), with the stage given up
-        // recorded once the engine hands its replay over.
+        // ESC gives a running course's stage up, recorded once the engine hands its replay over. The course gauge's
+        // rule decides what follows (`courseGoesOnAfterGivingUp`): LR2's goes on to the next stage while the gauge holds,
+        // the other sources end the run as a failed one and show the course result.
         const view = this.gameplayView;
         const active = courseStage !== undefined ? this.activeCourse : undefined;
         // ESC stops a course replay where it is, as it stops a dropped replay: back to the select screen, no result.
@@ -459,7 +460,7 @@ export class PlayRoute {
             const replay = await view?.waitForReplay();
             this.testHook?.recordReplay(replay);
             this.courses.giveUp(active!, replay, view?.progress());
-            await this.courseRoute.showCourseResult();
+            this.courseRoute.continueCourse();
           })();
           return;
         }

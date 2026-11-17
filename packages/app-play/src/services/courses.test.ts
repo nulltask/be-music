@@ -96,15 +96,21 @@ describe('CourseRunService', () => {
     expect(courses.active).toBe(newer);
   });
 
-  test('ESC gives the run up: the stage is recorded, the run ends and is the running one again for its result', () => {
+  test("ESC gives the stage up: it is recorded, the run is the running one again, and goes on or ends by the course gauge's rule", () => {
     const courses = new CourseRunService();
     const active = courses.beginRun(grade());
     // A navigation took the run meanwhile (the replay arrives after the stage left).
     courses.finishRun();
-    courses.giveUp(active, stageLog(40));
+    // LR2's course gauge goes on to the next stage while it holds, as LR2 does.
+    expect(courses.giveUp(active, stageLog(40))).toBe('next');
     expect(courses.active).toBe(active);
-    expect(active.run.finished).toBe(true);
+    expect(active.run.finished).toBe(false);
     expect(active.run.stagesPlayed).toBe(1);
+    // The class gauges end the run there, as beatoraja does: the course result shows it as a failed run.
+    const beatoraja = courses.beginRun(grade());
+    const log = stageLog(40);
+    expect(courses.giveUp(beatoraja, { ...log, play: { ...log.play, judgeRuleset: 'beatoraja' } })).toBe('finished');
+    expect(beatoraja.run.finished).toBe(true);
   });
 
   test('the course result takes the run, once', () => {

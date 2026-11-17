@@ -32,6 +32,32 @@ export function isCourseStageFailed(
   return gauge.failedMidPlay === true || (source === 'lr2' ? gauge.final < 2 : gauge.final <= 0);
 }
 
+/**
+ * Whether a course run goes on after a stage the player gave up with ESC. The rule is the course gauge's own, as the
+ * stage failure rule is (`gauge.source`, #1171):
+ *
+ * - LR2 shows the given-up stage as FAILED and goes on to the next stage while the gauge is at 2 % or more, provided the
+ *   stage judged a GOOD or better; otherwise it returns to the select screen (`LR2body.exe`). The course lamp is then
+ *   FAILED, since a stage was left unplayed.
+ * - beatoraja's class gauges end the run: `BMSPlayer.stopPlay` fails the stage and fills its gauge log with 0 up to the
+ *   chart's end, and `MusicResult` ends a course whose gauge stands at 0 or less. That-Which-Must-Not-Be-Named's courses
+ *   run on these gauges and follow them.
+ * - plugout leaves nothing to follow, and its run ends there: Be-Music's choice, as before LR2's rule was told apart.
+ *
+ * A run that has no last stage (an endless RANDOM MIX) never goes on: ESC is how its player stops it.
+ */
+export function courseGoesOnAfterGivingUp(
+  ruleset: string,
+  result: {
+    gauge: { final: number; failedMidPlay?: boolean; source?: string };
+    judge: { pgreat: number; great: number; good: number };
+  },
+): boolean {
+  const source = result.gauge.source ?? ruleset.split('/')[0];
+  if (source !== 'lr2' || isCourseStageFailed(ruleset, result.gauge)) return false;
+  return result.judge.pgreat + result.judge.great + result.judge.good > 0;
+}
+
 export interface RulesetCourseOptions {
   kind: RulesetCourseKind;
   /** The course's `gauge_*` constraint; without one beatoraja picks the set by play mode. LR2 ignores it. */

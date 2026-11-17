@@ -10,6 +10,7 @@ import {
 import type { BeMusicReplay, ReplayCourseStage, ReplayRecorderInfo, ReplayRulesetResult } from '../replay/format.ts';
 import { computeStageChartFingerprint, resolveReplayCourseInfo } from './course-replay.ts';
 import { isCourseStageFailed, isRulesetId, resolveRuleset } from '../ruleset/index.ts';
+import { courseGoesOnAfterGivingUp } from '../ruleset/course.ts';
 import type { CourseDefinition } from './definition.ts';
 import { applyCourseLongNoteConstraint } from './long-note.ts';
 import {
@@ -62,7 +63,8 @@ interface PlayedStage<H> {
 
 /**
  * One run of an EXPERT or GRADE course: plays the stages in order, carrying each stage's gauge value, course combo and
- * course max combo into the next, and ends when a stage fails, when the player gives up, or after the last stage. The
+ * course max combo into the next, and ends when a stage fails, when the player gives up (unless the course gauge's rule
+ * goes on, as LR2's does), or after the last stage. The
  * stage replays it collects make the course replay. A NONSTOP course is played as one stitched chart instead
  * (`prepareNonstopCourse`).
  *
@@ -209,14 +211,16 @@ export class CourseRun<
   }
 
   /**
-   * Records the stage the player gave up with ESC (its replay is marked `play.aborted`) and ends the run: a run given
-   * up is a failed run, as LR2 records it. Its play time runs up to where it was left ({@link resolveGivenUpPlaySeconds}).
-   * A stage without a replay just ends the run.
+   * Records the stage the player gave up with ESC (its replay is marked `play.aborted`) as a stage that did not clear,
+   * and returns whether the run goes on ({@link goesOnAfterGivingUp}): LR2's course gauges go on to the next stage while
+   * the gauge holds, the other sources end the run there as a failed one. Its play time runs up to where it was left
+   * ({@link resolveGivenUpPlaySeconds}). A stage without a replay or a live outcome just ends the run.
    */
-  giveUp(replay: BeMusicReplay | undefined, extras?: H): void {
-    if (this.ended) return;
-    this.markPractice(extras, replay);
+  giveUp(replay: BeMusicReplay | undefined, extras?: H): 'next' | 'finished' {
+    if (this.ended) return 'finished';
     const native = replay?.results?.native ?? extras?.stageOutcome;
+    const goesOn = this.goesOnAfterGivingUp(replay, native);
+    this.markPractice(extras, replay);
     if (native !== undefined) {
       const playSeconds = replay !== undefined ? resolveGivenUpPlaySeconds(replay) : extras?.playSeconds;
       this.played.push({
@@ -230,7 +234,26 @@ export class CourseRun<
         ...(extras !== undefined ? { extras } : {}),
       });
     }
-    this.ended = true;
+    if (!goesOn) {
+      this.ended = true;
+      return 'finished';
+    }
+    return 'next';
+  }
+
+  /**
+   * Whether the run would go on after the player gives the next stage up ({@link giveUp} returning `next`): the course
+   * gauge's rule ({@link courseGoesOnAfterGivingUp}), with a stage left to play. An endless run never goes on, since ESC
+   * is how its player stops it.
+   */
+  goesOnAfterGivingUp(replay: BeMusicReplay | undefined, outcome?: ReplayRulesetResult): boolean {
+    if (this.ended || this.endless) return false;
+    const native = replay?.results?.native ?? outcome;
+    if (native === undefined || this.played.length + 1 >= this.stages.length) return false;
+    return courseGoesOnAfterGivingUp(
+      replay === undefined ? native.ruleset : (replay.play?.judgeRuleset ?? 'lr2'),
+      native,
+    );
   }
 
   private markPractice(extras: H | undefined, replay: BeMusicReplay | undefined): void {

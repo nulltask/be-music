@@ -191,7 +191,7 @@ export function nextCourseStagePlay(active: ActiveCourse): CourseStagePlay | und
 
 /**
  * Records a finished stage on the run. A course replay's stage records its recorded replay (the replay played back
- * records none), and a stage the recorded run gave up ends the run as given up, as it did.
+ * records none), and a stage the recorded run gave up is recorded as given up, so the run goes on or ends as it did.
  */
 export function recordCourseStage(active: ActiveCourse, result: PlayResult): void {
   const recorded = active.replay?.stages[active.run.stagesPlayed];
@@ -199,7 +199,7 @@ export function recordCourseStage(active: ActiveCourse, result: PlayResult): voi
     active.run.recordStage(result.replay, result);
     return;
   }
-  if (recorded.end === 'given-up') active.run.giveUp(recorded.replay, result);
+  if (recorded.replay.play.aborted === true) active.run.giveUp(recorded.replay, result);
   else active.run.recordStage(recorded.replay, result);
 }
 
@@ -210,9 +210,12 @@ export function courseGoesOnAfter(active: ActiveCourse, result: PlayResult): boo
   return recorded.end === 'next' && active.run.goesOnAfter(recorded.replay, result.stageOutcome);
 }
 
-/** Whether the stage just played is one the recorded run gave up: the run ends there with no stage result, as it did. */
+/**
+ * Whether the stage just played is one the recorded run gave up: it shows no stage result, as a stage given up live
+ * shows none, and the run goes on or ends there as it did.
+ */
 export function courseReplayStageGivenUp(active: ActiveCourse | undefined): boolean {
-  return active?.replay?.stages[active.run.stagesPlayed]?.end === 'given-up';
+  return active?.replay?.stages[active.run.stagesPlayed]?.replay.play.aborted === true;
 }
 
 /**
