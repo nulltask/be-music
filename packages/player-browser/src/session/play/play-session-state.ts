@@ -63,6 +63,7 @@ import type { BGACue, NonstopStageBGATimeline } from '../../chart/bga-timeline.t
 import type { BeMusicJudgeWindows } from '@be-music/player-skin-sdk';
 import type { RuntimeMineNote, RuntimeNote } from '../../view/shared/playfield/context.ts';
 import type { GhostPresentation } from './ghost/ghost.ts';
+import { createAudioClockSmoother } from './play-clock.ts';
 import type { PlayfieldLaneRect } from '../../view/types.ts';
 
 export class PlaySessionState extends PlayPresentation {
@@ -176,6 +177,11 @@ export class PlaySessionState extends PlayPresentation {
    * (`PlaySession.currentSeconds`).
    */
   audioContextStartTime = 0;
+  /**
+   * The audio clock as the playfield draws it: `currentTime` without its render-callback steps
+   * (`createAudioClockSmoother`), so the notes move by the frame's own time each frame.
+   */
+  readonly drawClock = createAudioClockSmoother();
   /** The stage fades and FIT rates of a stitched NONSTOP chart (`options.nonstop`). */
   nonstopMixer: NonstopStageMixer | undefined;
   paused = false;
