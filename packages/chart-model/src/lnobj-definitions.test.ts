@@ -45,3 +45,19 @@ test('earlier LNOBJ definitions do not change the fingerprint', () => {
   const fingerprint = (bms: string) => computeChartFingerprint(parseBMS(bms), { chartPath: undefined });
   expect(fingerprint('#LNOBJ AA\n' + chart)).toBe(fingerprint(chart));
 });
+
+test('pairs LNOBJ with only the objects left once a later line of the same measure and channel overwrites one', () => {
+  const notes = (lines: string[]) =>
+    resolveChart(parseBMS(['#LNOBJ ZZ', ...lines].join('\n'))).notes.map(
+      ({ kind, sampleKey, beat, endBeat }) => [kind, sampleKey, beat, endBeat] as const,
+    );
+  // An end object overwritten by a later line's note: that note starts the long note the next end object ends.
+  expect(notes(['#00111:01', '#00211:ZZ', '#00211:02', '#00311:ZZ'])).toEqual([
+    ['tap', '01', 4, undefined],
+    ['ln', '02', 8, 12],
+  ]);
+  // A start overwritten by a later line's end object: the end object ends the note before it.
+  expect(notes(['#00111:01', '#00211:02', '#00211:ZZ'])).toEqual([['ln', '01', 4, 8]]);
+  // A note overwritten by a later line's note starts nothing.
+  expect(notes(['#00111:01', '#00111:02', '#00211:ZZ'])).toEqual([['ln', '02', 4, 8]]);
+});
