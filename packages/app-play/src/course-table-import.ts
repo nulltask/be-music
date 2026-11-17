@@ -33,6 +33,8 @@ export const DEFAULT_COURSE_TABLE_URLS: readonly string[] = [
 export interface ImportedCourseTable {
   group: CourseDefinitionGroup;
   headerURL: string;
+  /** The table's song list (`data_url`), where the download pages of its courses' stages are looked up. */
+  dataURL?: string;
 }
 
 /** The trimmed URL when it is an absolute http(s) URL, else `undefined`. */
@@ -136,7 +138,11 @@ export async function importCourseTable(
 ): Promise<ImportedCourseTable> {
   const table = await fetchTableHeaderCourses(url, fetchText);
   if (table.courses.length === 0) throw new Error(`${table.label} lists no course`);
-  return { group: { label: table.label, courses: table.courses }, headerURL: table.headerURL };
+  return {
+    group: { label: table.label, courses: table.courses },
+    headerURL: table.headerURL,
+    ...(table.dataURL !== undefined ? { dataURL: table.dataURL } : {}),
+  };
 }
 
 function defaultStorage(): Storage | undefined {

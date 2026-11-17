@@ -36,6 +36,7 @@ import { COURSE_REPLAY_FILE_SUFFIX, REPLAY_FILE_SUFFIX } from '@be-music/player-
 import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
 import {
   describeCourseTableImportError,
+  fetchCourseTableText,
   importCourseTable,
   isTableHeaderFilePath,
   mergeCourseGroup,
@@ -43,6 +44,13 @@ import {
   readTableHeaderFile,
   rememberCourseTableURL,
 } from '../course-table-import.ts';
+import {
+  describeMissingCourseStages,
+  parseTableSongIndex,
+  type MissingCourseStage,
+  type TableSongIndex,
+} from '../course-table-songs.ts';
+import type { CourseDefinition } from '@be-music/player-engine/course';
 import { navigationAfterDrop } from '../drop-navigation.ts';
 import {
   applyLoadProgress,
@@ -117,6 +125,10 @@ export class LibraryService {
    * resolved into `collection.courseFolders`.
    */
   private courseGroups: CourseDefinitionGroup[] = [];
+  /** The song list (`data_url`) of the difficulty table each imported course came from. */
+  private readonly courseTableDataURLs = new WeakMap<CourseDefinition, string>();
+  /** Table song lists fetched this session, by URL: fetched once, when a course of the table is missing a stage. */
+  private readonly tableSongIndexes = new Map<string, Promise<TableSongIndex>>();
   /** Session-only draws, oldest first across every source folder. */
   private keptRandomCourses: Array<{ folderLabel: string; course: LibraryCourse }> = [];
   private nextDrawId = 0;
@@ -455,7 +467,8 @@ export class LibraryService {
     for (const url of urls) {
       this.setStatus('Fetching course table…');
       try {
-        const { group } = await importCourseTable(url);
+        const { group, dataURL } = await importCourseTable(url);
+        if (dataURL !== undefined) for (const course of group.courses) this.courseTableDataURLs.set(course, dataURL);
         this.courseGroups = mergeCourseGroup(this.courseGroups, group);
         if (remember) rememberCourseTableURL(url);
         imported += 1;
@@ -472,6 +485,29 @@ export class LibraryService {
     const showing = this.showing();
     const busy = this.elements.shell.classList.contains('playing') || showing === 'result' || showing === 'decide';
     if (!busy) await this.showSelect();
+  }
+
+  /**
+   * The stages `course` is missing from the collection, with the download pages its difficulty table's song list names
+   * for them. The list is fetched (through the proxy) the first time a course of that table needs it; a course from
+   * elsewhere, or a list that cannot be fetched, gives the stages without links.
+   */
+  public async findMissingCourseStages(course: LibraryCourse): Promise<MissingCourseStage[]> {
+    const dataURL = this.courseTableDataURLs.get(course.definition);
+    if (dataURL === undefined) return describeMissingCourseStages(course);
+    let songs = this.tableSongIndexes.get(dataURL);
+    if (songs === undefined) {
+      songs = fetchCourseTableText(dataURL).then(parseTableSongIndex);
+      this.tableSongIndexes.set(dataURL, songs);
+    }
+    try {
+      return describeMissingCourseStages(course, await songs);
+    } catch (error) {
+      // Ask again next time: the list may be back.
+      this.tableSongIndexes.delete(dataURL);
+      dropLog.warn(`course table song list failed: ${dataURL}`, error);
+      return describeMissingCourseStages(course);
+    }
   }
 
   /**

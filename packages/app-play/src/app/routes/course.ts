@@ -127,6 +127,8 @@ export interface CourseRouteDeps {
   /** Where the select screen is: its position on the stage or off it, else the one last kept. */
   readonly selectNavigation: () => BrowseSnapshot | undefined;
   readonly setStatus: (text: string) => void;
+  /** Lists the stages a decided course is missing from the collection, with where to download them. */
+  readonly showMissingCourseStages: (course: LibraryCourse) => void;
   /** Starts a NONSTOP course (`NonstopRoute`), with its decide screen when the course bar starts it. */
   readonly startNonstopCourse: (course: LibraryCourse, options: { decide?: boolean }) => Promise<void>;
   readonly showSelect: () => Promise<void>;
@@ -184,6 +186,7 @@ export class CourseRoute {
   private readonly replayRecorder: CourseRouteDeps['replayRecorder'];
   private readonly selectNavigation: CourseRouteDeps['selectNavigation'];
   private readonly setStatus: CourseRouteDeps['setStatus'];
+  private readonly showMissingCourseStages: CourseRouteDeps['showMissingCourseStages'];
   private readonly startNonstopCourse: CourseRouteDeps['startNonstopCourse'];
   private readonly showSelect: CourseRouteDeps['showSelect'];
   private readonly showDecide: CourseRouteDeps['showDecide'];
@@ -208,6 +211,7 @@ export class CourseRoute {
     this.replayRecorder = deps.replayRecorder;
     this.selectNavigation = deps.selectNavigation;
     this.setStatus = deps.setStatus;
+    this.showMissingCourseStages = deps.showMissingCourseStages;
     this.startNonstopCourse = deps.startNonstopCourse;
     this.showSelect = deps.showSelect;
     this.showDecide = deps.showDecide;
@@ -234,6 +238,8 @@ export class CourseRoute {
     }
     if (plan.action === 'unplayable') {
       this.setStatus(describeUnplayableCourse(entry));
+      // A random course is unplayable for a bad filter, not a missing chart: the status says which.
+      if (entry.random === undefined) this.showMissingCourseStages(entry);
       return;
     }
     if (plan.action === 'random-mix') {

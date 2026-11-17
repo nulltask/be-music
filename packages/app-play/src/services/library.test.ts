@@ -214,6 +214,42 @@ describe('LibraryService difficulty tables', () => {
   });
 });
 
+describe('LibraryService missing course stages', () => {
+  const TABLE_DATA = 'https://table.example/insane/data.json';
+  const header = JSON.stringify({
+    name: 'Insane',
+    data_url: 'data.json',
+    course: [[{ name: 'Dan 1', md5: [MD5[0]] }]],
+  });
+  const songs = JSON.stringify([{ md5: MD5[0], title: 'Song A', url: 'https://venue.example/a' }]);
+  const courseOf = (library: LibraryService): LibraryCourse =>
+    library.collection.courseFolders!.find((folder) => folder.label === 'Insane')!.courses![0]!;
+
+  test("looks a missing stage's pages up in its table's song list, fetched once", async () => {
+    stubStorage();
+    const fetch = stubFetch({ [TABLE_HEADER]: header, [TABLE_DATA]: songs });
+    const { library } = harness();
+    await library.importCourseTables([TABLE_HEADER], false);
+    const course = courseOf(library);
+    expect(course.playable).toBe(false);
+    const expected = [{ stage: 1, title: 'Song A', links: [{ kind: 'song', href: 'https://venue.example/a' }] }];
+    expect(await library.findMissingCourseStages(course)).toEqual(expected);
+    expect(await library.findMissingCourseStages(course)).toEqual(expected);
+    expect(fetch.mock.calls.map(([url]) => proxiedURL(url as string))).toEqual([TABLE_HEADER, TABLE_DATA]);
+  });
+
+  test('lists the stages without pages when the song list cannot be fetched, and asks again next time', async () => {
+    stubStorage();
+    const fetch = stubFetch({ [TABLE_HEADER]: header });
+    const { library } = harness();
+    await library.importCourseTables([TABLE_HEADER], false);
+    const course = courseOf(library);
+    expect(await library.findMissingCourseStages(course)).toEqual([{ stage: 1, title: 'course 1', links: [] }]);
+    await library.findMissingCourseStages(course);
+    expect(fetch.mock.calls.map(([url]) => proxiedURL(url as string))).toEqual([TABLE_HEADER, TABLE_DATA, TABLE_DATA]);
+  });
+});
+
 describe('LibraryService well-known difficulty tables', () => {
   test('imports the well-known tables on a first visit, through the same-origin proxy', async () => {
     stubStorage();

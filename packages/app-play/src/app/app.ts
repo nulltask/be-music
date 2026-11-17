@@ -42,6 +42,7 @@ import { OptionsDialog, type OptionsDialogDeps } from '../ui/options/index.ts';
 import { confirmSkinDrop, promptSkinDrop } from '../ui/skin-drop-prompt.ts';
 import { showPlayOptionMismatch } from '../ui/play-option-mismatch.ts';
 import { showMissingReplayCharts } from '../ui/replay-missing.ts';
+import { showMissingCourseStages } from '../ui/course-missing.ts';
 import { readDeviceSignals, type DeviceProfile } from '../device-profile.ts';
 import { captureScreenshot, finalizeRecordingIfActive, toggleRecording } from '../recording-controller.ts';
 import type { PlayerGUIState, PlayerScene, PlayerWebElements, SkinFamilyOverride } from '../types.ts';
@@ -454,6 +455,8 @@ export class PlayerWebApp {
       replayRecorder: REPLAY_RECORDER,
       selectNavigation: () => this.selectView?.snapshot() ?? this.lastSelectNavigation,
       setStatus: (text) => this.status.set(text),
+      showMissingCourseStages: (course) =>
+        showMissingCourseStages(course, (missing) => this.library.findMissingCourseStages(missing)),
       startNonstopCourse: (course, options) => this.nonstopRoute.startNonstopCourse(course, options),
       showSelect: () => this.showSelect(),
       showDecide: (chartEntry, overrides, then) => this.decideRoute.showDecide(chartEntry, overrides, then),

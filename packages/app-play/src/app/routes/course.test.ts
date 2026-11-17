@@ -177,6 +177,7 @@ function harness(options: { family?: 'built-in' | 'beatoraja'; beatorajaMounts?:
     replayRecorder: { name: 'be-music-web' },
     selectNavigation: () => AT_COURSE_BAR,
     setStatus: vi.fn<CourseRouteDeps['setStatus']>(),
+    showMissingCourseStages: vi.fn<CourseRouteDeps['showMissingCourseStages']>(),
     startNonstopCourse: vi.fn<CourseRouteDeps['startNonstopCourse']>(async () => {}),
     showSelect: vi.fn<CourseRouteDeps['showSelect']>(async () => {}),
     showDecide: vi.fn<CourseRouteDeps['showDecide']>(async () => {}),
@@ -234,16 +235,17 @@ describe('CourseRoute: starting a course', () => {
     expect(h.courses.takeReturnNavigation()).toBe(AT_COURSE_BAR);
   });
 
-  test('a NEW COURSE bar starts making a course, and a course with a missing stage says why; neither runs', async () => {
+  test('a NEW COURSE bar starts making a course, and a course with a missing stage lists it; neither runs', async () => {
     const h = harness();
     await h.route.startCourse(grade(['a'], { newCourse: true }));
     expect(h.deps.courseMaker.maker.start).toHaveBeenCalledWith('grade');
     expect(h.deps.setStatus).toHaveBeenLastCalledWith('Making a course: decide charts to add them, then save');
+    expect(h.deps.showMissingCourseStages).not.toHaveBeenCalled();
 
-    await h.route.startCourse(
-      grade(['a'], { playable: false, stages: [{ title: 'a', chart: chartEntry('a') }, { title: 'x' }] }),
-    );
+    const missing = grade(['a'], { playable: false, stages: [{ title: 'a', chart: chartEntry('a') }, { title: 'x' }] });
+    await h.route.startCourse(missing);
     expect(h.deps.setStatus).toHaveBeenLastCalledWith('Dan: 1 stage is not in the collection');
+    expect(h.deps.showMissingCourseStages).toHaveBeenCalledWith(missing);
     expect(h.courses.active).toBeUndefined();
     expect(h.courses.takeReturnNavigation()).toBeUndefined();
     expect(h.deps.showDecide).not.toHaveBeenCalled();
