@@ -1,4 +1,5 @@
 import { BEMUSE_SERVER_URLS_STORAGE_KEY } from '../bemuse-server.ts';
+import { strToU8, zipSync } from 'fflate';
 import { readDropEntries, type BrowserChartCollection } from '@be-music/player-browser/collection';
 import type { SceneKind, SelectScene } from '@be-music/player-browser/host';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
@@ -350,6 +351,14 @@ describe('LibraryService made courses', () => {
       'MY DAN',
     ]);
     expect(view.restore).toHaveBeenCalledWith(navigation);
+  });
+
+  test('lists the made-course folders after charts load from an archive, with no course file loaded', async () => {
+    const { library, folders } = harness();
+    const archive = zipSync({ 'pack/a.bms': strToU8('#PLAYER 1\n#TITLE alpha\n#BPM 120\n#00111:01\n') });
+    await library.processIncomingFiles([new File([archive], 'pack.zip')]);
+    expect(library.collection.charts.map((chart) => chart.title)).toEqual(['alpha']);
+    expect(folders()).toEqual(['MY COURSES', 'MY NONSTOP', 'MY DAN']);
   });
 });
 

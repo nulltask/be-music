@@ -277,7 +277,6 @@ export class LibraryService {
       if (sorted.chartArchives.length > 0) {
         await this.loadCharts(sorted.chartArchives);
         if (files.length === 0) {
-          if (this.courseGroups.length > 0) await this.refreshCourseFolders();
           await this.showSelect();
           if (this.collection.charts.length > 0) this.setStatus(describeChartCollection(this.collection));
           return;
@@ -393,7 +392,8 @@ export class LibraryService {
     } else if (this.selectSkin() || this.resultSkin() || Object.keys(this.playSkins()).length > 0) {
       this.setStatus('Theme loaded');
     }
-    if (chartFiles.length > 0 || courseFiles.length > 0) await this.refreshCourseFolders();
+    // Charts list the course folders as they load; course files dropped without charts are listed here.
+    if (chartFiles.length === 0 && courseFiles.length > 0) await this.refreshCourseFolders();
     // Open what was dropped: its folder, or the folder list when the drop carried several.
     const dropped = navigationAfterDrop(this.collection.charts, previousChartIds, origin.showLibraryRoot);
     if (dropped !== undefined) this.browseTo(dropped);
@@ -555,7 +555,6 @@ export class LibraryService {
       if (params.musicURL) {
         this.setStatus('Fetching music…');
         await this.loadCharts([await fetchZipAsFile(params.musicURL)]);
-        if (this.courseGroups.length > 0) await this.refreshCourseFolders();
         await this.showSelect();
       }
       if (this.collection.charts.length > 0) {
@@ -604,7 +603,6 @@ export class LibraryService {
           this.setStatus(`Bemuse server ${label} failed: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
-      if (this.courseGroups.length > 0) await this.refreshCourseFolders();
       await this.showSelect();
     } finally {
       hideLoadingOverlay(this.elements);
@@ -737,6 +735,9 @@ export class LibraryService {
     // The player's own difficulties and levels (LR2's F3 level edit) go over the charts' own.
     applyChartLevelEdits(this.collection.charts, readChartLevelEdits(globalThis.localStorage));
     this.bemuseSongs.apply(this.collection.charts);
+    // The store's collection has no course folders: list the course files' and the player's own (MY COURSES, MY
+    // NONSTOP, MY DAN) again, whichever path loaded the charts.
+    await this.refreshCourseFolders();
     // Suppress the "0 charts loaded" reading — that text reads like a parse error to the user. The post-load status
     // text is set by `processIncomingFiles` once both theme + songs land, so a mid-flight transient is plenty.
     if (this.collection.charts.length > 0) {
