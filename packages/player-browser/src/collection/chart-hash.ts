@@ -2,6 +2,7 @@ import { sha256HexAsync } from '@be-music/shared-utils/hash';
 import { normalizePath } from '@be-music/shared-utils/core';
 import { loadAssetBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
 import { md5HexOfBytes } from './md5.ts';
+import type { BeMusicJSON } from '@be-music/chart-source';
 import type { BrowserAssetSource } from './types.ts';
 
 /**
@@ -63,4 +64,33 @@ export async function computeChartFileHashes(
   } catch {
     return undefined;
   }
+}
+
+/** The file hashes the collection loader kept for a chart, by the chart it listed. */
+const FILE_HASHES_BY_CHART = new WeakMap<BeMusicJSON, ChartFileHashes>();
+
+/**
+ * Keeps a chart's file hashes with the chart, as the collection loader does for a chart whose file it hashed (or whose
+ * hashes came back with its parse from the parsed-chart cache): whoever needs them later reads no file.
+ */
+export function seedChartFileHashes(chart: BeMusicJSON, hashes: ChartFileHashes): void {
+  FILE_HASHES_BY_CHART.set(chart, hashes);
+}
+
+/** The file hashes kept with a chart ({@link seedChartFileHashes}), or `undefined` for a chart that has none. */
+export function seededChartFileHashes(chart: BeMusicJSON): ChartFileHashes | undefined {
+  return FILE_HASHES_BY_CHART.get(chart);
+}
+
+/**
+ * The file hashes a parsed-chart cache key and the MD5 kept beside the parse stand for: the key starts with the
+ * SHA-256 of the chart file. `undefined` without both.
+ */
+export function chartFileHashesOfCacheKey(
+  key: string | undefined,
+  md5: string | undefined,
+): ChartFileHashes | undefined {
+  if (key === undefined || md5 === undefined) return undefined;
+  const sha256 = key.slice(0, 64);
+  return /^[0-9a-f]{64}$/u.test(sha256) && /^[0-9a-f]{32}$/u.test(md5) ? { sha256, md5 } : undefined;
 }

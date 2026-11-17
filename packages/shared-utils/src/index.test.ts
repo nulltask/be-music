@@ -276,6 +276,16 @@ describe('utils', () => {
   test('normalizePath/dirname/basename: normalizes browser and archive-style paths', () => {
     expect(normalizePath(String.raw`Songs\\set/../chart/./main.bms`)).toBe('Songs/chart/main.bms');
     expect(normalizePath('/root//song/../theme/')).toBe('root/theme');
+    // A path that is already normal comes back as it is, dots inside a name included.
+    for (const path of ['', 'main.bms', 'Songs/chart/main.bms', 'Songs/.hidden/..name/a.b..c', 'Songs/...']) {
+      expect(normalizePath(path)).toBe(path);
+    }
+    expect(normalizePath('./a')).toBe('a');
+    expect(normalizePath('a/.')).toBe('a');
+    expect(normalizePath('a/..')).toBe('');
+    expect(normalizePath('..')).toBe('');
+    expect(normalizePath('a//b')).toBe('a/b');
+    expect(normalizePath('a/')).toBe('a');
     expect(dirname(String.raw`root\\song/main.bms`)).toBe('root/song');
     expect(dirname('main.bms')).toBe('');
     expect(basename(String.raw`root\\song/main.bms`)).toBe('main.bms');

@@ -96,6 +96,7 @@ const BENCH_FAMILY_VIEW: playerWebCoreAPI.FamilyView<number, never> = {
 };
 
 const BENCH_BYTES = new Uint8Array([35, 84, 73, 84, 76, 69, 32, 66, 101, 110, 99, 104, 10]);
+const BENCH_HASHED_CHART = createEmptyJSON('bms');
 const BENCH_BMS_FILE = makeBenchFile('Songs/Bench/main.bms', '#TITLE Bench\n#BPM 130\n#00111:0100\n');
 const BENCH_APPEND_BMS_FILE = makeBenchFile('Songs/BenchExtra/main.bms', '#TITLE Bench Extra\n#BPM 130\n#00111:0100\n');
 const BENCH_WAV_FILE = makeBenchFile('Songs/Bench/kick.wav', 'RIFF');
@@ -359,6 +360,36 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       };
       await playerWebCoreAPI.parseChartThroughCache({ path: 'Songs/Bench/main.bms', bytes: BENCH_BYTES }, cache);
       await playerWebCoreAPI.parseChartThroughCache({ path: 'Songs/Bench/main.bms', bytes: BENCH_BYTES }, cache);
+    },
+  });
+  define('player-browser.chartFileHashesOfCacheKey', {
+    run: () => {
+      playerWebCoreAPI.chartFileHashesOfCacheKey(`${'0'.repeat(64)}:bms`, '0'.repeat(32));
+    },
+  });
+  define('player-browser.seedChartFileHashes', {
+    run: () => {
+      playerWebCoreAPI.seedChartFileHashes(BENCH_HASHED_CHART, { sha256: '0'.repeat(64), md5: '0'.repeat(32) });
+    },
+  });
+  define('player-browser.seededChartFileHashes', {
+    run: () => {
+      playerWebCoreAPI.seededChartFileHashes(BENCH_HASHED_CHART);
+    },
+  });
+  define('player-browser.readParsedCharts', {
+    run: async () => {
+      const parsed = await playerWebCoreAPI.parseChartThroughCache(
+        { path: 'Songs/Bench/main.bms', bytes: BENCH_BYTES },
+        undefined,
+      );
+      const entries = new Map([['kept', parsed]]);
+      const cache = {
+        get: async (key: string) => entries.get(key),
+        getMany: async (keys: readonly string[]) => keys.map((key) => entries.get(key)),
+        set: async () => {},
+      };
+      await playerWebCoreAPI.readParsedCharts(cache, ['kept', 'missing']);
     },
   });
   define('player-browser.createAudioService', {

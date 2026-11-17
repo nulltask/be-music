@@ -1,6 +1,11 @@
-import { describe, expect, test } from 'vite-plus/test';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import { parseBMS, parseBmson } from '@be-music/chart-parser';
-import { compactCollectionChart, PackedEventStrings } from './compact-chart.ts';
+import {
+  compactCollectionChart,
+  deferChartFields,
+  PackedEventStrings,
+  restoreDeferredChartFields,
+} from './compact-chart.ts';
 
 const SOURCE = ['#TITLE Compact', '#BPM 150', '#WAV01 kick.wav', '#00111:0101', '#00211:01'].join('\n');
 
@@ -80,5 +85,60 @@ describe('compactCollectionChart', () => {
     expect(chart.metadata).not.toBe(metadata);
     expect(chart.resources).not.toBe(resources);
     expect(chart.metadata.title).toBe('Compact');
+  });
+});
+
+describe('deferChartFields / restoreDeferredChartFields', () => {
+  test('takes the fields a listing does not read out of the chart, as text', () => {
+    const chart = chartOf('Deferred');
+    const resources = structuredClone(chart.resources);
+    const deferred = deferChartFields(chart);
+    expect(Object.keys(chart)).toEqual(['format', 'sourceFormat', 'metadata', 'events']);
+    expect(chart.metadata.title).toBe('Deferred');
+    expect(deferred.keys).toEqual(['resources', 'measures', 'bms', 'bmson', 'preservation']);
+    expect((JSON.parse(deferred.json) as { resources: unknown }).resources).toEqual(resources);
+  });
+
+  test('puts the fields back as they were, parsed once when one is first read', () => {
+    const expected = chartOf('Deferred');
+    const chart = chartOf('Deferred');
+    const deferred = structuredClone(deferChartFields(chart));
+    const parse = vi.spyOn(JSON, 'parse');
+    restoreDeferredChartFields(chart, deferred);
+    // Listing a chart reads its headers only: nothing is parsed, yet the fields are there to see.
+    expect(chart.metadata.title).toBe('Deferred');
+    expect(Object.keys(chart).sort()).toEqual(Object.keys(expected).sort());
+    expect('resources' in chart).toBe(true);
+    expect(parse).not.toHaveBeenCalled();
+    expect(chart.resources).toEqual(expected.resources);
+    expect(chart.bms).toEqual(expected.bms);
+    expect(chart.preservation).toEqual(expected.preservation);
+    expect(chart.resources).toBe(chart.resources);
+    expect(parse).toHaveBeenCalledTimes(1);
+    parse.mockRestore();
+    expect(chart).toEqual(expected);
+    expect({ ...chart }).toEqual({ ...expected });
+    expect(structuredClone(chart)).toEqual(expected);
+  });
+
+  test('assigning a field replaces it, before or after the others are read', () => {
+    const chart = chartOf('Deferred');
+    const expected = structuredClone(chart);
+    restoreDeferredChartFields(chart, deferChartFields(chart));
+    const resources = { ...expected.resources, wav: { '01': 'snare.wav' } };
+    chart.resources = resources;
+    expect(chart.resources).toBe(resources);
+    expect(chart.bms).toEqual(expected.bms);
+    expect(chart.resources).toBe(resources);
+    const measures = [{ index: 1, length: 0.5 }];
+    chart.measures = measures;
+    expect(chart.measures).toBe(measures);
+  });
+
+  test('leaves a chart without deferred fields as it is', () => {
+    const chart = chartOf('Whole');
+    const expected = structuredClone(chart);
+    restoreDeferredChartFields(chart, undefined);
+    expect(chart).toEqual(expected);
   });
 });

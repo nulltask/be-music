@@ -108,6 +108,14 @@ export function createIndexedDBParsedChartCache(
       );
       return value === undefined ? undefined : (value as ParseChartTaskResult);
     },
+    async getMany(keys) {
+      const db = await database();
+      if (db === undefined) return keys.map(() => undefined);
+      // One transaction for the lot: each request still answers on its own, but none waits for another's round trip.
+      const store = db.transaction(PARSED_CHARTS_STORE, 'readonly').objectStore(PARSED_CHARTS_STORE);
+      const values: unknown[] = await Promise.all(keys.map((key) => request(store.get(key))));
+      return values.map((value) => (value === undefined ? undefined : (value as ParseChartTaskResult)));
+    },
     async set(key, value) {
       const db = await database();
       if (db === undefined) return;
