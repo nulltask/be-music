@@ -5,6 +5,7 @@
 import { logger } from '@be-music/player-browser';
 import {
   BrowserChartCollectionStore,
+  bindCourseStagePaths,
   createChartHashLookup,
   describeChartCollection,
   isCourseFilePath,
@@ -312,7 +313,7 @@ export class LibraryService {
       await this.startReplayReplayFromFile(replayFiles[0]!);
       return;
     }
-    // Course files (LR2 `.lr2crs`, beatoraja `course/*.json`) list charts by hash; they are read here and matched
+    // Course files (LR2 `.lr2crs`, beatoraja `course/*.json`, Nanasi Groove 2 `.n2x` lists) are read here and matched
     // against the collection once its songs are in.
     const courseFiles = files.filter((file) => isCourseFilePath(file.webkitRelativePath || file.name));
     files = files.filter((file) => !isCourseFilePath(file.webkitRelativePath || file.name));
@@ -579,10 +580,12 @@ export class LibraryService {
     this.collection = {
       ...this.collection,
       courseFolders: [
-        ...resolveCourseFolders(this.courseGroups, createChartHashLookup(hashed)).map((folder) =>
-          folder.courses === undefined
-            ? folder
-            : { ...folder, courses: folder.courses.map((course) => this.withSongTitles(course)) },
+        // An `.n2x` list names its charts by path: they take the hashes of the charts at those paths first.
+        ...resolveCourseFolders(bindCourseStagePaths(this.courseGroups, hashed), createChartHashLookup(hashed)).map(
+          (folder) =>
+            folder.courses === undefined
+              ? folder
+              : { ...folder, courses: folder.courses.map((course) => this.withSongTitles(course)) },
         ),
         ...resolveCourseMakerFolders(this.courseMaker.courses, createChartHashLookup(hashed)),
       ],

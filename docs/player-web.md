@@ -281,7 +281,7 @@ Gameplay and select previews try the next distinct audio asset when reading or d
 Courses play through the same select → play → result scenes. See [Courses and dan certification](./course.md) for the rules.
 
 - **Loading:**
-  - A drop can carry course files: LR2 `.lr2crs` anywhere, beatoraja course JSON under a `course/` folder.
+  - A drop can carry course files: LR2 `.lr2crs` anywhere, beatoraja course JSON under a `course/` folder, and Nanasi Groove 2 `.n2x` chart lists anywhere, each read as an EXPERT course ([course.md](./course.md#nanasi-groove-2-n2x-chart-lists)).
   - They are read with `readCourseFile` (`@be-music/player-browser/collection`).
   - The player hashes the library's chart files (cached per song) and matches each stage by SHA-256, then MD5 (`resolveCourseFolders`).
   - Course files dropped on their own match against the songs already loaded.

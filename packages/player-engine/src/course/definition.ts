@@ -36,10 +36,16 @@ export type CourseConstraint =
 /** The groups of `CourseDataConstraint.type`: lane option, hi-speed, judge, gauge set, long-note mode. */
 export type CourseConstraintGroup = 'option' | 'speed' | 'judge' | 'gauge' | 'longNote';
 
-/** One stage, referenced by chart file hash. At least one of `md5` / `sha256` is set; both are lower-case hex. */
+/**
+ * One stage, referenced by chart file hash: at least one of `md5` / `sha256` is set, both lower-case hex. A Nanasi
+ * Groove 2 list (`.n2x`) names its charts by `path` instead, which the host replaces with the chart's hashes once it
+ * finds the chart; a stage left with only a `path` is not found.
+ */
 export interface CourseStageRef {
   md5?: string;
   sha256?: string;
+  /** The chart's path, `/`-separated, relative to the course file's folder (`.n2x` lists only). */
+  path?: string;
   /** Display title for a stage not found locally. */
   title?: string;
   artist?: string;
@@ -64,7 +70,8 @@ export type CourseSource =
   | { format: 'lr2crs'; type: number; header: string; hash: string }
   | { format: 'beatoraja-json' }
   | { format: 'beatoraja-random' }
-  | { format: 'table'; legacyGrade: boolean };
+  | { format: 'table'; legacyGrade: boolean }
+  | { format: 'n2x' };
 
 export interface CourseDefinition {
   name: string;

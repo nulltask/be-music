@@ -145,9 +145,10 @@ export const PLAYER_HELP_TEMPLATE = html`
               </li>
               <li>Subsequent drops add to the library and keep the current theme.</li>
               <li>
-                Course files in a dropped folder (LR2 <code>.lr2crs</code>, beatoraja course <code>.json</code>) list as
-                course folders. Decide <strong>NEW COURSE</strong> in MY COURSES, MY DAN or MY NONSTOP to make your own;
-                <strong>Course → My courses…</strong> in Options renames, deletes and exports them.
+                Course files in a dropped folder (LR2 <code>.lr2crs</code>, beatoraja course <code>.json</code>, Nanasi
+                Groove 2 <code>.n2x</code> chart lists) list as course folders. Decide <strong>NEW COURSE</strong> in MY
+                COURSES, MY DAN or MY NONSTOP to make your own; <strong>Course → My courses…</strong> in Options
+                renames, deletes and exports them.
               </li>
               <li>
                 Or link straight to a pack: open the page with
@@ -367,7 +368,8 @@ export const PLAYER_HELP_TEMPLATE = html`
               <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
               <li>
                 ドロップしたフォルダに含まれるコースファイル (LR2 の <code>.lr2crs</code>、beatoraja のコースの
-                <code>.json</code>) はコースのフォルダとして並びます。 MY COURSES / MY DAN / MY NONSTOP の
+                <code>.json</code>、ナナシグルーヴ2 の <code>.n2x</code> の譜面リスト)
+                はコースのフォルダとして並びます。 MY COURSES / MY DAN / MY NONSTOP の
                 <strong>NEW COURSE</strong>
                 を決定すると自分でコースを作れます。作ったコースの名前の変更・削除・書き出しは Options の
                 <strong>Course → My courses…</strong> から行えます。
