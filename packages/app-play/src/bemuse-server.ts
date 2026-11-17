@@ -64,6 +64,8 @@ export interface BemuseAssetFile {
 export interface BemuseAssetIndex {
   files: BemuseAssetFile[];
   chunkURLs: string[];
+  /** Each chunk's `refs[].hash` (the MD5 of its payload, lower-cased), where the index gives one. */
+  chunkHashes: (string | undefined)[];
 }
 
 const BEMUSEPACK_MAGIC = 'BEMUSEPACK';
@@ -272,6 +274,10 @@ export function parseBemuseAssetIndex(json: unknown, assetIndexURL: string): Bem
     }
     return new URL(path, assetIndexURL).href;
   });
+  const chunkHashes = root['refs'].map((value) => {
+    const hash = asRecord(value)?.['hash'];
+    return typeof hash === 'string' && /^[0-9a-f]{32}$/i.test(hash) ? hash.toLowerCase() : undefined;
+  });
   const files = root['files'].map((value, index): BemuseAssetFile => {
     const file = asRecord(value);
     const name = file?.['name'];
@@ -286,7 +292,7 @@ export function parseBemuseAssetIndex(json: unknown, assetIndexURL: string): Bem
     }
     return { name, chunk: chunk as number, start: start as number, end: end as number };
   });
-  return { files, chunkURLs };
+  return { files, chunkURLs, chunkHashes };
 }
 
 /**

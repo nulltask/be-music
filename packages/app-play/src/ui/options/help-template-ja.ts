@@ -623,6 +623,12 @@ export const OPTIONS_HELP_JA = html`
     <section class="help-menu-folder">
       <h4 class="help-menu-folder-title">Library &amp; records</h4>
       <dl class="help-menu-items">
+        <dt>Reload folders</dt>
+        <dd>
+          選曲画面の F8 (LR2) / F2 (beatoraja) と同じく、ライブラリを読み直します。フォルダ、Bemuse
+          音楽サーバー、難易度表が対象です。サーバーと難易度表はふだんはこのブラウザに保存した内容から読み、1 日に 1
+          回だけ取り直します。
+        </dd>
         <dt>Music ZIP URL</dt>
         <dd><code>?music=</code> と同じく、読み込む譜面の ZIP の URL。</dd>
         <dt>Skin ZIP URL</dt>

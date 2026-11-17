@@ -7,6 +7,7 @@ import {
   storeCourseTableURLs,
   DEFAULT_COURSE_TABLE_URLS,
   describeCourseTableImportError,
+  createCachedCourseTableFetchText,
   fetchCourseTableText,
   importCourseTable,
   isTableHeaderFilePath,
@@ -17,6 +18,7 @@ import {
   readTableHeaderFile,
   rememberCourseTableURL,
 } from './course-table-import.ts';
+import { createMemoryRemoteStore } from './services/remote-cache.ts';
 
 const MD5_A = '0123456789abcdef0123456789abcdef';
 
@@ -203,6 +205,67 @@ describe('fetchCourseTableText', () => {
     await expect(fetchCourseTableText('https://table.example/h.json')).rejects.toThrow(
       'HTTP 502 for https://table.example/h.json',
     );
+  });
+});
+
+describe('createCachedCourseTableFetchText', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  function setup() {
+    const store = createMemoryRemoteStore();
+    const calls: Array<{ url: string; cache: RequestCache | undefined }> = [];
+    let body = 'v1';
+    let failing = false;
+    const fetchText = async (url: string, init?: RequestInit) => {
+      calls.push({ url, cache: init?.cache });
+      if (failing) throw new TypeError('Failed to fetch');
+      return body;
+    };
+    const sources: string[] = [];
+    let nowMs = 0;
+    const reader = (refreshedSince?: number) =>
+      createCachedCourseTableFetchText({
+        store,
+        fetchText,
+        now: () => nowMs,
+        onRead: (_url, source) => sources.push(source),
+        ...(refreshedSince !== undefined ? { refreshedSince } : {}),
+      });
+    return {
+      calls,
+      sources,
+      reader,
+      setBody: (next: string) => (body = next),
+      setFailing: (next: boolean) => (failing = next),
+      setNow: (next: number) => (nowMs = next),
+    };
+  }
+
+  test('asks a table’s site once a day, as a revalidation', async () => {
+    const h = setup();
+    expect(await h.reader()('https://t.example/h.json')).toBe('v1');
+    h.setBody('v2');
+    h.setNow(DAY - 1);
+    expect(await h.reader()('https://t.example/h.json')).toBe('v1');
+    h.setNow(DAY);
+    expect(await h.reader()('https://t.example/h.json')).toBe('v2');
+    expect(h.calls).toEqual([
+      { url: 'https://t.example/h.json', cache: 'no-cache' },
+      { url: 'https://t.example/h.json', cache: 'no-cache' },
+    ]);
+    expect(h.sources).toEqual(['network', 'cache', 'network']);
+  });
+
+  test('asks again after a reload, and keeps the kept copy while the site is down', async () => {
+    const h = setup();
+    await h.reader()('https://t.example/h.json');
+    h.setBody('v2');
+    h.setNow(10);
+    expect(await h.reader(10)('https://t.example/h.json')).toBe('v2');
+    h.setFailing(true);
+    h.setNow(20);
+    expect(await h.reader(20)('https://t.example/h.json')).toBe('v2');
+    expect(h.sources).toEqual(['network', 'network', 'stale']);
   });
 });
 

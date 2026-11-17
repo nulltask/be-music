@@ -3,6 +3,12 @@
 // library service (`services/library.ts`) refreshes the course folders.
 import type { CourseDefinitionGroup } from '@be-music/player-browser/collection';
 import { fetchTableHeaderCourses, parseTableHeaderCourses, type TableFetchText } from '@be-music/player-engine/course';
+import {
+  COURSE_TABLE_MAX_AGE_MS,
+  readThroughRemoteCache,
+  type RemoteCacheSource,
+  type RemoteCacheStore,
+} from './services/remote-cache.ts';
 import { PLAYER_STORAGE_PREFIX } from './ui/options/folders.ts';
 import { resolveURLLoadFetchURL } from './url-load.ts';
 
@@ -151,10 +157,43 @@ export function describeCourseTableImportError(error: unknown): string {
  * the player's same-origin proxy (as `?music=` archives do), since most table sites send no CORS header. Relative
  * header URLs still resolve against `url` itself, not the proxy.
  */
-export async function fetchCourseTableText(url: string): Promise<string> {
-  const response = await fetch(resolveURLLoadFetchURL(url));
+export async function fetchCourseTableText(url: string, init?: RequestInit): Promise<string> {
+  const fetchURL = resolveURLLoadFetchURL(url);
+  const response = await (init === undefined ? fetch(fetchURL) : fetch(fetchURL, init));
   if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
   return response.text();
+}
+
+/**
+ * A table fetch that keeps what it read between visits (the table's page, header and song list), so the tables load
+ * again without asking their sites for a day ({@link COURSE_TABLE_MAX_AGE_MS}), or until `refreshedSince` (a reload of
+ * the folders). A read due goes to the site as a revalidation (`no-cache`), which the proxy passes on with the
+ * browser's validators, and a site that cannot be reached leaves the copy kept last time in use. `onRead` hears where
+ * each read came from.
+ */
+export function createCachedCourseTableFetchText(options: {
+  store: RemoteCacheStore | undefined;
+  refreshedSince?: number;
+  now?: () => number;
+  fetchText?: (url: string, init?: RequestInit) => Promise<string>;
+  onRead?: (url: string, source: RemoteCacheSource) => void;
+}): TableFetchText {
+  const fetchText = options.fetchText ?? fetchCourseTableText;
+  const now = options.now ?? Date.now;
+  return async (url) => {
+    const read = await readThroughRemoteCache(
+      `table:${url}`,
+      async () => new TextEncoder().encode(await fetchText(url, { cache: 'no-cache' })),
+      options.store,
+      {
+        maxAgeMs: COURSE_TABLE_MAX_AGE_MS,
+        ...(options.refreshedSince !== undefined ? { refreshedSince: options.refreshedSince } : {}),
+      },
+      now(),
+    );
+    options.onRead?.(url, read.source);
+    return new TextDecoder().decode(read.bytes);
+  };
 }
 
 /** Reads a difficulty table's courses from its page or header URL. Throws when the table has no course. */

@@ -256,6 +256,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Music ZIP URL': '楽曲 ZIP の URL',
   'Skin ZIP URL': 'スキン ZIP の URL',
   'Load from URLs': 'URL から読み込む',
+  'Reload folders': 'フォルダの再読み込み',
   'Auto-save replays': 'リプレイの自動保存',
   'Record device names in replays': 'リプレイにデバイス名を記録',
   'Bemuse ReplayGain': 'Bemuse の ReplayGain',

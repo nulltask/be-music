@@ -651,6 +651,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
       <section class="help-menu-folder">
         <h4 class="help-menu-folder-title">Library &amp; records</h4>
         <dl class="help-menu-items">
+          <dt>Reload folders</dt>
+          <dd>
+            Reads the library again, as F8 (LR2) or F2 (beatoraja) does on the select screen: your folders, the Bemuse
+            music servers and the difficulty tables. The servers and tables are otherwise read from what this browser
+            kept, and asked again once a day.
+          </dd>
           <dt>Music ZIP URL</dt>
           <dd>The URL of a chart ZIP to load, as <code>?music=</code> does.</dd>
           <dt>Skin ZIP URL</dt>

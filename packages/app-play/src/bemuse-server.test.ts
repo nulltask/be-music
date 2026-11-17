@@ -172,7 +172,7 @@ describe('parseBemuseAssetIndex', () => {
           { name: 'snare.ogg', ref: [1, 4, 8] },
         ],
         refs: [
-          { path: 'ogg.1.aaaa.bemuse', hash: 'aaaa', size: 24 },
+          { path: 'ogg.1.aaaa.bemuse', hash: '8ED2DECE0EEF7CD65195D7EF6A72708D', size: 24 },
           { path: 'ogg.2.bbbb.bemuse', hash: 'bbbb' },
         ],
       },
@@ -187,6 +187,8 @@ describe('parseBemuseAssetIndex', () => {
         'https://example.com/songs/a/assets/ogg.1.aaaa.bemuse',
         'https://example.com/songs/a/assets/ogg.2.bbbb.bemuse',
       ],
+      // Only an MD5 is kept, lower-cased; anything else is no hash.
+      chunkHashes: ['8ed2dece0eef7cd65195d7ef6a72708d', undefined],
     });
   });
 

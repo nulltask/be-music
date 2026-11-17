@@ -1,11 +1,9 @@
-import { md5HexOfBytes } from '@be-music/player-browser/collection';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   BEMUSE_PROXIED_ORIGINS_STORAGE_KEY,
   bemuseProxyURL,
   createBemuseFetcher,
   createStoredBemuseProxiedOrigins,
-  type BemuseChartCache,
 } from './bemuse-fetch.ts';
 
 const PAGE = 'https://play.example/';
@@ -53,38 +51,6 @@ describe('createBemuseFetcher', () => {
     await expect(fetcher.json('https://music.example/gone')).rejects.toThrow(/HTTP 404/);
     expect(await fetcher.exists('https://music.example/here')).toBe(true);
     expect(await fetcher.exists('https://music.example/gone')).toBe(false);
-  });
-
-  test('serves a chart from the cache only while its MD5 matches the index', async () => {
-    const stored = new Map<string, Uint8Array>();
-    const cache: BemuseChartCache = {
-      get: async (url, md5) => {
-        const bytes = stored.get(url);
-        return bytes && md5HexOfBytes(bytes) === md5 ? bytes : undefined;
-      },
-      put: async (url, bytes) => {
-        stored.set(url, bytes);
-      },
-    };
-    let fetches = 0;
-    const body = new TextEncoder().encode('#TITLE x');
-    const md5 = md5HexOfBytes(body);
-    const fetcher = createBemuseFetcher({
-      pageHref: PAGE,
-      chartCache: cache,
-      fetch: async () => {
-        fetches += 1;
-        return new Response(new Uint8Array(body));
-      },
-    });
-    await fetcher.chart('https://music.example/x.bms', md5);
-    await fetcher.chart('https://music.example/x.bms', md5);
-    expect(fetches).toBe(1);
-    // A changed chart (another MD5 in the index) is fetched again, and one without an MD5 is never cached.
-    await fetcher.chart('https://music.example/x.bms', '0'.repeat(32));
-    await fetcher.chart('https://music.example/y.bms', undefined);
-    expect(fetches).toBe(3);
-    expect([...stored.keys()]).toEqual(['https://music.example/x.bms']);
   });
 
   test('sends a known CORS-less default server straight to the proxy', async () => {
