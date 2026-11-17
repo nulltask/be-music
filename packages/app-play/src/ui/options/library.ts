@@ -42,6 +42,8 @@ export function buildLibraryFolder(
     setStatus: (text) => this.setStatus(text),
     saveSettings: () => this.scheduleSettingsSave(),
   });
+  // The select screen's F8 / F2, for a player without a keyboard: the folders, Bemuse servers and tables read again.
+  library.addButton({ title: 'Reload folders' }).on('click', () => void this.library.reloadCharts());
   // Bemuse's own volume for each server song (its `replaygain`). Read as a play starts, so it is locked while one runs.
   this.trackPlayOption(
     library.addBinding(this.guiState, 'bemuseReplayGain', { label: 'Bemuse ReplayGain' }).on('change', ({ value }) => {

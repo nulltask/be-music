@@ -149,6 +149,22 @@ afterEach(() => {
 });
 
 describe('LibraryService difficulty tables', () => {
+  test('a reload of the folders reads the remembered tables again, with no folder loaded', async () => {
+    stubStorage({ [COURSE_TABLE_URLS_STORAGE_KEY]: JSON.stringify([TABLE_PAGE]) });
+    const fetch = stubFetch({
+      [TABLE_PAGE]: '<meta name="bmstable" content="header.json">',
+      [TABLE_HEADER]: tableHeader(),
+    });
+    const { library, statuses, shown, folders } = harness();
+    await library.reloadCharts();
+    expect(statuses).not.toContain('No folders to reload');
+    expect(fetch.mock.calls.map(([url]) => proxiedURL(url as string))).toEqual([TABLE_PAGE, TABLE_HEADER]);
+    // Asked as revalidations, so an unchanged table comes back as a 304.
+    expect(fetch.mock.calls.every(([, init]) => (init as RequestInit | undefined)?.cache === 'no-cache')).toBe(true);
+    expect(folders()).toContain('Insane');
+    expect(shown).toHaveLength(1);
+  });
+
   test("lists a table's courses by its URL, remembers the URL when asked, and shows the select screen again", async () => {
     const stored = stubStorage();
     stubFetch({ [TABLE_PAGE]: '<meta name="bmstable" content="header.json">', [TABLE_HEADER]: tableHeader() });

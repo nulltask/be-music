@@ -37,8 +37,8 @@ import { countLR2UnplayedStages, LR2_MAX_PLAYED_STAGES } from '@be-music/player-
 import { COURSE_REPLAY_FILE_SUFFIX, REPLAY_FILE_SUFFIX } from '@be-music/player-engine/replay';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
 import {
+  createCachedCourseTableFetchText,
   describeCourseTableImportError,
-  fetchCourseTableText,
   importCourseTable,
   isTableHeaderFilePath,
   mergeCourseGroup,
@@ -65,6 +65,8 @@ import type { PlayerWebElements } from '../types.ts';
 import { expandZipToFiles, fetchZipAsFile, fetchZipAsFiles, parseURLMediaParams } from '../url-load.ts';
 import { bemuseServerLabel, readStoredBemuseServerURLs } from '../bemuse-server.ts';
 import { readBemuseServerFiles } from './bemuse-servers.ts';
+import { pageRemoteCacheStore } from './remote-cache.ts';
+import type { TableFetchText } from '@be-music/player-engine/course';
 import { BemuseSongExtrasRegistry } from '../bemuse-song-extras.ts';
 import { isDroppedArchive, sortDroppedArchives } from './drop-archives.ts';
 
@@ -153,6 +155,11 @@ export class LibraryService {
   private readonly tableSongIndexes = new Map<string, Promise<TableSongIndex>>();
   /** The table song lists that arrived, by URL, whose titles the course folders show. */
   private readonly loadedSongIndexes = new Map<string, TableSongIndex>();
+  /**
+   * When the player last reloaded the folders: what was kept from the difficulty tables and the Bemuse servers before
+   * then is asked for again (`services/remote-cache.ts`).
+   */
+  private remoteRefreshedSince: number | undefined;
   /** Session-only draws, oldest first across every source folder. */
   private keptRandomCourses: Array<{ folderLabel: string; course: LibraryCourse }> = [];
   private nextDrawId = 0;
@@ -488,13 +495,18 @@ export class LibraryService {
   /**
    * Imports the courses of difficulty tables by URL into `courseGroups` (replacing a group with the same label), then
    * matches them against the collection. With `remember`, a table that imported is stored to be imported again on load.
+   * Without `relist`, the select screen is left as it is, for a caller that lists it itself.
    */
-  public async importCourseTables(urls: readonly string[], remember: boolean): Promise<void> {
+  public async importCourseTables(
+    urls: readonly string[],
+    remember: boolean,
+    { relist = true }: { relist?: boolean } = {},
+  ): Promise<void> {
     let imported = 0;
     for (const url of urls) {
       this.setStatus('Fetching course table…');
       try {
-        const { group, dataURL } = await importCourseTable(url);
+        const { group, dataURL } = await importCourseTable(url, this.tableFetchText());
         if (dataURL !== undefined) for (const course of group.courses) this.courseTableDataURLs.set(course, dataURL);
         this.courseGroups = mergeCourseGroup(this.courseGroups, group);
         if (remember) rememberCourseTableURL(url);
@@ -508,10 +520,22 @@ export class LibraryService {
     }
     if (imported === 0) return;
     await this.refreshCourseFolders();
+    if (!relist) return;
     // Re-list the select screen so the new folders show; mid-play they show the next time it opens.
     const showing = this.showing();
     const busy = this.elements.shell.classList.contains('playing') || showing === 'result' || showing === 'decide';
     if (!busy) await this.showSelect();
+  }
+
+  /** Reads a difficulty table's files through the kept copies, asking again for those kept before the last reload. */
+  private tableFetchText(): TableFetchText {
+    return createCachedCourseTableFetchText({
+      store: pageRemoteCacheStore(),
+      ...(this.remoteRefreshedSince !== undefined ? { refreshedSince: this.remoteRefreshedSince } : {}),
+      onRead: (url, source) => {
+        if (source === 'stale') dropLog.warn(`course table: ${url} unreachable, using the copy kept last time`);
+      },
+    });
   }
 
   /**
@@ -547,7 +571,7 @@ export class LibraryService {
     if (loaded !== undefined) return loaded;
     let pending = this.tableSongIndexes.get(dataURL);
     if (pending === undefined) {
-      pending = fetchCourseTableText(dataURL).then(parseTableSongIndex);
+      pending = this.tableFetchText()(dataURL).then(parseTableSongIndex);
       this.tableSongIndexes.set(dataURL, pending);
     }
     let songs: TableSongIndex;
@@ -678,8 +702,14 @@ export class LibraryService {
         const label = bemuseServerLabel(indexURL);
         this.setStatus(`Fetching Bemuse server ${label}…`);
         try {
+          // Read again by a reload of the folders, which asks the server for its index again.
           const read = async () => {
-            const server = await readBemuseServerFiles(indexURL);
+            const server = await readBemuseServerFiles(
+              indexURL,
+              this.remoteRefreshedSince !== undefined ? { refreshedSince: this.remoteRefreshedSince } : {},
+            );
+            if (server.indexSource === 'stale')
+              dropLog.warn(`Bemuse server ${label}: unreachable, listing its kept index`);
             this.bemuseSongs.remember(server.songs);
             return server;
           };
@@ -706,17 +736,44 @@ export class LibraryService {
   /**
    * Reads the library's charts again, as LR2's and beatoraja's folder reload does: a dropped folder is walked again, so
    * charts added, changed or removed on disk since show up; picked files and archives are read again as they were. The
-   * select screen then shows the new library. Without a load to read again it only says so.
+   * Bemuse servers' indexes and the difficulty tables are asked for again too, whatever their kept copies' age, and the
+   * tables' song lists already read are read again. The select screen then shows the new library. Without a load or a
+   * table to read again it only says so.
    */
   public async reloadCharts(): Promise<void> {
-    if (this.chartLoads.length === 0) {
+    const tables = readStoredCourseTableURLs();
+    if (this.chartLoads.length === 0 && tables.length === 0) {
       this.setStatus('No folders to reload');
       return;
     }
+    this.remoteRefreshedSince = Date.now();
     this.setStatus('Reloading charts...');
-    await this.readChartsAgain((progress) => applyLoadProgress(this.elements, progress));
+    if (this.chartLoads.length > 0) {
+      await this.readChartsAgain((progress) => applyLoadProgress(this.elements, progress));
+    }
+    if (tables.length > 0) await this.importCourseTables(tables, false, { relist: false });
+    await this.readTableSongIndexesAgain();
     await this.showSelect();
     this.setStatus(describeChartCollection(this.collection));
+  }
+
+  /** Reads the song lists of this visit again (after a reload), keeping each list in use until its new one is in. */
+  private async readTableSongIndexesAgain(): Promise<void> {
+    const dataURLs = [...this.loadedSongIndexes.keys()];
+    this.tableSongIndexes.clear();
+    const fetchText = this.tableFetchText();
+    const read = await Promise.all(
+      dataURLs.map(async (dataURL) => {
+        try {
+          return [dataURL, parseTableSongIndex(await fetchText(dataURL))] as const;
+        } catch (error) {
+          dropLog.warn(`course table song list failed: ${dataURL}`, error);
+          return undefined;
+        }
+      }),
+    );
+    for (const entry of read) if (entry !== undefined) this.loadedSongIndexes.set(entry[0], entry[1]);
+    if (read.some((entry) => entry !== undefined)) await this.refreshCourseFolders();
   }
 
   /**

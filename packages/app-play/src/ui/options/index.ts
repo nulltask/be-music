@@ -103,11 +103,11 @@ export interface OptionsDialogDeps {
   readonly leaderboard: Pick<LeaderboardPanel, 'buildFolder'>;
   /**
    * The library service: "Import table courses", "Load from URLs" and the Bemuse music servers add to the library through
-   * it.
+   * it, and "Reload folders" reads it again.
    */
   readonly library: Pick<
     LibraryService,
-    'importCourseTables' | 'loadFromURL' | 'loadBemuseServers' | 'refreshBemuseReplayGain'
+    'importCourseTables' | 'loadFromURL' | 'loadBemuseServers' | 'refreshBemuseReplayGain' | 'reloadCharts'
   >;
   /** The records service, whose best records "Clear best records" empties. */
   readonly records: Pick<RecordsService, 'chartBestRecords'>;
@@ -194,7 +194,7 @@ export class OptionsDialog {
   public readonly silentMode: SilentModeSetting;
   public readonly library: Pick<
     LibraryService,
-    'importCourseTables' | 'loadFromURL' | 'loadBemuseServers' | 'refreshBemuseReplayGain'
+    'importCourseTables' | 'loadFromURL' | 'loadBemuseServers' | 'refreshBemuseReplayGain' | 'reloadCharts'
   >;
   public readonly records: Pick<RecordsService, 'chartBestRecords'>;
   public readonly courseMaker: Pick<CourseMakerService, 'panel'>;
