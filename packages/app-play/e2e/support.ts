@@ -484,6 +484,13 @@ export const test = base.extend<{ player: Player }>({
         errors.push(`console: ${message.text()}`);
       }
     });
+    // An empty Bemuse server list keeps every spec from listing the public servers over the network; a spec that
+    // stores its own list keeps it.
+    await page.addInitScript(() => {
+      if (window.localStorage.getItem('be-music.bemuse-server-urls') === null) {
+        window.localStorage.setItem('be-music.bemuse-server-urls', '[]');
+      }
+    });
     const player = new Player(page);
     await use(player);
     // Checklist item 11: nothing in the flow throws or logs an error.
