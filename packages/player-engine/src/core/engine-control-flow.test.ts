@@ -138,4 +138,39 @@ describe('holding a manual play open after its chart', () => {
     // Letting go is not an interrupt: the play ends with its summary.
     expect(summary.total).toBe(1);
   });
+
+  test('ends as soon as every note is judged when the host lets go before the chart is over', async () => {
+    // One note in the first measure, then a background sound far later.
+    const chart = parseChart(['#BPM 120', '#WAV01 one.wav', '#00111:01', '#20001:01'].join('\n'), 'bms');
+    const controller = new AbortController();
+    // The host lets go at once: the play still judges its note (missed: no input), then ends.
+    controller.abort();
+    let settledCount = 0;
+    let replay: BeMusicReplay | undefined;
+    const startedAt = performance.now();
+    const summary = await manualPlay(chart, {
+      speed: 64,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      laneModeExtension: '.bme',
+      writeOutput: () => {},
+      onReplayRecorded: (recorded) => {
+        replay = recorded;
+      },
+      holdAfterChart: {
+        signal: controller.signal,
+        onSettled: () => {
+          settledCount += 1;
+        },
+      },
+    });
+    // The chart's end at x64 is over a second away; the note is judged within a few dozen ms.
+    expect(performance.now() - startedAt).toBeLessThan(500);
+    expect(settledCount).toBe(0);
+    expect(summary.total).toBe(1);
+    expect(summary.poor).toBe(1);
+    // A complete play, not one given up.
+    expect(replay?.play.aborted).toBeUndefined();
+  });
 });
