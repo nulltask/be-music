@@ -116,10 +116,21 @@ export function applyBemuseSongExtras(
     bga.events.push({ y: Math.round(beatAtSeconds(chart, extras.video.offsetSeconds) * resolution), id });
     bga.events.sort((left, right) => left.y - right.y);
   }
-  if (Number.isFinite(extras.gain) && extras.gain > 0 && extras.gain !== 1) {
-    const percent = volWAVToLinearGain(chart.bms.volWAV) * extras.gain * 100;
-    chart.bms.volWAV = Math.min(199.99, Math.max(0.01, percent));
-  }
+  setVolWAV(chart, bemuseGainedVolWAV(chart.bms.volWAV, extras.gain));
+}
+
+function setVolWAV(chart: BeMusicJSON, volWAV: number | undefined): void {
+  if (volWAV === undefined) delete chart.bms.volWAV;
+  else chart.bms.volWAV = volWAV;
+}
+
+/**
+ * `#VOLWAV` with a ReplayGain `gain` multiplied in, kept inside the `0 < n < 200` range it is read in. A gain of 1 (or
+ * one that is not a positive number) leaves `volWAV` as it is.
+ */
+export function bemuseGainedVolWAV(volWAV: number | undefined, gain: number): number | undefined {
+  if (!Number.isFinite(gain) || gain <= 0 || gain === 1) return volWAV;
+  return Math.min(199.99, Math.max(0.01, volWAVToLinearGain(volWAV) * gain * 100));
 }
 
 /** A song of a Bemuse server: its folder in the library, its files (lower-cased, relative to it) and its extras. */
@@ -133,10 +144,20 @@ export interface BemuseSongEntry {
  * The Bemuse songs loaded into the library, by folder, laying each song's extras onto its charts once. A chart is
  * matched by the song folder its path starts with (`<server folder>/<song folder>/…`); a chart object already given
  * its extras is left alone, so laying them again after another load does not apply a gain twice.
+ *
+ * The ReplayGain goes on only while `replayGain()` says so (Options → "Bemuse ReplayGain"). The registry keeps each
+ * chart's own `#VOLWAV`, so {@link refreshReplayGain} turns the gain on or off on the charts already loaded.
  */
 export class BemuseSongExtrasRegistry {
   private readonly songs = new Map<string, BemuseSongEntry>();
-  private readonly applied = new WeakSet<BeMusicJSON>();
+  /** Each chart given its extras, with its own `#VOLWAV` and its song's gain. */
+  private readonly applied = new WeakMap<BeMusicJSON, { volWAV: number | undefined; gain: number }>();
+
+  private readonly replayGain: () => boolean;
+
+  public constructor(replayGain: () => boolean = () => true) {
+    this.replayGain = replayGain;
+  }
 
   remember(songs: readonly BemuseSongEntry[]): void {
     for (const song of songs) this.songs.set(song.folder, song);
@@ -148,8 +169,21 @@ export class BemuseSongExtrasRegistry {
       if (this.applied.has(chart)) continue;
       const song = this.songs.get(chartPath.split('/').slice(0, 2).join('/'));
       if (song === undefined) continue;
-      applyBemuseSongExtras(chart, song.extras, song.files);
-      this.applied.add(chart);
+      const volWAV = chart.bms.volWAV;
+      applyBemuseSongExtras(chart, { ...song.extras, gain: 1 }, song.files);
+      this.applied.set(chart, { volWAV, gain: song.extras.gain });
+      this.setGain(chart);
     }
+  }
+
+  /** Puts the ReplayGain on, or takes it off, each of `charts` given its extras, as `replayGain()` now says. */
+  refreshReplayGain(charts: ReadonlyArray<{ chart: BeMusicJSON }>): void {
+    for (const { chart } of charts) this.setGain(chart);
+  }
+
+  private setGain(chart: BeMusicJSON): void {
+    const own = this.applied.get(chart);
+    if (own === undefined) return;
+    setVolWAV(chart, this.replayGain() ? bemuseGainedVolWAV(own.volWAV, own.gain) : own.volWAV);
   }
 }

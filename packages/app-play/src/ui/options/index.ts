@@ -113,6 +113,7 @@ export interface OptionsDialogDeps {
     | 'onCourseTablesChange'
     | 'loadFromURL'
     | 'loadBemuseServers'
+    | 'refreshBemuseReplayGain'
   >;
   /** The records service, whose best records "Clear best records" empties. */
   readonly records: Pick<RecordsService, 'chartBestRecords'>;
@@ -205,6 +206,7 @@ export class OptionsDialog {
     | 'onCourseTablesChange'
     | 'loadFromURL'
     | 'loadBemuseServers'
+    | 'refreshBemuseReplayGain'
   >;
   public readonly records: Pick<RecordsService, 'chartBestRecords'>;
   public readonly courseMaker: Pick<CourseMakerService, 'panel'>;

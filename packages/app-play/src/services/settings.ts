@@ -259,6 +259,8 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     autoSaveReplay: false,
     // A replay records only coarse device classes unless the player opts in to the controllers' own names.
     replayDeviceNames: false,
+    // Bemuse server songs play at the volume Bemuse plays them at, unless the player turns it off.
+    bemuseReplayGain: true,
     // Every replay slot saves by itself until the player picks otherwise (`DEFAULT_REPLAY_AUTO_SAVE_RULES`): the best EX
     // score, the best lamp, the fewest BP and the latest play.
     replaySlotAutoSave1: DEFAULT_REPLAY_AUTO_SAVE_RULES[0]!,

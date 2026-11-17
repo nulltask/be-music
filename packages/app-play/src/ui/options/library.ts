@@ -42,6 +42,13 @@ export function buildLibraryFolder(
     setStatus: (text) => this.setStatus(text),
     saveSettings: () => this.scheduleSettingsSave(),
   });
+  // Bemuse's own volume for each server song (its `replaygain`). Read as a play starts, so it is locked while one runs.
+  this.trackPlayOption(
+    library.addBinding(this.guiState, 'bemuseReplayGain', { label: 'Bemuse ReplayGain' }).on('change', ({ value }) => {
+      this.guiState.bemuseReplayGain = value;
+      this.library.refreshBemuseReplayGain();
+    }),
+  );
 
   const urlParams = parseURLMediaParams(window.location.href);
   const urls = {

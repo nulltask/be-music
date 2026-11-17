@@ -657,6 +657,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>The URL of a skin ZIP to load, as <code>?skin=</code> does.</dd>
           <dt>Load from URLs</dt>
           <dd>Loads the ZIPs at the two URLs above.</dd>
+          <dt>Bemuse ReplayGain</dt>
+          <dd>
+            On by default. Plays each song from a Bemuse music server at the volume its server sets, as Bemuse does. Off
+            plays the charts at their own volume. Locked during play.
+          </dd>
           <dt>Auto-save replays</dt>
           <dd>Downloads each finished play's replay.</dd>
           <dt>Record device names in replays</dt>

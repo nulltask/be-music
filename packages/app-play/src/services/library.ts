@@ -75,6 +75,11 @@ export interface LibraryServiceOptions {
   readonly elements: LoadingOverlayElements & Pick<PlayerWebElements, 'shell'>;
   /** A chart's file hashes, cached per chart (`RecordsService`): course stages are matched by them. */
   readonly resolveChartHashes: (chartEntry: LibraryChart) => Promise<ChartFileHashes | undefined>;
+  /**
+   * Whether Bemuse server songs take their ReplayGain (Options → "Bemuse ReplayGain"); on when left out. After it
+   * changes, {@link LibraryService.refreshBemuseReplayGain} applies it to the charts already loaded.
+   */
+  readonly bemuseReplayGain?: () => boolean;
   /** The course maker, whose saved courses are listed in their own folders. */
   readonly courseMaker: Pick<CourseMaker, 'courses'>;
   /** The select screen the router keeps, on the stage or off it; `undefined` before the first. */
@@ -129,7 +134,7 @@ export class LibraryService {
   private readonly chartLoads: (LibraryLoadOrigin & { readonly files: BrowserDroppedFile[] })[] = [];
   private collectionStore = new BrowserChartCollectionStore();
   /** The songs of the Bemuse servers loaded, whose preview, video, images and gain go onto their charts. */
-  private readonly bemuseSongs = new BemuseSongExtrasRegistry();
+  private readonly bemuseSongs: BemuseSongExtrasRegistry;
   /** The library changed on disk while no select screen showed; it is read again when one does ({@link selectShown}). */
   private refreshPending = false;
   private refreshing: Promise<void> | undefined;
@@ -178,6 +183,7 @@ export class LibraryService {
     this.elements = options.elements;
     this.resolveChartHashes = options.resolveChartHashes;
     this.courseMaker = options.courseMaker;
+    this.bemuseSongs = new BemuseSongExtrasRegistry(options.bemuseReplayGain);
     this.selectView = options.selectView;
     this.showing = options.showing;
     this.setStatus = options.setStatus;
@@ -695,6 +701,11 @@ export class LibraryService {
    * folder reload reads a server's index again. A server that cannot be read only says so, so a dead server never
    * wedges the boot.
    */
+  /** Puts the Bemuse ReplayGain on, or takes it off, the charts already loaded, as the setting now says. */
+  public refreshBemuseReplayGain(): void {
+    this.bemuseSongs.refreshReplayGain(this.collection.charts);
+  }
+
   public async loadBemuseServers(indexURLs: readonly string[]): Promise<void> {
     if (indexURLs.length === 0) return;
     showLoadingOverlay(this.elements);

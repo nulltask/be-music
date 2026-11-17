@@ -629,6 +629,11 @@ export const OPTIONS_HELP_JA = html`
         <dd><code>?skin=</code> と同じく、読み込むスキンの ZIP の URL。</dd>
         <dt>Load from URLs</dt>
         <dd>上の 2 つの URL の ZIP を読み込みます。</dd>
+        <dt>Bemuse ReplayGain</dt>
+        <dd>
+          既定はオンです。Bemuse 音楽サーバーの曲を、Bemuse
+          と同じくサーバーが決めた音量で鳴らします。オフにすると譜面そのままの音量で鳴らします。プレイ中は変えられません。
+        </dd>
         <dt>Auto-save replays</dt>
         <dd>プレイが終わるたびにリプレイをダウンロードします。</dd>
         <dt>Record device names in replays</dt>
