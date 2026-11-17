@@ -2,7 +2,7 @@ import { readDropEntries, type BrowserChartCollection } from '@be-music/player-b
 import type { SceneKind, SelectScene } from '@be-music/player-browser/host';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
-import { COURSE_TABLE_URLS_STORAGE_KEY } from '../course-table-import.ts';
+import { COURSE_TABLE_URLS_STORAGE_KEY, DEFAULT_COURSE_TABLE_URLS } from '../course-table-import.ts';
 import { LibraryService, type LibraryServiceOptions } from './library.ts';
 
 // The loading overlay draws with Lit, which needs a DOM: a load here only reports its progress to it.
@@ -73,15 +73,24 @@ function stubStorage(entries: Record<string, string> = {}): Map<string, string> 
   return values;
 }
 
-/** `fetch` answering each URL of `pages` with its text, and rejecting the rest as a blocked request does. */
+/**
+ * `fetch` answering each URL of `pages` with its text, and rejecting the rest as a blocked request does. A request
+ * through the same-origin proxy answers for the URL it carries.
+ */
 function stubFetch(pages: Record<string, string>): ReturnType<typeof vi.fn> {
   const fetch = vi.fn(async (url: string) => {
-    const page = pages[url];
+    const page = pages[proxiedURL(url)];
     if (page === undefined) throw new TypeError('Failed to fetch');
     return new Response(page);
   });
   vi.stubGlobal('fetch', fetch);
   return fetch;
+}
+
+/** The URL a `/__url-load-proxy?url=` request carries, else the URL itself. */
+function proxiedURL(url: string): string {
+  const parsed = new URL(url);
+  return parsed.pathname === '/__url-load-proxy' ? (parsed.searchParams.get('url') ?? url) : url;
 }
 
 function harness(overrides: Partial<LibraryServiceOptions> = {}) {
@@ -148,7 +157,8 @@ describe('LibraryService difficulty tables', () => {
     // A new library, so the select screen takes it as one rather than redrawing the old one.
     expect(library.collection).not.toBe(before);
     expect(shown).toEqual([library.collection]);
-    expect(JSON.parse(stored.get(COURSE_TABLE_URLS_STORAGE_KEY)!)).toEqual([TABLE_PAGE]);
+    // The first remembered table joins the well-known ones, which were the list until then.
+    expect(JSON.parse(stored.get(COURSE_TABLE_URLS_STORAGE_KEY)!)).toEqual([...DEFAULT_COURSE_TABLE_URLS, TABLE_PAGE]);
 
     // The same table imported again replaces its folder.
     await library.importCourseTables([TABLE_PAGE], false);
@@ -199,7 +209,22 @@ describe('LibraryService difficulty tables', () => {
     expect(fetch).not.toHaveBeenCalled();
     ready();
     await loaded;
-    expect(fetch).toHaveBeenCalledWith(TABLE_HEADER);
+    expect(fetch.mock.calls.map(([url]) => proxiedURL(url as string))).toEqual([TABLE_HEADER]);
+    expect(folders()).toContain('Insane');
+  });
+});
+
+describe('LibraryService well-known difficulty tables', () => {
+  test('imports the well-known tables on a first visit, through the same-origin proxy', async () => {
+    stubStorage();
+    vi.stubGlobal('location', { href: 'https://play.example/' });
+    const fetch = stubFetch({ [DEFAULT_COURSE_TABLE_URLS[0]!]: tableHeader() });
+    const { library, folders } = harness();
+    await library.autoLoad('https://play.example/', Promise.resolve());
+    const requested = fetch.mock.calls.map(([url]) => url as string);
+    expect(requested.map(proxiedURL)).toEqual(DEFAULT_COURSE_TABLE_URLS);
+    expect(requested.every((url) => url.startsWith('https://play.example/__url-load-proxy?url='))).toBe(true);
+    // The tables that could not be fetched are skipped; the one that answered lists its courses.
     expect(folders()).toContain('Insane');
   });
 });
