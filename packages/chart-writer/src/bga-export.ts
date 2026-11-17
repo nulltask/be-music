@@ -13,8 +13,9 @@ import {
  * changed (#1198). A caller that must not convert with such a loss can throw from the handler.
  *
  * - Judging changes: `mine-damage` (the gauge a mine drains), `total` (the gauge's TOTAL), `long-note-mode` (how a long
- *   note is judged), `stp` (BMS `#STP` stops, which move every later note) and `exrank` (BMS `#EXRANKxx` changes,
- *   which the LR2 ruleset judges by).
+ *   note is judged), `stp` (BMS `#STP` stops, which move every later note), `exrank` (BMS `#EXRANKxx` changes,
+ *   which the LR2 ruleset judges by), `bpm` (BMS negative or undefined `#BPMxx`, LR2's reverse scroll) and `stop` (BMS
+ *   STOPs without a positive `#STOPxx`, which move every later note 1/192 of a measure earlier).
  * - Presentation changes: `speed` (BMS `SPEED` scroll changes), `sound-continuation` (bmson `c`, a note that continues
  *   its sound slice), `ln-end-sound` (beatoraja's `up`, a long note's end keysound) and the `bga-*` codes.
  */
@@ -30,6 +31,8 @@ export interface ChartExportDiagnostic {
     | 'long-note-mode'
     | 'stp'
     | 'exrank'
+    | 'bpm'
+    | 'stop'
     | 'speed'
     | 'sound-continuation'
     | 'ln-end-sound';

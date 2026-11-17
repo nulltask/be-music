@@ -386,6 +386,46 @@ describe('conversion losses that change gameplay are reported (#1198)', () => {
     expect(diagnostics.map((diagnostic) => diagnostic.message.split(' ')[0])).toEqual(['2', '1', '2']);
   });
 
+  test('BMS → bmson: negative or undefined #BPMxx and STOPs without a positive #STOPxx are reported with their count', () => {
+    const source = bms(
+      '#TITLE Timing',
+      '#BPM 120',
+      '#WAV01 key.wav',
+      '#BPM01 -120',
+      '#BPM02 0',
+      '#BPM03 150',
+      '#STOP01 0',
+      '#STOP02 -48',
+      '#STOP03 96',
+      '#00111:01',
+      '#00108:0104',
+      '#00208:0203',
+      '#00109:010402',
+      '#00209:03',
+    );
+    const diagnostics = collect((onDiagnostic) => stringifyBmson(source, { onDiagnostic }));
+    // `#BPM01` is negative and `04` undefined (both reverse in play); a zero `#BPM02` is ignored in play too, so it is no
+    // loss. `#STOP01` is zero, `#STOP02` negative and `04` undefined, which each move the later notes in play.
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['bpm', 'stop']);
+    expect(diagnostics.map((diagnostic) => diagnostic.message.split(' ')[0])).toEqual(['2', '3']);
+    const output = JSON.parse(stringifyBmson(source)) as { bpm_events: unknown[]; stop_events: unknown[] };
+    expect(output.bpm_events).toHaveLength(1);
+    expect(output.stop_events).toHaveLength(1);
+  });
+
+  test('bmson → bmson: a bmson source reports no BPM or STOP loss, since bmson skips those values itself', () => {
+    const source = bmson({
+      version: '1.0.0',
+      info: { title: 'Timing', init_bpm: 120, resolution: 240 },
+      bpm_events: [{ y: 240, bpm: 150 }],
+      stop_events: [{ y: 480, duration: 240 }],
+      sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0, l: 0, c: false }] }],
+    });
+    const diagnostics = collect((onDiagnostic) => stringifyBmson(source, { onDiagnostic }));
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('bpm');
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('stop');
+  });
+
   test('bmson → BMS: end keysounds (`up`) and continued sound slices (`c`) are reported with their count', () => {
     const source = bmson({
       info: { title: 'Slices', init_bpm: 120, resolution: 240 },
