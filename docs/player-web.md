@@ -275,7 +275,7 @@ Courses play through the same select → play → result scenes. See [Courses an
   - Dismissing a stage's result starts the next stage. With **Skip stage results** on (Options → Course), the next stage starts as soon as a stage ends, and only the course result is shown.
   - A course played with AUTO skips the result of every stage the course goes on after, as LR2 does (OpenLR2 `Main.cpp` M1381-M1384); the last stage's result and the course result still show.
   - A stage whose gauge empties ends the course.
-  - ESC gives the stage up. On LR2's course gauges the run goes on to the next stage while the gauge holds; otherwise it is kept as a failed one and the course result follows ([Courses — Ending on failure](./course.md#ending-on-failure)). F5 / quick retry is off.
+  - ESC gives the stage up. On LR2's course gauges a stage that judged a GOOD or better shows its result as FAILED first (unless stage results are skipped), and the run goes on to the next stage while the gauge holds; otherwise it is kept as a failed one and the course result follows ([Courses — Ending on failure](./course.md#ending-on-failure)). F5 / quick retry is off.
   - The course constraints are applied:
     - lane options are limited as beatoraja's `MusicSelector` limits them (`resolveCourseLaneOptions`): `grade` turns both sides and DP FLIP off, `grade_mirror` keeps a 1P MIRROR and then plays 2P on MIRROR with FLIP on (any other pick turns them all off), and `grade_random` keeps the random family on each side;
     - `no_speed` locks the hi-speed (and on a beatoraja theme the lane cover, lift and HIDDEN cover);

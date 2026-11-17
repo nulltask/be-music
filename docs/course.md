@@ -387,13 +387,16 @@ A stage given up with ESC does not clear, and what follows is the course gauge's
 | beatoraja's class gauges (and That-Which-Must-Not-Be-Named's courses, which run on them) | Ends the run as a failed one: `BMSPlayer.stopPlay` fails the stage and fills its gauge log with 0 to the chart's end, and `MusicResult` ends a course whose gauge stands at 0 or less [V].                                                                                  |
 | plugout                                                                                  | Ends the run as a failed one. plugout leaves nothing to follow; this is Be-Music's choice.                                                                                                                                                                                  |
 
-An endless run (RANDOM MIX drawn one stage at a time) always ends on a stage given up, since ESC is how its player stops it. A stage given up shows no stage result; the next stage, or the course result, follows at once. Where LR2 returns to the select screen without saving (a stage with no GOOD or better judged), Be-Music ends the run and keeps it as a failed one, as it keeps every play it does not leave to AUTO or a replay.
+An endless run (RANDOM MIX drawn one stage at a time) always ends on a stage given up, since ESC is how its player stops it. Under an LR2 gauge, a stage given up that judged a GOOD or better shows its result as FAILED first, as `LR2body.exe` does, whether the run goes on or ends there (`givenUpCourseStageShowsResult`); **Skip stage results** skips it, as it skips any stage result. Under any other gauge, and for a stage with no GOOD or better, no stage result shows: the next stage, or the course result, follows at once. Showing none under beatoraja's gauges is Be-Music's narrower choice, since only LR2's screen flow has been checked. Where LR2 returns to the select screen without saving (a stage with no GOOD or better judged), Be-Music ends the run and keeps it as a failed one, as it keeps every play it does not leave to AUTO or a replay.
 
 ```mermaid
 flowchart TD
   esc(["ESC on a course stage"]) --> source{"course gauge's source"}
-  source -- "LR2" --> holds{"gauge at 2 % or more,\nGOOD or better judged,\na stage left"}
+  source -- "LR2" --> judged{"GOOD or better judged"}
   source -- "class gauges, plugout" --> fail["course result: FAILED"]
+  judged -- "yes" --> stage["stage result: FAILED"]
+  judged -- "no" --> fail
+  stage --> holds{"gauge at 2 % or more,\na stage left"}
   holds -- "yes" --> next["next stage, from the gauge left"]
   holds -- "no" --> fail
   next --> lamp["course lamp FAILED at the end"]

@@ -2,6 +2,7 @@ import { playerText } from './player-copy.ts';
 import {
   CourseRun,
   createRandomMixCourse,
+  givenUpCourseStageShowsResult,
   type CourseConstraint,
   type CourseDefinition,
   type CourseRunStagePlan,
@@ -196,7 +197,9 @@ export function nextCourseStagePlay(active: ActiveCourse): CourseStagePlay | und
 export function recordCourseStage(active: ActiveCourse, result: PlayResult): void {
   const recorded = active.replay?.stages[active.run.stagesPlayed];
   if (recorded === undefined) {
-    active.run.recordStage(result.replay, result);
+    // A stage given up with ESC whose result shows comes here too: it is recorded as given up.
+    if (result.replay?.play.aborted === true) active.run.giveUp(result.replay, result);
+    else active.run.recordStage(result.replay, result);
     return;
   }
   if (recorded.replay.play.aborted === true) active.run.giveUp(recorded.replay, result);
@@ -211,11 +214,22 @@ export function courseGoesOnAfter(active: ActiveCourse, result: PlayResult): boo
 }
 
 /**
- * Whether the stage just played is one the recorded run gave up: it shows no stage result, as a stage given up live
- * shows none, and the run goes on or ends there as it did.
+ * Whether a course stage given up with ESC shows its result, as FAILED, before the run goes on or ends: the course
+ * gauge's rule (`givenUpCourseStageShowsResult`), read from the stage's replay or, without one, its live outcome.
  */
-export function courseReplayStageGivenUp(active: ActiveCourse | undefined): boolean {
-  return active?.replay?.stages[active.run.stagesPlayed]?.replay.play.aborted === true;
+export function givenUpStageShowsResult(replay: BeMusicReplay | undefined, result: PlayResult | undefined): boolean {
+  const native = replay?.results?.native ?? result?.stageOutcome;
+  if (native === undefined) return false;
+  return givenUpCourseStageShowsResult(replay?.play.judgeRuleset ?? native.ruleset, native);
+}
+
+/**
+ * Whether the stage just played is one the recorded run gave up and that shows no stage result, as a stage given up
+ * live shows none under that gauge ({@link givenUpStageShowsResult}): the run goes on or ends there as it did.
+ */
+export function courseReplayStageGivenUp(active: ActiveCourse | undefined, result?: PlayResult): boolean {
+  const recorded = active?.replay?.stages[active.run.stagesPlayed]?.replay;
+  return recorded?.play.aborted === true && !givenUpStageShowsResult(recorded, result);
 }
 
 /**

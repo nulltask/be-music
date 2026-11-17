@@ -53,9 +53,24 @@ export function courseGoesOnAfterGivingUp(
     judge: { pgreat: number; great: number; good: number };
   },
 ): boolean {
+  return givenUpCourseStageShowsResult(ruleset, result) && !isCourseStageFailed(ruleset, result.gauge);
+}
+
+/**
+ * Whether a course stage the player gave up with ESC shows its result, as FAILED, before the run goes on or ends. LR2
+ * shows it once the stage judged a GOOD or better, whether or not the gauge holds; with none it returns to the select
+ * screen (`LR2body.exe`). Under a gauge of another source the run goes on to the course result with no stage result
+ * shown: Be-Music's narrower choice, since only LR2's screen flow is verified (`gauge.source`, #1171).
+ */
+export function givenUpCourseStageShowsResult(
+  ruleset: string,
+  result: {
+    gauge: { source?: string };
+    judge: { pgreat: number; great: number; good: number };
+  },
+): boolean {
   const source = result.gauge.source ?? ruleset.split('/')[0];
-  if (source !== 'lr2' || isCourseStageFailed(ruleset, result.gauge)) return false;
-  return result.judge.pgreat + result.judge.great + result.judge.good > 0;
+  return source === 'lr2' && result.judge.pgreat + result.judge.great + result.judge.good > 0;
 }
 
 export interface RulesetCourseOptions {

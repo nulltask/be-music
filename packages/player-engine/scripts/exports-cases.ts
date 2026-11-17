@@ -1276,6 +1276,13 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseAPI.courseGoesOnAfterGivingUp('beatoraja', { gauge: { final: 40 }, judge });
     },
   });
+  define('player-engine.course.givenUpCourseStageShowsResult', {
+    run: () => {
+      const judge = { pgreat: 10, great: 2, good: 1 };
+      courseAPI.givenUpCourseStageShowsResult('lr2', { gauge: {}, judge });
+      courseAPI.givenUpCourseStageShowsResult('beatoraja', { gauge: {}, judge });
+    },
+  });
   define('player-engine.ruleset.resolveCourseClearLamp', {
     run: () => {
       rulesetAPI.resolveCourseClearLamp({

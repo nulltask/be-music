@@ -326,6 +326,29 @@ describe('ResultRoute.showResult: a course', () => {
     expect(h.deps.showSelect).not.toHaveBeenCalled();
   });
 
+  test('a stage given up shows its FAILED result, recorded on the run as given up, with no stage record', async () => {
+    const h = await harness({ family: 'lr2' });
+    const active = h.deps.courses.beginRun(course());
+    const base = resultOf(chartEntry('a'));
+    const data = {
+      ...base,
+      cleared: false,
+      lamp: 'FAILED' as const,
+      replay: { ...base.replay!, play: { ...base.replay!.play, aborted: true } },
+      stageOutcome: {
+        ruleset: 'lr2',
+        judge: { pgreat: 1, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 },
+        gauge: { type: 'GRADE', final: 90, cleared: true },
+      } as never,
+    };
+    await h.route.showResult(data);
+    expect(h.deps.records.recordActiveCourseStage).not.toHaveBeenCalled();
+    expect(active.run.stagesPlayed).toBe(1);
+    // Given up, the stage does not clear, whatever its gauge stood at.
+    expect(active.run.buildReplay().stages[0]).toMatchObject({ played: true });
+    expect(shown(h).options).toMatchObject({ run: 'stage', result: { cleared: false, lamp: 'FAILED' } });
+  });
+
   test('the course result shows on the course-result skin and reports the course run', async () => {
     const h = await harness({ family: 'lr2' });
     const info = resolveCourseView(course());

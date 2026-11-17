@@ -873,6 +873,29 @@ describe('PlayRoute: a course replay', () => {
     expect(h.deps.results.showResult).not.toHaveBeenCalled();
   });
 
+  test('the stage the recorded run gave up under the LR2 gauge shows its result as FAILED, as the run did', async () => {
+    const h = await harness();
+    const givenUp = {
+      play: { mode: 'manual', judgeRuleset: 'lr2', aborted: true },
+      results: {
+        native: {
+          ruleset: 'lr2',
+          judge: { pgreat: 1, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 },
+          gauge: { type: 'GRADE', final: 90, cleared: true },
+        },
+      },
+    } as unknown as BeMusicReplay;
+    const active = h.deps.courses.beginRun(course(), courseReplay([givenUp]));
+    const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)!, replay: givenUp });
+    play.options.on.finish(
+      { ...resultOf(chartEntry('a')), cleared: true, replay: undefined, fromReplay: true },
+      undefined,
+    );
+    expect(h.deps.results.showResult).toHaveBeenCalledOnce();
+    expect(h.deps.results.showResult.mock.calls[0]![0]).toMatchObject({ cleared: false, lamp: 'FAILED' });
+    expect(h.deps.courseRoute.continueCourse).not.toHaveBeenCalled();
+  });
+
   test('a stage the recorded run went on after shows its result', async () => {
     const h = await harness();
     const recorded = { play: { mode: 'manual' } } as unknown as BeMusicReplay;
@@ -932,6 +955,8 @@ describe('PlayRoute: the hi-speed and the tempo', () => {
 
 test('an interrupted practice stage keeps its live outcome without a replay', async () => {
   const h = await harness();
+  // With stage results skipped, the stage given up goes straight on.
+  h.deps.guiState.courseAutoAdvance = true;
   const active = h.deps.courses.beginRun(course());
   const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)! });
   const outcome = {
@@ -951,6 +976,44 @@ test('an interrupted practice stage keeps its live outcome without a replay', as
   expect(active.run.practice).toBe(true);
   expect(active.run.stagesPlayed).toBe(1);
   expect(() => active.run.buildReplay()).toThrow('practice course');
+});
+
+test.each(['built-in', 'beatoraja'] as const)(
+  'a stage given up under the LR2 gauge with a GOOD or better shows its result as FAILED on the %s result',
+  async (family) => {
+    const h = await harness({ family });
+    const active = h.deps.courses.beginRun(course());
+    const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)! });
+    const outcome = {
+      ruleset: 'lr2',
+      judge: { pgreat: 1, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 },
+      gauge: { type: 'GRADE', final: 90, cleared: true },
+    };
+    play.progress.mockReturnValue({ ...resultOf(chartEntry('a')), cleared: true, stageOutcome: outcome as never });
+    play.options.on.exit();
+    const shown = family === 'beatoraja' ? h.deps.results.showBeatorajaPlayResult : h.deps.results.showResult;
+    await vi.waitFor(() => expect(shown).toHaveBeenCalledOnce());
+    expect(shown.mock.calls[0]![0]).toMatchObject({ cleared: false, lamp: 'FAILED' });
+    if (family === 'beatoraja') expect(shown.mock.calls[0]![1]).toBe(true);
+    // The result screen records the stage and leads on, so the play does not.
+    expect(h.deps.courseRoute.continueCourse).not.toHaveBeenCalled();
+    expect(active.run.stagesPlayed).toBe(0);
+  },
+);
+
+test('a stage given up that judged no GOOD or better shows no result and goes on to what follows', async () => {
+  const h = await harness();
+  const active = h.deps.courses.beginRun(course());
+  const play = await started(h, chartEntry('a'), { courseStage: nextCourseStagePlay(active)! });
+  const outcome = {
+    ruleset: 'lr2',
+    judge: { pgreat: 0, great: 0, good: 0, bad: 1, poor: 0, emptyPoor: 0 },
+    gauge: { type: 'GRADE', final: 90, cleared: true },
+  };
+  play.progress.mockReturnValue({ ...resultOf(chartEntry('a')), stageOutcome: outcome as never });
+  play.options.on.exit();
+  await vi.waitFor(() => expect(h.deps.courseRoute.continueCourse).toHaveBeenCalledOnce());
+  expect(h.deps.results.showResult).not.toHaveBeenCalled();
 });
 
 test.each(['built-in', 'lr2', 'beatoraja'] as const)(
