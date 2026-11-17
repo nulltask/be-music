@@ -1297,6 +1297,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.resolveMissCount({ bad: 3, poor: 5, emptyPoor: 2 }, 10);
     },
   });
+  define('player-engine.ruleset.resolvePlugoutScore', {
+    run() {
+      rulesetAPI.resolvePlugoutScore({ pgreat: 900, great: 80, good: 20 }, 1000);
+    },
+  });
   define('player-engine.ruleset.resolveGaugeEndOnFailure', {
     run() {
       rulesetAPI.resolveGaugeEndOnFailure('CONTINUE');
