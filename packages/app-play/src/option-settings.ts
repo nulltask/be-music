@@ -210,6 +210,9 @@ export interface OptionSettings {
   hiSpeed: number;
   hsFix: PlayerGUIState['hsFix'];
   displayAreaInfo: PlayerGUIState['displayAreaInfo'];
+  bga: PlayerGUIState['bga'];
+  bgaSize: PlayerGUIState['bgaSize'];
+  scoreGraph: boolean;
   hiddenSudden1P: PlayerGUIState['hiddenSudden1P'];
   hiddenSudden2P: PlayerGUIState['hiddenSudden2P'];
   laneCover: PlayerGUIState['laneCover'];
@@ -508,6 +511,9 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'laneCover', booleanOf(raw.laneCover));
   if (typeof raw.shutter === 'number' && Number.isFinite(raw.shutter)) settings.shutter = clampShutter(raw.shutter);
   assign(settings, 'displayAreaInfo', oneOf(raw.displayAreaInfo, PLAY_OPTION_CHOICES.displayAreaInfo!));
+  assign(settings, 'bga', oneOf(raw.bga, PLAY_OPTION_CHOICES.bga!));
+  assign(settings, 'bgaSize', oneOf(raw.bgaSize, PLAY_OPTION_CHOICES.bgaSize!));
+  assign(settings, 'scoreGraph', booleanOf(raw.scoreGraph));
   assign(settings, 'hsFix', oneOf(raw.hsFix, PLAY_OPTION_CHOICES.hsFix!));
   assign(settings, 'skinEffects', oneOf(raw.skinEffects, SKIN_EFFECTS));
   assign(settings, 'playLayout', oneOf(raw.playLayout, PLAY_LAYOUTS));
@@ -816,6 +822,9 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('hiSpeed');
   assignState('hsFix');
   assignState('displayAreaInfo');
+  assignState('bga');
+  assignState('bgaSize');
+  assignState('scoreGraph');
   assignState('hiddenSudden1P');
   assignState('hiddenSudden2P');
   assignState('laneCover');
@@ -992,6 +1001,9 @@ export function captureOptionSettings(
     hiSpeed: state.hiSpeed,
     hsFix: state.hsFix,
     displayAreaInfo: state.displayAreaInfo,
+    bga: state.bga,
+    bgaSize: state.bgaSize,
+    scoreGraph: state.scoreGraph,
     hiddenSudden1P: state.hiddenSudden1P,
     hiddenSudden2P: state.hiddenSudden2P,
     laneCover: state.laneCover,

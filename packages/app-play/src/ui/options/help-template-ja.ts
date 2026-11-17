@@ -47,7 +47,7 @@ export const OPTIONS_HELP_JA = html`
       <dl class="help-menu-items">
         <dt>Judgment windows</dt>
         <dd>
-          すべてのプレイが従うルール。LR2、beatoraja、????。判定の幅、ゲージ、選べるオプション、選曲画面に出すベスト記録が変わります。
+          すべてのプレイが従うルール。LR2、beatoraja、????、plugout。判定の幅、ゲージ、選べるオプション、選曲画面に出すベスト記録が変わります。
         </dd>
         <dt>Record kept</dt>
         <dd>
@@ -388,6 +388,12 @@ export const OPTIONS_HELP_JA = html`
         <dd>LIFT で 1P 側の判定ラインを上げる高さ (レーンに対する割合)。プレイ中にも変えられます。</dd>
         <dt>LIFT height 2P</dt>
         <dd>LIFT で 2P 側の判定ラインを上げる高さ (レーンに対する割合)。プレイ中にも変えられます。</dd>
+        <dt>BGA</dt>
+        <dd>BGA を表示するかどうか。常に表示、表示しない、AUTO プレイのときだけ表示、から選びます。</dd>
+        <dt>BGA size</dt>
+        <dd>BGA をスキンの通常の枠と大きい枠のどちらに描くか。</dd>
+        <dt>Score graph</dt>
+        <dd>プレイ中にスキンのスコアグラフを表示します。</dd>
         <dt>BPM GUIDE (beatoraja)</dt>
         <dd>これから来る BPM の変化をレーン上に表示します。</dd>
         <dt>BPM change warning (AC)</dt>

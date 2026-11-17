@@ -52,6 +52,7 @@ describe('parseDanRanks / serializeDanRanks', () => {
     const ranks = new Map<string, DanRank>([
       ['lr2:7', 'dan-7'],
       ['beatoraja:14', 'insane-kaiden'],
+      ['plugout:9', 'dan-3'],
     ]);
     expect(parseDanRanks(serializeDanRanks(ranks))).toEqual(ranks);
   });

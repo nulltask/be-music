@@ -50,8 +50,8 @@ export const OPTIONS_HELP_TEMPLATE = html`
         <dl class="help-menu-items">
           <dt>Judgment windows</dt>
           <dd>
-            The rules every play follows: LR2, beatoraja or ????. It decides the windows, gauges, options offered, and
-            which best records the select screen shows.
+            The rules every play follows: LR2, beatoraja, ???? or plugout. It decides the windows, gauges, options
+            offered, and which best records the select screen shows.
           </dd>
           <dt>Record kept</dt>
           <dd>
@@ -414,6 +414,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>How far LIFT raises the 1P judge line, as a fraction of the lane. Changes live.</dd>
           <dt>LIFT height 2P</dt>
           <dd>How far LIFT raises the 2P judge line, as a fraction of the lane. Changes live.</dd>
+          <dt>BGA</dt>
+          <dd>Whether the BGA shows: always, never, or only in AUTO play.</dd>
+          <dt>BGA size</dt>
+          <dd>Draws the BGA in the skin's normal frame or its larger one.</dd>
+          <dt>Score graph</dt>
+          <dd>Shows the skin's score graph during a play.</dd>
           <dt>BPM GUIDE (beatoraja)</dt>
           <dd>Shows upcoming BPM changes on the lanes.</dd>
           <dt>BPM change warning (AC)</dt>

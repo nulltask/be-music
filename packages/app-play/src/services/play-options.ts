@@ -2,7 +2,7 @@ import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import type { RulesetId } from '@be-music/player-engine/ruleset';
 // The play options the player hands to every screen and play: the full `PlayOptions`, kept here rather than read back
 // from the select screen. The Options dialog holds some of them itself (auto play, gauge, lane options, assists, sort and
-// filters, hi-speed and covers); the rest (BGA, the score graph and the 2P gauge) are only
+// filters, hi-speed, covers, BGA and the score graph); the rest (the 2P gauge) are only
 // changed on a select screen, and live here between screens, so a select screen made again (another skin system or
 // theme) starts from them.
 
@@ -119,6 +119,9 @@ export type GUIPlayOptions = Pick<
   | 'hiSpeed'
   | 'hsFix'
   | 'displayAreaInfo'
+  | 'bga'
+  | 'bgaSize'
+  | 'scoreGraph'
   | 'hiddenSudden1P'
   | 'hiddenSudden2P'
   | 'laneCover'
@@ -236,6 +239,9 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     hiSpeed: state.hiSpeed,
     hsFix: state.hsFix,
     displayAreaInfo: state.displayAreaInfo,
+    bga: state.bga,
+    bgaSize: state.bgaSize,
+    scoreGraph: state.scoreGraph,
     hiddenSudden1P: state.hiddenSudden1P,
     hiddenSudden2P: state.hiddenSudden2P,
     laneCover: state.laneCover,
@@ -250,6 +256,9 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
 export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIPlayOptions): void {
   state.hsFix = options.hsFix;
   state.displayAreaInfo = options.displayAreaInfo;
+  state.bga = options.bga;
+  state.bgaSize = options.bgaSize;
+  state.scoreGraph = options.scoreGraph;
   state.hiddenSudden1P = options.hiddenSudden1P;
   state.hiddenSudden2P = options.hiddenSudden2P;
   state.laneCover = options.laneCover;

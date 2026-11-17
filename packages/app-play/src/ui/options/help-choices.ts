@@ -109,6 +109,10 @@ export const OPTION_HELP_CHOICES: OptionHelpChoices = {
       ['LR2', "LR2's windows, gauges and lamps; a long note is judged at its head only (default)."],
       ['beatoraja', "beatoraja's windows and gauges, with LN MODE, CUSTOM JUDGE and the judge algorithm choices."],
       ['????', "AC's fixed windows and its gauges; every long note is a charge note, and ANY KEY (PC) is offered."],
+      [
+        'plugout',
+        "plugout4 -ARCADE EDITION-'s windows by rank, its gauges, 100,000-point score and lamps; every long note is a charge note.",
+      ],
     ],
     Gauge: GAUGES,
     'Judge algorithm': [
@@ -341,6 +345,15 @@ export const OPTION_HELP_CHOICES: OptionHelpChoices = {
       ['ON', 'Keeps the cover length and the green number at the edge of every active cover.'],
       ['SUDDEN+ ONLY', 'Keeps them at the SUDDEN+ edge only.'],
       ['HID+/LIFT ONLY', 'Keeps them at the HIDDEN+ and LIFT edge only.'],
+    ],
+    BGA: [
+      ['OFF', 'Hides the BGA.'],
+      ['ON', 'Shows the BGA (default).'],
+      ['AUTOPLAY ONLY', 'Shows the BGA only in AUTO play.'],
+    ],
+    'BGA size': [
+      ['NORMAL', "Draws the BGA in the skin's normal frame."],
+      ['EXTEND', "Draws the BGA in the skin's larger frame, where it has one (default)."],
     ],
     'Effect 1P': LANE_COVERS,
     'Effect 2P': LANE_COVERS,

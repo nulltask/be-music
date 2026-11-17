@@ -1,5 +1,5 @@
 import type { CourseRunStageExtras } from '@be-music/player-engine/course';
-import { resolveLR2MoneyScore } from '@be-music/player-engine/ruleset';
+import { resolveLR2MoneyScore, resolvePlugoutScore } from '@be-music/player-engine/ruleset';
 import type { BeMusicCourseReplay, ReplayCourseResult } from '@be-music/player-engine/replay';
 import { resolveCourseView } from '../course-view/course-view.ts';
 import type { LibraryCourse } from '../library/entries.ts';
@@ -87,7 +87,10 @@ export function playResultFromCourseRun(
         ? 'beatoraja'
         : result.ruleset.startsWith('____')
           ? '____'
-          : 'lr2';
+          : result.ruleset.startsWith('plugout')
+            ? 'plugout'
+            : 'lr2';
+  // The score a stage's result shows under the ruleset: LR2's money score, plugout's 100000-point score, else EX score.
   const score =
     judgeRuleset === 'lr2'
       ? resolveLR2MoneyScore({
@@ -96,7 +99,9 @@ export function playResultFromCourseRun(
           great: result.judge.great,
           good: result.judge.good,
         })
-      : result.exScore;
+      : judgeRuleset === 'plugout'
+        ? resolvePlugoutScore(result.judge, result.noteCount)
+        : result.exScore;
   return {
     ...(options.practice === true ? { practice: true } : {}),
     ...(options.fromReplay === true ? { fromReplay: true } : {}),

@@ -92,6 +92,17 @@ describe('playResultFromCourseRun', () => {
     expect(playResultFromCourseRun(course(), result, courseLog('beatoraja')).score.score).toBe(72);
   });
 
+  test('shows a plugout course on its 100000-point scale, whether or not a stage was played', () => {
+    const plugout = { ...result, ruleset: 'plugout/0', judge: { ...result.judge, pgreat: 30, great: 6 } };
+    const log = { stages: [{ played: true, replay: { play: { mode: 'manual', judgeRuleset: 'plugout' } } }] };
+    // 100000·30/36 + 50000·6/36, each term truncated.
+    const expected = 83333 + 8333;
+    expect(playResultFromCourseRun(course(), plugout, log as unknown as BeMusicCourseReplay).score.score).toBe(
+      expected,
+    );
+    expect(playResultFromCourseRun(course(), plugout, undefined).score.score).toBe(expected);
+  });
+
   test('reads a NONSTOP run as one play, timed by the stitched play', () => {
     const data = playResultFromCourseRun(course('nonstop'), result, courseLog(), {
       gaugeHistory: [{ progress: 1, value: 50 }],

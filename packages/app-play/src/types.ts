@@ -232,6 +232,9 @@ export interface PlayerGUIState extends PlayTempoSettings {
   hiSpeed: number;
   hsFix: HSFix;
   displayAreaInfo: PlayOptions['displayAreaInfo'];
+  bga: PlayOptions['bga'];
+  bgaSize: PlayOptions['bgaSize'];
+  scoreGraph: boolean;
   hiddenSudden1P: PlayOptions['hiddenSudden1P'];
   hiddenSudden2P: PlayOptions['hiddenSudden2P'];
   laneCover: PlayOptions['laneCover'];
