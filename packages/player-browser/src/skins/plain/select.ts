@@ -291,7 +291,14 @@ function drawCourse(
   text(ctx, card.title, x, y + 28, { size: 18, weight: 800, maxWidth: width, nowMs });
   text(ctx, card.detail, x, y + 52, { size: 11, color: MUTED, maxWidth: width, nowMs });
   card.stages.slice(0, 6).forEach((stage, index) => {
-    text(ctx, `${index + 1}. ${stage}`, x, y + 86 + index * 22, { size: 12, maxWidth: width, nowMs });
+    // A stage missing from the collection is drawn faint; a random course's stages are drawn when it starts.
+    const missing = course.random === undefined && course.stages[index]?.chart === undefined;
+    text(ctx, `${index + 1}. ${stage}`, x, y + 86 + index * 22, {
+      size: 12,
+      maxWidth: width,
+      nowMs,
+      ...(missing ? { color: MUTED } : {}),
+    });
   });
 }
 
@@ -313,6 +320,9 @@ function button(
   text(ctx, label, x + w / 2, y + h / 2, { size: 14, weight: 800, align: 'center' });
   frame.hit(x, y, w, h, action);
 }
+
+/** How faint a course that cannot start is drawn in the list. */
+const DISABLED_ALPHA = 0.4;
 
 /** Draws one list row, its text centred on `midY`. */
 type RowDrawer = (
@@ -355,6 +365,8 @@ function drawList(
       ctx.fillRect(listX, y, 4, rowHeight - 2);
       ctx.globalAlpha /= light.alpha || 1;
     }
+    // A course that cannot start (a stage missing) is drawn faint, as a disabled control is.
+    if (entry.kind === 'course' && !entry.course.playable) ctx.globalAlpha *= DISABLED_ALPHA;
     drawEntry(ctx, entry, listX, y + (rowHeight - 2) / 2, rowW, selected ? frame.nowMs : undefined);
     ctx.restore();
   }
