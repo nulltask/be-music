@@ -259,6 +259,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Skin ZIP URL': 'スキン ZIP の URL',
   'Load from URLs': 'URL から読み込む',
   'Auto-save replays': 'リプレイの自動保存',
+  'Record device names in replays': 'リプレイにデバイス名を記録',
   'Slot 1 auto-save': 'スロット 1 の自動保存',
   'Slot 2 auto-save': 'スロット 2 の自動保存',
   'Slot 3 auto-save': 'スロット 3 の自動保存',

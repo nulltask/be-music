@@ -128,6 +128,7 @@ export interface PlayEngineContext
       | 'onExit'
       | 'onRestart'
       | 'replayRecorder'
+      | 'replayDeviceNames'
       | 'randomSeed1P'
       | 'randomSeed2P'
       | 'randomFixedLane1P'
@@ -449,6 +450,7 @@ export function resolveReplayRecording(
     | 'chartSHA256'
     | 'chartMD5'
     | 'replayRecorder'
+    | 'replayDeviceNames'
     | 'randomSeed1P'
     | 'randomSeed2P'
     | 'randomFixedLane1P'
@@ -588,6 +590,7 @@ export function resolveReplayRecording(
     ...(options.chartSHA256 !== undefined ? { chartSHA256: options.chartSHA256 } : {}),
     ...(options.chartMD5 !== undefined ? { chartMD5: options.chartMD5 } : {}),
     ...(options.replayRecorder !== undefined ? { recorder: options.replayRecorder } : {}),
+    ...(options.replayDeviceNames === true ? { includeDeviceNames: true } : {}),
     ...(chartEntry !== undefined ? { sourceChart: chartEntry.chart } : {}),
     ...(options.random1P !== undefined || options.random2P !== undefined
       ? {

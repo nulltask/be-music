@@ -141,6 +141,7 @@ describe('captureOptionSettings', () => {
       ghost: 'LEADERBOARD_TOP',
       ghostMode: 'LANE_OVERLAY',
       autoSaveReplay: true,
+      replayDeviceNames: true,
       courseAutoAdvance: true,
       nonstopPlacement: 'lr2',
       submitToLeaderboard: true,

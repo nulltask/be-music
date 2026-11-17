@@ -104,8 +104,14 @@ directions of a turntable share one model (#605, [ADR 0040](./adr/0040-replay-in
   `direction` (`up` or `down`). A turntable is always two sources, whether the device reports an axis or two buttons.
 - `device` is a coarse class only: `keyboard`, `controller` or `touch`. `label` is a normalised name (lowercase
   printable ASCII without whitespace, at most 32 characters): a keyboard key's first token (`'shift-left'`, `'z'`), a
-  touch zone's lane key, or a controller's `b1` / `tt`. A replay never records device-identifying data: no
-  `Gamepad.id`, vendor or product id, or serial.
+  touch zone's lane key, or a controller's `b1` / `tt`. Labels never carry device-identifying data.
+- `deviceName` (optional) is the device's own name as the host reported it: a browser's `Gamepad.id`, which often
+  names the vendor and product ids. It is recorded only when the player opts in (the web player's "Record device names
+  in replays", `ReplayRecordingOptions.includeDeviceNames`; off by default), and then goes wherever the replay goes,
+  Leaderboard submissions included. Keyboards and touch report none. It is not part of the source's identity and
+  judging never reads it, so the same play records the same `inputs` with or without it. A source keeps the name it
+  was first seen with: another controller in the same slot later in the play is the same source. The recorder removes
+  control characters, trims it and cuts it to 128 characters. No serial is ever recorded.
 - Each physical key bound to a lane is its own source: a scratch lane's Shift, Ctrl and Space are three. Each lane's
   touch zone is one.
 - `play.analogScratch` (optional) names the versioned algorithm, and its parameters, by which the host turned an analog
@@ -113,8 +119,8 @@ directions of a turntable share one model (#605, [ADR 0040](./adr/0040-replay-in
   axis samples, and the simulators never re-run the algorithm.
 
 `parseReplay` rejects a table with duplicate ids, an unknown `kind` or `device`, a label that is not a normalised name,
-a turntable source without a `direction` (or another source with one), and any input whose `source` the table does not
-hold. A log without `play.inputSources`, or whose inputs carry no `source` (the `tokens` of logs recorded before input
+a turntable source without a `direction` (or another source with one), a `deviceName` that is empty, longer than 128
+characters, has control characters or surrounding spaces, and any input whose `source` the table does not hold. A log without `play.inputSources`, or whose inputs carry no `source` (the `tokens` of logs recorded before input
 sources), is rejected rather than guessed: the format is still at revision 0 and older logs need not be read. Turning
 a source into channels stays the host's job, and `channels` stays authoritative for lane selection.
 

@@ -253,7 +253,8 @@ export interface ReplayChart {
 export interface ReplayPlay {
   /**
    * The physical inputs the play used (#605), numbered by `id`; every input event names one (`ReplayInputEvent.source`).
-   * Coarse device classes and normalised labels only — never a device id, vendor or product id, or serial.
+   * Coarse device classes and normalised labels, plus a source's `deviceName` (a browser's `Gamepad.id`) only when the
+   * player opted in to recording it (`ReplayRecordingOptions.includeDeviceNames`, off by default). Never a serial.
    */
   inputSources: ReplayInputSource[];
   /** How the host turned an analog turntable axis into presses and releases, when one was played. */

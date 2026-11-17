@@ -828,8 +828,9 @@ judge core, a replay and the replay simulator all key a scratch hold by the same
   `down`, whether the device reports an axis or two buttons, and a host that turns an axis into presses names the
   algorithm in `recordReplay.analogScratch`. The web player reads standard-mapped Gamepads with the CS DualShock
   assignment: D-pad to key 1, L1 / Square / R1 / Cross / Triangle / Circle to keys 2–7, and L2 / R2 to the two
-  turntable directions. It records only generic button / turntable source labels, never a device id. A source never
-  carries device-identifying data.
+  turntable directions. Its source labels are generic button / turntable names, never a device id. A controller source
+  also carries the pad's `Gamepad.id` as `deviceName`, which a replay keeps only when the player opts in
+  ([Replays, Input sources](./replay.md#input-sources)); judging never reads it.
 
   For USB arcade controllers, select the INFINITAS HID mode (including on compatible GAMO2/DJDAO PHOENIXWAN firmware).
   The browser must expose the controller through Gamepad API. Be-Music recognizes the INFINITAS VID/PID

@@ -217,6 +217,8 @@ describe('createPlayerGUIState', () => {
       peakGain: false,
       compressor: true,
       autoSaveReplay: false,
+      // Device names stay out of replays until the player opts in.
+      replayDeviceNames: false,
       tempoEnabled: false,
       tempoStretchAlgorithm: 'wsola',
       tempoPercent: 0,

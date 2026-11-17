@@ -42,6 +42,7 @@ export {
   type InputSourceDevice,
   type InputSourceKind,
   type InputSourceTable,
+  type InputSourceTableOptions,
   type TurntableDirection,
 } from './core/input-source.ts';
 

@@ -32,6 +32,14 @@ describe('resolveReplayRecording', () => {
     });
   });
 
+  test('asks the recorder for device names only when the player opted in', () => {
+    expect(resolveReplayRecording({}, undefined, VIEW)).not.toHaveProperty('includeDeviceNames');
+    expect(resolveReplayRecording({ replayDeviceNames: false }, undefined, VIEW)).not.toHaveProperty(
+      'includeDeviceNames',
+    );
+    expect(resolveReplayRecording({ replayDeviceNames: true }, undefined, VIEW).includeDeviceNames).toBe(true);
+  });
+
   test("passes the song's chart through as the fingerprints' source", () => {
     const chart = createEmptyJSON('bms');
     expect(resolveReplayRecording({}, { chart, chartPath: 'chart.bms' }, VIEW).sourceChart).toBe(chart);
