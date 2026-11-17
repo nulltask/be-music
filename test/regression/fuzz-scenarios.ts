@@ -1,6 +1,7 @@
 import { createEmptyJSON, type BeMusicJSON } from '@be-music/chart-source';
 import { manualPlay } from '@be-music/player-engine';
 import type { ReplayInputEvent, ReplayNote, RulesetId } from '@be-music/player-engine/replay';
+import type { GaugeType } from '@be-music/player-engine/ruleset';
 import type { EngineReplay } from './play-scenarios.ts';
 
 /**
@@ -193,7 +194,8 @@ export function buildFuzzInputs(notes: readonly ReplayNote[], random: () => numb
 
 export interface FuzzReplayOptions {
   ruleset: RulesetId;
-  gauge: FuzzGauge;
+  /** A drawn gauge ({@link FuzzGauge}), or the one a ruleset plays in its place. */
+  gauge: GaugeType;
   autoScratch: boolean;
 }
 
