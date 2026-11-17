@@ -1,12 +1,12 @@
 import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
 // The Options dialog's Course folder. It is built with the dialog as `this` (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
-import { normalizeCourseTableURL } from '../../course-table-import.ts';
+import { mountCourseTableManager } from './course-tables.ts';
 import type { PlayerGUIState } from '../../types.ts';
 import type { OptionsDialog, OptionsDialogDeps } from './index.ts';
 /**
- * Courses: whether stage results show, the player's own courses, the NONSTOP placement, and importing a difficulty
- * table's courses from its URL (remembered and imported again on load).
+ * Courses: whether stage results show, the player's own courses, the NONSTOP placement, and the list of difficulty
+ * tables whose courses are imported (remembered and imported again on load).
  */
 export function buildCourseFolder(this: OptionsDialog, folder: OptionContainer): void {
   const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);
@@ -20,20 +20,14 @@ export function buildCourseFolder(this: OptionsDialog, folder: OptionContainer):
       ({ value }) => applyNonstopPlacement(this.deps, value),
     ),
   );
-  // Courses from a difficulty table's page (or header JSON) URL; the URL is remembered and imported again on load.
-  const courseTable = {
-    url: '',
-    import: () => {
-      const url = normalizeCourseTableURL(courseTable.url);
-      if (url === undefined) {
-        this.setStatus('Enter a difficulty-table URL first');
-        return;
-      }
-      void this.library.importCourseTables([url], true).finally(() => this.scheduleSettingsSave());
-    },
-  };
-  folder.addBinding(courseTable, 'url', { label: 'Table URL' });
-  folder.addButton({ title: 'Import table courses' }).on('click', () => courseTable['import']());
+  // The difficulty tables whose courses are listed: remembered, and imported again on load.
+  const courseTables = document.createElement('div');
+  folder.addElement(courseTables);
+  mountCourseTableManager(courseTables, {
+    library: this.library,
+    setStatus: (text) => this.setStatus(text),
+    saveSettings: () => this.scheduleSettingsSave(),
+  });
 }
 /**
  * Takes a NONSTOP placement picked on the menu. A NONSTOP course keeps its records per placement (`courseBestRecordKey`), so

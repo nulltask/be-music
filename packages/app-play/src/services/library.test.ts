@@ -168,6 +168,28 @@ describe('LibraryService difficulty tables', () => {
     expect(folders().filter((label) => label === 'Insane')).toHaveLength(1);
   });
 
+  test("removes an imported table's courses by its URL, keeping a group another URL still imports", async () => {
+    stubStorage();
+    stubFetch({ [TABLE_PAGE]: '<meta name="bmstable" content="header.json">', [TABLE_HEADER]: tableHeader() });
+    const { library, folders } = harness();
+    const changed = vi.fn();
+    library.onCourseTablesChange(changed);
+    expect(
+      await library.importCourseTables([TABLE_PAGE, TABLE_HEADER, 'https://nowhere.example/t.html'], false),
+    ).toEqual([TABLE_PAGE, TABLE_HEADER]);
+    expect(library.courseTableLabel(TABLE_PAGE)).toBe('Insane');
+    expect(changed).toHaveBeenCalledTimes(2);
+    // The page and its header are one table: removing one URL keeps the other's folder.
+    await library.removeCourseTable(TABLE_PAGE);
+    expect(library.courseTableLabel(TABLE_PAGE)).toBeUndefined();
+    expect(folders()).toContain('Insane');
+    await library.removeCourseTable(TABLE_HEADER);
+    expect(folders()).not.toContain('Insane');
+    // A URL that never imported changes nothing.
+    await library.removeCourseTable('https://nowhere.example/t.html');
+    expect(changed).toHaveBeenCalledTimes(4);
+  });
+
   test('imports a table without remembering it, and leaves a play, decide or result screen up', async () => {
     const stored = stubStorage();
     stubFetch({ [TABLE_HEADER]: tableHeader() });
