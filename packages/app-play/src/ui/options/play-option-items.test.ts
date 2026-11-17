@@ -36,10 +36,11 @@ test('PRACTICE lists the judge ruleset’s own gauges first, named as it names t
 
 test('PRACTICE then lists the other sources’ gauges, qualified and named with their source (ADR 0019)', () => {
   const lr2 = practiceGaugeItems('lr2');
-  // LR2's own seven, then beatoraja's nine and AC's five.
-  expect(lr2).toHaveLength(7 + 9 + 5);
+  // LR2's own seven, then beatoraja's nine, AC's five and plugout's eight.
+  expect(lr2).toHaveLength(7 + 9 + 5 + 8);
   expect(lr2[7]).toEqual({ text: 'ASSIST EASY (beatoraja)', value: 'beatoraja:ASSIST-EASY' });
-  expect(lr2.at(-1)).toEqual({ text: 'EX-HARD (????)', value: '____:EX-HARD' });
+  expect(lr2[7 + 9 + 4]).toEqual({ text: 'EX-HARD (????)', value: '____:EX-HARD' });
+  expect(lr2.slice(-8).every((item) => item.value.startsWith('plugout:'))).toBe(true);
   expect(practiceGaugeItems('beatoraja')).toContainEqual({ text: 'HAZARD (LR2)', value: 'lr2:DEATH' });
   // A pick qualified with the judge ruleset itself is listed after the own gauges only while it is selected.
   expect(lr2.some((item) => item.value === 'lr2:HARD')).toBe(false);
@@ -52,6 +53,11 @@ test('the lowest auto-shift gauge reads as the ruleset’s own gauges; LR2 start
     { text: 'GROOVE', value: 'GROOVE' },
   ]);
   expect(bottomShiftableGaugeItems('beatoraja').map((item) => item.text)).toEqual(['ASSIST EASY', 'EASY', 'NORMAL']);
+  // plugout has no ASSIST EASY (the engine reads it as EASY), so its lowest choice is EASY, as under LR2.
+  expect(bottomShiftableGaugeItems('plugout')).toEqual([
+    { text: 'EASY', value: 'EASY' },
+    { text: 'NORMAL', value: 'GROOVE' },
+  ]);
   expect(bottomShiftableGaugeItems('____')[0]).toEqual({ text: 'ASSISTED EASY', value: 'ASSIST-EASY' });
 });
 
@@ -150,6 +156,14 @@ test('the gauges list the judge ruleset’s own first, then the other sources’
     { text: 'EX-HARD (????)', value: '____:EX-HARD' },
     { text: 'EASY (????)', value: '____:EASY' },
     { text: 'ASSISTED EASY (????)', value: '____:ASSIST-EASY' },
+    { text: 'NORMAL (plugout)', value: 'plugout:GROOVE' },
+    { text: 'HARD (plugout)', value: 'plugout:HARD' },
+    { text: 'HAZARD (plugout)', value: 'plugout:DEATH' },
+    { text: 'EASY (plugout)', value: 'plugout:EASY' },
+    { text: 'EXNORMAL (plugout)', value: 'plugout:EX-GROOVE' },
+    { text: 'EXHARD (plugout)', value: 'plugout:EX-HARD' },
+    { text: 'EXHAZARD (plugout)', value: 'plugout:EX-DEATH' },
+    { text: 'EX EASY (plugout)', value: 'plugout:EX-EASY' },
   ]);
   expect(gaugeItems('beatoraja').map((item) => item.text)).toEqual([
     'NORMAL',
@@ -170,6 +184,14 @@ test('the gauges list the judge ruleset’s own first, then the other sources’
     'EX-HARD (????)',
     'EASY (????)',
     'ASSISTED EASY (????)',
+    'NORMAL (plugout)',
+    'HARD (plugout)',
+    'HAZARD (plugout)',
+    'EASY (plugout)',
+    'EXNORMAL (plugout)',
+    'EXHARD (plugout)',
+    'EXHAZARD (plugout)',
+    'EX EASY (plugout)',
   ]);
   expect(gaugeItems('____').map((item) => item.value)).toEqual([
     'GROOVE',
@@ -190,6 +212,14 @@ test('the gauges list the judge ruleset’s own first, then the other sources’
     'beatoraja:DEATH',
     'beatoraja:EASY',
     'beatoraja:ASSIST-EASY',
+    'plugout:GROOVE',
+    'plugout:HARD',
+    'plugout:DEATH',
+    'plugout:EASY',
+    'plugout:EX-GROOVE',
+    'plugout:EX-HARD',
+    'plugout:EX-DEATH',
+    'plugout:EX-EASY',
   ]);
 });
 

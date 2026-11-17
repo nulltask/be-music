@@ -11,7 +11,7 @@ import {
   type DanRank,
 } from '@be-music/player-engine/records';
 import type { CourseKind } from '@be-music/player-engine/course';
-import type { ClearLamp, RulesetId } from '@be-music/player-engine/ruleset';
+import { RULESET_IDS, type ClearLamp, type RulesetId } from '@be-music/player-engine/ruleset';
 import type { BeMusicDanRank } from '@be-music/player-skin-sdk';
 
 const STORAGE_KEY = 'be-music.dan-ranks';
@@ -21,7 +21,7 @@ const STORAGE_KEY = 'be-music.dan-ranks';
  */
 const STORAGE_VERSION = 0;
 
-const JUDGE_RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
+const JUDGE_RULESETS: readonly RulesetId[] = RULESET_IDS;
 
 /** The key a dan rank is stored under: the judge ruleset the course was cleared on, then its key mode (`lr2:7`). */
 export function danRankKey(ruleset: RulesetId, keyMode: number): string {

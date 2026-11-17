@@ -31,6 +31,7 @@ describe('rulesetRecordKey / rulesetRecords', () => {
   it('reads the ruleset back, and keys an LR2 separate lamp beside the ordinary record', () => {
     expect(recordKeyRuleset('lr2:sha256:abc')).toBe('lr2');
     expect(recordKeyRuleset('____:path:a.bms')).toBe('____');
+    expect(recordKeyRuleset('plugout:sha256:abc')).toBe('plugout');
     expect(recordKeyRuleset('sha256:abc')).toBeUndefined();
     expect(slotRecordKey('lr2:sha256:abc', 'main')).toBe('lr2:sha256:abc');
     expect(slotRecordKey('lr2:sha256:abc', 'd-battle')).toBe('lr2:d-battle:sha256:abc');
@@ -62,6 +63,7 @@ describe('parseChartBestRecords / serializeChartBestRecords', () => {
       ['lr2:sha256:abc', { lamp: 'FULL_COMBO' as const, exScore: 900, maxCombo: 450, missCount: 0, playCount: 2 }],
       ['beatoraja:sha256:abc', { lamp: 'MAX' as const, exScore: 910, playCount: 1 }],
       ['____:path:x.bms', { lamp: 'FAILED' as const, playCount: 1 }],
+      ['plugout:sha256:abc', { lamp: 'PERFECT' as const, exScore: 880, playCount: 3 }],
     ]);
     expect(JSON.parse(serializeChartBestRecords(records)).version).toBe(0);
     expect(parseChartBestRecords(serializeChartBestRecords(records))).toEqual(records);
