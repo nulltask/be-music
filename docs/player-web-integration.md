@@ -29,7 +29,11 @@ The browser fetches same-origin archives directly and other HTTPS archives throu
 ></iframe>
 ```
 
-By default the preview plays in AUTO and judges no input. Add `mode=play` to let the viewer play the chart with the keyboard instead: the default lane keys judge it as a normal play, without seeking. M and F are lanes then, so they mute and toggle full screen only before the play starts; use the controls bar while playing. A click or tap on the stage does not pause the play either: pause with the controls bar or the play's own pause key. Touch lanes are not available in the embed. Neither mode records a replay or a score. The viewer can also switch modes without changing the URL: the **AUTO** checkbox in the chart list's header, and under the play button of a single chart, starts checked for `preview` and cleared for `play`; changing it under the play button loads the play again in the other mode.
+The preview plays in AUTO by default and ignores lane input. Add `mode=play` to let viewers play with the default lane keys. Manual play uses normal judgment and disables seeking. The embed has no touch lanes. Neither mode saves scores or replays.
+
+During manual play, M and F act as lane keys. Before play, they mute audio and toggle fullscreen. During play, use the controls bar for those actions. To pause, use the bar or the pause key. Clicking or tapping the stage leaves the play running.
+
+Viewers can switch modes with the **AUTO** checkbox in the chart list header or beneath a single chart’s Play button. The box starts checked in `preview` mode and unchecked in `play` mode. Changing it beneath the Play button reloads the chart in the selected mode.
 
 | Parameter | Meaning                                                                       |
 | --------- | ----------------------------------------------------------------------------- |

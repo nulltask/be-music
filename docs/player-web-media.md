@@ -43,14 +43,25 @@ BGA events can reference still images and video.
 ### Recording and results
 
 - The result screen opens after a short delay. Samples already playing ring out across the transition.
-- The gameplay recorder writes MP4 or WebM output and coordinates stop/finalization before scene disposal so active recordings are flushed before the gameplay bus is torn down.
+- The gameplay recorder writes MP4 or WebM. It stops and finalizes active recordings before the scene disposes of the gameplay audio bus.
 - See the [replay specification](./replay.md) for recording, downloads, and playback.
 
 ### Leaderboard submissions
 
-- With "Submit to Leaderboard" on (Options → Leaderboard, OFF by default, latched like the auto-save), a finished manual play is sent to the Leaderboard ([leaderboard.md](./leaderboard.md)) when the result scene mounts: it needs a signed-in account (a guest one is enough), rebuilds the play's fingerprint documents from the song's chart and checks them against the log before sending, resends with the chart document when the server asks for it, and shows the rank in the status line. The deployed Worker forwards `/api/*` and `/leaderboard/*` to the Leaderboard Worker through a Service Binding; `pnpm player:web` proxies them to a local one (`pnpm --filter @be-music/app-leaderboard run dev`, or `LEADERBOARD_DEV_ORIGIN`).
-- "Submit when" (Options → Leaderboard, latched with "Submit to Leaderboard") picks which of those plays are sent: "EX-SCORE improves (first play always)" (the default) sends a play only when its EX-SCORE beats the player's own best on the chart, or "Always" sends every play. The best is the local record (`be-music.chart-best-records`, the chart's ordinary record under the judge ruleset in force) read as the play starts, before its result updates it; a chart without a recorded EX-SCORE counts as a first play and is sent, and an equal EX-SCORE is not an improvement. A play held back says so in the status line. The rule (`shouldSubmitPlay` in `leaderboard-submit-rule.ts`) only cuts traffic: the Leaderboard still decides what a sent play shows. Course runs are always sent whatever the rule, since a run is ranked by more than its EX-SCORE and is few requests.
-- Accounts can start a guest account. "Keep this account" opens Accounts, where a passkey, Google or Discord keeps it as a regular account, which also lists its plays under its handle instead of behind the Guests filter; "Sign in" opens Accounts to sign in to another account, which moves this browser's guest plays into it.
+Enable **Submit to Leaderboard** under Options → Leaderboard to submit completed manual plays. The setting defaults to off and takes effect at chart start, like replay auto-save. Sign in with a guest or regular account to submit.
+
+**Submit when** controls which plays the browser sends. It also takes effect at chart start.
+
+- **EX-SCORE improves (first play always)** is the default. The player uses the chart’s local best for the active ruleset from `be-music.chart-best-records` at chart start. It sends the first play and any play that exceeds that score.
+- **Always** sends every eligible play.
+
+Course runs bypass this filter because they rank on more than EX-SCORE and produce few requests. The filter (`shouldSubmitPlay` in `leaderboard-submit-rule.ts`) controls submissions. The Leaderboard decides how to list and rank each play. The status line reports when the browser skips submission.
+
+When the result scene mounts, the browser rebuilds the fingerprint documents from the chart and checks them against the replay. If the server requests the chart document, the browser includes it when resending. The rank appears in the status line. [Leaderboard specification](./leaderboard.md)
+
+The deployed Worker forwards `/api/*` and `/leaderboard/*` to the Leaderboard Worker through a Service Binding. With `pnpm player:web`, start the local Leaderboard with `pnpm --filter @be-music/app-leaderboard run dev` or set `LEADERBOARD_DEV_ORIGIN` to choose the proxy destination.
+
+To keep a guest account, open **Keep this account** and register a passkey or link Google or Discord. The Leaderboard then lists the plays under the account’s handle. **Sign in** opens Accounts and moves the guest plays from this browser to the account you sign into.
 
 ### BGA video transcode
 

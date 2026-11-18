@@ -2,7 +2,7 @@
 
 # @be-music/player-browser
 
-Be-Music プレイヤーの browser の PixiJS ランタイムです。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作ります。音声サービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持ちます。[`@be-music/app-play`](../app-play/README.ja.md) がこれをプレイヤーのアプリに組み込みます。
+Be-Music のブラウザー版を PixiJS で動かすパッケージです。ホスト API は選曲・決定・プレイ・リザルトの各シーンセッションを作り、組み込み・LR2・beatoraja のビューで描画します。音声、譜面ライブラリー、スキンの読み込み、プレイの録画も扱います。[`@be-music/app-play` への組み込み](../app-play/README.ja.md)
 
 [Browser player 実装メモ](../../docs/player-web.ja.md) を参照してください。
 

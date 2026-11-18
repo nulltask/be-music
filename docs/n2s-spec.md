@@ -37,4 +37,6 @@ The reader skips directory entries. When the header’s encryption flag is set, 
 
 `parseN2SBytes` walks file entries in index order and takes the first `.pms`, `.bms`, `.bme` or `.bml` it finds. It descends into nested ZEXA containers as it encounters them, up to four levels below the outer container. A malformed container or a container with no chart raises an error.
 
-The parser passes the extracted bytes to `parseBMSBytes`, which applies the normal BMS text encoding rules and returns the same chart data as the standalone payload. The `.n2s` extension counts as `.pms` for lane detection. The shipped five-button charts use a subset of the nine-button layout. The container and the extracted PMS have the same gameplay fingerprint. [BMS implementation specification](./bms-spec.md)
+`parseBMSBytes` applies the ordinary BMS text encoding rules and returns the same chart data it would produce from the standalone payload.
+
+Lane detection treats `.n2s` as `.pms`. The shipped five-button charts use a subset of the nine-button layout. The container and the extracted PMS share a gameplay fingerprint. [BMS implementation specification](./bms-spec.md)

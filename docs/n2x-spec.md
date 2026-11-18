@@ -33,7 +33,9 @@ Nanasi Groove 2 uses `.n2x` files for chart lists and other data. Be-Music impor
 </bmslist>
 ```
 
-Each nonempty `file` creates one stage. The parser trims its text, replaces backslashes with slashes and removes leading slashes. The chart file’s stem is the stage title until the browser matches a chart. The list’s stem names both the course and its group. For example, `amanas.n2x` becomes `amanas`. The importer keeps repeated entries, skips entries with no file, and ignores unlock conditions. A file without a nonempty list yields no course. [Parser implementation](../packages/player-engine/src/course/n2x.ts)
+Each nonempty `file` creates a stage, including repeated entries. The parser ignores unlock conditions. It trims the path, replaces backslashes with slashes, and removes leading slashes. Until the browser finds a matching chart, the stage title is the chart file name without its extension.
+
+The list file name without its extension names both the course and its group. For example, `amanas.n2x` becomes `amanas`. A list with no usable entries yields no course. [Parser implementation](../packages/player-engine/src/course/n2x.ts)
 
 ## Resolving stages
 

@@ -24,13 +24,9 @@
 では RANDOM / MIRROR を引き直す代わりに記録済みチャンネルを再適用します（`applyReplayArrangement`）— つまり
 シャッフルされたプレイも正確にリプレイできます。新しい MIRROR/RANDOM は、空レーンを含む確定したモード全体の鍵盤を対象とし、スクラッチとホイールは固定します。旧方式で記録した配置も保存済みのチャンネルを再生し、修正後のシャッフルで解釈し直しません。
 
-譜面の `#RANDOM` / `#SWITCH` 行はログの
-`play.randomDraws` で解決するので、リプレイは記録時の枝を遊びます。ブラウザのプレイセッション（`session/play/play-chart.ts`）は自分で
-その draws を使って解決し（`resolvePlayChart(chart, { randomDraws })`）、元の譜面をエンジンに解決させるホストは
-`replayInputs` と一緒に `PlayerOptions.randomDraws` として渡します。読み込んだ譜面のために引かれていない draws や、
-draws のないログで新しく引いた分岐が記録時と異なる場合は再整列できないため、食い違った譜面を遊ぶ代わりに
-ステータス表示でエラーになります。リプレイは記録時のスキンファミリーに関わらず、
-そのときのゲームプレイのファミリー自身のプレイ画面で再生されます。
+リプレイは、記録した `play.randomDraws` を使って譜面の `#RANDOM` / `#SWITCH` の分岐を再現します。ブラウザーのプレイセッション（`session/play/play-chart.ts`）は `resolvePlayChart(chart, { randomDraws })` を呼びます。分岐の解決をエンジンに任せるホストは、`PlayerOptions.randomDraws` と `replayInputs` を渡します。
+
+乱数の抽選結果が別の譜面のものなら、再生を中止し、ステータス行にエラーを表示します。抽選結果を記録していないリプレイでも、引き直した分岐が記録時と食い違えば同じ扱いになります。再生時のプレイ画面は、現在選択中のスキンファミリーが描画します。
 
 ESC で中断したログのリプレイは、再シミュレーションと同じく中断した所で止まります。ホストは `play.abortedAtUs` を
 `PlayerOptions.replayAbortedAtUs` として渡し、エンジンはその譜面時刻まで判定してから、ESC としてリプレイを
@@ -67,7 +63,7 @@ flowchart LR
 
 ## ゴースト
 
-ゴーストは、記録されたプレイを今のプレイの横に見せるものです。ブラウザーのプレイヤーは、1 つを選ぶ前に比べられるよう、いくつかの形を並べて作っています（[#418](https://github.com/nulltask/be-music/issues/418)、[#934](https://github.com/nulltask/be-music/issues/934)）。それぞれは **ソース**（どのリプレイを再生するか）と **見せ方**（どう見せるか）の組で、別々に選べます。
+ゴーストを使うと、記録済みのプレイを現在のプレイと並べて確認できます。どのリプレイを使うか（**ソース**）と、どう表示するか（**見せ方**）は別々に選べます。複数の表示を切り替えて比べられます。[#418](https://github.com/nulltask/be-music/issues/418)、[#934](https://github.com/nulltask/be-music/issues/934)
 
 ```mermaid
 flowchart LR

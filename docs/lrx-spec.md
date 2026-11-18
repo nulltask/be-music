@@ -39,7 +39,9 @@ LRX is the chart format of plugout4 -ARCADE EDITION-. Open the `.lrs` sequence a
 | `.lrh` | Optional header with the same stem                 |
 | `.lrm` | Optional `image` / `movie` mappings and BGA events |
 
-The loader looks for `moviepath` in the header, then in the sequence, and defaults to `_movie.lrm`. The byte parser accepts UTF-16LE and UTF-16BE with a BOM, recognizes BOM-less UTF-16 starting with `<`, and otherwise decodes UTF-8. The LRX reader uses element names and attributes in document order.
+The loader takes `moviepath` from the header or, if it is missing there, from the sequence. If both omit it, the loader uses `_movie.lrm`.
+
+The byte parser reads UTF-16LE and UTF-16BE with a BOM. It also recognizes either UTF-16 encoding without a BOM if the file starts with `<`. It reads other input as UTF-8. The LRX reader processes element names and attributes in document order.
 
 Use `parseLRXBytes` or `parseLRX` from `@be-music/chart-parser` when the caller already has the companion files. The Node `parseChartFile` adapter reads them from disk. [Parser implementation](../packages/chart-parser/src/core/lrx.ts)
 
@@ -56,7 +58,9 @@ An `n` element uses `c` for channel, `s` for start tick, `e` for end tick and `p
 | 302     | STOP in milliseconds |
 | 309     | End of play          |
 
-The first BPM event sets the starting tempo. Without one, the parser tries `startbpm`, then `basebpm` and the shared default if the selected header value is absent or nonpositive. A STOP uses the BPM in effect on its tick, including BPM changes on that tick. Bar lines define measure positions at their written ticks. They leave the tick duration intact.
+The first BPM event sets the starting tempo. If the chart has no BPM event, the parser uses `startbpm` or, when that field is absent, `basebpm`. It uses the shared default when neither field exists or the chosen value is nonpositive.
+
+A STOP uses the effective BPM at its tick, including any BPM change on that tick. Bar lines mark measure boundaries at their written ticks without changing the tick duration.
 
 Without an end event, playback ends three seconds after the last sound starts. Be-Music waits for any note that still needs judgment. [Play-end implementation](../packages/chart-model/src/lrx-play-end.ts)
 
@@ -80,6 +84,13 @@ Choose the `plugout` ruleset for plugout judgment and gauge behavior. [Ruleset d
 
 ## BGA and conversion
 
-Channels 200, 201, 202 and 299 map to the common base, layer, layer 2 and POOR planes. Extended cues retain layers 203 and 204, crops, transforms and animation keyframes in `lrx.bga`. The browser compositor uses a 1280 × 720 canvas. Other hosts use the common BGA planes. Channels 205–298 are skipped with a warning.
+| Channel | Common BGA plane |
+| ------- | ---------------- |
+| 200     | Base             |
+| 201     | Layer            |
+| 202     | Layer 2          |
+| 299     | POOR             |
+
+Extended cues retain layers 203 and 204, crops, transforms and animation keyframes in `lrx.bga`. The browser compositor uses a 1280 × 720 canvas. Other hosts use the common BGA planes. Channels 205–298 are skipped with a warning.
 
 The parser maps LRX onto the shared event model with `sourceFormat: 'lrx'`. Be-Music JSON retains format-specific header values, note properties and extended BGA cues. Exporting to BMS or bmson can lose LRX-only properties such as chain playback and per-note audio. [JSON representation](./json-spec.md)

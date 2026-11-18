@@ -52,7 +52,7 @@ flowchart LR
   uw -->|"draws"| term
 ```
 
-When TTY support or TUI initialization is unavailable, the player falls back to text output.
+The player uses text output when the terminal lacks TTY support or the TUI cannot start.
 Passing `--no-tui` also disables the TUI path; in that mode the effective play mode is `AUTO`.
 
 ## Entry flow
@@ -166,7 +166,7 @@ The display size of `#STAGEFILE` is used up to the current terminal size.
 When drawing, the image is enlarged using the equivalent of `cover` to cover the entire terminal while maintaining the image's aspect ratio. If it does not match the terminal ratio, crop a part based on the center.
 The loading text is overlaid on top of it, and the background color of each character cell uses the corresponding `STAGEFILE` pixel color. The font color is chosen to have a higher contrast ratio with the background, so it can be either white or black.
 
-If `#STAGEFILE` is not specified, the file is not found, the format is not supported, or decoding fails, it will fall back to a text loading screen without an image.
+The loading screen uses text only if `#STAGEFILE` is absent, the image is missing, the format is unsupported, or decoding fails.
 `#STAGEFILE` is only for loading and does not refer to the BGA renderer during gameplay. The viewport remains a black background while the first base BGA cue is not yet enabled.
 If `--kitty-graphics` is enabled and the device supports it, `#STAGEFILE` will be displayed as an image overlay using the Kitty graphics protocol. Kitty graphics is enabled by default; with `--no-kitty-graphics` or on an unsupported terminal, ANSI display is used.
 

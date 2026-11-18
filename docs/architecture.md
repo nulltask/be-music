@@ -2,9 +2,9 @@
 
 # Architecture
 
-This document covers how a chart becomes something to play (the Source and Resolved layers), how the engine judges a play (a deterministic judge core and the one play loop around it), and the rules that keep these parts runtime-neutral and small.
+Be-Music separates chart parsing from playback and puts judgment in a deterministic core. One play loop runs that core. The package boundaries keep these parts independent of the runtime and limit what each needs to do.
 
-Be-Music reads a chart in two layers. The **Source layer** says what the file says. The **Resolved layer** says what the player plays. Exactly one function, `resolveChart`, turns the first into the second, and every format default and de facto reading is applied there or in a helper it calls. Consumers read the Resolved layer and do not interpret the format again.
+The **Source layer** represents the chart file. `resolveChart` is the only function that converts it to the **Resolved layer**, which holds what the player plays. It applies format defaults and conventions, directly or through its helpers, so consumers can use the resolved data as-is.
 
 ```mermaid
 flowchart TD

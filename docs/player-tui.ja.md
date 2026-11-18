@@ -142,48 +142,33 @@ terminal resize event、pause state、high-speed change、judge/combo update、d
 
 ## BGA と terminal image
 
-terminal BGA renderer は共有 BGA timeline helper を使い、base、layer、layer2、POOR track に対応します。
-BMP、PNG、JPEG、対応 video frame を読み込み、active frame を ANSI color block または Kitty graphics image へ合成します。
-BMS layer channel は black pixel を transparent として扱います。bmson layer image は black pixel を画像データとして保持します。
-動画コーデックは同梱 LibAV のデコーダーで処理し、H.264、HEVC、VP9/WebM などに対応します。デコーダーや画素形式が非対応の場合、その素材は利用できません。先頭フレームの読み込みは、ファイル末尾で遅延フレームを取り出す場合も含め、変換した1フレームで停止します。
+端末版は共通の BGA タイムラインを使い、ベース、レイヤー、レイヤー 2、POOR を描画します。BMP、PNG、JPEG と対応する動画フレームを読み、ANSI の色付きブロックか Kitty graphics の画像に合成します。BMS のレイヤーでは黒を透明として扱い、bmson のレイヤーでは黒をそのまま描きます。
 
-`#BANNER` と bmson `info.banner_image` は terminal に十分な幅がある場合、Music Select に表示します。
+同梱の LibAV デコーダーは H.264、HEVC、VP9/WebM などに対応します。デコーダーや画素形式が非対応の場合、その素材は表示できません。先頭フレームの読み込みは、変換済みのフレームが 1 枚できた時点で止まります。ファイル末尾で遅延フレームを取り出す場合も同じです。
 
-Kitty graphics は対応 terminal で既定有効です。
-ANSI rendering を強制する場合は `--no-kitty-graphics` を使います。
-video BGA は既定で progressive decode します。`--no-video-bga-streaming` を使うと旧来の full-predecode behavior に戻します。
+端末に十分な表示幅があれば、選曲画面に `#BANNER` または bmson の `info.banner_image` を表示します。対応端末では既定で Kitty graphics を使います。ANSI で描くには `--no-kitty-graphics` を指定してください。
+
+動画 BGA は既定で順次デコードします。再生前に全フレームをデコードするには `--no-video-bga-streaming` を指定してください。
 
 ## 読み込み画面
 
-選曲後の loading 中は、CLI が progress bar と現在の手順を標準出力へ描画します。
-このとき `metadata.stageFile` が存在し、画像を解決できる場合は、その画像を ANSI 化して terminal 全体へ描画し、loading 文言はその上にオーバーレイします。
+選曲後、CLI は進捗バーと処理中の手順を標準出力に表示します。`Step` は全体の手順を示し、`Sound` と `Visual` で並行して進む音声と画像の読み込み状況を確認できます。必要に応じて処理中のファイル名や `3/24` のような件数も表示します。
 
-loading 文言は高レベルの `Step` に加えて、`Sound` と `Visual` の個別状態を表示します。
-audio 読み込みと graphics 読み込みは並列に進むため、どちらで待っているかを画面上で判別できます。
-各行の detail には、必要に応じて現在処理中のファイル名や `3/24` のような件数も表示します。
+`metadata.stageFile` の画像を読み込めた場合は、縦横比を保って端末全体を覆う `cover` 相当の方法で拡大し、はみ出す分を中央基準で切り取ります。ANSI 表示では、`STAGEFILE` の画像の色を各文字セルの背景に使います。読み込み状況の文字は、背景とのコントラストが高い白か黒で描きます。対応端末で `--kitty-graphics` が有効なら、Kitty graphics protocol で画像を表示します。既定では有効で、`--no-kitty-graphics` を指定するか端末が未対応の場合は ANSI で表示します。
 
-`#STAGEFILE` の表示サイズは現在の端末サイズいっぱいまで使います。
-描画時は画像の縦横比を維持したまま、terminal 全体を覆うように `cover` 相当で拡大します。端末比率と合わない場合は中央基準で一部を crop します。
-loading 文言はその上へオーバーレイし、各文字セルの背景色には対応する `STAGEFILE` ピクセル色を使います。文字色は背景とのコントラスト比が高いほうを選ぶため、白または黒のどちらかになります。
-
-`#STAGEFILE` が未指定、ファイル未発見、非対応形式、デコード失敗の場合は、画像なしのテキスト loading screen へフォールバックします。
-`#STAGEFILE` は loading 専用であり、gameplay 中の BGA renderer は参照しません。最初の base BGA cue がまだ有効でない間は、viewport は黒背景のままです。
-`--kitty-graphics` が有効で、対応端末なら `#STAGEFILE` は Kitty graphics protocol の画像 overlay として表示します。Kitty graphics は既定で有効で、`--no-kitty-graphics` を指定した場合や非対応端末では ANSI 表示になります。
+`#STAGEFILE` が未指定、ファイルが見つからない、形式が非対応、またはデコードに失敗した場合は、テキストだけを表示します。`#STAGEFILE` を使うのは読み込み画面です。プレイ画面では最初のベース BGA が始まるまで背景が黒のままです。
 
 ## 設定とログ
 
-CLI は player settings を `~/.be-music/player.json` に保存します。
-この file には次を保存します。
+CLI は `~/.be-music/player.json` に次の設定を保存します。
 
-- play mode: `manual`、`auto-scratch`、`auto`;
-- 共有 `0.5` から `10.0` の範囲で正規化した high-speed;
-- directory ごとの last selected chart file;
-- directory ごとの last Music Select focus key。
+- プレイモード（`manual`、`auto-scratch`、`auto`）
+- ハイスピード（共通の `0.5`〜`10.0` の範囲に収めた値）
+- ディレクトリーごとに最後に選んだ譜面ファイルと、選曲画面のフォーカスキー
 
-command-line の play-mode / high-speed flag は、その実行では persisted value より優先します。
+コマンドラインでプレイモードやハイスピードを指定すると、その実行では指定した値を使います。
 
-structured log の既定 path は `~/.be-music/logs/player.ndjson` です。
-別の出力先を使う場合は `--log-file <path>` を指定します。
+構造化ログの既定の出力先は `~/.be-music/logs/player.ndjson` です。変更するには `--log-file <path>` を指定してください。
 
 ## Compatibility boundary
 

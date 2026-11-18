@@ -2,7 +2,7 @@
 
 # @be-music/player-browser
 
-The browser PixiJS runtime of the Be-Music player: every select, decide, play and result screen as a scene session drawn by a built-in, LR2 or beatoraja family view, behind one host API, plus the audio service, the chart collection, skin loading and gameplay recording. [`@be-music/app-play`](../app-play/README.md) wires it into the player application.
+This package runs Be-Music in the browser with PixiJS. The host API creates scene sessions for Music Select, Decide, Play, and Result. Each screen uses a built-in, LR2, or beatoraja view. The package also handles audio, chart collections, skin loading, and gameplay recording. [Application integration in `@be-music/app-play`](../app-play/README.md)
 
 See the [Browser player implementation notes](../../docs/player-web.md).
 

@@ -36,20 +36,31 @@
 - BGA rect（LR2 の `#DST_BGA`、beatoraja の `bga`、built-in frame）はいずれも 256x256 の BMS キャンバスとして扱います。長辺 256 px 以下の静止画は等倍のまま X 軸中央・上詰めで黒地の上に置き、それより大きい画像と動画は rect いっぱいに描きます（[フォーマット互換性](./format-compat-bms.ja.md#217-bga)）。
 - default family は LR2 skin と同じ chart BGA layer stack を built-in BGA frame 内に描画します。
 - BMS rendering は `#BGAxx` の部分領域、EXBMP 静止画・不透明動画の透過色、面ごとの A1〜A4 ARGB、キー入力連動 A5 SWBGA を反映します。SWBGA は透過色付き動画の切り出しと NONSTOP のリソース変換にも対応します。選択と表示はステージ境界で終了し、アニメーションと動画の時計は FIT に合わせます。[BMS 対応範囲](bms-spec.ja.md)を参照してください。
-- bmson rendering は `bga.bga_events`、`bga.layer_events`、`bga.poor_events` を使います。BMS layer channel と異なり、bmson layer image は黒を透明化せず黒ピクセルとして保持します。
+- bmson の BGA は `bga.bga_events`、`bga.layer_events`、`bga.poor_events` を使います。BMS のレイヤーでは黒いピクセルを透明にし、bmson のレイヤーではそのまま描画します。
 - ブラウザが再生できない BGA 動画（`.wmv`、`.avi`、`.mpg` など）は、ffmpeg.wasm と single-threaded の `@ffmpeg/core` で H.264 に transcode し、transcode の途中から再生を始めます（[BGA 動画の transcode](#bga-動画の-transcode)）。現在の 0.12.x の multithreaded core は libx264 でクラッシュするため含めていません。BGA 動画の音声はいずれにしても扱いません。
 
 ### 録画とリザルト
 
-- chart の自然終了時は、短い post-chart delay を置いてから result scene を開きます。視覚的に result へ遷移しても、残っている gameplay audio tail は中断しません。
-- gameplay recorder は MP4 か WebM の output を書き出し、active recording が gameplay bus の破棄前に flush されるよう、scene disposal より前に stop / finalization を終えます。
+- 譜面が最後まで進むと、少し待ってからリザルト画面を開きます。すでに鳴っている音は画面が切り替わった後も続きます。
+- 録画は MP4 または WebM に書き出します。シーンがプレイ用の音声バスを破棄する前に、録画を止めてファイルへの書き込みを完了します。
 - リプレイの記録・ダウンロード・再生は [リプレイ仕様](./replay.ja.md) を参照してください。
 
 ### Leaderboard への送信
 
-- Options ダイアログ の Leaderboard フォルダにある「Submit to Leaderboard」（デフォルト OFF。自動保存と同じく曲開始時にラッチ）をオンにすると、終了した手動プレイを result scene のマウント時に Leaderboard（[leaderboard.ja.md](./leaderboard.ja.md)）へ送信します。送信にはログイン済みのアカウントが要ります（ゲストで足ります）。楽曲の譜面からプレイの fingerprint ドキュメントを作り直してログと照合してから送り、サーバーに求められたら chart document を付けて再送し、順位をステータス行に表示します。デプロイ先の Worker は `/api/*` と `/leaderboard/*` を Service Binding で Leaderboard の Worker に転送し、`pnpm player:web` はローカルの Leaderboard（`pnpm --filter @be-music/app-leaderboard run dev`、または `LEADERBOARD_DEV_ORIGIN`）にプロキシします。
-- 「Submit when」（Options → Leaderboard。「Submit to Leaderboard」と一緒に曲開始時にラッチ）で、どのプレイを送るかを選びます。「EX-SCORE improves (first play always)」（既定）はその譜面の自己ベスト EX-SCORE を超えたプレイだけを送り、「Always」は毎回送ります。自己ベストはローカルの記録（`be-music.chart-best-records`。そのときの判定ルールでの譜面の通常の記録）を、リザルトで更新される前のプレイ開始時に読みます。EX-SCORE の記録がない譜面は初回プレイとして送り、同点は更新とみなしません。送らなかったプレイはステータス行にそう表示します。このルール（`leaderboard-submit-rule.ts` の `shouldSubmitPlay`）は通信を減らすだけで、送ったプレイをどう表示するかは引き続き Leaderboard が決めます。コースはルールにかかわらず常に送ります。コースは EX-SCORE 以外でも順位が決まり、送信の回数も少ないためです。
-- Accounts ではゲストアカウントから始められます。「Keep this account」で Accounts を開き、パスキー・Google・Discord のどれかで保存すると通常のアカウントになり、プレイはゲストのフィルタの陰ではなく handle で一覧に載るようになります。「Sign in」で Accounts から別のアカウントにログインすると、このブラウザーのゲストのプレイはそのアカウントに移ります。
+手動プレイの結果を送るには、Options の Leaderboard で「Submit to Leaderboard」をオンにします。既定ではオフです。リプレイの自動保存と同じく、プレイ開始時の設定が適用されます。送信にはログインが必要で、ゲストアカウントも使えます。
+
+送信するプレイは「Submit when」で選びます。この設定もプレイ開始時に確定します。
+
+- 「EX-SCORE improves (first play always)」が既定です。開始時に、その譜面と判定ルールの自己ベストを `be-music.chart-best-records` から読みます。EX-SCORE の記録がない初回と、自己ベストを上回ったプレイを送ります。
+- 「Always」では、送信条件を満たすプレイをすべて送ります。
+
+コースは EX-SCORE 以外の指標も順位に使い、送信回数も少ないため、この設定による絞り込みの対象外です。`leaderboard-submit-rule.ts` の `shouldSubmitPlay` が送信の要否を決め、送った結果の表示は Leaderboard が決めます。送信を見送った場合はステータス行に表示します。
+
+リザルト画面を開くと、ブラウザーは譜面からフィンガープリントのドキュメントを組み立て直し、リプレイと照合します。サーバーから求められた場合は譜面ドキュメントを添えて再送します。順位はステータス行に表示します。[Leaderboard 仕様](./leaderboard.ja.md)
+
+デプロイ先の Worker は `/api/*` と `/leaderboard/*` を Service Binding 経由で Leaderboard の Worker に転送します。`pnpm player:web` を使う場合は、`pnpm --filter @be-music/app-leaderboard run dev` で起動したローカルの Leaderboard か、`LEADERBOARD_DEV_ORIGIN` で指定した先にプロキシします。
+
+ゲストアカウントを引き継ぐには「Keep this account」を開き、パスキーを登録するか Google または Discord を連携します。引き継いだプレイはアカウントのユーザー名で一覧に表示されます。「Sign in」から別のアカウントにログインすると、このブラウザーのゲストプレイがそのアカウントに移ります。
 
 ### BGA 動画の transcode
 

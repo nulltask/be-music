@@ -25,13 +25,9 @@ log stores the resolved note arrangement, the chart prepare re-applies the recor
 loaded chart (`applyReplayArrangement`) instead of re-rolling RANDOM / MIRROR — so shuffled plays replay exactly.
 New MIRROR/RANDOM plays use the complete key set of the resolved mode, including empty lanes; scratch/wheel lanes stay fixed. Previously recorded subset arrangements still replay their stored channels and are never reinterpreted under the corrected shuffle.
 
-The chart's `#RANDOM` / `#SWITCH` lines are resolved with the log's `play.randomDraws`, so a replay plays the
-recorded branches: the browser's play session (`session/play/play-chart.ts`) resolves with them itself (`resolvePlayChart(chart,
-{ randomDraws })`), and a host that lets the engine resolve the source chart passes them as
-`PlayerOptions.randomDraws` next to `replayInputs`. Draws that were not drawn for the loaded chart, and a log without
-them whose new draw rolls differently from the recorded run, cannot be re-aligned: the replay fails with a status
-message instead of playing a mismatched chart. A replay plays on the gameplay family's own play screen, whichever
-skin family recorded the log.
+Replay playback uses the saved `play.randomDraws` to resolve the chart’s `#RANDOM` / `#SWITCH` branches. The browser’s play session (`session/play/play-chart.ts`) calls `resolvePlayChart(chart, { randomDraws })`. Hosts that let the engine resolve the source chart pass `PlayerOptions.randomDraws` with `replayInputs`.
+
+The replay fails with a status message if the draws belong to a different chart. For an older replay that lacks draws, it also fails if newly drawn branches differ from the recorded ones. The active skin family draws the play screen during playback.
 
 A replay of an ESC-aborted log stops where the play was aborted, as the re-simulations do: the host passes
 `play.abortedAtUs` as `PlayerOptions.replayAbortedAtUs`, and the engine judges up to that chart time and ends the replay
@@ -70,10 +66,7 @@ flowchart LR
 
 ## Ghost
 
-A ghost is a recorded play shown beside the live one. The browser player builds several kinds side by side so they can
-be compared before one is chosen ([#418](https://github.com/nulltask/be-music/issues/418),
-[#934](https://github.com/nulltask/be-music/issues/934)). Each is a **source** (which replay it plays) and a
-**presentation** (how it shows), picked apart.
+A ghost shows a recorded play alongside your current play. Choose its **source** (the replay to use) and its **presentation** (how to show it) independently. The browser player offers several presentations so you can compare them. [#418](https://github.com/nulltask/be-music/issues/418), [#934](https://github.com/nulltask/be-music/issues/934)
 
 ```mermaid
 flowchart LR
