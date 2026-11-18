@@ -29,12 +29,24 @@ export interface ParsedChartCache {
  * the same kind of name parse the same.
  */
 export function parsedChartPathKind(path: string): 'bmson' | 'lrx' | 'n2s' | 'pms' | 'bms' {
-  const lower = path.toLowerCase();
-  if (lower.endsWith('.bmson')) return 'bmson';
-  if (lower.endsWith('.lrs')) return 'lrx';
-  if (lower.endsWith('.n2s')) return 'n2s';
-  if (lower.endsWith('.pms')) return 'pms';
+  // The extension is compared in place, without lowercasing a copy of the path.
+  if (endsWithASCIIIgnoringCase(path, '.bmson')) return 'bmson';
+  if (endsWithASCIIIgnoringCase(path, '.lrs')) return 'lrx';
+  if (endsWithASCIIIgnoringCase(path, '.n2s')) return 'n2s';
+  if (endsWithASCIIIgnoringCase(path, '.pms')) return 'pms';
   return 'bms';
+}
+
+/** Whether `text` ends with `suffix` (lowercase ASCII), ignoring the case of ASCII letters. */
+function endsWithASCIIIgnoringCase(text: string, suffix: string): boolean {
+  const offset = text.length - suffix.length;
+  if (offset < 0) return false;
+  for (let index = 0; index < suffix.length; index += 1) {
+    const code = text.charCodeAt(offset + index);
+    const lower = code >= 0x41 && code <= 0x5a ? code + 0x20 : code;
+    if (lower !== suffix.charCodeAt(index)) return false;
+  }
+  return true;
 }
 
 /** The cache key of a chart file: the SHA-256 (lowercase hex) of its bytes and {@link parsedChartPathKind}. */

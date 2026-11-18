@@ -81,9 +81,13 @@ export function resolveDefaultPracticeGauge(ruleset: RulesetId): PracticeGaugeTy
 
 /** Whether `value` is a PRACTICE gauge type: of `ruleset` when given, else of any ruleset. */
 export function isPracticeGaugeType(value: unknown, ruleset?: RulesetId): value is PracticeGaugeType {
-  const types: readonly string[] = ruleset === undefined ? PRACTICE_GAUGE_TYPES : resolvePracticeGaugeTypes(ruleset);
-  return typeof value === 'string' && types.includes(value);
+  if (typeof value !== 'string') return false;
+  return ruleset === undefined
+    ? PRACTICE_GAUGE_TYPE_SET.has(value)
+    : (resolvePracticeGaugeTypes(ruleset) as readonly string[]).includes(value);
 }
+
+const PRACTICE_GAUGE_TYPE_SET: ReadonlySet<string> = new Set(PRACTICE_GAUGE_TYPES);
 
 /** The rulesets whose PRACTICE gauges a pick can name. */
 const PRACTICE_GAUGE_SOURCES: readonly RulesetId[] = ['lr2', 'beatoraja', '____', 'plugout'];
@@ -105,15 +109,41 @@ export type PracticeGaugePick = PracticeGaugeType | QualifiedPracticeGaugeType;
  * `value` is none. A qualified pick names a gauge its own source's PRACTICE list offers; it is never mapped to a
  * lookalike.
  */
-export function splitPracticeGaugePick(
-  value: unknown,
-): { source: RulesetId | undefined; type: PracticeGaugeType } | undefined {
-  if (typeof value !== 'string') return undefined;
-  const colon = value.indexOf(':');
-  if (colon < 0) return isPracticeGaugeType(value) ? { source: undefined, type: value } : undefined;
-  const source = PRACTICE_GAUGE_SOURCES.find((id) => id === value.slice(0, colon));
-  const type = value.slice(colon + 1);
-  return source !== undefined && isPracticeGaugeType(type, source) ? { source, type } : undefined;
+export function splitPracticeGaugePick(value: unknown): Readonly<PracticeGaugePickParts> | undefined {
+  return typeof value === 'string' ? PRACTICE_GAUGE_PICK_PARTS.get(value) : undefined;
+}
+
+interface PracticeGaugePickParts {
+  source: RulesetId | undefined;
+  type: PracticeGaugeType;
+}
+
+/** Every PRACTICE gauge pick and its parts, so a pick is split by one lookup: the table is fixed. */
+const PRACTICE_GAUGE_PICK_PARTS: ReadonlyMap<string, Readonly<PracticeGaugePickParts>> = new Map<
+  string,
+  Readonly<PracticeGaugePickParts>
+>([
+  ...PRACTICE_GAUGE_TYPES.map((type) => [type, Object.freeze({ source: undefined, type })] as const),
+  ...PRACTICE_GAUGE_SOURCES.flatMap((source) =>
+    resolvePracticeGaugeTypes(source).map(
+      (type) => [qualifyPracticeGaugePick(source, type), Object.freeze({ source, type })] as const,
+    ),
+  ),
+]);
+
+/** The PRACTICE gauge picks valid under each judge ruleset: its own bare gauges and every qualified one. */
+const PRACTICE_GAUGE_PICKS_BY_RULESET = new Map<RulesetId, ReadonlySet<string>>();
+
+function practiceGaugePicksOf(ruleset: RulesetId): ReadonlySet<string> {
+  let picks = PRACTICE_GAUGE_PICKS_BY_RULESET.get(ruleset);
+  if (picks === undefined) {
+    picks = new Set([
+      ...resolvePracticeGaugeTypes(ruleset),
+      ...[...PRACTICE_GAUGE_PICK_PARTS].flatMap(([pick, parts]) => (parts.source === undefined ? [] : [pick])),
+    ]);
+    PRACTICE_GAUGE_PICKS_BY_RULESET.set(ruleset, picks);
+  }
+  return picks;
 }
 
 /**
@@ -121,9 +151,9 @@ export function splitPracticeGaugePick(
  * any ruleset).
  */
 export function isPracticeGaugePick(value: unknown, ruleset?: RulesetId): value is PracticeGaugePick {
-  const parts = splitPracticeGaugePick(value);
-  if (parts === undefined) return false;
-  return parts.source !== undefined || ruleset === undefined || isPracticeGaugeType(parts.type, ruleset);
+  // The ruleset's own bare gauge is the common case, and needs no split.
+  if (typeof value !== 'string') return false;
+  return ruleset === undefined ? PRACTICE_GAUGE_PICK_PARTS.has(value) : practiceGaugePicksOf(ruleset).has(value);
 }
 
 /** `type` as `source`'s PRACTICE gauge. */

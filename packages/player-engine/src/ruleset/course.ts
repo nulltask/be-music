@@ -148,14 +148,26 @@ export function resolveClassGauge(gaugeId: string, gaugeSet: CourseGaugeSet): Ga
     border: 0,
     survival: true,
     // beatoraja runs its class gauges in Java `float` too; LR2's course HP is `double` (#1090).
-    ...(gaugeSet === 'lr2'
-      ? { values: row.values, guts: row.guts }
-      : {
-          values: row.values.map(Math.fround) as unknown as GaugeSpec['values'],
-          guts: row.guts.map((step) => ({ ...step, multiplier: Math.fround(step.multiplier) })),
-          float32: true,
-        }),
+    ...(gaugeSet === 'lr2' ? { values: row.values, guts: row.guts } : float32ClassGaugeRow(row)),
   };
+}
+
+/** The float32 reading of each class gauge row, built once per row: the rows are constant. */
+const FLOAT32_CLASS_GAUGE_ROWS = new WeakMap<ClassGaugeRow, Float32ClassGaugeRow>();
+
+type Float32ClassGaugeRow = Pick<GaugeSpec, 'values' | 'guts'> & { float32: true };
+
+function float32ClassGaugeRow(row: ClassGaugeRow): Float32ClassGaugeRow {
+  let float32 = FLOAT32_CLASS_GAUGE_ROWS.get(row);
+  if (float32 === undefined) {
+    float32 = {
+      values: row.values.map(Math.fround) as unknown as GaugeSpec['values'],
+      guts: row.guts.map((step) => ({ ...step, multiplier: Math.fround(step.multiplier) })),
+      float32: true,
+    };
+    FLOAT32_CLASS_GAUGE_ROWS.set(row, float32);
+  }
+  return float32;
 }
 
 /** The class-gauge set a play mode uses when the course names none (beatoraja's `BMSPlayerRule` per mode). */
@@ -237,7 +249,9 @@ export function resolveCourseGauge(
   if (initial === undefined || !Number.isFinite(initial)) return spec;
   // plugout starts a grade stage at 0.01 % at least, so a stage left on lives plays its gauge again.
   if (rulesetId === 'plugout' && course.kind === 'grade') initial = resolvePlugoutGradeStageStart(initial);
-  return { ...spec, initial: Math.min(spec.max, Math.max(spec.min, initial)) };
+  // Each resolver above builds a new spec, so it is set in place rather than copied.
+  spec.initial = Math.min(spec.max, Math.max(spec.min, initial));
+  return spec;
 }
 
 function collapseWindows(set: JudgeWindowSetUs, constraint: CourseJudgeConstraint): JudgeWindowSetUs {

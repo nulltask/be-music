@@ -89,14 +89,18 @@ export const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
  * type (`lr2:P-ATTACK` as P.ATTACK), as ADR 0019 has a skin label it.
  */
 export function formatGaugeLabel(pick: string | undefined): string | undefined {
-  const id = splitGaugePick(pick)?.type ?? pick;
-  return id === 'P-ATTACK'
-    ? 'P.ATTACK'
-    : id === 'G-ATTACK'
-      ? 'G.ATTACK'
-      : id === 'DEATH-CORRECTED'
-        ? 'DEATH corrected'
-        : id;
+  switch (pick) {
+    case 'P-ATTACK':
+      return 'P.ATTACK';
+    case 'G-ATTACK':
+      return 'G.ATTACK';
+    case 'DEATH-CORRECTED':
+      return 'DEATH corrected';
+  }
+  // Only a source-qualified pick needs splitting; a bare one reads as it is.
+  if (pick === undefined || !pick.includes(':')) return pick;
+  const type = splitGaugePick(pick)?.type;
+  return type === undefined ? pick : formatGaugeLabel(type);
 }
 
 /**
@@ -507,10 +511,11 @@ export function cyclePlayOptionValue<K extends keyof PlayOptions>(
   if (!Object.hasOwn(PLAY_OPTION_CHOICES, key)) return undefined;
   const choices = PLAY_OPTION_CHOICES[key] as readonly PlayOptions[K][] | undefined;
   if (!choices || choices.length === 0) return undefined;
+  let index = choices.indexOf(current);
   // A gauge button steps LR2's own cells: a qualified pick steps on from its gauge type, to a bare gauge.
-  if (key === 'gauge1P' || key === 'gauge2P')
-    return nextChoice(choices, gaugePickType(current as GaugePick) as PlayOptions[K], step);
-  return nextChoice(choices, current, step);
+  if (index < 0 && (key === 'gauge1P' || key === 'gauge2P'))
+    index = choices.indexOf(gaugePickType(current as GaugePick) as PlayOptions[K]);
+  return stepChoice(choices, index, step);
 }
 
 /**
@@ -531,7 +536,11 @@ export function keepGaugePick(pick: GaugePick, ruleset: RulesetId): GaugePick {
  * moves to on a click.
  */
 export function nextChoice<T>(choices: readonly T[], current: T, step: number = 1): T {
-  const index = choices.indexOf(current);
+  return stepChoice(choices, choices.indexOf(current), step);
+}
+
+/** The choice one `step` direction from `index`, wrapping around either end; the first when `index` is -1. */
+function stepChoice<T>(choices: readonly T[], index: number, step: number): T {
   if (index < 0) return choices[0]!;
   const delta = step < 0 ? -1 : 1;
   return choices[(index + delta + choices.length) % choices.length]!;

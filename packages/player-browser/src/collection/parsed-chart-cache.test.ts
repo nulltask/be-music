@@ -38,6 +38,13 @@ describe('parsedChartPathKind', () => {
     expect(parsedChartPathKind('songs/a.bme')).toBe('bms');
     expect(parsedChartPathKind('songs/a.bml')).toBe('bms');
   });
+
+  test('reads only the extension of the file name', () => {
+    expect(parsedChartPathKind('songs/bmson')).toBe('bms');
+    expect(parsedChartPathKind('songs/x.bmson/a.bms')).toBe('bms');
+    expect(parsedChartPathKind('songs/x.pms/a')).toBe('bms');
+    expect(parsedChartPathKind('songs/.bmson')).toBe('bmson');
+  });
 });
 
 describe('parsedChartCacheKey', () => {

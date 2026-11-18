@@ -1,4 +1,4 @@
-import { resolveClearLamp, resolveMissCount, type ClearLamp } from '../ruleset/clear-lamp.ts';
+import { resolveClearLamp, resolveMissCount, type ClearLamp, type PlayClearLampFacts } from '../ruleset/clear-lamp.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import type { ReplayRulesetResult } from './format.ts';
 
@@ -12,20 +12,17 @@ export function resolveRulesetResultLamp(
   ruleset: RulesetId,
 ): ClearLamp {
   const { pgreat, great, good } = result.judge;
-  return resolveClearLamp({
-    ruleset,
-    cleared: result.gauge.cleared,
-    gauge: result.gauge.type,
-    ...(result.gauge.source !== undefined ? { gaugeSource: result.gauge.source } : {}),
-    score: {
-      total: result.noteCount,
-      perfect: pgreat,
-      great,
-      good,
-      emptyPoor: result.judge.emptyPoor,
-      ...(result.fullCombo !== undefined ? { fullCombo: result.fullCombo } : {}),
-    },
-  });
+  const score: PlayClearLampFacts['score'] = {
+    total: result.noteCount,
+    perfect: pgreat,
+    great,
+    good,
+    emptyPoor: result.judge.emptyPoor,
+  };
+  if (result.fullCombo !== undefined) score.fullCombo = result.fullCombo;
+  const facts: PlayClearLampFacts = { ruleset, cleared: result.gauge.cleared, gauge: result.gauge.type, score };
+  if (result.gauge.source !== undefined) facts.gaugeSource = result.gauge.source;
+  return resolveClearLamp(facts);
 }
 
 /**

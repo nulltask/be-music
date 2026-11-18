@@ -76,8 +76,10 @@ export function resolveGaugeTypes(ruleset: GaugeSource): readonly GaugeType[] {
 
 /** Whether `value` names a gauge type. */
 export function isGaugeType(value: unknown): value is GaugeType {
-  return typeof value === 'string' && (GAUGE_TYPES as readonly string[]).includes(value);
+  return typeof value === 'string' && GAUGE_TYPE_SET.has(value);
 }
+
+const GAUGE_TYPE_SET: ReadonlySet<string> = new Set(GAUGE_TYPES);
 
 /** The sources a gauge pick can name: the judge rulesets, whose gauge line-ups differ. */
 type GaugeSource = 'lr2' | 'beatoraja' | '____' | 'plugout';
@@ -100,17 +102,21 @@ export interface GaugePickParts {
   type: GaugeType;
 }
 
+/**
+ * Every gauge pick and its parts: each bare gauge type, and each source's menu gauges qualified with it. A qualified pick
+ * names a gauge its source's own menu offers; it is never mapped to a lookalike. The table is fixed, so a pick is split
+ * by one lookup rather than by parsing it on every call.
+ */
+const GAUGE_PICK_PARTS: ReadonlyMap<string, Readonly<GaugePickParts>> = new Map<string, Readonly<GaugePickParts>>([
+  ...GAUGE_TYPES.map((type) => [type, Object.freeze({ source: undefined, type })] as const),
+  ...GAUGE_SOURCES.flatMap((source) =>
+    resolveGaugeTypes(source).map((type) => [qualifyGaugePick(source, type), Object.freeze({ source, type })] as const),
+  ),
+]);
+
 /** Splits a gauge pick into its source and type, or `undefined` when `value` is no gauge pick. */
-export function splitGaugePick(value: unknown): GaugePickParts | undefined {
-  if (typeof value !== 'string') return undefined;
-  const colon = value.indexOf(':');
-  if (colon < 0) return isGaugeType(value) ? { source: undefined, type: value } : undefined;
-  const source = GAUGE_SOURCES.find((id) => id === value.slice(0, colon));
-  const type = value.slice(colon + 1);
-  // A qualified pick names a gauge its source's own menu offers; it is never mapped to a lookalike.
-  return source !== undefined && isGaugeType(type) && resolveGaugeTypes(source).includes(type)
-    ? { source, type }
-    : undefined;
+export function splitGaugePick(value: unknown): Readonly<GaugePickParts> | undefined {
+  return typeof value === 'string' ? GAUGE_PICK_PARTS.get(value) : undefined;
 }
 
 /** Whether `value` is a gauge pick: a bare gauge type, or one qualified with a source that defines it. */
@@ -123,11 +129,14 @@ export function isGaugePick(value: unknown): value is GaugePick {
  * gauge pick (an unvalidated log) is returned as it is.
  */
 export function gaugePickType(pick: GaugePick): GaugeType {
+  // A pick without a source is its own type, whether or not it names one.
+  if (typeof pick === 'string' && !pick.includes(':')) return pick as GaugeType;
   return splitGaugePick(pick)?.type ?? (pick as GaugeType);
 }
 
 /** The source whose gauge `pick` runs under the judge ruleset `ruleset`: its own source, or the ruleset for a bare pick. */
 export function resolveGaugePickSource(pick: GaugePick, ruleset: GaugeSource): GaugeSource {
+  if (typeof pick === 'string' && !pick.includes(':')) return ruleset;
   return splitGaugePick(pick)?.source ?? ruleset;
 }
 

@@ -371,8 +371,7 @@ function scaleBeatorajaWindows(
   judgeRank: number,
   scaled: readonly [boolean, boolean, boolean, boolean],
 ): JudgeWindowSetUs {
-  const judgeCount = flat.length >= 10 ? 5 : 4;
-  const legs: number[] = [];
+  const legs = [0, 0, 0, 0, 0, 0, 0, 0];
   for (let judge = 0; judge < 4; judge += 1) {
     for (let side = 0; side < 2; side += 1) {
       let value = flat[judge * 2 + side]!;
@@ -386,7 +385,7 @@ function scaleBeatorajaWindows(
       if (judge > 0 && Math.abs(value) < Math.abs(legs[(judge - 1) * 2 + side]!)) {
         value = legs[(judge - 1) * 2 + side]!;
       }
-      legs.push(Math.round(value));
+      legs[judge * 2 + side] = Math.round(value);
     }
   }
   const set: JudgeWindowSetUs = {
@@ -396,8 +395,9 @@ function scaleBeatorajaWindows(
       [legs[4]!, legs[5]!],
       [legs[6]!, legs[7]!],
     ],
-    ...(judgeCount === 5 ? { ms: [flat[8]!, flat[9]!] as WindowPairUs } : {}),
   };
+  // A fifth pair is the table's MS window.
+  if (flat.length >= 10) set.ms = [flat[8]!, flat[9]!];
   return set;
 }
 
@@ -520,6 +520,12 @@ function lr2RecoveryValues(
 
 const FLOAT_0_15 = Math.fround(0.15);
 
+/** MODIFY_DAMAGE's TOTAL steps and their damage multipliers (`GaugeModifier`), the multipliers in Java `float`. */
+const BEATORAJA_DAMAGE_TOTALS: readonly number[] = [240, 230, 210, 200, 180, 160, 150, 130, 120, 0];
+const BEATORAJA_DAMAGE_MULTIPLIERS: readonly number[] = [1, 1.11, 1.25, 1.5, 1.666, 2, 2.5, 3.333, 5, 10].map(
+  Math.fround,
+);
+
 /**
  * beatoraja's gauge table as `GrooveGauge.Gauge` builds it in Java `float`: the base values are float constants, and
  * TOTAL, LIMIT_INCREMENT and MODIFY_DAMAGE round to float32 where Java does (`GaugeModifier`, beatoraja `8320241d`) [V].
@@ -532,15 +538,13 @@ function beatorajaGaugeValues(
 ): GaugeValues {
   const notes = Math.max(1, noteCount);
   const f32 = Math.fround;
-  let modify: (value: number) => number = (value) => value;
-  if (modifier === 'total') modify = (value) => (value > 0 ? f32((value * total) / notes) : value);
-  else if (modifier === 'limit') {
+  // LIMIT_INCREMENT scales the gains and MODIFY_DAMAGE the losses, each by one factor; TOTAL rescales each gain itself.
+  let scale = 1;
+  if (modifier === 'limit') {
     const pg = f32(Math.max(Math.min(FLOAT_0_15, (2 * total - 320) / notes), 0));
-    const scale = f32(pg / FLOAT_0_15);
-    modify = (value) => (value > 0 ? f32(value * scale) : value);
+    scale = f32(pg / FLOAT_0_15);
   } else if (modifier === 'damage') {
-    const totals = [240, 230, 210, 200, 180, 160, 150, 130, 120, 0];
-    const multipliers = [1, 1.11, 1.25, 1.5, 1.666, 2, 2.5, 3.333, 5, 10].map(f32);
+    const totals = BEATORAJA_DAMAGE_TOTALS;
     let index = 0;
     while (index < totals.length - 1 && total < totals[index]!) index++;
     let fix2 = 1;
@@ -551,10 +555,21 @@ function beatorajaGaugeValues(
       note = Math.trunc(note / 2);
       step = f32(step * 2);
     }
-    const scale = Math.max(multipliers[index]!, fix2);
-    modify = (value) => (value < 0 ? f32(value * scale) : value);
+    scale = Math.max(BEATORAJA_DAMAGE_MULTIPLIERS[index]!, fix2);
   }
-  return base.map((value) => modify(f32(value))) as unknown as GaugeValues;
+  const values = [0, 0, 0, 0, 0, 0];
+  for (let index = 0; index < 6; index += 1) {
+    let value = f32(base[index]!);
+    if (modifier === 'total') {
+      if (value > 0) value = f32((value * total) / notes);
+    } else if (modifier === 'limit') {
+      if (value > 0) value = f32(value * scale);
+    } else if (modifier === 'damage' && value < 0) {
+      value = f32(value * scale);
+    }
+    values[index] = value;
+  }
+  return values as unknown as GaugeValues;
 }
 
 function scaleNegative(values: GaugeValues, multiplier: number): GaugeValues {

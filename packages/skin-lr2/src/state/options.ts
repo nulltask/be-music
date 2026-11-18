@@ -109,7 +109,11 @@ export function resolveLR2BattleOps(options: Partial<Pick<PlayOptions, 'keysFilt
  * (`beatoraja:HARD`) reads as its gauge type.
  */
 export function isLR2RedGauge(pick: GaugePick): boolean {
-  const gauge = gaugePickType(pick);
+  // A bare pick is its own gauge type; only a source-qualified one needs splitting.
+  return isRedGaugeType(pick) || (pick.includes(':') && isRedGaugeType(gaugePickType(pick)));
+}
+
+function isRedGaugeType(gauge: string): boolean {
   return gauge === 'HARD' || gauge === 'DEATH' || gauge === 'DEATH-CORRECTED' || gauge === 'EX-HARD';
 }
 

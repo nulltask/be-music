@@ -126,11 +126,13 @@ export function resolveLR2GradeCoursePlaySettings<T extends LR2GradeResetSetting
 ): T {
   // Spread over `settings` so the other fields a host carries along pass through.
   if (!isLR2GradeCourse(definition)) return settings;
-  const pick = splitGaugePick(settings.gauge);
-  const reset = pick?.type === 'EASY' || pick?.type === 'G-ATTACK';
+  // A bare pick, the common case, needs no split.
+  const pick = settings.gauge.includes(':') ? splitGaugePick(settings.gauge) : undefined;
+  const type = pick?.type ?? settings.gauge;
+  const reset = type === 'EASY' || type === 'G-ATTACK';
   return {
     ...settings,
-    gauge: !reset ? settings.gauge : pick.source === undefined ? 'GROOVE' : qualifyGaugePick(pick.source, 'GROOVE'),
+    gauge: !reset ? settings.gauge : pick?.source === undefined ? 'GROOVE' : qualifyGaugePick(pick.source, 'GROOVE'),
     hiddenSudden1P: 'OFF',
     hiddenSudden2P: 'OFF',
     autoScratch1P: false,

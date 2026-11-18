@@ -169,6 +169,7 @@ export interface InputSourceTableOptions {
 export function createInputSourceTable(options: InputSourceTableOptions = {}): InputSourceTable {
   const ids = new Map<string, number>();
   const sources: IdentifiedInputSource[] = [];
+  const keepDeviceNames = options.deviceNames === true;
   return {
     idOf: (source) => {
       const key = inputSourceKey(source);
@@ -176,17 +177,13 @@ export function createInputSourceTable(options: InputSourceTableOptions = {}): I
       if (known !== undefined) return known;
       const id = sources.length;
       ids.set(key, id);
-      sources.push({
-        id,
-        kind: source.kind,
-        device: source.device,
-        label: source.label,
-        ...(source.direction !== undefined ? { direction: source.direction } : {}),
-      });
-      if (options.deviceNames === true) {
+      const entry: IdentifiedInputSource = { id, kind: source.kind, device: source.device, label: source.label };
+      if (source.direction !== undefined) entry.direction = source.direction;
+      if (keepDeviceNames) {
         const deviceName = normalizeInputSourceDeviceName(source.deviceName);
-        if (deviceName !== undefined) sources[id]!.deviceName = deviceName;
+        if (deviceName !== undefined) entry.deviceName = deviceName;
       }
+      sources.push(entry);
       return id;
     },
     list: () => sources.map((source) => ({ ...source })),
