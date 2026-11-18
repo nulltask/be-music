@@ -384,7 +384,7 @@ export const PLAYER_HELP_TEMPLATE = html`
                 >
                 / <kbd>Backspace</kbd> で戻ります。最上位で <kbd>Esc</kbd> を押すと、ドロップ画面へ戻るか確認します。
                 譜面の行をクリック、または現在のスキンの
-                <em>PLAY</em> ボタンでも開始できます。皿でもカーソルを動かせます。
+                <em>PLAY</em> ボタンでも開始できます。スクラッチでもカーソルを動かせます。
               </li>
               <li>
                 鍵盤は LR2 と同じく、白鍵で開始、黒鍵で戻る、鍵盤 6 で AUTO (2 秒押し続けると保存したリプレイ)、鍵盤 4
@@ -471,7 +471,7 @@ export const PLAYER_HELP_TEMPLATE = html`
               <li>
                 START (<kbd>Q</kbd>) + 鍵盤でハイスピード調整 (奇数鍵で下げ、偶数鍵で上げ。LR2 スキンでは SELECT
                 でも同じで、レーンカバー表示中は鍵盤 6 / 7 でカバーを動かします)。beatoraja スキンでは START +
-                皿でカバーを動かし、SELECT + 鍵盤で表示時間 (緑数字) を 1 ms ずつ変えます。START 2
+                スクラッチでカバーを動かし、SELECT + 鍵盤で表示時間 (緑数字) を 1 ms ずつ変えます。START 2
                 回押しでレーンカバーの ON / OFF。START + SELECT を 1
                 秒押し続けると中断し、最後のノーツの後はどちらか一方だけでプレイを終えます。
               </li>

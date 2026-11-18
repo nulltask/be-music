@@ -55,7 +55,7 @@ describe('buildKeyboardGuide', () => {
     const guide = buildKeyboardGuide('result', 'lr2', {}, 'ja');
     expect(rowOf(guide, '1P-keys')?.name).toBe('1P 鍵盤 1〜7');
     expect(rowOf(guide, 'result.retry')?.name).toBe('リトライ');
-    expect(controlButtonName('2P-scratch-cw', 'ja')).toBe('2P 皿 ↻');
+    expect(controlButtonName('2P-scratch-cw', 'ja')).toBe('2P スクラッチ ↻');
     expect(keyboardKeyName('ControlRight')).toBe('Right Ctrl');
   });
 

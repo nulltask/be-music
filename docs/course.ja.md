@@ -2,9 +2,11 @@
 
 # コースと段位認定
 
-**コース**は、複数の譜面を 1 回のプレイにつなげたものです。代表的なのが**段位認定**で、共通の段位ゲージのまま各ステージを続けて遊び、全体に 1 つの結果が付きます。LR2 と beatoraja はそれぞれ独自の形式でコースを定義し、難易度表は表のヘッダーにコースを載せています。Be-Music はこの 3 つとナナシグルーヴ2 の譜面リストを `@be-music/player-engine/course` の `CourseDefinition` という 1 つのモデルに読み込むので、後段はコースの取得元を気にする必要がありません。
+**コース**は複数の譜面を続けて遊ぶ形式です。代表例の**段位認定**では、段位ゲージをステージ間で引き継ぎ、コース全体で一つの結果を出します。
 
-本書はコースのモデル、形式ごとの対応、プレイ規則、記録、リプレイを定義します。ブラウザーの画面遷移は[ブラウザープレイヤー仕様](./player-web.ja.md#コースと段位認定)を参照してください。
+LR2 と beatoraja のコースファイル、難易度表のヘッダー、ナナシグルーヴ2 の譜面リストを読み込めます。どの形式も `@be-music/player-engine/course` の `CourseDefinition` に変換し、共通のコースとして扱います。
+
+ブラウザー版でコース中に画面がどう切り替わるかは、[コースと段位認定](./player-web.ja.md#コースと段位認定)を参照してください。
 
 ```mermaid
 flowchart LR
@@ -68,12 +70,7 @@ beatoraja の**ランダムコース**（`RandomCourseData`）は、曲データ
 
 ### ナナシグルーヴ2 の `.n2x` 譜面リスト
 
-Toy Musical 3 は譜面の一覧を `.n2x` ファイルに書いています。ZEXA コンテナ（`.n2s` と同じ構造、[format-compat §2.20](format-compat.ja.md#220-ナナシグルーヴ2-の-n2s-コンテナ)）に UTF-8 の XML が 1 つ入っています。リストは `<bms>` を並べた `<bmslist>` で、各 `<bms>` はリストのフォルダからの譜面の `<file>`（区切りは `\`）と、たいていは解禁の `<condition>` を持ちます。ナナシグルーヴ2 は、モードのステージで選べる譜面をリストで決めています。Be-Music にはそのモードがないので、リストをコースとして読みます。リストのない `.n2x`（スキン、モード、設定、`bms_information`）は読み飛ばします。
-
-- **コース。** リスト 1 つが EXPERT コース 1 つです。名前は拡張子を除いたファイル名（`amanas.n2x` → `amanas`）で、同じ名前のフォルダに並びます。ステージはリストの項目を順に、すべて並べたものです。解禁条件は読みません。
-- **ステージ。** ステージは、リストのフォルダを起点にした `path` で譜面を指します（`parseN2XCourseFile`、`readCourseFile`）。譜面が揃うと、ホストはそのパスの譜面のハッシュと題名をステージに与えます（`bindCourseStagePaths`）。以降は他のステージと同じく照合・記録・リプレイされます。パスは大文字と小文字を区別せずに譜面のパスと照合し、一致しなければ、フォルダの境界でパスの末尾が一致する最初の譜面（譜面のパスがステージのパスで終わる、またはその逆）を使います。それまでは拡張子を除いたファイル名を表示します。
-- **ない譜面。** ドロップにない譜面のステージは欠けたままで、他のコースと同じくコースを開始できません。Toy Musical 3 の `extra1`〜`extra3` と `stagelist` のリストは、同梱されていない開発用の譜面（`___dev\foon_*.pms`）を含むので、一覧には出ますが開始できません。
-- **長さ。** ステージ数に上限はありません。Toy Musical 3 の `free` のリストは 1,200 を超えるステージのコースになります。
+ナナシグルーヴ2 の譜面リストは、リストの順に遊ぶ EXPERT コースとして開きます。フォルダー構成を保ってリストと譜面を一緒に読み込ませてください。[n2x の読み込みとステージの照合](./n2x-spec.ja.md)
 
 ### 難易度表のヘッダー
 
@@ -137,7 +134,7 @@ flowchart LR
 | `score.notes`                                      | 譜面のノーツ数                                                                                                                                                                                                         |
 | `score.sha256`                                     | 記録のある譜面の SHA-256                                                                                                                                                                                               |
 | `information.n` / `ln`                             | 鍵盤のタップ / ロングノーツ。CN と HCN は終端も数えます（`BMSModelUtils.getTotalNotes` と同じ）                                                                                                                        |
-| `information.s` / `ls`                             | 皿で同じもの                                                                                                                                                                                                           |
+| `information.s` / `ls`                             | スクラッチで同じもの                                                                                                                                                                                                   |
 | `information.total`                                | beatoraja がプレイで使う TOTAL：`#TOTAL`、bmson の `total` は既定値に対する百分率、なければノーツ数から求める beatoraja の既定値（`BMSPlayerRule.validate`）                                                           |
 | `information.density`、`peakdensity`、`enddensity` | 平均・最大・終盤の密度（`computeBeatorajaChartDensityValues`、`SongInformation` に準拠）                                                                                                                               |
 | `information.mainbpm`                              | 判定ノーツが最も多く置かれた BPM（`resolveChartMainBPM`）                                                                                                                                                              |
@@ -255,11 +252,11 @@ LR2 の RANDOM MIX バーは、レベル・BPM・ステージ数からライブ�
 
 ```mermaid
 flowchart TD
-    count[ステージ数：1-5、またはランダムに 2-5] --> first[1 曲目：キーモード、レベルと BPM の制限]
+    count[ステージ数を決める] --> first[1 曲目を抽選]
     first -->|なし| fail[コースなし]
-    first --> window[BPM の幅：1 曲目の最大 BPM ± 範囲]
-    window --> rest[2 曲目以降：1 つの乱順、曲フォルダごとに 1 曲]
-    rest --> prefer[各ステージ：同じフォルダで好みのレベルに近い譜面]
+    first --> window[許容 BPM を決める]
+    window --> rest[各フォルダーから 1 譜面]
+    rest --> prefer[好みのレベルに合わせる]
     prefer --> course[RANDOM MIX のコース]
 ```
 

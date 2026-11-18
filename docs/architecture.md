@@ -2,31 +2,33 @@
 
 # Architecture
 
-This document covers how a chart becomes something to play (the Source and Resolved layers), how the engine judges a play (a deterministic judge core and the one play loop around it), and the rules that keep these parts runtime-neutral and small.
+Be-Music separates chart parsing from playback and puts judgment in a deterministic core. One play loop runs that core. The package boundaries keep these parts independent of the runtime and limit what each needs to do.
 
-Be-Music reads a chart in two layers. The **Source layer** says what the file says. The **Resolved layer** says what the player plays. Exactly one function, `resolveChart`, turns the first into the second, and every format default and de facto reading is applied there or in a helper it calls. Consumers read the Resolved layer and do not interpret the format again.
+The **Source layer** represents the chart file. `resolveChart` is the only function that converts it to the **Resolved layer**, which holds what the player plays. It applies format defaults and conventions, directly or through its helpers, so consumers can use the resolved data as-is.
 
 ```mermaid
 flowchart TD
   files[".bms / .bme / .pms / .bmson / .json"]
-  source["BeMusicJSON<br/><i>Source layer (@be-music/chart-source)</i>"]
-  flat["BeMusicJSON without control flow"]
-  resolved["ResolvedChart<br/><i>Resolved layer (@be-music/chart-model)</i>"]
-  player["@be-music/player-engine<br/>engine bootstrap (preparePlaybackChart), ruleset facts, replay"]
-  renderer["@be-music/chart-audio-renderer<br/>renderJSON"]
-  tui["@be-music/player-terminal<br/>chart list, preview signature, BGA, UI worker"]
-  web["@be-music/player-browser<br/>play session, playfield, chart preview, beatoraja chart graphs, courses"]
-  skin["@be-music/player-skin-sdk<br/>chart stats (resolveChartStats)"]
+  source["BeMusicJSON<br/>Source"]
+  flat["Chart with branches resolved"]
+  resolved["ResolvedChart<br/>Resolved"]
+  player["Engine"]
+  renderer["Audio renderer"]
+  tui["Terminal player"]
+  web["Browser player"]
+  skin["Skin SDK"]
 
-  files -->|"@be-music/chart-parser<br/>parseChart, parseBMS, parseBmson"| source
-  source -->|"drawRandomOutcomes(chart, random) → RandomDraws (@be-music/chart-model)<br/>resolveBMSControlFlowWithDraws(chart, draws) (@be-music/chart-parser)<br/>hosts: resolvePlayChart(chart) → { chart, randomDraws } (@be-music/player-engine)"| flat
-  flat -->|"resolveChart(chart, { randomDraws, chartPath, playVariant, inferBmsLNTypeWhenMissing })"| resolved
+  files -->|"Parse"| source
+  source -->|"Resolve branches"| flat
+  flat -->|"resolveChart"| resolved
   resolved --> player
   resolved --> renderer
   resolved --> tui
   resolved --> web
   resolved --> skin
 ```
+
+Replay processing, audio rendering, each player, and the skin SDK read the resolved chart. The sections below identify the functions that parse the chart and resolve its branches and timing.
 
 ## Source layer
 
@@ -112,7 +114,7 @@ flowchart TD
     auto["play-auto.ts"]
   end
   subgraph core["judge core"]
-    judge["judge-core.ts<br/>(+ judge-core-{types,score,advance,press}.ts)"]
+    judge["judge-core.ts"]
     autoJudge["auto-judge-core.ts"]
   end
   effects["engine-effects.ts"]
@@ -230,8 +232,8 @@ An arrow points from a layer to a layer built on it.
 - **Skin models** (`player-skin-sdk`, `skin-lr2`, `skin-beatoraja`). Each parses its skins and maps the scene models to their vocabulary: the Be-Music Skin contract (`@be-music/player-skin-sdk`), one table of LR2-compatible op / number / text / timer ids (`@be-music/skin-lr2/ids`) with the LR2 state resolvers (`@be-music/skin-lr2/state`), and the beatoraja state resolution (`@be-music/skin-beatoraja/scene`).
 - **Reusable UI** (`player-ui`, `player-ui-react`, `player-ui-vue`). Lit Web Components receive SDK presentation data and emit operation requests. Native Skin adapts scene frames and actions to these components; React and Vue wrappers expose their properties, events and refs. The UI owns no play loop or audio, and the SDK does not depend on Lit ([Player UI](../packages/player-ui/README.md), [ADR 0013](./adr/0013-player-ui-components.md)).
 
-- **Web runtime** (`@be-music/player-browser`). A scene session (`session/`) owns each screen's behaviour once, for every skin family: chart preparation, RANDOM / FLIP, audio and BGA, engine options, input, endings. A family view (`view/`) only draws the session's frames and returns intents ([ADR 0001](./adr/0001-skin-families-only-draw.md)). The host API (`./host`) makes every screen with `createSelectScene`, `createDecideScene`, `createPlayScene` or `createResultScene` from a family kit, as a `SessionScene` with the one scene lifecycle (`PixiScene`) that `PixiSceneHost` shows. Every sound outside a play's chart goes through one audio service (`./audio`, [ADR 0007](./adr/0007-one-system-audio-context.md)). See [Browser player — Scene sessions and family views](./player-web.md#scene-sessions-and-family-views).
-- **Hosts.** The web player is a set of services (`services/`) and routes (`app/routes/`: select, decide, play, result, replay, course and NONSTOP) that its composition root (`app/app.ts`) wires together, with one scene router (`app/scene-router.ts`) owning every transition ([ADR 0006](./adr/0006-scene-router.md)). `main.ts` only boots it, and a service imports no UI (`ui/`) or app (`app/`) module ([Browser player — How the player is built](./player-web.md#how-the-player-is-built)). The terminal player plays through the engine and its `./signals`, `./lanes` and `./display` entries, and the Leaderboard checks and ranks runs with the rules (`./course`, `./replay`, `./ruleset`).
+- **Web runtime** (`@be-music/player-browser`). A scene session (`session/`) owns each screen's behaviour once, for every skin family: chart preparation, RANDOM / FLIP, audio and BGA, engine options, input, endings. A family view (`view/`) only draws the session's frames and returns intents ([ADR 0001](./adr/0001-skin-families-only-draw.md)). The host API (`./host`) makes every screen with `createSelectScene`, `createDecideScene`, `createPlayScene` or `createResultScene` from a family kit, as a `SessionScene` with the one scene lifecycle (`PixiScene`) that `PixiSceneHost` shows. Every sound outside a play's chart goes through one audio service (`./audio`, [ADR 0007](./adr/0007-one-system-audio-context.md)). See [Browser player — Scene sessions and family views](./player-web-scenes.md#scene-sessions-and-family-views).
+- **Hosts.** The web player is a set of services (`services/`) and routes (`app/routes/`: select, decide, play, result, replay, course and NONSTOP) that its composition root (`app/app.ts`) wires together, with one scene router (`app/scene-router.ts`) owning every transition ([ADR 0006](./adr/0006-scene-router.md)). `main.ts` only boots it, and a service imports no UI (`ui/`) or app (`app/`) module ([Browser player — How the player is built](./player-web-scenes.md#how-the-player-is-built)). The terminal player plays through the engine and its `./signals`, `./lanes` and `./display` entries, and the Leaderboard checks and ranks runs with the rules (`./course`, `./replay`, `./ruleset`).
 
 Rules that keep it cheap to change:
 
@@ -248,6 +250,6 @@ Rules that keep it cheap to change:
 
 - **Runtime-neutral code.** `@be-music/chart-model`, `@be-music/chart-source`, `@be-music/chart-parser`, `@be-music/player-scene-model`, `@be-music/skin-lr2`'s `state/`, `@be-music/skin-beatoraja`'s `scene/` and `@be-music/player-engine`'s `core/`, `course/`, `replay/`, `records/` and `ruleset/`, with its `signals`, `lanes` and `display` entries and the modules they gather, run unchanged in the browser and in Node. Oxlint's `no-restricted-imports` and `no-restricted-globals` (configured in [`vite.config.ts`](../vite.config.ts)) reject Node built-in imports (`node:*` and bare names) and DOM / Node-only globals (`window`, `document`, `process`, `Buffer`, …) there. Runtime services come in through adapters instead: `PlayerOptions.createAudioSession` / `createUIRuntime` / `createInputRuntime`, and the parser's [`node-file.ts`](../packages/chart-parser/src/node-file.ts) (`parseChartFile`), which with the parser CLI is exempt. Tests are exempt too.
 - **Deterministic judge.** `core/judge-*.ts`, `core/auto-judge-core.ts`, `ruleset/` and `replay/simulate.ts` additionally may not read `Date` or `performance`, set timers, or call `Math.random`: time and randomness are inputs. The scene models (`@be-music/player-scene-model`) and the LR2 and beatoraja state resolvers (`@be-music/skin-lr2`'s `state/`, `@be-music/skin-beatoraja`'s `scene/`) are held to the same rule: a scene's time comes in as an input.
-- **Web runtime layers.** In `@be-music/player-browser`, the same Oxlint rules keep the layers apart ([Layering](./player-web.md#layering)): no lower layer (every directory but `host/`, `session/` and `view/`) imports the host, a session or a view, not even a type; a session and a view reach each other and the host only for types, a session uses Pixi only for types, and a view imports nothing of the engine, not even a type; only a session and `runtime/engine-driver.ts` import the engine as values; and only the audio layer, `runtime/`, creates an `AudioContext` or `OfflineAudioContext`. The last two rules cover the web player too.
-- **Web player layers.** In the web player, a service (`services/`) imports no `ui/` or `app/` module, not even a type: it takes what it needs of the app as deps ([Browser player — How the player is built](./player-web.md#how-the-player-is-built)).
+- **Web runtime layers.** In `@be-music/player-browser`, the same Oxlint rules keep the layers apart ([Layering](./player-web-scenes.md#layering)): no lower layer (every directory but `host/`, `session/` and `view/`) imports the host, a session or a view, not even a type; a session and a view reach each other and the host only for types, a session uses Pixi only for types, and a view imports nothing of the engine, not even a type; only a session and `runtime/engine-driver.ts` import the engine as values; and only the audio layer, `runtime/`, creates an `AudioContext` or `OfflineAudioContext`. The last two rules cover the web player too.
+- **Web player layers.** In the web player, a service (`services/`) imports no `ui/` or `app/` module, not even a type: it takes what it needs of the app as deps ([Browser player — How the player is built](./player-web-scenes.md#how-the-player-is-built)).
 - **File-size budget.** [`scripts/lint/file-size-budget.ts`](../scripts/lint/file-size-budget.ts) fails when a package source file (tests, declarations and fixtures excluded) grows past 1,500 lines. Files that were already larger went on its allowlist, which only warns, and came off it as they were split; the list is empty now, and an allowlisted file that drops under the budget must be taken off it. Run it alone with `pnpm run check:file-size`.

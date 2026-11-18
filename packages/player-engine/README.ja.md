@@ -2,7 +2,7 @@
 
 # @be-music/player-engine
 
-規則と再生 engine を共有する package です。1 つのプレイループ（手動・AUTO・リプレイ）、判定、score、gauge とクリアランプ、自己ベスト、コースの実行と NONSTOP、リプレイの形式、ホストが差し込む runtime 契約を持ちます。ターミナルプレイヤー、ブラウザプレイヤー、Leaderboard が使います。
+端末プレイヤー、ブラウザープレイヤー、Leaderboard が共有するエンジンです。手動・AUTO・リプレイを 1 つのプレイループで処理します。判定、スコア、ゲージ、クリアランプ、自己ベスト、コースと NONSTOP、リプレイ形式、ホストが使うランタイムインターフェースを定義します。
 
 [Player 実装仕様](../../docs/player-spec.ja.md)、[アーキテクチャ](../../docs/architecture.ja.md#エンジン-判定コアと-1-つのプレイループ)、[リプレイ仕様](../../docs/replay.ja.md)、[コースと段位認定](../../docs/course.ja.md) を参照してください。
 
@@ -18,22 +18,4 @@
 
 エンジンは音声レンダーも Node 出力も import しません。Node のホストは [`@be-music/player-node-audio`](../player-node-audio/README.ja.md) の `createAudioSession` を設定します。
 
-## FREE ZONE (`17` / `27`)
-
-- 9KEY と 24KEY / 48KEY の keyboard mode 以外では FREE ZONE として扱います。
-- 独立レーンは作らず、スクラッチレーン (`16` / `26`) に重ねて描画します。
-- ノート長は 4 分音符固定です。
-- 判定対象外のため、`TOTAL` / `EX-SCORE` / `SCORE` には含めません。
-- 9KEY / 24KEY / 48KEY 判定時は `17` / `27` を通常レーンノートとして扱います。
-
-## スコアと判定
-
-- 判定種別: `PERFECT`, `GREAT`, `GOOD`, `BAD`, `POOR`
-- `FAST` / `SLOW` は `GREAT` / `GOOD` の早押し・遅押し時のみ加算
-- 対応する未判定ノートが存在しない空打鍵は LR2-style empty POOR として扱います。judgment counter、score、EX-SCORE、combo は変えませんが、empty POOR の gauge delta を適用し、POOR BGA を起動します
-- EX-SCORE:
-  - `PERFECT = +2`
-  - `GREAT = +1`
-- SCORE (200000 満点):
-  - 判定基礎点 150000 + コンボ加点 50000
-  - `BAD` / `POOR` は加点なし、コンボを切断
+譜面の解釈は [FREE ZONE](../../docs/player-spec.ja.md#free-zone)、判定の詳細は [判定・スコア・ゲージ](../../docs/player-judgment.ja.md) を参照してください。

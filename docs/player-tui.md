@@ -6,6 +6,22 @@ This document summarizes the terminal frontend implemented by `@be-music/player-
 Shared playback semantics such as timing, notes, judgment, score, gauge, and BGA cues are defined in [Player implementation specifications](./player-spec.md).
 Browser-specific PixiJS and WebAudio behavior is documented in [Browser player implementation notes](./player-web.md).
 
+<details>
+<summary>Table of contents</summary>
+
+- [Runtime boundary](#runtime-boundary)
+- [Entry flow](#entry-flow)
+- [Music Select](#music-select)
+- [Preview playback](#preview-playback)
+- [Input model](#input-model)
+- [TUI rendering](#tui-rendering)
+- [BGA and terminal images](#bga-and-terminal-images)
+- [Loading screen](#loading-screen)
+- [Configuration and logs](#configuration-and-logs)
+- [Compatibility boundary](#compatibility-boundary)
+
+</details>
+
 ## Runtime boundary
 
 `@be-music/player-terminal` is a Node frontend around the shared `@be-music/player-engine` engine.
@@ -36,7 +52,7 @@ flowchart LR
   uw -->|"draws"| term
 ```
 
-When TTY support or TUI initialization is unavailable, the player falls back to text output.
+The player uses text output when the terminal lacks TTY support or the TUI cannot start.
 Passing `--no-tui` also disables the TUI path; in that mode the effective play mode is `AUTO`.
 
 ## Entry flow
@@ -122,6 +138,8 @@ The default target refresh rate is `60fps`; `--tui-fps <value>` accepts any posi
 The UI worker receives compact frame patches instead of full frame payloads whenever possible.
 It also tracks terminal resize events, pause state, high-speed changes, judge/combo updates, and deferred UI command flushing.
 
+The renderer draws long-note heads and tails above their bodies, and mines above those. The playback progress indicator outside the lanes highlights the row closest to the current position.
+
 ## BGA and terminal images
 
 The terminal BGA renderer uses the shared BGA timeline helper and supports base, layer, layer2, and POOR tracks.
@@ -129,13 +147,28 @@ It loads BMP, PNG, JPEG, and supported video frames, then composites the active 
 BMS layer channels treat black pixels as transparent; bmson layer images preserve black pixels as image data.
 Video codecs are handled by the bundled LibAV decoder, including H.264, HEVC and VP9/WebM; an unavailable decoder or unsupported pixel layout leaves the asset unavailable. The first-frame loading pass stops after one converted frame, including delayed frames flushed at end of file.
 
-`#STAGEFILE` is used only for the loading screen.
-It is drawn with a cover fit over the terminal and falls back to text loading when the image is missing or unsupported.
 `#BANNER` and bmson `info.banner_image` are shown in Music Select when the terminal has enough space.
 
 Kitty graphics is enabled by default on capable terminals.
 Use `--no-kitty-graphics` to force ANSI rendering.
 Video BGA decodes progressively by default; `--no-video-bga-streaming` restores the older full-predecode behavior.
+
+## Loading screen
+
+During loading after song selection, the CLI draws a progress bar and current steps to standard output.
+At this time, if `metadata.stageFile` exists and the image can be resolved, the image will be converted to ANSI and drawn across the terminal, and the loading text will be overlaid on top of it.
+
+The loading statement displays the high-level `Step` as well as the separate states of `Sound` and `Visual`.
+The audio and graphics loads proceed in parallel, so you can tell on the screen which one you're waiting on.
+The detail of each line also displays the name of the file currently being processed and the number of items, such as `3/24`, if necessary.
+
+The display size of `#STAGEFILE` is used up to the current terminal size.
+When drawing, the image is enlarged using the equivalent of `cover` to cover the entire terminal while maintaining the image's aspect ratio. If it does not match the terminal ratio, crop a part based on the center.
+The loading text is overlaid on top of it, and the background color of each character cell uses the corresponding `STAGEFILE` pixel color. The font color is chosen to have a higher contrast ratio with the background, so it can be either white or black.
+
+The loading screen uses text only if `#STAGEFILE` is absent, the image is missing, the format is unsupported, or decoding fails.
+`#STAGEFILE` is only for loading and does not refer to the BGA renderer during gameplay. The viewport remains a black background while the first base BGA cue is not yet enabled.
+If `--kitty-graphics` is enabled and the device supports it, `#STAGEFILE` will be displayed as an image overlay using the Kitty graphics protocol. Kitty graphics is enabled by default; with `--no-kitty-graphics` or on an unsupported terminal, ANSI display is used.
 
 ## Configuration and logs
 
@@ -158,7 +191,7 @@ The terminal player does not load LR2 or beatoraja skin files.
 It renders its own TUI and uses shared engine semantics for notes, scoring, gauge, input, timing, BGA cues, and result summaries.
 
 The compat ruleset and the gauge are selectable: `--ruleset <lr2|beatoraja|____>` (default `lr2`) and
-`--gauge <GROOVE|EASY|HARD|DEATH>` (default `GROOVE`). See [player-spec.md](./player-spec.md) for what each ruleset
+`--gauge <GROOVE|EASY|HARD|DEATH>` (default `GROOVE`). See [judgment and gauges](./player-judgment.md) for what each ruleset
 governs. A survival gauge that empties ends the play there; `--no-end-on-failure` keeps judging to the end
 (`PlayerOptions.endOnFailure: false`), for practice.
 

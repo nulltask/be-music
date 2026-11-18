@@ -2,31 +2,33 @@
 
 # アーキテクチャ
 
-この文書では、譜面がどのように演奏できる形になるか（Source レイヤーと Resolved レイヤー）、エンジンがどのように判定するか（決定的な判定コアと、それを動かす 1 つのプレイループ）、そしてそれらを実行環境に依存させず小さく保つための規則を説明します。
+Be-Music は譜面の読み込みと再生を分け、判定は決定的なコアに任せます。そのコアを動かすのは 1 つのプレイループです。パッケージごとに役割を絞り、これらの処理を実行環境から独立させます。
 
-Be-Music は譜面を 2 つのレイヤーで読みます。**Source レイヤー**はファイルに何が書いてあるかを表し、**Resolved レイヤー**はプレイヤーが何を演奏するかを表します。前者を後者に変える関数は `resolveChart` の 1 つだけで、フォーマットの既定値と de facto の読み方は、すべてこの関数か、この関数が呼ぶヘルパーで適用します。利用側は Resolved レイヤーを読み、フォーマットを解釈し直しません。
+**Source レイヤー**は譜面ファイルの内容を表します。プレイヤーが実際に再生する **Resolved レイヤー**への変換は、`resolveChart` だけが行います。フォーマットの既定値と実装上の慣例は、この関数か呼び出し先のヘルパーで適用します。利用側は変換済みのデータをそのまま使います。
 
 ```mermaid
 flowchart TD
   files[".bms / .bme / .pms / .bmson / .json"]
-  source["BeMusicJSON<br/><i>Source レイヤー (@be-music/chart-source)</i>"]
-  flat["制御構文を解決した BeMusicJSON"]
-  resolved["ResolvedChart<br/><i>Resolved レイヤー (@be-music/chart-model)</i>"]
-  player["@be-music/player-engine<br/>エンジンの準備 (preparePlaybackChart)、ルールセットの事実、リプレイ"]
-  renderer["@be-music/chart-audio-renderer<br/>renderJSON"]
-  tui["@be-music/player-terminal<br/>譜面一覧、プレビューの署名、BGA、UI worker"]
-  web["@be-music/player-browser<br/>プレイセッション、プレイフィールド、譜面のプレビュー、beatoraja の譜面グラフ、コース"]
-  skin["@be-music/player-skin-sdk<br/>譜面の統計 (resolveChartStats)"]
+  source["BeMusicJSON<br/>Source"]
+  flat["分岐解決済みの譜面"]
+  resolved["ResolvedChart<br/>Resolved"]
+  player["エンジン"]
+  renderer["音声レンダラー"]
+  tui["端末プレイヤー"]
+  web["ブラウザープレイヤー"]
+  skin["スキン SDK"]
 
-  files -->|"@be-music/chart-parser<br/>parseChart, parseBMS, parseBmson"| source
-  source -->|"drawRandomOutcomes(chart, random) → RandomDraws (@be-music/chart-model)<br/>resolveBMSControlFlowWithDraws(chart, draws) (@be-music/chart-parser)<br/>ホスト: resolvePlayChart(chart) → { chart, randomDraws } (@be-music/player-engine)"| flat
-  flat -->|"resolveChart(chart, { randomDraws, chartPath, playVariant, inferBmsLNTypeWhenMissing })"| resolved
+  files -->|"パース"| source
+  source -->|"分岐を解決"| flat
+  flat -->|"resolveChart"| resolved
   resolved --> player
   resolved --> renderer
   resolved --> tui
   resolved --> web
   resolved --> skin
 ```
+
+ソースと Resolved 譜面の変換を担う関数は、以下の各節で説明します。リプレイ処理、音声レンダリング、各プレイヤー、スキン SDK は Resolved 譜面を参照します。
 
 ## Source レイヤー
 
@@ -112,7 +114,7 @@ flowchart TD
     auto["play-auto.ts"]
   end
   subgraph core["判定コア"]
-    judge["judge-core.ts<br/>(+ judge-core-{types,score,advance,press}.ts)"]
+    judge["judge-core.ts"]
     autoJudge["auto-judge-core.ts"]
   end
   effects["engine-effects.ts"]
@@ -230,8 +232,8 @@ flowchart TD
 - **スキンモデル**（`player-skin-sdk`、`skin-lr2`、`skin-beatoraja`）。それぞれのスキンを解析し、シーンモデルをそのスキンの表現に対応付けます。Be-Music Skin の契約（`@be-music/player-skin-sdk`）、LR2 互換の op・数値・テキスト・タイマーの番号表 1 つ（`@be-music/skin-lr2/ids`）と LR2 の状態を求める関数（`@be-music/skin-lr2/state`）、beatoraja の状態の計算（`@be-music/skin-beatoraja/scene`）です。
 - **再利用する UI**（`player-ui`、`player-ui-react`、`player-ui-vue`）。Lit 製 Web Components は SDK の表示用データを受け取り、操作要求をイベントで通知します。Native Skin はシーンのフレームと操作を部品に接続し、React / Vue は同じ部品の property・イベント・ref を公開します。UI は再生ループや音声を所有せず、SDK は Lit に依存しません（[Player UI](../packages/player-ui/README.ja.md)、[ADR 0013](./adr/0013-player-ui-components.ja.md)）。
 
-- **Web ランタイム**（`@be-music/player-browser`）。シーンセッション（`session/`）が各画面の振る舞いを、どのスキンの種類にも共通に 1 つだけ持ちます。譜面の準備、RANDOM / FLIP、音と BGA、エンジンの設定、入力、終了処理です。ファミリービュー（`view/`）はセッションのフレームを描いてインテントを返すだけです（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。ホスト向けの API（`./host`）は、どの画面もファミリーキットから `createSelectScene`、`createDecideScene`、`createPlayScene`、`createResultScene` で作り、`PixiSceneHost` が表示する 1 つの画面のライフサイクル（`PixiScene`）を持つ `SessionScene` にします。プレイの譜面の音以外はすべて 1 つの音声サービス（`./audio`、[ADR 0007](./adr/0007-one-system-audio-context.ja.md)）を通ります。[ブラウザプレイヤー — シーンセッションとファミリービュー](./player-web.ja.md#シーンセッションとファミリービュー)を参照してください。
-- **ホスト**。Web プレイヤーは、構成の根（`app/app.ts`）がつなぐサービス（`services/`）とルート（`app/routes/`）の集まりで、画面の切り替えはすべて 1 つのシーンルーター（`app/scene-router.ts`）が受け持ちます（[ADR 0006](./adr/0006-scene-router.ja.md)）。ルートは選曲、決定、プレイ、リザルト、リプレイ、コース、NONSTOP です。`main.ts` はアプリを起動するだけで、サービスは UI（`ui/`）、アプリ（`app/`）のモジュールを import しません（[ブラウザプレイヤー — プレイヤーの作り](./player-web.ja.md#プレイヤーの作り)）。ターミナルプレイヤーはエンジンとエントリポイントの `./signals`、`./lanes`、`./display` で遊び、Leaderboard は規則（`./course`、`./replay`、`./ruleset`）で記録を確かめて順位を付けます。
+- **Web ランタイム**（`@be-music/player-browser`）。シーンセッション（`session/`）が各画面の振る舞いを、どのスキンの種類にも共通に 1 つだけ持ちます。譜面の準備、RANDOM / FLIP、音と BGA、エンジンの設定、入力、終了処理です。ファミリービュー（`view/`）はセッションのフレームを描いてインテントを返すだけです（[ADR 0001](./adr/0001-skin-families-only-draw.ja.md)）。ホスト向けの API（`./host`）は、どの画面もファミリーキットから `createSelectScene`、`createDecideScene`、`createPlayScene`、`createResultScene` で作り、`PixiSceneHost` が表示する 1 つの画面のライフサイクル（`PixiScene`）を持つ `SessionScene` にします。プレイの譜面の音以外はすべて 1 つの音声サービス（`./audio`、[ADR 0007](./adr/0007-one-system-audio-context.ja.md)）を通ります。[ブラウザプレイヤー — シーンセッションとファミリービュー](./player-web-scenes.ja.md#シーンセッションとファミリービュー)を参照してください。
+- **ホスト**。Web プレイヤーは、構成の根（`app/app.ts`）がつなぐサービス（`services/`）とルート（`app/routes/`）の集まりで、画面の切り替えはすべて 1 つのシーンルーター（`app/scene-router.ts`）が受け持ちます（[ADR 0006](./adr/0006-scene-router.ja.md)）。ルートは選曲、決定、プレイ、リザルト、リプレイ、コース、NONSTOP です。`main.ts` はアプリを起動するだけで、サービスは UI（`ui/`）、アプリ（`app/`）のモジュールを import しません（[ブラウザプレイヤー — プレイヤーの作り](./player-web-scenes.ja.md#プレイヤーの作り)）。ターミナルプレイヤーはエンジンとエントリポイントの `./signals`、`./lanes`、`./display` で遊び、Leaderboard は規則（`./course`、`./replay`、`./ruleset`）で記録を確かめて順位を付けます。
 
 変更しやすさを保つための規則：
 
@@ -248,6 +250,6 @@ flowchart TD
 
 - **実行環境に依存しないコード**：`@be-music/chart-model`、`@be-music/chart-source`、`@be-music/chart-parser`、`@be-music/player-scene-model`、`@be-music/skin-lr2` の `state/`、`@be-music/skin-beatoraja` の `scene/` と、`@be-music/player-engine` の `core/`、`course/`、`replay/`、`records/`、`ruleset/` と、エントリポイントの `signals`、`lanes`、`display` およびそれらが集めるモジュールは、ブラウザでも Node でもそのまま動きます。そこでは Oxlint の `no-restricted-imports` と `no-restricted-globals`（[`vite.config.ts`](../vite.config.ts) で設定）が、Node の組み込みモジュールの import（`node:*` と接頭辞なしの名前）と、DOM や Node だけのグローバル（`window`、`document`、`process`、`Buffer` など）を拒否します。実行環境のサービスはアダプタを通して渡します。`PlayerOptions.createAudioSession` / `createUIRuntime` / `createInputRuntime`、Node の音声出力を読み込むオプショナルモジュールのローダー、parser の [`node-file.ts`](../packages/chart-parser/src/node-file.ts)（`parseChartFile`）です。`node-file.ts` と parser の CLI、テストはこの規則の対象外です。
 - **決定的な判定**：`core/judge-*.ts`、`core/auto-judge-core.ts`、`ruleset/`、`replay/simulate.ts` では、さらに `Date` と `performance` の読み取り、タイマーの設定、`Math.random` の呼び出しを禁止します。時刻と乱数は入力として受け取ります。シーンモデル（`@be-music/player-scene-model`）と、LR2 と beatoraja の状態を求める関数（`@be-music/skin-lr2` の `state/`、`@be-music/skin-beatoraja` の `scene/`）にも同じ規則を課します。画面の時刻は入力として受け取ります。
-- **web ランタイムのレイヤー**：`@be-music/player-browser` では、同じ Oxlint の規則がレイヤーを分けたまま保ちます（[レイヤーの分け方](./player-web.ja.md#レイヤーの分け方)）。下位レイヤー（`host/`、`session/`、`view/` 以外のすべてのディレクトリ）は、ホスト、セッション、ビューを型であっても import しません。セッションとビューが互いとホストに触れるのは型だけで、セッションは Pixi も型だけ、ビューはエンジンを型であっても import しません。エンジンを値として import するのはセッションと `runtime/engine-driver.ts` だけで、`AudioContext` や `OfflineAudioContext` を作るのは音声レイヤーの `runtime/` だけです。後の 2 つの規則は Web プレイヤー にも課します。
-- **web プレイヤーのレイヤー**：web プレイヤーのサービス（`services/`）は、`ui/`、`app/` のモジュールを型であっても import しません。アプリから必要なものは deps として受け取ります（[ブラウザプレイヤー — プレイヤーの作り](./player-web.ja.md#プレイヤーの作り)）。
+- **web ランタイムのレイヤー**：`@be-music/player-browser` では、同じ Oxlint の規則がレイヤーを分けたまま保ちます（[レイヤーの分け方](./player-web-scenes.ja.md#レイヤーの分け方)）。下位レイヤー（`host/`、`session/`、`view/` 以外のすべてのディレクトリ）は、ホスト、セッション、ビューを型であっても import しません。セッションとビューが互いとホストに触れるのは型だけで、セッションは Pixi も型だけ、ビューはエンジンを型であっても import しません。エンジンを値として import するのはセッションと `runtime/engine-driver.ts` だけで、`AudioContext` や `OfflineAudioContext` を作るのは音声レイヤーの `runtime/` だけです。後の 2 つの規則は Web プレイヤー にも課します。
+- **web プレイヤーのレイヤー**：web プレイヤーのサービス（`services/`）は、`ui/`、`app/` のモジュールを型であっても import しません。アプリから必要なものは deps として受け取ります（[ブラウザプレイヤー — プレイヤーの作り](./player-web-scenes.ja.md#プレイヤーの作り)）。
 - **ファイルサイズの上限**：[`scripts/lint/file-size-budget.ts`](../scripts/lint/file-size-budget.ts) は、パッケージのソースファイル（テスト、型宣言、フィクスチャを除く）が 1,500 行を超えると失敗します。上限を入れた時点で既に大きかったファイルは許可リストに入れて警告だけを出し、分けるたびに外してきました。いまリストは空です。許可リストのファイルが上限を下回ったら、リストから外す必要があります。単独では `pnpm run check:file-size` で実行できます。

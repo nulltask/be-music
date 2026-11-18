@@ -2,9 +2,11 @@
 
 # Courses and dan certification
 
-A **course** chains several charts into one run. The best-known kind is **dan certification (段位認定)**: the stages are played back to back on one shared class gauge, and the whole run gets a single result. LR2 and beatoraja each define courses in their own formats, and difficulty tables publish theirs inside the table header. Be-Music reads all three, and Nanasi Groove 2's chart lists as well, into one model, `CourseDefinition` in `@be-music/player-engine/course`, so nothing downstream needs to know where a course came from.
+A **course** groups several charts into one run. In **dan certification (段位認定)**, the stages share a class gauge and the run produces a single result.
 
-This document defines the course model, format mappings, play rules, records and replays. See the [browser player specification](./player-web.md#courses-and-dan-certification) for scene transitions.
+Be-Music imports LR2 and beatoraja course files, difficulty-table headers, and Nanasi Groove 2 chart lists. All four sources become a `CourseDefinition` in `@be-music/player-engine/course`, so the player uses the same model for every course.
+
+For how the browser moves between course screens, see [Courses and dan certification](./player-web.md#courses-and-dan-certification).
 
 ```mermaid
 flowchart LR
@@ -68,12 +70,7 @@ beatoraja's **random courses** (`RandomCourseData`) draw each stage from the cha
 
 ### Nanasi Groove 2 `.n2x` chart lists
 
-Toy Musical 3 lists its charts in `.n2x` files: a ZEXA container (the `.n2s` layout, [format-compat §2.20](format-compat.md#220-nanasi-groove-2-n2s-containers)) holding one UTF-8 XML file. A list is a `<bmslist>` of `<bms>` entries, each a chart `<file>` relative to the list's folder (with `\` separators), mostly with unlock `<condition>`s. Nanasi Groove 2 offers a list's charts to choose from at a stage of its modes; Be-Music has no such mode, so it reads each list as a course instead. The other `.n2x` files (skins, modes, settings, `bms_information`) hold no list and are skipped.
-
-- **Course.** One EXPERT course per list, named after the file without its extension (`amanas.n2x` → `amanas`), in a folder of the same name. Its stages are the list's entries in order, every one of them: the unlock conditions are not read.
-- **Stages.** A stage names its chart by `path`, resolved against the list's folder (`parseN2XCourseFile`, `readCourseFile`). When the charts are in, the host gives it the hashes and title of the chart at that path (`bindCourseStagePaths`), so it is found, recorded and replayed like any stage. The path matches a chart's path ignoring case, else the first chart whose path ends with it, or that it ends with, at a folder boundary. Until then a stage shows its file name without the extension.
-- **Missing charts.** A stage whose chart the drop does not hold stays missing, and the course cannot start, as with every course. Toy Musical 3's `extra1`–`extra3` and `stagelist` lists name developer charts (`___dev\foon_*.pms`) that it does not ship, so those courses list but cannot start.
-- **Length.** A list has no stage limit: Toy Musical 3's `free` list makes a course of more than 1,200 stages.
+Nanasi Groove 2 chart lists open as EXPERT courses. The stages follow list order. Import the list and its charts together with their folder paths intact. [n2x import and stage resolution](./n2x-spec.md)
 
 ### Difficulty-table headers
 
@@ -255,11 +252,11 @@ LR2's RANDOM MIX bar draws a course from the library by level, BPM and stage cou
 
 ```mermaid
 flowchart TD
-    count[Stage count: 1-5, or 2-5 at random] --> first[Stage 1: key mode, level and BPM limits]
+    count[Set stage count] --> first[Draw first stage]
     first -->|none| fail[No course]
-    first --> window[BPM window: stage 1 max BPM ± range]
-    window --> rest[Stages 2+: one random order, one per song folder]
-    rest --> prefer[Each stage: the chart of its folder nearest the favorite level]
+    first --> window[Set BPM window]
+    window --> rest[One chart per folder]
+    rest --> prefer[Match favorite level]
     prefer --> course[RANDOM MIX course]
 ```
 

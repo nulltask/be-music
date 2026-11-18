@@ -2,9 +2,9 @@
 
 # Be-Music-specific interpretations and behaviour
 
-Be-Music aims to behave as LR2 and beatoraja do. This document lists the places where it does something of its own: it reads a chart differently from a reference, plays something no reference plays, picks a behaviour the references leave open, or works around its platform.
+Be-Music follows LR2 and beatoraja where their behavior applies. This index records where Be-Music reads or plays a chart differently, makes a choice the references leave open, or adapts to platform constraints.
 
-It is an index, not a specification. Each row states one behaviour and names the code that implements it; the linked documents hold the details and the evidence. Behaviour that simply matches the references is left out.
+Each entry names the behavior and its implementation. Follow the links for the specification and evidence. Behaviors that match the references need no entry here.
 
 ## 1. How to read this document
 
@@ -39,7 +39,7 @@ The judge rulesets are `lr2`, `beatoraja`, `____` and `plugout`. "Every ruleset"
 
 ## 2. Reading BMS
 
-Details: [BMS implementation specification](./bms-spec.md) and [compatibility notes §2](./format-compat.md#2-bms).
+Details: [BMS implementation specification](./bms-spec.md) and [compatibility notes §2](./format-compat-bms.md#2-bms).
 
 ### 2.1 Lines, headers and objects
 
@@ -109,7 +109,7 @@ Details: [BMS implementation specification](./bms-spec.md) and [compatibility no
 
 ## 3. Reading bmson
 
-Details: [bmson implementation specification](./bmson-spec.md) and [compatibility notes §3](./format-compat.md#3-bmson).
+Details: [bmson implementation specification](./bmson-spec.md) and [compatibility notes §3](./format-compat-bmson.md#3-bmson).
 
 | Behaviour                                                                                                                                                                                                                    | References                                                                              | Kind     | Code                                                                        |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------- |
@@ -207,7 +207,7 @@ Details: [play options](./play-options.md), [courses](./course.md) and [ADR 0019
 
 ## 9. Audio and assets
 
-Details: [player specification — audio processing](./player-spec.md#audio-processing) and [compatibility notes §2.19](./format-compat.md#219-asset-file-lookup).
+Details: [player specification — audio processing](./player-runtime.md#audio-processing) and [compatibility notes §2.19](./format-compat-bms.md#219-asset-file-lookup).
 
 | Behaviour                                                                                                                                                     | References                                                                  | Kind    | Code                                                        |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------- | ----------------------------------------------------------- |
@@ -222,7 +222,7 @@ Details: [player specification — audio processing](./player-spec.md#audio-proc
 
 ## 10. BGA
 
-Details: [compatibility notes §2.17](./format-compat.md#217-bga).
+Details: [compatibility notes §2.17](./format-compat-bms.md#217-bga).
 
 | Behaviour                                                                                                                                                                        | References                                            | Kind     | Code                                   |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | -------- | -------------------------------------- |

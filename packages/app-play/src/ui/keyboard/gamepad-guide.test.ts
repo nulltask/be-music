@@ -38,7 +38,7 @@ describe('buildGamepadGuide', () => {
     expect(standard['1P 鍵盤 1']).toEqual(['十字キー']);
     expect(standard['1P START']).toBeUndefined();
     expect(keysOf(guide.iidx)['1P START']).toBeUndefined();
-    expect(keysOf(guide.iidx)['1P 皿 ↺']).toEqual(['ターンテーブル ↺']);
+    expect(keysOf(guide.iidx)['1P スクラッチ ↺']).toEqual(['ターンテーブル ↺']);
   });
 
   test('lists nothing for the keys of every screen', () => {
