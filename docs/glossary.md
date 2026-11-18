@@ -2,8 +2,7 @@
 
 # Glossary
 
-This document defines terms used by the `be-music` specifications and implementation.
-The definitions follow general BMS/bmson terminology where possible, but prioritize how this repository uses each term.
+These are the terms used in the `be-music` specifications and implementation. The definitions follow BMS and bmson conventions where those agree with the repository’s usage.
 
 ## Usage Rules
 

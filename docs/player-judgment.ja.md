@@ -45,15 +45,9 @@
 
 ## 互換ルールセット
 
-**このプレイヤーは独自の判定ロジックを持ちません。** すべてのプレイは 4 つの互換ルールセット
-`lr2`（デフォルト）/ `beatoraja` / `____` / `plugout` のいずれかで動作します（`PlayerOptions.judgeRuleset`）。
-判定幅、押下がどのノートを取るか、ロングノートの扱い、空 POOR の規則、ゲージの種類とカーブ、スコア計算式は
-すべてルールセットが所有します。定数と出典は
-[`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) にあり、
-3 つの比較表は [`docs/replay.ja.md`](./replay.ja.md) にあります。
+プレイの判定には、`PlayerOptions.judgeRuleset` で選んだ互換ルールセットを使います。選べる値は `lr2`（既定）、`beatoraja`、`____`、`plugout` です。判定幅、打鍵で判定するノート、ロングノート、空 POOR、ゲージの種類とカーブ、スコア計算式はルールセットごとに決まります。定数と出典は [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts)、比較表 3 つは [`docs/replay.ja.md`](./replay.ja.md) を参照してください。
 
-同じテーブルがライブエンジンとリプレイシミュレータの両方を駆動し、等価性テストが同一の記録入力列に対して
-両者の判定が 1 つずつ一致することを要求します。
+実プレイとリプレイのシミュレーターは同じ判定テーブルを使います。等価性テストでは、同じ入力列を与えたときに判定が一つずつ一致することを確認します。
 
 `plugout` は LRX 譜面のプレイヤーである plugout4 -ARCADE EDITION- に従います。ランクごとに固定の判定幅、終点を
 離して判定するチャージノーツ、EX 版を持つ NORMAL / EASY / HARD / HAZARD のゲージ、100,000 点満点のスコア、PERFECT

@@ -4,7 +4,7 @@
 
 Use `@be-music/player-skin-sdk` to write a Be-Music Skin for the browser player’s built-in family. Synesthesia and Plain draw on Canvas. Native uses DOM screens and sizes each playfield canvas to the part of the stage it draws. You can reuse its DOM components through `@be-music/player-ui`.
 
-A skin draws the screens. The player handles input, timing, audio, judgment, lane layout and note positions. The player also handles hit testing for the Canvas chart list. A DOM chart list handles its own controls and calls the actions the player provides.
+The skin draws each screen. The player handles input, timing, audio, judgment, lane layout, and note positions. For a Canvas chart list, the player also handles hit testing. A DOM chart list handles its controls and calls the player’s actions.
 
 <details>
 <summary>Table of contents</summary>

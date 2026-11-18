@@ -50,9 +50,8 @@ Be-Music Play は BMS・BME・BML・PMS・bmson・LRX・n2s の譜面をブラ�
 
 ## 共通 runtime 連携
 
-browser player は gameplay を engine（`@be-music/player-engine` のルート）経由で駆動します。
-player から使うほかのものは、ほかのエントリポイントから取ります。input と UI の bus と state signal は `@be-music/player-engine/signals`、lane の配置は `./lanes`、描く note と scroll 距離は `./display`、判定幅は `./ruleset` です。
-譜面のタイミング（`TimingResolver`、sample trigger）と `ChartPlayVariant` は `@be-music/chart-model` から取ります。
+ブラウザー版は `@be-music/player-engine` のルートエントリポイントを使ってプレイを進めます。入力と UI のバス、状態シグナルは `@be-music/player-engine/signals`、レーン配置は `./lanes`、描画するノートとスクロール距離は `./display`、判定幅は `./ruleset` から取得します。譜面のタイミング（`TimingResolver`）、サンプルのトリガー、`ChartPlayVariant` は `@be-music/chart-model` が提供します。
+
 判定、keysound trigger routing、long note、地雷の発動、score、gauge、chart finish の意味論は engine が担当します。
 どのプレイ画面も、その裏のプレイのセッションがスキンの `PLAYSTART` gate で 1 回 engine を起動します（beatoraja のスキンでは読み込み終了の 1.5 秒後）。
 セッションは engine の frame snapshot をプレイ状態へ反映し、engine の UI command をフレームのきっかけとしてファミリービューに渡し、ビューがそれを Pixi の視覚効果にします。

@@ -2,9 +2,7 @@
 
 # beatoraja skin 実装メモ
 
-この文書は、現在の `@be-music/skin-beatoraja` 実装をまとめます。
-この package は beatoraja の JSON skin と Lua skin theme を renderer 非依存の data structure に parse します。
-PixiJS rendering は `@be-music/player-browser` の責務です。CLI/TUI render path は beatoraja skin を読み込みません。
+`@be-music/skin-beatoraja` は beatoraja の JSON・Lua スキンを、描画方式に依存しないデータに変換します。ブラウザー版の `@be-music/player-browser` は PixiJS で描画します。端末版は beatoraja スキンを読み込みません。
 
 ## 対象範囲
 

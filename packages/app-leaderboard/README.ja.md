@@ -37,7 +37,7 @@ Be-Music Leaderboard の API を Cloudflare Workers 上で提供する Hono ア�
 
 未実装: 新しい `#RANDOM` の結果に対する L4 と L5、ライバル。スコア共有画像はブラウザーで生成し、`PUT /api/v0/scores/:id/card` で送信して `/scores/:id/card` で配信します。
 
-スコアの送信を、Worker が確かめる順に示します（`src/api/v0.ts`、`src/scores/submit.ts`）。クライアントを含む全体のシーケンスは [docs/leaderboard.ja.md 5.2 節](../../docs/leaderboard.ja.md#52-送信処理) にあります。
+Worker はスコアの送信を次の順で検証します（`src/api/v0.ts`、`src/scores/submit.ts`）。クライアントを含む処理全体は [docs/leaderboard.ja.md 5.2 節](../../docs/leaderboard.ja.md#52-送信処理) を参照してください。
 
 ```mermaid
 flowchart TD

@@ -2,7 +2,7 @@
 
 # Player UI
 
-Reusable Lit Web Components for Be-Music. The components receive presentation data through JavaScript properties and emit semantic requests as bubbling, composed `CustomEvent`s. They own no engine, clock, audio context or subscriptions, and ship headless: layout only, with the look from a theme ([Styling](#styling-and-composition)). Native Skin uses the same components through its DOM skin adapter.
+These Lit Web Components render Be-Music UI from data passed as JavaScript properties. They report user actions through bubbling, composed `CustomEvent`s. The host owns the engine, clock, audio context, and subscriptions. Components provide the layout, and themes supply the appearance. Native Skin uses the same components through its DOM skin adapter. [Styling](#styling-and-composition)
 
 <details>
 <summary>Table of contents</summary>

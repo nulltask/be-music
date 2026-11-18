@@ -2,4 +2,4 @@
 '@be-music/app-play': patch
 ---
 
-Use スクラッチ consistently in the Japanese key guide and Help so the same control uses the same term across the player.
+Use スクラッチ throughout the Japanese key guide, key settings, and Help.

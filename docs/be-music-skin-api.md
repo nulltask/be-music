@@ -39,7 +39,7 @@
 
 ## Skin metadata
 
-Every skin declares these fields. `defineBeMusicSkin` checks the rules it can test (the API version, the id, label, version, author and URLs, `fontLoads`, the context, each screen's `draw`, `decide` and `settings`) and throws when one is broken, so a broken skin fails where it is defined.
+Every skin declares the fields below. `defineBeMusicSkin` checks the API version, ID, label, version, author and URLs, `fontLoads`, rendering context, each screen’s `draw`, `decide`, and `settings`. It throws at definition time if a check fails.
 
 | Field                                    | Required | Rule                                                                                                                                  |
 | ---------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------- |

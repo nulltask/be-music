@@ -40,7 +40,7 @@ This Hono app serves the Be-Music Leaderboard API on Cloudflare Workers and stor
 
 Not implemented: L4 for new `#RANDOM` outcomes, L5 and rivals. Score share cards are generated in the browser, uploaded through `PUT /api/v0/scores/:id/card` and served by `/scores/:id/card`.
 
-A score submission, in the order the Worker checks it (`src/api/v0.ts`, `src/scores/submit.ts`); the full sequence with the client is in [docs/leaderboard.md section 5.2](../../docs/leaderboard.md#52-sequence):
+The Worker checks submissions in this order (`src/api/v0.ts` and `src/scores/submit.ts`). For the full sequence, including the client, see [docs/leaderboard.md section 5.2](../../docs/leaderboard.md#52-sequence).
 
 ```mermaid
 flowchart TD

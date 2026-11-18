@@ -2,7 +2,7 @@
 
 # BMS implementation specification
 
-This document defines how `packages/chart-parser` / `packages/chart-writer` / `packages/player-engine` handles BMS.
+Be-Music reads, writes, and plays BMS through `packages/chart-parser`, `packages/chart-writer`, and `packages/player-engine`.
 
 ## Primary References
 
@@ -48,10 +48,10 @@ This document defines how `packages/chart-parser` / `packages/chart-writer` / `p
 
 ### line end
 
-The actual `chart-parser` separates the BMS text as either `LF` / `CRLF` / `CR`.
+`chart-parser` splits BMS text on `LF`, `CRLF`, or `CR`.
 `CRLF` is treated as a single line terminator, and `CR` single line breaks are accepted as well as `LF`.
 
-Treats EOF as the end of the last line even if there is no newline at the end of the input.
+EOF terminates the last line even without a final newline.
 However, the exact specification of control syntax compatibility for files containing a mixture of `CRLF` and `LF` remains an unsupported item, which will be discussed later.
 
 ## Supported Semantics

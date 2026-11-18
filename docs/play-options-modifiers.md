@@ -4,7 +4,7 @@
 
 [Play options and record policy](./play-options.md)
 
-An arrangement or chart modifier follows the implementation named by its option. Gauge changes follow the selected gauge policy.
+Lane arrangements and chart modifiers follow the implementation named by the selected option. Gauge changes use the selected gauge’s rules.
 
 <details>
 <summary>Table of contents</summary>

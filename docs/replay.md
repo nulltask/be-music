@@ -35,7 +35,7 @@ A Be-Music replay stores the chart as played, the player’s inputs and the sett
 
 ## Design principle: an input replay, not a result log
 
-A replay is deliberately **not** a list of judgments. Its canonical payload is:
+The replay format records the information needed to compute judgments again. Its canonical payload has three parts.
 
 1. **`chart`** — the resolved chart that actually scrolled past the player: post-`#RANDOM` control flow, post
    lane-shuffle (RANDOM / MIRROR / S-RANDOM), post DP-flip. Long notes are stored as single objects with a

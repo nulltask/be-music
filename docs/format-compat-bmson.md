@@ -29,7 +29,7 @@ Each section names the lines of the bmson spec it relies on.
 
 ### 3.1 `version`
 
-The spec (L238-249) has one value, `"1.0.0"`; a missing `version` marks a legacy (pre-1.0) file that a player should reject or read as v0.21, and `null` is an error.
+The spec (L238–249) defines only `"1.0.0"`. If `version` is absent, the file predates 1.0. A player should reject it or read it as v0.21. An explicit `null` is an error.
 jbms-parser never reads the field [V] ([Bmson.java L8][j-bmson-model]).
 Be-Music validates SemVer syntax before reading chart fields and supports stable `1.0.0` with optional build metadata. It rejects null/malformed values, prereleases and other versions, and reads missing-version v0.21 by converting its fields and timing units as [Bemuse](https://github.com/bemusic/bemuse/blob/4bf3e7d98a44841b323741cc403ecb7b41618ade/packages/bmson/src/legacy.ts) does ([bmson spec checklist](./bmson-spec.md#parser-bmson---be-musicchart-source)).
 

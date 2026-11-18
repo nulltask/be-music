@@ -2,7 +2,7 @@
 
 # @be-music/player-engine
 
-規則と再生 engine を共有する package です。1 つのプレイループ（手動・AUTO・リプレイ）、判定、score、gauge とクリアランプ、自己ベスト、コースの実行と NONSTOP、リプレイの形式、ホストが差し込む runtime 契約を持ちます。ターミナルプレイヤー、ブラウザプレイヤー、Leaderboard が使います。
+端末プレイヤー、ブラウザープレイヤー、Leaderboard が共有するエンジンです。手動・AUTO・リプレイを 1 つのプレイループで処理します。判定、スコア、ゲージ、クリアランプ、自己ベスト、コースと NONSTOP、リプレイ形式、ホストが使うランタイムインターフェースを定義します。
 
 [Player 実装仕様](../../docs/player-spec.ja.md)、[アーキテクチャ](../../docs/architecture.ja.md#エンジン-判定コアと-1-つのプレイループ)、[リプレイ仕様](../../docs/replay.ja.md)、[コースと段位認定](../../docs/course.ja.md) を参照してください。
 

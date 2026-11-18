@@ -49,7 +49,7 @@ See the [Terminal player implementation notes](../../docs/player-tui.md) and the
 
 ## Usage
 
-Run the player from the repository root:
+Run these commands from the repository root.
 
 ```bash
 # Autoplay

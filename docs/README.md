@@ -2,7 +2,7 @@
 
 # Specifications
 
-This directory is a Markdown collection of specifications used in the `be-music` repository.
+These specifications cover chart formats, playback, skins, and services in `be-music`.
 
 - [Architecture: the chart layers, the engine and the package layers](./architecture.md)
 - [Architecture decisions](./adr/README.md)

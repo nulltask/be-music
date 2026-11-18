@@ -2,9 +2,9 @@
 
 # Be-Music-specific interpretations and behaviour
 
-Be-Music aims to behave as LR2 and beatoraja do. This document lists the places where it does something of its own: it reads a chart differently from a reference, plays something no reference plays, picks a behaviour the references leave open, or works around its platform.
+Be-Music follows LR2 and beatoraja where their behavior applies. This index records where Be-Music reads or plays a chart differently, makes a choice the references leave open, or adapts to platform constraints.
 
-It is an index, not a specification. Each row states one behaviour and names the code that implements it; the linked documents hold the details and the evidence. Behaviour that simply matches the references is left out.
+Each entry names the behavior and its implementation. Follow the links for the specification and evidence. Behaviors that match the references need no entry here.
 
 ## 1. How to read this document
 

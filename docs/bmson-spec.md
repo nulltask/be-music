@@ -2,7 +2,7 @@
 
 # bmson implementation specification
 
-This document defines how `packages/chart-parser` / `packages/chart-writer` handles bmson.
+`packages/chart-parser` reads bmson, and `packages/chart-writer` writes it.
 How beatoraja and other players read the same fields is compared in [BMS / bmson compatibility notes](./format-compat.md).
 
 ## Primary reference

@@ -2,7 +2,7 @@
 
 # BMS 実装仕様
 
-この文書は、`packages/chart-parser` / `packages/chart-writer` / `packages/player-engine` が BMS をどう扱うかを定義します。
+BMS の読み込みは `packages/chart-parser`、書き出しは `packages/chart-writer`、再生は `packages/player-engine` が担当します。
 
 ## 一次参照
 
@@ -48,7 +48,7 @@
 
 ### 行終端
 
-現実装の `chart-parser` は、BMS テキストを `LF` / `CRLF` / `CR` のいずれでも区切ります。
+`chart-parser` は `LF`、`CRLF`、`CR` のどれでも BMS テキストを行に分けます。
 `CRLF` は 1 つの行終端として扱い、`CR` 単独改行も `LF` と同様に受理します。
 
 入力末尾に改行がなくても、EOF を最終行の終端として扱います。

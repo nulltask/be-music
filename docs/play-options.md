@@ -50,7 +50,15 @@ The Options dialog and Music Select share the same play settings. Settings that 
 
 ## Options and judge rules
 
-**Judgment windows** at the top of the Options dialog's Play options picks the judge rules: judgment windows, gauges, note selection, long-note style, mine trigger and score. Options that only transform the chart or the view are offered under every ruleset. Each runs its own source's algorithm whatever the judge rules, is kept when the ruleset changes, and keeps its source's chart-type limits. These are HS-FIX CONSTANT, CLASSIC and normal HI-SPEED, FLOATING HI-SPEED and the fixed display area, the BPM-change warning, automatic judge timing adjustment, the lane options R-RANDOM, SPIRAL, H-RANDOM, ALL-SCR, RANDOM-EX, S-RANDOM-EX, RANDOM_PLAYABLE, S_RANDOM_PLAYABLE and both SCATTERs, SYNCHRONIZE RANDOM, SYMMETRY RANDOM and M-RAN, the mine and scroll modifiers, EXTRA and LR2 EXTRA MODE, ADD LN / CN / HCN / ALL, SP TO DP, 7 TO 9, BATTLE AS, D-BATTLE and two-player play. Every lane option draws from the side's seed under every ruleset (see [Source seeds and previous arrangement](./play-options-modifiers.md#source-seeds-and-previous-arrangement)); long-note addition draws from the browser's random source.
+Choose a ruleset with **Judgment windows** at the top of Play options in the Options dialog. It determines judgment windows, gauges, note selection, long-note behavior, mine triggers, and scoring. Options that only modify the chart or display are available under every ruleset. Changing rulesets preserves your selections. Each uses its source’s algorithm and chart-type limits.
+
+These options are available under every ruleset.
+
+- Display and timing settings include HS-FIX CONSTANT, CLASSIC and normal HI-SPEED, FLOATING HI-SPEED and the fixed display area, the BPM-change warning, and automatic judge timing adjustment.
+- Lane arrangements include R-RANDOM, SPIRAL, H-RANDOM, ALL-SCR, RANDOM-EX, S-RANDOM-EX, RANDOM_PLAYABLE, S_RANDOM_PLAYABLE, both SCATTERs, SYNCHRONIZE RANDOM, SYMMETRY RANDOM, and M-RAN.
+- Chart modifiers and play modes include mine and scroll modifiers, EXTRA and LR2 EXTRA MODE, ADD LN / CN / HCN / ALL, SP TO DP, 7 TO 9, BATTLE AS, D-BATTLE, and two-player play.
+
+Lane options always draw from the affected side’s seed. Long-note addition uses the browser’s random source. [Source seeds and previous arrangement](./play-options-modifiers.md#source-seeds-and-previous-arrangement)
 
 Be-Music defaults to **GROOVE** under LR2 rules and **NORMAL** under beatoraja and AC rules. A new beatoraja profile defaults to **ASSIST EASY**. [beatoraja PlayerConfig](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayerConfig.java#L50-L54)
 

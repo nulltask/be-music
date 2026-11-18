@@ -4,7 +4,7 @@ Implemented policy: [ADR 0030](../adr/0030-bmson-zero-total.md). The repository 
 
 # Optional bmson zero-TOTAL semantics
 
-Research for #837, checked 2026-10-31 against Be-Music `c3b783a5`. This note proposes an opt-in playback policy; it does not change the existing beatoraja-compatible default.
+Research for #837, checked on 2026-10-31 against Be-Music `c3b783a5`. The proposal adds an opt-in playback policy and keeps the beatoraja-compatible default.
 
 ## Specification and native behavior
 

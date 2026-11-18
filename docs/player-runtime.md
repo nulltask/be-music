@@ -36,13 +36,9 @@
 
 ### `AUTO`
 
-`AUTO` automatically processes all notes to be played.
-A normal note confirms `PERFECT` once when the time is reached. An LN-style long note confirms its one `PERFECT` at the
-tail; a charge note confirms its head's `PERFECT` at the start point and its tail's at the end point (see Auto
-Play above).
+`AUTO` judges every playable note without looking for a manual input candidate or applying a judgment window. Tap notes receive one `PERFECT` at their scheduled time. LN-style long notes receive one at the tail, and charge notes receive one at the head and one at the tail.
 
-`AUTO` accepts pause/resume, restart, and high-speed changes.
-No judgment window or manual input candidate search is used.
+Pause, resume, restart, and hi-speed controls remain available.
 
 ### `MANUAL`
 

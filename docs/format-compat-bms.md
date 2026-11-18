@@ -33,7 +33,7 @@
 
 ## 2. BMS
 
-The comparisons cover what the parser reads and how a chart plays in LR2, beatoraja and Be-Music.
+Compare how LR2, beatoraja, and Be-Music read and play BMS charts.
 
 ### 2.1 Lines, headers and object data
 

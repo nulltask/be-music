@@ -26,7 +26,7 @@ At 120 Hz, the browser has about 8 ms for each frame. That budget includes the p
 
 ### General techniques
 
-- **Measure first.** Record a play in the browser's Performance panel, or wrap your `draw` in `performance.now()` calls. Test on a dense chart, at the highest refresh rate you can, at a high `devicePixelRatio`, and with `effects: 'full'`.
+- **Measure first.** Record a play in the browser's Performance panel, or wrap your `draw` in `performance.now()` calls. Use a dense chart, the highest available refresh rate, a high `devicePixelRatio`, and `effects: 'full'`.
 - **Draw only what changed.**
   - Static layers can be rendered once and reused: backgrounds, frames, labels, lane beds, and anything else that depends only on the layout. Keep them in an offscreen canvas or texture.
   - Rebuild them only when their inputs change: `layout` changes with the chart's lanes, and select state changes with `frame.revision`.

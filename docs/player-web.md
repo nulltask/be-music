@@ -46,10 +46,8 @@ Be-Music Play runs BMS, BME, BML, PMS, bmson, LRX and n2s charts in the browser.
 
 ## Shared runtime integration
 
-The browser player drives gameplay through the engine, the root of `@be-music/player-engine`. The rest of what it needs from
-the player comes from its other entries: the input and UI buses and the state signals (`@be-music/player-engine/signals`),
-the lane layout (`./lanes`), the notes and scroll distance it draws (`./display`) and the judge windows (`./ruleset`).
-The chart's timing (`TimingResolver`, the sample triggers) and `ChartPlayVariant` come from `@be-music/chart-model`.
+The browser player runs gameplay through the root entry of `@be-music/player-engine`. It imports input and UI buses and state signals from `@be-music/player-engine/signals`, lane layouts from `./lanes`, note data and scroll distances from `./display`, and judgment windows from `./ruleset`. The timing resolver (`TimingResolver`), sample triggers, and `ChartPlayVariant` come from `@be-music/chart-model`.
+
 The engine owns judgment, keysound trigger routing, long-note handling, mine detonation, score, gauge, and chart-finish
 semantics. The play session behind every play screen starts one engine run at the skin's `PLAYSTART` gate (on a
 beatoraja skin, 1.5 s after load-end). It mirrors the engine's frame snapshots into the play state and hands the

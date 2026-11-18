@@ -16,7 +16,7 @@ Be-Music Play は LR2 と beatoraja のスキンを使い、プレイオプシ�
 
 ## 決定
 
-各画面はキーではなく**操作ボタン**を読みます（`session/controls/control-buttons.ts`）。各サイドの 7 つの鍵盤、2 つのスクラッチのキー（Shift の `scratch-cw` と、2 つ目のキーの `scratch-ccw`）、START と SELECT です。これはユーザーのレーンのキー（`laneKeys`。14 KEY のレーン）と START / SELECT のキー（`controlKeys`）から作ります。セッションが受け取るキーイベントには、そのキーがどのボタンかが付きます（`SessionKeyEvent.buttons`）。`createControlButtonTracker` は、イベント自身のタイムスタンプから、押しっぱなし・長押し・2 回押しを見分けます。
+各画面は、押されたキーがどの**操作ボタン**に対応するかを見ます（`session/controls/control-buttons.ts`）。各サイドに鍵盤 7 つ、スクラッチ用のキー 2 つ、START と SELECT があります。スクラッチには Shift の `scratch-cw` と、もう一方のキーの `scratch-ccw` を使います。これはユーザーのレーンのキー（`laneKeys`。14 KEY のレーン）と START / SELECT のキー（`controlKeys`）から作ります。セッションが受け取るキーイベントには、そのキーがどのボタンかが付きます（`SessionKeyEvent.buttons`）。`createControlButtonTracker` は、イベント自身のタイムスタンプから、押しっぱなし・長押し・2 回押しを見分けます。
 
 画面がどの系統のキー操作を読むかは、その画面の**操作系統**（`resolveControlScheme`）で決まります。
 

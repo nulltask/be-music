@@ -29,7 +29,7 @@
 
 ### 3.1 `version`
 
-仕様（L238-249）が定める値は `"1.0.0"` だけです。`version` がなければ 1.0 より前の旧形式で、プレイヤーは拒否するか v0.21 として読みます。`null` はエラーです。
+仕様（L238–249）が定める値は `"1.0.0"` だけです。`version` がなければ 1.0 より前の形式です。プレイヤーは読み込みを拒否するか、v0.21 として読みます。`null` を明示した場合はエラーです。
 jbms-parser はこのフィールドを読みません [V]（[Bmson.java L8][j-bmson-model]）。
 Be-Music は譜面フィールドを読む前に SemVer 表記を検証し、安定版 `1.0.0` と任意のビルドメタデータに対応します。null・不正な表記・プレリリース・その他の版を拒否し、バージョン省略の v0.21 は [Bemuse](https://github.com/bemusic/bemuse/blob/4bf3e7d98a44841b323741cc403ecb7b41618ade/packages/bmson/src/legacy.ts) と同じくフィールドと時間単位を変換して読みます（[bmson 実装仕様のチェックリスト](./bmson-spec.ja.md#parser-bmson---be-musicchart-source)）。
 

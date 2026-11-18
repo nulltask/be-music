@@ -48,7 +48,7 @@ BMS has no single normative specification. These are the closest things to one:
 
 ### 1.3 Evidence labels
 
-Each de facto claim carries one label:
+Evidence labels identify how each observed behavior was verified or inferred.
 
 - **[V]** verified in the implementation's source code at the commit above.
 - **[R]** read in OpenLR2's reconstruction of LR2 beta3 100201. It is the best available evidence for LR2, but it is a rewrite, not LR2's own source.

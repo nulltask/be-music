@@ -2,9 +2,7 @@
 
 # beatoraja skin implementation notes
 
-This document summarizes the current `@be-music/skin-beatoraja` implementation. The package parses beatoraja JSON
-and Lua skin themes into renderer-independent data structures. PixiJS rendering is the responsibility of
-`@be-music/player-browser`; CLI / TUI render paths do not load beatoraja skins.
+`@be-music/skin-beatoraja` parses beatoraja JSON and Lua skin themes into data that any renderer can use. `@be-music/player-browser` renders the skins with PixiJS. The terminal renderer skips beatoraja skins.
 
 ## Scope
 

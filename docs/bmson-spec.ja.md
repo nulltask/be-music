@@ -2,7 +2,7 @@
 
 # bmson 実装仕様
 
-この文書は、`packages/chart-parser` / `packages/chart-writer` が bmson をどう扱うかを定義します。
+bmson の読み込みは `packages/chart-parser`、書き出しは `packages/chart-writer` が担当します。
 beatoraja など他のプレイヤーが同じフィールドをどう読むかは [BMS / bmson 互換性ノート](./format-compat.ja.md) で比較しています。
 
 ## 一次参照

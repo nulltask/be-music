@@ -50,7 +50,15 @@ Options ダイアログと選曲画面はプレイ設定を共有します。譜
 
 ## オプションと判定ルール
 
-Options ダイアログ の Play options の一番上にある **Judgment windows** は判定ルール（判定幅・ゲージ・判定対象ノートの選び方・ロングノートの種類・地雷の発動・スコア）を選びます。譜面または表示を変えるだけのオプションは、どのルールでも選べます。それぞれ判定ルールに関係なく参照元のアルゴリズムで動き、ルールを切り替えても維持し、参照元の譜面の種類の制限はそのまま残ります。対象は HS-FIX CONSTANT、CLASSIC と通常の HI-SPEED、FLOATING HI-SPEED と表示エリア固定、BPM 変化予告、判定タイミングの自動調整、レーンオプションの R-RANDOM・SPIRAL・H-RANDOM・ALL-SCR・RANDOM-EX・S-RANDOM-EX・RANDOM_PLAYABLE・S_RANDOM_PLAYABLE と 2 種類の SCATTER、SYNCHRONIZE RANDOM・SYMMETRY RANDOM・M-RAN、地雷とスクロールの変換、EXTRA と LR2 EXTRA MODE、ADD LN / CN / HCN / ALL、SP TO DP、7 TO 9、BATTLE AS、D-BATTLE、2 人プレイです。レーンオプションはどのルールでもその側のシードで抽選します（[参照元のシードと前回の配置](./play-options-modifiers.ja.md#参照元のシードと前回の配置)）。ロングノートの追加はブラウザの乱数で抽選します。
+Options ダイアログの Play options にある **Judgment windows** でルールセットを選びます。判定幅、ゲージ、判定対象ノートの選び方、ロングノートの種類、地雷の発動、スコアはこの選択で決まります。譜面や表示だけを変えるオプションは、ルールセットを変更しても選択が残ります。処理方法と対応する譜面の種類は、それぞれの参照元に従います。
+
+次のオプションはどのルールセットでも使えます。
+
+- 表示とタイミングの設定。HS-FIX CONSTANT、CLASSIC と通常の HI-SPEED、FLOATING HI-SPEED と表示エリア固定、BPM 変化予告、判定タイミングの自動調整。
+- レーン配置。R-RANDOM、SPIRAL、H-RANDOM、ALL-SCR、RANDOM-EX、S-RANDOM-EX、RANDOM_PLAYABLE、S_RANDOM_PLAYABLE、2 種類の SCATTER、SYNCHRONIZE RANDOM、SYMMETRY RANDOM、M-RAN。
+- 譜面の変換とプレイ形態。地雷とスクロールの変換、EXTRA と LR2 EXTRA MODE、ADD LN / CN / HCN / ALL、SP TO DP、7 TO 9、BATTLE AS、D-BATTLE、2 人プレイ。
+
+レーン配置の抽選には、どのルールセットでも対象サイドのシードを使います。ロングノートの追加にはブラウザーの乱数を使います。[参照元のシードと前回の配置](./play-options-modifiers.ja.md#参照元のシードと前回の配置)
 
 Be-Music の既定ゲージは LR2 ルールでは **GROOVE**、beatoraja と AC のルールでは **NORMAL** です。beatoraja 本体の新規プロファイルでは **ASSIST EASY** が既定です。[beatoraja PlayerConfig](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayerConfig.java#L50-L54)
 

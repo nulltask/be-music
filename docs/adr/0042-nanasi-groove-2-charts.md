@@ -6,6 +6,6 @@ Toy Musical 3 ships its charts only as `.n2s` files for Nanasi Groove 2, the pla
 
 `@be-music/chart-parser` opens the container itself (`parseN2SBytes`) and parses the PMS file inside as it parses a `.pms` file. The key and IV therefore live in this public repository. The alternative, asking players to decrypt their packages with a separate tool first, would leave Toy Musical 3 unplayable for most of them; the maintainer chose to read the files directly.
 
-`.n2s` counts as `.pms` wherever the extension is a lane-mode input (`isPMSChartPath`): the play variant, the 9 KEY layout and the fingerprint. An `.n2s` chart and the `.pms` file inside it get one fingerprint.
+`isPMSChartPath` treats `.n2s` as `.pms` when determining the play variant, 9 KEY layout, and fingerprint. The `.n2s` chart and its inner `.pms` file share a fingerprint.
 
 The five-button charts are PMS files that use only the centre lanes `13`–`15` and `22`–`23`. Nanasi Groove 2 plays them on its nine-button layout too, so Be-Music needs no separate mode for them. The `.n2x` lists and settings beside the charts (course lists, unlock conditions, play-level overrides) are not read, except that a chart list (`bmslist`) is read as a course without its unlock conditions ([course.md](../course.md#nanasi-groove-2-n2x-chart-lists)).

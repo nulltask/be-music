@@ -2,9 +2,11 @@
 
 # Courses and dan certification
 
-A **course** chains several charts into one run. The best-known kind is **dan certification (段位認定)**: the stages are played back to back on one shared class gauge, and the whole run gets a single result. LR2 and beatoraja each define courses in their own formats, and difficulty tables publish theirs inside the table header. Be-Music reads all three, and Nanasi Groove 2's chart lists as well, into one model, `CourseDefinition` in `@be-music/player-engine/course`, so nothing downstream needs to know where a course came from.
+A **course** groups several charts into one run. In **dan certification (段位認定)**, the stages share a class gauge and the run produces a single result.
 
-This document defines the course model, format mappings, play rules, records and replays. See the [browser player specification](./player-web.md#courses-and-dan-certification) for scene transitions.
+Be-Music imports LR2 and beatoraja course files, difficulty-table headers, and Nanasi Groove 2 chart lists. All four sources become a `CourseDefinition` in `@be-music/player-engine/course`, so the player uses the same model for every course.
+
+For how the browser moves between course screens, see [Courses and dan certification](./player-web.md#courses-and-dan-certification).
 
 ```mermaid
 flowchart LR

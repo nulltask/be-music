@@ -2,8 +2,7 @@
 
 # Be-Music
 
-
-Be-Music is an open-source project for playing and working with BMS and bmson charts. It brings together browser and terminal players, online leaderboards, and reusable TypeScript packages for chart processing, gameplay, skins, and UI.
+Be-Music is an open-source toolkit for BMS and bmson charts. It includes browser and terminal players, online leaderboards, and reusable TypeScript packages for chart processing, gameplay, skins, and UI.
 
 ## Features
 
