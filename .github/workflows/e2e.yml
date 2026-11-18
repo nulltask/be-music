@@ -61,7 +61,7 @@ jobs:
     timeout-minutes: ${{ github.event_name == 'pull_request' && 30 || 90 }}
     # The 4-vCPU runner renders in software: several browsers at once space frames far enough apart that tests pressing
     # keys at a time on the page miss their windows or race the end of a short chart (#792). Both runs are split over
-    # four runners: the full run with one browser each, the smoke run (13 tests) with two. A grep run stays on one.
+    # four runners: the full run with one browser each and the smoke run with two. A grep run stays on one.
     strategy:
       fail-fast: false
       matrix:
@@ -113,8 +113,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          args=(--shard "$E2E_SHARD")
-          if [ -n "$E2E_GREP" ]; then args+=(--grep "$E2E_GREP"); fi
+          if [ "$E2E_GREP" = '@smoke' ] && [ "$E2E_SHARD" != '1/1' ]; then
+            # Spread the long GRADE and replay journeys across the four jobs.
+            # The fourth job picks up smoke tests without a group, including new tests.
+            case "$E2E_SHARD" in
+              4/4) args=(--grep '@smoke' --grep-invert '@smoke-group-[123]\b') ;;
+              *) args=(--grep "@smoke-group-${E2E_SHARD%/*}\b") ;;
+            esac
+          else
+            args=(--shard "$E2E_SHARD")
+            if [ -n "$E2E_GREP" ]; then args+=(--grep "$E2E_GREP"); fi
+          fi
           pnpm run test:e2e "${args[@]}"
 
       - name: Upload report

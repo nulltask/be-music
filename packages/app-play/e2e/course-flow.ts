@@ -1,5 +1,5 @@
 import type { TestHookFamily, TestHookResult, TestHookState } from '../src/test-hook.ts';
-import { COURSES, expect, SMOKE, test, type Player } from './support.ts';
+import { COURSES, expect, SMOKE, smokeGroup, test, type Player } from './support.ts';
 
 /**
  * The course flow of the checklist (`docs/player-web.md#browser-verification`), run the same way on each skin family:
@@ -61,6 +61,7 @@ async function expectBackOnCourseBar(player: Player, title: string, record?: { l
 }
 
 export function courseFlowTests(setup: FamilyCase): void {
+  const smoke = setup.name === 'built-in' ? smokeGroup(1) : setup.name === 'beatoraja' ? smokeGroup(3) : SMOKE;
   test.describe(`course flow on the ${setup.name} family`, () => {
     test('lists course folders and bars, and says why a course with a missing stage does not start', async ({
       player,
@@ -92,7 +93,7 @@ export function courseFlowTests(setup: FamilyCase): void {
 
     test(
       'plays a GRADE course with AUTO: stage results skipped, gauge carried over, settings restored',
-      SMOKE,
+      smoke,
       async ({ player }) => {
         await setup.open(player);
         // An LR2 grade turns the lane option off and EASY into GROOVE for its stages only.

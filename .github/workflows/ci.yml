@@ -102,11 +102,12 @@ jobs:
             run: vp run check
           - task: build
             run: vp run build
-          # The unit tests are the longest job; two runners take half of the test files each.
-          - task: test 1/2
-            run: vp test run --shard=1/2
-          - task: test 2/2
-            run: vp test run --shard=2/2
+          - task: test 1/3
+            run: vp test run --shard=1/3
+          - task: test 2/3
+            run: vp test run --shard=2/3
+          - task: test 3/3
+            run: vp test run --shard=3/3
 
     steps:
       - name: Checkout

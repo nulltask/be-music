@@ -1,6 +1,8 @@
-import { expect, openWithLibrary, SMOKE, test } from './support.ts';
+import { expect, openWithLibrary, smokeGroup, test } from './support.ts';
 
-test('native screens browse, search, play, show results and switch back to Canvas', SMOKE, async ({ player }, info) => {
+const smoke = smokeGroup(1);
+
+test('native screens browse, search, play, show results and switch back to Canvas', smoke, async ({ player }, info) => {
   await openWithLibrary(player, { 'be-music.built-in-skin': 'native' });
   const { page } = player;
   await player.setOption(['Play options'], 'Judgment windows', '????');

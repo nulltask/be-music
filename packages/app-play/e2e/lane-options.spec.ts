@@ -1,6 +1,6 @@
 import { FIXTURE_CHARTS } from '../../../scripts/course-checklist/fixtures.ts';
 import type { TestHookFamily } from '../src/test-hook.ts';
-import { expect, openWithLibrary, SMOKE, SONGS, test, type Player } from './support.ts';
+import { expect, openWithLibrary, SMOKE, smokeGroup, SONGS, test, type Player } from './support.ts';
 
 /**
  * The lane options apply on every family (ADR 0001): an AUTO play of Fixture A with the Options dialog's Random 1P on
@@ -84,7 +84,8 @@ const FAMILIES: readonly FamilyCase[] = [
 ];
 
 for (const setup of FAMILIES) {
-  test(`MIRROR plays the keys mirrored and is recorded on the ${setup.name} family`, SMOKE, async ({ player }) => {
+  const smoke = setup.name === 'LR2' ? SMOKE : smokeGroup(3);
+  test(`MIRROR plays the keys mirrored and is recorded on the ${setup.name} family`, smoke, async ({ player }) => {
     await setup.open(player);
     await player.setOption(PLAY_OPTIONS, 'Random 1P', 'MIRROR');
     await player.browseTo(SONGS, 'Fixture A');

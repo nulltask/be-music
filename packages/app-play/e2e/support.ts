@@ -506,6 +506,11 @@ export { expect } from '@playwright/test';
  */
 export const SMOKE = { tag: '@smoke' } as const;
 
+/** Assign a smoke test to a CI group. Smoke tests without a group run in the fourth job. */
+export function smokeGroup(group: 1 | 2 | 3): { tag: string[] } {
+  return { tag: [SMOKE.tag, `@smoke-group-${group}`] };
+}
+
 /** The checklist library's song folder and course folder, as the player lists them after a drop of `songs`. */
 export const SONGS = 'fixtures';
 export const COURSES = 'fixture-courses';

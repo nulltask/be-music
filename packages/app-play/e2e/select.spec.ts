@@ -1,5 +1,5 @@
 import type { TestHookFamily, TestHookState } from '../src/test-hook.ts';
-import { expect, openWithLibrary, SMOKE, SONGS, test, type Player } from './support.ts';
+import { expect, openWithLibrary, SMOKE, smokeGroup, SONGS, test, type Player } from './support.ts';
 
 /**
  * The select screen's list on the built-in, LR2 and beatoraja families (the browse model of `@be-music/player-scene-model`):
@@ -243,7 +243,7 @@ for (const setup of FAMILIES) {
 
     test(
       'narrows the list to the search, and lists the matching charts at the root',
-      setup.name === 'built-in' ? SMOKE : {},
+      setup.name === 'built-in' ? smokeGroup(2) : {},
       async ({ player }) => {
         await setup.open(player);
         await player.browseTo(SONGS, 'Fixture C');
