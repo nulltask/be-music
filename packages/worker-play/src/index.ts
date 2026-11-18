@@ -16,7 +16,8 @@
 // The core files only change when the pinned `@ffmpeg/core` version changes — upload them with the `cf:r2:push` script.
 
 import { handleAuth, readSession, type OIDCEnv } from '@be-music/service-auth-client';
-import { playAppShortName, playAppTitle, playEnvironmentOfOrigin, retitleManifest } from './app-title.ts';
+import { playAppShortName, playAppTitle, retitleManifest } from '@be-music/app-play/app-title';
+import { playEnvironmentOfOrigin } from './app-environment.ts';
 import { withCrossOriginIsolation } from './cross-origin-isolation.ts';
 import { isLeaderboardPath } from './leaderboard-paths.ts';
 import { handlePlayerSettings, PLAYER_SETTINGS_PATH } from './player-settings.ts';
@@ -76,7 +77,7 @@ async function serveFFmpegCore(request: Request, env: Env, pathname: string): Pr
 }
 
 /**
- * `response` retitled for the deployment this Worker serves (`app-title.ts`): the player page's title and the web app
+ * `response` retitled for the deployment this Worker serves (`@be-music/app-play/app-title`): the player page's title and the web app
  * manifest's names. Production, other paths and misses pass through untouched. The embed page is not installable and
  * keeps its own title.
  */
@@ -137,7 +138,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
   // Everything else: static assets, with `not_found_handling: single-page-application` serving index.html on a miss.
   // The service worker and the web app manifest get their own headers (`pwa-assets.ts`), and the page and the manifest
-  // the title of this deployment (`app-title.ts`).
+  // the title of this deployment (`@be-music/app-play/app-title`).
   const asset = await withEnvironmentTitle(pathname, await env.ASSETS.fetch(request), env.PUBLIC_ORIGIN);
   return withPWAAssetHeaders(pathname, asset);
 }

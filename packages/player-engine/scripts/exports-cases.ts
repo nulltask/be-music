@@ -1203,6 +1203,15 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  define('player-engine.replay.resolveChartPlayProgram', {
+    run() {
+      replayAPI.resolveChartPlayProgram(
+        { version: 3, options: { random: 'MIRROR' } },
+        { notes: 'DBLCOPY' },
+        { playVariant: '7', course: true },
+      );
+    },
+  });
   define('player-engine.resolveChartNotesPlayVariant', {
     run() {
       playerAPI.resolveChartNotesPlayVariant('7', 'COPY');

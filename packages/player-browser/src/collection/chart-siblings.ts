@@ -1,4 +1,4 @@
-import { resolveLRXHeaderPath, resolveLRXMoviePath } from '@be-music/chart-parser';
+import { resolveLRXHeaderPath, resolveLRXMoviePath } from '@be-music/chart-parser/core';
 import { dirname } from '@be-music/shared-utils/core';
 import type { ChartSiblingBytes } from '../compute/tasks.ts';
 import { loadAssetBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';

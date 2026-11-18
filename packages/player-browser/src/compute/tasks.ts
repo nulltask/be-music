@@ -1,6 +1,6 @@
 import { unzipSync } from 'fflate';
 import { countScoredNotes } from '@be-music/chart-model';
-import { decodeUTF8Text, parseBMSBytes, parseBmson, parseLRXBytes, parseN2SBytes } from '@be-music/chart-parser';
+import { decodeUTF8Text, parseBMSBytes, parseBmson, parseLRXBytes, parseN2SBytes } from '@be-music/chart-parser/core';
 import { type BeMusicJSON } from '@be-music/chart-source';
 import { compactChartPreservation } from '../collection/chart-preservation.ts';
 import { md5HexOfBytes } from '../collection/md5.ts';

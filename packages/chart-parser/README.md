@@ -4,6 +4,8 @@
 
 Parsers for `.bms` / `.bme` / `.bml` / `.pms` / `.bmson`, Nanasi Groove 2 `.n2s`, LRX (`.lrs` with its `.lrh` / `.lrm`) and Be-Music JSON charts, producing the intermediate representation of [`@be-music/chart-source`](../chart-source/README.md). The package also ships the `bms-parse` CLI.
 
+Import `@be-music/chart-parser/core` to read chart text or bytes. The root entry also exports `parseChartFile` for reading files in Node.
+
 ## Usage
 
 Convert BMS/bmson to JSON from the repository root:

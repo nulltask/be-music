@@ -30,7 +30,7 @@ import {
   resolveChart,
   type RandomDraws,
 } from '@be-music/chart-model';
-import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser';
+import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser/core';
 import { resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
 import type { PlayerSummary } from '../core/engine.ts';
 import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';

@@ -4,6 +4,9 @@
   "private": true,
   "description": "Web player application for browsing charts, gameplay, and replays",
   "type": "module",
+  "exports": {
+    "./app-title": "./src/app-title.ts"
+  },
   "scripts": {
     "dev": "vp dev --host 0.0.0.0",
     "build": "vp build",

@@ -20,7 +20,7 @@ import {
 import type { BestRecord } from '@be-music/player-engine/records';
 import { resolveBeatorajaDefaultTotal } from '@be-music/player-engine/replay';
 import { isScratchLaneForVariant } from '@be-music/player-skin-sdk';
-import { dirname, normalizePath } from '@be-music/shared-utils';
+import { dirname, normalizePath } from '@be-music/shared-utils/core';
 import {
   resolveLibraryChartDifficultyValue,
   resolveLibraryChartPlayVariant,

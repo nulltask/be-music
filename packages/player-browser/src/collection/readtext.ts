@@ -3,7 +3,7 @@
  * among the chart's files and decoding it. BMS authors traditionally ship notes and changelogs this way.
  */
 
-import { decodeBMSText } from '@be-music/chart-parser';
+import { decodeBMSText } from '@be-music/chart-parser/core';
 import { basename, dirname } from '@be-music/shared-utils/core';
 import { loadAssetBytes, resolveChartSource } from './collection.ts';
 import type { LibraryChart } from '@be-music/player-scene-model';

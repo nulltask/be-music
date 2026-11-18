@@ -12,7 +12,7 @@ import {
   type BeMusicFingerprintDocument,
 } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser';
+import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser/core';
 import {
   checkCourseReplayEligibility,
   checkReplayEligibility,

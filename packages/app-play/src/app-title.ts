@@ -9,18 +9,12 @@ export type PlayEnvironment = 'development' | 'preview' | 'production';
 
 const PLAY_APP_NAME = 'Be-Music Play';
 const PLAY_APP_SHORT_NAME = 'Be-Music';
-const PREVIEW_PLAY_HOST = 'play.preview.be-music.app';
 
 const ENVIRONMENT_LABELS: Readonly<Record<PlayEnvironment, string | undefined>> = {
   development: 'Development',
   preview: 'Preview',
   production: undefined,
 };
-
-/** The deployment a Worker serves, from its public origin (`PUBLIC_ORIGIN`, cloudflare.config.ts). */
-export function playEnvironmentOfOrigin(origin: string): Exclude<PlayEnvironment, 'development'> {
-  return new URL(origin).hostname.toLowerCase() === PREVIEW_PLAY_HOST ? 'preview' : 'production';
-}
 
 function withEnvironmentLabel(name: string, environment: PlayEnvironment): string {
   const label = ENVIRONMENT_LABELS[environment];

@@ -893,6 +893,9 @@ importers:
 
   packages/worker-play:
     dependencies:
+      '@be-music/app-play':
+        specifier: workspace:*
+        version: link:../app-play
       '@be-music/service-auth-client':
         specifier: workspace:*
         version: link:../service-auth-client
