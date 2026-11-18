@@ -91,26 +91,22 @@ export interface DeferredChartFields {
   readonly json: string;
 }
 
-/** What a chart list reads of every chart, kept as it is: its headers. `events` is packed on its own. */
-const RESIDENT_CHART_FIELDS = new Set(['format', 'sourceFormat', 'metadata', 'events']);
-
 /**
- * Takes the fields a listing does not read out of `chart` and returns them as JSON text. A library keeps every chart
- * it lists, and copies each one whenever it crosses a worker or the parsed-chart cache; text is copied as it is, where
- * the objects it stands for are rebuilt one by one, so a library of thousands of charts loads in a fraction of the
- * time. {@link restoreDeferredChartFields} puts the fields back, parsed when one is first read.
+ * Splits a chart into its listing fields and the remaining fields as JSON text. Text crosses the worker and the
+ * parsed-chart cache without copying a tree of objects. {@link restoreDeferredChartFields} restores the deferred
+ * fields on first read.
  */
-export function deferChartFields(chart: BeMusicJSON): DeferredChartFields {
-  const record = chart as unknown as Record<string, unknown>;
-  const fields: Record<string, unknown> = {};
-  const keys: string[] = [];
-  for (const key of Object.keys(record)) {
-    if (RESIDENT_CHART_FIELDS.has(key) || record[key] === undefined) continue;
-    fields[key] = record[key];
-    keys.push(key);
-    delete record[key];
+export function deferChartFields(chart: BeMusicJSON): { chart: BeMusicJSON; deferred: DeferredChartFields } {
+  const { format, sourceFormat, metadata, events, ...fields } = chart;
+  const record: Record<string, unknown> = fields;
+  const keys = Object.keys(fields);
+  for (let index = keys.length - 1; index >= 0; index -= 1) {
+    if (record[keys[index]!] === undefined) keys.splice(index, 1);
   }
-  return { keys, json: JSON.stringify(fields) };
+  return {
+    chart: { format, sourceFormat, metadata, events } as BeMusicJSON,
+    deferred: { keys, json: JSON.stringify(fields) },
+  };
 }
 
 /**

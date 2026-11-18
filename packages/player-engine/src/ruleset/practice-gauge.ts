@@ -132,28 +132,32 @@ const PRACTICE_GAUGE_PICK_PARTS: ReadonlyMap<string, Readonly<PracticeGaugePickP
 ]);
 
 /** The PRACTICE gauge picks valid under each judge ruleset: its own bare gauges and every qualified one. */
-const PRACTICE_GAUGE_PICKS_BY_RULESET = new Map<RulesetId, ReadonlySet<string>>();
-
-function practiceGaugePicksOf(ruleset: RulesetId): ReadonlySet<string> {
-  let picks = PRACTICE_GAUGE_PICKS_BY_RULESET.get(ruleset);
-  if (picks === undefined) {
-    picks = new Set([
-      ...resolvePracticeGaugeTypes(ruleset),
-      ...[...PRACTICE_GAUGE_PICK_PARTS].flatMap(([pick, parts]) => (parts.source === undefined ? [] : [pick])),
-    ]);
-    PRACTICE_GAUGE_PICKS_BY_RULESET.set(ruleset, picks);
-  }
-  return picks;
-}
+const QUALIFIED_PRACTICE_GAUGE_PICKS = [...PRACTICE_GAUGE_PICK_PARTS.keys()].filter((pick) => pick.includes(':'));
+const PRACTICE_GAUGE_PICKS_BY_RULESET = {
+  lr2: new Set([...LR2_PRACTICE_GAUGE_TYPES, ...QUALIFIED_PRACTICE_GAUGE_PICKS]),
+  beatoraja: new Set([...BEATORAJA_PRACTICE_GAUGE_TYPES, ...QUALIFIED_PRACTICE_GAUGE_PICKS]),
+  ____: new Set([...____PRACTICE_GAUGE_TYPES, ...QUALIFIED_PRACTICE_GAUGE_PICKS]),
+  plugout: new Set([...PLUGOUT_PRACTICE_GAUGE_TYPES, ...QUALIFIED_PRACTICE_GAUGE_PICKS]),
+};
 
 /**
  * Whether `value` is a PRACTICE gauge pick: a qualified one of any source, or a bare one of `ruleset` when given (else of
  * any ruleset).
  */
 export function isPracticeGaugePick(value: unknown, ruleset?: RulesetId): value is PracticeGaugePick {
-  // The ruleset's own bare gauge is the common case, and needs no split.
   if (typeof value !== 'string') return false;
-  return ruleset === undefined ? PRACTICE_GAUGE_PICK_PARTS.has(value) : practiceGaugePicksOf(ruleset).has(value);
+  switch (ruleset) {
+    case undefined:
+      return PRACTICE_GAUGE_PICK_PARTS.has(value);
+    case 'lr2':
+      return PRACTICE_GAUGE_PICKS_BY_RULESET.lr2.has(value);
+    case 'beatoraja':
+      return PRACTICE_GAUGE_PICKS_BY_RULESET.beatoraja.has(value);
+    case 'plugout':
+      return PRACTICE_GAUGE_PICKS_BY_RULESET.plugout.has(value);
+    default:
+      return PRACTICE_GAUGE_PICKS_BY_RULESET.____.has(value);
+  }
 }
 
 /** `type` as `source`'s PRACTICE gauge. */

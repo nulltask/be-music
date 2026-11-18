@@ -90,19 +90,17 @@ describe('compactCollectionChart', () => {
 
 describe('deferChartFields / restoreDeferredChartFields', () => {
   test('takes the fields a listing does not read out of the chart, as text', () => {
-    const chart = chartOf('Deferred');
-    const resources = structuredClone(chart.resources);
-    const deferred = deferChartFields(chart);
+    const original = chartOf('Deferred');
+    const { chart, deferred } = deferChartFields(original);
     expect(Object.keys(chart)).toEqual(['format', 'sourceFormat', 'metadata', 'events']);
     expect(chart.metadata.title).toBe('Deferred');
     expect(deferred.keys).toEqual(['resources', 'measures', 'bms', 'bmson', 'preservation']);
-    expect((JSON.parse(deferred.json) as { resources: unknown }).resources).toEqual(resources);
+    expect((JSON.parse(deferred.json) as { resources: unknown }).resources).toEqual(original.resources);
   });
 
   test('puts the fields back as they were, parsed once when one is first read', () => {
     const expected = chartOf('Deferred');
-    const chart = chartOf('Deferred');
-    const deferred = structuredClone(deferChartFields(chart));
+    const { chart, deferred } = structuredClone(deferChartFields(chartOf('Deferred')));
     const parse = vi.spyOn(JSON, 'parse');
     restoreDeferredChartFields(chart, deferred);
     // Listing a chart reads its headers only: nothing is parsed, yet the fields are there to see.
@@ -122,9 +120,9 @@ describe('deferChartFields / restoreDeferredChartFields', () => {
   });
 
   test('assigning a field replaces it, before or after the others are read', () => {
-    const chart = chartOf('Deferred');
-    const expected = structuredClone(chart);
-    restoreDeferredChartFields(chart, deferChartFields(chart));
+    const expected = chartOf('Deferred');
+    const { chart, deferred } = deferChartFields(expected);
+    restoreDeferredChartFields(chart, deferred);
     const resources = { ...expected.resources, wav: { '01': 'snare.wav' } };
     chart.resources = resources;
     expect(chart.resources).toBe(resources);

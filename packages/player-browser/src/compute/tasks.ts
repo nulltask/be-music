@@ -48,20 +48,14 @@ export function parseChartTask(input: ParseChartTaskInput): ParseChartTaskResult
   compactChartPreservation(chart);
   const strings = new PackedEventStrings();
   const packed = packEvents(chart.events, strings);
-  const values: string[] = [];
-  if (packed) {
-    let maximum = -1;
-    for (const id of packed.channels) maximum = Math.max(maximum, id);
-    for (const id of packed.values) maximum = Math.max(maximum, id);
-    for (let index = 0; index <= maximum; index++) values.push(strings.valueOf(index));
-    chart.events = [];
-  }
+  if (packed) chart.events = [];
+  const { chart: listing, deferred } = deferChartFields(chart);
   return {
-    chart,
+    chart: listing,
     scored,
     packed,
-    strings: values,
-    deferred: deferChartFields(chart),
+    strings: packed ? strings.snapshot() : [],
+    deferred,
     md5: md5HexOfBytes(input.bytes),
   };
 }
