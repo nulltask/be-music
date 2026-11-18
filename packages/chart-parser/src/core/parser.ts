@@ -60,7 +60,12 @@ export function parseBMS(input: string): BeMusicJSON {
     json.bms.base = 62;
   }
 
-  const firstNormalObjectLines = new Map<number, { order: number; events: BeMusicJSON['events'] }>();
+  // The first object line of each normal-channel measure, with the events it made (its preserved entry's and, outside
+  // control flow, their copies in `json.events`), so a duplicate line can stamp both with their line orders.
+  const firstNormalObjectLines = new Map<
+    number,
+    { order: number; events: BeMusicJSON['events']; copies: BeMusicJSON['events'] | undefined }
+  >();
   forEachLine(input, (rawLine) => {
     const line = rawLine.trim();
     if (!line.startsWith('#')) {
@@ -87,13 +92,16 @@ export function parseBMS(input: string): BeMusicJSON {
       if (channel[0] === '1' || channel[0] === '2') {
         const key = measure * 1296 + Number.parseInt(channel, 36);
         const first = firstNormalObjectLines.get(key);
-        const copies = events === entry.events ? events : [...entry.events, ...events];
+        const copies = events === entry.events ? undefined : events;
         if (first) {
           for (const event of first.events) event.bmsLineOrder = first.order;
+          if (first.copies !== undefined) for (const event of first.copies) event.bmsLineOrder = first.order;
           first.events = [];
-          for (const event of copies) event.bmsLineOrder = bmsLineOrder;
+          first.copies = undefined;
+          for (const event of entry.events) event.bmsLineOrder = bmsLineOrder;
+          if (copies !== undefined) for (const event of copies) event.bmsLineOrder = bmsLineOrder;
         } else {
-          firstNormalObjectLines.set(key, { order: bmsLineOrder, events: copies });
+          firstNormalObjectLines.set(key, { order: bmsLineOrder, events: entry.events, copies });
         }
       }
       if (controlFlowCaptureStack.length > 0) {

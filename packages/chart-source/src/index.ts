@@ -865,15 +865,18 @@ export function ensureMeasure(json: BeMusicJSON, index: number): BeMusicMeasure 
 }
 
 function cloneEvent(event: BeMusicEvent): BeMusicEvent {
-  return {
+  // Optional fields are assigned, not spread, so clones share the hidden classes of parsed events; extra shapes slow
+  // every event comparison. The key order matches the declaration's.
+  const cloned: BeMusicEvent = {
     measure: event.measure,
     channel: event.channel,
     position: [event.position[0], event.position[1]],
     value: event.value,
-    ...(event.bmsLineOrder !== undefined ? { bmsLineOrder: event.bmsLineOrder } : {}),
-    bmson: event.bmson ? { ...event.bmson, ...copyExtras(event.bmson) } : undefined,
-    ...(event.lrx !== undefined ? { lrx: { ...event.lrx } } : {}),
   };
+  if (event.bmsLineOrder !== undefined) cloned.bmsLineOrder = event.bmsLineOrder;
+  cloned.bmson = event.bmson ? { ...event.bmson, ...copyExtras(event.bmson) } : undefined;
+  if (event.lrx !== undefined) cloned.lrx = { ...event.lrx };
+  return cloned;
 }
 
 function cloneControlFlowEntry(entry: BMSControlFlowEntry): BMSControlFlowEntry {
