@@ -143,8 +143,10 @@ jobs:
       BENCH_WARMUP_TIME_MS: 25
       BENCH_REPEATS: 5
       BENCH_REGRESSION_THRESHOLD: 8
+      BENCH_ISSUE_THRESHOLD: 20
     permissions:
       contents: write
+      issues: write
 
     steps:
       - name: Checkout
@@ -278,6 +280,7 @@ jobs:
           pnpm run bench:compare "${args[@]}"
 
       - name: Post benchmark comment
+        id: benchmark-comment
         if: steps.scope.outputs.packages != ''
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
@@ -305,18 +308,93 @@ jobs:
             });
 
             if (existing) {
-              await github.rest.repos.updateCommitComment({
+              const { data } = await github.rest.repos.updateCommitComment({
                 owner,
                 repo,
                 comment_id: existing.id,
                 body,
               });
+              core.setOutput('url', data.html_url);
             } else {
-              await github.rest.repos.createCommitComment({
+              const { data } = await github.rest.repos.createCommitComment({
                 owner,
                 repo,
                 commit_sha,
                 body,
+              });
+              core.setOutput('url', data.html_url);
+            }
+
+      - name: Confirm benchmark regressions
+        id: confirm-regressions
+        if: github.ref == 'refs/heads/devel' && steps.run-bench.outputs.base_ok == 'true'
+        shell: bash
+        env:
+          BASE_DIR: ${{ steps.prepare-base.outputs.dir }}
+        run: |
+          set -euo pipefail
+          args=("$BENCH_ISSUE_THRESHOLD" tmp/bench/base.json tmp/bench/head.json)
+          packages="$(node scripts/bench/regressions.ts "${args[@]}" | jq -r 'map(.key | split(".")[0]) | unique | join(",")')"
+          if [ -z "$packages" ]; then exit 0; fi
+          mkdir -p tmp/bench/confirm-head-runs tmp/bench/confirm-base-runs
+          for run_index in $(seq 1 "$BENCH_REPEATS"); do
+            BENCH_GIT_SHA="$GITHUB_SHA" pnpm run bench --output "tmp/bench/confirm-head-runs/run-${run_index}.json" --packages "$packages" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
+            (cd "$BASE_DIR" && BENCH_GIT_SHA="$BENCH_BASE_SHA" pnpm run bench --output "$GITHUB_WORKSPACE/tmp/bench/confirm-base-runs/run-${run_index}.json" --packages "$packages" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS")
+          done
+          pnpm run bench:aggregate -- --output tmp/bench/confirm-head.json tmp/bench/confirm-head-runs/*.json
+          pnpm run bench:aggregate -- --output tmp/bench/confirm-base.json tmp/bench/confirm-base-runs/*.json
+          node scripts/bench/regressions.ts "${args[@]}" tmp/bench/confirm-base.json tmp/bench/confirm-head.json > tmp/bench/confirmed-regressions.json
+          echo "count=$(jq length tmp/bench/confirmed-regressions.json)" >> "$GITHUB_OUTPUT"
+
+      - name: File confirmed benchmark regressions
+        if: steps.confirm-regressions.outputs.count != '' && steps.confirm-regressions.outputs.count != '0'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          BENCH_REPORT_URL: ${{ steps.benchmark-comment.outputs.url }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const rows = JSON.parse(fs.readFileSync('tmp/bench/confirmed-regressions.json', 'utf8'));
+            const base = process.env.BENCH_BASE_SHA;
+            const head = context.sha;
+            const { owner, repo } = context.repo;
+            const repository = `${context.serverUrl}/${owner}/${repo}`;
+            const baselineMarker = `<!-- be-music-benchmark-regressions:${base} -->`;
+            const observationMarker = `<!-- be-music-benchmark-observation:${head} -->`;
+            const percent = (row) => `${(-row.deltaPercent).toFixed(1)}%`;
+            const body = [
+              observationMarker,
+              `${rows.length} benchmark cases on [devel \`${head.slice(0, 8)}\`](${repository}/commit/${head}) lost at least ${process.env.BENCH_ISSUE_THRESHOLD}% throughput compared with [main \`${base.slice(0, 8)}\`](${repository}/commit/${base}) in both measurement rounds. Each round alternated between the same two commits on one runner, with ${process.env.BENCH_REPEATS} runs per commit and no overlap between their ranges for these cases.`,
+              '',
+              '| Case | Initial ops/s loss | Confirmed ops/s loss |',
+              '| --- | ---: | ---: |',
+              ...rows.slice(0, 25).map((row) => `| \`${row.key}\` | ${percent(row.initial)} | ${percent(row.confirmation)} |`),
+              ...(rows.length > 25 ? ['', `Showing the 25 largest confirmed losses out of ${rows.length} cases.`] : []),
+              '',
+              `[Benchmark report](${process.env.BENCH_REPORT_URL}) · [Workflow run](${repository}/actions/runs/${context.runId})`,
+            ].join('\n');
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'all', labels: 'perf', per_page: 100,
+            });
+            const trackers = issues.filter((item) =>
+              !item.pull_request && item.user?.type === 'Bot' && item.body?.includes(baselineMarker)
+            );
+            for (const issue of trackers) {
+              if (issue.body.includes(observationMarker)) return;
+              if (!issue.comments) continue;
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner, repo, issue_number: issue.number, per_page: 100,
+              });
+              if (comments.some((comment) => comment.user?.type === 'Bot' && comment.body?.includes(observationMarker))) return;
+            }
+            const issue = trackers.find((item) => item.state === 'open');
+            if (issue) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body });
+            } else {
+              await github.rest.issues.create({
+                owner, repo, labels: ['perf'],
+                title: `Confirmed benchmark regressions against main ${base.slice(0, 8)}`,
+                body: `${baselineMarker}\n${body}`,
               });
             }
 
