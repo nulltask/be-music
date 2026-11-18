@@ -217,10 +217,9 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 
 - snapshot 出力: `tmp/bench/exports*.json`
 - compare 出力: 任意の Markdown と summary JSON
-- GitHub Actions では、`devel` / `main` 向け PR で base/head 比較を PR comment として投稿します
-- GitHub Actions では、`devel` / `main` への push でも直前 revision 比較を実行し、対象 commit へ commit comment を投稿します
-- PR・push とも、ファイルが変更されたパッケージだけを測定し、そのパッケージに依存するパッケージは測定しません。ドキュメントと `*.test.*` / `*.spec.*` の変更は除外し、測定対象でないパッケージだけの変更はスキップします。共通ツール・ロックファイル・ルート設定の変更は全件を測定します。CI の各ケースの測定時間 50 ms・ウォームアップ 25 ms は維持します。
-- CI は base と head を同一 runner で交互に（head、base、head、base…）3 回ずつ計測し、ホスト間のノイズや一時的な遅さが両方に等しくかかるようにします
+- GitHub Actions は `devel` / `main` への push 時だけベンチマークを実行します。`devel` では push したコミットを実行時点の `main` と比較します。`main` では push 前後のコミットを比較します。結果は push したコミットにコメントします。
+- 計測対象は push で変更されたファイルから選びます。ドキュメントと `*.test.*` / `*.spec.*` は除外し、共通ツール・ロックファイル・ルート設定が変わった場合は全パッケージを測定します。各ケースのウォームアップは 25 ms、測定時間は 50 ms です。
+- CI は同じランナー上で比較する 2 つのコミットを交互に 5 回ずつ測定し、ランナーの負荷が比較に与える影響を抑えます。
 - 速い関数は 1 回の計測サンプルの中で何度も呼び出し（1 サンプル約 50 µs）、ナノ秒単位のケースもタイマーの分解能に埋もれずに計測します。時間は 1 回の呼び出しあたりで表示します
 - 回帰・改善と判定するのは、中央値の変化がしきい値（CI では 8%）を超え、かつ base と head の各回の計測値が重ならないケースだけです。しきい値を超えても計測値が重なるものは「within noise」として別に表示します
 - `ioBound` を付けたケース（ファイルシステムに触るもの）は、時間が OS のキャッシュやディスクに左右されるため、判定せずに別枠で表示します

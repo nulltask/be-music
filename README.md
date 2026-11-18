@@ -217,10 +217,9 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 
 - snapshot output: `tmp/bench/exports*.json`
 - compare output: arbitrary Markdown and summary JSON
-- In GitHub Actions, post base/head comparison as PR comment in PR for `devel` / `main`
-- GitHub Actions also performs the previous revision comparison when pushing to `devel` / `main` and posts a commit comment to the target commit.
-- Both PR and push benchmarks measure only the packages whose files changed, not the packages that depend on them. Documentation and `*.test.*` / `*.spec.*` changes are ignored; changes to no benchmarked package skip measurement. Shared tooling, lockfiles and root configuration measure the full inventory. Each case retains 50 ms of measurement and 25 ms of warmup in CI.
-- CI measures base and head on the same runner, taking turns (head, base, head, base, …) for 3 runs each, so host-to-host noise and slow stretches hit both sides alike.
+- GitHub Actions runs benchmarks only on pushes to `devel` or `main`. A push to `devel` compares the pushed commit with the current `main`. A push to `main` compares the new tip with the previous `main` tip. GitHub Actions posts the report on the pushed commit.
+- CI selects packages from the files changed in the push. It skips documentation and `*.test.*` / `*.spec.*` files and measures the full inventory when shared tooling, lockfiles, or root configuration changes. Each case runs for 50 ms after a 25 ms warmup.
+- CI measures each revision five times, alternating between them on the same runner to reduce the effect of runner load on the comparison.
 - Fast functions are called many times per timed sample (about 50 µs a sample), so cases that take nanoseconds are measured rather than lost in the timer's resolution. Times are reported per call.
 - A case counts as a regression or an improvement only when its median changes past the threshold (8% in CI) and the runs of the two sides do not overlap; a change past the threshold with overlapping runs is listed as "within noise".
 - Cases marked `ioBound` (they touch the filesystem) are listed apart and never judged, since their time follows the OS cache and the disk.
