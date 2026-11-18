@@ -222,5 +222,6 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 - CI measures each revision five times, alternating between them on the same runner to reduce the effect of runner load on the comparison.
 - Fast functions are called many times per timed sample (about 50 µs a sample), so cases that take nanoseconds are measured rather than lost in the timer's resolution. Times are reported per call.
 - A case counts as a regression or an improvement only when its median changes past the threshold (8% in CI) and the runs of the two sides do not overlap; a change past the threshold with overlapping runs is listed as "within noise".
+- On pushes to `devel`, a case that loses at least 20% of its median ops/s is measured again against the same `main` commit. Cases that meet the threshold with non-overlapping runs in both rounds are reported in one `perf` issue per `main` baseline. Later confirmations are added to the open issue.
 - Cases marked `ioBound` (they touch the filesystem) are listed apart and never judged, since their time follows the OS cache and the disk.
 - The comment leads with the verdict, links the base and head commits, lists the changed packages' cases and new or removed exports, and folds noise, exclusions and run details into collapsible sections.
