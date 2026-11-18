@@ -1,4 +1,4 @@
-import { isN2SArchive, readN2SArchive } from '@be-music/chart-parser';
+import { isN2SArchive, readN2SArchive } from '@be-music/chart-parser/core';
 import type { CourseDefinition, CourseStageRef } from './definition.ts';
 import { decodeCourseText, parseCourseXML } from './text.ts';
 

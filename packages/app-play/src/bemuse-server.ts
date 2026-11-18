@@ -1,7 +1,7 @@
 // Reading a Bemuse music server: its index (`index.json`, or a single-song `bemuse-song.json`), each song's asset index
 // (`assets/metadata.json`) and the `*.bemuse` chunks the asset index points into. The formats and the rules below follow
 // Bemuse's own loader (docs/bemuse-spec.md). Everything here is pure; the fetching lives in `services/bemuse-servers.ts`.
-import { decodeBMSText } from '@be-music/chart-parser';
+import { decodeBMSText } from '@be-music/chart-parser/core';
 import { PLAYER_STORAGE_PREFIX } from './player-storage.ts';
 
 /** `localStorage` key of the registered Bemuse music server URLs, loaded again each time the player opens. */

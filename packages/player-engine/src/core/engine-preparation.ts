@@ -6,7 +6,7 @@ import {
   type ResolvedChart,
 } from '@be-music/chart-model';
 import { type BeMusicEvent, type BeMusicJSON, cloneJSON } from '@be-music/chart-source';
-import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser';
+import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser/core';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { type LaneBinding } from './lane-layout.ts';
 import { type PlayerUISignalBus } from './ui-signal-bus.ts';

@@ -6,7 +6,7 @@ import {
   isPlayableChannel,
   sortEvents,
 } from '@be-music/chart-model';
-import { parseBMS } from '@be-music/chart-parser';
+import { parseBMS } from '@be-music/chart-parser/core';
 import {
   intToBase36,
   normalizeChannel,
