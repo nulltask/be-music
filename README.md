@@ -217,9 +217,8 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 
 - snapshot output: `tmp/bench/exports*.json`
 - compare output: arbitrary Markdown and summary JSON
-- For pull requests targeting `devel` or `main`, GitHub Actions compares the PR head with the current `main` and posts the report on the PR.
-- On pushes to `devel`, GitHub Actions compares the pushed commit with the current `main`. On pushes to `main`, it compares the new tip with the `main` tip before the push. It posts the report as a comment on the pushed commit.
-- Both PR and push benchmarks measure only the packages whose files changed, not the packages that depend on them. Documentation and `*.test.*` / `*.spec.*` changes are ignored; changes to no benchmarked package skip measurement. Shared tooling, lockfiles and root configuration measure the full inventory. Each case retains 50 ms of measurement and 25 ms of warmup in CI.
+- GitHub Actions runs benchmarks only on pushes to `devel` or `main`. A push to `devel` compares the pushed commit with the current `main`. A push to `main` compares the new tip with the previous `main` tip. GitHub Actions posts the report on the pushed commit.
+- CI selects packages from the files changed in the push. It skips documentation and `*.test.*` / `*.spec.*` files and measures the full inventory when shared tooling, lockfiles, or root configuration changes. Each case runs for 50 ms after a 25 ms warmup.
 - CI measures base and head on the same runner, taking turns (head, base, head, base, …) for 3 runs each, so host-to-host noise and slow stretches hit both sides alike.
 - Fast functions are called many times per timed sample (about 50 µs a sample), so cases that take nanoseconds are measured rather than lost in the timer's resolution. Times are reported per call.
 - A case counts as a regression or an improvement only when its median changes past the threshold (8% in CI) and the runs of the two sides do not overlap; a change past the threshold with overlapping runs is listed as "within noise".
