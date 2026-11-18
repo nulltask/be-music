@@ -7,9 +7,9 @@ import type { TimedPlayableNote } from '../playable-notes.ts';
 import { ChartTextController } from './chart-text.ts';
 import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
 import { resolveEffectiveBattleMode } from './battle-mode.ts';
-import { chartNotesCopies, resolveEffectiveChartPlayOptions } from './chart-notes-options.ts';
+import { chartNotesCopies } from './chart-notes-options.ts';
 import { arrangeChartPlayLanes } from './chart-play-lanes.ts';
-import { resolveChartAddMineModifier } from './chart-play-options.ts';
+import { resolveChartAddMineModifier, resolveChartPlayProgram } from './chart-play-options.ts';
 import { applySevenToNine } from './seven-to-nine.ts';
 import { clampExtraNoteDepth } from './extra-note-modifier.ts';
 import { buildAutoKeyBoundBGAInputs, KeyBoundBGAController } from './key-bound-bga.ts';
@@ -24,11 +24,8 @@ import {
   compileChartOptions,
   compileChartPlayOptions,
   isLegacyChartPlayOptionProgram,
-  playerChartPlayOptionsOf,
   resolveChartOptionsAt,
-  withPlayerChartPlayOptions,
   type ChartOptionProgram,
-  type ChartPlayOptionProgram,
   isPlayLaneSoundChannel,
   type ResolvedChart,
 } from '@be-music/chart-model';
@@ -93,9 +90,6 @@ import { createRealtimeAudioCursor, type RealtimeAudioCursor } from './play-audi
 import { createChainSoundQueue, type ChainSoundQueue } from './chain-audio.ts';
 import type { JudgeStrategy } from './play-strategy.ts';
 import { resolvePracticePlayWindow } from './practice.ts';
-
-/** A program that forces nothing. */
-const EMPTY_CHART_PLAY_PROGRAM: ChartPlayOptionProgram = { version: 1, options: {} };
 
 /** A chart sound the realtime audio fires at its time. */
 type TimedChartSound = { readonly event: BeMusicEvent; readonly seconds: number };
@@ -225,29 +219,20 @@ export async function createPlaySession(
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const replay = options.replayInputs !== undefined;
   let resolvedChart = options.preparedChart?.resolvedChart ?? resolveEngineChart(resolvedJSON, options);
-  // The chart's gameplay program (#844, #932): the host's (a replay's recorded one), or compiled here and narrowed to what
-  // takes effect in this play (`resolveEffectiveChartPlayOptions`).
-  // Without a host program the engine also knows which of its options the player added (#1243); a host that hands its
-  // own program records them through `recordReplay.playerChartPlayOptions`.
-  const declaredChartPlay =
-    options.chartPlayOptionProgram !== undefined
-      ? undefined
-      : compileChartPlayOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing));
+  // A host providing the effective program also supplies its player options through recordReplay.
   const chartPlay =
-    declaredChartPlay === undefined
-      ? { program: structuredClone(options.chartPlayOptionProgram ?? EMPTY_CHART_PLAY_PROGRAM), diagnostics: [] }
-      : resolveEffectiveChartPlayOptions(
-          withPlayerChartPlayOptions(declaredChartPlay, options.playerChartPlayOptions),
+    options.chartPlayOptionProgram !== undefined
+      ? { program: structuredClone(options.chartPlayOptionProgram), diagnostics: [], playerOptions: undefined }
+      : resolveChartPlayProgram(
+          compileChartPlayOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing)),
+          options.playerChartPlayOptions,
           {
             playVariant: resolvedChart.playVariant,
             course: options.course !== undefined,
           },
         );
   const chartPlayOptions = chartPlay.program;
-  const playerChartPlayOptions =
-    declaredChartPlay === undefined
-      ? undefined
-      : playerChartPlayOptionsOf(declaredChartPlay.options, chartPlayOptions.options);
+  const playerChartPlayOptions = chartPlay.playerOptions;
   const chartBaseSpeed = chartPlayOptions.options.baseSpeed ?? 1;
   const speed = playerSpeed * chartBaseSpeed;
   const tempoClock = createTempoClock(speed);

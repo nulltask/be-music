@@ -512,6 +512,23 @@ export default defineConfig({
         },
       },
       {
+        files: ['packages/app-leaderboard/src/**/*.ts'],
+        rules: {
+          'no-restricted-imports': [
+            'error',
+            {
+              paths: [
+                parserCoreImport,
+                {
+                  name: engineModule,
+                  message: 'The Leaderboard verifies runs through the replay, course, records, and ruleset entries.',
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
         // Tests read fixtures from disk, and the adapters exist to hold the runtime-specific code.
         files: ['**/*.test.ts', ...runtimeAdapterSources],
         rules: {

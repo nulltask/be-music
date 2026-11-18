@@ -60,6 +60,8 @@ See the frontend guides for [terminal controls and settings](./player-tui.md) an
 | `./records`               | Best records per judge ruleset and the rules that keep them                                                                                                                                                                                                                                                                                                       |
 | `./course`                | Course definitions: LR2 `.lr2crs`, beatoraja courses and table courses, the course maker, and NONSTOP runs                                                                                                                                                                                                                                                        |
 
+The player and replay verifiers use `resolveChartPlayProgram` from `./replay` to determine which chart and player options take effect. It also identifies the effective options supplied by the player.
+
 Import chart-layer APIs from `@be-music/chart-model`. They include `ChartPlayVariant`, `LongNoteMode`, timelines and their points, `BGACue`, BGA timeline builders, the timing resolver, and sample triggers. The rest of the package is internal.
 
 ## Node audio adapter

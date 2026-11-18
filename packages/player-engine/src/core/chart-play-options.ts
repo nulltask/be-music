@@ -1,5 +1,23 @@
-import { isLegacyChartPlayOptionProgram, type ChartPlayOptionProgram } from '@be-music/chart-model';
+import {
+  isLegacyChartPlayOptionProgram,
+  playerChartPlayOptionsOf,
+  withPlayerChartPlayOptions,
+  type ChartOptionDiagnostic,
+  type ChartPlayOptionProgram,
+  type PlayerChartPlayOptions,
+} from '@be-music/chart-model';
+import { resolveEffectiveChartPlayOptions, type ChartPlayOptionContext } from './chart-notes-options.ts';
 import type { MineModifier } from './mine-modifier.ts';
+
+/** Resolve a play's program and identify the effective options contributed by the player. */
+export function resolveChartPlayProgram(
+  declared: ChartPlayOptionProgram,
+  player: PlayerChartPlayOptions | undefined,
+  context: ChartPlayOptionContext,
+): { program: ChartPlayOptionProgram; diagnostics: ChartOptionDiagnostic[]; playerOptions: PlayerChartPlayOptions } {
+  const effective = resolveEffectiveChartPlayOptions(withPlayerChartPlayOptions(declared, player), context);
+  return { ...effective, playerOptions: playerChartPlayOptionsOf(declared.options, effective.program.options) };
+}
 
 /** The player's arrangement and mine choices a chart's gameplay options can replace. */
 export interface ChartPlaySelection {
