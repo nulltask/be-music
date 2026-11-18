@@ -2,8 +2,21 @@
 
 # @be-music/app-leaderboard
 
-The Be-Music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. The design is in
-[docs/leaderboard.md](../../docs/leaderboard.md); this README covers running and deploying it.
+This Hono app serves the Be-Music Leaderboard API on Cloudflare Workers and stores data in D1 and R2. [Service specification](../../docs/leaderboard.md)
+
+<details>
+<summary>Table of contents</summary>
+
+- [What is implemented](#what-is-implemented)
+- [Setup](#setup)
+  - [Secrets](#secrets)
+- [Database](#database)
+- [Deploy](#deploy)
+- [Pages](#pages)
+  - [Icons](#icons)
+- [Tests](#tests)
+
+</details>
 
 ## What is implemented
 

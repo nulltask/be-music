@@ -18,22 +18,4 @@
 
 エンジンは音声レンダーも Node 出力も import しません。Node のホストは [`@be-music/player-node-audio`](../player-node-audio/README.ja.md) の `createAudioSession` を設定します。
 
-## FREE ZONE (`17` / `27`)
-
-- 9KEY と 24KEY / 48KEY の keyboard mode 以外では FREE ZONE として扱います。
-- 独立レーンは作らず、スクラッチレーン (`16` / `26`) に重ねて描画します。
-- ノート長は 4 分音符固定です。
-- 判定対象外のため、`TOTAL` / `EX-SCORE` / `SCORE` には含めません。
-- 9KEY / 24KEY / 48KEY 判定時は `17` / `27` を通常レーンノートとして扱います。
-
-## スコアと判定
-
-- 判定種別: `PERFECT`, `GREAT`, `GOOD`, `BAD`, `POOR`
-- `FAST` / `SLOW` は `GREAT` / `GOOD` の早押し・遅押し時のみ加算
-- 対応する未判定ノートが存在しない空打鍵は LR2-style empty POOR として扱います。judgment counter、score、EX-SCORE、combo は変えませんが、empty POOR の gauge delta を適用し、POOR BGA を起動します
-- EX-SCORE:
-  - `PERFECT = +2`
-  - `GREAT = +1`
-- SCORE (200000 満点):
-  - 判定基礎点 150000 + コンボ加点 50000
-  - `BAD` / `POOR` は加点なし、コンボを切断
+譜面の解釈は [FREE ZONE](../../docs/player-spec.ja.md#free-zone)、判定の詳細は [判定・スコア・ゲージ](../../docs/player-judgment.ja.md) を参照してください。

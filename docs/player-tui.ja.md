@@ -6,6 +6,22 @@
 timing、note、判定、score、gauge、BGA cue などの共有再生意味論は [Player 実装仕様](./player-spec.ja.md) で定義します。
 browser 固有の PixiJS / WebAudio 挙動は [Browser player 実装メモ](./player-web.ja.md) に記述します。
 
+<details>
+<summary>目次</summary>
+
+- [Runtime 境界](#runtime-境界)
+- [Entry flow](#entry-flow)
+- [Music Select](#music-select)
+- [Preview playback](#preview-playback)
+- [Input model](#input-model)
+- [TUI rendering](#tui-rendering)
+- [BGA と terminal image](#bga-と-terminal-image)
+- [読み込み画面](#読み込み画面)
+- [設定とログ](#設定とログ)
+- [Compatibility boundary](#compatibility-boundary)
+
+</details>
+
 ## Runtime 境界
 
 `@be-music/player-terminal` は、共有 `@be-music/player-engine` engine を使う Node frontend です。
@@ -122,6 +138,8 @@ target refresh rate の既定値は `60fps` です。`--tui-fps <value>` は任�
 UI worker は可能な限り full frame payload ではなく compact frame patch を受け取ります。
 terminal resize event、pause state、high-speed change、judge/combo update、deferred UI command flush も追跡します。
 
+ロングノートの始点と終点を本体より優先して描き、地雷はそれらより優先します。レーン外の再生位置表示では、現在位置に最も近い行を明るい縦棒で示します。
+
 ## BGA と terminal image
 
 terminal BGA renderer は共有 BGA timeline helper を使い、base、layer、layer2、POOR track に対応します。
@@ -129,13 +147,28 @@ BMP、PNG、JPEG、対応 video frame を読み込み、active frame を ANSI co
 BMS layer channel は black pixel を transparent として扱います。bmson layer image は black pixel を画像データとして保持します。
 動画コーデックは同梱 LibAV のデコーダーで処理し、H.264、HEVC、VP9/WebM などに対応します。デコーダーや画素形式が非対応の場合、その素材は利用できません。先頭フレームの読み込みは、ファイル末尾で遅延フレームを取り出す場合も含め、変換した1フレームで停止します。
 
-`#STAGEFILE` は loading screen 専用です。
-terminal 全体に cover fit で描画し、画像が見つからない場合や非対応の場合は text loading へ fallback します。
 `#BANNER` と bmson `info.banner_image` は terminal に十分な幅がある場合、Music Select に表示します。
 
 Kitty graphics は対応 terminal で既定有効です。
 ANSI rendering を強制する場合は `--no-kitty-graphics` を使います。
 video BGA は既定で progressive decode します。`--no-video-bga-streaming` を使うと旧来の full-predecode behavior に戻します。
+
+## 読み込み画面
+
+選曲後の loading 中は、CLI が progress bar と現在の手順を標準出力へ描画します。
+このとき `metadata.stageFile` が存在し、画像を解決できる場合は、その画像を ANSI 化して terminal 全体へ描画し、loading 文言はその上にオーバーレイします。
+
+loading 文言は高レベルの `Step` に加えて、`Sound` と `Visual` の個別状態を表示します。
+audio 読み込みと graphics 読み込みは並列に進むため、どちらで待っているかを画面上で判別できます。
+各行の detail には、必要に応じて現在処理中のファイル名や `3/24` のような件数も表示します。
+
+`#STAGEFILE` の表示サイズは現在の端末サイズいっぱいまで使います。
+描画時は画像の縦横比を維持したまま、terminal 全体を覆うように `cover` 相当で拡大します。端末比率と合わない場合は中央基準で一部を crop します。
+loading 文言はその上へオーバーレイし、各文字セルの背景色には対応する `STAGEFILE` ピクセル色を使います。文字色は背景とのコントラスト比が高いほうを選ぶため、白または黒のどちらかになります。
+
+`#STAGEFILE` が未指定、ファイル未発見、非対応形式、デコード失敗の場合は、画像なしのテキスト loading screen へフォールバックします。
+`#STAGEFILE` は loading 専用であり、gameplay 中の BGA renderer は参照しません。最初の base BGA cue がまだ有効でない間は、viewport は黒背景のままです。
+`--kitty-graphics` が有効で、対応端末なら `#STAGEFILE` は Kitty graphics protocol の画像 overlay として表示します。Kitty graphics は既定で有効で、`--no-kitty-graphics` を指定した場合や非対応端末では ANSI 表示になります。
 
 ## 設定とログ
 
@@ -158,8 +191,8 @@ terminal player は LR2 skin file や beatoraja skin file を読み込みませ�
 独自の TUI を描画し、note、scoring、gauge、input、timing、BGA cue、result summary は共有 engine semantics を使います。
 
 互換ルールセットとゲージは選択できます: `--ruleset <lr2|beatoraja|____>`（既定 `lr2`）と
-`--gauge <GROOVE|EASY|HARD|DEATH>`（既定 `GROOVE`）。各ルールセットが何を支配するかは
-[player-spec.ja.md](./player-spec.ja.md) を参照してください。サバイバル系ゲージが尽きるとその場でプレイを終えます。
+`--gauge <GROOVE|EASY|HARD|DEATH|DEATH-CORRECTED>`（既定 `GROOVE`）。各ルールセットが何を支配するかは
+[判定とゲージ](./player-judgment.ja.md) を参照してください。サバイバル系ゲージが尽きるとその場でプレイを終えます。
 `--no-end-on-failure` は練習用に最後まで判定を続けます（`PlayerOptions.endOnFailure: false`）。
 
 2P independent gauge variant と LR2 / beatoraja skin option panel は browser 側の関心事です。

@@ -16,6 +16,7 @@
 - [Browser player 実装メモ](player-web.ja.md)
 - [シーンモデル（`@be-music/player-scene-model`）](scene-model.ja.md)
 - [リプレイ（プレイ履歴）仕様](replay.ja.md)
+- [プレイオプション](./play-options.ja.md)
 - [コースと段位認定](course.ja.md)
 - [ブラウザー検証](player-web.ja.md#ブラウザー検証)
 - [Be-Music Fingerprint 仕様](fingerprint-spec.ja.md)

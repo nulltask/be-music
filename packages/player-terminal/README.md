@@ -2,9 +2,27 @@
 
 # @be-music/player-terminal
 
-The terminal UI and the `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA and SEA builds, plus the `bms-replay` replay re-simulator. It plays through [`@be-music/player-engine`](../player-engine/README.md) and [`@be-music/player-node-audio`](../player-node-audio/README.md).
+`bms-player` runs Music Select and gameplay in the terminal. It supports autoplay, keyboard input and BGA, and can be built as a standalone executable. `bms-replay` re-simulates a recorded play.
 
 See the [Terminal player implementation notes](../../docs/player-tui.md) and the [Player implementation specification](../../docs/player-spec.md).
+
+<details>
+<summary>Table of contents</summary>
+
+- [Features](#features)
+- [Usage](#usage)
+  - [Replay re-simulation](#replay-re-simulation)
+- [Operations](#operations)
+  - [Song selection screen](#song-selection-screen)
+  - [Playing](#playing)
+  - [Results screen](#results-screen)
+- [Lane input assignment](#lane-input-assignment)
+- [Keyboard input (kitty keyboard protocol)](#keyboard-input-kitty-keyboard-protocol)
+- [BGA implementation](#bga-implementation)
+- [Settings/Cache/Log](#settingscachelog)
+- [SEA (Single Executable Applications)](#sea-single-executable-applications)
+
+</details>
 
 ## Features
 

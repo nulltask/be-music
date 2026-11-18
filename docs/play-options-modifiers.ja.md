@@ -1,0 +1,367 @@
+[English version](./play-options-modifiers.md)
+
+# レーン・譜面・ゲージのプレイオプション
+
+[プレイオプションと記録の方針](./play-options.ja.md)
+
+選んだオプションの参照元によってレーン配置や譜面の変換方法が決まります。ゲージの切り替えは、選択したゲージの規則に従います。
+
+<details>
+<summary>目次</summary>
+
+- [R-RANDOM](#r-random)
+- [SPIRAL](#spiral)
+- [H-RANDOM](#h-random)
+- [スクラッチを含める（LR2）](#スクラッチを含めるlr2)
+- [CONVERGE](#converge)
+- [ALL-SCR](#all-scr)
+- [RANDOM-EX と S-RANDOM-EX](#random-ex-と-s-random-ex)
+- [PMS 用の無理押しなし RANDOM と S-RANDOM](#pms-用の無理押しなし-random-と-s-random)
+- [参照元のシードと前回の配置](#参照元のシードと前回の配置)
+- [リザルト画面: 同じ配置でもう一度、ゲージグラフの切り替え](#リザルト画面-同じ配置でもう一度ゲージグラフの切り替え)
+- [SCATTER](#scatter)
+- [SYNCHRONIZE RANDOM と SYMMETRY RANDOM](#synchronize-random-と-symmetry-random)
+- [M-RAN](#m-ran)
+- [BATTLE と M-RAN のキー](#battle-と-m-ran-のキー)
+- [nanasigroove の GOOD2BAD・GREAT2BAD・HELLJUDGE](#nanasigroove-の-good2badgreat2badhelljudge)
+- [nanasigroove の NOTES](#nanasigroove-の-notes)
+- [地雷の REMOVE と ADD](#地雷の-remove-と-add)
+- [ADD LN / ADD CN / ADD HCN / ADD ALL](#add-ln--add-cn--add-hcn--add-all)
+- [スクロールの REMOVE と ADD](#スクロールの-remove-と-add)
+- [SOFTLANDING](#softlanding)
+- [ゲージオートシフト](#ゲージオートシフト)
+- [DEATH corrected](#death-corrected)
+- [P.ATTACK / G.ATTACK](#pattack--gattack)
+- [EXTRA ノート変換](#extra-ノート変換)
+- [LR2 の EXTRA MODE](#lr2-の-extra-mode)
+- [LR2 マニアの譜面オプション](#lr2-マニアの譜面オプション)
+- [LN MODE](#ln-mode)
+- [SP TO DP・DP-TO-SP・9-TO-7](#sp-to-dpdp-to-sp9-to-7)
+- [7 TO 9](#7-to-9)
+- [BATTLE・BATTLE AS・D-BATTLE](#battlebattle-asd-battle)
+- [2 人プレイの BATTLE と COUPLE](#2-人プレイの-battle-と-couple)
+- [スキンでの BATTLE](#スキンでの-battle)
+
+</details>
+
+## R-RANDOM
+
+どのルールでも、Options ダイアログ の **Play options → Random 1P / Random 2P → R-RANDOM** を選択します。R-RANDOM は片側の鍵盤レーン全体を正順または逆順に回転させ、スクラッチは固定します。beatoraja 0.8.9 の `LaneRotateShuffleModifier` と同様に元の並びと MIRROR を除外し、残りの回転を等確率で選びます。どのルールでもこの回転の集合を使い、ルールを切り替えても選択を維持します。その側のシードで抽選します（「参照元のシードと前回の配置」を参照）。beatoraja は R-RANDOM をアシストなしのオプションとして扱い、`grade_random` 制約のコースでは beatoraja が先頭 6 種類のランダムを維持するのと同様に維持します。
+
+リプレイは選択を `play.randomLane` と `play.options.random1P` / `random2P` に、各ノートの最終的なレーンを元のレーン（`sourceChannel`）とともに記録します。そのためリプレイは再抽選せず、記録したレーンを適用します。内蔵の選曲画面の **Lanes** と共通のプレイオプション API はすべてのレーンオプション名を列挙し、実行中のルールにない選択でプレイを始めると明示的にエラーにします。LR2 スキンでは RANDOM のオプションテキストに選択した名前を参照元なしで表示し、RANDOM ボタン（42 / 43）は、ADR 0019 のとおりスキンが自分の参照元の値だけを切り替えるため、LR2 自身の 6 つのレーンオプション、OFF / MIRROR / RANDOM / S-RANDOM / SCATTER / CONVERGE のセル（`RANDOM`、`lr2:S-RANDOM`、`SCATTER`、`lr2:CONVERGE`）だけを切り替えます。ほかの参照元の S-RANDOM・CONVERGE はその名前のセルに表示し、そこから次へ進みます。それ以外の選択は最初のセルに表示し、クリックすると OFF になります。beatoraja スキンの RANDOM 1P / 2P ボタン（42 / 43）は、フォーカスした譜面のプレイモード（PMS かどうか）に応じた beatoraja 0.8.9 の 10 個のレーンオプション（RANDOM は共通のもの、S-RANDOM・CONVERGE は beatoraja 自身のもの）を切り替え、ラベルにはその枠を表示します。ほかの参照元の S-RANDOM はその名前の枠に表示します（[beatoraja スキン](./beatoraja-skin.ja.md)を参照）。それ以外の選択は Options ダイアログ で選びます。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+参照元：beatoraja 0.8.9 の [`Random`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Random.java) と [`LaneShuffleModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/LaneShuffleModifier.java)、AC 34 の[プレイオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。対応 Issue は [#693](https://github.com/nulltask/be-music/issues/693) です。
+
+## SPIRAL
+
+どのルールでも **Random 1P / Random 2P → SPIRAL** を選択します。SPIRAL は 1〜N−1 レーンの刻みを 1 つ抽選し、タイムラインごとに鍵盤レーンを前のタイムラインよりその刻みだけ多く回転させます。ロングノートを押している間は、終点を過ぎるまで回転を止めます。beatoraja 0.8.9 の `SpiralRandomizer` と同様に、スクラッチ・地雷・不可視オブジェクト・反対側のオブジェクトだけのタイムラインや、ロングノートの終点だけのタイムラインもすべて数えます。スクラッチは固定し、刻みをその側のシードで抽選します。
+
+beatoraja は SPIRAL を LIGHT_ASSIST とします。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。`grade_random` 制約のコースでは維持します。リプレイは SPIRAL を `play.randomLane` と `play.options` に各ノートの最終的なレーンとともに記録するため、リプレイで再抽選しません。
+
+参照元：beatoraja 0.8.9 の [`Random`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Random.java) と [`Randomizer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Randomizer.java)。対応 Issue は [#696](https://github.com/nulltask/be-music/issues/696) です。
+
+## H-RANDOM
+
+どのルールでも **Random 1P / Random 2P → H-RANDOM** を選び、**H-RANDOM threshold BPM (beatoraja)** を設定します。範囲は beatoraja 0.8.9 の `PlayerConfig` と同じ 1〜1000、既定は 120 です。H-RANDOM は S-RANDOM と同様にタイムラインごとにノートを配置しますが、各ノートは直前のノートがしきい値 BPM の 16 分音符 1 つ分（`ceil(15000 / BPM)` ミリ秒）より前にあるレーンを優先します。条件を満たす空きレーンがない場合は、最も長く空いているレーンを使います。押しているロングノートは終点までレーンを維持し、スクラッチは固定します。抽選にその側のシードを使います。beatoraja の `Randomizer.create` と同様に、同じしきい値を ALL-SCR、beatoraja の CONVERGE、S_RANDOM_PLAYABLE でも使います。
+
+beatoraja は H-RANDOM を LIGHT_ASSIST とします。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。リプレイは選択を `play.randomLane` と `play.options` に、範囲内に収めたしきい値を `play.options.hRandomThresholdBPM` に、各ノートの最終的なレーンとともに記録します。
+
+参照元：beatoraja 0.8.9 の [`Randomizer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Randomizer.java) と [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java)。対応 Issue は [#697](https://github.com/nulltask/be-music/issues/697) です。
+
+## スクラッチを含める（LR2）
+
+Options ダイアログの **Include scratch 1P / 2P (LR2)** で、5・7・10・14 KEY のスクラッチを、その側の MIRROR、RANDOM、LR2 S-RANDOM、SCATTER、LR2 CONVERGE の配置に含めます。既定はオフです。LR2 beta3 の隠しコマンドは譜面決定時に片側のボタン 12 と 13 を同時に押して有効にします。Be-Music の設定は両側を個別に保存します。LR2 の BATTLE で両者のレーンオプションが同じ場合は、2P も 1P の配置を使います。D-BATTLE ではどちらかの設定がオンなら、両側のスクラッチをプレイできるレーンに残します。[OpenLR2 の入力処理](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/Main.cpp#L1235-L1257) · [BATTLE の配置](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27432-L27485)
+
+MIRROR はスクラッチと外端の鍵盤を入れ替えます。1P の RANDOM で抽選後に鍵盤がスクラッチへ移る場合、固定キーを指定すると、その元の鍵盤を指定した鍵盤に置き換えます。CONVERGE の固定先は両側とも 0 がスクラッチで、1 からは鍵盤番号と一致します。スコアの扱いは選んだレーンオプションに従い、この設定自体はアシストになりません。リプレイは両側の設定と最終配置を記録します。[OpenLR2 の配置と抽選範囲](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27100-L27227) · [固定先](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27337-L27380) · [スコア保存条件](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L68-L79)
+
+## CONVERGE
+
+どのルールでも **Random 1P / Random 2P → CONVERGE (LR2)**（`lr2:CONVERGE`）を選び、**Fixed key 1P / Fixed key 2P (LR2; 0=default)** で集める先のレーンを選びます。1〜9 は鍵盤を、0 はモードの既定値（スクラッチ、9 鍵盤の譜面では鍵盤 5）を選びます。LR2 beta3 に従い、各ノートはまず集める先のレーンを試し、同じタイムラインのノートや押しているロングノート（終点まで）がすでにある場合は、空いている鍵盤レーンからランダムに選びます。[スクラッチを含める設定](#スクラッチを含めるlr2)がオフの場合、スクラッチのノートは元のレーンに残ります。2P 側では LR2 が固定鍵盤に 2P の開始レーンを足す（[L27374-L27380](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27374-L27380)）ため、CONVERGE (LR2) は 2P の集める先を 1 レーン右にずらします。0 はスクラッチではなく鍵盤 1、鍵盤 n は鍵盤 n + 1 になり、最後の鍵盤は鍵盤の外を指して、そのノートは叩けません（10 鍵盤では `28`、チャンネルの無い 14 鍵盤では `2A`）。**CONVERGE corrected (LR2)**（`CONVERGE-CORRECTED`）は 2P でも 1P と同じく選んだ鍵盤に集め、9 鍵盤の譜面の抽選も 9 鍵の中だけにします（[#1083](https://github.com/nulltask/be-music/issues/1083)）。記録の扱いは CONVERGE と同じです。LR2 の CONVERGE は 5・7・9・10・14 鍵盤の譜面で使え、それ以外の譜面では明示的にエラーにします。LR2 beta3 は CONVERGE でスコアを保存しません（`CheckScoreSaveConditon`）。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+14 KEY の LR2 S-RANDOM と CONVERGE では、並べ替え後にスクラッチが先に処理されると、その側の遠い鍵盤（1P の 4〜7、2P の 1〜4）に回避の印が付きます。印の付いた鍵盤は抽選範囲のすべてに印が付いた場合に選べます。CONVERGE の固定先にも同じ条件を適用します。共有の S-RANDOM はどの判定ルールでも LR2 の配置を使います。旧値 `____:S-RANDOM` も同じオプションを指します。記録済みリプレイでは保存済みのノート配置を使います。配置可能なレーンがなく再抽選が終わらない場合、Be-Music は譜面準備をエラーにします。[配置の実装](../packages/player-engine/src/lane-lr2-double.ts)
+
+**CONVERGE (beatoraja)**（`beatoraja:CONVERGE`）は、beatoraja 0.8.9 の別の PMS 用配置（`Random.OPTION_PMS`、`ConvergeRandomizer`）で、PMS 以外の譜面では明示的にエラーにします。H-RANDOM のしきい値を過ぎた空きレーンのうち、現在の連続回数が最も多いレーンにノートを置き、しきい値の 2 倍を超えて空いたレーンの連続回数はリセットします。その側のシードを使い、beatoraja はこれを LIGHT_ASSIST とします。AC に CONVERGE はありません。古いリプレイや設定にある参照元のない `CONVERGE` は判定ルール自身のものです。リプレイは選択を `play.randomLane` と `play.options` に、LR2 の集める先を `play.options.randomFixedLane1P` / `randomFixedLane2P` に、各ノートの最終的なレーンとともに記録します。
+
+参照元：OpenLR2 の [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27322-L27404) と[スコア保存条件](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L68-L79)、beatoraja 0.8.9 の [`Random`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Random.java) と [`Randomizer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Randomizer.java)。対応 Issue は [#695](https://github.com/nulltask/be-music/issues/695) と [#701](https://github.com/nulltask/be-music/issues/701) です。
+
+## ALL-SCR
+
+どのルールでも **Random 1P / Random 2P → ALL-SCR** を選択します。beatoraja 0.8.9 の `AllScratchRandomizer` に従い、各タイムラインでスクラッチが空いていて直前のノートが 40 ミリ秒より前にある場合、鍵盤のノートを 1 つスクラッチへ移します。残りのノートは H-RANDOM と同様に、そのしきい値で鍵盤とスクラッチに配置します。DP では各側が自分のスクラッチを使い、残りのノートはランダムではなく参照元の固定の側別順序でレーンを選びます。ALL-SCR にはスクラッチレーンが必要なため、PMS の譜面では明示的にエラーにします。抽選にその側のシードを使います。
+
+beatoraja は ALL-SCR を LIGHT_ASSIST とします。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりで、`grade_random` のコースでは OFF にします。リプレイは選択を `play.randomLane` と `play.options` に各ノートの最終的なレーンとともに記録します。
+
+参照元：beatoraja 0.8.9 の [`Random`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Random.java) と [`Randomizer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Randomizer.java)。対応 Issue は [#698](https://github.com/nulltask/be-music/issues/698) です。
+
+## RANDOM-EX と S-RANDOM-EX
+
+どのルールでも **Random 1P / Random 2P → RANDOM-EX** または **S-RANDOM-EX** を選択します。どちらも RANDOM と S-RANDOM が動かすレーンに、その側のスクラッチレーンを加えます。RANDOM-EX は、beatoraja 0.8.9 の `LaneRandomShuffleModifier` がスクラッチを含める場合と同様に、鍵盤とスクラッチの譜面全体の並べ替えを 1 つ抽選します。判定ルールに関係なく常に beatoraja の並べ替えです。S-RANDOM-EX は、beatoraja の S-RANDOM の 40 ミリ秒の縦連しきい値でタイムラインごとに鍵盤とスクラッチへノートを配置し、条件を満たさない場合は最も長く空いているレーンを使います。どちらもスクラッチレーンが必要なため PMS の譜面では明示的にエラーにし、その側のシードを使います。
+
+beatoraja はどちらも LIGHT_ASSIST とします。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりで、`grade_random` のコースでは OFF にします。リプレイは選択を `play.randomLane` と `play.options` に各ノートの最終的なレーンとともに記録するため、移動したスクラッチのノートも記録したレーンで再生します。
+
+参照元：beatoraja 0.8.9 の [`Random`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Random.java)、[`LaneShuffleModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/LaneShuffleModifier.java)、[`Randomizer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Randomizer.java)。対応 Issue は [#699](https://github.com/nulltask/be-music/issues/699) と [#700](https://github.com/nulltask/be-music/issues/700) です。
+
+## PMS 用の無理押しなし RANDOM と S-RANDOM
+
+どのルールでも **Random 1P / Random 2P → RANDOM_PLAYABLE** または **S_RANDOM_PLAYABLE** を選択します。どちらも beatoraja 0.8.9 の `Random.OPTION_PMS` にある PMS 用の配置で、他の譜面では明示的にエラーにします。RANDOM_PLAYABLE（`LanePlayableRandomShuffleModifier`）は、どの同時押しも参照元の 10 種類の無理な 3 鍵の形にならない並べ替えから、元の並びと MIRROR を除いて 9 鍵の譜面全体の並べ替えを等確率で 1 つ選びます。7 鍵以上の同時押しがある場合や条件を満たす並べ替えがない場合は、元の並びか MIRROR をランダムに使います。参照元の処理は変換のシードを使わないため、RANDOM_PLAYABLE ではその側の Seed を Options ダイアログ に表示しません。
+
+S_RANDOM_PLAYABLE（`NoMurioshiRandomizer`）はタイムラインごとにノートを配置し、押しているロングノートを含めて 3〜6 個のノートがあるタイムラインでは、押しているレーンを含む参照元の 10 種類の 6 鍵の押せる形のいずれかに、H-RANDOM のしきい値とあわせて収めます。しきい値を過ぎたレーンが足りる形がない場合、固定した版の参照元は例外を投げます。Be-Music は独自の代替処理を作らず、プレイを明示的にエラーにします。抽選にその側のシードを使います。beatoraja はどちらも LIGHT_ASSIST とします。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。リプレイは選択を `play.randomLane` と `play.options` に各ノートの最終的なレーンとともに記録します。
+
+参照元：beatoraja 0.8.9 の [`Random`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Random.java)、[`LaneShuffleModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/LaneShuffleModifier.java)、[`Randomizer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Randomizer.java)。対応 Issue は [#702](https://github.com/nulltask/be-music/issues/702) と [#703](https://github.com/nulltask/be-music/issues/703) です。
+
+## 参照元のシードと前回の配置
+
+Options ダイアログ はどのルールでも **Seed 1P / Seed 2P (-1=random)** を表示します。シードは 0〜9223372036854775807 の Java の long 値で、LR2 と AC のものも含めてすべてのレーンオプションを、beatoraja 0.8.9 の変換と同様に `java.util.Random` で抽選します。そのため判定ルールに関係なく、同じ譜面・レーンオプション・シードでは同じ配置になります。beatoraja のオプションでは地雷と不可視ノートまで beatoraja と同じ配置になります。タイムラインのノートの無いレーンは、縦連の閾値を超えたレーンから先に、残りのレーンへ置きます。DP の ALL-SCR は 1P では番号の最も小さいレーン、2P では最も大きいレーンを選びます（[#1087](https://github.com/nulltask/be-music/issues/1087)）。-1 はプレイごとに 16,777,216 未満の新しいシードを抽選します。リプレイは各側で実際に使ったシードを `play.options.randomSeed1P` / `randomSeed2P` に記録します。LR2 と AC には入力できる独自のシードがないため（LR2 はプレイごとに 15 ビットのシードを 1 つ引き、`#RANDOM` と両側で共有してプレイとともに記録します。AC にはシードがありません）、それらのアルゴリズムも同じ Java の `Random` の乱数列を使います。シードで配置を再現できるのは Be-Music の中だけで、LR2 では再現しません。譜面自身の ALL / ALL+ の並べ替えは 1P のシードで抽選します。RANDOM_PLAYABLE は参照元と同様にシードを使わず、beatoraja の地雷の ADD RANDOM とロングノートの追加もシードを使いません。[#933](https://github.com/nulltask/be-music/issues/933) で追跡しています。
+
+**Reuse previous arrangement** と **New arrangement** ボタンはどのルールでも表示します。Reuse は、リプレイ・コース・NONSTOP を除く直前のプレイを対象に、そのレーンオプション（Random 1P / 2P、シード、Fixed key、DP flip、H-RANDOM のしきい値、Long notes）を選択します。次に同じ譜面をプレイすると、beatoraja の譜面オプションの再現が譜面のレーンオプション・シード・分岐を復元するのと同様に、記録したレーンと `#RANDOM` の結果をそのまま使い、入力は通常どおり受け付けて新しいリプレイを記録します。これらのオプションを変更するか **New arrangement** を押すと再利用を解除し、New arrangement は両側のシードも -1 に戻します。別の譜面のプレイには影響しません。再利用には直前のプレイと同じ判定ルールが必要です。ほかのルールでは何も選択せず、ほかのルールで再利用の配置をプレイした場合は「The previous arrangement was played under other judgment rules.」というエラーにします。譜面のハッシュが異なる配置を再利用した場合も明示的にエラーにします。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+参照元：beatoraja 0.8.9 の [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java) と [`Randomizer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/Randomizer.java)。対応 Issue は [#721](https://github.com/nulltask/be-music/issues/721) です。
+
+## リザルト画面: 同じ配置でもう一度、ゲージグラフの切り替え
+
+beatoraja のリザルト画面のキー 2 つ（[`MusicResult` L214-L246](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L214-L246)、[L267-L280](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/result/MusicResult.java#L267-L280)）[V] を、リザルト画面の操作として追加しました。どちらのキーマップでも使え、Keys で割り当てを変えられます。
+
+**Retry (same arrangement)**（`result.retry-same`、**T**）は、いま終えたプレイと同じノーツ配置（レーンと `#RANDOM` の結果）でその譜面をもう一度プレイします。入力は実際の操作で、新しいリプレイを記録します。**Retry**（`result.retry`、R）はこれまでどおり新しい配置を引きます。
+
+- beatoraja のキーマップでは、画面が閉じる時点で 7 鍵を押していれば同じ配置、5 鍵なら新しい配置です。両方押していれば 5 鍵が優先されます（beatoraja がキーを順に読むため）。これまではどちらも通常のリトライでした。
+- アシストを使ったプレイは、beatoraja と同じく新しい配置でプレイし直します（「アシストモード時は同じ譜面でリプレイできません」）。ここでは、スコアが更新されないプレイ（アシスト区分が LIGHT ASSIST か ASSIST、または記録を残さないプレイ）が該当します。
+- リプレイ再生のリザルトと AUTO プレイのリザルトには繰り返す配置がないので、このキーは R と同じ動作になります。リザルト画面で判定ルールを変えた場合も同じです。配置は、記録したときのルールでしか繰り返せないためです。
+- リトライできる場面でだけ使えます。単曲プレイが対象で、コースのステージやコースのリザルトでは使えません。
+
+**Gauge graph**（`result.change-graph`、**G**。beatoraja のキーマップでは 6 鍵も）は、ゲージグラフをそのプレイのルールの次のゲージに切り替えます。ルールごとの順で、最後まで行くと先頭に戻ります。beatoraja のルールでは ASSIST EASY から HAZARD、LR2 では EASY から DEATH、`____` では ASSISTED EASY から EX-HARD です。ゲージの値、ランプ、判定数はプレイのままで、変わるのはグラフだけです。内蔵、LR2、beatoraja のどのリザルト画面でも切り替わります。プレイしたゲージに戻ると、プレイ自身のグラフを表示します。
+
+- beatoraja はプレイ中にすべてのゲージを記録し、選ばれたゲージの記録を描きます。Be-Music はプレイに必要なゲージしか動かさないため、ほかのゲージのグラフはリプレイから再シミュレーションします（`@be-music/player-engine/replay` の `resolveReplayGaugeHistories`）。各ゲージを単独で、それぞれの開始値から動かします。シミュレーションは決定的なので、そのゲージでプレイしたときに描かれるグラフと同じになります。
+- ゲージが尽きて止まったプレイでは、どのグラフもそこで終わります。beatoraja は残りを 0 で埋めますが、ここではグラフを止めます [I]。
+- ゲージの自動切り替えを使ったプレイは、キーを押すまで、その時点で有効だったゲージに沿った自分のグラフを表示します。切り替えたあとのグラフは、それぞれ 1 つのゲージのものです。
+- コースでは使えません。ステージのほかのゲージは、記録されていない値から始まるためです。beatoraja はコースで段位ゲージ 3 種を切り替えます。LR2 の P-ATTACK と G-ATTACK は並びにないため、これらでプレイした場合は先頭のゲージから切り替わります。
+
+[#1133](https://github.com/nulltask/be-music/issues/1133) で追跡しています。
+
+## SCATTER
+
+どのルールでも、**Random 1P / Random 2P** に **SCATTER (LR2)** と **SCATTER 9KEY corrected (LR2)** があり、それぞれ `SCATTER` と `SCATTER-CORRECTED` として記録します。SCATTER は LR2 beta3 の配置（LR2body.exe 100201、OpenLR2 による再構成）を再現します。各鍵盤ノートは、そのタイムラインでまだ使っておらずロングノートも押されていないレーンからランダムに選び、直前のタイムラインで使ったレーンを避けます。直前のレーンを再び使うのは、他に空きがない場合だけです。スクラッチのノートだけのタイムラインでも回避の対象は進みますが、不可視ノートやロングノートの終点だけでは進みません。スクラッチは固定し、14 鍵盤ではスクラッチのノートがあると参照元の決まった同じ側の鍵盤を回避の対象に加えます。DP FLIP を使う場合、タイムラインの管理は LR2 と同じく反転前の側に従います。SCATTER は 5・7・9・10・14 鍵盤の譜面で使えます。
+
+9 鍵盤の譜面では、LR2 beta3 の抽選は PMS のプレイエリア外にある 10 番目の行き先（2P のスクラッチ）に届くことがあります。**SCATTER (LR2)** はこれを再現し、そのノートはレーンを増やさず、叩けないため POOR になります。**SCATTER 9KEY corrected (LR2)** は 9 鍵の中だけで抽選する 9 鍵盤用のオプションで、他の譜面では明示的にエラーにします。LR2 の 9 鍵の S-RANDOM と CONVERGE も同じ引き方をする（`startlane + GetRand(9)`、[L27354](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27354)・[L27372](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27372)）ため、9 鍵盤の譜面では **S-RANDOM (LR2 / ????)** と **CONVERGE (LR2)** もノートを 2P のスクラッチに置くことがあります。**S-RANDOM 9KEY corrected (LR2)**（`S-RANDOM-CORRECTED`、9 鍵盤用）と **CONVERGE corrected (LR2)**（[CONVERGE](#converge) を参照）は 9 鍵の中だけに置きます。リプレイは選択を `play.randomLane` と `play.options` に、叩けないノートも含めて各ノートの最終的なレーンとともに記録するため、リプレイのシミュレーションは同じ判定を再現します。LR2 beta3 は SCATTER でスコアを保存しません（`CheckScoreSaveConditon`）。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+参照元：OpenLR2 の [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27270-L27404) と[スコア保存条件](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L68-L79)。対応 Issue は [#694](https://github.com/nulltask/be-music/issues/694) です。
+
+## SYNCHRONIZE RANDOM と SYMMETRY RANDOM
+
+どのルールでも、**Play options → Battle** で譜面を両側に複製する 1 人用の **BATTLE (beatoraja)**・**BATTLE (????)**・**BATTLE AS**・**D-BATTLE** を選ぶと、**Random 1P** に **SYNCHRONIZE RANDOM** と **SYMMETRY RANDOM** が加わり、それぞれ `SYNCHRONIZE-RANDOM` と `SYMMETRY-RANDOM` として記録します。複製した譜面で、1P の鍵盤に RANDOM の並べ替えを 1 つ抽選します。AC 34 のオプションのページの説明どおり、SYNCHRONIZE RANDOM では 2P の鍵盤が同じレーン番号を、SYMMETRY RANDOM ではその鏡像を使います。スクラッチは固定し、Random 2P は適用しません。これらのモードをやめると Random 1P を OFF に戻します。
+
+リプレイは選択を `play.randomLane.p1` と `play.options.random1P` に、両側のノートの最終的なレーンとともに記録します。BATTLE を含め、記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+参照元：AC 34 の[プレイオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。対応 Issue は [#722](https://github.com/nulltask/be-music/issues/722) と [#723](https://github.com/nulltask/be-music/issues/723) です。
+
+## M-RAN
+
+**Play options → Battle** で 2 人プレイ（どのルールでも選べる **BATTLE (LR2)**、???? ルールでの名前は **2P PLAY (????)**、または **COUPLE (LR2)**）を選ぶと、Options ダイアログ の **Gauge 2P** の隣に **M-RAN 1P** と **M-RAN 2P** を表示します。M-RAN は RANDOM 系の配置（どの参照元の RANDOM と S-RANDOM も、R-RANDOM も）のあと、そのプレイヤーの側に MIRROR を適用します。それ以外のレーンオプションでは何もしません。両側に複製した SP 譜面で 2 人が同じレーンオプションを選ぶと、2P 側は 1P の配置を引き継ぐため、片方の M-RAN でもう一方の譜面の鏡像になります。2 人プレイ以外では M-RAN を適用せず、Options ダイアログ にもスイッチを表示しません。
+
+リプレイはスイッチを `play.options.mRan1P` / `mRan2P` に各ノートの最終的なレーンとともに記録するため、リプレイで再びミラーにしません。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+参照元：AC 34 の[プレイオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。対応 Issue は [#724](https://github.com/nulltask/be-music/issues/724) です。
+
+## BATTLE と M-RAN のキー
+
+選曲画面では、どちらのキーマップでも、テンキーの **7** で **BATTLE (????)** を、テンキーの **6** で **M-RAN 1P** を、Shift + テンキーの **6** で **M-RAN 2P** を切り替えます。いずれもキー表の操作（Keys タブの **BATTLE (????)**、**M-RAN 1P**、**M-RAN 2P**）なので、割り当てを変えられます。BATTLE のキーは、Battle がほかの選択肢のときは AC の 1 人用 BATTLE を選び、すでに選んでいるときは OFF に戻します。それぞれのオプションが働く場面で効きます（BATTLE は 7KEY の譜面、M-RAN は 2 人プレイ）。
+
+AC 34 では、オプション画面で、ダブルプレー時にテンキー 7 で BATTLE を、2 人プレー時にテンキー 6 で M-RAN を設定します。AC は各プレーヤーにテンキーがあるため、1 つのキーで両者に対応します。AC の選曲画面そのものでは、テンキー 6 はクリアレート表示の切り替え、テンキー 9 は譜面の詳細情報です（[テンキーのページ](https://p.eagate.573.jp/game/2dx/34/howto/play/tenkey.html)）。Be-Music にはどちらの表示もなく、廃止されたコマンドをテンキー 9 に割り当てることもしていません。
+
+出典: AC 34 [ゲームオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)と[テンキー](https://p.eagate.573.jp/game/2dx/34/howto/play/tenkey.html)。[#1138](https://github.com/nulltask/be-music/issues/1138) で追跡しています。
+
+## nanasigroove の GOOD2BAD・GREAT2BAD・HELLJUDGE
+
+どのルールでも、Options ダイアログの Modifiers ページにある **nanasigroove** フォルダーの **GOOD2BAD / GREAT2BAD** と **HELLJUDGE** で選びます。nanasigroove のオプションと同じ動きをする LR2・beatoraja のオプションはないため、ほかの出典のオプションとは分けて専用のフォルダーにまとめています。GOOD2BAD は判定をそのままにして、GOOD でゲージを BAD と同じだけ動かします。GREAT2BAD は GREAT と GOOD で同じことをします。HELLJUDGE はルールの PGREAT と GREAT の判定幅を 3/8、GOOD を 1/3、BAD を 1/4 に狭めます。譜面が同じ系統の `774:CRAZY_*` を宣言していれば譜面が優先します。リプレイは譜面のゲームプレイプログラムに記録するので、どのルールでもこれらを使って再判定します。アシストではありません（[ADR 0033](./adr/0033-chart-authored-gameplay-options.ja.md)、[#1177](https://github.com/nulltask/be-music/issues/1177)、[#1185](https://github.com/nulltask/be-music/issues/1185)）。
+
+## nanasigroove の NOTES
+
+どのルールでも、同じ **nanasigroove** フォルダーの **NOTES** で **OFF**（既定）・**DOUBLE**・**COPY**・**DBLCOPY** を選べます。DOUBLE は nanasigroove と同じくレーンをまるごとほかのレーンへ写すので、5 KEY 譜面の鍵盤 3 と 5 は鍵盤 1・3・5 を、鍵盤 2 と 4 は鍵盤 2・4 を持ちます。5・7・9・10・14 KEY で動きます。COPY は 5 / 7 KEY 譜面を 2P 側に鏡写しにして 10 / 14 KEY として遊びます（地雷は写しません）。DBLCOPY は写してから両サイドを倍にします。コースのステージはキーモードを保つので、そこでは COPY は何もしません。コースのバーでは COPY と DBLCOPY を薄く表示して選べなくします。譜面のバーで選んだものは譜面のために残ります（[#1242](https://github.com/nulltask/be-music/issues/1242)）。譜面自身の `774:NOTES_*` が優先します。リプレイは変換を譜面のゲームプレイプログラムに記録し、そのノートが結果を持ちます（[ADR 0035](./adr/0035-chart-authored-notes-options.ja.md)、[#1184](https://github.com/nulltask/be-music/issues/1184)）。記録は譜面自身のキーモードのものなので、プレイヤーの COPY や DBLCOPY で譜面を写したプレイは記録を残さず、Leaderboard は順位に入れずに保存します。譜面自身の COPY はこれまでどおり記録を残します。プレイヤーの DOUBLE は、GOOD2BAD / GREAT2BAD や HELLJUDGE と同じく、nanasigroove が記録するとおり普通のプレイです。リプレイは、プレイヤーが足したオプションを `play.playerChartPlayOptions` に記録します（[#1243](https://github.com/nulltask/be-music/issues/1243)）。
+
+## 地雷の REMOVE と ADD
+
+どのルールでも、Options ダイアログ の **Mines** で **OFF**（既定）、beatoraja の **REMOVE**・**ADD RANDOM**・**ADD NEAR**・**ADD ALL**（`ADD_BLANK`）を選びます。nanasigroove の **ADDMINE** は **nanasigroove** フォルダーにある別のオプションです。オンのあいだは、譜面の `774:CRAZY_ADDMINE` と同じく Mines の選択に代わり、ダイアログは Mines を使えない状態で表示します（[ADR 0033](./adr/0033-chart-authored-gameplay-options.ja.md)）。リプレイには地雷オプション `NANASI_ADD` として記録します。REMOVE はすべての地雷を取り除くため、地雷の爆発もゲージの減少も起きません。ADD は beatoraja 0.8.9 の `MineNoteModifier` に従い、参照元のタイムラインの各行をスクラッチを含むレーン順に調べ、ノート・地雷・押下中のロングノートがないセルを対象にします。ADD RANDOM はセルごとに独立した 10 分の 1 の抽選で、ADD NEAR はその行の追加前に隣のレーンが埋まっていた場合に、ADD ALL は対象のすべてのセルに地雷を置きます。追加した地雷のダメージは 10 % で、爆発音を鳴らしません。譜面にもともとある地雷は元の値を維持します。この変換はレーンオプションより前に譜面を準備するため、追加した地雷もレーンと一緒に移動します。
+
+リプレイには `play.mineModifier` と、実際に除去・追加した地雷の数を示す `play.mineModifierChangeCount` を記録します。beatoraja は実際に除去した場合だけアシスト扱いにするため、この数で地雷のない譜面を REMOVE で遊んだ場合と、地雷を実際に除去した場合を区別できます。実効譜面のノートには追加した地雷をダメージと `silent` フラグ付きで含め、リプレイを開く際は再抽選せずに記録した位置へ地雷を置きます。beatoraja スキンの地雷モードボタン（351）は 5 つの選択肢を参照元の順で巡回し、ラベル画像に表示します。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+参照元：beatoraja 0.8.9 の [`MineNoteModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/MineNoteModifier.java)。対応 Issue は [#716](https://github.com/nulltask/be-music/issues/716)、[#717](https://github.com/nulltask/be-music/issues/717)、[#718](https://github.com/nulltask/be-music/issues/718)、[#719](https://github.com/nulltask/be-music/issues/719) です。
+
+## ADD LN / ADD CN / ADD HCN / ADD ALL
+
+どのルールでも、Options ダイアログ の **Long notes** に **ADD LN (beatoraja)**、**ADD CN (beatoraja)**、**ADD HCN (beatoraja)**、**ADD ALL (beatoraja)** も表示します。いずれかを選んでいる間は **Long-note add rate (beatoraja)**（0〜1、既定 1）でノートごとの変換確率を設定します。beatoraja 0.8.9 の `LongNoteModifier` と同様に、通常ノートのレーンが譜面の次のタイムライン行で空いている場合、そのノートをその行で終わるロングノートに変えます。既存のロングノートは変えず、スクラッチも対象に含めます。ADD LN・ADD CN・ADD HCN は追加したノートをそれぞれのモードにし、ADD ALL はノートごとに LN・CN・HCN を抽選します。追加したノートは判定ルールのロングノートとして判定します。LR2 はすべてのロングノートを LN、???? はチャージノートとして判定するため、CN と HCN の区別が効くのは beatoraja ルールだけです。確率の抽選にはブラウザの乱数を使います。
+
+リプレイには `play.longNoteModifier`、`play.longNoteRate` と、変換したノート数を示す `play.longNoteModifierChangeCount` を記録します。実効譜面のノートでは、生成した始点ごとに `generatedLongNote`、終点の時刻、モードを保持し、リプレイを開く際は再抽選せずにその配置を復元します。beatoraja スキンのロングノートモードボタン（353）は OFF・REMOVE・ADD LN・ADD CN・ADD HCN・ADD ALL を巡回します。LEGACY NOTE は beatoraja のモードではないため Options ダイアログ で選びます。Native スキンのプレイ設定パネルには変換方式と変換確率を表示します。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+参照元：beatoraja 0.8.9 の [`LongNoteModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/LongNoteModifier.java)。対応 Issue は [#712](https://github.com/nulltask/be-music/issues/712)、[#713](https://github.com/nulltask/be-music/issues/713)、[#714](https://github.com/nulltask/be-music/issues/714)、[#715](https://github.com/nulltask/be-music/issues/715) です。
+
+## スクロールの REMOVE と ADD
+
+どのルールでも、Options ダイアログ の **Scroll** で **OFF**（既定）、**REMOVE (beatoraja)**、**ADD (beatoraja)**、LR2 の [SOFTLANDING](#softlanding) を選びます。REMOVE と ADD は beatoraja 0.8.9 の `ScrollSpeedModifier` に従い、譜面の描画だけを変えます。判定時刻と音声は譜面のとおりです。REMOVE は各オブジェクトの時刻を維持したまま、BPM 変化・STOP・SCROLL 変化をなくし、最初の BPM と SCROLL で譜面を描画するため、ノートは一定の速度で流れます。ADD を選ぶと **Scroll section lines**（1〜1024、既定 4）と **Scroll rate**（0〜1、既定 0.5）を表示します。最初の小節線を 1 本目として N 本ごとの小節線で、SCROLL を最初の SCROLL の ±rate の範囲のランダムな値にし、譜面自身の SCROLL の値を置き換えます。
+
+リプレイには `play.scrollModifier` と、譜面が実際に変化したかを示す `play.scrollModifierChanged` を記録します。beatoraja は除去する変化があった場合だけ REMOVE をアシスト扱いにし、ADD ではアシストのフラグを立てません。ADD では `play.scrollSection`、`play.scrollRate` と実効的な `play.scrollModifierTimeline` も記録し、リプレイを開く際は再抽選せずにこれを使います。beatoraja スキンのスクロールモードボタン（352）は OFF・REMOVE・ADD を巡回します。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+参照元：beatoraja 0.8.9 の [`ScrollSpeedModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/ScrollSpeedModifier.java)。対応 Issue は [#739](https://github.com/nulltask/be-music/issues/739)、[#740](https://github.com/nulltask/be-music/issues/740) です。
+
+## SOFTLANDING
+
+どのルールでも、Options ダイアログの **Scroll** で **SOFTLANDING LEVEL 1 (LR2)** と **SOFTLANDING LEVEL 2 (LR2)** を選べます。LR2 の隠しマニアパネルにあるスクロールのオプション（「BPMに変化を与えるオプション」）です。スクロール速度だけをランダムに変え、ノーツの時刻、音声、判定は譜面のとおりです。
+
+- **LEVEL 1** は小節の頭ごとに新しい係数を抽選します（「小節ごとにBPMが変化します」）。
+- **LEVEL 2** はノーツと地雷ごとにも抽選します（「常にBPMが変化し続けます」）。
+- **係数**は `(100 + r) / 100` か `100 / (100 + r)` で、どちらになるかは半々です。`r` は 0 から 100 の整数なので、係数は 0.5 倍から 2 倍の間になります。
+
+LR2 は小節の長さと現在の BPM の両方に係数を掛け（[L26591-L26610](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26591-L26610)、[L26680-L26700](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26680-L26700)）、その後の BPM 変化にもその時点の係数を掛けます。小節の時間は変わらず、ノーツの間隔とスクロールだけがその倍率で広く速くなります。これは SCROLL の値と同じなので、Be-Music は係数をプレイのスクロールのタイムラインとして書き込みます。各点は譜面の最初の SCROLL に係数を掛けた値で、スクロール ADD と同じく譜面自身の SCROLL を置き換えます。OpenLR2 の LEVEL 2 の行は `nowBPM = scrollSpeed * meaLength` ですが、LR2 beta3 は LEVEL 1 や BPM 変化と同じく譜面の現在の BPM に係数を掛けます。Be-Music は LR2 に従います。
+
+LR2 との違いは次のとおりで、いずれも小さなものです。
+
+- LR2 は小節線を描くかどうかにかかわらず、すべての小節に小節長オブジェクトを置きます。Be-Music は譜面の最後のオブジェクトまでの各小節の頭で抽選します。
+- 同じ拍では係数を 1 回だけ抽選します。LR2 はそこにあるオブジェクトごとに抽選します（LR2 でも最後の抽選が有効になります）。
+- ロングノートの終点では抽選しません [I]。OpenLR2 はレーンオブジェクト 10〜28 で抽選しますが、その時点で LR2 がロングノートの終点をどの番号にしているかは確認していません。
+- LR2 は係数を掛けた BPM を最小・最大 BPM に含め、HS-FIX の MAX / MIN がそれを読みます。Be-Music の HS-FIX と BPM 表示は譜面自身の BPM のままです。
+- 抽選には seed がありません。スクロール ADD と同じです。
+
+リプレイには `play.scrollModifier`（`SOFTLANDING-1` か `SOFTLANDING-2`）、`play.scrollModifierChanged`、抽選した `play.scrollModifierTimeline` を記録し、リプレイを開く際は再抽選せずにそのタイムラインを再生します。LR2 は SOFTLANDING のプレイを通常のプレイとして保存する（[スコア保存条件](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L67-L79)に含まれない）ため、アシストなしです。beatoraja スキンのスクロールモードボタン（352）は、beatoraja 自身の OFF・REMOVE・ADD を巡回するままです。プレイ中は選択をロックします。
+
+出典: OpenLR2 [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26591-L26610)。[#1116](https://github.com/nulltask/be-music/issues/1116) で追跡しています。
+
+## ゲージオートシフト
+
+どのルールでも、Options ダイアログ の **Gauge auto-shift** で **NONE**（既定）、**CONTINUE**、**SURVIVAL TO GROOVE**、**BEST CLEAR**、**SELECT TO UNDER** を選びます。**Lowest auto-shift gauge** は後の 2 つに適用します。切り替え方式と beatoraja のゲージ順は beatoraja 0.8.9 に由来します。LR2・AC・plugout（自身のオートシフトを持たない）では Be-Music の拡張として、下表のゲージ順に同じ方式を適用します。これにより、各ルールで共通の操作ができ、リプレイでも切り替えを再現できます（[#933](https://github.com/nulltask/be-music/issues/933)）。
+
+| ルール       | 単曲（緩い順）                                   | 段位コース                                  | EXPERT / NONSTOP コース                         |
+| ------------ | ------------------------------------------------ | ------------------------------------------- | ----------------------------------------------- |
+| beatoraja    | ASSIST EASY・EASY・NORMAL・HARD・EX-HARD・HAZARD | CLASS・EXCLASS・EXHARDCLASS                 | CLASS・EXCLASS・EXHARDCLASS                     |
+| LR2          | EASY・GROOVE・HARD・HAZARD（`DEATH`）            | GRADE・GRADE-HARD・GRADE-DEATH              | COURSE-EASY・COURSE・COURSE-HARD・COURSE-DEATH  |
+| AC（`????`） | ASSISTED EASY・EASY・NORMAL・HARD・EX-HARD       | CLASS・EXCLASS・EXHARDCLASS                 | CLASS・EXCLASS・EXHARDCLASS                     |
+| plugout      | EASY・NORMAL・HARD・HAZARD                       | GRADE-EASY・GRADE・GRADE-HARD・GRADE-HAZARD | COURSE-EASY・COURSE・COURSE-HARD・COURSE-HAZARD |
+
+```mermaid
+flowchart LR
+  death["HAZARD"] --> hard["HARD"] --> groove["GROOVE"] --> easy["EASY"]
+```
+
+図は LR2 の単曲の並びで、BEST CLEAR が下げていく順です。AC にはコース以外で HAZARD がなく、コースのゲージは beatoraja のクラスゲージです。
+
+- NONE はサバイバルゲージがゼロになった時点でプレイを終了します。
+- CONTINUE はゼロになったゲージのまま最後までプレイを続け、ゲージはゼロのままです。
+- SURVIVAL TO GROOVE は譜面の開始からルールの既定の回復ゲージ（NORMAL、LR2 では GROOVE）をサバイバルゲージと並行して動かし、サバイバルゲージがゼロになるとその現在値で続行します。コースのゲージでは切り替えず、サバイバルゲージでないゲージには切り替える元がありません。
+- BEST CLEAR は並び全体を並行して動かし、ゼロより大きくクリア条件を満たす最も上のゲージを使います。最低ゲージ（選択したゲージの方が下ならそのゲージ）より下には移らず、条件を満たすゲージがなければ最低ゲージのままです。
+- SELECT TO UNDER は選択したゲージを上限として同じ処理をします。
+- コースではどちらもルールのコースのゲージから緩い方から上へ選び、各コースのゲージはそれぞれの値を次のステージへ持ち越します。
+
+**Lowest auto-shift gauge** は **ASSIST EASY**（既定）・**EASY**・**NORMAL** で、ルールの並びで読みます。AC では ASSIST EASY を ASSISTED EASY と読み、ASSIST EASY がない LR2 では **EASY** か **GROOVE** です（保存済みの ASSIST EASY は EASY と読みます）。LR2 の P.ATTACK と G.ATTACK は並びにありません。より難しいクリアではなく別のものを判定するゲージなので、BEST CLEAR と SELECT TO UNDER ではそのゲージだけで CONTINUE と同じく最後まで遊びます。どの方式もどのルールで読めるので、方式を使ったリプレイはほかのルールでもそのルールの並びで再判定します（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)）。
+
+リプレイには `play.gaugeAutoShift` と `play.bottomShiftableGauge` を記録します。NONE では `play.endOnFailure` も記録し、ほかの方式では最後まで判定を続けます。結果の `gauge.type` はプレイ終了時のゲージを示します。BEST CLEAR と SELECT TO UNDER では `gauge.values` に並行するすべてのゲージの値を保持し、コースのステージの `play.course.carryIn.gauges` に引き継いだコースのゲージを保持します。2 人プレイでは両プレイヤーのゲージがそれぞれ切り替わります。beatoraja スキンのゲージオートシフト（78）と最低シフトゲージ（341）のボタンは選択肢を参照元の順で巡回します。Native スキンのプレイ設定パネルには方式・最低ゲージ・実効ゲージを表示します。方式から入力アシストを推測しません。シフト後のクリアの順位付けは Leaderboard 側で決めます。
+
+参照元：beatoraja 0.8.9 の [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java#L600-L633)、[`GrooveGauge`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/GrooveGauge.java)、[`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java)。対応 Issue は [#729](https://github.com/nulltask/be-music/issues/729)、[#730](https://github.com/nulltask/be-music/issues/730)、[#731](https://github.com/nulltask/be-music/issues/731)、[#732](https://github.com/nulltask/be-music/issues/732) です。
+
+## DEATH corrected
+
+LR2 ルールでは、通常プレイと PRACTICE の **DEATH corrected** を Options ダイアログで選択できます。ターミナルプレイヤーでは `--gauge DEATH-CORRECTED` を指定します。LR2 スキンでは HAZARD の画像を表示し、そこからゲージボタンを押すと EASY に進みます。
+
+## P.ATTACK / G.ATTACK
+
+LR2 ルールでは、Options ダイアログ の **Gauge** に GROOVE・HARD・DEATH・EASY に続いて **P.ATTACK** と **G.ATTACK** も表示します。LR2 beta3 のゲージオプションの順です。どちらも満タンから始まるサバイバルゲージで、LR2 の死亡境界 2 を使います。P.ATTACK（PERFECT ATTACK）は PGREAT で 0.1 回復し、GREAT で 1 減少し、GOOD 以下で失敗します。G.ATTACK（GOOD ATTACK）は GOOD で 0.1 回復し、GREAT で 1、BAD で 6 減少し、PGREAT と POOR では HARD の譜面依存のダメージ係数の 10 倍、空 POOR では 2 倍を減らします。どちらも残量 32 未満では BAD・POOR・空 POOR のダメージを LR2 の HARD と同様に 60 % にします。クリアすると HARD ランプです。beatoraja と AC のルールにこれらのゲージはなく、直接指定した場合はエラーにします。これらのルールへ切り替えると GROOVE に戻します。
+
+LR2 スキンのゲージボタンは 6 セルを巡回し、P.ATTACK と G.ATTACK はセル 4 と 5 です。通常プレイと PRACTICE の **DEATH corrected** は Options ダイアログで選択できます。ターミナルプレイヤーでは `--gauge DEATH-CORRECTED` を指定します。LR2 スキンでは HAZARD の画像を表示し、そこからゲージボタンを押すと EASY に進みます。ゲージの表示は P.ATTACK と G.ATTACK と綴り、リプレイには `play.gauge: "P-ATTACK"` または `"G-ATTACK"` と同じ名前の結果ゲージを記録します。LR2 の GRADE コースでは、LR2 と同様にコース開始時に P.ATTACK を維持し、G.ATTACK は EASY と同じく GROOVE に戻します。戻したプレイのランプは NORMAL です。EXPERT と NONSTOP のコースは両方のゲージを維持し、どちらの攻撃ゲージでもコースをクリアすると HARD ランプです。LR2 のコースクリアには LR2 のコースクリア判定に従い、すべてのノートの判定も必要で、最終ゲージがちょうど 2 の場合はフルコンボのときだけクリアです。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+参照元：OpenLR2 の[ゲージテーブル](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27654-L27800)と[ダメージ軽減](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1954-L1960)。対応 Issue は [#727](https://github.com/nulltask/be-music/issues/727)、[#728](https://github.com/nulltask/be-music/issues/728)、[#408](https://github.com/nulltask/be-music/issues/408) です。
+
+## EXTRA ノート変換
+
+どのルールでも、Options ダイアログ の **EXTRA depth (beatoraja)**（0〜100、既定 0）と **EXTRA scratch (beatoraja)** を設定します。0 より大きい深さでは beatoraja 0.8.9 の `ExtraNoteModifier` に従い、背景のキー音がある各行で最大その数までのキー音を、その行で空いていてロングノートの押下中でもないレーンの通常ノートに変えます。レーンは同じキー音を最後に置いたレーンから探します。変換したキー音は背景では鳴らしません。スクラッチには EXTRA scratch がオンの場合だけノートを置きます。この変換は抽選を使わず、参照元の挙動を維持します。空きレーンは行ごとに一度だけ求めるため、後の変換が先の変換を上書きしてその音を失うことがあり、変換したノートはすべて通常ノートです。ロングノートと地雷の変換の後、レーンオプションの前に適用します。
+
+リプレイには `play.extraNoteDepth`、`play.extraNoteScratch` と、上書きされた分を含む実際の変換数 `play.extraNoteChangeCount` を記録し、実効譜面のノートに変換後のノートを含めます。beatoraja スキンの EXTRA 深さボタン（350）は、設定値は 100 まで持てますが、参照元と同様に 0〜3 を切り替えます。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+参照元：beatoraja 0.8.9 の [`ExtraNoteModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/ExtraNoteModifier.java)。対応 Issue は [#720](https://github.com/nulltask/be-music/issues/720) です。
+
+## LR2 の EXTRA MODE
+
+どのルールでも、Options ダイアログ の **EXTRA MODE (LR2)** をオンにし、**EXTRA minimum level (LR2)** で **LEVEL 1**（既定）、**LEVEL 2**、**LEVEL 3** を選びます。変換は実行ファイルに基づいて LR2 beta3 の `MakeExtraChart` を再現します。背景のキー音を、同じ音が最も多く使われているレーン（同数なら最も小さいレーン）に、そこが埋まっていれば近くの空きレーンにノートとして置き、レベルと BPM で既存のノートとの最小間隔を決めます。譜面で一度もレーンに置かれない音は、同じファミリーの音がレーンに置かれていれば、直前の音番号のレーンを使います。LR2 は `#WAV` のファイル名の先頭 2 バイトで音をファミリーに分けるため、パーサーはそのバイトを保持します（UTF-16 の譜面にはありません）。譜面のオブジェクト数に応じてレベルを上げます。LEVEL 1 は 1,000 個から LEVEL 2、1,200 個から LEVEL 3 として、LEVEL 2 は 1,000 個から LEVEL 3 として遊びます。DP の譜面ではスクラッチのノートを背景音にします。変換はプレイのテンポに従い、36 進の BMS 譜面が必要で、bmson とキーボードモードは受け付けず、コースでは適用しません。
+
+リプレイには `play.lr2ExtraMode`、`play.lr2ExtraLevel`、`play.lr2ExtraEffectiveLevel`、`play.lr2ExtraConvertedObjectCount`、`play.lr2ExtraTempo` を記録し、実効譜面のノートに変換後のノートを含めます。LR2 のプレイスキンには op 52 の代わりに op 53（EXTRA MODE オン）を渡します。LR2 自身のスコア保存条件は EXTRA のプレイを除外します。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+参照元：OpenLR2 が再構成した [`MakeExtraChart`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L24799-L25088)、[レベルの説明](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L1391-L1404)、[スコア保存条件](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L68-L79)。対応 Issue は [#720](https://github.com/nulltask/be-music/issues/720) です。
+
+## LR2 マニアの譜面オプション
+
+どのルールでも、Options ダイアログの Play options で、LR2 の隠しマニアパネルにある譜面生成 4 種を選べます。**ADD NOTES (LR2)**、**LOUDNESS (LR2)**、**ADD LONGNOTES (LR2)**、**ADD MINES (LR2)** です。それぞれ LR2 と同じく **0**（オフ、既定）か **10** から **100** まで 10 刻みの確率で、併用できます。対象は LR2 が読み込める 5・7・9・10・14 KEY の譜面で、コースと PRACTICE では働きません（LR2 はコースで適用しません）。プレイ中は変更できません。
+
+| オプション        | 動作                                                                                                                                                                                                                                                  | 成立条件               | LR2                                                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **ADD NOTES**     | サイドにノーツか地雷がある時刻ごとに、そのオブジェクトの数だけ試行します。成立した試行は、そのサイドでその時刻に何もないレーン（スクラッチを含む）から均等に 1 つ選んでノーツを置きます。                                                             | `GetRand(100) <= 確率` | [L26744-L26819](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26744-L26819) |
+| **LOUDNESS**      | 同じ時刻ごとに、サイドにつき 1 回抽選します。成立すると、そのサイドの空きレーンすべて（スクラッチを含む）にノーツを置きます。                                                                                                                         | `GetRand(100) <= 確率` | [L26822-L26867](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26822-L26867) |
+| **ADD LONGNOTES** | 鍵盤レーンごとに、最後以外のオブジェクトにつき 1 回抽選します。成立すると、そのノーツをレーンの次のオブジェクトとの中間まで伸ばします。すでにそれより長いロングノートはそのままです。100 のときは、レーンの最後のノーツも譜面の終わりまで伸ばします。 | `GetRand(100) < 確率`  | [L27813-L27832](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27813-L27832) |
+| **ADD MINES**     | 鍵盤レーンごとに、最後以外のオブジェクトにつき 1 回抽選します。成立し、次のオブジェクトとの間隔が 200 ms を超えていれば、その中間に地雷を置きます。                                                                                                   | `GetRand(100) < 確率`  | [L27835-L27869](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27835-L27869) |
+
+`GetRand(100)` は 0 から 100 の整数です。ADD NOTES と LOUDNESS は 100 で必ず成立し、ADD LONGNOTES と ADD MINES は 100 でも 101 回に 100 回の成立です。
+
+- **ロングノート。** ADD NOTES と LOUDNESS は、最初に譜面のすべてのロングノートを始点だけに戻します。LR2 が追加の前に各オブジェクトの終点を始点に揃えるためです。
+- **追加したノーツ**には LR2 のキー音 1294、つまり `#WAV` の `ZY` が付きます。その定義がある譜面でだけ音が鳴ります。追加した地雷は値が 4 で、音はありません。
+- **ADD MINES とロングノート。** 間隔はそのオブジェクト自身の時刻から測りますが、次のオブジェクトがロングノートのときは、LR2 はこのオブジェクトのロングノート終点から測ります。ロングノートでないオブジェクトの終点は LR2 では −1 ms なので、地雷は次のロングノートの時刻の半分の位置に置かれます。レーンのどこであってもそうなります。Be-Music はこの挙動を残します。ロングノートの次が通常ノーツのときは始点から測るので、地雷がそのロングノートの上に置かれることがあります。ADD LONGNOTES を併用すると、中間まで伸ばしたノーツの終点ちょうどに地雷が置かれます。
+- **スクラッチ。** ADD NOTES と LOUDNESS はスクラッチレーンにも追加します。ADD LONGNOTES と ADD MINES はスクラッチレーンには触れません。
+- **適用順。** LR2 は ADD NOTES と LOUDNESS をレーンオプションの前に、ADD LONGNOTES と ADD MINES を配置後のレーンに対して実行します。Be-Music は 4 つともレーンオプションの前に実行し、追加したものはレーンオプションがレーンごと動かします。MIRROR や RANDOM などレーン単位で動かすオプションでは結果は同じです。S-RANDOM などノーツ単位のオプションでは、LR2 はシャッフル後のレーンに対して伸ばしたり地雷を置いたりします [I]。
+- **9 KEY。** LR2 のレーン 0（スクラッチ）は 9 KEY 譜面のレーンではありません。LR2 がそこに追加するかどうかは確認していないため、Be-Music は 9 つの鍵盤にだけ追加します [I]。
+- **抽選。** 4 つとも 1 つの seed から抽選します。seed はプレイごとに 16,777,216 未満で決め、レーンオプションと同じく `java.util.Random` で抽選します。Be-Music の中で譜面を再現するためのもので、LR2 自身の抽選を再現するものではありません。
+
+リプレイには `play.lr2Mania` を記録します。4 つの確率、`seed`、そして各生成が行った数を示す `changes`（追加したノーツ、全押しにした同時押し、伸ばしたノーツ、追加した地雷）です。リプレイの譜面には生成したノーツと地雷が入り、リプレイを開く際は確率と seed から譜面を作り直します。作り直した結果の数が記録と違うときは失敗します。LR2 は 4 つのどれを使ってもスコアを保存せず（[`CheckScoreSaveConditon`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L67-L79)）、ADD NOTES と LOUDNESS はさらに保存しないフラグを立てます（[L27073-L27080](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27073-L27080)）。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+出典: OpenLR2 [`LR2f.cpp`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26744-L26867)。[#1110](https://github.com/nulltask/be-music/issues/1110)、[#1111](https://github.com/nulltask/be-music/issues/1111)、[#1112](https://github.com/nulltask/be-music/issues/1112)、[#1113](https://github.com/nulltask/be-music/issues/1113) で追跡しています。
+
+## LN MODE
+
+beatoraja ルールでは、Options ダイアログ の **LN MODE (beatoraja)** で **LONG NOTE**（既定）、**CHARGE NOTE**、**HELL CHARGE NOTE** を選びます。beatoraja 0.8.9 の `lnmode` と同様に、ロングノートのモードを指定していない譜面（`#LNMODE` がない、または bmson の `ln_type` がないか 0）だけに適用し、譜面自身のモードとコースの `ln` / `cn` / `hcn` 制約を優先します。ロングノートの追加や除去はしません。LR2 と AC のルールではこうした譜面を LN として遊ぶため、項目を隠し、切り替えると LONG NOTE に戻し、CHARGE NOTE や HELL CHARGE NOTE を直接指定した場合はエラーにします。
+
+リプレイには実効的なモードを `chart.lnMode` に記録し、リプレイを開く際は現在の選択ではなくそのモードを適用します。beatoraja スキンの LN MODE ボタン（308）は 3 つの選択肢を巡回します。LNMODE の画像は、選曲画面と決定画面ではプレイヤーの選択を、プレイ画面とリザルト画面では遊んだ譜面が自身のモードを指定していればそのモードを表示します。これは通常のプレイ設定で、LN REMOVE や ADD の変換とは別です。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+参照元：beatoraja 0.8.9 の [`PlayerConfig`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/PlayerConfig.java#L123)。対応 Issue は [#604](https://github.com/nulltask/be-music/issues/604) です。
+
+## SP TO DP・DP-TO-SP・9-TO-7
+
+どのルールでも、Options ダイアログ の **Play options → Battle → SP TO DP** を選択します。LR2 beta3 の SP TO DP（`battle` 3）で、LR2 と同様に譜面のキーモードによって動作が変わります。5KEY・7KEY の譜面は、ノートを複製せずに 10KEY・14KEY の両側へ振り分けます。小節ごとに各キー音のグループをどちらかの側に割り当て、同じ音が密集する小節は `#PLAYLEVEL` に応じて両側に分散し、スクラッチは左右交互に置きます。スクラッチから 200 ms 以内のキーのノートは反対の手に移します。ただし、その側の AUTO SCRATCH が有効な場合は移しません。
+
+10KEY・14KEY の譜面では同じ選択肢が DP-TO-SP になり、2P 側のノートをすべて 1P 側へ移します。移動先は元のレーンか、ほかのノートから半拍（125 ms 以上）離せる最も近いレーンです。9KEY の譜面では 9-TO-7 になり、小節ごとに 9 レーンを 7 鍵盤に畳みます。どちらも空きレーンのないノートは背景音にし、ロングノートの終点は移動した始点に合わせます。LR2 はコースで SP TO DP を適用せず、24/48KEY のモードもないため、これらのプレイは変化しません。LR2 と同様にプレイのテンポでノートの時刻を読むため、テンポも変換の入力です。
+
+LR2 は DP FLIP を譜面自身の鍵盤数で判定し（[L27318](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27318)）、Be-Music もこれに従います。SP TO DP では複製した譜面を FLIP しません。DP-TO-SP では DP FLIP が 1P 側にまとめたノートをすべて 2P 側へ移し、シングルのレーンからは叩けなくなります。これは LR2 のバグとみられます。**SP TO DP corrected (LR2)**（`SP-TO-DP-CORRECTED`）は DP-TO-SP を FLIP せず、それ以外は SP TO DP と同じです。リプレイには `SP-TO-DP` として記録し、FLIP の有無は譜面のノートに残ります（[#1084](https://github.com/nulltask/be-music/issues/1084)）。
+
+エンジンと描画は変換後の譜面を使います。リプレイには実効的な `play.battleMode`（適用できない譜面では `OFF`）を、`battleSourceVariant`、振り分けに使ったテンポ（`battleTempo`）、考慮した左右の AUTO SCRATCH（`battleAssist1P` / `battleAssist2P`）、変更・除去したオブジェクト数とともに記録します。リプレイの譜面には変換後のノートとレーンモードを保存し、選択した値はオプション一式に残ります。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+参照元：OpenLR2 の [`SPtoDP`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25553)、[`DPsplit`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L24753)、[`DPtoSP` と `PMStoSP`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25091-L25450)。対応 Issue は [#706](https://github.com/nulltask/be-music/issues/706) です。
+
+## 7 TO 9
+
+どのルールでも、Options ダイアログ の **Play options → 7-to-9 (beatoraja)** で **OFF**（既定）、**SC1 KEY2–8**、**SC1 KEY3–9**、**SC2 KEY3–9**、**SC8 KEY1–7**、**SC9 KEY1–7**、**SC9 KEY2–8** を選びます。各パターンは 7 つのキーを 9 鍵盤の連続したレーンに置き、スクラッチのレーンを指定します。残る 1 レーンが予備です。**7-to-9 scratch** は各スクラッチの行き先を決めます。**Fixed** は常にスクラッチのレーン、**Alternate** はスクラッチのレーンと予備のうち前回の打鍵が古いほう、**Avoid repeated hits** はスクラッチのレーンを **H-RANDOM threshold BPM** での 16 分音符以内に叩いていて、かつ予備レーンよりも最近に叩いていた場合に予備のレーンを使います。押下中のロングノートはそのレーンを維持します。
+
+beatoraja 0.8.9 の `ModeModifier` に従い、7KEY の譜面にだけ、レーンのランダム配置の後で適用します。ほかの譜面は変化しません。FREE ZONE（`#17`）は beatoraja の 7 鍵盤モードにレーンがないため除去します。リプレイには `sevenToNinePattern`、`sevenToNineType`、`sevenToNineThresholdBPM` と変換の適用有無（`sevenToNineApplied`）を、変換後の 9 鍵盤のノートとともに記録します。リプレイを開く際は変換を適用してからレーン配置を復元します。beatoraja スキンではオプションボタン 360（`seventonine_pattern`）と 361（`seventonine_type`）で両方を切り替えられます。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+参照元：beatoraja 0.8.9 の [`ModeModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/ModeModifier.java) と [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java)。対応 Issue は [#707](https://github.com/nulltask/be-music/issues/707) です。
+
+## BATTLE・BATTLE AS・D-BATTLE
+
+Options ダイアログ の **Play options → Battle** は、どのルールでもすべてのモードを参照元ごとにまとめ、判定ルール自身の参照元を先頭に並べます。**BATTLE (LR2)**（2 人プレイ。???? ルールでは **2P PLAY (????)**）、**D-BATTLE (LR2)**、**SP TO DP (LR2)**、**BATTLE (beatoraja)**、**BATTLE AS (beatoraja)**、**BATTLE (????)** で、**COUPLE (LR2)** は LR2 ルールだけです。BATTLE は LR2 では 2 人プレイ、beatoraja と AC では 1 人用の複製を指すため、1 人用の複製は参照元を付けて（`beatoraja:BATTLE`・`____:BATTLE`、ADR 0019）どのルールでもその参照元の譜面を作ります。古いリプレイや設定にある参照元のない `BATTLE` は判定ルール自身のものです。選択肢が対応しないキーモードの譜面は変化しません。
+
+| 選択肢             | ルール                | 元の譜面               | プレイ                                  |
+| ------------------ | --------------------- | ---------------------- | --------------------------------------- |
+| BATTLE (beatoraja) | どれでも              | 5 / 7 / 24KEY          | 1 人、両側に同じ譜面（10 / 14 / 48KEY） |
+| BATTLE AS          | どれでも（beatoraja） | 5 / 7 / 24KEY          | BATTLE と同じ、スクラッチは背景音       |
+| BATTLE (????)      | どれでも              | 7KEY                   | 1 人、両側に同じ譜面（14KEY）           |
+| D-BATTLE           | どれでも（LR2）       | 5 / 7KEY               | 1 人、両側に同じ譜面（10 / 14KEY）      |
+| BATTLE (LR2)       | LR2、beatoraja        | 5 / 7KEY、10 / 14KEY   | 2 人（後述）                            |
+| 2P PLAY (????)     | ????                  | 5 / 7KEY               | 2 人（後述）                            |
+| SP TO DP           | どれでも（LR2）       | 5 / 7 / 9 / 10 / 14KEY | 1 人、変換後の譜面（前述）              |
+
+beatoraja の BATTLE（`doubleoption` 2）と AC の BATTLE は、地雷を含む SP 譜面を 2P 側へ複製します。複製はスクロール・ロングノート・地雷・EXTRA の変換の後、レーンのランダム配置の前に行い、各複製は 2P のチャンネルを持つ別のノートになります。**BATTLE AS**（`doubleoption` 3）はさらに、beatoraja の `AutoplayModifier` と同様に両側のスクラッチのノート（24KEY ではホイール）を背景音にします。LR2 の **D-BATTLE**（`battle` 2）は 1x・3x・5x のセルだけを複製するため、地雷は 1P 側に残ります。また、**D-BATTLE scratch (LR2)** が無効ならスクラッチのノートを背景音にします。このスイッチは、皿を残す LR2 の隠しコマンド（`randSC`）の代わりです。LR2 では譜面を決定するときに、片側のボタン 12 と 13（おそらく START と SELECT）を同時に押します（[`Main.cpp` L1235-L1257](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/Main.cpp#L1235-L1257)）。スイッチは D-BATTLE を選んだ間だけ表示します。LR2 の同じコマンドはその側のレーンオプションでも皿を動かしますが、Be-Music にはありません（[#1077](https://github.com/nulltask/be-music/issues/1077)）。複製した譜面に DP FLIP は適用しません。
+
+リプレイには実効的な `play.battleMode`、`battleSourceVariant`、複製したオブジェクト数（`battleChangedObjectCount`）、D-BATTLE では `dBattleScratch` を記録します。リプレイの譜面には両側のノートを保存するため、リプレイでは各複製の配置を個別に復元します。記録の扱いは[アシストと記録の方針](./play-options.ja.md#アシストと記録の方針)のとおりです。
+
+参照元：beatoraja 0.8.9 の [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java)、[`LaneShuffleModifier.PlayerBattleModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/LaneShuffleModifier.java)、[`AutoplayModifier`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/pattern/AutoplayModifier.java)、OpenLR2 の[譜面の読み込み](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26244)と [D-BATTLE のスクラッチ](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27433-L27436)、AC 34 の[プレイオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。対応 Issue は [#704](https://github.com/nulltask/be-music/issues/704)、[#709](https://github.com/nulltask/be-music/issues/709)、[#705](https://github.com/nulltask/be-music/issues/705) です。
+
+## 2 人プレイの BATTLE と COUPLE
+
+LR2 と beatoraja のルールでは **Play options → Battle → BATTLE (LR2)**、???? ルールでは **2P PLAY (????)** を選びます。どちらも 2 人プレイ（`TWO-PLAYER`）で、LR2 の BATTLE（`battle` 1）と AC の 2 人プレイに当たります。beatoraja には独自の 2 人プレイがないため、beatoraja ルールでは LR2 の BATTLE で譜面を作り、各プレイヤーを beatoraja の判定幅とゲージで判定します。あわせて表示する **Gauge 2P** で、**Gauge** と同じ選択肢から 2P 側のプレイヤーのゲージを選びます。5KEY・7KEY の譜面では各プレイヤーに譜面の複製を渡します。LR2 は 1x・3x・5x のセルを（beatoraja ルールでも同じ）、AC は地雷を含む譜面全体を複製します。両プレイヤーが同じレーンオプションを選んだ場合、2P 側は 1P 側と同じ配置で遊びます。LR2 の作り方ではこのとき 1P 側の地雷も 2P 側へ写します（LR2 は配置後のレーンを地雷ごと写すため、[L27473-L27492](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L27473-L27492)）。LR2 と beatoraja のルールの 10KEY・14KEY の譜面は COUPLE になり、各プレイヤーが譜面の片側をそのまま遊びます。コースでは 1 人でプレイします。
+
+各プレイヤーは自分の側とキーで判定し、判定数・コンボ・スコア・TOTAL・ゲージをそれぞれ持ちます。譜面とその時計、音声は共有します。両プレイヤーがノートを終えるか、両方がプレイを終了するゲージで失敗するとプレイを終えます（LR2 は両プレイヤーの失敗で停止します）。リプレイには `play.battleMode: "TWO-PLAYER"` と `play.gauge2P` を記録します。`results.native` が 1P、`results.secondPlayer` が 2P の結果で、空 POOR もそれぞれの値です。2 人プレイの結果は自己ベストに記録せず、Leaderboard にも送信しません。リプレイは保存します。
+
+参照元：OpenLR2 の[譜面の読み込み](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26244)と[スコアの保存](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L9334-L9364)、AC 34 の[プレイオプション](https://p.eagate.573.jp/game/2dx/34/howto/play/option.html)。対応 Issue は [#704](https://github.com/nulltask/be-music/issues/704) です。
+
+## スキンでの BATTLE
+
+LR2 スキンでは選曲画面のボタン 56 で OFF・BATTLE・D-BATTLE・SP TO DP を切り替えます。G-BATTLE は選べません。テキスト 69 は選択中の譜面に合わせて LR2 と同じ名前を表示します。COUPLE・DP-TO-SP・9-TO-7、譜面が対応しない場合は DISABLE です。ほかの参照元の 1 人用 BATTLE は BATTLE と表示します。プレイ中は数値 120〜136、ランクの op 210〜217、ゲージの op 250〜260 が 2P 側のプレイヤーを示し、バトルの op 10〜13 が選択中のモードに応じて点灯します。キーモードの op は元の譜面に従います。5KEY・7KEY の譜面の 2 人プレイでは、テーマが BATTLE 用のプレイスキン（`#INFORMATION` の種類 12・13）を宣言していればそれを、なければ DP のスキンを使います。ほかのバトルモードは変換後の譜面のスキンを使います。beatoraja スキンでは `optiondp`（ボタン 54）で OFF・FLIP・BATTLE（`beatoraja:BATTLE`）・BATTLE AS を切り替え、どの参照元の 1 人用 BATTLE も BATTLE の枠に表示します。Synesthesia・Plain・Native では、2 人プレイのとき 2P 側のゲージ・EX スコア・コンボ・結果を 1P 側の横に表示します。ID の詳細は [LR2 スキン](./lr2-skin.ja.md)を参照してください。

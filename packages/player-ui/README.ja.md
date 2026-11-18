@@ -4,6 +4,23 @@
 
 Be-Music の表示を再利用する Lit 製 Web Components です。表示データを JavaScript の property で受け取り、操作要求を bubbling・composed な `CustomEvent` で通知します。エンジン・クロック・AudioContext・購読は所有しません。要素は headless で、持つのはレイアウトだけです。見た目はテーマから与えます（[外観と組み立て](#外観と組み立て)）。Native Skin も DOM スキンのアダプターを介して同じ部品を使います。
 
+<details>
+<summary>目次</summary>
+
+- [パッケージ](#パッケージ)
+- [コンポーネント](#コンポーネント)
+- [README ダイアログ](#readme-ダイアログ)
+- [プレイフィールド](#プレイフィールド)
+- [プレビュー](#プレビュー)
+- [譜面表示](#譜面表示)
+- [HTML・TypeScript](#htmltypescript)
+- [React](#react)
+- [Vue](#vue)
+- [外観と組み立て](#外観と組み立て)
+- [ライフサイクルと描画](#ライフサイクルと描画)
+
+</details>
+
 ## パッケージ
 
 | パッケージ                  | 役割                                            |
@@ -61,7 +78,7 @@ React・Vue はそれぞれのラッパーの peer dependency です。スキン
 
 ## プレビュー
 
-`be-music-playback-controls` は動画プレイヤーのコントロールバーです。再生／一時停止（`pause-request`）、ドラッグ中と離したときに `{ seconds }` 付きの `seek-request` を送るシークバー、時間、ミュートと音量（`{ volume, muted }` 付きの `volume-change`）、全画面（`fullscreen-request`）があります。`be-music-preview-hud` は譜面の情報・スコア・コンボ・ゲージ・判定を BGA の範囲の下に、コントロールをステージの下端に置き、それらの要求を伝えます。`be-music-preview-select` はトラックの譜面を一覧し、`images` にあればその絵（`#STAGEFILE`、なければ `#BANNER`）を出し、`activate-request` で 1 つを要求します。`be-music-preview-start` は大きな再生／リプレイボタン（`play-request`）です。`formatPlaybackTime`・`resolveSeekTarget`・`resolveGameplayPanels` はこれらを支える純粋関数です。埋め込みページがこれらを組み合わせています（[ブラウザープレイヤー](../../docs/player-web.ja.md#埋め込みプレビュー)）。
+`be-music-playback-controls` は動画プレイヤーのコントロールバーです。再生／一時停止（`pause-request`）、ドラッグ中と離したときに `{ seconds }` 付きの `seek-request` を送るシークバー、時間、ミュートと音量（`{ volume, muted }` 付きの `volume-change`）、全画面（`fullscreen-request`）があります。`be-music-preview-hud` は譜面の情報・スコア・コンボ・ゲージ・判定を BGA の範囲の下に、コントロールをステージの下端に置き、それらの要求を伝えます。`be-music-preview-select` はトラックの譜面を一覧し、`images` にあればその絵（`#STAGEFILE`、なければ `#BANNER`）を出し、`activate-request` で 1 つを要求します。`be-music-preview-start` は大きな再生／リプレイボタン（`play-request`）です。`formatPlaybackTime`・`resolveSeekTarget`・`resolveGameplayPanels` はこれらを支える純粋関数です。埋め込みページがこれらを組み合わせています（[ブラウザープレイヤー](../../docs/player-web-integration.ja.md#埋め込みプレビュー)）。
 
 ## 譜面表示
 

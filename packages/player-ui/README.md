@@ -4,6 +4,23 @@
 
 Reusable Lit Web Components for Be-Music. The components receive presentation data through JavaScript properties and emit semantic requests as bubbling, composed `CustomEvent`s. They own no engine, clock, audio context or subscriptions, and ship headless: layout only, with the look from a theme ([Styling](#styling-and-composition)). Native Skin uses the same components through its DOM skin adapter.
 
+<details>
+<summary>Table of contents</summary>
+
+- [Packages](#packages)
+- [Components](#components)
+- [README dialog](#readme-dialog)
+- [Playfield](#playfield)
+- [Preview](#preview)
+- [Chart score](#chart-score)
+- [HTML and TypeScript](#html-and-typescript)
+- [React](#react)
+- [Vue](#vue)
+- [Styling and composition](#styling-and-composition)
+- [Lifecycle and rendering](#lifecycle-and-rendering)
+
+</details>
+
 ## Packages
 
 | Package                     | Purpose                                                      |
@@ -61,7 +78,7 @@ Notes, long-note caps, and mines use `resolveNoteHeight` from `@be-music/player-
 
 ## Preview
 
-`be-music-playback-controls` is a video player's control bar: play / pause (`pause-request`), a seek bar that requests `seek-request` with `{ seconds }` while it is dragged and again when let go, the time, mute and volume (`volume-change` with `{ volume, muted }`) and full screen (`fullscreen-request`). `be-music-preview-hud` lays the chart's facts, score, combo, gauge and judgments under the BGA rect and the controls along the bottom of the stage, and forwards their requests. `be-music-preview-select` lists a track's charts, showing each chart's picture from `images` (a `#STAGEFILE`, or a `#BANNER` when the host supplies one), and requests one with `activate-request`; `be-music-preview-start` is the large play or replay button (`play-request`). `formatPlaybackTime`, `resolveSeekTarget` and `resolveGameplayPanels` are the pure helpers behind them. The embed page composes them ([browser player](../../docs/player-web.md#embedded-preview)).
+`be-music-playback-controls` is a video player's control bar: play / pause (`pause-request`), a seek bar that requests `seek-request` with `{ seconds }` while it is dragged and again when let go, the time, mute and volume (`volume-change` with `{ volume, muted }`) and full screen (`fullscreen-request`). `be-music-preview-hud` lays the chart's facts, score, combo, gauge and judgments under the BGA rect and the controls along the bottom of the stage, and forwards their requests. `be-music-preview-select` lists a track's charts, showing each chart's picture from `images` (a `#STAGEFILE`, or a `#BANNER` when the host supplies one), and requests one with `activate-request`; `be-music-preview-start` is the large play or replay button (`play-request`). `formatPlaybackTime`, `resolveSeekTarget` and `resolveGameplayPanels` are the pure helpers behind them. The embed page composes them ([browser player](../../docs/player-web-integration.md#embedded-preview)).
 
 ## Chart score
 

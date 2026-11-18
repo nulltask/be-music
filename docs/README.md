@@ -16,6 +16,7 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [Browser player implementation notes](./player-web.md)
 - [Scene models (`@be-music/player-scene-model`)](./scene-model.md)
 - [Replay (play history) specification](./replay.md)
+- [Play options](./play-options.md)
 - [Courses and dan certification](./course.md)
 - [Browser verification](./player-web.md#browser-verification)
 - [Be-Music Fingerprint specification](./fingerprint-spec.md)

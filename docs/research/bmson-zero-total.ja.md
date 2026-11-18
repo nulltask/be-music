@@ -20,7 +20,7 @@
 
 ## 元ファイルの使用状況
 
-既存の[監査マニフェスト](./format-feature-usage.json) にある bmson 28 ファイルを `~/Downloads/bms/BMS_Starter_Pack` と同階層の `gdbg_bms_package_20xx` から再読込した。SHA-256 は全 28 件で一致した。以下はパーサー正規化前の JSON 値であり、分母はノート数ではなくファイル数。
+既存の監査マニフェスト にある bmson 28 ファイルを `~/Downloads/bms/BMS_Starter_Pack` と同階層の `gdbg_bms_package_20xx` から再読込した。SHA-256 は全 28 件で一致した。以下はパーサー正規化前の JSON 値であり、分母はノート数ではなくファイル数。
 
 | 元の `info.total`   | ファイル数 | bmson 28 件中 |
 | ------------------- | ---------: | ------------: |

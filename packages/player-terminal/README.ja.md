@@ -2,9 +2,27 @@
 
 # @be-music/player-terminal
 
-autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend、およびリプレイ再シミュレータ `bms-replay` です。[`@be-music/player-engine`](../player-engine/README.ja.md) と [`@be-music/player-node-audio`](../player-node-audio/README.ja.md) で再生します。
+`bms-player` は端末で譜面を選んで遊ぶための CLI です。AUTO、キーボード入力、BGA に対応し、単体実行ファイルとしてもビルドできます。`bms-replay` は記録したプレイを再シミュレーションします。
 
 [Terminal player 実装メモ](../../docs/player-tui.ja.md) と [Player 実装仕様](../../docs/player-spec.ja.md) を参照してください。
+
+<details>
+<summary>目次</summary>
+
+- [機能](#機能)
+- [使い方](#使い方)
+  - [リプレイの再シミュレーション](#リプレイの再シミュレーション)
+- [操作](#操作)
+  - [選曲画面](#選曲画面)
+  - [プレイ中](#プレイ中)
+  - [リザルト画面](#リザルト画面)
+- [レーンの入力割り当て](#レーンの入力割り当て)
+- [キーボード入力 (kitty keyboard protocol)](#キーボード入力-kitty-keyboard-protocol)
+- [BGA 実装](#bga-実装)
+- [設定・キャッシュ・ログ](#設定キャッシュログ)
+- [SEA (Single Executable Applications)](#sea-single-executable-applications)
+
+</details>
 
 ## 機能
 
@@ -15,10 +33,10 @@ autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI 
 - HIGH-SPEED (`0.5` 〜 `10.0`, `0.5` 刻み)
 - TUI refresh rate 設定 (`--tui-fps`, default `60`)
 - 判定: `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR`（`FAST` / `SLOW` 集計あり）
-- 20 万点満点 SCORE と 名前を言ってはいけないあのゲーム 準拠 EX-SCORE（[スコアと判定](../player-engine/README.ja.md#スコアと判定)）
+- 判定ルールセットごとの [EX-SCORE と SCORE](../../docs/player-judgment.ja.md#score)
 - 不可視ノート表示 (`--show-invisible-notes`)
-- FREE ZONE (`17` / `27`) の専用扱い（[FREE ZONE](../player-engine/README.ja.md#free-zone-17--27)）
-- BGA 画像描画 (`BMP` / `PNG` / `JPEG`) と動画描画 (`mpeg1video` / `h264` / `mjpeg`)
+- [FREE ZONE の扱い](../../docs/player-spec.ja.md#free-zone)
+- [BGA と端末の画像表示](../../docs/player-tui.ja.md#bga-と-terminal-image)
 - 動画 BGA の progressive decode (`--no-video-bga-streaming` で旧方式へ切り替え)
 - `--kitty-graphics` / `--no-kitty-graphics` による Kitty graphics protocol 描画切り替え (default: on)
 - `node-web-audio-api` 固定バックエンドで再生
@@ -115,7 +133,7 @@ pnpm run replay -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
 - `Space`: 一時停止 / 再開
 - `Alt`/`Option` + 奇数レーン入力: HIGH-SPEED 減少 (`-0.5`)
 - `Alt`/`Option` + 偶数レーン入力: HIGH-SPEED 増加 (`+0.5`)
-- `Esc`: 演奏終了してリザルトへ
+- `Esc`: ディレクトリを開いている場合は選曲画面に戻る。単一譜面の場合はプレイを中断する。
 - `Ctrl+C`: 終了
 
 ### リザルト画面
@@ -147,17 +165,7 @@ pnpm run replay -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
 
 ## BGA 実装
 
-- `04` (base) と `07` (layer) を合成して描画します。
-- layer の黒 (`#000000`) は透過色として扱います。
-- `#BANNER` / bmson `banner_image` は選曲画面の曲紹介 block に表示します。
-- 対応端末では、既定で kitty graphics protocol を使って gameplay BGA、`#STAGEFILE` loading 画面、選曲画面 banner を画像として表示します。
-- `--no-kitty-graphics` を付けると ANSI 描画へ戻せます。
-- BGA はウィンドウリサイズ時に再計算して表示サイズを更新します。
-- 動画 BGA は `@uwx/libav.js-fat` でデコードします。
-  - 対応コーデック: `mpeg1video`, `h264`, `mjpeg`
-  - 音声トラックはデコードしません。
-  - 既定では最初のフレーム取得後に再生を開始し、残りフレームはバックグラウンドで段階的にデコードします。
-  - `--no-video-bga-streaming` を付けると、再生前に全フレームをデコードする旧方式へ戻せます。
+[対応形式・合成・画像表示](../../docs/player-tui.ja.md#bga-と-terminal-image) を参照してください。
 
 ## 設定・キャッシュ・ログ
 

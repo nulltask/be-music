@@ -248,7 +248,7 @@ sequenceDiagram
 - The generic rank ops (220-227) light every rank the EX score reaches over the chart's notes (`beatorajaGenericRankOps`),
   as beatoraja's `BooleanPropertyFactory` asks `ScoreDataProperty.qualifyRank` (`rate >= border / 27`): an AAA lights
   all eight, any score lights F, and a chart without notes lights none. `computeGenericRankOp` names the highest one.
-- The replay slots ([replay.md](./replay.md#replay-slots)): on the select screen ops 196 / 197 (slot 1 empty / holding a
+- The replay slots ([replay.md](./replay-browser.md#replay-slots)): on the select screen ops 196 / 197 (slot 1 empty / holding a
   replay), 1196 / 1197, 1199 / 1200 and 1202 / 1203 (slots 2-4) follow the bar under the cursor and 1205-1208 the slot
   picked, and the replay buttons (19, 316-318) replay their slot; on a result screen each slot lights its none, exists or
   saved op (196-198, 1196-1204) and the replay buttons save into it (`resolveBeatorajaSelectReplayOps`,
@@ -295,7 +295,7 @@ The browser renderer uses `BeatorajaPlaySkinView` as the shared view for select,
 skins. The family views read `TEXT`, `NUM`, `OPTION`, timers, gauges and graphs from the [scene mapping](#scene-mapping) and
 provide the runtime-specific parts themselves: chart images, note layers, BGA layers, audio and the result histories.
 The select, decide, play and result screens are player-browser's beatoraja family views, made with `createSelectScene`,
-`createDecideScene`, `createPlayScene` and `createResultScene` ([player-web.md](./player-web.md#the-select-screen)): they
+`createDecideScene`, `createPlayScene` and `createResultScene` ([player-web.md](./player-web-scenes.md#the-select-screen)): they
 draw the sessions' frames through the select, decide and result resolvers, the result view reading a `PlayResult`
 directly, and read beatoraja's scene timers off each frame. The select view reads the browse position's list options for
 the MODE and SORT image sets (`BEATORAJA_KEYS_FILTERS` and `BEATORAJA_SORTS` give their order, `beatorajaKeysFilterIndex`
@@ -313,7 +313,7 @@ start in the regular and the practice mode. The LNMODE image shows the player's 
 screens and the played chart's long-note mode on the play and result screens, as beatoraja's does.
 The play view draws through `BeatorajaPlayBridge`: the play's state is the play session's `PlayState`, and the bridge
 applies the ops and timers the mapping resolves for each frame, judgment and lane action
-([player-web.md](./player-web.md#the-play-screen)).
+([player-web.md](./player-web-scenes.md#the-play-screen)).
 
 The browser gameplay path mounts every chart variant the parser discovers — `5`, `7`, `9`, `10`, `14`, `24`, and
 `24d`. The keyboard modes address their lanes through the `1000`-block timer bases upstream's `play24main.lua` uses

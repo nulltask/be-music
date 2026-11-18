@@ -2,8 +2,21 @@
 
 # @be-music/app-leaderboard
 
-Be-Music の Leaderboard API です。Cloudflare Workers 上の Hono アプリで、D1 と R2 を使います。設計は
-[docs/leaderboard.ja.md](../../docs/leaderboard.ja.md) にあり、この README は動かし方とデプロイ方法を扱います。
+Be-Music Leaderboard の API を Cloudflare Workers 上で提供する Hono アプリです。データの保存には D1 と R2 を使います。[サービス仕様](../../docs/leaderboard.ja.md)
+
+<details>
+<summary>目次</summary>
+
+- [実装済みのもの](#実装済みのもの)
+- [準備](#準備)
+  - [Secrets](#secrets)
+- [データベース](#データベース)
+- [デプロイ](#デプロイ)
+- [ページ](#ページ)
+  - [アイコン](#アイコン)
+- [テスト](#テスト)
+
+</details>
 
 ## 実装済みのもの
 
