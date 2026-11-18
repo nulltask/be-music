@@ -140,7 +140,7 @@ jobs:
     env:
       BENCH_TIME_MS: 50
       BENCH_WARMUP_TIME_MS: 25
-      BENCH_REPEATS: 3
+      BENCH_REPEATS: 5
       BENCH_REGRESSION_THRESHOLD: 8
     permissions:
       contents: write
@@ -179,7 +179,7 @@ jobs:
           if [ -z "$packages" ]; then
             echo "No benchmarked runtime packages changed; measurement skipped." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "Benchmarking $packages: 3 paired runs per revision." >> "$GITHUB_STEP_SUMMARY"
+            echo "Benchmarking $packages: $BENCH_REPEATS paired runs." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Detect benchmark support

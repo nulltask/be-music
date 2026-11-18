@@ -219,7 +219,7 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 - compare output: arbitrary Markdown and summary JSON
 - GitHub Actions runs benchmarks only on pushes to `devel` or `main`. A push to `devel` compares the pushed commit with the current `main`. A push to `main` compares the new tip with the previous `main` tip. GitHub Actions posts the report on the pushed commit.
 - CI selects packages from the files changed in the push. It skips documentation and `*.test.*` / `*.spec.*` files and measures the full inventory when shared tooling, lockfiles, or root configuration changes. Each case runs for 50 ms after a 25 ms warmup.
-- CI measures base and head on the same runner, taking turns (head, base, head, base, …) for 3 runs each, so host-to-host noise and slow stretches hit both sides alike.
+- CI measures each revision five times, alternating between them on the same runner to reduce the effect of runner load on the comparison.
 - Fast functions are called many times per timed sample (about 50 µs a sample), so cases that take nanoseconds are measured rather than lost in the timer's resolution. Times are reported per call.
 - A case counts as a regression or an improvement only when its median changes past the threshold (8% in CI) and the runs of the two sides do not overlap; a change past the threshold with overlapping runs is listed as "within noise".
 - Cases marked `ioBound` (they touch the filesystem) are listed apart and never judged, since their time follows the OS cache and the disk.
