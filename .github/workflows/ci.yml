@@ -334,12 +334,24 @@ jobs:
         run: |
           set -euo pipefail
           args=("$BENCH_ISSUE_THRESHOLD" tmp/bench/base.json tmp/bench/head.json)
-          packages="$(node scripts/bench/regressions.ts "${args[@]}" | jq -r 'map(.key | split(".")[0]) | unique | join(",")')"
-          if [ -z "$packages" ]; then exit 0; fi
+          candidates="$(node scripts/bench/regressions.ts "${args[@]}")"
+          keys="$(jq -r 'map(.key) | join(",")' <<< "$candidates")"
+          if [ -z "$keys" ]; then exit 0; fi
+          packages="$(jq -r 'map(.key | split(".")[0]) | unique | join(",")' <<< "$candidates")"
+          echo "Confirming $(jq length <<< "$candidates") benchmark cases."
+          benchmark_args=(--packages "$packages" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS")
+          base_runner=scripts/bench/exports.ts
+          base_args=("${benchmark_args[@]}")
+          base_help="$(cd "$BASE_DIR" && node --conditions=source "$base_runner" --help)"
+          if [[ "$base_help" == *--case-keys* ]]; then
+            base_args+=(--case-keys "$keys")
+          else
+            base_runner="$(node scripts/bench/legacy-case-runner.ts "$BASE_DIR" "$keys")"
+          fi
           mkdir -p tmp/bench/confirm-head-runs tmp/bench/confirm-base-runs
           for run_index in $(seq 1 "$BENCH_REPEATS"); do
-            BENCH_GIT_SHA="$GITHUB_SHA" pnpm run bench --output "tmp/bench/confirm-head-runs/run-${run_index}.json" --packages "$packages" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
-            (cd "$BASE_DIR" && BENCH_GIT_SHA="$BENCH_BASE_SHA" pnpm run bench --output "$GITHUB_WORKSPACE/tmp/bench/confirm-base-runs/run-${run_index}.json" --packages "$packages" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS")
+            BENCH_GIT_SHA="$GITHUB_SHA" pnpm run bench --output "tmp/bench/confirm-head-runs/run-${run_index}.json" "${benchmark_args[@]}" --case-keys "$keys"
+            (cd "$BASE_DIR" && BENCH_GIT_SHA="$BENCH_BASE_SHA" node --conditions=source "$base_runner" --output "$GITHUB_WORKSPACE/tmp/bench/confirm-base-runs/run-${run_index}.json" "${base_args[@]}")
           done
           pnpm run bench:aggregate -- --output tmp/bench/confirm-head.json tmp/bench/confirm-head-runs/*.json
           pnpm run bench:aggregate -- --output tmp/bench/confirm-base.json tmp/bench/confirm-base-runs/*.json
