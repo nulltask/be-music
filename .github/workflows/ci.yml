@@ -366,48 +366,62 @@ jobs:
         with:
           script: |
             const fs = require('node:fs');
+            const { setTimeout: delay } = require('node:timers/promises');
             const rows = JSON.parse(fs.readFileSync('tmp/bench/confirmed-regressions.json', 'utf8'));
             const base = process.env.BENCH_BASE_SHA;
             const head = context.sha;
             const { owner, repo } = context.repo;
             const repository = `${context.serverUrl}/${owner}/${repo}`;
-            const baselineMarker = `<!-- be-music-benchmark-regressions:${base} -->`;
-            const observationMarker = `<!-- be-music-benchmark-observation:${head} -->`;
+            const summaryStart = '<!-- be-music-benchmark-summary:start -->';
+            const summaryEnd = '<!-- be-music-benchmark-summary:end -->';
+            const runNumber = Number(process.env.GITHUB_RUN_NUMBER);
             const percent = (row) => `${(-row.deltaPercent).toFixed(1)}%`;
-            const body = [
-              observationMarker,
-              `${rows.length} benchmark cases on [devel \`${head.slice(0, 8)}\`](${repository}/commit/${head}) lost at least ${process.env.BENCH_ISSUE_THRESHOLD}% throughput compared with [main \`${base.slice(0, 8)}\`](${repository}/commit/${base}) in both measurement rounds. Each round alternated between the same two commits on one runner, with ${process.env.BENCH_REPEATS} runs per commit and no overlap between their ranges for these cases.`,
-              '',
-              '| Case | Initial ops/s loss | Confirmed ops/s loss |',
-              '| --- | ---: | ---: |',
-              ...rows.slice(0, 25).map((row) => `| \`${row.key}\` | ${percent(row.initial)} | ${percent(row.confirmation)} |`),
-              ...(rows.length > 25 ? ['', `Showing the 25 largest confirmed losses out of ${rows.length} cases.`] : []),
-              '',
-              `[Benchmark report](${process.env.BENCH_REPORT_URL}) · [Workflow run](${repository}/actions/runs/${context.runId})`,
-            ].join('\n');
             const issues = await github.paginate(github.rest.issues.listForRepo, {
-              owner, repo, state: 'all', labels: 'perf', per_page: 100,
+              owner, repo, state: 'open', per_page: 100,
             });
-            const trackers = issues.filter((item) =>
-              !item.pull_request && item.user?.type === 'Bot' && item.body?.includes(baselineMarker)
-            );
-            for (const issue of trackers) {
-              if (issue.body.includes(observationMarker)) return;
-              if (!issue.comments) continue;
-              const comments = await github.paginate(github.rest.issues.listComments, {
-                owner, repo, issue_number: issue.number, per_page: 100,
-              });
-              if (comments.some((comment) => comment.user?.type === 'Bot' && comment.body?.includes(observationMarker))) return;
-            }
-            const issue = trackers.find((item) => item.state === 'open');
-            if (issue) {
-              await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body });
-            } else {
-              await github.rest.issues.create({
-                owner, repo, labels: ['perf'],
-                title: `Confirmed benchmark regressions against main ${base.slice(0, 8)}`,
-                body: `${baselineMarker}\n${body}`,
-              });
+            const tracked = issues.filter((item) => !item.pull_request && item.user?.login === 'github-actions[bot]');
+            let wroteIssue = false;
+            for (const row of rows) {
+              const marker = `<!-- be-music-benchmark-case:${encodeURIComponent(row.key)} -->`;
+              const issue = tracked.find((item) => item.body?.includes(marker));
+              const currentBody = issue?.body ?? '';
+              const start = currentBody.indexOf(summaryStart);
+              const end = start === -1 ? -1 : currentBody.indexOf(summaryEnd, start);
+              const previousSummary = end === -1 ? '' : currentBody.slice(start, end);
+              const previousRun = /<!-- be-music-benchmark-run:(\d+) -->/.exec(previousSummary)?.[1];
+              if (previousRun !== undefined && Number(previousRun) > runNumber) continue;
+
+              const summary = [
+                summaryStart,
+                `<!-- be-music-benchmark-run:${runNumber} -->`,
+                '## Latest confirmed regression',
+                '',
+                `\`${row.key}\` lost at least ${process.env.BENCH_ISSUE_THRESHOLD}% throughput on [devel \`${head.slice(0, 8)}\`](${repository}/commit/${head}) compared with [main \`${base.slice(0, 8)}\`](${repository}/commit/${base}) in both measurement rounds. Each round alternated between the same commits on one runner, with ${process.env.BENCH_REPEATS} runs per commit and no overlap between their ranges.`,
+                '',
+                '| Initial ops/s loss | Confirmed ops/s loss |',
+                '| ---: | ---: |',
+                `| ${percent(row.initial)} | ${percent(row.confirmation)} |`,
+                '',
+                `[Benchmark report](${process.env.BENCH_REPORT_URL}) · [Workflow run](${repository}/actions/runs/${context.runId})`,
+                summaryEnd,
+              ].join('\n');
+              const body = end === -1
+                ? [currentBody || marker, summary].join('\n\n')
+                : currentBody.slice(0, start) + summary + currentBody.slice(end + summaryEnd.length);
+              if (body === currentBody) continue;
+
+              // Space out issue writes when a single run confirms many cases.
+              if (wroteIssue) await delay(1000);
+              if (issue) {
+                await github.rest.issues.update({ owner, repo, issue_number: issue.number, body });
+              } else {
+                await github.rest.issues.create({
+                  owner, repo, labels: ['perf'],
+                  title: `Performance regression in ${row.key}`,
+                  body,
+                });
+              }
+              wroteIssue = true;
             }
 
   # The release builds the SEA binaries on these three runners (release.yml), and its install runs every package's
