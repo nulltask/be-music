@@ -56,11 +56,13 @@ function playedRuleset(replay: BeMusicReplay): RulesetId {
  * and plugout's EX picks anywhere else (`resolveCourseGaugeId`).
  */
 function definesGauge(ruleset: RulesetId, pick: GaugePick, courseStage: boolean): boolean {
-  const parts = splitGaugePick(pick);
+  // A bare pick on the ruleset's menu, the common case, needs no split.
+  if (!courseStage && resolveGaugeTypes(ruleset).includes(pick as GaugeType)) return true;
   // A qualified gauge keeps its source's reading under every ruleset (carried, ADR 0019).
-  if (parts?.source !== undefined) return true;
-  const gauge = parts?.type ?? (pick as GaugeType);
-  if (!courseStage) return resolveGaugeTypes(ruleset).includes(gauge);
+  if (pick.includes(':') && splitGaugePick(pick)?.source !== undefined) return true;
+  if (!courseStage) return false;
+  // Anything else, a bare pick or no pick at all, reads as it is.
+  const gauge = pick as GaugeType;
   // plugout's course gauges take every pick of its own but ASSIST EASY; its EX picks exist nowhere else.
   if (ruleset === 'plugout') return gauge !== 'ASSIST-EASY' && gauge !== 'P-ATTACK' && gauge !== 'G-ATTACK';
   if (gauge === 'EX-GROOVE' || gauge === 'EX-EASY' || gauge === 'EX-DEATH') return false;
