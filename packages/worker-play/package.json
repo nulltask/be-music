@@ -9,6 +9,7 @@
     "deploy:preview": "pnpm --filter @be-music/app-play run build:cf && cf deploy --mode preview"
   },
   "dependencies": {
+    "@be-music/app-play": "workspace:*",
     "@be-music/service-auth-client": "workspace:*"
   },
   "devDependencies": {

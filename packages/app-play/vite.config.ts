@@ -2,7 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { getBuildInfo } from '../../scripts/release/build-info.ts';
 import { acknowledgementsPlugins } from './scripts/acknowledgements.ts';
 import { serviceWorkerPlugin } from './scripts/service-worker-plugin.ts';
-import { retitleHTML, retitleManifest } from '../worker-play/src/app-title.ts';
+import { retitleHTML, retitleManifest } from './src/app-title.ts';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -119,7 +119,7 @@ function ffmpegCorePlugin(sourceDir: string): Plugin {
 /**
  * Titles the dev server's player `Be-Music Play (Development)`: the page, and the web app manifest an installed dev
  * player takes its window title from. A build keeps the production title; the preview Worker retitles it as it serves
- * (`packages/worker-play/src/app-title.ts`).
+ * (`packages/app-play/src/app-title.ts`).
  */
 function developmentTitlePlugin(): Plugin {
   const manifestPath = resolve(import.meta.dirname, 'public/manifest.webmanifest');
