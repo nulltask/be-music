@@ -549,7 +549,7 @@ stateDiagram-v2
   [*] --> Pending
   Pending --> Missed: head window passes
   Pending --> Held: head pressed
-  Pending --> Done: head BAD / POOR (That-Which-Must-Not-Be-Named charge)
+  Pending --> Done: ???? CN/HCN head BAD/POOR
   Held --> Margin: early release under a margin
   Margin --> Held: pressed again
   Margin --> Done: margin elapses

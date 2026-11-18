@@ -2,7 +2,7 @@
 
 # Browser player implementation notes
 
-Be-Music Play loads BMS, BME, BML, PMS and bmson charts, and runs them in the browser. The app handles the library and settings. `@be-music/player-browser` provides the runtime and draws each screen with the active skin family. See the [shared player specification](./player-spec.md) for chart timing and note rules.
+Be-Music Play runs BMS, BME, BML, PMS, bmson, LRX and n2s charts in the browser. The app handles the library and settings. `@be-music/player-browser` provides the runtime and draws each screen with the active skin family. See the [shared player specification](./player-spec.md) for chart timing and note rules.
 
 <details>
 <summary>Table of contents</summary>
@@ -199,11 +199,11 @@ The player is an installable web app: Chrome and Edge (desktop and Android) offe
 - **Icons:** The tab and manifest use the playfield SVG (`public/favicon.svg`). Run `pnpm --filter @be-music/app-play run build:icons` to generate the maskable SVG with safe-zone padding, 192 / 512 px PNG fallbacks, and the 180 px iOS touch icon in `public/icons/`.
 - **Service worker:** `src/service-worker/service-worker.ts`, served as `/sw.js` with the scope `/`. The build bundles it as one more entry and writes its precache manifest into it (`scripts/service-worker-plugin.ts`); its rules are the pure `src/service-worker/routes.ts`. A production build registers it once the page has loaded (`src/service-worker/register.ts`); the dev server and runs under the test hook (`?e2e=1`) do not.
 
-What the worker does with a request:
+The service worker bypasses the cache for requests other than GET, range requests, and the paths `/api`, `/__url-load-proxy`, `/embed` and `/sw.js`. This also covers paths under `/api/` and `/embed/`.
 
 ```mermaid
 flowchart TD
-  request[Request] --> dynamic{"Not a GET, a range,<br/>/api/*, /__url-load-proxy,<br/>/embed/ or /sw.js?"}
+  request[Request] --> dynamic{"Bypass cache?"}
   dynamic -- yes --> network[Network only]
   dynamic -- no --> page{Page load?}
   page -- yes --> shell["Network first;<br/>cached shell offline or after 5 s"]

@@ -2,7 +2,7 @@
 
 # Browser player 実装メモ
 
-Be-Music Play は BMS・BME・BML・PMS・bmson の譜面をブラウザーで再生します。アプリはライブラリーと設定を管理し、`@be-music/player-browser` が選択中のスキンで各画面を描画します。譜面のタイミングとノートの規則は [共通プレイヤー仕様](./player-spec.ja.md) を参照してください。
+Be-Music Play は BMS・BME・BML・PMS・bmson・LRX・n2s の譜面をブラウザーで再生します。アプリはライブラリーと設定を管理し、`@be-music/player-browser` が選択中のスキンで各画面を描画します。譜面のタイミングとノートの規則は [共通プレイヤー仕様](./player-spec.ja.md) を参照してください。
 
 <details>
 <summary>目次</summary>
@@ -126,7 +126,7 @@ Play はページが表示されてから Leaderboard のアカウントを読�
 **Library & records → Local data…** は、プレイヤーがこのブラウザーに保存しているものを表示します。`localStorage` のすべてのキー（プレイヤー自身の `be-music.*` を先に、中身の説明とサイズ付き）、ブラウザーがこのオリジンについて一覧するすべての IndexedDB データベース（自作コースの `be-music`、リプレイスロットの `be-music-replays`）と各ストアのレコード数・先頭 200 件、ブラウザーの容量の見積もりです。各項目は開くと値を表示し、値は開いたときに初めて描きます。リプレイスロットの圧縮されたリプレイは JSON として読み出せます。ビューアは読むだけです。データベースは現在のバージョンで、ブラウザーが一覧するものだけを開くので、何も作らず、何も変えません。データは消すための各操作（Reset settings、Clear best records、My courses、リプレイスロットのカード）から消します。設定の Cookie は HttpOnly なので表示されません。
 
 - **Library タブの最上部:** Status（読み取り専用）、Open folder、Open files (ZIP / replay)。Open files では ZIP アーカイブや、リプレイするリプレイ（`*.bmplay.json`、コースは `*.bmcourse.json`）を選べ、ドロップと同じ経路で読み込みます。Open folder はフォルダー選択ダイアログを使い、これもドロップと同じ経路で読み込みます。
-- **Key config**（Keys タブ）: 各レーンに割り当てるキー。5 / 7 / 10 / 14 KEY（レーンごとに共通）と 9 KEY（ボタン番号ごと）で 1 ページずつあり、24 / 48 KEY は既定のままです。レーンのキーをクリックしてから割り当てたいキーを押します。そのページのほかのレーンが使っているキーなら、そのレーンには元のキーが入れ替わりで入り、Esc で取り消します。Esc、Pause、F5、Backspace、上下の矢印はプレイ用、Ctrl と Space は皿の 2 つ目のキーなので使えません。5 / 7 / 10 / 14 KEY のページには各サイドの START と SELECT もあり（既定は LR2 の初期設定と同じ Q / W と O / P。`controlKeys`）、レーンと同じキーにはできません。**Built-in skin controls** では、内蔵スキンの画面が LR2 と beatoraja のどちらのキー操作に従うかを選びます（`builtInControlScheme`）。**Screens** のページには、選曲・決定・プレイ・リザルトの各画面の操作（`session/controls/control-actions.ts` の `CONTROL_ACTIONS`）とそのキーが並びます。操作にキーを割り当てると既定のキーの代わりになり（`actionKeys`）、同じ画面のほかの操作が使っているキーは使えません。**Reset screen keys to defaults** で既定に戻せます。各画面はレーンと同じく物理キー（`KeyboardEvent.code`）で操作を見分け、プレイ中に譜面のレーンが使うキーはレーンになります。キーはほかの設定と一緒に保存され（`laneKeys`）、プレイ開始時に読み（`@be-music/player-engine/lanes` の `LaneModeOptions.laneKeys`）、プレイ中は変えられません。**Reset keys to defaults** でページごとに既定に戻せます。リプレイは記録したレーンで再生するので、キーは関係しません。各画面はキーを操作ボタンとして読みます（`session/controls/control-buttons.ts`）。各サイドの 7 つの鍵盤、2 つの皿のキー（Shift と Ctrl。1P 側は LR2 と同じく Space も）、START と SELECT です。そのため LR2 の選曲画面の PLAY OPTION パネルも、ユーザーの 1P のキーで項目を切り替えます。
+- **Key config**（Keys タブ）: 各レーンに割り当てるキー。5 / 7 / 10 / 14 KEY（レーンごとに共通）と 9 KEY（ボタン番号ごと）で 1 ページずつあり、24 / 48 KEY は既定のままです。レーンのキーをクリックしてから割り当てたいキーを押します。そのページのほかのレーンが使っているキーなら、そのレーンには元のキーが入れ替わりで入り、Esc で取り消します。Esc、Pause、F5、Backspace、上下の矢印はプレイ用、Ctrl と Space はスクラッチの 2 つ目のキーなので使えません。5 / 7 / 10 / 14 KEY のページには各サイドの START と SELECT もあり（既定は LR2 の初期設定と同じ Q / W と O / P。`controlKeys`）、レーンと同じキーにはできません。**Built-in skin controls** では、内蔵スキンの画面が LR2 と beatoraja のどちらのキー操作に従うかを選びます（`builtInControlScheme`）。**Screens** のページには、選曲・決定・プレイ・リザルトの各画面の操作（`session/controls/control-actions.ts` の `CONTROL_ACTIONS`）とそのキーが並びます。操作にキーを割り当てると既定のキーの代わりになり（`actionKeys`）、同じ画面のほかの操作が使っているキーは使えません。**Reset screen keys to defaults** で既定に戻せます。各画面はレーンと同じく物理キー（`KeyboardEvent.code`）で操作を見分け、プレイ中に譜面のレーンが使うキーはレーンになります。キーはほかの設定と一緒に保存され（`laneKeys`）、プレイ開始時に読み（`@be-music/player-engine/lanes` の `LaneModeOptions.laneKeys`）、プレイ中は変えられません。**Reset keys to defaults** でページごとに既定に戻せます。リプレイは記録したレーンで再生するので、キーは関係しません。各画面はキーを操作ボタンとして読みます（`session/controls/control-buttons.ts`）。各サイドの 7 つの鍵盤、2 つのスクラッチのキー（Shift と Ctrl。1P 側は LR2 と同じく Space も）、START と SELECT です。そのため LR2 の選曲画面の PLAY OPTION パネルも、ユーザーの 1P のキーで項目を切り替えます。
 - **Play options**（Play タブ）: 一番上の Judgment windows（ページの上。LR2、beatoraja、????、plugout から選び、曲の開始時に確定。選曲画面に出す[ベスト記録](#ベスト記録)のルールセットもこれで決まります）。**Judge & gauge** にはゲージ、判定アルゴリズム、オートシフトのゲージ、beatoraja の LN MODE と CUSTOM JUDGE、判定タイミングが、**Arrangement** にはレーンのオプション（Random 1P / 2P、固定キー、シード、7-to-9、DP flip、Battle）が、**Modifiers** には譜面の変更（Scroll、Mines、Long notes、EXTRA）が、**Assist** には Auto play、Auto scratch 1P / 2P、ANY KEY が、**Practice** には PRACTICE と **Tempo** フォルダーがあります。曲の開始時に確定し、プレイ中は無効になります。ただし判定タイミングはその場で反映します。
   - **Replay / ghost**: Tempo、Hi-speed、SUDDEN+ / HIDDEN+、LIFT — 記録したプレイヤーが見ていたもののうち、リプレイで再現するもの。それ以外は自分の設定のままです。既定ですべてオンで、次回以降も保持され、曲の開始時に確定し、プレイ中は無効になります。シーンには `replayView`（`ReplayPlaybackOptions`）として渡ります。**Ghost**（既定は OFF。OWN BEST、REPLAY SLOT 1-4、LEADERBOARD TOP、REPLAY FILE）でゴーストが再生するリプレイを、**Ghost mode**（SECOND PLAYFIELD、PACEMAKER、PACEMAKER + LANES）でその見せ方を選びます。**Ghost status** はカーソルのバーで見せられるかを示し、**Ghost replay file…** で REPLAY FILE が再生するファイルを選びます（[replay.ja.md](./replay-browser.ja.md#ゴースト)）。Ghost と Ghost mode はプレイ中とコースのバーでは無効です。
 - **Tempo**（Practice ページ）: Tempo (%)、Pitch、Keep-pitch stretcher（[プレイテンポ](#プレイテンポ) を参照）。曲の開始時に確定し、プレイ中は無効になります。ただしピッチがテンポに追従するときの Tempo (%) はプレイ中も有効で、プレイのテンポをその場で変えます。
@@ -197,11 +197,11 @@ flowchart LR
 - **アイコン:** タブとマニフェストはプレイフィールドの SVG（`public/favicon.svg`）を使います。`pnpm --filter @be-music/app-play run build:icons` を実行すると、セーフゾーンに収めた maskable SVG、フォールバック用の 192 / 512 px PNG、iOS 用の 180 px アイコンを `public/icons/` に生成します。
 - **Service Worker:** `src/service-worker/service-worker.ts` を `/sw.js` としてスコープ `/` で配信します。ビルドはこれを入口の一つとして束ね、precache のマニフェストを書き込みます（`scripts/service-worker-plugin.ts`）。ルールは純粋なモジュール `src/service-worker/routes.ts` です。登録するのは本番ビルドだけで、ページの読み込みが終わってから登録します（`src/service-worker/register.ts`）。開発サーバーとテスト用フック（`?e2e=1`）の実行では登録しません。
 
-Service Worker がリクエストをどう扱うか:
+Service Worker は GET 以外のリクエスト、Range リクエスト、`/api`、`/__url-load-proxy`、`/embed`、`/sw.js` をキャッシュせずにネットワークへ渡します。`/api` と `/embed` の配下も同じです。
 
 ```mermaid
 flowchart TD
-  request[リクエスト] --> dynamic{"GET 以外、Range、<br/>/api/*、/__url-load-proxy、<br/>/embed/、/sw.js?"}
+  request[リクエスト] --> dynamic{"キャッシュを迂回？"}
   dynamic -- はい --> network[ネットワークのみ]
   dynamic -- いいえ --> page{ページの読み込み?}
   page -- はい --> shell["ネットワーク優先。<br/>オフラインか 5 秒でキャッシュのシェル"]

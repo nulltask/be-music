@@ -30,14 +30,14 @@ flowchart TD
   subgraph appDir["app/"]
     app["app.ts<br/>composition root"]
     shell["shell.ts"]
-    routes["routes/<br/>select · decide · play<br/>result · replay<br/>course · NONSTOP"]
+    routes["routes/"]
     router["scene-router.ts"]
   end
   app --> shell
   app --> routes
   app --> ui["ui/<br/>Options dialog · panels"]
   routes --> router
-  routes --> services["services/<br/>settings · library · records<br/>themes · courses · replays"]
+  routes --> services["services/"]
   ui --> services
   routes --> host["player-browser<br/>host API"]
   router --> host

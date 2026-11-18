@@ -9,24 +9,26 @@ Be-Music は譜面を 2 つのレイヤーで読みます。**Source レイヤ�
 ```mermaid
 flowchart TD
   files[".bms / .bme / .pms / .bmson / .json"]
-  source["BeMusicJSON<br/><i>Source レイヤー (@be-music/chart-source)</i>"]
-  flat["制御構文を解決した BeMusicJSON"]
-  resolved["ResolvedChart<br/><i>Resolved レイヤー (@be-music/chart-model)</i>"]
-  player["@be-music/player-engine<br/>エンジンの準備 (preparePlaybackChart)、ルールセットの事実、リプレイ"]
-  renderer["@be-music/chart-audio-renderer<br/>renderJSON"]
-  tui["@be-music/player-terminal<br/>譜面一覧、プレビューの署名、BGA、UI worker"]
-  web["@be-music/player-browser<br/>プレイセッション、プレイフィールド、譜面のプレビュー、beatoraja の譜面グラフ、コース"]
-  skin["@be-music/player-skin-sdk<br/>譜面の統計 (resolveChartStats)"]
+  source["BeMusicJSON<br/>Source"]
+  flat["分岐解決済みの譜面"]
+  resolved["ResolvedChart<br/>Resolved"]
+  player["エンジン"]
+  renderer["音声レンダラー"]
+  tui["端末プレイヤー"]
+  web["ブラウザープレイヤー"]
+  skin["スキン SDK"]
 
-  files -->|"@be-music/chart-parser<br/>parseChart, parseBMS, parseBmson"| source
-  source -->|"drawRandomOutcomes(chart, random) → RandomDraws (@be-music/chart-model)<br/>resolveBMSControlFlowWithDraws(chart, draws) (@be-music/chart-parser)<br/>ホスト: resolvePlayChart(chart) → { chart, randomDraws } (@be-music/player-engine)"| flat
-  flat -->|"resolveChart(chart, { randomDraws, chartPath, playVariant, inferBmsLNTypeWhenMissing })"| resolved
+  files -->|"パース"| source
+  source -->|"分岐を解決"| flat
+  flat -->|"resolveChart"| resolved
   resolved --> player
   resolved --> renderer
   resolved --> tui
   resolved --> web
   resolved --> skin
 ```
+
+ソースと Resolved 譜面の変換を担う関数は、以下の各節で説明します。リプレイ処理、音声レンダリング、各プレイヤー、スキン SDK は Resolved 譜面を参照します。
 
 ## Source レイヤー
 
@@ -112,7 +114,7 @@ flowchart TD
     auto["play-auto.ts"]
   end
   subgraph core["判定コア"]
-    judge["judge-core.ts<br/>(+ judge-core-{types,score,advance,press}.ts)"]
+    judge["judge-core.ts"]
     autoJudge["auto-judge-core.ts"]
   end
   effects["engine-effects.ts"]

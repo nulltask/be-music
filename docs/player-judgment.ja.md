@@ -486,15 +486,15 @@ FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱�
   [SnekBox の HID レポート定義](https://github.com/dinsfire64/snekbox_firmware/blob/main/handlers/infinitas.h)を参照してください。
 
   ブラウザーが実験的な Gamepad の生入力イベントを送る場合は、イベントを受け取った時点で入力を処理します。
-  4 ms 間隔を要求するポーリングで、イベント非対応時の入力、皿の停止、コントローラーの切断を検出します。
+  4 ms 間隔を要求するポーリングで、イベント非対応時の入力、スクラッチの停止、コントローラーの切断を検出します。
   実際の取得間隔はブラウザーと OS に依存します。
 
   選曲・決定・リザルト画面も同じパッドをコントロールボタンとして読みます（`runtime/gamepad-menu.ts`）。パッドのボタンは、
   画面のキー操作（スキン系統による LR2 風 / beatoraja 風）で対応するキーと同じ働きをします。標準パッドはプレイと同じ鍵盤と
-  皿に加え、Start が START、Back（Share / Create）が SELECT で、方向キーは 1 鍵ではなく矢印キーになります。
+  スクラッチに加え、Start が START、Back（Share / Create）が SELECT で、方向キーは 1 鍵ではなく矢印キーになります。
   IIDX コントローラーの START / SELECT はボタン 9 / 10（INFINITAS 配置の E1 / E2、beatoraja のコントローラー既定の
   START / SELECT）です。これは INFINITAS の HID レポートの並びからの推定で、実機での確認は未実施です。
-  1 台目が 1P、2 台目が 2P です。皿と方向キーは押し続けると 300 ms 後から 60 ms ごとにくり返します（キーの長押しと同じ
+  1 台目が 1P、2 台目が 2P です。スクラッチと方向キーは押し続けると 300 ms 後から 60 ms ごとにくり返します（キーの長押しと同じ
   扱いにする Be-Music の方針）。画面に来たときすでに押されているボタンは押下として扱わず、モーダルダイアログや
   テキスト欄はキーと同じくパッドの入力も受け取ります。
 
@@ -529,7 +529,7 @@ stateDiagram-v2
   [*] --> Pending
   Pending --> Missed: 始点の窓を過ぎる
   Pending --> Held: 始点を押す
-  Pending --> Done: 始点 BAD / POOR（名前を言ってはいけないあのゲームのチャージ）
+  Pending --> Done: ???? の CN/HCN 始点 BAD/POOR
   Held --> Margin: マージンのある早い離鍵
   Margin --> Held: 押し直す
   Margin --> Done: マージンが過ぎる

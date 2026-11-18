@@ -9,24 +9,26 @@ Be-Music reads a chart in two layers. The **Source layer** says what the file sa
 ```mermaid
 flowchart TD
   files[".bms / .bme / .pms / .bmson / .json"]
-  source["BeMusicJSON<br/><i>Source layer (@be-music/chart-source)</i>"]
-  flat["BeMusicJSON without control flow"]
-  resolved["ResolvedChart<br/><i>Resolved layer (@be-music/chart-model)</i>"]
-  player["@be-music/player-engine<br/>engine bootstrap (preparePlaybackChart), ruleset facts, replay"]
-  renderer["@be-music/chart-audio-renderer<br/>renderJSON"]
-  tui["@be-music/player-terminal<br/>chart list, preview signature, BGA, UI worker"]
-  web["@be-music/player-browser<br/>play session, playfield, chart preview, beatoraja chart graphs, courses"]
-  skin["@be-music/player-skin-sdk<br/>chart stats (resolveChartStats)"]
+  source["BeMusicJSON<br/>Source"]
+  flat["Chart with branches resolved"]
+  resolved["ResolvedChart<br/>Resolved"]
+  player["Engine"]
+  renderer["Audio renderer"]
+  tui["Terminal player"]
+  web["Browser player"]
+  skin["Skin SDK"]
 
-  files -->|"@be-music/chart-parser<br/>parseChart, parseBMS, parseBmson"| source
-  source -->|"drawRandomOutcomes(chart, random) → RandomDraws (@be-music/chart-model)<br/>resolveBMSControlFlowWithDraws(chart, draws) (@be-music/chart-parser)<br/>hosts: resolvePlayChart(chart) → { chart, randomDraws } (@be-music/player-engine)"| flat
-  flat -->|"resolveChart(chart, { randomDraws, chartPath, playVariant, inferBmsLNTypeWhenMissing })"| resolved
+  files -->|"Parse"| source
+  source -->|"Resolve branches"| flat
+  flat -->|"resolveChart"| resolved
   resolved --> player
   resolved --> renderer
   resolved --> tui
   resolved --> web
   resolved --> skin
 ```
+
+Replay processing, audio rendering, each player, and the skin SDK read the resolved chart. The sections below identify the functions that parse the chart and resolve its branches and timing.
 
 ## Source layer
 
@@ -112,7 +114,7 @@ flowchart TD
     auto["play-auto.ts"]
   end
   subgraph core["judge core"]
-    judge["judge-core.ts<br/>(+ judge-core-{types,score,advance,press}.ts)"]
+    judge["judge-core.ts"]
     autoJudge["auto-judge-core.ts"]
   end
   effects["engine-effects.ts"]
