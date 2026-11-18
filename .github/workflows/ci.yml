@@ -191,7 +191,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          git fetch --no-tags origin refs/heads/main
+          BASE_SHA="$(git rev-parse --verify 'FETCH_HEAD^{commit}')"
+          echo "BENCH_BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
+          echo "Benchmark baseline (main): $BASE_SHA" >> "$GITHUB_STEP_SUMMARY"
           BASE_PKG_JSON="$(mktemp)"
           trap 'rm -f "$BASE_PKG_JSON"' EXIT
           if ! git show "${BASE_SHA}:package.json" > "$BASE_PKG_JSON" 2>/dev/null; then
@@ -218,7 +221,7 @@ jobs:
         run: |
           set -euo pipefail
           BASE_DIR="${RUNNER_TEMP}/bench-base"
-          git worktree add --detach "$BASE_DIR" "${{ github.event.pull_request.base.sha }}"
+          git worktree add --detach "$BASE_DIR" "$BENCH_BASE_SHA"
           (cd "$BASE_DIR" && pnpm install --frozen-lockfile --prefer-offline)
           echo "dir=$BASE_DIR" >> "$GITHUB_OUTPUT"
 
@@ -237,7 +240,7 @@ jobs:
           for run_index in $(seq 1 "$BENCH_REPEATS"); do
             BENCH_GIT_SHA="${{ github.event.pull_request.head.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
             if [ "$base_ok" = true ]; then
-              if ! (cd "$BASE_DIR" && BENCH_GIT_SHA="${{ github.event.pull_request.base.sha }}" pnpm run bench --output "$GITHUB_WORKSPACE/tmp/bench/base-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"); then
+              if ! (cd "$BASE_DIR" && BENCH_GIT_SHA="$BENCH_BASE_SHA" pnpm run bench --output "$GITHUB_WORKSPACE/tmp/bench/base-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"); then
                 echo "::warning::The base benchmark failed; the report shows the head only."
                 base_ok=false
                 rm -f tmp/bench/base-runs/*.json
@@ -368,20 +371,25 @@ jobs:
         if: steps.scope.outputs.packages != ''
         id: detect-bench
         shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          BASE_SHA="${{ github.event.before }}"
-          ZERO_SHA="0000000000000000000000000000000000000000"
-          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "$ZERO_SHA" ]; then
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            # The new main tip is the head. Compare it with main before this push.
+            BASE_SHA="$(git rev-parse --verify --quiet "${BEFORE_SHA}^{commit}" || true)"
+          else
+            git fetch --no-tags origin refs/heads/main
+            BASE_SHA="$(git rev-parse --verify 'FETCH_HEAD^{commit}')"
           fi
+          echo "BENCH_BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
           BASE_PKG_JSON="$(mktemp)"
           trap 'rm -f "$BASE_PKG_JSON"' EXIT
-          if ! git show "${BASE_SHA}:package.json" > "$BASE_PKG_JSON" 2>/dev/null; then
+          if [ -z "$BASE_SHA" ] || ! git show "${BASE_SHA}:package.json" > "$BASE_PKG_JSON" 2>/dev/null; then
             echo "available=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "Benchmark baseline (main): $BASE_SHA" >> "$GITHUB_STEP_SUMMARY"
           if node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); process.exit(pkg.scripts && pkg.scripts['bench'] ? 0 : 1);" "$BASE_PKG_JSON"; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
@@ -402,7 +410,7 @@ jobs:
         run: |
           set -euo pipefail
           BASE_DIR="${RUNNER_TEMP}/bench-base"
-          git worktree add --detach "$BASE_DIR" "${{ github.event.before }}"
+          git worktree add --detach "$BASE_DIR" "$BENCH_BASE_SHA"
           (cd "$BASE_DIR" && pnpm install --frozen-lockfile --prefer-offline)
           echo "dir=$BASE_DIR" >> "$GITHUB_OUTPUT"
 
@@ -421,7 +429,7 @@ jobs:
           for run_index in $(seq 1 "$BENCH_REPEATS"); do
             BENCH_GIT_SHA="${{ github.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
             if [ "$base_ok" = true ]; then
-              if ! (cd "$BASE_DIR" && BENCH_GIT_SHA="${{ github.event.before }}" pnpm run bench --output "$GITHUB_WORKSPACE/tmp/bench/base-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"); then
+              if ! (cd "$BASE_DIR" && BENCH_GIT_SHA="$BENCH_BASE_SHA" pnpm run bench --output "$GITHUB_WORKSPACE/tmp/bench/base-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"); then
                 echo "::warning::The base benchmark failed; the report shows the head only."
                 base_ok=false
                 rm -f tmp/bench/base-runs/*.json

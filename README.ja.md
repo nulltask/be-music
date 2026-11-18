@@ -217,8 +217,8 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 
 - snapshot 出力: `tmp/bench/exports*.json`
 - compare 出力: 任意の Markdown と summary JSON
-- GitHub Actions では、`devel` / `main` 向け PR で base/head 比較を PR comment として投稿します
-- GitHub Actions では、`devel` / `main` への push でも直前 revision 比較を実行し、対象 commit へ commit comment を投稿します
+- GitHub Actions は `devel` / `main` 向けの PR で、PR の最新コミットを実行時点の `main` と比較し、結果を PR にコメントします。
+- `devel` への push では、実行時点の `main` と比較します。`main` への push では、push 前後の `main` を比較します。結果は push したコミットにコメントします。
 - PR・push とも、ファイルが変更されたパッケージだけを測定し、そのパッケージに依存するパッケージは測定しません。ドキュメントと `*.test.*` / `*.spec.*` の変更は除外し、測定対象でないパッケージだけの変更はスキップします。共通ツール・ロックファイル・ルート設定の変更は全件を測定します。CI の各ケースの測定時間 50 ms・ウォームアップ 25 ms は維持します。
 - CI は base と head を同一 runner で交互に（head、base、head、base…）3 回ずつ計測し、ホスト間のノイズや一時的な遅さが両方に等しくかかるようにします
 - 速い関数は 1 回の計測サンプルの中で何度も呼び出し（1 サンプル約 50 µs）、ナノ秒単位のケースもタイマーの分解能に埋もれずに計測します。時間は 1 回の呼び出しあたりで表示します

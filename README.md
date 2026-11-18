@@ -217,8 +217,8 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 
 - snapshot output: `tmp/bench/exports*.json`
 - compare output: arbitrary Markdown and summary JSON
-- In GitHub Actions, post base/head comparison as PR comment in PR for `devel` / `main`
-- GitHub Actions also performs the previous revision comparison when pushing to `devel` / `main` and posts a commit comment to the target commit.
+- For pull requests targeting `devel` or `main`, GitHub Actions compares the PR head with the current `main` and posts the report on the PR.
+- On pushes to `devel`, GitHub Actions compares the pushed commit with the current `main`. On pushes to `main`, it compares the new tip with the `main` tip before the push. It posts the report as a comment on the pushed commit.
 - Both PR and push benchmarks measure only the packages whose files changed, not the packages that depend on them. Documentation and `*.test.*` / `*.spec.*` changes are ignored; changes to no benchmarked package skip measurement. Shared tooling, lockfiles and root configuration measure the full inventory. Each case retains 50 ms of measurement and 25 ms of warmup in CI.
 - CI measures base and head on the same runner, taking turns (head, base, head, base, …) for 3 runs each, so host-to-host noise and slow stretches hit both sides alike.
 - Fast functions are called many times per timed sample (about 50 µs a sample), so cases that take nanoseconds are measured rather than lost in the timer's resolution. Times are reported per call.
