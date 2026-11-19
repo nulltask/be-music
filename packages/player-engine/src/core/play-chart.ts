@@ -2,7 +2,9 @@ import { drawRandomOutcomes, resolveChart, type ResolvedChart } from '@be-music/
 import type { BeMusicJSON } from '@be-music/chart-source';
 import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser/core';
 import { rulesetChartFactsFromChart, type RulesetChartFacts } from '../ruleset/index.ts';
-import { preparePlaybackChart } from './bootstrap.ts';
+import { collectUniqueNoteChannels, isActiveFreeZoneChannel, resolveActiveFreeZoneChannels } from './bootstrap.ts';
+import { createLaneBindings, resolveLaneDisplayMode } from './lane-layout.ts';
+import { toTimedPlayableNote } from '../playable-notes.ts';
 import type { PlayerOptions, ResolvedPlayChart, ResolvePlayChartOptions } from './engine-types.ts';
 
 /*
@@ -43,5 +45,20 @@ export function resolveChartRulesetFacts(
 ): RulesetChartFacts {
   const { chart, randomDraws } = resolvePlayChart(json, { random: () => 0 });
   const resolved = resolveEngineChart(chart, { ...options, randomDraws });
-  return rulesetChartFactsFromChart(chart, preparePlaybackChart(resolved, options));
+  // Unplayed stages have no modifiers. Use the same lane layout as playback without building its sound and render data.
+  const channels = collectUniqueNoteChannels(resolved.notes, resolved.mines, resolved.invisibleNotes);
+  const laneOptions = {
+    player: chart.bms.player,
+    chartExtension: options.laneModeExtension,
+    playVariant: resolved.playVariant,
+  };
+  const activeFreeZoneChannels = resolveActiveFreeZoneChannels(channels, createLaneBindings(channels, laneOptions));
+  const scorableNotes = resolved.notes
+    .filter((note) => !isActiveFreeZoneChannel(note.channel, activeFreeZoneChannels))
+    .map(toTimedPlayableNote);
+  return rulesetChartFactsFromChart(chart, {
+    scorableNotes,
+    laneDisplayMode: resolveLaneDisplayMode(channels, laneOptions),
+    resolvedChart: resolved,
+  });
 }

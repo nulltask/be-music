@@ -75,6 +75,7 @@ import {
 } from '../playable-notes.ts';
 import {
   appendFreeZoneInputChannels,
+  type ChannelLike,
   createInputTokenToChannelsMap,
   createLaneBindings,
   type LaneKeyOverrides,
@@ -714,10 +715,10 @@ function compareLaneSoundNotes(left: TimedPlayableNote, right: TimedPlayableNote
   return 0;
 }
 
-function collectUniqueNoteChannels(
-  notes: ReadonlyArray<TimedPlayableNote>,
-  landmineNotes: ReadonlyArray<TimedLandmineNote>,
-  invisibleNotes: ReadonlyArray<TimedPlayableNote>,
+export function collectUniqueNoteChannels(
+  notes: readonly ChannelLike[],
+  landmineNotes: readonly ChannelLike[],
+  invisibleNotes: readonly ChannelLike[],
 ): string[] {
   const seen = new Set<string>();
   const channels: string[] = [];
@@ -739,7 +740,7 @@ function collectUniqueNoteChannels(
   return channels;
 }
 
-function resolveActiveFreeZoneChannels(
+export function resolveActiveFreeZoneChannels(
   channels: ReadonlyArray<string>,
   laneBindings: ReadonlyArray<LaneBinding>,
 ): ReadonlySet<string> {
@@ -757,7 +758,7 @@ function resolveActiveFreeZoneChannels(
   return activeFreeZoneChannels;
 }
 
-function isActiveFreeZoneChannel(channel: string, activeFreeZoneChannels: ReadonlySet<string>): boolean {
+export function isActiveFreeZoneChannel(channel: string, activeFreeZoneChannels: ReadonlySet<string>): boolean {
   return activeFreeZoneChannels.has(normalizeChannel(channel));
 }
 

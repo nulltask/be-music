@@ -428,6 +428,22 @@ describe('parser', () => {
     expect(parsed.bms.controlFlow.find((entry) => entry.kind === 'object')?.events[0]?.bmsLineOrder).toBe(4);
   });
 
+  test('BMS: counts complete slots in captured and preserved object streams', () => {
+    const parsed = parseChart(
+      ['#BASE 62', '#00111:0a!000BZ discarded', '#RANDOM 1', '#IF 1', '#00211:000aZ', '#ENDIF', '#ENDRANDOM'].join(
+        '\n',
+      ),
+    );
+    const eventSlots = (events: typeof parsed.events) => events.map(({ position, value }) => [position, value]);
+    expect(eventSlots(parsed.events)).toEqual([
+      [[0, 3], '0a'],
+      [[2, 3], '0B'],
+    ]);
+    expect(eventSlots(parsed.preservation.bms.objectLines[0]!.events)).toEqual(eventSlots(parsed.events));
+    const captured = parsed.bms.controlFlow.find((entry) => entry.kind === 'object');
+    expect(eventSlots(captured!.events)).toEqual([[[1, 2], '0a']]);
+  });
+
   test('BMS: preserves non-control-flow object line boundaries for roundtrip', () => {
     const parsed = parseChart(
       [
