@@ -11,6 +11,7 @@ import {
   type FolderDirectoryLike,
   type FolderListing,
 } from './folder-listing.ts';
+import { isSameFolder } from './folder-handle.ts';
 
 /** A chart file of a snapshot: how the walk found it, and its parsed-chart cache key when the load worked one out. */
 export interface FolderSnapshotChart extends FolderChartStat {
@@ -99,7 +100,7 @@ export function createIndexedDBFolderSnapshotStore(
   };
   const idOf = async (db: IDBDatabase, folder: SnapshotFolder): Promise<IDBValidKey | undefined> => {
     for (const kept of await keptFolders(db)) {
-      if (await kept.folder.isSameEntry(folder as unknown as FileSystemHandle)) return kept.id;
+      if (await isSameFolder(kept.folder, folder)) return kept.id;
     }
     return undefined;
   };
@@ -127,7 +128,7 @@ export function createIndexedDBFolderSnapshotStore(
       for (const kept of await keptFolders(db)) {
         let saved = false;
         for (const folder of folders) {
-          if (await kept.folder.isSameEntry(folder as unknown as FileSystemHandle)) {
+          if (await isSameFolder(kept.folder, folder)) {
             saved = true;
             break;
           }

@@ -1,6 +1,7 @@
 import type { BrowserDroppedFile } from '@be-music/player-browser/collection';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { DropTarget, type DropTargetOptions } from './drop-target.ts';
+import { FOLDER_HANDLE_TIMEOUT_MS } from '../services/folder-handle.ts';
 import type { FolderListing } from '../services/folder-listing.ts';
 import type { FolderSnapshot, FolderSnapshotStore } from '../services/folder-snapshots.ts';
 import type { LibraryLoadOrigin } from '../services/library.ts';
@@ -298,6 +299,25 @@ describe('remembered folders', () => {
     await target.restoreFolder();
     expect(loaded).toEqual([]);
     expect(list).not.toHaveBeenCalled();
+  });
+
+  test('restores the other folders when the browser never answers one permission query', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const stuck = grantedFolder('Stuck');
+    (stuck as unknown as { queryPermission: () => Promise<string> }).queryPermission = () => new Promise(() => {});
+    remembered.saved = [stuck, grantedFolder('Pack')];
+    const { target, loaded, list } = folderHarness([listingOf('Pack', { 'a.bms': 10 })]);
+    try {
+      const restored = target.restoreFolder();
+      await vi.advanceTimersByTimeAsync(FOLDER_HANDLE_TIMEOUT_MS);
+      await restored;
+      expect(loaded).toEqual([['Pack/a.bms']]);
+      expect(list).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
   });
 
   test("keeps a dropped folder's snapshot from the keys of the charts its drop loaded", async () => {
