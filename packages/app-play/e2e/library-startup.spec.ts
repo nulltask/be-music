@@ -93,6 +93,12 @@ for (const slowSource of ['Bemuse server', 'saved folder', 'difficulty table'] a
           .toEqual({ charts: 1, courseFolders: expect.arrayContaining(['Startup Table']) });
       }
       await expect.poll(() => page.evaluate(() => window.__beMusicTest?.state().scene.kind)).toBe('select');
+      if (slowSource === 'saved folder') {
+        await page.locator('[data-service-header="settings"]').click();
+        const dialog = page.locator('#options-modal');
+        await dialog.getByRole('tab', { name: 'Library', exact: true }).click();
+        await expect(dialog.getByText('Saved charts', { exact: true })).toBeVisible({ timeout: 5_000 });
+      }
     } finally {
       release();
     }
