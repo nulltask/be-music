@@ -10,6 +10,7 @@ import {
   writeOptionSettings,
 } from './option-settings.ts';
 import { defaultCompressorTunings } from './compressor-tuning.ts';
+import { BEMUSE_SERVER_URLS_STORAGE_KEY, DEFAULT_BEMUSE_SERVER_URLS } from './bemuse-server.ts';
 import { createPlayerGUIState, VOLUME_STORAGE_KEY } from './services/settings.ts';
 import type { PlayerGUIState } from './types.ts';
 
@@ -28,6 +29,22 @@ function memory(): Storage {
 }
 
 describe('parseOptionSettingsDocument', () => {
+  test('ignores an invalid Bemuse server list and preserves an explicitly empty one', () => {
+    const parse = (bemuseServerURLs: unknown[]) =>
+      parseOptionSettingsDocument(JSON.stringify({ version: 0, updatedAt: 10, settings: { bemuseServerURLs } }))
+        ?.settings.bemuseServerURLs;
+    expect(parse(['bad-url'])).toBeUndefined();
+    expect(parse([])).toEqual([]);
+  });
+
+  test('uses the default Bemuse servers when migrating an invalid saved list', () => {
+    const storage = memory();
+    storage.setItem(BEMUSE_SERVER_URLS_STORAGE_KEY, '{');
+    expect(optionSettingsFromLegacy(storage, 10).settings.bemuseServerURLs).toEqual(DEFAULT_BEMUSE_SERVER_URLS);
+    storage.setItem(BEMUSE_SERVER_URLS_STORAGE_KEY, '[]');
+    expect(optionSettingsFromLegacy(storage, 10).settings.bemuseServerURLs).toEqual([]);
+  });
+
   test('keeps a known setting and drops an unknown one', () => {
     const document = parseOptionSettingsDocument(
       JSON.stringify({

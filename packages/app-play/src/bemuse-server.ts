@@ -371,21 +371,27 @@ export function scanChartFileReferences(path: string, bytes: Uint8Array): ChartF
   return { sounds: [...sounds], images: [...images] };
 }
 
-/** Stored server index URLs, keeping only valid, distinct URLs in their stored order. */
-export function parseStoredBemuseServerURLs(raw: string | null | undefined): string[] {
-  if (!raw) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const urls: string[] = [];
-    for (const value of parsed) {
-      const url = typeof value === 'string' ? bemuseServerIndexURL(value) : undefined;
-      if (url !== undefined && !urls.includes(url)) urls.push(url);
+/** Stored server index URLs, keeping valid, distinct URLs in order. An explicit empty list remains empty. */
+export function parseStoredBemuseServerURLs(
+  raw: string | null | undefined,
+  fallback: readonly string[] = [],
+): string[] {
+  if (raw) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const urls: string[] = [];
+        for (const value of parsed) {
+          const url = typeof value === 'string' ? bemuseServerIndexURL(value) : undefined;
+          if (url !== undefined && !urls.includes(url)) urls.push(url);
+        }
+        if (urls.length > 0 || parsed.length === 0) return urls;
+      }
+    } catch {
+      // A malformed value uses the same fallback as a missing one.
     }
-    return urls;
-  } catch {
-    return [];
   }
+  return [...fallback];
 }
 
 /**
@@ -402,14 +408,12 @@ export const DEFAULT_BEMUSE_SERVER_URLS: readonly string[] = [
 ];
 
 /**
- * The registered server index URLs. Until the player changes the list (nothing stored), the
- * {@link DEFAULT_BEMUSE_SERVER_URLS}; a stored list, even an empty one, is the player's own. Blocked storage reads as
- * the defaults.
+ * The registered server index URLs. Missing or malformed settings use {@link DEFAULT_BEMUSE_SERVER_URLS}.
+ * An explicitly empty list means the player has removed every server.
  */
 export function readStoredBemuseServerURLs(storage: Pick<Storage, 'getItem'> | undefined = defaultStorage()): string[] {
   try {
-    const raw = storage?.getItem(BEMUSE_SERVER_URLS_STORAGE_KEY);
-    return raw == null ? [...DEFAULT_BEMUSE_SERVER_URLS] : parseStoredBemuseServerURLs(raw);
+    return parseStoredBemuseServerURLs(storage?.getItem(BEMUSE_SERVER_URLS_STORAGE_KEY), DEFAULT_BEMUSE_SERVER_URLS);
   } catch {
     return [...DEFAULT_BEMUSE_SERVER_URLS];
   }

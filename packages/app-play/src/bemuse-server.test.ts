@@ -264,6 +264,12 @@ describe('stored Bemuse servers', () => {
       'https://b.example/index.json',
     ]);
   });
+
+  test.each(['{', 'null', '{}', '["bad-url"]'])('recovers from an invalid saved list (%s)', (raw) => {
+    const storage = memoryStorage();
+    storage.setItem(BEMUSE_SERVER_URLS_STORAGE_KEY, raw);
+    expect(readStoredBemuseServerURLs(storage)).toEqual(DEFAULT_BEMUSE_SERVER_URLS);
+  });
 });
 
 describe('song fields', () => {
