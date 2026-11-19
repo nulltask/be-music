@@ -3,3 +3,5 @@
 ---
 
 Restore charts from the parsing cache without opening missing files during startup, and preserve chart IDs when refreshing a library source.
+
+Make background chart reads cancellable so playback can take priority.

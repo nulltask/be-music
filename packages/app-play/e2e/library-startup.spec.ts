@@ -106,7 +106,7 @@ for (const slowSource of ['Bemuse server', 'saved folder', 'difficulty table'] a
   });
 }
 
-test('shows the cached library together before any background refresh responds', async ({ player }) => {
+test('shows the cached library first and suspends refreshes during gameplay', async ({ player }) => {
   const { page } = player;
   const servers = ['https://first-bemuse.example', 'https://second-bemuse.example'];
   const table = 'https://startup-table.example/header.json';
@@ -116,6 +116,17 @@ test('shows the cached library together before any background refresh responds',
   });
   let reloading = false;
   let indexRequests = 0;
+  let tableRequests = 0;
+  let aborted = 0;
+  page.on('requestfailed', (request) => {
+    const url = new URL(request.url());
+    if (
+      request.failure()?.errorText === 'net::ERR_ABORTED' &&
+      ((servers.includes(url.origin) && url.pathname === '/index.json') || url.searchParams.get('url') === table)
+    ) {
+      aborted += 1;
+    }
+  });
   await page.route('https://*-bemuse.example/**', async (route) => {
     const url = new URL(route.request().url());
     const first = url.origin === servers[0];
@@ -128,11 +139,13 @@ test('shows the cached library together before any background refresh responds',
       }
       const charts = [{ file: 'main.bms' }];
       if (reloading && first) charts.push({ file: 'new.bms' });
-      await route.fulfill({ headers, json: { songs: [{ path: 'song', bemusepack_url: null, charts }] } });
+      if (route.request().failure() === null) {
+        await route.fulfill({ headers, json: { songs: [{ path: 'song', bemusepack_url: null, charts }] } });
+      }
     } else if (url.pathname.endsWith('.bms')) {
       await route.fulfill({
         headers,
-        body: `#TITLE ${url.pathname.endsWith('new.bms') ? 'New chart' : title}\n#BPM 120\n#WAV01 key.wav\n#00111:01\n`,
+        body: `#TITLE ${url.pathname.endsWith('new.bms') ? 'New chart' : title}\n#BPM 120\n#WAV01 key.wav\n#00111:01\n#01611:01\n`,
       });
     } else {
       await route.fulfill({ headers, status: 404 });
@@ -143,8 +156,13 @@ test('shows the cached library together before any background refresh responds',
       await route.fulfill({ status: 404 });
       return;
     }
-    if (reloading) await paused;
-    await route.fulfill({ json: { name: 'Saved Table', course: [[{ name: 'Dan', md5: ['a'.repeat(32)] }]] } });
+    if (reloading) {
+      tableRequests += 1;
+      await paused;
+    }
+    if (route.request().failure() === null) {
+      await route.fulfill({ json: { name: 'Saved Table', course: [[{ name: 'Dan', md5: ['a'.repeat(32)] }]] } });
+    }
   });
   await page.route('**/api/player-settings', (route) => route.fulfill({ status: 204 }));
   await player.open({
@@ -175,8 +193,32 @@ test('shows the cached library together before any background refresh responds',
     expect(first.library.charts).toBe(2);
     expect(first.library.courseFolders).toContain('Saved Table');
     await expect.poll(() => indexRequests).toBe(2);
+    await expect.poll(() => tableRequests).toBe(1);
     const selected = await player.openFolder('Bemuse first-bemuse.example');
     expect(selected.cursor?.bar).toMatchObject({ kind: 'chart', title: 'First chart' });
+    await player.key('Enter');
+    await player.waitFor((state) => state.scene.kind === 'play', 'the cached chart to start playing', 15_000);
+    await expect.poll(() => aborted).toBe(3);
+    release();
+    await player.waitFor(
+      (state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0.5,
+      'the chart to play',
+      15_000,
+    );
+    expect(indexRequests).toBe(2);
+    expect(tableRequests).toBe(1);
+    expect((await player.state()).library.charts).toBe(2);
+
+    await player.key('Escape');
+    const afterPlay = await player.waitFor(
+      (state) => state.scene.kind === 'result' || state.scene.kind === 'select',
+      'the play to end',
+      15_000,
+    );
+    if (afterPlay.scene.kind === 'result') await player.leaveResult();
+    await player.waitFor((state) => state.scene.kind === 'select', 'the select screen to return');
+    await expect.poll(() => indexRequests).toBe(4);
+    await expect.poll(() => tableRequests).toBe(2);
   } finally {
     release();
   }

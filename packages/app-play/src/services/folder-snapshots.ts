@@ -147,7 +147,11 @@ export function createIndexedDBFolderSnapshotStore(
 
 export interface RememberedFolderSessionDeps {
   /** Walks a folder (`listFolder`, or `listFolderInWorker`). */
-  readonly list: (folder: FolderDirectoryLike, onProgress?: (fileCount: number) => void) => Promise<FolderListing>;
+  readonly list: (
+    folder: FolderDirectoryLike,
+    onProgress?: (fileCount: number) => void,
+    signal?: AbortSignal,
+  ) => Promise<FolderListing>;
   /** Where the folder's snapshot is kept; without one every visit walks the folder. */
   readonly snapshots: FolderSnapshotStore | undefined;
 }
@@ -208,12 +212,14 @@ export class RememberedFolderSession implements ChartCacheKeyBook {
   }
 
   /** The folder's files as they are now: the walk {@link verify} made, or a new one. */
-  public async read(onProgress?: (fileCount: number) => void): Promise<BrowserDroppedFile[]> {
+  public async read(onProgress?: (fileCount: number) => void, signal?: AbortSignal): Promise<BrowserDroppedFile[]> {
+    signal?.throwIfAborted();
     if (this.unreadable) {
       this.unreadable = false;
       return [];
     }
-    const listing = this.walked ?? (await this.deps.list(this.folder, onProgress));
+    const listing = this.walked ?? (await this.deps.list(this.folder, onProgress, signal));
+    signal?.throwIfAborted();
     this.walked = undefined;
     const previous = new Map(this.listing?.charts.map((chart) => [chart.path, chart]));
     const keys = new Map<string, string>();
@@ -239,11 +245,13 @@ export class RememberedFolderSession implements ChartCacheKeyBook {
    * Walks the folder and tells whether it differs from what the library was loaded from; the library then reads it
    * again ({@link read}). A folder that cannot be walked rejects, and reads as empty from then on.
    */
-  public async verify(refreshUnchanged = false): Promise<boolean> {
+  public async verify(refreshUnchanged = false, signal?: AbortSignal): Promise<boolean> {
     let listing: FolderListing;
     try {
-      listing = await this.deps.list(this.folder);
+      listing = await this.deps.list(this.folder, undefined, signal);
+      signal?.throwIfAborted();
     } catch (error) {
+      signal?.throwIfAborted();
       this.unreadable = true;
       throw error;
     }

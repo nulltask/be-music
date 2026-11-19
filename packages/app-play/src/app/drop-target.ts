@@ -37,7 +37,12 @@ export interface DropTargetOptions {
   /** Takes the select screen off the stage while files load, when it is the one showing. */
   readonly leaveSelect: () => Promise<boolean>;
   /** Loads a drop's (or the folder picker's) files (`LibraryService`). */
-  readonly processIncomingFiles: (files: BrowserDroppedFile[], origin?: LibraryLoadOrigin) => Promise<void>;
+  readonly processIncomingFiles: (
+    files: BrowserDroppedFile[],
+    origin?: LibraryLoadOrigin,
+    signal?: AbortSignal,
+  ) => Promise<void>;
+  readonly runBackgroundRefresh?: <T>(work: (signal: AbortSignal) => Promise<T>) => Promise<T>;
   /** Reads the library's charts again where it stands: a folder listed from its snapshot changed on disk. */
   readonly refreshCharts: () => Promise<void>;
   /** How a remembered folder is walked, and where its snapshot is kept (`RememberedFolderSession`). */
@@ -110,7 +115,7 @@ export class DropTarget {
             const files = await this.sessionOf(folder).restore();
             if (files === undefined) {
               void refreshAfter
-                .then(() => this.loadFolder(folder, true))
+                .then(() => this.runBackgroundRefresh((signal) => this.loadFolder(folder, true, undefined, signal)))
                 .catch((error: unknown) => this.reportFolderError(error));
             } else {
               await this.loadFolder(folder, true, { files, refreshAfter });
@@ -296,6 +301,7 @@ export class DropTarget {
     folder: RememberedFolder,
     startup = false,
     cached?: { files: BrowserDroppedFile[]; refreshAfter: Promise<void> },
+    signal?: AbortSignal,
   ): Promise<void> {
     const loaded = this.sessionOf(folder);
     if (!startup) showLoadingOverlay(this.elements);
@@ -305,32 +311,38 @@ export class DropTarget {
     try {
       if (!startup) leftSelect = await this.leaveSelect();
       let files = cached?.files ?? (await loaded.restore());
+      signal?.throwIfAborted();
       restored = files !== undefined;
       files ??= await loaded.read(
         startup
           ? undefined
           : (fileCount) => applyLoadProgress(this.elements, { phase: 'enumerating', current: fileCount, total: -1 }),
+        signal,
       );
-      await this.processIncomingFiles(files, {
-        startup,
-        readFiles: () => loaded.read(),
-        chartKeys: loaded,
-        ...(cached === undefined
-          ? {}
-          : {
-              readAuxiliaryAfter: cached.refreshAfter,
-              onChartCacheMiss: () => {
-                cacheMiss = true;
-              },
-            }),
-        onLoaded: () => {
-          void loaded.save().catch((error: unknown) => console.warn('folder snapshot not kept', error));
+      await this.processIncomingFiles(
+        files,
+        {
+          startup,
+          readFiles: (signal) => loaded.read(undefined, signal),
+          chartKeys: loaded,
+          ...(cached === undefined
+            ? {}
+            : {
+                readAuxiliaryAfter: cached.refreshAfter,
+                onChartCacheMiss: () => {
+                  cacheMiss = true;
+                },
+              }),
+          onLoaded: () => {
+            void loaded.save().catch((error: unknown) => console.warn('folder snapshot not kept', error));
+          },
         },
-      });
+        signal,
+      );
     } finally {
       if (!startup) hideLoadingOverlay(this.elements);
       if (leftSelect) await this.options.resumeSelect();
-      this.recordLoad();
+      if (!signal?.aborted) this.recordLoad();
     }
     if (restored) {
       void (cached?.refreshAfter ?? Promise.resolve())
@@ -354,7 +366,7 @@ export class DropTarget {
    */
   private async verifyFolder(session: RememberedFolderSession, cacheMiss: boolean): Promise<void> {
     try {
-      if (!(await session.verify(cacheMiss))) return;
+      if (!(await this.runBackgroundRefresh((signal) => session.verify(cacheMiss, signal)))) return;
     } catch (error) {
       this.reportFolderError(error);
     }
@@ -363,6 +375,10 @@ export class DropTarget {
     } catch (error) {
       this.reportFolderError(error);
     }
+  }
+
+  private runBackgroundRefresh<T>(work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    return this.options.runBackgroundRefresh?.(work) ?? work(new AbortController().signal);
   }
 
   private reportFolderError(error: unknown): void {

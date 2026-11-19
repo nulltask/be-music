@@ -14,7 +14,7 @@ export interface BemuseFetcher {
   bytes(url: string, init?: RequestInit): Promise<Uint8Array>;
   json(url: string, init?: RequestInit): Promise<unknown>;
   /** Whether `url` answers a HEAD request with a success; false on any failure. */
-  exists(url: string): Promise<boolean>;
+  exists(url: string, signal?: AbortSignal): Promise<boolean>;
 }
 
 /** Origins whose requests go straight to the proxy. */
@@ -135,6 +135,7 @@ export function createBemuseFetcher(
     } catch (error) {
       // A bare TypeError is the browser refusing a cross-origin read (or the network failing): try the proxy once, and
       // send the origin there from now on when the proxy reached the server.
+      init?.signal?.throwIfAborted();
       if (proxyURL === undefined) throw error;
       const response = await fetchFn(proxyURL, init);
       if (response.ok) proxied.add(origin);
@@ -147,6 +148,7 @@ export function createBemuseFetcher(
     try {
       response = await request(url, init);
     } catch (error) {
+      init?.signal?.throwIfAborted();
       throw new Error(`could not fetch ${url} — network error or the server does not allow other sites to read it`, {
         cause: error,
       });
@@ -160,10 +162,11 @@ export function createBemuseFetcher(
   return {
     bytes,
     json: async (url, init) => (await ok(url, init)).json(),
-    async exists(url) {
+    async exists(url, signal) {
       try {
-        return (await request(url, { method: 'HEAD' })).ok;
+        return (await request(url, { method: 'HEAD', ...(signal === undefined ? {} : { signal }) })).ok;
       } catch {
+        signal?.throwIfAborted();
         return false;
       }
     },

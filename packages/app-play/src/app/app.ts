@@ -124,6 +124,7 @@ export class PlayerWebApp {
   private readonly router = new SceneRouter<PlayerScene, PlayScene, SelectScene>({
     host: {
       setScene: async (scene, role) => {
+        if (role === 'decide' || role === 'play') this.library.pauseBackgroundRefresh();
         await this.mountStage();
         this.chartDiagnostics.show();
         await this.sceneHost.setScene(scene);
@@ -418,15 +419,17 @@ export class PlayerWebApp {
     this.dropTarget = new DropTarget({
       elements,
       leaveSelect: () => this.leaveSelect(),
-      processIncomingFiles: (files, origin) => this.library.processIncomingFiles(files, origin),
+      processIncomingFiles: (files, origin, signal) => this.library.processIncomingFiles(files, origin, signal),
+      runBackgroundRefresh: (work) => this.library.runBackgroundRefresh(work),
       refreshCharts: () => this.library.refreshCharts(),
       folders: {
         // A remembered folder is walked off the page's thread.
-        list: (folder, onProgress) =>
+        list: (folder, onProgress, signal) =>
           listFolderInWorker(
             () => new Worker(new URL('../folder-listing-worker.ts', import.meta.url), { type: 'module' }),
             folder,
             onProgress,
+            signal,
           ),
         snapshots: createIndexedDBFolderSnapshotStore(),
       },
@@ -977,6 +980,7 @@ export class PlayerWebApp {
    * at select). The Options dialog disables its skin controls with them (`OptionsDialog.lockForPlay`).
    */
   private lockReplayOptionsForPlay(liveTempo = false, chartEntry?: LibraryChart): void {
+    this.library.pauseBackgroundRefresh();
     this.replayAutoSave.latch(this.guiState.autoSaveReplay);
     this.leaderboard.lockForPlay(chartEntry);
     this.optionsDialog.lockForPlay(liveTempo);

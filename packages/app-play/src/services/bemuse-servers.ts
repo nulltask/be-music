@@ -87,6 +87,7 @@ export interface BemuseServerReadOptions {
   refreshedSince?: number;
   /** An already displayed server listing. Skip re-reading song files when its tracks still match. */
   displayedIndex?: BemuseLibraryIndex;
+  signal?: AbortSignal;
   now?: () => number;
 }
 
@@ -238,7 +239,11 @@ class SongFileList {
 }
 
 /** Reads a file through the kept copies: `key` names it, `policy` says when the kept copy serves. */
-type CachedRead = (key: string, policy: RemoteCachePolicy) => Promise<{ bytes: Uint8Array; source: RemoteCacheSource }>;
+type CachedRead = (
+  key: string,
+  policy: RemoteCachePolicy,
+  signal?: AbortSignal,
+) => Promise<{ bytes: Uint8Array; source: RemoteCacheSource }>;
 
 interface SongContext {
   track: BemuseServerTrack;
@@ -248,6 +253,7 @@ interface SongContext {
   cached: CachedRead;
   remoteStore: RemoteCacheStore | undefined;
   now: () => number;
+  signal?: AbortSignal;
 }
 
 function decodeJSON(bytes: Uint8Array): unknown {
@@ -270,7 +276,7 @@ function trackVersion(track: BemuseServerTrack): string {
 async function defaultPreviewExists(
   url: string,
   version: string,
-  { fetcher, remoteStore, now }: Pick<SongContext, 'fetcher' | 'remoteStore' | 'now'>,
+  { fetcher, remoteStore, now, signal }: Pick<SongContext, 'fetcher' | 'remoteStore' | 'now' | 'signal'>,
 ): Promise<boolean> {
   const key = `exists:${url}`;
   const kept = await remoteStore?.get(key).catch(() => undefined);
@@ -280,14 +286,14 @@ async function defaultPreviewExists(
       return found;
     }
   }
-  const exists = await fetcher.exists(url);
+  const exists = await fetcher.exists(url, signal);
   await remoteStore
     ?.put(key, { bytes: Uint8Array.of(exists ? 1 : 0), fetchedAt: now(), version })
     .catch(() => undefined);
   return exists;
 }
 
-async function readSong({ track, folder, fetcher, chunks, cached, remoteStore, now }: SongContext): Promise<{
+async function readSong({ track, folder, fetcher, chunks, cached, remoteStore, now, signal }: SongContext): Promise<{
   files: BrowserDroppedFile[];
   song: BemuseServerSong;
 }> {
@@ -295,11 +301,12 @@ async function readSong({ track, folder, fetcher, chunks, cached, remoteStore, n
   const assetIndexURL = track.assetIndexURL;
   const readAssets = async (refreshedSince?: number) => {
     if (assetIndexURL === undefined) return undefined;
-    const read = await cached(assetIndexURL, {
-      maxAgeMs: Infinity,
-      version,
-      ...(refreshedSince !== undefined ? { refreshedSince } : {}),
-    });
+    const read = await cached(
+      assetIndexURL,
+      { maxAgeMs: Infinity, version, ...(refreshedSince !== undefined ? { refreshedSince } : {}) },
+      // A later read on behalf of gameplay is independent of the library refresh.
+      refreshedSince === undefined ? signal : undefined,
+    );
     return { index: parseBemuseAssetIndex(decodeJSON(read.bytes), assetIndexURL), source: read.source };
   };
   const firstAssets = await readAssets();
@@ -348,7 +355,7 @@ async function readSong({ track, folder, fetcher, chunks, cached, remoteStore, n
   const chartBytes = await Promise.all(
     track.charts.map(async (chart) => ({
       chart,
-      bytes: (await cached(new URL(chart.file, track.baseURL).href, { maxAgeMs: Infinity, version })).bytes,
+      bytes: (await cached(new URL(chart.file, track.baseURL).href, { maxAgeMs: Infinity, version }, signal)).bytes,
     })),
   );
   for (const { chart, bytes } of chartBytes) {
@@ -387,7 +394,12 @@ async function readSong({ track, folder, fetcher, chunks, cached, remoteStore, n
   if (
     track.preview !== undefined &&
     (!track.preview.isDefault ||
-      (await defaultPreviewExists(track.preview.url, version, { fetcher, remoteStore, now })))
+      (await defaultPreviewExists(track.preview.url, version, {
+        fetcher,
+        remoteStore,
+        now,
+        ...(signal === undefined ? {} : { signal }),
+      })))
   ) {
     extras.previewPath = addExtra('preview', [track.preview.url], '.mp3');
   }
@@ -416,8 +428,21 @@ function bemuseReadContext(options: BemuseServerReadOptions): Omit<SongContext, 
   const now = options.now ?? Date.now;
   // A file due for asking again goes to the server as a revalidation (`no-cache`): a server that sends validators
   // answers an unchanged file with a 304 and no body.
-  const cached: CachedRead = (key, policy) =>
-    readThroughRemoteCache(key, () => fetcher.bytes(key, { cache: 'no-cache' }), remoteStore, policy, now());
+  const cached: CachedRead = async (key, policy, signal) => {
+    signal?.throwIfAborted();
+    const read = await readThroughRemoteCache(
+      key,
+      () => {
+        signal?.throwIfAborted();
+        return fetcher.bytes(key, { cache: 'no-cache', ...(signal === undefined ? {} : { signal }) });
+      },
+      remoteStore,
+      policy,
+      now(),
+    );
+    signal?.throwIfAborted();
+    return read;
+  };
   return { fetcher, remoteStore, now, cached, chunks: new ChunkCache(fetcher, chunkStore) };
 }
 
@@ -489,10 +514,15 @@ export async function readBemuseServerFiles(
 ): Promise<BemuseServerFiles> {
   const context = bemuseReadContext(options);
   const { cached } = context;
-  const indexRead = await cached(indexURL, {
-    maxAgeMs: BEMUSE_INDEX_MAX_AGE_MS,
-    ...(options.refreshedSince !== undefined ? { refreshedSince: options.refreshedSince } : {}),
-  });
+  const { signal } = options;
+  const indexRead = await cached(
+    indexURL,
+    {
+      maxAgeMs: BEMUSE_INDEX_MAX_AGE_MS,
+      ...(options.refreshedSince !== undefined ? { refreshedSince: options.refreshedSince } : {}),
+    },
+    signal,
+  );
   const index = parseBemuseServerIndex(decodeJSON(indexRead.bytes), indexURL);
   const root = `Bemuse ${pathSegment(bemuseServerLabel(indexURL))}`;
   const displayed = options.displayedIndex?.songs;
@@ -521,14 +551,29 @@ export async function readBemuseServerFiles(
   });
   const read: Array<{ files: BrowserDroppedFile[]; song: BemuseServerSong; track: BemuseServerTrack } | undefined> = [];
   const skipped: BemuseServerFiles['skipped'] = [];
-  await runWithConcurrency(index.tracks, SONG_CONCURRENCY, async (track, trackIndex) => {
-    try {
-      const listed = await readSong({ ...context, track, folder: folders[trackIndex]! });
-      read[trackIndex] = { ...listed, track };
-    } catch (error) {
-      skipped.push({ track: track.title || track.id, reason: error instanceof Error ? error.message : String(error) });
-    }
-  });
+  await runWithConcurrency(
+    index.tracks,
+    SONG_CONCURRENCY,
+    async (track, trackIndex) => {
+      try {
+        const listed = await readSong({
+          ...context,
+          track,
+          folder: folders[trackIndex]!,
+          ...(signal === undefined ? {} : { signal }),
+        });
+        read[trackIndex] = { ...listed, track };
+      } catch (error) {
+        signal?.throwIfAborted();
+        skipped.push({
+          track: track.title || track.id,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+    signal === undefined ? {} : { signal },
+  );
+  signal?.throwIfAborted();
   const songs = read.filter((entry) => entry !== undefined);
   return {
     folder: root,

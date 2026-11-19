@@ -374,6 +374,26 @@ describe('loadChartCollectionFromFiles progress events', () => {
 });
 
 describe('BrowserChartCollectionStore', () => {
+  test('keeps the previous collection when a background read is cancelled', async () => {
+    const store = new BrowserChartCollectionStore();
+    const original = await store.appendFromFiles([makeFile('Pack/a.bms', MINIMAL_BMS)]);
+    const controller = new AbortController();
+    const file = new DeferredDroppedFile(
+      {
+        name: 'b.bms',
+        file: (resolve) => {
+          controller.abort();
+          resolve(new File([MINIMAL_BMS], 'b.bms'));
+        },
+      },
+      'Pack/b.bms',
+    );
+    await expect(
+      store.appendFromFiles([file], { replaceSourceIds: [original.sources[0]!.id], signal: controller.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(store.collection).toBe(original);
+  });
+
   test('replaces one source without changing its chart IDs or touching other sources', async () => {
     const store = new BrowserChartCollectionStore();
     const initial = await store.appendFromFiles([makeFile('Pack/a.bms', MINIMAL_BMS)]);
