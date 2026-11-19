@@ -82,6 +82,7 @@ describe('parseLRX', () => {
         '<n c="301" s="0" p="120" />',
         '<n c="300" s="480" />',
         '<n c="300" s="1920" />',
+        '<n c="300" s="480.25" />',
         '<n c="301" s="1920" p="180" />',
         '<n c="1" s="2400" p="0" />',
       ),
@@ -275,6 +276,15 @@ describe('LRX sibling paths', () => {
     expect(resolveLRXMoviePath(sequence, utf16(lrh('moviepath="_movie_dp.lrm"')))).toBe('_movie_dp.lrm');
     expect(resolveLRXMoviePath(sequence)).toBe('_movie_sp.lrm');
     expect(resolveLRXMoviePath(utf16(lrs()), utf16(lrh('moviepath=""')))).toBe('_movie.lrm');
+    const sequenceWithOverrides = utf16(
+      lrs(
+        '<information moviepath="first.lrm" />',
+        '<!-- <information moviepath="comment.lrm" /> -->',
+        '<n c="100" moviepath="note.lrm" />',
+        '<information moviepath="second&amp;last.lrm" />',
+      ),
+    );
+    expect(resolveLRXMoviePath(sequenceWithOverrides, utf16(lrh('moviepath=""')))).toBe('second&last.lrm');
   });
 });
 

@@ -131,9 +131,9 @@ export function resolveLRXHeaderPath(lrsPath: string): string {
  * plugout reads it from the chart's folder (and tries `../` for the media it names, not for the file itself).
  */
 export function resolveLRXMoviePath(lrs: Uint8Array, lrh?: Uint8Array): string {
-  const fromHeader = lrh ? readString(informationOf(readLRXElements(decodeLRXText(lrh)))?.get('moviepath')) : undefined;
-  const fromSequence = readString(informationOf(readLRXElements(decodeLRXText(lrs)))?.get('moviepath'));
-  return fromHeader ?? fromSequence ?? DEFAULT_MOVIE_PATH;
+  const moviePathOf = (bytes: Uint8Array): string | undefined =>
+    readString(informationOf(readLRXElements(decodeLRXText(bytes), 'information'))?.get('moviepath'));
+  return (lrh ? moviePathOf(lrh) : undefined) ?? moviePathOf(lrs) ?? DEFAULT_MOVIE_PATH;
 }
 
 /** Parses an LRX chart from its decoded files. */
@@ -194,20 +194,26 @@ export function parseLRX(files: LRXSourceFiles<string>): BeMusicJSON {
   }
 
   const notes: LRXNote[] = [];
-  for (const element of [...sequence, ...movie]) {
-    if (element.name !== 'n') continue;
-    const channel = readInt(element.attributes.get('c')) ?? MISSING_CHANNEL;
-    const start = Math.max(0, readFloat(element.attributes.get('s')) ?? 0);
-    const written = readFloat(element.attributes.get('e'));
-    // An end at or before the start is no length (plugout clamps `e` to `s`).
-    const end = written !== undefined && written > start ? written : start;
-    const value = readFloat(element.attributes.get('p')) ?? 0;
-    notes.push({ channel, start, end, value, attributes: element.attributes, order: notes.length });
+  for (const elements of [sequence, movie]) {
+    for (const element of elements) {
+      if (element.name !== 'n') continue;
+      const channel = readInt(element.attributes.get('c')) ?? MISSING_CHANNEL;
+      const start = Math.max(0, readFloat(element.attributes.get('s')) ?? 0);
+      const written = readFloat(element.attributes.get('e'));
+      // An end at or before the start is no length (plugout clamps `e` to `s`).
+      const end = written !== undefined && written > start ? written : start;
+      const value = readFloat(element.attributes.get('p')) ?? 0;
+      notes.push({ channel, start, end, value, attributes: element.attributes, order: notes.length });
+    }
   }
   notes.sort((left, right) => left.start - right.start || left.order - right.order);
 
-  const barTicks = [...new Set(notes.filter((note) => note.channel === 300).map((note) => Math.round(note.start)))];
-  barTicks.sort((left, right) => left - right);
+  const barTicks: number[] = [];
+  for (const note of notes) {
+    if (note.channel !== 300) continue;
+    const tick = Math.round(note.start);
+    if (tick !== barTicks.at(-1)) barTicks.push(tick);
+  }
   // The measures follow the bar lines, which can sit anywhere; a measure before the first bar line starts at tick 0.
   const lines = barTicks.length > 0 && barTicks[0] !== 0 ? [0, ...barTicks] : barTicks;
   if (lines.length > 0) lrx.barTicks = lines;

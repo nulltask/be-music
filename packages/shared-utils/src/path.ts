@@ -22,6 +22,9 @@ const loadNodePath = (): Promise<NodePath> => (nodePathPromise ??= import('node:
  * - The resolved absolute path is additionally pinned to `baseDir` — even if a candidate slipped through the per-string
  *   check, the post-resolve containment guard refuses to return paths outside the chart bundle.
  *
+ * Set `fallbackConcurrency` to check that many fallback candidates at once after the first lookup misses. The
+ * earliest existing candidate still wins.
+ *
  * Both layers are defense-in-depth — the per-string predicate catches the obvious shapes before we even spawn a
  * syscall; the containment check catches anything subtle (symlinks, platform-specific path quirks, future additions to
  * the candidate generator).
@@ -30,12 +33,18 @@ export async function resolveFirstExistingPath(
   baseDir: string,
   candidates: Iterable<string>,
   signal?: AbortSignal,
+  options?: { fallbackConcurrency?: number },
 ): Promise<string | undefined> {
   const { resolve, sep } = await loadNodePath();
   const baseAbsolute = resolve(baseDir);
   // Trailing-separator normalized form lets the containment check work regardless of whether `baseDir` was passed with
   // or without a slash — `/foo` vs `/foo/` both produce `/foo/` for the prefix comparison.
   const baseAbsoluteWithSep = baseAbsolute.endsWith(sep) ? baseAbsolute : baseAbsolute + sep;
+  const concurrency = options?.fallbackConcurrency ?? 1;
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1)
+    throw new RangeError('Path fallback concurrency must be a positive integer.');
+  const batch: string[] = [];
+  let checkedFirst = false;
   for (const candidate of candidates) {
     throwIfAborted(signal);
     if (isMaliciousAssetPath(candidate)) {
@@ -48,11 +57,28 @@ export async function resolveFirstExistingPath(
     if (absolute !== baseAbsolute && !absolute.startsWith(baseAbsoluteWithSep)) {
       continue;
     }
-    if (await pathExists(absolute, signal)) {
-      return absolute;
+    if (!checkedFirst || concurrency === 1) {
+      if (await pathExists(absolute, signal)) return absolute;
+      checkedFirst = true;
+    } else {
+      batch.push(absolute);
+      if (batch.length === concurrency) {
+        const match = await firstAccessiblePath(batch, signal);
+        if (match !== undefined) return match;
+        batch.length = 0;
+      }
     }
   }
-  return undefined;
+  return batch.length > 0 ? firstAccessiblePath(batch, signal) : undefined;
+}
+
+async function firstAccessiblePath(
+  paths: readonly string[],
+  signal: AbortSignal | undefined,
+): Promise<string | undefined> {
+  const exists = await Promise.all(paths.map((path) => pathExists(path, signal)));
+  throwIfAborted(signal);
+  return paths[exists.indexOf(true)];
 }
 
 async function pathExists(path: string, signal?: AbortSignal): Promise<boolean> {

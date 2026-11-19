@@ -15,7 +15,7 @@ import type { LoadBeatorajaSkinResult } from './skin.ts';
 import { playVariantForSkinType, sceneForSkinType } from './types.ts';
 import type { BeatorajaPlayVariant, BeatorajaSkinConfig, BeatorajaSkinHeader } from './types.ts';
 import { asLoadedBytes, type BeatorajaSkinFileEntry } from './file-lookup.ts';
-import { evaluateBeatorajaLuaSkin } from './lua.ts';
+import { evaluateBeatorajaLuaSkin, type BeatorajaLuaModuleSource } from './lua.ts';
 import { parseBeatorajaSkinJSONHeader } from './json.ts';
 
 /**
@@ -65,6 +65,22 @@ export function discoverBeatorajaTheme(
 ): DiscoverBeatorajaThemeResult {
   const warnings: BeatorajaThemeDiscoveryWarning[] = [];
   const entries: BeatorajaSkinEntry[] = [];
+  const modulesByDirectory = new Map<string, BeatorajaLuaModuleSource[]>();
+  let luaFiles: Map<string, BeatorajaSkinFileEntry> | undefined;
+  const modulesFor = (entryPath: string): readonly BeatorajaLuaModuleSource[] => {
+    const directory = dirname(normalizePath(entryPath));
+    let modules = modulesByDirectory.get(directory);
+    if (modules !== undefined) return modules;
+    if (luaFiles === undefined) {
+      luaFiles = new Map();
+      for (const [path, entry] of files) {
+        if (path.slice(-4).toLowerCase() === '.lua') luaFiles.set(path, entry);
+      }
+    }
+    modules = collectBeatorajaLuaModules(luaFiles, directory);
+    modulesByDirectory.set(directory, modules);
+    return modules;
+  };
 
   for (const [path, entry] of files) {
     const format = detectBeatorajaSkinFormat(path);
@@ -76,7 +92,7 @@ export function discoverBeatorajaTheme(
       continue;
     }
     try {
-      const header = readHeader(bytes, path, format, files);
+      const header = readHeader(bytes, path, format, modulesFor);
       // A theme folder may be dropped directly, losing the enclosing skin/ directory. Admit its JSON headers
       // by shape while keeping unrelated player/practice JSON quiet in a whole-installation drop.
       if (
@@ -136,13 +152,12 @@ function readHeader(
   bytes: Uint8Array,
   entryPath: string,
   format: 'json' | 'lua',
-  files: ReadonlyMap<string, BeatorajaSkinFileEntry>,
+  modulesFor: (entryPath: string) => readonly BeatorajaLuaModuleSource[],
 ): BeatorajaSkinHeader {
   if (format === 'json') {
     return parseBeatorajaSkinJSONHeader(bytes);
   }
-  const modules = collectBeatorajaLuaModules(files, dirname(normalizePath(entryPath)));
-  const result = evaluateBeatorajaLuaSkin({ entry: bytes, entryName: entryPath, modules });
+  const result = evaluateBeatorajaLuaSkin({ entry: bytes, entryName: entryPath, modules: modulesFor(entryPath) });
   if (!result.ok) {
     throw new Error(result.error.message);
   }

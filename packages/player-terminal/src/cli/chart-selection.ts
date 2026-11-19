@@ -127,7 +127,7 @@ export interface ListChartFilesOptions {
 const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson', '.n2s', '.lrs']);
 const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/7';
 const CHART_SELECTION_BUILD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism()));
-let buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
+let buildChartSelectionEntriesWorker: WorkerizedChartSelectionEntriesBuilder | undefined;
 
 export async function listChartFiles(rootDir: string, options: ListChartFilesOptions = {}): Promise<string[]> {
   const files: string[] = [];
@@ -297,16 +297,12 @@ async function buildChartSelectionEntriesFromSummariesOffThread(
   summaries: ChartSummaryItem[],
   signal?: AbortSignal,
 ): Promise<ChartSelectionEntry[]> {
-  const activeWorker = buildChartSelectionEntriesWorker;
+  if (summaries.length === 0) return [];
+  const activeWorker = (buildChartSelectionEntriesWorker ??= createBuildChartSelectionEntriesWorker());
   try {
     const result = await invokeWorkerizedFunction(activeWorker, [summaries], {
       signal,
-      onAbort: () => {
-        if (buildChartSelectionEntriesWorker === activeWorker) {
-          buildChartSelectionEntriesWorker.close();
-          buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
-        }
-      },
+      onAbort: () => discardChartSelectionWorker(activeWorker),
     });
     if (!Array.isArray(result)) {
       return buildChartSelectionEntriesFromSummaries(summaries);
@@ -316,12 +312,15 @@ async function buildChartSelectionEntriesFromSummariesOffThread(
     if (isAbortError(error)) {
       throw error;
     }
-    if (buildChartSelectionEntriesWorker === activeWorker) {
-      buildChartSelectionEntriesWorker.close();
-      buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
-    }
+    discardChartSelectionWorker(activeWorker);
     return buildChartSelectionEntriesFromSummaries(summaries);
   }
+}
+
+function discardChartSelectionWorker(activeWorker: WorkerizedChartSelectionEntriesBuilder): void {
+  if (buildChartSelectionEntriesWorker !== activeWorker) return;
+  buildChartSelectionEntriesWorker = undefined;
+  activeWorker.close();
 }
 
 function createBuildChartSelectionEntriesWorker(): WorkerizedChartSelectionEntriesBuilder {

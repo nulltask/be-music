@@ -9,17 +9,25 @@ export interface LRXElement {
   attributes: Map<string, string>;
 }
 
+let utf8Decoder: TextDecoder | undefined;
+let utf16LEDecoder: TextDecoder | undefined;
+let utf16BEDecoder: TextDecoder | undefined;
+
 /**
  * Decodes an LRX file. plugout writes UTF-16LE with a byte-order mark; irrXML also takes UTF-16BE, and Be-Music reads
  * a file without a mark as UTF-8 (irrXML would widen it byte by byte, which agrees on ASCII).
  */
 export function decodeLRXText(bytes: Uint8Array): string {
-  if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder('utf-16le').decode(bytes.subarray(2));
-  if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder('utf-16be').decode(bytes.subarray(2));
+  const littleEndianBOM = bytes[0] === 0xff && bytes[1] === 0xfe;
+  const bigEndianBOM = bytes[0] === 0xfe && bytes[1] === 0xff;
   // A BOM-less UTF-16 file still starts with `<` and a zero byte.
-  if (bytes[0] === 0x3c && bytes[1] === 0x00) return new TextDecoder('utf-16le').decode(bytes);
-  if (bytes[0] === 0x00 && bytes[1] === 0x3c) return new TextDecoder('utf-16be').decode(bytes);
-  return new TextDecoder('utf-8').decode(bytes);
+  if (littleEndianBOM || (bytes[0] === 0x3c && bytes[1] === 0x00)) {
+    return (utf16LEDecoder ??= new TextDecoder('utf-16le')).decode(littleEndianBOM ? bytes.subarray(2) : bytes);
+  }
+  if (bigEndianBOM || (bytes[0] === 0x00 && bytes[1] === 0x3c)) {
+    return (utf16BEDecoder ??= new TextDecoder('utf-16be')).decode(bigEndianBOM ? bytes.subarray(2) : bytes);
+  }
+  return (utf8Decoder ??= new TextDecoder()).decode(bytes);
 }
 
 const NAMED_ENTITIES: Readonly<Record<string, string>> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
@@ -42,8 +50,8 @@ function decodeEntities(value: string): string {
 const ATTRIBUTE = /([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 const NAME = /^[^\s/>]+/;
 
-/** Every start or empty-element tag of `text`, in document order. */
-export function readLRXElements(text: string): LRXElement[] {
+/** Start and empty-element tags in document order, optionally restricted to one name. */
+export function readLRXElements(text: string, onlyName?: string): LRXElement[] {
   const elements: LRXElement[] = [];
   let cursor = 0;
   while (cursor < text.length) {
@@ -64,11 +72,13 @@ export function readLRXElements(text: string): LRXElement[] {
     cursor = close + 1;
     const first = text[open + 1];
     if (first === '?' || first === '!' || first === '/') continue;
+    if (onlyName !== undefined && !text.startsWith(onlyName, open + 1)) continue;
     const body = text.slice(open + 1, close);
     const name = NAME.exec(body)?.[0];
-    if (!name) continue;
+    if (!name || (onlyName !== undefined && name !== onlyName)) continue;
     const attributes = new Map<string, string>();
-    for (const match of body.slice(name.length).matchAll(ATTRIBUTE)) {
+    ATTRIBUTE.lastIndex = name.length;
+    for (let match = ATTRIBUTE.exec(body); match !== null; match = ATTRIBUTE.exec(body)) {
       attributes.set(match[1]!, decodeEntities(match[2] ?? match[3] ?? ''));
     }
     elements.push({ name, attributes });
@@ -78,14 +88,14 @@ export function readLRXElements(text: string): LRXElement[] {
 
 /** The `>` closing the tag that starts at `from`, skipping `>` inside quoted attribute values. */
 function findTagEnd(text: string, from: number): number {
-  let quote: string | undefined;
+  let quote = 0;
   for (let index = from; index < text.length; index++) {
-    const character = text[index]!;
-    if (quote !== undefined) {
-      if (character === quote) quote = undefined;
-    } else if (character === '"' || character === "'") {
+    const character = text.charCodeAt(index);
+    if (quote !== 0) {
+      if (character === quote) quote = 0;
+    } else if (character === 0x22 || character === 0x27) {
       quote = character;
-    } else if (character === '>') {
+    } else if (character === 0x3e) {
       return index;
     }
   }

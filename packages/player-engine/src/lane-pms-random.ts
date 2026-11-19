@@ -77,26 +77,21 @@ export function randomizePMSPlayableLanes(
   const tripleMasks = new Set<number>();
   for (const pattern of patterns)
     for (const [a, b, c] of chordTriples(pattern)) tripleMasks.add((1 << a!) | (1 << b!) | (1 << c!));
-  const triples = new Uint8Array(tripleMasks.size * 3);
-  let offset = 0;
-  for (const mask of tripleMasks)
-    for (let lane = 0; lane < 9; lane += 1) if ((mask & (1 << lane)) !== 0) triples[offset++] = lane;
-  // The visit ordinals of the valid permutations, in the source order; a uniform pick among them is the source's pick.
-  const validCount = impossible ? 0 : searchValidOrdinals(triples);
   const draw = random();
   if (!Number.isFinite(draw) || draw < 0 || draw >= 1) throw new RangeError('Lane randomness must be in [0, 1).');
-  const permutation =
-    validCount === 0
-      ? Array.from({ length: 9 }, (_, index) => (draw < 0.5 ? index : 8 - index))
-      : permutationAt(VALID_ORDINALS[Math.floor(draw * validCount)]!);
+  const permutation = impossible ? undefined : pickPlayablePermutation(tripleMasks, draw);
   return notes.map((note) => {
     const source = indexByLane.get(note.channel);
-    return source === undefined ? note.channel : lanes[permutation[source]!]!;
+    return source === undefined ? note.channel : lanes[permutation?.[source] ?? (draw < 0.5 ? source : 8 - source)]!;
   });
 }
 
 /** The number of permutations Heap's algorithm visits after the initial regular one. */
 const VISITED_PERMUTATIONS = 362_879;
+const PERMUTATION_BLOCK_SIZE = 256;
+const INITIAL_PERMUTATION = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
+/** The permutation before each block of swaps, so selecting one replays at most one block. */
+const PERMUTATION_BLOCKS = new Uint8Array(Math.ceil(VISITED_PERMUTATIONS / PERMUTATION_BLOCK_SIZE) * 9);
 
 /**
  * Heap's algorithm in the source order, as its swaps: visit `k` (0 = the first after the regular permutation) swaps
@@ -110,12 +105,14 @@ let MIRROR_ORDINAL = -1;
 function heapSwaps(): Uint8Array {
   if (HEAP_SWAPS) return HEAP_SWAPS;
   const swaps = new Uint8Array(VISITED_PERMUTATIONS * 2);
-  const permutation = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+  const permutation = [...INITIAL_PERMUTATION];
   const counters = new Uint8Array(9);
   let ordinal = 0;
   let index = 0;
   while (index < 9) {
     if (counters[index]! < index) {
+      if (ordinal % PERMUTATION_BLOCK_SIZE === 0)
+        PERMUTATION_BLOCKS.set(permutation, (ordinal / PERMUTATION_BLOCK_SIZE) * 9);
       const other = index % 2 === 0 ? 0 : counters[index]!;
       const swap = permutation[index]!;
       permutation[index] = permutation[other]!;
@@ -135,8 +132,30 @@ function heapSwaps(): Uint8Array {
   return swaps;
 }
 
-/** The ordinals {@link searchValidOrdinals} found, reused across calls (only its returned prefix is meaningful). */
+/** Cache the last set of chord constraints, independent of chart timing or channel names. */
 const VALID_ORDINALS = new Uint32Array(VISITED_PERMUTATIONS);
+let lastConstraintKey: string | undefined;
+let lastValidCount = 0;
+
+function pickPlayablePermutation(tripleMasks: ReadonlySet<number>, draw: number): Uint8Array | undefined {
+  if (tripleMasks.size === 0) {
+    heapSwaps();
+    const rank = Math.floor(draw * (VISITED_PERMUTATIONS - 1));
+    return permutationAt(rank < MIRROR_ORDINAL ? rank : rank + 1);
+  }
+
+  const masks = [...tripleMasks].sort((left, right) => left - right);
+  const key = masks.join(',');
+  if (key !== lastConstraintKey) {
+    const triples = new Uint8Array(masks.length * 3);
+    let offset = 0;
+    for (const mask of masks)
+      for (let lane = 0; lane < 9; lane += 1) if ((mask & (1 << lane)) !== 0) triples[offset++] = lane;
+    lastValidCount = searchValidOrdinals(triples);
+    lastConstraintKey = key;
+  }
+  return lastValidCount === 0 ? undefined : permutationAt(VALID_ORDINALS[Math.floor(draw * lastValidCount)]!);
+}
 
 /**
  * Heap's algorithm in the source order (omitting the initial regular permutation), writing into
@@ -145,7 +164,7 @@ const VALID_ORDINALS = new Uint32Array(VISITED_PERMUTATIONS);
  */
 function searchValidOrdinals(triples: Uint8Array): number {
   const swaps = heapSwaps();
-  const permutation = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+  const permutation = new Uint8Array(INITIAL_PERMUTATION);
   const ordinals = VALID_ORDINALS;
   const tripleLength = triples.length;
   let found = 0;
@@ -173,11 +192,12 @@ function searchValidOrdinals(triples: Uint8Array): number {
 }
 
 /** The permutation Heap's algorithm visits at `target` (0 = the first after the regular one). */
-function permutationAt(target: number): number[] {
+function permutationAt(target: number): Uint8Array {
   if (target < 0 || target >= VISITED_PERMUTATIONS) throw new RangeError(`No permutation at ${target}.`);
   const swaps = heapSwaps();
-  const permutation = [0, 1, 2, 3, 4, 5, 6, 7, 8];
-  for (let ordinal = 0; ordinal <= target; ordinal += 1) {
+  const block = Math.floor(target / PERMUTATION_BLOCK_SIZE);
+  const permutation = PERMUTATION_BLOCKS.slice(block * 9, (block + 1) * 9);
+  for (let ordinal = block * PERMUTATION_BLOCK_SIZE; ordinal <= target; ordinal += 1) {
     const index = swaps[ordinal * 2]!;
     const other = swaps[ordinal * 2 + 1]!;
     const swap = permutation[index]!;

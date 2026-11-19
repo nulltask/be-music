@@ -4,6 +4,7 @@ import { resolveAutoScratchSides } from '../core/auto-scratch.ts';
 import { resolveScratchChannels } from './scratch-channels.ts';
 import { resolve____RankLabel } from '../ruleset/score.ts';
 import type { BeMusicReplay, ReplayInputEvent, ReplayRulesetResult } from './format.ts';
+import type { ReplayGaugeHistory } from './gauge-histories.ts';
 import {
   createInputSourceLookup,
   endsBackSpinScratch,
@@ -125,13 +126,26 @@ function simulateReplayWithRuleset(
   ruleset: RulesetId,
   options: Omit<SimulateReplayOptions, 'ruleset'>,
 ): ReplayRulesetResult {
+  replay = replayForPlayer(replay, options.player);
+  const config = resolveRulesetConfig(replay, ruleset, options);
+  const endOnFailure =
+    options.endOnFailure ??
+    resolveGaugeEndOnFailure(
+      replay.play.gaugeAutoShift,
+      replay.play.endOnFailure === true,
+      replay.play.course === undefined ? config.gaugeSource : undefined,
+    );
+  return new ReplaySimulation(replay, config, endOnFailure, options.onJudgment, options.onFailure).run();
+}
+
+function replayForPlayer(replay: BeMusicReplay, player: 1 | 2 | undefined): BeMusicReplay {
   const twoPlayer = replay.play.battleMode === 'TWO-PLAYER' || replay.play.battleMode === 'COUPLE';
-  if (options.player === 2 && !twoPlayer) throw new RangeError('Player 2 requires a recorded two-player play.');
+  if (player === 2 && !twoPlayer) throw new RangeError('Player 2 requires a recorded two-player play.');
   if (twoPlayer) {
-    const player = options.player ?? 1;
+    player ??= 1;
     const own = (channel: string): boolean => channel.startsWith(String(player));
     const notes = replay.chart.notes.filter((note) => own(note.channel));
-    replay = {
+    return {
       ...replay,
       chart: {
         ...replay.chart,
@@ -144,15 +158,48 @@ function simulateReplayWithRuleset(
         .filter((input) => input.channels.length > 0),
     };
   }
-  const config = resolveRulesetConfig(replay, ruleset, options);
-  const endOnFailure =
-    options.endOnFailure ??
-    resolveGaugeEndOnFailure(
-      replay.play.gaugeAutoShift,
-      replay.play.endOnFailure === true,
-      replay.play.course === undefined ? config.gaugeSource : undefined,
-    );
-  return new ReplaySimulation(replay, config, endOnFailure, options.onJudgment, options.onFailure).run();
+  return replay;
+}
+
+/** Internal gauge-history path. With failure stopping disabled, the chosen gauge never changes a judgment. */
+export function simulateReplayGaugeSamples(
+  replay: BeMusicReplay,
+  ruleset: RulesetId,
+  gauges: readonly string[],
+  untilUs: number,
+): ReplayGaugeHistory[] {
+  const played = replayForPlayer(replay, undefined);
+  const configs = gauges.map((gauge) => resolveRulesetConfig(played, ruleset, { gauge, gaugeAutoShift: 'NONE' }));
+  const tracks = configs.map(({ gauge, gaugeFallback, gaugeBank }): GaugeTrack => ({
+    state: new RulesetGauge(gauge, gaugeFallback, gaugeBank),
+    samples: [],
+  }));
+  const first = configs[0];
+  if (first !== undefined) {
+    new ReplaySimulation(played, first, false, undefined, undefined, { tracks, untilUs }).run();
+  }
+  return gauges.map((gauge, index) => {
+    // The initial marker has always used the full chart, even when the samples are for player 1.
+    const spec =
+      played === replay
+        ? configs[index]!.gauge
+        : resolveRulesetConfig(replay, ruleset, { gauge, gaugeAutoShift: 'NONE' }).gauge;
+    return {
+      gauge,
+      initial: spec.max > 0 ? (spec.initial / spec.max) * 100 : 0,
+      samples: tracks[index]!.samples,
+    };
+  });
+}
+
+interface GaugeHistory {
+  tracks: readonly GaugeTrack[];
+  untilUs: number;
+}
+
+interface GaugeTrack {
+  state: RulesetGauge;
+  samples: { atUs: number; gauge: number }[];
 }
 
 /** Runs {@link simulateReplay} for each requested ruleset (default: LR2, beatoraja, That-Which-Must-Not-Be-Named). */
@@ -283,6 +330,7 @@ class ReplaySimulation {
   private readonly laneList: SimLane[] = [];
   private readonly counts = [0, 0, 0, 0, 0, 0];
   private readonly gauge: RulesetGauge;
+  private readonly gaugeHistory: GaugeHistory | undefined;
   private combo = 0;
   private maxCombo = 0;
   private minePoor = 0;
@@ -317,15 +365,18 @@ class ReplaySimulation {
     endOnFailure: boolean,
     observer?: ReplayJudgmentObserver,
     onFailure?: (atUs: number) => void,
+    gaugeHistory?: GaugeHistory,
   ) {
     this.onFailure = onFailure;
+    this.gaugeHistory = gaugeHistory;
     this.replay = replay;
     this.config = config;
     this.endOnFailure = endOnFailure;
     this.observer = observer;
     this.course = replay.play.course === undefined ? undefined : courseStageCarryCombo(replay.play.course);
     this.scratchChannels = resolveScratchChannels(replay.chart.laneMode);
-    this.gauge = new RulesetGauge(config.gauge, config.gaugeFallback, config.gaugeBank);
+    this.gauge =
+      gaugeHistory?.tracks[0]?.state ?? new RulesetGauge(config.gauge, config.gaugeFallback, config.gaugeBank);
     this.anyKeyRoutes = replay.play.anyKey === true && replay.play.mode !== 'auto' ? new AnyKeyRoutes() : undefined;
     this.sourceOf = createInputSourceLookup(replay.play.inputSources);
     this.buildLanes();
@@ -677,7 +728,11 @@ class ReplaySimulation {
       this.counts[JUDGE_MISS_POOR]! += 1;
       this.minePoor += 1;
     }
-    this.gauge.applyRawDelta(-mine.damage);
+    if (this.gaugeHistory === undefined) {
+      this.gauge.applyRawDelta(-mine.damage);
+    } else {
+      for (const track of this.gaugeHistory.tracks) track.state.applyRawDelta(-mine.damage);
+    }
     this.noteFailure();
   }
 
@@ -725,7 +780,7 @@ class ReplaySimulation {
   private applyHCNTick(gain: boolean): void {
     if (this.closed()) return;
     const tick = this.config.hcnTick;
-    this.gauge.applyJudge(
+    this.applyGaugeJudge(
       (gain ? tick.heldJudge : tick.releasedJudge) as GaugeJudgeIndex,
       gain ? tick.heldRate : tick.releasedRate,
     );
@@ -1190,9 +1245,22 @@ class ReplaySimulation {
         this.slow += 1;
       }
     }
-    this.gauge.applyJudge(judgeIndex);
+    this.applyGaugeJudge(judgeIndex, 1, this.judgeAtUs);
     this.noteFailure();
     if (this.observer !== undefined) this.notifyJudgment(judgeIndex, dmUs);
+  }
+
+  private applyGaugeJudge(judge: GaugeJudgeIndex, rate: number, atUs?: number): void {
+    const history = this.gaugeHistory;
+    if (history === undefined) {
+      this.gauge.applyJudge(judge, rate);
+      return;
+    }
+    for (const { state, samples } of history.tracks) {
+      state.applyJudge(judge, rate);
+      // Mine damage and HCN ticks change the gauge, but only scored judgments add a sample.
+      if (atUs !== undefined && atUs <= history.untilUs) samples.push({ atUs, gauge: gaugePercent(state) });
+    }
   }
 
   /** Tells {@link onFailure} where the survival gauge first emptied mid-play. */
@@ -1204,7 +1272,6 @@ class ReplaySimulation {
 
   private notifyJudgment(judgeIndex: GaugeJudgeIndex, dmUs: number | undefined): void {
     const note = judgeIndex === JUDGE_EMPTY_POOR ? undefined : this.judgeNote;
-    const max = this.gauge.spec.max;
     this.observer!({
       atUs: this.judgeAtUs,
       judgment: JUDGMENT_KINDS[judgeIndex]!,
@@ -1215,9 +1282,14 @@ class ReplaySimulation {
       combo: this.combo,
       maxCombo: this.maxCombo,
       exScore: this.exScore,
-      gauge: max === 100 ? this.gauge.value : max > 0 ? (this.gauge.value / max) * 100 : 0,
+      gauge: gaugePercent(this.gauge),
     });
   }
+}
+
+function gaugePercent(gauge: RulesetGauge): number {
+  const max = gauge.spec.max;
+  return max === 100 ? gauge.value : max > 0 ? (gauge.value / max) * 100 : 0;
 }
 
 function classifyJudge(dmUs: number, set: JudgeWindowSetUs): JudgeClassification {

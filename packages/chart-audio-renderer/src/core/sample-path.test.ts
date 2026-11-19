@@ -111,6 +111,13 @@ describe('resolveSamplePath', () => {
     });
   });
 
+  test('chooses the earliest fallback when several encodings exist', async () => {
+    await withSongFolder(['Song/kick.ogg', 'Song/kick.mp3', 'Song/kick.opus'], async (root) => {
+      const chartDir = join(root, 'Song');
+      expect(await resolveSamplePath(chartDir, 'kick.wav')).toBe(join(chartDir, 'kick.mp3'));
+    });
+  });
+
   test('goes up one folder only', async () => {
     await withSongFolder(['kick.wav', 'Song/sub/x'], async (root) => {
       expect(await resolveSamplePath(join(root, 'Song', 'sub'), 'kick.wav')).toBeUndefined();

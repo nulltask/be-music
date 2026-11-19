@@ -19,13 +19,14 @@ export function parseBeatorajaSkinJSON(source: Uint8Array | string): BeatorajaSk
 }
 
 /**
- * Read just the header section without parsing the (potentially large) element arrays. We currently parse the whole
- * tree because beatoraja JSON skins are ≤ a few hundred KB and `JSON.parse` is much faster than a hand-rolled
- * partial tokenizer; the field exists to stay symmetric with the Lua side, where `parseBeatorajaSkinHeader` is the
- * cheap path that avoids running `main()`.
+ * Parses a JSON skin and returns its header without the main rendering arrays.
  */
 export function parseBeatorajaSkinJSONHeader(source: Uint8Array | string): BeatorajaSkinHeader {
-  const skin = parseBeatorajaSkinJSON(source);
+  return headerFromBeatorajaSkinJSON(parseBeatorajaSkinJSON(source));
+}
+
+/** Extracts a header from a JSON skin that has already been parsed. */
+export function headerFromBeatorajaSkinJSON(skin: BeatorajaSkin): BeatorajaSkinHeader {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const {
     source: _src,
