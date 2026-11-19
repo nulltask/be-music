@@ -171,6 +171,25 @@ describe('loadBeatorajaSceneKit', () => {
     expect(onFonts).not.toHaveBeenCalled();
   });
 
+  it('reads a static JSON skin once and keeps its header independent of the skin', async () => {
+    quietDecodes();
+    const files = new Map(FILES);
+    const read = vi.spyOn(files, 'get');
+    const runtimeContext = vi.fn(createBeatorajaSkinLoadContext);
+    const entryPath = 'skin/select.json';
+    const result = await loadBeatorajaSceneKit({
+      files,
+      entryPath,
+      caches: createBeatorajaSceneKitCaches(),
+      runtimeContext: (skinConfig) => runtimeContext({ skinConfig }),
+    });
+    if (!result.ok) throw new Error(result.message);
+    expect(read.mock.calls.filter(([path]) => path === entryPath)).toHaveLength(1);
+    expect(result.header.property).toEqual(result.kit.skin.property);
+    expect(result.header.property).not.toBe(result.kit.skin.property);
+    expect(runtimeContext).toHaveBeenCalledExactlyOnceWith({ skinConfig: result.kit.skinConfig });
+  });
+
   it('decodes the textures again on a reload and keeps the fonts', async () => {
     quietDecodes();
     const caches = createBeatorajaSceneKitCaches();
