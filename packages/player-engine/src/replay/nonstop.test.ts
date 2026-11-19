@@ -107,6 +107,38 @@ describe('NONSTOP replays', () => {
     expect(simulateReplay(second!, { ruleset: 'lr2' }).judge.pgreat).toBe(4);
   });
 
+  test('keeps input routing stable when notes are out of order or tied', async () => {
+    const { replay } = await playStitched();
+    replay.chart.notes = [
+      { id: 0, timeUs: 200_000, channel: '11', type: 'normal' },
+      { id: 1, timeUs: 100_000, channel: '11', type: 'normal' },
+      { id: 2, timeUs: 200_000, channel: '11', type: 'normal' },
+      { id: 3, timeUs: 150_000, channel: '12', type: 'normal' },
+      { id: 4, timeUs: 150_000, channel: '11', type: 'mine', damage: 1 },
+    ];
+    replay.chart.noteCount = 4;
+    replay.inputs = [
+      { seq: 0, timeUs: 150_000, action: 'down', channels: ['11'], source: 0 },
+      { seq: 1, timeUs: 160_000, action: 'up', channels: ['11'], source: 0 },
+      { seq: 2, timeUs: 175_000, action: 'down', channels: ['12', '11'], source: 0 },
+      { seq: 3, timeUs: 200_000, action: 'down', channels: ['11'], source: 0 },
+    ];
+    const [first, second] = splitNonstopReplay(
+      {
+        replay,
+        stages: [
+          { offsetUs: 0, windowStartUs: 0, windowEndUs: 170_000, rate: 1 },
+          { offsetUs: 0, windowStartUs: 170_000, rate: 1 },
+        ],
+        noteStages: [1, 0, 0, 0, 0],
+      },
+      [],
+      { ruleset: 'lr2' },
+    );
+    expect(first!.inputs.map((input) => input.timeUs)).toEqual([175_000]);
+    expect(second!.inputs.map((input) => input.timeUs)).toEqual([150_000, 160_000, 200_000]);
+  });
+
   test('judges a later stage with its own #RANK, and replays and cuts it out with it', async () => {
     // Stage 2 is VERY HARD (PGREAT ±8 ms); stage 1 has no #RANK (NORMAL, ±18 ms). Every note is hit 12 ms late.
     const stitched = stitchNonstopCourse(

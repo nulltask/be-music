@@ -134,8 +134,10 @@ export function splitNonstopReplay(
 ): BeMusicReplay[] {
   const { replay, stages, noteStages } = run;
   const endUs = replay.play.aborted === true ? (replay.play.abortedAtUs ?? Number.POSITIVE_INFINITY) : undefined;
-  const lastInputUs = replay.inputs.at(-1)?.timeUs ?? 0;
-  const reachedUntil = endUs ?? Math.max(lastInputUs, ...replay.chart.notes.map((note) => note.timeUs));
+  let reachedUntil = endUs ?? replay.inputs.at(-1)?.timeUs ?? 0;
+  if (endUs === undefined) {
+    for (const note of replay.chart.notes) reachedUntil = Math.max(reachedUntil, note.timeUs);
+  }
   const inputStages = assignInputs(replay, noteStages, stages);
   const logs: BeMusicReplay[] = [];
   stages.forEach((stage, index) => {
@@ -209,10 +211,20 @@ function assignInputs(
   noteStages: readonly number[],
   stages: readonly ReplayNonstopStage[],
 ): number[] {
-  const byChannel = new Map<string, ReplayNote[]>();
-  for (const note of replay.chart.notes) {
-    if (note.type === 'mine' || note.type === 'invisible') continue;
-    byChannel.set(note.channel, [...(byChannel.get(note.channel) ?? []), note]);
+  const byChannel = new Map<string, IndexedReplayNote[]>();
+  replay.chart.notes.forEach((note, order) => {
+    if (note.type === 'mine' || note.type === 'invisible') return;
+    const channel = byChannel.get(note.channel);
+    if (channel === undefined) byChannel.set(note.channel, [{ note, order }]);
+    else channel.push({ note, order });
+  });
+  for (const [channel, notes] of byChannel) {
+    notes.sort((left, right) => left.note.timeUs - right.note.timeUs);
+    // At the same time, the first note in the replay wins.
+    byChannel.set(
+      channel,
+      notes.filter(({ note }, index) => note.timeUs !== notes[index - 1]?.note.timeUs),
+    );
   }
   const windowStage = (timeUs: number): number => {
     const index = stages.findIndex((stage) => stage.windowEndUs === undefined || timeUs < stage.windowEndUs);
@@ -227,10 +239,11 @@ function assignInputs(
     }
     let nearest: ReplayNote | undefined;
     for (const channel of input.channels) {
-      for (const note of byChannel.get(channel) ?? []) {
-        if (nearest === undefined || Math.abs(note.timeUs - input.timeUs) < Math.abs(nearest.timeUs - input.timeUs)) {
-          nearest = note;
-        }
+      const notes = byChannel.get(channel);
+      if (notes === undefined) continue;
+      const note = findNearestInputNote(notes, input.timeUs);
+      if (nearest === undefined || Math.abs(note.timeUs - input.timeUs) < Math.abs(nearest.timeUs - input.timeUs)) {
+        nearest = note;
       }
     }
     const stage =
@@ -238,6 +251,31 @@ function assignInputs(
     for (const channel of input.channels) held.set(channel, stage);
     return stage;
   });
+}
+
+interface IndexedReplayNote {
+  note: ReplayNote;
+  order: number;
+}
+
+/** Finds the nearest note in a nonempty lane sorted by time, with one note per timestamp. */
+function findNearestInputNote(notes: readonly IndexedReplayNote[], timeUs: number): ReplayNote {
+  let lo = 0;
+  let hi = notes.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (notes[mid]!.note.timeUs < timeUs) lo = mid + 1;
+    else hi = mid;
+  }
+  const before = notes[lo - 1];
+  const after = notes[lo];
+  if (before === undefined) return after!.note;
+  if (after === undefined) return before.note;
+  const earlierDistance = timeUs - before.note.timeUs;
+  const laterDistance = after.note.timeUs - timeUs;
+  return earlierDistance < laterDistance || (earlierDistance === laterDistance && before.order < after.order)
+    ? before.note
+    : after.note;
 }
 
 /** The gauge and combo a stitched play had reached at `timeUs`: the play simulated up to that point. */
