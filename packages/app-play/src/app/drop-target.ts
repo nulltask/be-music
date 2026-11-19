@@ -103,7 +103,7 @@ export class DropTarget {
       for (const folder of [...this.reconnectFolders]) {
         try {
           if ((await folder.queryPermission({ mode: 'read' })) === 'granted') {
-            await this.loadFolder(folder);
+            await this.loadFolder(folder, true);
             this.reconnectFolders = this.reconnectFolders.filter((pending) => pending !== folder);
           }
         } catch (error) {
@@ -270,19 +270,22 @@ export class DropTarget {
    * Lists a folder's charts: from its snapshot when it has one, which touches no file, and otherwise by walking it. A
    * folder listed from its snapshot is then walked in the background ({@link verifyFolder}).
    */
-  private async loadFolder(folder: RememberedFolder): Promise<void> {
+  private async loadFolder(folder: RememberedFolder, startup = false): Promise<void> {
     const loaded = this.sessionOf(folder);
-    showLoadingOverlay(this.elements);
+    if (!startup) showLoadingOverlay(this.elements);
     let leftSelect = false;
     let restored = false;
     try {
-      leftSelect = await this.leaveSelect();
+      if (!startup) leftSelect = await this.leaveSelect();
       let files = await loaded.restore();
       restored = files !== undefined;
-      files ??= await loaded.read((fileCount) =>
-        applyLoadProgress(this.elements, { phase: 'enumerating', current: fileCount, total: -1 }),
+      files ??= await loaded.read(
+        startup
+          ? undefined
+          : (fileCount) => applyLoadProgress(this.elements, { phase: 'enumerating', current: fileCount, total: -1 }),
       );
       await this.processIncomingFiles(files, {
+        startup,
         readFiles: () => loaded.read(),
         chartKeys: loaded,
         onLoaded: () => {
@@ -290,7 +293,7 @@ export class DropTarget {
         },
       });
     } finally {
-      hideLoadingOverlay(this.elements);
+      if (!startup) hideLoadingOverlay(this.elements);
       if (leftSelect) await this.options.resumeSelect();
       this.recordLoad();
     }

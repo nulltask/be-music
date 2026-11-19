@@ -117,6 +117,8 @@ export interface LibraryServiceOptions {
 }
 
 export interface LibraryLoadOrigin {
+  /** Refreshes an active select screen without interrupting other scenes. */
+  readonly startup?: boolean;
   readonly showLibraryRoot?: boolean;
   readonly entries?: readonly FileSystemEntry[];
   readonly readFiles?: () => Promise<BrowserDroppedFile[]>;
@@ -267,14 +269,24 @@ export class LibraryService {
    */
   public autoLoad(href: string, ready: Promise<void>): Promise<void> {
     const mediaParams = parseURLMediaParams(href);
-    // Difficulty tables imported in an earlier visit are imported again, after the URL load so their stages match it.
     const storedCourseTables = readStoredCourseTableURLs();
     const bemuseServers = readStoredBemuseServerURLs();
     return ready.then(async () => {
       if (mediaParams.musicURL || mediaParams.skinURL) await this.loadFromURL(mediaParams);
-      if (bemuseServers.length > 0) await this.loadBemuseServers(bemuseServers);
-      if (storedCourseTables.length > 0) await this.importCourseTables(storedCourseTables, false);
+      await Promise.all([
+        ...bemuseServers.map(async (url) => {
+          if (await this.loadBemuseServer(url)) await this.showStartupLibrary();
+        }),
+        ...storedCourseTables.map(async (url) => {
+          const imported = await this.importCourseTables([url], false, { relist: false });
+          if (imported.length > 0) await this.showStartupLibrary();
+        }),
+      ]);
     });
+  }
+
+  private async showStartupLibrary(): Promise<void> {
+    if (this.showing() === 'select' && !this.elements.shell.classList.contains('playing')) await this.showSelect();
   }
 
   /**
@@ -294,6 +306,7 @@ export class LibraryService {
     if (files.length === 0) {
       return;
     }
+    const showLibrary = () => (origin.startup ? this.showStartupLibrary() : this.showSelect());
     // Dropped ZIP archives: one that holds a chart goes to the collection whole, as the Open files picker sends it;
     // any other (a skin, replays, course files) is expanded and joins the drop, as a `?skin=` archive does. A ZIP inside
     // a dropped folder is neither: it stays a plain file of the folder.
@@ -310,7 +323,7 @@ export class LibraryService {
       if (sorted.chartArchives.length > 0) {
         await this.loadCharts(sorted.chartArchives);
         if (files.length === 0) {
-          await this.showSelect();
+          await showLibrary();
           if (this.collection.charts.length > 0) this.setStatus(describeChartCollection(this.collection));
           return;
         }
@@ -324,7 +337,7 @@ export class LibraryService {
       const name = file.name.toLowerCase();
       return name.endsWith(REPLAY_FILE_SUFFIX) || name.endsWith(COURSE_REPLAY_FILE_SUFFIX);
     };
-    const replayFiles = files.filter(isReplayFile);
+    const replayFiles = origin.startup ? [] : files.filter(isReplayFile);
     files = files.filter((file) => !isReplayFile(file));
     if (files.length === 0 && replayFiles.length > 0) {
       await this.startReplayReplayFromFile(replayFiles[0]!);
@@ -343,7 +356,7 @@ export class LibraryService {
     if (files.length === 0 && courseFiles.length > 0) {
       if (this.courseGroups.length > courseGroupCount) {
         await this.refreshCourseFolders();
-        await this.showSelect();
+        await showLibrary();
       }
       return;
     }
@@ -398,7 +411,7 @@ export class LibraryService {
     const playContinues = this.showing() === 'play';
     if (tasks.length === 0) {
       // A canceled skin drop resumes select; unrelated files leave navigation untouched. A play on the stage stays.
-      if (themeFamilies.size > 0 && !playContinues) await this.showSelect();
+      if (themeFamilies.size > 0 && !playContinues) await showLibrary();
       return;
     }
     await Promise.all(tasks);
@@ -429,12 +442,12 @@ export class LibraryService {
     if (chartFiles.length === 0 && courseFiles.length > 0) await this.refreshCourseFolders();
     // Open what was dropped: its folder, or the folder list when the drop carried several.
     const dropped = navigationAfterDrop(this.collection.charts, previousChartIds, origin.showLibraryRoot);
-    if (dropped !== undefined) this.browseTo(dropped);
+    if (dropped !== undefined && !origin.startup) this.browseTo(dropped);
     // Commit the confirmed family before mounting the next select scene. A skin dropped onto a play swaps that play's
     // family (`applyDroppedSkin`) and leaves the chart running; the select screen takes the family when the play returns.
     const confirmedFamily = await confirmation;
     if (confirmedFamily !== undefined) await this.applyDroppedSkin(confirmedFamily);
-    if (!(playContinues && chartFiles.length === 0 && confirmedFamily !== undefined)) await this.showSelect();
+    if (!(playContinues && chartFiles.length === 0 && confirmedFamily !== undefined)) await showLibrary();
     if (replayFiles.length > 0) {
       await this.startReplayReplayFromFile(replayFiles[0]!);
     }
@@ -527,7 +540,7 @@ export class LibraryService {
       }
     }
     if (imported.length === 0) return imported;
-    await this.refreshCourseFolders();
+    await this.changeCollection(() => this.refreshCourseFolders());
     if (!relist) return imported;
     // Re-list the select screen so the new folders show; mid-play they show the next time it opens.
     const showing = this.showing();
@@ -699,7 +712,7 @@ export class LibraryService {
       return;
     }
     showLoadingOverlay(this.elements);
-    await this.leaveSelect();
+    const leftSelect = await this.leaveSelect();
     try {
       if (params.skinURL) {
         this.setStatus('Fetching skin…');
@@ -719,6 +732,7 @@ export class LibraryService {
       this.setStatus(`URL load failed: ${message}`);
     } finally {
       hideLoadingOverlay(this.elements);
+      if (leftSelect && this.showing() === undefined) await this.showSelect();
     }
   }
 
@@ -738,38 +752,41 @@ export class LibraryService {
     showLoadingOverlay(this.elements);
     await this.leaveSelect();
     try {
-      for (const indexURL of indexURLs) {
-        const label = bemuseServerLabel(indexURL);
-        this.setStatus(`Fetching Bemuse server ${label}…`);
-        try {
-          // Read again by a reload of the folders, which asks the server for its index again.
-          const read = async () => {
-            const server = await readBemuseServerFiles(
-              indexURL,
-              this.remoteRefreshedSince !== undefined ? { refreshedSince: this.remoteRefreshedSince } : {},
-            );
-            if (server.indexSource === 'stale')
-              dropLog.warn(`Bemuse server ${label}: unreachable, listing its kept index`);
-            this.bemuseSongs.remember(server.songs);
-            return server;
-          };
-          const server = await read();
-          for (const { track, reason } of server.skipped)
-            dropLog.warn(`Bemuse server ${label}: skipped ${track}: ${reason}`);
-          dropLog.info(`Bemuse server ${label}: songs=${server.songs.length} skipped=${server.skipped.length}`);
-          if (server.files.length === 0) {
-            this.setStatus(`Bemuse server ${label} has no songs Be-Music can play`);
-            continue;
-          }
-          await this.loadCharts(server.files, { readFiles: async () => (await read()).files });
-        } catch (error) {
-          dropLog.warn(`Bemuse server failed: ${indexURL}`, error);
-          this.setStatus(`Bemuse server ${label} failed: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      }
+      for (const indexURL of indexURLs) await this.loadBemuseServer(indexURL);
       await this.showSelect();
     } finally {
       hideLoadingOverlay(this.elements);
+    }
+  }
+
+  private async loadBemuseServer(indexURL: string): Promise<boolean> {
+    const label = bemuseServerLabel(indexURL);
+    this.setStatus(`Fetching Bemuse server ${label}…`);
+    try {
+      // A folder reload asks for the server's current index.
+      const read = async () => {
+        const server = await readBemuseServerFiles(
+          indexURL,
+          this.remoteRefreshedSince !== undefined ? { refreshedSince: this.remoteRefreshedSince } : {},
+        );
+        if (server.indexSource === 'stale') dropLog.warn(`Bemuse server ${label}: unreachable, listing its kept index`);
+        this.bemuseSongs.remember(server.songs);
+        return server;
+      };
+      const server = await read();
+      for (const { track, reason } of server.skipped)
+        dropLog.warn(`Bemuse server ${label}: skipped ${track}: ${reason}`);
+      dropLog.info(`Bemuse server ${label}: songs=${server.songs.length} skipped=${server.skipped.length}`);
+      if (server.files.length === 0) {
+        this.setStatus(`Bemuse server ${label} has no songs Be-Music can play`);
+        return false;
+      }
+      await this.loadCharts(server.files, { readFiles: async () => (await read()).files });
+      return true;
+    } catch (error) {
+      dropLog.warn(`Bemuse server failed: ${indexURL}`, error);
+      this.setStatus(`Bemuse server ${label} failed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
     }
   }
 
