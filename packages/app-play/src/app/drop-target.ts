@@ -23,6 +23,7 @@ import {
   storedFolders,
   type RememberedFolder,
 } from '../services/remembered-folder.ts';
+import { folderReadPermission, isSameFolder } from '../services/folder-handle.ts';
 import {
   RememberedFolderSession,
   type RememberedFolderSessionDeps,
@@ -106,9 +107,12 @@ export class DropTarget {
     this.folderBusy = true;
     try {
       await this.readSavedFolders();
-      for (const folder of [...this.reconnectFolders]) {
+      // Asked of every folder at once: a query the browser leaves unanswered holds up the start only until it times out.
+      const folders = [...this.reconnectFolders];
+      const permissions = await Promise.all(folders.map((folder) => folderReadPermission(folder)));
+      for (const [index, folder] of folders.entries()) {
         try {
-          if ((await folder.queryPermission({ mode: 'read' })) !== 'granted') continue;
+          if (permissions[index] !== 'granted') continue;
           if (refreshAfter === undefined) {
             await this.loadFolder(folder, true);
           } else {
@@ -219,7 +223,7 @@ export class DropTarget {
       await this.updateSavedFolders(async (saved) => {
         if (folder) {
           for (const existing of saved) {
-            if (await existing.isSameEntry(folder)) {
+            if (await isSameFolder(existing, folder)) {
               return existing === previous ? saved : saved.filter((item) => item !== previous);
             }
           }
@@ -271,7 +275,7 @@ export class DropTarget {
       const next = [...saved];
       for (const folder of folders) {
         let index = 0;
-        while (index < next.length && !(await folder.isSameEntry(next[index]!))) index += 1;
+        while (index < next.length && !(await isSameFolder(folder, next[index]!))) index += 1;
         next[index] = folder;
       }
       return next;
