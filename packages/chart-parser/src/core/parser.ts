@@ -163,8 +163,8 @@ export function parseBMS(input: string): BeMusicJSON {
     // base-62 charts (`#BASE 62`) put lowercase letters in indexed-header keys (e.g. `#WAV0a`), so most charts skip
     // this entirely and the JSON stays compact.
     const commandCaseDiffers = command !== commandRaw;
-    const definitionKey = resolveHeaderDefinitionKey(command, commandRaw, base);
     if (controlFlowCaptureStack.length > 0) {
+      const definitionKey = resolveHeaderDefinitionKey(command, commandRaw, base);
       const headerEntry: BMSControlFlowHeaderEntry = {
         kind: 'header',
         command,
@@ -186,11 +186,15 @@ export function parseBMS(input: string): BeMusicJSON {
 
     // LR2 and beatoraja apply header lines in file order: a top-level line overrides the same header in any branch
     // above it, taken or not.
-    if (definitionKey !== undefined && value.length > 0) {
-      for (const entry of capturedHeadersByKey.get(definitionKey) ?? []) {
-        entry.overriddenByLaterHeader = true;
+    if (capturedHeadersByKey.size > 0 && value.length > 0) {
+      const definitionKey = resolveHeaderDefinitionKey(command, commandRaw, base);
+      if (definitionKey !== undefined) {
+        const captured = capturedHeadersByKey.get(definitionKey);
+        if (captured !== undefined) {
+          for (const entry of captured) entry.overriddenByLaterHeader = true;
+          capturedHeadersByKey.delete(definitionKey);
+        }
       }
-      capturedHeadersByKey.delete(definitionKey);
     }
 
     json.preservation.bms.sourceLines.push({

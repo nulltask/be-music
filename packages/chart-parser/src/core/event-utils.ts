@@ -28,56 +28,6 @@ export function normalizeBmsonNoteLength(value: unknown): number | undefined {
 }
 
 /**
- * Tokenizes a BMS channel-object stream (the body of e.g. `#xxxYY:ZZ...`) into 2-character object IDs.
- *
- * - The total `tokenCount` (= denominator) counts EVERY 2-char slot including `00` placeholders — needed to compute
- *   fractional beat positions.
- * - The returned `tokens` array only includes NON-ZERO entries (zeros are silent placeholders, not events).
- * - The stream ENDS at the first whitespace character: de-facto BMS implementations treat the object data as one
- *   contiguous token run, so trailing text (`#00111:0102  some note`) must not fabricate events or shift the
- *   denominator of the legitimate tokens before it.
- *
- * `base` controls the per-character validator: - `36` (default): ASCII `[0-9A-Za-z]` is accepted and lowercase is
- * FOLDED to uppercase, so `0a` and `0A` collapse to the same ID. - `62`: lowercase is preserved, so `0a` and `0A` are
- * distinct. Used when the chart declared `#BASE 62`.
- */
-export function collectNonZeroObjectTokens(
-  input: string,
-  base: 36 | 62 = 36,
-): {
-  tokenCount: number;
-  tokens: Array<{ index: number; value: string }>;
-} {
-  const normalize = base === 62 ? normalizeASCIIBase62Code : normalizeASCIIBase36Code;
-  const tokens: Array<{ index: number; value: string }> = [];
-  let tokenCount = 0;
-  let highCode = -1;
-  for (let index = 0; index < input.length; index += 1) {
-    const code = input.charCodeAt(index);
-    if (code === 0x20 || code === 0x09 || code === 0x0b || code === 0x0c) {
-      break;
-    }
-    const normalizedCode = normalize(code);
-    if (normalizedCode < 0) {
-      continue;
-    }
-    if (highCode < 0) {
-      highCode = normalizedCode;
-      continue;
-    }
-    if (!(highCode === 0x30 && normalizedCode === 0x30)) {
-      tokens.push({
-        index: tokenCount,
-        value: String.fromCharCode(highCode, normalizedCode),
-      });
-    }
-    tokenCount += 1;
-    highCode = -1;
-  }
-  return { tokenCount, tokens };
-}
-
-/**
  * Builds the canonical entry for one BMS object data line (`#mmmcc:data`).
  *
  * Single implementation of the line → entry rule shared by the strict parse path and the control-flow capture path
@@ -108,16 +58,33 @@ export function buildBMSObjectLineEntry(
     };
   }
 
-  const parsed = collectNonZeroObjectTokens(data, base);
-  const events: BeMusicEvent[] = [];
-  for (const token of parsed.tokens) {
-    events.push({
-      measure,
-      channel,
-      position: [token.index, parsed.tokenCount],
-      value: token.value,
-    });
+  const normalize = base === 62 ? normalizeASCIIBase62Code : normalizeASCIIBase36Code;
+  const events: Array<Omit<BeMusicEvent, 'position'> & { position: [number, number] }> = [];
+  let tokenCount = 0;
+  let highCode = -1;
+  for (let index = 0; index < data.length; index += 1) {
+    const code = data.charCodeAt(index);
+    // BMS reads one contiguous run of slots. Text after whitespace takes no space in the measure.
+    if (code === 0x20 || code === 0x09 || code === 0x0b || code === 0x0c) break;
+    const normalizedCode = normalize(code);
+    if (normalizedCode < 0) continue;
+    if (highCode < 0) {
+      highCode = normalizedCode;
+      continue;
+    }
+    if (highCode !== 0x30 || normalizedCode !== 0x30) {
+      events.push({
+        measure,
+        channel,
+        position: [tokenCount, 0],
+        value: String.fromCharCode(highCode, normalizedCode),
+      });
+    }
+    tokenCount += 1;
+    highCode = -1;
   }
+  // The denominator counts every complete slot, including rests.
+  for (const event of events) event.position[1] = tokenCount;
   if (events.length === 0) {
     return undefined;
   }
