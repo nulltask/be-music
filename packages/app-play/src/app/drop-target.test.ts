@@ -1,19 +1,33 @@
 import type { BrowserDroppedFile } from '@be-music/player-browser/collection';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { DropTarget, type DropTargetOptions } from './drop-target.ts';
-import { FOLDER_HANDLE_TIMEOUT_MS } from '../services/folder-handle.ts';
+import {
+  FOLDER_HANDLE_TIMEOUT_MS,
+  FOLDER_PERMISSION_REQUEST_TIMEOUT_MS,
+  isUnansweredFolder,
+} from '../services/folder-handle.ts';
 import type { FolderListing } from '../services/folder-listing.ts';
 import type { FolderSnapshot, FolderSnapshotStore } from '../services/folder-snapshots.ts';
 import type { LibraryLoadOrigin } from '../services/library.ts';
 import type { RememberedFolder } from '../services/remembered-folder.ts';
 
 // The remembered folders' own store and the browser's pickers: the folders are handed in by each test.
-const remembered = vi.hoisted(() => ({ saved: [] as unknown[], dropped: [] as unknown[] }));
+// `unstorable` folders make a write fail, as a handle the browser cannot store again does.
+const remembered = vi.hoisted(() => ({
+  saved: [] as unknown[],
+  dropped: [] as unknown[],
+  picked: undefined as unknown,
+  unstorable: new Set<unknown>(),
+}));
 vi.mock('../services/remembered-folder.ts', () => ({
-  pickRememberedFolder: () => undefined,
+  pickRememberedFolder: () => (remembered.picked === undefined ? undefined : Promise.resolve(remembered.picked)),
   captureDroppedFolders: async () => remembered.dropped,
   storedFolders: async (folders?: readonly unknown[]) => {
-    if (folders) remembered.saved = [...folders];
+    if (folders) {
+      if (folders.some((folder) => remembered.unstorable.has(folder)))
+        throw new DOMException('cannot', 'DataCloneError');
+      remembered.saved = [...folders];
+    }
     return [...remembered.saved];
   },
 }));
@@ -197,6 +211,8 @@ describe('remembered folders', () => {
   beforeEach(() => {
     remembered.saved = [];
     remembered.dropped = [];
+    remembered.picked = undefined;
+    remembered.unstorable.clear();
     vi.stubGlobal('indexedDB', {});
     vi.stubGlobal('window', {});
   });
@@ -314,6 +330,82 @@ describe('remembered folders', () => {
       await restored;
       expect(loaded).toEqual([['Pack/a.bms']]);
       expect(list).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
+  });
+
+  /** Restores `saved`, with `stuck` leaving every call unanswered, and returns once the start has gone on without it. */
+  async function restoreWithStuck(stuck: RememberedFolder, others: RememberedFolder[], listings: FolderListing[] = []) {
+    const never = () => new Promise(() => {});
+    Object.assign(stuck, { queryPermission: never, requestPermission: never, isSameEntry: never });
+    remembered.saved = [stuck, ...others];
+    const built = folderHarness(listings);
+    const restored = built.target.restoreFolder();
+    await vi.advanceTimersByTimeAsync(FOLDER_HANDLE_TIMEOUT_MS);
+    await restored;
+    return built;
+  }
+
+  test('replaces an unanswered folder with the one the player picks again, and loads it', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const stuck = grantedFolder('Stuck');
+      const { target, loaded } = await restoreWithStuck(stuck, [], [listingOf('Again', { 'a.bms': 10 })]);
+      expect(isUnansweredFolder(stuck)).toBe(true);
+      const again = grantedFolder('Again');
+      remembered.picked = again;
+      await target['reconnectFolder'](stuck);
+      expect(remembered.saved).toEqual([again]);
+      expect(loaded).toEqual([['Again/a.bms']]);
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
+  });
+
+  test('frees the folder buttons when a permission request goes unanswered, and offers to pick the folder again', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const folder = grantedFolder('Pack');
+      Object.assign(folder, { queryPermission: async () => 'prompt', requestPermission: () => new Promise(() => {}) });
+      remembered.saved = [folder];
+      const { target, loaded } = folderHarness([listingOf('Pack', { 'a.bms': 10 })]);
+      await target.restoreFolder();
+      const reconnect = target['reconnectFolder'](folder);
+      await vi.advanceTimersByTimeAsync(FOLDER_PERMISSION_REQUEST_TIMEOUT_MS);
+      await reconnect;
+      expect(loaded).toEqual([]);
+      expect(isUnansweredFolder(folder)).toBe(true);
+      // The next press picks the folder again instead of waiting on the same request.
+      const again = grantedFolder('Pack');
+      remembered.picked = again;
+      await target['reconnectFolder'](folder);
+      expect(remembered.saved).toEqual([again]);
+      expect(loaded).toEqual([['Pack/a.bms']]);
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
+  });
+
+  test('removes a saved folder even when an unanswered one cannot be stored again', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const stuck = grantedFolder('Stuck');
+      const kept = grantedFolder('Kept');
+      const removed = grantedFolder('Removed');
+      Object.assign(kept, { queryPermission: async () => 'prompt' });
+      Object.assign(removed, { queryPermission: async () => 'prompt' });
+      const { target, options } = await restoreWithStuck(stuck, [kept, removed]);
+      remembered.unstorable.add(stuck);
+      await target['editSavedFolder'](removed, false);
+      expect(remembered.saved).toEqual([kept]);
+      expect(options.setStatus).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
       vi.restoreAllMocks();

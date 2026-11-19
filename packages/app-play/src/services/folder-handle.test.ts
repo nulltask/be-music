@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
-import { FOLDER_HANDLE_TIMEOUT_MS, folderReadPermission, isSameFolder, settleWithin } from './folder-handle.ts';
+import {
+  FOLDER_HANDLE_TIMEOUT_MS,
+  FOLDER_PERMISSION_REQUEST_TIMEOUT_MS,
+  folderReadPermission,
+  isSameFolder,
+  isUnansweredFolder,
+  requestFolderReadPermission,
+  settleWithin,
+} from './folder-handle.ts';
 
 const never = <T>() => new Promise<T>(() => {});
 
@@ -44,6 +52,22 @@ describe('folderReadPermission', () => {
     expect(warn).toHaveBeenCalledOnce();
   });
 
+  test('does not ask a folder that went unanswered again, and does not compare it', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const folder = { name: 'Pack', queryPermission: vi.fn(never<PermissionState>), isSameEntry: vi.fn(never<boolean>) };
+    const permission = folderReadPermission(folder);
+    await vi.advanceTimersByTimeAsync(FOLDER_HANDLE_TIMEOUT_MS);
+    await permission;
+    expect(isUnansweredFolder(folder)).toBe(true);
+    await expect(folderReadPermission(folder)).resolves.toBe('prompt');
+    expect(folder.queryPermission).toHaveBeenCalledOnce();
+    const other = { isSameEntry: vi.fn(async () => true) };
+    await expect(isSameFolder(folder, other)).resolves.toBe(false);
+    await expect(isSameFolder(other, folder)).resolves.toBe(false);
+    expect(folder.isSameEntry).not.toHaveBeenCalled();
+    expect(other.isSameEntry).not.toHaveBeenCalled();
+  });
+
   test('reads a failed query as one that needs the permission asked again', async () => {
     const rejecting = { name: 'Pack', queryPermission: () => Promise.reject(new Error('gone')) };
     await expect(folderReadPermission(rejecting)).resolves.toBe('prompt');
@@ -54,6 +78,29 @@ describe('folderReadPermission', () => {
       },
     };
     await expect(folderReadPermission(throwing)).resolves.toBe('prompt');
+  });
+});
+
+describe('requestFolderReadPermission', () => {
+  test("passes on the player's answer", async () => {
+    const folder = {
+      name: 'Pack',
+      queryPermission: never<PermissionState>,
+      requestPermission: async () => 'granted' as const,
+    };
+    await expect(requestFolderReadPermission(folder)).resolves.toBe('granted');
+    expect(isUnansweredFolder(folder)).toBe(false);
+  });
+
+  test('gives up on a request that never answers, and remembers the folder as unanswered', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const folder = { name: 'Pack', queryPermission: never<PermissionState>, requestPermission: never<PermissionState> };
+    const permission = requestFolderReadPermission(folder);
+    await vi.advanceTimersByTimeAsync(FOLDER_HANDLE_TIMEOUT_MS);
+    expect(isUnansweredFolder(folder)).toBe(false);
+    await vi.advanceTimersByTimeAsync(FOLDER_PERMISSION_REQUEST_TIMEOUT_MS - FOLDER_HANDLE_TIMEOUT_MS);
+    await expect(permission).resolves.toBe('prompt');
+    expect(isUnansweredFolder(folder)).toBe(true);
   });
 });
 

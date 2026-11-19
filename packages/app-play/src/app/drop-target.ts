@@ -23,7 +23,12 @@ import {
   storedFolders,
   type RememberedFolder,
 } from '../services/remembered-folder.ts';
-import { folderReadPermission, isSameFolder } from '../services/folder-handle.ts';
+import {
+  folderReadPermission,
+  isSameFolder,
+  isUnansweredFolder,
+  requestFolderReadPermission,
+} from '../services/folder-handle.ts';
 import {
   RememberedFolderSession,
   type RememberedFolderSessionDeps,
@@ -145,7 +150,11 @@ export class DropTarget {
         this.reconnectFolders.map(
           (folder) => html`
             <button class="btn" @click=${() => void this.reconnectFolder(folder)}>
-              ${localized(() => playerText().shell.reconnectFolder(folder.name))}
+              ${localized(() =>
+                isUnansweredFolder(folder)
+                  ? playerText().shell.pickFolderAgain(folder.name)
+                  : playerText().shell.reconnectFolder(folder.name),
+              )}
             </button>
           `,
         ),
@@ -257,8 +266,12 @@ export class DropTarget {
     const write = this.folderWrites.then(async () => {
       await this.readSavedFolders();
       const next = await update(this.savedFolders);
-      this.savedFolders = await storedFolders(next);
-      this.reconnectFolders = this.reconnectFolders.filter((folder) => this.savedFolders.includes(folder));
+      const kept = await this.writeSavedFolders(next);
+      this.savedFolders = kept;
+      // A folder left out of the store because its handle went unanswered keeps its "pick again" button.
+      this.reconnectFolders = this.reconnectFolders.filter(
+        (folder) => kept.includes(folder) || (next.includes(folder) && isUnansweredFolder(folder)),
+      );
       // A folder no longer remembered keeps no snapshot.
       void this.options.folders.snapshots
         ?.prune(this.savedFolders as unknown as SnapshotFolder[])
@@ -268,6 +281,22 @@ export class DropTarget {
     });
     this.folderWrites = write.catch(() => undefined);
     return write;
+  }
+
+  /**
+   * Stores `folders` as the saved folders. The whole list is written again on every change, and a handle the browser
+   * left unanswered may not be stored again: then the list is stored without such handles, so a change to the others
+   * (removing one, adding one) still goes through.
+   */
+  private async writeSavedFolders(folders: readonly RememberedFolder[]): Promise<RememberedFolder[]> {
+    try {
+      return await storedFolders(folders);
+    } catch (error) {
+      const answered = folders.filter((folder) => !isUnansweredFolder(folder));
+      if (answered.length === folders.length) throw error;
+      console.warn('The saved folders were stored without the ones that did not answer.', error);
+      return storedFolders(answered);
+    }
   }
 
   private rememberLoadedFolders(folders: readonly RememberedFolder[]): Promise<void> {
@@ -282,19 +311,45 @@ export class DropTarget {
     });
   }
 
+  /**
+   * Loads a saved folder the start could not: once the player allows it to be read, or, for a handle the browser left
+   * unanswered, from the folder the player picks again in its place.
+   */
   private async reconnectFolder(folder: RememberedFolder): Promise<void> {
     if (this.folderBusy) return;
+    // The picker opens within the click, before anything is awaited.
+    const picker = isUnansweredFolder(folder) ? pickRememberedFolder() : undefined;
     this.folderBusy = true;
     try {
-      if ((await folder.requestPermission({ mode: 'read' })) !== 'granted') return;
-      await this.loadFolder(folder);
+      let loaded = folder;
+      if (picker !== undefined) {
+        loaded = await picker;
+        await this.replaceSavedFolder(folder, loaded);
+      } else if ((await requestFolderReadPermission(folder)) !== 'granted') {
+        // A request the browser left unanswered turns the button into "pick again".
+        return;
+      }
+      await this.loadFolder(loaded);
       this.reconnectFolders = this.reconnectFolders.filter((pending) => pending !== folder);
-      this.renderReconnect();
     } catch (error) {
-      this.reportFolderError(error);
+      if (!(error instanceof DOMException && error.name === 'AbortError')) this.reportFolderError(error);
     } finally {
       this.folderBusy = false;
+      this.renderReconnect();
     }
+  }
+
+  /** Puts `folder` in the place of the saved `previous`, or only drops `previous` when `folder` is saved already. */
+  private replaceSavedFolder(previous: RememberedFolder, folder: RememberedFolder): Promise<void> {
+    return this.updateSavedFolders(async (saved) => {
+      for (const existing of saved) {
+        if (existing !== previous && (await isSameFolder(existing, folder))) {
+          return saved.filter((item) => item !== previous);
+        }
+      }
+      // `previous` may be out of the store already: a handle that did not answer could not be stored again.
+      return saved.includes(previous) ? saved.map((item) => (item === previous ? folder : item)) : [...saved, folder];
+    });
   }
 
   /**
