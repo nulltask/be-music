@@ -3,7 +3,7 @@
 // handle saved afresh for the same folder works: the start-up restore then never finished, so the select screen, the
 // Bemuse servers, the difficulty tables and every later drop waited on it for good. Each call here gives up after a
 // while and answers as for a folder that cannot be used now. A handle that did not answer is remembered for the page
-// ({@link isUnansweredFolder}): it is not asked again, and the player picks its folder again to replace it.
+// ({@link isUnansweredFolder}): it is not asked again, and its folder leaves the saved folders.
 
 /** How long a handle call may take before the page goes on without its answer. */
 export const FOLDER_HANDLE_TIMEOUT_MS = 3000;
@@ -65,7 +65,7 @@ async function permissionWithin(
   );
   if (state !== 'timeout') return state;
   unanswered.add(folder);
-  console.warn(`The saved folder "${folder.name}" did not answer; pick it again to load it.`);
+  console.warn(`The saved folder "${folder.name}" did not answer; it is removed from the saved folders.`);
   return 'prompt';
 }
 
