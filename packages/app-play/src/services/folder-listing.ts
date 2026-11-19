@@ -214,8 +214,12 @@ export type FolderListingWorkerMessage =
 /** The worker's side of {@link listFolderInWorker}: walks the folder it is posted and posts back what it finds. */
 export function serveFolderListing(scope: {
   onmessage: ((event: MessageEvent<{ folder: FolderDirectoryLike }>) => void) | null;
+  onmessageerror: ((event: MessageEvent) => void) | null;
   postMessage(message: FolderListingWorkerMessage): void;
 }): void {
+  scope.onmessageerror = () => {
+    scope.postMessage({ error: { name: 'DataCloneError', message: 'Could not receive the folder handle' } });
+  };
   scope.onmessage = (event) => {
     listFolder(event.data.folder, (fileCount) => scope.postMessage({ fileCount })).then(
       (listing) => scope.postMessage({ listing }),
@@ -247,26 +251,48 @@ export function listFolderInWorker(
     return listFolder(folder, onProgress);
   }
   return new Promise<FolderListing>((resolve, reject) => {
+    let finished = false;
+    const stop = () => {
+      finished = true;
+      worker.terminate();
+    };
+    const listOnPage = () => {
+      if (finished) return;
+      stop();
+      resolve(listFolder(folder, onProgress));
+    };
     worker.onmessage = (event: MessageEvent<FolderListingWorkerMessage>) => {
+      if (finished) return;
       const message = event.data;
       if ('fileCount' in message) {
         onProgress?.(message.fileCount);
         return;
       }
-      worker.terminate();
       if ('listing' in message) {
+        stop();
         resolve(message.listing);
         return;
       }
-      const error = new Error(message.error.message);
-      error.name = message.error.name;
+      const { name, message: detail } = message.error;
+      // Access can be granted in the page even if the worker cannot receive or use the directory handle.
+      if (name === 'DataCloneError' || name === 'NotAllowedError' || name === 'SecurityError') {
+        listOnPage();
+        return;
+      }
+      stop();
+      const error = new Error(detail);
+      error.name = name;
       reject(error);
     };
     worker.onerror = (event) => {
       event.preventDefault();
-      worker.terminate();
-      resolve(listFolder(folder, onProgress));
+      listOnPage();
     };
-    worker.postMessage({ folder });
+    worker.onmessageerror = listOnPage;
+    try {
+      worker.postMessage({ folder });
+    } catch {
+      listOnPage();
+    }
   });
 }
