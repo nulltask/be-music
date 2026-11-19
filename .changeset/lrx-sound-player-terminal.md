@@ -2,4 +2,4 @@
 '@be-music/player-terminal': patch
 ---
 
-Tell LRX charts whose notes differ only in their sound values apart in the chart preview's cache.
+The chart preview plays LRX background sounds that plugout mixes with the keysounds (chain notes, hidden notes and most background columns) at the keysound volume, and tells LRX charts whose notes differ only in their sound values apart in its cache.

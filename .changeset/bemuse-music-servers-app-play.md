@@ -6,4 +6,4 @@ Register Bemuse music servers in the Library & records section of Options, start
 
 Songs play as Bemuse serves them: packed sounds are read out of their `.bemuse` packages when a song is played, unpacked songs and the images and videos beside a package are read from the song folder, and the song's preview, background video (at `video_offset`), loading and back images and ReplayGain apply to its charts.
 
-Chart files are kept between visits and checked against the server index, and a server that does not allow other sites to read it is read through the player's proxy.
+Chart files are kept between visits and checked against the server index, and a server that does not allow other sites to read it is read through the player's proxy (remembered, so it is tried directly only once). A damaged saved server list falls back to the public servers.
