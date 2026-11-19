@@ -1,5 +1,27 @@
 # @be-music/player-scene-model
 
+## 0.10.0
+
+### Minor Changes
+
+- 94b5e2d: The `gauge1P` and `gauge2P` play options now take a source-qualified gauge pick (`lr2:HARD`, `beatoraja:EX-HARD`) besides a bare gauge type. `keepGaugePick` is the ruleset-change rule: a qualified pick stays, and a bare one the new ruleset lacks returns to GROOVE. `cyclePlayOptionValue` steps on from a qualified pick's gauge type, and `formatGaugeLabel` labels it by that type.
+- 355fc10: Play options gain `crazyJudge` (nanasigroove's GOOD2BAD / GREAT2BAD), `crazyHellJudge` (HELLJUDGE) and `crazyAddMine` (ADDMINE), kept apart from the other sources' options because none plays as they do. `crazyAddMine` replaces the mine option while it is on, which stays beatoraja's (`PlayerMineModifier`).
+- 5002b99: Add the `crazyNotes` play option (`CrazyNotesOption`: OFF, DOUBLE, COPY or DBLCOPY) for nanasigroove's NOTES conversion.
+- 87ae513: The lane option type `RandomMode` gains `RANDOM+`, nanasigroove's RANDOM+, which only a chart's `774:RANDOM_RANDOM+` selects; it is never offered to the player.
+- 5b16c66: Add the `practiceCarriedLongNotes` play option (on by default), passed to the engine as `PracticeSelection.carriedLongNotes`: a PRACTICE play keeps a long note held into its bars from before them.
+- 56e435f: `PlayOptions.practiceGauge` takes a source-qualified PRACTICE gauge (`beatoraja:ASSIST-EASY`), which `resolvePracticeSelection` passes on with beatoraja's GAUGE CATEGORY for a beatoraja gauge and `keepPracticeGauge` keeps across a ruleset change. `practiceGaugeSource` names the source a pick plays on.
+- d088f5f: Add the `practiceRestBefore` and `practiceRestAfter` play options (0 to 8 bars, 1 by default) and pass them on as `PracticeSelection.restBarsBefore` and `restBarsAfter`.
+- 1d57a1a: `PlayOptions` gains `windowHold`, beatoraja's WINDOW HOLD (default off).
+
+### Patch Changes
+
+- 7436dd8: The result lamp of a play on another source's gauge than the judge ruleset's own follows that source, so a clear on LR2's DEATH under beatoraja judging is no longer read as an EX-HARD clear.
+- b5e9970: Add validated per-side play settings for the LR2 scratch-inclusive lane options.
+- 488ba86: Read an LRX chart's play variant from its `lanetype`, as the engine does.
+- ac6a5be: Speed up the gauge and PRACTICE option helpers (`formatGaugeLabel`, `keepPracticeGauge`, `cyclePlayOptionValue`, `resolvePracticeSelection`): a bare gauge pick no longer goes through the source-qualified split, and the PRACTICE selection is built without spreads.
+- 0da5638: `playResultFromCourseRun` shows a plugout course run's result with plugout's 100,000-point score, as a plugout stage's result does.
+- Updated dependencies: `@be-music/player-engine@0.19.0`, `@be-music/chart-model@0.12.0`, `@be-music/chart-source@0.9.0`, `@be-music/shared-utils@0.8.0`
+
 ## 0.9.0
 
 ### Minor Changes

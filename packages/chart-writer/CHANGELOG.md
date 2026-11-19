@@ -1,5 +1,21 @@
 # @be-music/chart-writer
 
+## 0.7.0
+
+### Minor Changes
+
+- 9b7a629: `stringifyBmson` now reports the BMS directives bmson has no field for through `onDiagnostic`: `stp` (`#STP` stops), `exrank` (`#EXRANKxx` changes) and `speed` (`SPEED` changes). `stringifyBMS` reports the bmson fields BMS has no form for: `ln-end-sound` (beatoraja's `up`) and `sound-continuation` (`c`). Each message carries the count. The output is unchanged.
+- 70dd4e6: `stringifyBMS` and `stringifyBmson` now report conversion losses that change gameplay through `onDiagnostic`, with the new `ChartExportDiagnostic` codes `mine-damage` (a bmson mine damage BMS cannot hold, or a missing one), `total` (a TOTAL the other format's unit cannot express) and `long-note-mode` (long notes of different types under one `#LNMODE`). The output is unchanged; a caller can throw from the handler to refuse a lossy conversion.
+
+### Patch Changes
+
+- e9cb57e: Preserve the later BMS normal-note object at a shared position when resolving or round-tripping charts with source line order.
+- eda2023: Converting BMS to bmson now reports what it silently dropped before: a BPM change to a negative or undefined `#BPMxx` (code `bpm`, LR2's reverse scroll) and a STOP without a positive `#STOPxx` (code `stop`, which moves the later notes 1/192 of a measure earlier). bmson can hold neither, so the output still leaves them out, but `onDiagnostic` now says so.
+- af62160: Default to BMS LNTYPE 1 when the chart omits the header, matching reference playback.
+- be797a5: BMS output writes a slot's `#EXWAVxx` after its `#WAVxx` unless a later `#WAVxx` redefined it, so reading the output back keeps which one wins.
+- 624db83: Preserve mine damage when converting BMS to bmson and apply the existing minimum representable BMS damage when exporting a zero-damage bmson mine.
+- Updated dependencies: `@be-music/chart-parser@0.8.0`, `@be-music/chart-model@0.12.0`, `@be-music/chart-source@0.9.0`, `@be-music/shared-utils@0.8.0`
+
 ## 0.6.3
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @be-music/chart-editor
 
+## 0.4.6
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/chart-parser@0.8.0`, `@be-music/chart-model@0.12.0`, `@be-music/chart-source@0.9.0`, `@be-music/chart-writer@0.7.0`, `@be-music/shared-utils@0.8.0`
+
 ## 0.4.5
 
 ### Patch Changes

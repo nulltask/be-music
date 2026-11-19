@@ -1,5 +1,13 @@
 # @be-music/chart-audio-renderer
 
+## 0.5.4
+
+### Patch Changes
+
+- e5dce2a: Render each LRX note with its own volume, balance, rate, sample window and fade-in / fade-out, instead of the whole sample at full level.
+- 829cb1b: Speed up chart audio rendering when a keysound requires an alternate file extension or is missing.
+- Updated dependencies: `@be-music/chart-parser@0.8.0`, `@be-music/chart-model@0.12.0`, `@be-music/chart-source@0.9.0`, `@be-music/shared-utils@0.8.0`
+
 ## 0.5.3
 
 ### Patch Changes

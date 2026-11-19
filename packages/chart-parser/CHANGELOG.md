@@ -1,5 +1,26 @@
 # @be-music/chart-parser
 
+## 0.8.0
+
+### Minor Changes
+
+- 7f6108a: Use `@be-music/chart-parser/core` to parse chart text and bytes without resolving the Node filesystem adapter. The root entry still provides `parseChartFile` and the existing parser exports.
+- 398f2dd: The LRX parser reads BGA transforms (`sx`…`dh`, `a` `r` `g` `b`, `bld`, `rot`, `ctr`, `acc`, keyframe `cn`) and layers 203 and 204 into `lrx.bga`, as plugout reads them, and reading Be-Music JSON back keeps them.
+- f5490bd: Read LRX charts (plugout4 -ARCADE EDITION-). `parseLRX` / `parseLRXBytes` convert an `.lrs` sequence with its `.lrh` header and `.lrm` BGA file onto BMS channels, keeping the LRX note and header values; `resolveLRXHeaderPath` and `resolveLRXMoviePath` name the files beside the `.lrs`. `parseChartFile` reads `.lrs` files with their siblings, and Be-Music JSON keeps the LRX values on a round trip.
+- 880f8c2: Read Nanasi Groove 2 `.n2s` charts (Toy Musical 3). `parseN2SBytes` opens the encrypted "ZEXA" container and parses the PMS file inside as `parseBMSBytes` would; `readN2SArchive` lists a container's files and `isN2SArchive` recognizes one. `parseChartFile` dispatches `.n2s` files to it. The package now depends on `fflate` for the container's zlib streams.
+
+### Patch Changes
+
+- 71e61f9: Speed up BMS parsing by reducing allocations when reading object lines and scanning for WAV headers.
+- e9cb57e: Preserve the later BMS normal-note object at a shared position when resolving or round-tripping charts with source line order.
+- be797a5: A `#WAVxx` after a slot's `#EXWAVxx` now redefines it, as nanasigroove 1.552 does: the later line wins, also across control flow, where the two now share one definition. Before, a valid `#EXWAVxx` always won.
+- d486332: Use only the last active BMS LNOBJ declaration as the long-note end marker. This can change the notes and fingerprint of charts with repeated declarations.
+- 212d164: An LRX chain or hidden note records its lane in `lrx.lane`. Background sounds outside plugout's BGM mixer group (all but the BGM columns' notes with a non-zero `dmg`) are flagged `lrx.keyVolume`. Reading Be-Music JSON back keeps both. An LRX chain note with no note before it on its lane is a judged lane note, as plugout judges it.
+- f45dc22: Speed up LRX parsing and read the chart’s video path from the header when available.
+- 4ee342f: Speed up everything that compares or walks a parsed chart's events, such as sorting and timing: events read from BMS, bmson and Be-Music JSON now share the object shapes of the parser's plain events again. Optional fields such as `bmsLineOrder` and `bmson` were spread in, which gave the events several hidden classes and made event comparisons up to three times slower.
+- 47aa2cd: Reduce BMS parsing work by building events directly from their object streams and checking header overrides only when branch headers are pending.
+- Updated dependencies: `@be-music/chart-model@0.12.0`, `@be-music/chart-source@0.9.0`, `@be-music/shared-utils@0.8.0`
+
 ## 0.7.2
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @be-music/skin-lr2
 
+## 0.7.5
+
+### Patch Changes
+
+- 94b5e2d: An LR2 skin now shows a source-qualified gauge pick (`beatoraja:EX-HARD`) by its gauge type: the option text, the gauge button's cell and the red-gauge ops read it as the bare gauge instead of showing the raw value on the first cell.
+- 488ba86: Pick the play skin of an LRX chart from its `lanetype`, as the engine does.
+- ac6a5be: Speed up `resolveLR2GaugeTypeOps`: it returns shared read-only op pairs and checks a bare gauge pick without splitting it.
+- 624db83: Give the LR2 result screen's bar graphs and progress slider their native IDs: graphs no longer show an unrelated statistic under a native type, a BATTLE play fills the 2P graphs (14, 30-37), and the best-record and target graphs (12, 13, 15) stay undrawn while the result carries no score history.
+- Updated dependencies: `@be-music/player-engine@0.19.0`, `@be-music/chart-model@0.12.0`, `@be-music/chart-source@0.9.0`, `@be-music/player-scene-model@0.10.0`, `@be-music/shared-utils@0.8.0`
+
 ## 0.7.4
 
 ### Patch Changes

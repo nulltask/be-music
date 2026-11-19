@@ -1,5 +1,11 @@
 # @be-music/worker-play
 
+## 0.1.8
+
+### Patch Changes
+
+- Updated dependencies: `@be-music/app-play@0.15.0`
+
 ## 0.1.7
 
 ### Patch Changes

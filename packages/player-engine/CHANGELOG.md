@@ -1,5 +1,78 @@
 # @be-music/player-engine
 
+## 0.19.0
+
+### Minor Changes
+
+- 3358b76: A course stage given up with ESC now follows the course gauge's source, as the stage failure rule does: LR2's course gauges go on to the next stage while the gauge is at 2 % or more and the stage judged a GOOD or better, as `LR2body.exe` does, and the course lamp is FAILED in the end; beatoraja's class gauges (and the `____` courses that run on them) and plugout end the run, as before. Before, every gauge ended the run, which LR2 does not.
+  
+  - `courseGoesOnAfterGivingUp` (from `@be-music/player-engine/course`) states the rule.
+  - `CourseRun.giveUp` returns `'next'` or `'finished'`, and `CourseRun.goesOnAfterGivingUp` asks before recording; an endless run always ends on a stage given up.
+  - `simulateCourseReplay` stops at a stage given up where the target's course gauge ends the run, and `rejudgeCourseReplay` marks a run that ended on one `truncated` under a ruleset whose course gauge goes on.
+  - A course on LR2's course gauge under another judge ruleset is FAILED when a stage in it was given up, as it is under LR2's own.
+- 7436dd8: A gauge pick can now name its source (`lr2:HARD`, `beatoraja:EX-HARD`, `____:ASSIST-EASY`) and keeps it under every judge ruleset: that source's gauge table and TOTAL reading, auto-shift ladder, fallback gauge, course gauges and clear lamp. `PlayerOptions.gauge`, replays (`play.gauge`, `play.gauge2P`) and re-judging accept it, a result names the source in `gauge.source`, and `splitGaugePick`, `isGaugePick`, `gaugePickType`, `resolveGaugePickSource` and `qualifyGaugePick` are exported. A bare gauge still means the judge ruleset's own.
+- 13d999a: Add `givenUpCourseStageShowsResult` to `@be-music/player-engine/course`: whether a course stage given up with ESC shows its result as FAILED before the run goes on or ends. LR2 shows it once the stage judged a GOOD or better; a gauge of another source shows none.
+- 212d164: LRX chain notes play as plugout plays them: in a judged play, each press that sounds a note (an empty press included) plays the chain notes tied to it, each as long after the press as it follows the note in the chart, and without a press they stay silent. Before, they played in the background at their own times; AUTO play still does that. A replay sought past a press starts its chain notes partway, as it does the press's keysound.
+- 46796b5: A NONSTOP course of LRX stages stitches into an LRX chart that keeps each note's sound values, chain notes and hidden notes, with its long notes as CNs. A course that mixes LRX with BMS or bmson, or LRX stages of different lane types, is refused (`lrx-mixed`, `lrx-layout-mismatch`).
+- 2831f33: Replays and ruleset chart facts record an LRX chart's format as `lrx` instead of `bms` (`chart.sourceFormat`). Its rank and TOTAL still read as a BMS chart's. Readers before this change reject such a replay.
+- f45d61a: Add `parseN2XCourseFile`, which reads a Nanasi Groove 2 chart list (`.n2x`, the `bmslist` Toy Musical 3 ships beside its charts) as an EXPERT course of its charts in order, without the unlock conditions. Its stages name their charts by the new `CourseStageRef.path` until a host binds them to the charts' hashes, and the course's source is `{ format: 'n2x' }`.
+- c81cc53: Export `arrangeChartPlayLanes`, the engine's arrangement of a chart's nanasigroove `774:RANDOM_*`, so a host plays a chart's ALL / ALL+ with the same shuffle under every judge ruleset instead of through an LR2 or beatoraja lane option.
+- 355fc10: nanasigroove's GOOD2BAD and GREAT2BAD keep every judgment and move the gauge as a BAD instead of collapsing the judge windows, HELLJUDGE narrows each window by nanasigroove's own ratio (PGREAT and GREAT 3/8, GOOD 1/3, BAD 1/4) instead of halving it, and ADDMINE places nanasigroove's mines through the new `NANASI_ADD` mine option. `PlayerOptions.playerChartPlayOptions` lets a player select GOOD2BAD / GREAT2BAD and HELLJUDGE. Replays recorded before this keep their earlier readings.
+- 5002b99: NOTES DOUBLE, COPY and DBLCOPY now convert the chart as nanasigroove does: DOUBLE copies whole lanes into others in nanasigroove's order and keeps one object per instant on each lane, COPY leaves the mines on 1P, and DBLCOPY copies before it doubles both sides. DOUBLE runs on 5, 7, 9, 10 and 14 KEY and is diagnosed as unsupported elsewhere. A version 1 or 2 chart gameplay program keeps the earlier mirror-lane reading, so existing replays play as recorded.
+- cce5da4: A play of the player's own nanasigroove NOTES COPY or DBLCOPY that copied the chart is now classified `no-save` (source `be-music`, `nanasi-notes:COPY` / `nanasi-notes:DBLCOPY`), since a record is of the chart's own key mode; a chart's own COPY and the player's DOUBLE, GOOD2BAD / GREAT2BAD and HELLJUDGE are unchanged. The replay records the player's options apart from the chart's in `play.playerChartPlayOptions`, which must match `chart.chartPlayOptions`, and `PlannedPlay` takes them so the planned record policy names the COPY as conditional.
+- 7accbed: Adds the `plugout` judge ruleset (revision `plugout/0`), plugout4 -ARCADE EDITION-'s rules read from its executable: fixed windows by rank, charge long notes whose end is a release (a key held 200 ms past the end and an early release are BADs, a scratch held to the end is a PGREAT), the NORMAL / EASY / HARD / HAZARD gauges and their EX variants, course gauges with grade lives, a score out of 100,000 and lamps up to PERFECT. It is in `RULESET_IDS`, replays and re-judging accept it, and the new gauge picks `EX-GROOVE`, `EX-EASY` and `EX-DEATH` reach the EX gauges.
+  
+  It also follows these plugout rules:
+  
+  - A single play keeps going when a survival gauge empties, as plugout plays the chart to its end.
+  - After a BAD the same press judges the lane's next note when that note lies less than 3 ms after the press.
+  - AUTO SCRATCH only sounds its notes, which are neither judged nor counted.
+  - An LRX chain note that starts its lane is judged but left out of the note count; replays mark such notes `uncounted`.
+  - A press with nothing to judge plays plugout's lane sound cursor: the last note a press judged, the lane's next note after a long note is let go, or a hidden note that played since, starting from the lane's first note.
+- 0da5638: Export `resolvePlugoutScore` from `@be-music/player-engine/ruleset`, so a host can show plugout's 100,000-point score for a summed course result.
+- 56e435f: PRACTICE can now play on another source's gauge under any judge ruleset. `PlayPractice.gauge` takes a source-qualified pick such as `beatoraja:ASSIST-EASY` under LR2 rules, which plays on that source's PRACTICE gauge and TOTAL reading with the judge ruleset's windows, as a qualified gauge pick does (ADR 0019). `splitPracticeGaugePick`, `isPracticeGaugePick` and `qualifyPracticeGaugePick` are exported.
+- 5b16c66: A looping PRACTICE play no longer drops the first beat of its bars: the seek back to the loop's start rebuilt the judge up to the time it overshot the end, so the notes on the range's first beat counted as already passed, and AUTO skipped them too. `applySeek` takes a `judgeFromSeconds` that the judge and the realtime audio go to, while the clock goes on from the time sought.
+  
+  A loop of picked bars is now seamless with rest bars after them too (`isSeamlessPracticeLoop`): it goes back the moment it reaches its end and draws the next round's notes through the rest, instead of waiting for the last judgments and dropping the next round's notes onto the lanes.
+  
+  `PlayPractice.carriedLongNotes` keeps a long note that starts before the range and ends in it, and starts the play early enough to play it from its head.
+- d088f5f: A PRACTICE play can now rest more or fewer bars around its range. `PlayPractice.restBarsBefore` and `restBarsAfter` (each absent is 1, as before; 0 starts and ends at the range itself) set how many whole bars `resolvePracticePlayWindow` adds before the first bar picked and after the last.
+- 05993ae: A PRACTICE play's first notes no longer start on the judgement line, and a loop with no rest after the bars no longer jumps. The first round starts a bar before the range even with `restBarsBefore` 0 (`PreparedPlaybackChartData.practiceLoopStartSeconds` is where each loop goes back to). With `restBarsAfter` 0 a looping play goes back the moment it reaches the range's end, carrying the time past it, and `renderNotes` draws the next round's notes past the end, so the loop runs on without a seam.
+- 130f80c: Export `resolveChartPlayProgram` from `@be-music/player-engine/replay` so players and replay verifiers can share the rules for resolving effective chart options and identifying which options the player contributed.
+- 33536f3: Replays can record each input source's device name, off by default. `InputSource.deviceName` carries the name a host reported (a browser's `Gamepad.id`), and the recorder keeps it in `play.inputSources` only under the new `ReplayRecordingOptions.includeDeviceNames`, with control characters removed and cut to 128 characters. `createInputSourceTable` takes `{ deviceNames: true }` to keep names, and `parseReplay` validates `deviceName` when present. The name is not part of a source's identity and judging never reads it.
+- 0269d96: Add `AudioSession.scheduleEventAt(event, outputSeconds)`: a session whose write head (`scheduledSeconds`) runs ahead of its output now gets each realtime sound the engine queues (background sounds, `#xxx97` / `#xxx98` volume changes, AUTO play's keysounds) with its due time on the output clock, so it can start it exactly then instead of on the tick that queued it. Sessions without it are unchanged: those sounds still go through `triggerEvent`.
+- e588b01: `fetchTableHeaderCourses` now returns the header's `data_url` as `dataURL`, resolved against the header URL, so a host can look up where to download a course's stages in the table's song list.
+
+### Patch Changes
+
+- fd3315f: Under the `____` ruleset a bare `DEATH` or `DEATH-CORRECTED` gauge outside a course is now refused with a `RangeError`, as every other bare gauge a ruleset lacks is (LR2's EX-HARD, the attack gauges outside LR2). It used to play silently as EX-HARD, while re-judging refused it and the Options dialog returned it to GROOVE. Re-judging now reports such a replay as `not-simulated` (`gauge`) under its own ruleset too, instead of failing inside the simulation. Other rulesets that accept the gauge use the old EX-HARD curve to recover the failure time. A course stage still plays `DEATH` on the class gauge, and another source's pick (`lr2:DEATH`) keeps its source's gauge.
+- 110dea8: Under the `____` ruleset a charge-note release inside the GOOD window is now a PGREAT, as community documentation of the game says GREAT and GOOD releases are upgraded to PGREAT; before, the borrowed beatoraja tail windows gave a GREAT or GOOD. The GOOD and BAD bounds and the empty-POOR window stay provisional, borrowed from beatoraja.
+- 203885f: Mines under AC judgment now follow LR2's mine policy instead of a provisional rule of their own: a key-down detonates a mine only ahead of the judge line, inside the GREAT window, a held key detonates it at the crossing, and each hit counts one POOR without breaking the combo. AC has no mines, so this is a Be-Music extension; replays re-judge under the imported policy.
+- 71e61f9: Speed up practice gauge validation, judgment window calculation, course stage setup, and replay simulation.
+- 232aebe: A host that aborts `holdAfterChart` before the chart is over now ends the play as soon as nothing is left to judge, instead of running on to the chart's end, so a play finished by ESC after its last judgment reaches its result without waiting out the remaining background sounds.
+- be797a5: NONSTOP carries a stage's `#EXWAVxx` `r` rate and drops an `#EXWAVxx` a later `#WAVxx` of the slot redefined.
+- cf287e6: beatoraja's gauges now run in single precision, as Java `float` does: the table, its TOTAL, LIMIT_INCREMENT and MODIFY_DAMAGE scaling, each delta and each sum round to float32, so a gauge near a border clears or fails as in beatoraja. LR2's per-note GROOVE and EASY gain is divided in float32 (`total / (float)notes`) while HP stays double.
+- 94b5e2d: LR2's GRADE-course reset of the EASY and G.ATTACK gauges accepts a source-qualified gauge pick: it reads the gauge type and keeps the source, so `beatoraja:EASY` plays the course on `beatoraja:GROOVE`.
+- b67cfb3: Under LR2 judgment, `#DEFEXRANK` and `#EXRANKxx` now scale the `#RANK 2` windows by their percentage, the base value the command's definition names: `#DEFEXRANK 120` is ±21.6 / ±48 / ±120 ms, where it was ±19.8 / ±52 / ±112 ms by interpolation between LR2's NORMAL and EASY ranks. bmson `judge_rank` and PRACTICE's JUDGERANK keep the interpolation. Replays re-judge with the new windows.
+- b5e9970: Support scratch destinations in LR2 S-RANDOM, SCATTER and CONVERGE while preserving their note placement and record rules.
+- 7011db4: An LRX chart's play ends where plugout ends it: at its end-of-song note, else 3 s after its last sound note.
+- e5dce2a: Count a sample with its own rate or release correctly in the debug estimate of the voices playing.
+- 346b21a: Lay out Nanasi Groove 2 `.n2s` charts as PMS: a 9 KEY chart named `.n2s` takes the PMS lane layout, and a NONSTOP stage from an `.n2s` file stitches as a `.pms` stage.
+- 87ae513: A chart's nanasigroove `774:RANDOM_RANDOM+` is recorded in the replay as its own lane value `RANDOM+` instead of beatoraja's `RANDOM-EX`, so a replay no longer reads as if the player chose beatoraja's option. The shuffle is unchanged, and replays recorded before keep `RANDOM-EX`.
+- d334392: A stitched NONSTOP chart now carries its first stage's `#STAGEFILE`, `#BANNER` (through `assetPath`), `#PLAYLEVEL` and `#DIFFICULTY`, as it does `#BACKBMP`, so the decide and play screens show the stage file and banner the NONSTOP entry stands for; before, they showed none. The map gives each stage's as `map.stages[].stageFile`, `banner`, `playLevel` and `difficulty`.
+- 7167234: Speed up replay re-judging and ruleset resolution, which had become several times slower:
+  
+  - `resolveRulesetConfig` counts a replay's notes in one pass and resolves a lane mode's scratch lanes once, instead of looking them up through the play-mode table on every call.
+  - Gauge picks are split by one table lookup, and bare picks skip the split.
+  - beatoraja's float32 gauge tables and class gauge rows are built without per-call closures and copies.
+  - `applyChartPlayOptions`, `createInputSourceTable`, `resolveCourseStageStartGauge` and the course and record lamp helpers build their results without spreading optional fields or deleting absent keys.
+- d921e63: Reuse the valid PMS RANDOM_PLAYABLE permutations when consecutive plays have the same chord constraints, and shorten the scan needed to read the selected permutation.
+  
+  Generate replay gauge histories from one simulation and find the closest notes for NONSTOP course inputs with a binary search.
+- 34a85f2: Resolve ruleset facts for unplayed course stages without preparing audio, rendering, or playback state.
+- bda45e3: A difficulty table's course read from `md5` now takes its stages' titles from the header's `song_title` (an extension some tables such as Stardust add) instead of the `course N` placeholder, so a stage that is not in the library shows its song.
+- Updated dependencies: `@be-music/chart-parser@0.8.0`, `@be-music/chart-model@0.12.0`, `@be-music/chart-source@0.9.0`, `@be-music/shared-utils@0.8.0`
+
 ## 0.18.0
 
 ### Minor Changes
