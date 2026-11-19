@@ -63,6 +63,25 @@ describe('discoverBeatorajaTheme', () => {
     expect(theme.resultSkin?.header.name).toBe('lua-result');
   });
 
+  it('resolves the module local to each Lua skin directory on every discovery', () => {
+    const entry = (type: number) => enc(`return { type = ${type}, name = require("parts"), w = 1280, h = 720 }`);
+    const files: Map<string, BeatorajaSkinFileEntry> = new Map([
+      ['skin/default/play7.luaskin', entry(0)],
+      ['skin/default/play5.luaskin', entry(1)],
+      ['skin/default/result/result.luaskin', entry(7)],
+      ['skin/default/parts.lua', enc('return "play"')],
+      ['skin/default/result/parts.LUA', enc('return "result"')],
+    ]);
+    const { theme, warnings } = discoverBeatorajaTheme(files);
+    expect(warnings).toEqual([]);
+    expect(theme.playSkins['7']?.header.name).toBe('play');
+    expect(theme.playSkins['5']?.header.name).toBe('play');
+    expect(theme.resultSkin?.header.name).toBe('result');
+
+    files.set('skin/default/parts.lua', enc('return "updated"'));
+    expect(discoverBeatorajaTheme(files).theme.playSkins['7']?.header.name).toBe('updated');
+  });
+
   it('skips unrelated JSON files outside skin/ without warnings', () => {
     const files: Map<string, BeatorajaSkinFileEntry> = new Map([
       ['beatoraja/practice/abc.json', enc('not-a-skin-just-state-bytes')],
