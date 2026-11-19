@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@be-music/service-auth-client": "workspace:*",
+    "@be-music/service-avatar": "workspace:*",
     "@be-music/service-web-theme": "workspace:*",
     "@be-music/shared-utils": "workspace:*",
     "@better-auth/oauth-provider": "1.7.21",

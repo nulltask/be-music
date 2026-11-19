@@ -174,7 +174,7 @@ What the replay (`ReplayPlay` in [`replay/format.ts`](../packages/player-engine/
 
 Replay fields with no matching option: `play.mode` (the judge strategy), `play.randomLane` and `play.dpFlip` (host lane options, applied through `preparedChart` and declared through `recordReplay`), `play.native`, and `play.aborted` / `play.abortedAtUs` (an outcome).
 
-Audio implementations are host-provided. `@be-music/player-node-audio` owns the Node session, sample decoding through `chart-audio-renderer`, and PCM output through `node-web-audio-api`. The engine owns the `AudioSession` contract and passes its resolved chart to the factory; an absent adapter means silent playback. The terminal installs the Node adapter, and the browser installs its Web Audio adapter. Optional diagnostic duration loading is injected too ([ADR 0011](./adr/0011-host-provided-audio.md)).
+Audio implementations are host-provided. `@be-music/player-node-audio` owns the Node session, sample decoding through `audio-sample`, and PCM output through `node-web-audio-api`. The engine owns the `AudioSession` contract and passes its resolved chart to the factory; an absent adapter means silent playback. The terminal installs the Node adapter, and the browser installs its Web Audio adapter. Optional diagnostic duration loading is injected too ([ADR 0011](./adr/0011-host-provided-audio.md)).
 
 ## Target architecture
 
@@ -183,7 +183,7 @@ This section defines the current package structure. New and moved code follows t
 ```mermaid
 flowchart TD
   subgraph data["Data"]
-    d["chart-source · chart-model · chart-parser<br/>chart-writer · chart-audio-renderer · shared-utils"]
+    d["chart-source · chart-model · chart-parser<br/>chart-writer · shared-utils"]
   end
   subgraph domain["Rules and engine — @be-music/player-engine"]
     rules["ruleset · replay<br/>course · records"]
@@ -208,6 +208,7 @@ flowchart TD
     tui["player-terminal"]
     nodeaudio["player-node-audio"]
     lb["app-leaderboard"]
+    dashboard["app-dashboard"]
   end
 
   d --> rules --> engine
@@ -221,8 +222,11 @@ flowchart TD
   views --> hostApi
   hostApi --> player
   engine --> nodeaudio --> tui
-  d --> nodeaudio
+  d --> sample["audio-sample"] --> nodeaudio
+  sample --> renderer["chart-audio-renderer"] --> tui
   rules --> lb
+  avatar["service-avatar"] --> lb
+  avatar --> dashboard
 ```
 
 An arrow points from a layer to a layer built on it.

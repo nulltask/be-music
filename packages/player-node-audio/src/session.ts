@@ -24,7 +24,7 @@ import {
   type SampleSliceEnvelope,
 } from '@be-music/shared-utils/core';
 import { type BeMusicEvent, normalizeChannel, normalizeObjectKey, resolveBMSBase } from '@be-music/chart-source';
-import { type RenderResult, renderSingleSample } from '@be-music/chart-audio-renderer';
+import { type RenderResult, renderSingleSample } from '@be-music/audio-sample';
 import { createNodeAudioSink, type AudioSink } from './audio-sink.ts';
 import type { AudioSession, CreateAudioSessionContext, PlayerOptions } from '@be-music/player-engine';
 

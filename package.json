@@ -39,6 +39,7 @@
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@be-music/audio-sample": "workspace:*",
     "@be-music/chart-audio-renderer": "workspace:*",
     "@be-music/chart-editor": "workspace:*",
     "@be-music/chart-model": "workspace:*",
@@ -54,6 +55,7 @@
     "@be-music/player-ui": "workspace:*",
     "@be-music/player-ui-react": "workspace:*",
     "@be-music/player-ui-vue": "workspace:*",
+    "@be-music/service-avatar": "workspace:*",
     "@be-music/shared-utils": "workspace:*",
     "@be-music/skin-beatoraja": "workspace:*",
     "@be-music/skin-lr2": "workspace:*",

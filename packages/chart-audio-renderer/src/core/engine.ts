@@ -1,8 +1,6 @@
 import {
   collectBmsWAVVolumeMultipliers,
   collectBmsWAVPlaybackModifiers,
-  resolveBmsWAVPlayback,
-  type BmsWAVPlaybackModifiers,
   firesBeforeTempoReversal,
   playsAtKeysoundVolume,
   resolveChart,
@@ -11,34 +9,32 @@ import {
   type TimedSampleTrigger,
   volWAVToLinearGain,
 } from '@be-music/chart-model';
-// `node:fs/promises` and `node:path` are loaded lazily inside the Node-only entry points (`renderChartFile`,
-// `writeAudioFile`, `getOrCreateSample`) so that bundling this module into a browser build doesn't statically
-// pull the Node built-ins into the browser bundle. Vite externalises `node:`-prefixed imports for browser
-// targets but emits a runtime error if any code path actually reaches them — keeping the imports dynamic
-// confines that error to the Node-specific paths the browser never executes (renderJSON / renderSingleSample
-// stay browser-safe because they don't touch disk).
+// Load filesystem adapters only when rendering from or writing to disk.
 type NodeFSPromises = typeof import('node:fs/promises');
 type NodePath = typeof import('node:path');
 let nodeFSPromisesPromise: Promise<NodeFSPromises> | undefined;
 let nodePathPromise: Promise<NodePath> | undefined;
 const loadNodeFSPromises = (): Promise<NodeFSPromises> => (nodeFSPromisesPromise ??= import('node:fs/promises'));
 const loadNodePath = (): Promise<NodePath> => (nodePathPromise ??= import('node:path'));
-import { normalizeObjectKey, type BeMusicJSON } from '@be-music/chart-source';
+import type { BeMusicJSON } from '@be-music/chart-source';
 import {
-  isAbortError,
   readSampleFrame,
   resolveSampleVoiceEnvelope,
   resolveStereoBalance,
   sampleSliceEnvelopeGain,
   SAMPLE_SLICE_FADE_SECONDS,
   throwIfAborted,
-  transformStereoPCM,
   type SampleSliceEnvelope,
 } from '@be-music/shared-utils/core';
 import { parseChartFile, resolveBMSControlFlow } from '@be-music/chart-parser';
 import { detectAudioFormat, encodeAIFF16, encodeWAV16 } from './file-codec.ts';
-import { createFallbackTone, decodeAudioSample, resampleLinear } from './decode.ts';
-import { resolveSamplePath } from './sample-path.ts';
+import {
+  createSampleLoader,
+  measurePeak,
+  type RenderSampleLoadProgress,
+  type RenderResult,
+  type StereoSample,
+} from '@be-music/audio-sample';
 export interface RenderOptions {
   sampleRate?: number;
   normalize?: boolean;
@@ -51,44 +47,6 @@ export interface RenderOptions {
   resolveTriggerGain?: (trigger: TimedSampleTrigger) => number;
   onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
   inferBmsLNTypeWhenMissing?: boolean;
-}
-
-export interface RenderSampleLoadProgress {
-  stage: 'resolving' | 'reading' | 'decoded' | 'cached' | 'fallback';
-  sampleKey: string;
-  samplePath?: string;
-  resolvedPath?: string;
-}
-
-export interface RenderResult {
-  sampleRate: number;
-  left: Float32Array;
-  right: Float32Array;
-  durationSeconds: number;
-  peak: number;
-}
-
-export interface RenderSingleSampleOptions {
-  /** Authored pitch, pan, frequency and sounding-time limit, applied before host tempo controls. */
-  playbackModifiers?: BmsWAVPlaybackModifiers;
-  sampleRate?: number;
-  gain?: number;
-  baseDir?: string;
-  fallbackToneSeconds?: number;
-  signal?: AbortSignal;
-  onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
-  /**
-   * Object-ID radix the supplied `sampleKey` was authored under. Defaults to base 36 (case-folded). Pass `62` for
-   * charts that declared `#BASE 62` so a lowercase `0a` key isn't re-folded back to `0A` during validation.
-   */
-  base?: 36 | 62;
-  /** The chart's `#PATH_WAV` directory, tried before the bare sample path. */
-  pathPrefix?: string;
-}
-
-interface StereoSample {
-  left: Float32Array;
-  right: Float32Array;
 }
 
 /** A BMS dynamic volume change from the resolved chart (`ResolvedChart.volumeChanges`). */
@@ -138,7 +96,6 @@ interface ScheduledSampleFrameWindow {
 const DEFAULT_SAMPLE_RATE = 44_100;
 const DEFAULT_TAIL_SECONDS = 2;
 const DEFAULT_GAIN = 0.9;
-const FALLBACK_SAMPLE_CACHE = new Map<string, StereoSample>();
 
 function advanceDynamicVolumeGain(
   changes: readonly DynamicVolumeChange[],
@@ -181,8 +138,6 @@ export async function renderJSON(json: BeMusicJSON, options: RenderOptions = {})
           firesBeforeTempoReversal(reversal, trigger.seconds, trigger.channel),
         );
 
-  const loadedSamples = new Map<string, StereoSample>();
-  const resolvedPathCache = new Map<string, string | undefined>();
   const { scheduled, maxFrame } = await scheduleSampleRenders({
     json,
     triggers,
@@ -191,8 +146,6 @@ export async function renderJSON(json: BeMusicJSON, options: RenderOptions = {})
     startSeconds,
     baseDir,
     fallbackToneSeconds,
-    loadedSamples,
-    resolvedPathCache,
     signal,
     onSampleLoadProgress,
     resolveTriggerGain,
@@ -238,8 +191,6 @@ async function scheduleSampleRenders(params: {
   startSeconds: number;
   baseDir: string;
   fallbackToneSeconds: number;
-  loadedSamples: Map<string, StereoSample>;
-  resolvedPathCache: Map<string, string | undefined>;
   signal?: AbortSignal;
   onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
   resolveTriggerGain?: (trigger: TimedSampleTrigger) => number;
@@ -253,8 +204,6 @@ async function scheduleSampleRenders(params: {
     startSeconds,
     baseDir,
     fallbackToneSeconds,
-    loadedSamples,
-    resolvedPathCache,
     signal,
     onSampleLoadProgress,
     resolveTriggerGain,
@@ -274,21 +223,17 @@ async function scheduleSampleRenders(params: {
   // MacBeat WAVCMD volume is a percentage (100 = unity). Pitch and duration are handled separately.
   const wavCmdVolumeMultipliers = collectBmsWAVVolumeMultipliers(json);
   const playbackModifiers = collectBmsWAVPlaybackModifiers(json);
+  const loadSample = createSampleLoader({
+    sampleRate,
+    baseDir,
+    fallbackToneSeconds,
+    signal,
+    onSampleLoadProgress,
+    pathPrefix: pathWAVPrefix,
+  });
   for (const trigger of triggers) {
     throwIfAborted(signal);
-    const sample = await getOrCreateSample({
-      sampleKey: trigger.sampleKey,
-      samplePath: trigger.samplePath,
-      sampleRate,
-      baseDir,
-      fallbackToneSeconds,
-      loadedSamples,
-      resolvedPathCache,
-      signal,
-      onSampleLoadProgress,
-      pathPrefix: pathWAVPrefix,
-      playbackModifiers: playbackModifiers.get(trigger.sampleKey),
-    });
+    const sample = await loadSample(trigger.sampleKey, trigger.samplePath, playbackModifiers.get(trigger.sampleKey));
     const frameWindow = resolveScheduledSampleFrameWindow(trigger, sampleRate, sample);
     if (!frameWindow) {
       continue;
@@ -472,36 +417,6 @@ function mixScheduledSamples(
   }
 }
 
-export async function renderSingleSample(
-  sampleKey: string,
-  samplePath: string | undefined,
-  options: RenderSingleSampleOptions = {},
-): Promise<RenderResult> {
-  const normalizedKey = normalizeObjectKey(sampleKey, options.base ?? 36);
-  const sampleRate = options.sampleRate ?? DEFAULT_SAMPLE_RATE;
-  const gain = typeof options.gain === 'number' && Number.isFinite(options.gain) ? options.gain : 1;
-  const baseDir = options.baseDir ?? process.cwd();
-  // Spec-compliant default: missing / undecodable samples are silent. Pass a positive value to opt into the
-  // debugging sine tone.
-  const fallbackToneSeconds = options.fallbackToneSeconds ?? 0;
-  throwIfAborted(options.signal);
-  const sample = await getOrCreateSample({
-    sampleKey: normalizedKey,
-    samplePath,
-    sampleRate,
-    baseDir,
-    pathPrefix: options.pathPrefix,
-    fallbackToneSeconds,
-    loadedSamples: new Map(),
-    resolvedPathCache: new Map(),
-    signal: options.signal,
-    onSampleLoadProgress: options.onSampleLoadProgress,
-    playbackModifiers: options.playbackModifiers,
-  });
-  throwIfAborted(options.signal);
-  return toRenderResult(sample, sampleRate, gain);
-}
-
 export async function renderChartFile(
   inputPath: string,
   outputPath: string,
@@ -524,175 +439,6 @@ export async function writeAudioFile(outputPath: string, result: RenderResult): 
   const format = detectAudioFormat(destination);
   const encoded = format === 'aiff' ? encodeAIFF16(result) : encodeWAV16(result);
   await writeFile(destination, encoded);
-}
-
-async function getOrCreateSample(params: {
-  playbackModifiers?: BmsWAVPlaybackModifiers;
-  sampleKey: string;
-  samplePath?: string;
-  sampleRate: number;
-  baseDir: string;
-  fallbackToneSeconds: number;
-  loadedSamples: Map<string, StereoSample>;
-  resolvedPathCache: Map<string, string | undefined>;
-  signal?: AbortSignal;
-  onSampleLoadProgress?: (progress: RenderSampleLoadProgress) => void;
-  pathPrefix?: string;
-}): Promise<StereoSample> {
-  const {
-    sampleKey,
-    samplePath,
-    sampleRate,
-    baseDir,
-    fallbackToneSeconds,
-    loadedSamples,
-    resolvedPathCache,
-    signal,
-    onSampleLoadProgress,
-    pathPrefix,
-    playbackModifiers,
-  } = params;
-  throwIfAborted(signal);
-
-  const cached = loadedSamples.get(sampleKey);
-  if (cached) {
-    onSampleLoadProgress?.({
-      stage: 'cached',
-      sampleKey,
-      samplePath,
-    });
-    return cached;
-  }
-
-  const originalFallback = getFallbackSample(sampleKey, sampleRate, fallbackToneSeconds);
-  const fallback = playbackModifiers
-    ? transformStereoPCM(
-        originalFallback.left,
-        originalFallback.right,
-        sampleRate,
-        sampleRate,
-        resolveBmsWAVPlayback(playbackModifiers, sampleRate),
-        signal,
-      )
-    : originalFallback;
-  if (!samplePath) {
-    loadedSamples.set(sampleKey, fallback);
-    onSampleLoadProgress?.({
-      stage: 'fallback',
-      sampleKey,
-      samplePath,
-    });
-    return fallback;
-  }
-
-  onSampleLoadProgress?.({
-    stage: 'resolving',
-    sampleKey,
-    samplePath,
-  });
-  // Cache key includes the `#PATH_WAV` prefix so two charts sharing a `baseDir` but different prefixes don't collide.
-  const cacheKey = `${baseDir}:${pathPrefix ?? ''}:${samplePath}`;
-  const resolvedPath = resolvedPathCache.has(cacheKey)
-    ? resolvedPathCache.get(cacheKey)
-    : await resolveSamplePath(baseDir, samplePath, signal, { pathPrefix });
-  resolvedPathCache.set(cacheKey, resolvedPath);
-
-  if (!resolvedPath) {
-    loadedSamples.set(sampleKey, fallback);
-    onSampleLoadProgress?.({
-      stage: 'fallback',
-      sampleKey,
-      samplePath,
-    });
-    return fallback;
-  }
-
-  try {
-    throwIfAborted(signal);
-    onSampleLoadProgress?.({
-      stage: 'reading',
-      sampleKey,
-      samplePath,
-      resolvedPath,
-    });
-    const { readFile } = await loadNodeFSPromises();
-    const buffer = await readFile(resolvedPath, { signal });
-    throwIfAborted(signal);
-    const decoded = await decodeAudioSample(buffer, resolvedPath, signal);
-    throwIfAborted(signal);
-    const rightSource = decoded.right ?? decoded.left;
-    const sample = playbackModifiers
-      ? transformStereoPCM(
-          decoded.left,
-          rightSource,
-          decoded.sampleRate,
-          sampleRate,
-          resolveBmsWAVPlayback(playbackModifiers, decoded.sampleRate),
-          signal,
-        )
-      : {
-          left: resampleLinear(decoded.left, decoded.sampleRate, sampleRate, signal),
-          right: resampleLinear(rightSource, decoded.sampleRate, sampleRate, signal),
-        };
-    loadedSamples.set(sampleKey, sample);
-    onSampleLoadProgress?.({
-      stage: 'decoded',
-      sampleKey,
-      samplePath,
-      resolvedPath,
-    });
-    return sample;
-  } catch (error) {
-    if (isAbortError(error)) {
-      throw error;
-    }
-    loadedSamples.set(sampleKey, fallback);
-    onSampleLoadProgress?.({
-      stage: 'fallback',
-      sampleKey,
-      samplePath,
-      resolvedPath,
-    });
-    return fallback;
-  }
-}
-
-function getFallbackSample(sampleKey: string, sampleRate: number, fallbackToneSeconds: number): StereoSample {
-  const cacheKey = `${sampleKey}:${sampleRate}:${fallbackToneSeconds}`;
-  const cached = FALLBACK_SAMPLE_CACHE.get(cacheKey);
-  if (cached) {
-    return cached;
-  }
-  const created = createFallbackTone(sampleKey, sampleRate, fallbackToneSeconds);
-  FALLBACK_SAMPLE_CACHE.set(cacheKey, created);
-  return created;
-}
-
-function toRenderResult(sample: StereoSample, sampleRate: number, gain: number): RenderResult {
-  const safeGain = Number.isFinite(gain) ? gain : 1;
-  if (safeGain === 1) {
-    return {
-      sampleRate,
-      left: sample.left,
-      right: sample.right,
-      durationSeconds: sample.left.length / sampleRate,
-      peak: measurePeak(sample.left, sample.right),
-    };
-  }
-
-  const left = new Float32Array(sample.left.length);
-  const right = new Float32Array(sample.right.length);
-  for (let index = 0; index < sample.left.length; index += 1) {
-    left[index] = sample.left[index] * safeGain;
-    right[index] = sample.right[index] * safeGain;
-  }
-  return {
-    sampleRate,
-    left,
-    right,
-    durationSeconds: left.length / sampleRate,
-    peak: measurePeak(left, right),
-  };
 }
 
 function mixSample(
@@ -805,21 +551,6 @@ function mixSampleVoice(
     destinationLeft[target] += readSampleFrame(sample.left, sourceStart + played) * leftGain * envelope;
     destinationRight[target] += readSampleFrame(sample.right, sourceStart + played) * rightGain * envelope;
   }
-}
-
-function measurePeak(left: Float32Array, right: Float32Array): number {
-  let peak = 0;
-  for (let index = 0; index < left.length; index += 1) {
-    const absLeft = Math.abs(left[index]);
-    const absRight = Math.abs(right[index]);
-    if (absLeft > peak) {
-      peak = absLeft;
-    }
-    if (absRight > peak) {
-      peak = absRight;
-    }
-  }
-  return peak;
 }
 
 function scalePCM(channel: Float32Array, scale: number): void {

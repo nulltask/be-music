@@ -437,7 +437,7 @@ pnpm bench -- --packages player-browser
 
 ## Compatibility boundary
 
-The browser player consumes `chart-parser`, `chart-model`, `player-engine`, `player-scene-model`, `player-skin-sdk`, `shared-utils`, and the LR2/beatoraja skin packages. Native Skin uses `player-ui` for presentation. Node decoding and output belong to `player-node-audio` through `chart-audio-renderer`; browser audio uses its Web Audio adapter.
+The browser player consumes `chart-parser`, `chart-model`, `player-engine`, `player-scene-model`, `player-skin-sdk`, `shared-utils`, and the LR2/beatoraja skin packages. Native Skin uses `player-ui` for presentation. Node decoding and output belong to `player-node-audio` through `audio-sample`; browser audio uses its Web Audio adapter.
 When browser behavior diverges from the terminal player, prefer moving pure path, timing, scroll, lookup, or event-mapping helpers into shared packages and covering them with package-local tests.
 PixiJS scene wiring can remain in `player-browser` when the behavior depends on browser rendering or WebAudio resources.
 

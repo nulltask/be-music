@@ -28,7 +28,7 @@
     "bench": "node --conditions=source scripts/bench.ts"
   },
   "dependencies": {
-    "@be-music/chart-audio-renderer": "workspace:*",
+    "@be-music/audio-sample": "workspace:*",
     "@be-music/chart-model": "workspace:*",
     "@be-music/chart-source": "workspace:*",
     "@be-music/player-engine": "workspace:*",

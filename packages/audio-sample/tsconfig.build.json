@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "compilerOptions": {
+    "declaration": true,
+    "isolatedDeclarations": true,
+    "allowImportingTsExtensions": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "emitDeclarationOnly": true
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"]
+}

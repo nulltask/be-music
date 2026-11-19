@@ -64,6 +64,7 @@ jobs:
               - '.github/workflows/ci.yml'
             sea_player:
               - 'packages/player-engine/**'
+              - 'packages/audio-sample/**'
               - 'packages/chart-audio-renderer/**'
               - 'packages/chart-parser/**'
               - 'packages/chart-source/**'
@@ -75,6 +76,7 @@ jobs:
               - 'tsconfig*.json'
               - 'packages/*/tsconfig*.json'
             sea_audio_renderer:
+              - 'packages/audio-sample/**'
               - 'packages/chart-audio-renderer/**'
               - 'packages/chart-parser/**'
               - 'packages/chart-source/**'
