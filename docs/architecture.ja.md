@@ -174,7 +174,7 @@ flowchart TD
 
 対応するオプションがないリプレイのフィールド：`play.mode`（判定ストラテジー）、`play.randomLane` と `play.dpFlip`（ホストのレーンオプション。`preparedChart` で適用し、`recordReplay` で宣言します）、`play.native`、`play.aborted` / `play.abortedAtUs`（結果）。
 
-音声実装はホストが提供します。`@be-music/player-node-audio` が Node セッション、`chart-audio-renderer` によるサンプルのデコード、`node-web-audio-api` による PCM 出力を所有します。エンジンは `AudioSession` 契約を持ち、自身の解決済み譜面をファクトリーへ渡します。未指定なら無音再生です。ターミナルは Node アダプター、ブラウザーは Web Audio アダプターを設定し、デバッグ用のサンプル長読み込みも注入します（[ADR 0011](./adr/0011-host-provided-audio.ja.md)）。
+音声実装はホストが提供します。`@be-music/player-node-audio` が Node セッション、`audio-sample` によるサンプルのデコード、`node-web-audio-api` による PCM 出力を所有します。エンジンは `AudioSession` 契約を持ち、自身の解決済み譜面をファクトリーへ渡します。未指定なら無音再生です。ターミナルは Node アダプター、ブラウザーは Web Audio アダプターを設定し、デバッグ用のサンプル長読み込みも注入します（[ADR 0011](./adr/0011-host-provided-audio.ja.md)）。
 
 ## 目指す構造
 
@@ -183,7 +183,7 @@ flowchart TD
 ```mermaid
 flowchart TD
   subgraph data["データ"]
-    d["chart-source · chart-model · chart-parser<br/>chart-writer · chart-audio-renderer · shared-utils"]
+    d["chart-source · chart-model · chart-parser<br/>chart-writer · shared-utils"]
   end
   subgraph domain["規則とエンジン — @be-music/player-engine"]
     rules["ruleset · replay<br/>course · records"]
@@ -208,6 +208,7 @@ flowchart TD
     tui["player-terminal"]
     nodeaudio["player-node-audio"]
     lb["app-leaderboard"]
+    dashboard["app-dashboard"]
   end
 
   d --> rules --> engine
@@ -221,8 +222,11 @@ flowchart TD
   views --> hostApi
   hostApi --> player
   engine --> nodeaudio --> tui
-  d --> nodeaudio
+  d --> sample["audio-sample"] --> nodeaudio
+  sample --> renderer["chart-audio-renderer"] --> tui
   rules --> lb
+  avatar["service-avatar"] --> lb
+  avatar --> dashboard
 ```
 
 矢印は、あるレイヤーからその上に作られたレイヤーへ向かいます。

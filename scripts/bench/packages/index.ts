@@ -1,4 +1,6 @@
 import { playerUIBenchmarkPackage, playerUIReactBenchmarkPackage, playerUIVueBenchmarkPackage } from './player-ui.ts';
+import { audioSampleBenchmarkPackage } from './audio-sample.ts';
+import { serviceAvatarBenchmarkPackage } from './service-avatar.ts';
 import { nodeAudioBenchmarkPackage } from './player-node-audio.ts';
 import {
   PACKAGE_NAMES,
@@ -28,6 +30,8 @@ export const PACKAGE_DEFINITIONS: Record<PackageName, BenchmarkPackageDefinition
   'chart-parser': parserBenchmarkPackage,
   'chart-writer': stringifierBenchmarkPackage,
   'chart-editor': editorBenchmarkPackage,
+  'audio-sample': audioSampleBenchmarkPackage,
+  'service-avatar': serviceAvatarBenchmarkPackage,
   'chart-audio-renderer': audioRendererBenchmarkPackage,
   'player-engine': playerBenchmarkPackage,
   'player-node-audio': nodeAudioBenchmarkPackage,

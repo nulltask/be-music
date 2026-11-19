@@ -58,6 +58,7 @@ Each package's README covers its usage, options and compatibility status.
 - [`@be-music/shared-utils`](./packages/shared-utils/README.md): Generic utilities reused across all packages, with narrow subpath exports for browser-safe core helpers and Node-facing helpers
 - [`@be-music/chart-parser`](./packages/chart-parser/README.md): `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / `.n2s` / LRX / JSON parser
 - [`@be-music/chart-writer`](./packages/chart-writer/README.md): Stringization from JSON to `.bms` / `.bmson`
+- [`@be-music/audio-sample`](./packages/audio-sample/README.md) resolves individual chart samples and decodes them to stereo PCM.
 - [`@be-music/chart-audio-renderer`](./packages/chart-audio-renderer/README.md): Render the music score and output `.wav` / `.aiff`
 - [`@be-music/player-engine`](./packages/player-engine/README.md): Shared rules and playback engine: one play loop (manual, auto, replay), judgment, scoring, gauges and clear lamps, best records, course runs and NONSTOP, the replay format, and the runtime contracts hosts plug into
 - [`@be-music/player-node-audio`](./packages/player-node-audio/README.md): Host adapter for Node audio sessions, sample decoding, and PCM output
@@ -72,6 +73,7 @@ Each package's README covers its usage, options and compatibility status.
 - [`@be-music/app-leaderboard`](./packages/app-leaderboard/README.md): Private Leaderboard API on Cloudflare Workers: replay submission, verification by re-simulation, and rankings
 - [`@be-music/app-dashboard`](./packages/app-dashboard/README.md): Private service dashboard and the Accounts service: the OIDC provider for sign-in, passkeys, and linked providers
 - [`@be-music/worker-play`](./packages/worker-play/README.md): Player delivery Worker for static assets, OIDC sessions, settings, Leaderboard forwarding, and URL/media proxies
+- [`@be-music/service-avatar`](./packages/service-avatar/README.md) validates avatar uploads, derives storage keys and generates default images.
 - [`@be-music/service-auth-client`](./packages/service-auth-client/README.md): Shared OIDC client, service sessions, and API token verification
 - [`@be-music/service-web-theme`](./packages/service-web-theme/README.md): Shared service styles and Lit views, with separate client and server entries
 - [`@be-music/chart-editor`](./packages/chart-editor/README.md): CLI editor (import/edit/export)
@@ -104,16 +106,21 @@ flowchart TD
     tui["player-terminal"]
     nodeaudio["player-node-audio"]
     lb["app-leaderboard"]
+    dashboard["app-dashboard"]
     web["player-browser"]
     app["app-play"]
   end
 
   chart-writer --> editor
   parser --> player
-  renderer --> nodeaudio
+  chart --> sample["audio-sample"] --> renderer
+  sample --> nodeaudio
+  renderer --> tui
   player --> scene
   player --> nodeaudio --> tui
   player --> lb
+  avatar["service-avatar"] --> lb
+  avatar --> dashboard
   scene --> sdk
   scene --> lr2 --> beatoraja
   sdk --> ui --> web

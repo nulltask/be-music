@@ -58,6 +58,7 @@ Be-Music は BMS・bmson 譜面を扱うオープンソースのツールキッ�
 - [`@be-music/shared-utils`](./packages/shared-utils/README.ja.md): 全パッケージで再利用する汎用ユーティリティ。browser-safe な core helper と Node 向け helper は狭い subpath export で分けています
 - [`@be-music/chart-parser`](./packages/chart-parser/README.ja.md): `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / `.n2s` / LRX / JSON のパーサ
 - [`@be-music/chart-writer`](./packages/chart-writer/README.ja.md): JSON から `.bms` / `.bmson` への文字列化
+- [`@be-music/audio-sample`](./packages/audio-sample/README.ja.md) は譜面の音声サンプルを解決し、ステレオ PCM に変換します。
 - [`@be-music/chart-audio-renderer`](./packages/chart-audio-renderer/README.ja.md): 譜面をレンダリングして `.wav` / `.aiff` を出力
 - [`@be-music/player-engine`](./packages/player-engine/README.ja.md): 規則と再生 engine を共有する package。1 つのプレイループ（手動・AUTO・リプレイ）、判定、score、gauge とクリアランプ、自己ベスト、コースの実行と NONSTOP、リプレイの形式、ホストが差し込む runtime 契約
 - [`@be-music/player-node-audio`](./packages/player-node-audio/README.ja.md): Node 用の音声セッション、サンプルデコード、PCM 出力を提供するホストアダプター
@@ -72,6 +73,7 @@ Be-Music は BMS・bmson 譜面を扱うオープンソースのツールキッ�
 - [`@be-music/app-leaderboard`](./packages/app-leaderboard/README.ja.md): Cloudflare Workers で動く private な Leaderboard API。リプレイの投稿、再シミュレーションによる検証、ランキング
 - [`@be-music/app-dashboard`](./packages/app-dashboard/README.ja.md): 非公開のサービスダッシュボードと Accounts サービス（ログイン、パスキー、連携プロバイダーを扱う OIDC プロバイダー）
 - [`@be-music/worker-play`](./packages/worker-play/README.ja.md): 静的アセット、OIDC セッション、設定、Leaderboard 転送、URL・メディアプロキシを扱うプレイヤー配信用 Worker
+- [`@be-music/service-avatar`](./packages/service-avatar/README.ja.md) はアバター画像の検証、保存キーの決定、既定画像の生成を担当します。
 - [`@be-music/service-auth-client`](./packages/service-auth-client/README.ja.md): 共通の OIDC クライアント、サービスセッション、API トークン検証
 - [`@be-music/service-web-theme`](./packages/service-web-theme/README.ja.md): クライアントとサーバーのエントリーを分けた、サービス共通のスタイルと Lit ビュー
 - [`@be-music/chart-editor`](./packages/chart-editor/README.ja.md): CLI エディタ (インポート・編集・エクスポート)
@@ -104,16 +106,21 @@ flowchart TD
     tui["player-terminal"]
     nodeaudio["player-node-audio"]
     lb["app-leaderboard"]
+    dashboard["app-dashboard"]
     web["player-browser"]
     app["app-play"]
   end
 
   chart-writer --> editor
   parser --> player
-  renderer --> nodeaudio
+  chart --> sample["audio-sample"] --> renderer
+  sample --> nodeaudio
+  renderer --> tui
   player --> scene
   player --> nodeaudio --> tui
   player --> lb
+  avatar["service-avatar"] --> lb
+  avatar --> dashboard
   scene --> sdk
   scene --> lr2 --> beatoraja
   sdk --> ui --> web

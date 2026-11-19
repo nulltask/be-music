@@ -2,11 +2,11 @@ import { describe, expect, test, vi } from 'vite-plus/test';
 import { resolveChart } from '@be-music/chart-model';
 import { createEmptyJSON } from '@be-music/chart-source';
 import { createNodeAudioSession, loadNodeAudioSampleDurations } from './index.ts';
-import { renderSingleSample } from '@be-music/chart-audio-renderer';
+import { renderSingleSample } from '@be-music/audio-sample';
 import { createNodeAudioSink } from './audio-sink.ts';
 import { mixActiveVoices, resolveVoiceFrameWindow, type ActiveVoice } from './session.ts';
 
-vi.mock('@be-music/chart-audio-renderer', () => ({
+vi.mock('@be-music/audio-sample', () => ({
   renderSingleSample: vi.fn(async () => ({
     sampleRate: 44_100,
     left: new Float32Array(0),

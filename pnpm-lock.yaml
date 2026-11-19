@@ -199,6 +199,9 @@ importers:
 
   .:
     devDependencies:
+      '@be-music/audio-sample':
+        specifier: workspace:*
+        version: link:packages/audio-sample
       '@be-music/chart-audio-renderer':
         specifier: workspace:*
         version: link:packages/chart-audio-renderer
@@ -244,6 +247,9 @@ importers:
       '@be-music/player-ui-vue':
         specifier: workspace:*
         version: link:packages/player-ui-vue
+      '@be-music/service-avatar':
+        specifier: workspace:*
+        version: link:packages/service-avatar
       '@be-music/shared-utils':
         specifier: workspace:*
         version: link:packages/shared-utils
@@ -292,6 +298,9 @@ importers:
       '@be-music/service-auth-client':
         specifier: workspace:*
         version: link:../service-auth-client
+      '@be-music/service-avatar':
+        specifier: workspace:*
+        version: link:../service-avatar
       '@be-music/service-web-theme':
         specifier: workspace:*
         version: link:../service-web-theme
@@ -341,6 +350,9 @@ importers:
       '@be-music/service-auth-client':
         specifier: workspace:*
         version: link:../service-auth-client
+      '@be-music/service-avatar':
+        specifier: workspace:*
+        version: link:../service-avatar
       '@be-music/service-web-theme':
         specifier: workspace:*
         version: link:../service-web-theme
@@ -488,14 +500,11 @@ importers:
         specifier: ^4.155.0
         version: 4.155.0(@cloudflare/workers-types@5.20261022.1)(@types/node@26.6.5)
 
-  packages/chart-audio-renderer:
+  packages/audio-sample:
     dependencies:
       '@be-music/chart-model':
         specifier: workspace:*
         version: link:../chart-model
-      '@be-music/chart-parser':
-        specifier: workspace:*
-        version: link:../chart-parser
       '@be-music/chart-source':
         specifier: workspace:*
         version: link:../chart-source
@@ -511,6 +520,24 @@ importers:
       ogg-opus-decoder:
         specifier: ^1.7.5
         version: 1.7.5
+
+  packages/chart-audio-renderer:
+    dependencies:
+      '@be-music/audio-sample':
+        specifier: workspace:*
+        version: link:../audio-sample
+      '@be-music/chart-model':
+        specifier: workspace:*
+        version: link:../chart-model
+      '@be-music/chart-parser':
+        specifier: workspace:*
+        version: link:../chart-parser
+      '@be-music/chart-source':
+        specifier: workspace:*
+        version: link:../chart-source
+      '@be-music/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
 
   packages/chart-editor:
     dependencies:
@@ -649,9 +676,9 @@ importers:
 
   packages/player-node-audio:
     dependencies:
-      '@be-music/chart-audio-renderer':
+      '@be-music/audio-sample':
         specifier: workspace:*
-        version: link:../chart-audio-renderer
+        version: link:../audio-sample
       '@be-music/chart-model':
         specifier: workspace:*
         version: link:../chart-model
@@ -811,6 +838,12 @@ importers:
       tinybench:
         specifier: ^6.2.1
         version: 6.2.2
+
+  packages/service-avatar:
+    dependencies:
+      '@be-music/shared-utils':
+        specifier: workspace:*
+        version: link:../shared-utils
 
   packages/service-web-theme:
     dependencies:

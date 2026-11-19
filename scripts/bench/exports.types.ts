@@ -8,6 +8,8 @@ export const PACKAGE_NAMES = [
   'chart-parser',
   'chart-writer',
   'chart-editor',
+  'audio-sample',
+  'service-avatar',
   'chart-audio-renderer',
   'player-engine',
   'player-node-audio',

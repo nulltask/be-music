@@ -29,6 +29,7 @@
     "@be-music/chart-model": "workspace:*",
     "@be-music/player-engine": "workspace:*",
     "@be-music/service-auth-client": "workspace:*",
+    "@be-music/service-avatar": "workspace:*",
     "@be-music/service-web-theme": "workspace:*",
     "@be-music/shared-utils": "workspace:*",
     "@better-auth/passkey": "^1.7.21",

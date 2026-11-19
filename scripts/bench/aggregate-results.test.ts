@@ -26,6 +26,8 @@ function createSnapshot(
       'chart-parser': [],
       'chart-writer': [],
       'chart-editor': [],
+      'audio-sample': [],
+      'service-avatar': [],
       'chart-audio-renderer': [],
       'player-engine': [],
       'player-node-audio': [],

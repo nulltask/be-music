@@ -4,3 +4,9 @@
  * `@be-music/chart-model`'s.
  */
 export * from './core/engine.ts';
+export {
+  renderSingleSample,
+  type RenderSingleSampleOptions,
+  type RenderResult,
+  type RenderSampleLoadProgress,
+} from '@be-music/audio-sample';

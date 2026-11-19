@@ -28,12 +28,10 @@
     "bench": "node --conditions=source scripts/bench.ts"
   },
   "dependencies": {
+    "@be-music/audio-sample": "workspace:*",
     "@be-music/chart-model": "workspace:*",
     "@be-music/chart-parser": "workspace:*",
     "@be-music/chart-source": "workspace:*",
-    "@be-music/shared-utils": "workspace:*",
-    "@wasm-audio-decoders/ogg-vorbis": "^0.1.20",
-    "mpg123-decoder": "^1.0.3",
-    "ogg-opus-decoder": "^1.7.5"
+    "@be-music/shared-utils": "workspace:*"
   }
 }

@@ -7,6 +7,8 @@ const workspacePackages = [
   'chart-model',
   'chart-parser',
   'chart-writer',
+  'audio-sample',
+  'service-avatar',
   'chart-audio-renderer',
   'player-engine',
   'player-node-audio',
