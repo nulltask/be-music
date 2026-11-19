@@ -23,9 +23,34 @@
 
 ## 対応状況の要約
 
-- 対応レベル: 未対応
+- 対応レベル: 一部対応（Web プレイヤーが Bemuse 音楽サーバーを読める。パーサー・CLI・ライターは未対応）
 - 方針: bemuse を「譜面形式」ではなく「配布コンテナ」として扱う
 - 変換方針: `@be-music/chart-source` の `sourceFormat` は `bms` / `bmson` を維持し、bemuse は入力解決レイヤで吸収する
+
+## Web プレイヤー（`@be-music/app-play`）
+
+Options → Library & records → Bemuse music servers でサーバー URL を登録する。プレイヤーが一覧を変えるまでは、公開されているサーバー（`DEFAULT_BEMUSE_SERVER_URLS`）が入っている。Bemuse の公式サーバー（`music4.bemuse.ninja/server`）と、Bemuse のドキュメントとサーバー一覧（[bemuse-meta `servers.yml`](https://github.com/bemusic/bemuse-meta/blob/master/servers.yml)）が載せていて今も曲を配信しているサーバー、すなわち `flicknote.bemuse.ninja`、`bmson.nekokan.dyndns.info` の METTATUNES と The Forgetalia（CORS ヘッダを返さないのでプロキシ経由で読む）、`yuinore.net/bms` である。「既定のサーバーを追加」で一覧にない既定サーバーを登録し直せる。URL は `localStorage`（`be-music.bemuse-server-urls`）に保存し、Options の設定（`bemuseServerURLs`）としてプレイヤーの他のブラウザにも同期し、プレイヤーを開くたびに読み込む。サーバー URL は Bemuse が `?server=` を解決するのと同じ規則で index に解決する（`bemuseServerIndexURL`）。
+
+- 各サーバーは遅延ファイルで組んだライブラリのフォルダ `Bemuse <host/path>/<曲フォルダ>/…` になる（`services/bemuse-servers.ts`）。一覧化で取得するのは `index.json`、各曲の `assets/metadata.json` と譜面ファイル。
+- サーバーへのリクエストをできるだけ減らし、サーバーに届かない間も一覧に出せるよう、サーバーから読んだものをこのブラウザに保存する。
+  - index は Cache Storage（`be-music-remote-v1`、`services/remote-cache.ts`）に保存し、1 日のあいだ使う（`BEMUSE_INDEX_MAX_AGE_MS`）。フォルダの再読み込み（F8 / F2、または Options → Library & records → Reload folders）では期限を待たずに取り直す。期限が来た index は再検証（`cache: 'no-cache'`）として取りに行くので、検証子を返すサーバーは変わっていなければ 304 で答える。サーバーに届かないときは前回保存した index で一覧に出す。
+  - 曲の `assets/metadata.json`、譜面ファイル、既定のプレビューの有無は、曲のバージョン（index がその曲について書いている内容のハッシュ）と一緒に保存する。取り直すのは index の曲の記述が変わったときだけである（既定のプレビューがなかった場合は 1 週間後に確かめ直す）。index の記述が同じまま曲を詰め直すと、保存した資産インデックスがサーバーにもうないチャンクを指す。その場合、最初に読めなかったパッケージ内のファイルで資産インデックスを 1 回だけ取り直し、新しいほうから読む。
+  - 譜面の `charts[].md5` は曲のバージョンに含まれるので、index の譜面の記述が変われば取り直す。譜面のバイト列は MD5 と照合しない。ファイルと違う MD5 を載せているサーバーがあり、照合するとその譜面を毎回取りに行ってしまうからである。以前のビルドは MD5 をキーに `be-music-bemuse-charts` に譜面を保存していたが、今はこのキャッシュを削除する。
+  - このため、1 日以内にプレイヤーを開き直したときは、曲を遊ぶまでサーバーに 1 件もリクエストを送らない。
+- パッケージ内の音声ファイルは、プレイが開いたときに `*.bemuse` チャンクから切り出す。最近のチャンクの payload はメモリに保持する（32 チャンク）が、切り出したファイルのバイト列は保持しない。チャンクは Cache Storage（`be-music-bemuse-chunks`、`services/bemuse-chunk-store.ts`）にも URL をキーに保存する。チャンクの名前は payload のハッシュを含むので、保存したチャンクを取り直すことはない。保存するのは `refs[].hash` があり、payload の MD5 が一致したチャンクだけである。保存するチャンクは合計 1 GiB まで（`BEMUSE_CHUNK_BUDGET_BYTES`）で、超えた分は最後に使ったのが古いものから消す。サイズと使った時刻は `localStorage`（`be-music.bemuse-chunk-cache`）の一覧で管理する。
+- パッケージ外のファイルは Bemuse に従う。パッケージのある曲は `fallbackPattern`（`/\.(?:png|jpg|webm|mp4|m4v)/`）に一致する名前だけをパッケージの横から読み、`bemusepack_url: null` の曲はすべてのファイルを読む。音声は `SamplesLoader` が試す名前（`.ogg`、`.m4a`、`.flac`、`.mp3`、元の名前）で読む。サーバーはファイル一覧を出せないので、譜面が名指すファイルは譜面テキストから読む（`scanChartFileReferences`）。
+- ブラウザが遮ったリクエスト（CORS ヘッダなし）はプレイヤーのプロキシ（`/__url-load-proxy`）経由で送り直し、プロキシがサーバーに届いたら以後そのオリジンへのリクエストは直接プロキシに送る（`services/bemuse-fetch.ts`）。そのオリジンは `localStorage`（`be-music.bemuse-proxied-origins`、最新 64 件）に保存し、nekokan のサーバーのオリジン（`KNOWN_PROXIED_BEMUSE_ORIGINS`）は初回からプロキシに送る。これにより、ブラウザが CORS エラーを記録するのは訪問のたびではなく、1 つのオリジンにつき多くて 1 回になる。
+
+index が譜面以外に持つ曲の情報は、解析後の譜面に載せる（`applyBemuseSongExtras`）。譜面が持たないものだけを埋める。いずれも譜面フィンガープリントには含まれず（BGA・動画・プレビュー・音量は対象外）、譜面ファイルは配信されたままなので、ハッシュと記録はディスクから読んだ同じ譜面と同じになる。
+
+| フィールド                                  | Bemuse                                                                        | Be-Music                                                                                                               |
+| ------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `preview_url`（既定 `_bemuse_preview.mp3`） | 曲一覧で再生する。チュートリアルにはない                                      | `#PREVIEW` / `preview_music` のない譜面のプレビュー。既定のファイルは HEAD で存在を確かめたときだけ使う                |
+| `video_url` / `video_file`、`video_offset`  | 譜面の `video_offset` 秒から動画を頭から再生する。譜面の BGA 画像は表示しない | その秒に BGA キューを足す。曲が配信する BGA を譜面が持たないときだけ（表示できるなら譜面自身の BGA を出す）            |
+| `eyecatch_image_url`                        | 曲の読み込み中に表示する                                                      | 譜面に `#STAGEFILE` がなければそれにする                                                                               |
+| `back_image_url`                            | プレイの背面に表示する                                                        | 譜面に `#BACKBMP` がなければそれにする                                                                                 |
+| `replaygain`                                | 音量 `10^((gain + 4) / 20)`。欠落や `"<n> dB"` 以外は `-12.2 dB`              | 同じゲインを譜面の `#VOLWAV` のゲインに掛ける（`0 < n < 200` の範囲に収める）。Options の「Bemuse ReplayGain」で切れる |
+| `preview_start`                             | プレイヤーでは使わない（プレビューファイルの作成時に使う）                    | 使わない                                                                                                               |
 
 ## 形式概要
 
@@ -91,7 +116,7 @@
 - [ ] `bemuse-song.json` 単体入力を受理
 - [ ] `?server=<url>` で `index.json` 省略時に自動補完して解決
 - [ ] `?server=<url/to/bemuse-song.json>` を single-song server として解決
-- [ ] `bemusepack_url` の `undefined/null/string` を規則通りに解決
+- [x] `bemusepack_url` の `undefined/null/string` を規則通りに解決（Web プレイヤー）
 - [ ] `bemusepack_url` 文字列を `assetsBase` と `metadataFilename` に分解して解決
 - [ ] `assets/metadata.json` を読み、`files[].name` を大小文字非区別で参照
 - [ ] `*.bemuse` の `BEMUSEPACK` / `metadataLength` を検証
@@ -117,14 +142,14 @@
 
 ### player / chart-audio-renderer
 
-- [ ] 入力として `index.json` / `bemuse-song.json` を受理
-- [ ] keysound は `assets/metadata.json` + `*.bemuse` から解決
-- [ ] package 未収録の画像/動画は base resources へ fallback
-- [ ] `refs[].hash` をキーにキャッシュ戦略を適用
-- [ ] 画像/動画 fallback の対象拡張子を `png|jpg|webm|mp4|m4v` に固定
-- [ ] `preview_url` 未指定時の既定値 `_bemuse_preview.mp3` を解決
-- [ ] `video_url` が `video_file` を上書きする規則を適用
-- [ ] `video_offset` を動画再生開始位置へ反映
+- [x] 入力として `index.json` / `bemuse-song.json` を受理（Web プレイヤー）
+- [x] keysound は `assets/metadata.json` + `*.bemuse` から解決（Web プレイヤー）
+- [x] package 未収録の画像/動画は base resources へ fallback（Web プレイヤー）
+- [x] `refs[].hash` をキーにキャッシュ戦略を適用（Web プレイヤー）
+- [x] 画像/動画 fallback の対象拡張子を `png|jpg|webm|mp4|m4v` に固定（Web プレイヤー）
+- [x] `preview_url` 未指定時の既定値 `_bemuse_preview.mp3` を解決（Web プレイヤー）
+- [x] `video_url` が `video_file` を上書きする規則を適用（Web プレイヤー）
+- [x] `video_offset` を動画再生開始位置へ反映（Web プレイヤー）
 
 ## MVP 受け入れ基準
 

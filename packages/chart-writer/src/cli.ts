@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolveCLIPath } from '@be-music/shared-utils/cli-path';
-import { parseChart } from '@be-music/chart-parser';
+import { parseChart } from '@be-music/chart-parser/core';
 import { stringifyBmson, stringifyBMS } from './index.ts';
 
 interface CLIArgs {

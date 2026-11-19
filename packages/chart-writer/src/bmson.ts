@@ -15,7 +15,7 @@ import {
   resolveLNOBJLongNotes,
   sortEvents,
 } from '@be-music/chart-model';
-import { parseBmson } from '@be-music/chart-parser';
+import { parseBmson } from '@be-music/chart-parser/core';
 import {
   normalizeChannel,
   normalizeObjectKey,

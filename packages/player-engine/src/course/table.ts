@@ -46,9 +46,12 @@ function parseTableCourse(value: unknown, legacy: boolean, keyMode: number | und
       stages.push(stage);
     }
   } else if (Array.isArray(data.md5)) {
-    for (const md5 of data.md5) {
+    // `song_title`, beside `md5` in the same order, is no part of beatoraja's table format (some tables, such as
+    // Stardust, add it); Be-Music reads it for a stage's title only, which shows while the stage is not in the library.
+    const titles: readonly unknown[] = Array.isArray(data.song_title) ? data.song_title : [];
+    for (const [index, md5] of data.md5.entries()) {
       if (typeof md5 !== 'string') continue;
-      const stage = createCourseStageRef({ md5, title: stageTitle(undefined, stages.length) });
+      const stage = createCourseStageRef({ md5, title: stageTitle(titles[index], stages.length) });
       if (stage === undefined) return undefined;
       stages.push(stage);
     }

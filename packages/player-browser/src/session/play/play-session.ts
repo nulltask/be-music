@@ -50,7 +50,7 @@ import { prepareChart } from './play-chart.ts';
 import { prepareGhost } from './ghost/prepare-ghost.ts';
 import { toPlayOptionMismatch } from './play-option-mismatch.ts';
 import { beginExitSequence, getResultData } from './play-ending.ts';
-import { interruptSharedEngine, launchSharedEngine, stopSharedEngine } from './play-engine.ts';
+import { finishPlayOnExit, interruptSharedEngine, launchSharedEngine, stopSharedEngine } from './play-engine.ts';
 import { chartSecondsFromFrame } from './play-clock.ts';
 import { seekPlay } from './play-seek.ts';
 import {
@@ -386,8 +386,12 @@ export class PlaySession extends PlaySessionState {
     });
   }
 
-  /** Leaves the play the way Escape does: the theme's fade-out runs, then the host's `onExit` fires. */
+  /**
+   * Leaves the play the way Escape does: the theme's fade-out runs, then the host's `onExit` fires. Once every note is
+   * judged it finishes the play instead, and the result shows (`finishPlayOnExit`).
+   */
   public requestExit(): void {
+    if (finishPlayOnExit(this)) return;
     beginExitSequence(this, () => {
       // The quit key held through the fade-out plays the chart again (That-Which-Must-Not-Be-Named PC's quick retry).
       if (isQuickRetryHeld(this, performance.now())) {
@@ -915,15 +919,17 @@ export class PlaySession extends PlaySessionState {
   /**
    * The chart second the play is at now. The engine owns chart time: each of its frames carries the second it shows and
    * the audio-clock reading that second holds at (`chartSecondsFromFrame`), so the playfield runs on from the latest
-   * frame on `audioContext.currentTime` — bit-exact with the scheduled sounds, through pauses, tempo changes and seeks.
-   * Before the engine's first frame, the chart runs from the play-start gate at the play's tempo (audio clock, else wall
-   * clock while the audio context is not up).
+   * frame on the audio clock — `audioContext.currentTime` without its render-callback steps (`drawClock`), so it moves
+   * smoothly and stays on the clock the sounds are scheduled on, through pauses, tempo changes and seeks. Before the
+   * engine's first frame, the chart runs from the play-start gate at the play's tempo (audio clock, else wall clock
+   * while the audio context is not up).
    */
   currentSeconds(): number {
     const context = this.audioContext;
     const frame = this.engineFrame;
     if (context !== undefined && frame !== undefined) {
-      const seconds = chartSecondsFromFrame(frame, context.currentTime);
+      const contextSeconds = this.drawClock.read(context.currentTime, performance.now(), context.state === 'running');
+      const seconds = chartSecondsFromFrame(frame, contextSeconds);
       if (seconds !== undefined) return seconds;
     }
     if (context !== undefined && this.audioContextStartTime > 0) {

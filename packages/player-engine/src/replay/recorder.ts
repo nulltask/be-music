@@ -30,7 +30,7 @@ import {
   resolveChart,
   type RandomDraws,
 } from '@be-music/chart-model';
-import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser';
+import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser/core';
 import { resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
 import type { PlayerSummary } from '../core/engine.ts';
 import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
@@ -161,6 +161,8 @@ export type ReplayRecordingOptions = Pick<
   chartMD5?: string;
   sourceChart?: BeMusicJSON;
   recorder?: Omit<ReplayRecorderInfo, 'engine'>;
+  /** Record each input source's device name (`ReplayRecorderOptions.includeDeviceNames`). Off by default. */
+  includeDeviceNames?: boolean;
 };
 
 export interface ReplayRecorderOptions {
@@ -189,6 +191,12 @@ export interface ReplayRecorderOptions {
   moneyScore?: boolean;
   /** Host application that records the play. `engine` is always overwritten with this package's version. */
   recorder?: Omit<ReplayRecorderInfo, 'engine'>;
+  /**
+   * Record each input source's device name (`InputSource.deviceName`, a browser's `Gamepad.id`) in
+   * `play.inputSources`. Off by default, and only the player turns it on: a device name can identify the player's
+   * hardware, and judging never reads it.
+   */
+  includeDeviceNames?: boolean;
   /** Dynamic `#EXRANKxx` changes the engine collected (chart order). */
   dynamicJudgeRankChanges?: ReadonlyArray<{ seconds: number; exRankValue: number }>;
   /** A stitched NONSTOP chart's later stages taking over the judge rank (`PlayerPlaySettings.stageRanks`). */
@@ -252,7 +260,7 @@ export const UNKNOWN_INPUT_SOURCE: InputSource = { kind: 'button', device: 'cont
 export function createReplayRecorder(options: ReplayRecorderOptions): ReplayRecorder {
   const chart = buildReplayChart(options);
   const inputs: ReplayInputEvent[] = [];
-  const inputSources = createInputSourceTable();
+  const inputSources = createInputSourceTable({ deviceNames: options.includeDeviceNames === true });
   let discarded = false;
   let seq = 0;
   let emptyPoorCount = 0;

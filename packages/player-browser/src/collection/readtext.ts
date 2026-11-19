@@ -3,11 +3,14 @@
  * among the chart's files and decoding it. BMS authors traditionally ship notes and changelogs this way.
  */
 
-import { decodeBMSText } from '@be-music/chart-parser';
-import { dirname } from '@be-music/shared-utils/core';
+import { decodeBMSText } from '@be-music/chart-parser/core';
+import { basename, dirname } from '@be-music/shared-utils/core';
 import { loadAssetBytes, resolveChartSource } from './collection.ts';
 import type { LibraryChart } from '@be-music/player-scene-model';
 import type { BrowserChartCollection } from './types.ts';
+import { rankReadtexts, type ReadtextFile } from './readtext-rank.ts';
+
+export type { ReadtextFile } from './readtext-rank.ts';
 
 /** The `.txt` files directly inside the folder of `song`'s chart, in the source's order. */
 function readtextPaths(collection: BrowserChartCollection, chartEntry: LibraryChart): string[] {
@@ -28,24 +31,25 @@ export function hasReadtextForChart(collection: BrowserChartCollection, chartEnt
 }
 
 /**
- * The decoded contents of the first `.txt` file directly inside the folder of `song`'s chart (no sub-folder, no folder
- * above), in the source's order (the directory listing, or a ZIP's central directory), or `undefined` when there is
- * none. The files of a dropped folder are read on demand.
+ * The decoded text files directly inside the folder of `song`'s chart (no sub-folder, no folder above), the likeliest
+ * README first ({@link rankReadtexts}) and otherwise in the source's order (the directory listing, or a ZIP's central
+ * directory); empty when there is none. The files of a dropped folder are read on demand.
  */
-export async function findReadtextForChart(
+export async function findReadtextsForChart(
   collection: BrowserChartCollection,
   chartEntry: LibraryChart,
-): Promise<string | undefined> {
+): Promise<ReadtextFile[]> {
   const source = resolveChartSource(collection, chartEntry);
-  if (!source) return undefined;
+  if (!source) return [];
+  const files: ReadtextFile[] = [];
   for (const path of readtextPaths(collection, chartEntry)) {
     const entry = source.files.get(path);
     if (entry === undefined) continue;
     const bytes = await loadAssetBytes(entry);
     if (!bytes) continue;
-    return decodeReadtextBytes(bytes);
+    files.push({ name: basename(path), text: decodeReadtextBytes(bytes) });
   }
-  return undefined;
+  return rankReadtexts(files);
 }
 
 /**

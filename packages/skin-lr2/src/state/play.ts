@@ -210,10 +210,14 @@ function setupOps(setup: LR2PlaySetup): number[] {
  * the normal ones (42 / 44). Skins gate their gauge frame on them.
  */
 export function resolveLR2GaugeTypeOps(gauge: GaugeType): readonly [number, number] {
-  return isLR2RedGauge(gauge)
-    ? [LR2_OP.GAUGE_1P_RED, LR2_OP.GAUGE_2P_RED]
-    : [LR2_OP.GAUGE_1P_NORMAL, LR2_OP.GAUGE_2P_NORMAL];
+  return isLR2RedGauge(gauge) ? LR2_RED_GAUGE_OPS : LR2_NORMAL_GAUGE_OPS;
 }
+
+const LR2_RED_GAUGE_OPS: readonly [number, number] = Object.freeze([LR2_OP.GAUGE_1P_RED, LR2_OP.GAUGE_2P_RED] as const);
+const LR2_NORMAL_GAUGE_OPS: readonly [number, number] = Object.freeze([
+  LR2_OP.GAUGE_1P_NORMAL,
+  LR2_OP.GAUGE_2P_NORMAL,
+] as const);
 
 /**
  * LR2's gauge-range op for a gauge in percent: 230 for 0-9 %, 231 for 10-19 %, …, 240 for 100 % on 1P, and 250-260 on

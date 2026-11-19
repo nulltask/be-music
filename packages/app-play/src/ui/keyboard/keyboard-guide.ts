@@ -53,10 +53,10 @@ const COPY = {
   },
   ja: {
     keys: (side: string) => `${side} 鍵盤 1〜7`,
-    turntable: (side: string) => `${side} 皿`,
+    turntable: (side: string) => `${side} スクラッチ`,
     startSelect: (side: string) => `${side} START / SELECT`,
     key: (side: string, n: string) => `${side} 鍵盤 ${n}`,
-    scratch: (side: string, second: boolean) => `${side} 皿 ${second ? '↺' : '↻'}`,
+    scratch: (side: string, second: boolean) => `${side} スクラッチ ${second ? '↺' : '↻'}`,
     noKey: (name: string) => `${name} (キーなし)`,
   },
 } as const;

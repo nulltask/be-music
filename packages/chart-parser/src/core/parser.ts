@@ -60,7 +60,12 @@ export function parseBMS(input: string): BeMusicJSON {
     json.bms.base = 62;
   }
 
-  const firstNormalObjectLines = new Map<number, { order: number; events: BeMusicJSON['events'] }>();
+  // The first object line of each normal-channel measure, with the events it made (its preserved entry's and, outside
+  // control flow, their copies in `json.events`), so a duplicate line can stamp both with their line orders.
+  const firstNormalObjectLines = new Map<
+    number,
+    { order: number; events: BeMusicJSON['events'] | undefined; copyStart: number | undefined }
+  >();
   forEachLine(input, (rawLine) => {
     const line = rawLine.trim();
     if (!line.startsWith('#')) {
@@ -80,30 +85,41 @@ export function parseBMS(input: string): BeMusicJSON {
       if (!objectLine) return;
       const entry = { kind: 'object' as const, ...objectLine };
       json.preservation.bms.sourceLines.push(entry);
-      const events =
-        controlFlowCaptureStack.length > 0
-          ? entry.events
-          : entry.events.map((event) => ({ ...event, position: [...event.position] as typeof event.position }));
+      const captured = controlFlowCaptureStack.length > 0;
+      const copyStart = captured ? undefined : json.events.length;
       if (channel[0] === '1' || channel[0] === '2') {
-        const key = measure * 1296 + Number.parseInt(channel, 36);
+        const key = measure * 256 + (channel[0] === '2' ? 128 : 0) + channel.charCodeAt(1);
         const first = firstNormalObjectLines.get(key);
-        const copies = events === entry.events ? events : [...entry.events, ...events];
-        if (first) {
-          for (const event of first.events) event.bmsLineOrder = first.order;
-          first.events = [];
-          for (const event of copies) event.bmsLineOrder = bmsLineOrder;
+        if (first === undefined) {
+          firstNormalObjectLines.set(key, { order: bmsLineOrder, events: entry.events, copyStart });
         } else {
-          firstNormalObjectLines.set(key, { order: bmsLineOrder, events: copies });
+          if (first.events !== undefined) {
+            for (let index = 0; index < first.events.length; index += 1) {
+              first.events[index]!.bmsLineOrder = first.order;
+              if (first.copyStart !== undefined) json.events[first.copyStart + index]!.bmsLineOrder = first.order;
+            }
+            first.events = undefined;
+          }
+          for (const event of entry.events) event.bmsLineOrder = bmsLineOrder;
         }
       }
-      if (controlFlowCaptureStack.length > 0) {
+      if (captured) {
         json.bms.controlFlow.push(entry);
       } else {
         json.preservation.bms.objectLines.push(objectLine);
         if (objectLine.measureLength !== undefined) {
           upsertMeasureLength(json, measure, objectLine.measureLength, measureByIndex);
         }
-        for (const event of events) json.events.push(event);
+        for (const event of entry.events) {
+          const copy: BeMusicJSON['events'][number] = {
+            measure,
+            channel,
+            position: [event.position[0], event.position[1]],
+            value: event.value,
+          };
+          if (event.bmsLineOrder !== undefined) copy.bmsLineOrder = event.bmsLineOrder;
+          json.events.push(copy);
+        }
       }
       return;
     }
@@ -433,7 +449,8 @@ function forEachLine(input: string, visitor: (line: string) => void): void {
  */
 function detectBMSBase(input: string): 36 | 62 {
   let resolved: 36 | 62 = 36;
-  for (const match of input.matchAll(BASE_DIRECTIVE_REGEX)) {
+  // A failed exec resets the global regexp for the next chart.
+  for (let match = BASE_DIRECTIVE_REGEX.exec(input); match !== null; match = BASE_DIRECTIVE_REGEX.exec(input)) {
     resolved = match[1] === '62' ? 62 : 36;
   }
   return resolved;

@@ -44,6 +44,16 @@ interface WebAudioSourceHandle {
 export const LIVE_TEMPO_RAMP_SECONDS = 0.03;
 
 /**
+ * How far ahead of the audio clock the session reports its write head (`AudioSinkClockState.scheduledSeconds`), so the
+ * engine queues the chart's background sounds, volume changes and AUTO keysounds that long before they are due, and
+ * {@link WebAudioSession.scheduleEventAt} starts each one at its due time with `start(when)`. Without it, a sound
+ * starts when the engine's ~60 Hz tick reaches it: up to a tick (and the main thread's timer slip) late, a different
+ * amount for each sound. 50 ms covers a tick and a stalled one after it. Nothing a player does waits on it: a press's
+ * keysound still starts at once, and judging reads the output clock.
+ */
+export const WEB_AUDIO_SCHEDULE_AHEAD_SECONDS = 0.05;
+
+/**
  * Per-event playback override produced by the bmson 1.0.0 slicing pipeline. Each entry carries the seek `offset` into
  * the source `sound_channels[]` WAV plus an optional `duration` cap that bounds how long this slice plays before the
  * next note's slice takes over. BMS / json paths leave this map unset and play the whole WAV from `t = 0`.
@@ -191,6 +201,12 @@ export interface WebAudioSession extends AudioSession {
    * `start(when)` semantics), so a host that polls on a slightly-late tick won't drop the cue.
    */
   scheduleEvent: (event: BeMusicEvent, audioContextStartSeconds: number) => void;
+  /**
+   * Starts `event`'s sound (or applies its `#xxx97` / `#xxx98` volume) at `outputSeconds` on the clock `getClockState`
+   * reports, the context's from the chart's start: the engine queues the chart's realtime sounds
+   * {@link WEB_AUDIO_SCHEDULE_AHEAD_SECONDS} ahead and this places each at its due time.
+   */
+  scheduleEventAt: NonNullable<AudioSession['scheduleEventAt']>;
 }
 
 /**
@@ -280,6 +296,25 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
   // per-voice at build time instead of being written onto the shared bus mixers.
   let currentBGMDynamicGain = 1;
   let currentKeyDynamicGain = 1;
+  /** Volume changes queued ahead of the audio clock, by time: each applies to the voices that start from its time on. */
+  let pendingGainChanges: Array<{ at: number; bgm: boolean; gain: number }> = [];
+  /** Applies the queued volume changes that are due by `now`. */
+  const settleGainChanges = (now: number): void => {
+    while (pendingGainChanges.length > 0 && pendingGainChanges[0]!.at <= now + 1e-6) {
+      const change = pendingGainChanges.shift()!;
+      if (change.bgm) currentBGMDynamicGain = change.gain;
+      else currentKeyDynamicGain = change.gain;
+    }
+  };
+  /** The dynamic gain of a voice starting at `at`: the volume in force then, queued changes included. */
+  const dynamicGainAt = (bgm: boolean, at: number): number => {
+    let gain = bgm ? currentBGMDynamicGain : currentKeyDynamicGain;
+    for (const change of pendingGainChanges) {
+      if (change.at > at + 1e-6) break;
+      if (change.bgm === bgm) gain = change.gain;
+    }
+    return gain;
+  };
   const crossfadeSeconds =
     context.seekCrossfadeSeconds !== undefined && Number.isFinite(context.seekCrossfadeSeconds)
       ? Math.max(0, context.seekCrossfadeSeconds)
@@ -497,6 +532,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
         : audioContext.currentTime;
     const previousSlice = sliceId === undefined ? undefined : activeBySlice.get(sliceId);
     if (previousSlice?.startContextSeconds === startAt) return;
+    settleGainChanges(audioContext.currentTime);
 
     const buffer = sampleBuffer(path, sampleKey);
     if (!buffer) return;
@@ -526,7 +562,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       sampleKey,
       path,
       bus,
-      isPlayerLane ? currentKeyDynamicGain : currentBGMDynamicGain,
+      dynamicGainAt(!isPlayerLane, startAt),
       hasEnvelope,
       elapsedSeconds > 0,
       slice,
@@ -540,13 +576,20 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     };
     // Scheduled BGM cues clamp to "now" so a slightly-late polling tick still fires immediately rather than
     // throwing for a past timestamp; player-input keysounds and immediate triggers go through the no-`when` path.
-    if (previousSlice) stopSource(previousSlice, startAt);
-    if (usesMonophonicWAVPlayback(chart, sampleKey)) {
-      const previous = activeBySlot.get(sampleKey);
-      if (previous) {
-        stopSource(previous, startAt);
+    // A voice queued to start after this one (a sound scheduled ahead, then a press) cuts this one when it starts and
+    // stays the latest: the voices of a slot or slice cut each other in the order they sound, not the order queued.
+    let cutAt: number | undefined;
+    const retrigger = (previous: WebAudioSourceHandle | undefined): boolean => {
+      if (previous === undefined) return true;
+      if (isQueued(previous, startAt)) {
+        cutAt = Math.min(cutAt ?? Infinity, previous.startContextSeconds!);
+        return false;
       }
-    }
+      stopSource(previous, startAt);
+      return true;
+    };
+    const latestOfSlice = retrigger(previousSlice);
+    const latestOfSlot = !usesMonophonicWAVPlayback(chart, sampleKey) || retrigger(activeBySlot.get(sampleKey));
     if (hasEnvelope && built.gain) {
       scheduleSliceEnvelope(built.gain.gain, startAt, durationSeconds, envelope, basePlaybackRate * built.stageRate);
     }
@@ -560,8 +603,9 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
 
     activeSources.add(built);
     built.startContextSeconds = startAt;
-    activeBySlot.set(sampleKey, built);
-    if (sliceId !== undefined) activeBySlice.set(sliceId, built);
+    if (cutAt !== undefined) stopSource(built, cutAt);
+    if (latestOfSlot) activeBySlot.set(sampleKey, built);
+    if (sliceId !== undefined && latestOfSlice) activeBySlice.set(sliceId, built);
     if (isPlayerLane) activeByChannel.set(channel, built);
   };
 
@@ -581,11 +625,22 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     return start + elapsedInBuffer(sampleKey, elapsedSeconds) * voiceRateOf(slice) < end;
   };
 
-  const applyDynamicVolumeEvent = (event: BeMusicEvent): void => {
+  const applyDynamicVolumeEvent = (event: BeMusicEvent, audioContextSeconds?: number): void => {
     if (disposed) return;
     const gain = parseBMSDynamicVolumeGain(event.value);
     if (gain === undefined) return;
     const clamped = Math.max(0, Math.min(1, gain));
+    const now = audioContext.currentTime;
+    settleGainChanges(now);
+    // Due ahead of the audio clock: it applies to the voices that start from then (`dynamicGainAt`).
+    if (audioContextSeconds !== undefined && audioContextSeconds > now + 1e-6) {
+      const bgm = isBmsBGMVolumeChangeChannel(event.channel);
+      if (!bgm && !isBMSKeyVolumeChangeChannel(event.channel)) return;
+      const at = audioContextSeconds;
+      const index = pendingGainChanges.findIndex((change) => change.at > at);
+      pendingGainChanges.splice(index < 0 ? pendingGainChanges.length : index, 0, { at, bgm, gain: clamped });
+      return;
+    }
     // BGM channel = `97`, key channel = `98`. The dispatcher already gated on
     // `isBMSDynamicVolumeChangeChannel(event.channel)` so one of the two predicates must match — but we still branch
     // explicitly so an unrecognized future channel doesn't accidentally retarget the wrong side. The stored gain is
@@ -650,7 +705,9 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       // We don't actually buffer ahead on the web (Web Audio's BufferSource handles its own scheduling), so the
       // scheduled head matches the output head. Reporting the same value lets the engine's
       // `createAudioPlaybackClockSource` short-circuit its `Math.max` between the two.
-      return { outputSeconds, scheduledSeconds: outputSeconds };
+      // The write head runs ahead: the engine queues the chart's realtime sounds that early and `scheduleEventAt`
+      // starts each at its due time (`WEB_AUDIO_SCHEDULE_AHEAD_SECONDS`).
+      return { outputSeconds, scheduledSeconds: outputSeconds + WEB_AUDIO_SCHEDULE_AHEAD_SECONDS };
     },
     finish: async (): Promise<void> => {
       // Engine finished playback gracefully — let any tail samples ring out naturally. Drop our tracking so a
@@ -709,6 +766,15 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       }
       playSampleEvent(event, audioContextStartSeconds);
     },
+    scheduleEventAt: (event: BeMusicEvent, outputSeconds: number): void => {
+      // The output clock `getClockState` reports is the context's, from the chart's start.
+      const at = resolveChartStartContextTime() + outputSeconds;
+      if (isBmsBGMVolumeChangeChannel(event.channel) || isBMSKeyVolumeChangeChannel(event.channel)) {
+        applyDynamicVolumeEvent(event, at);
+        return;
+      }
+      playSampleEvent(event, at);
+    },
     setTempo: (next: number): void => {
       if (disposed || !(Number.isFinite(next) && next > 0)) return;
       // The chart runs on at the new tempo from where it is now: a NONSTOP chart's fades move with it.
@@ -737,6 +803,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       // The engine applies the volume changes before `seconds` again, from the chart's start values.
       currentBGMDynamicGain = 1;
       currentKeyDynamicGain = 1;
+      pendingGainChanges = [];
       anchorChartAt(seconds);
     },
     stopChannel: (channel: string): void => {

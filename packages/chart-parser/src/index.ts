@@ -1,8 +1,3 @@
-/**
- * Stable package root. Implementation modules are split under `./core/`.
- */
-export * from './core/parser.ts';
-export { parseBMSBytes } from './core/bms-bytes.ts';
-export { isN2SArchive, parseN2SBytes, readN2SArchive, type N2SArchiveEntry } from './core/n2s.ts';
-export { parseLRX, parseLRXBytes, resolveLRXHeaderPath, resolveLRXMoviePath, type LRXSourceFiles } from './core/lrx.ts';
+/** The compatibility entry, including the Node file adapter. */
+export * from './core/index.ts';
 export { parseChartFile, type ParseChartFileOptions } from './node-file.ts';

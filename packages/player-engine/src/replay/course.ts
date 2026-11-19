@@ -1,8 +1,14 @@
-import { gaugePickType, resolveGaugePickSource, type GaugePick } from '../ruleset/gauge-type.ts';
+import { gaugePickType, splitGaugePick, type GaugePick } from '../ruleset/gauge-type.ts';
 import { resolve____RankLabel } from '../ruleset/score.ts';
 import type { RulesetChartFacts } from '../ruleset/facts.ts';
 import { resolveRuleset, type RulesetId } from '../ruleset/index.ts';
-import { CLEAR_LAMPS, resolveCourseClearLamp, resolveMissCount, type ClearLamp } from '../ruleset/clear-lamp.ts';
+import {
+  CLEAR_LAMPS,
+  resolveCourseClearLamp,
+  resolveMissCount,
+  type ClearLamp,
+  type CourseClearLampFacts,
+} from '../ruleset/clear-lamp.ts';
 import {
   courseGoesOnAfterGivingUp,
   isCourseStageFailed,
@@ -141,17 +147,18 @@ export function resolveCourseLamp(
   // CheckCourseClear: HP >= 2 may advance; at course end, HP == 2 clears only through the full-combo branch.
   const cleared =
     result.gauge.cleared && (!lr2Gauge || (result.gauge.final >= 2 && (fullCombo || result.gauge.final > 2)));
-  return resolveCourseClearLamp({
+  const facts: CourseClearLampFacts = {
     ruleset: id,
     cleared,
     gauge: result.gauge.type,
-    ...(result.gauge.source !== undefined ? { gaugeSource: result.gauge.source } : {}),
     gaugeType: gaugePickType(pick),
     noteCount: result.noteCount,
     maxCombo: result.maxCombo,
-    ...(result.fullCombo !== undefined ? { fullCombo: result.fullCombo } : {}),
     judge: result.judge,
-  }) as CourseClearLamp;
+  };
+  if (result.gauge.source !== undefined) facts.gaugeSource = result.gauge.source;
+  if (result.fullCombo !== undefined) facts.fullCombo = result.fullCombo;
+  return resolveCourseClearLamp(facts) as CourseClearLamp;
 }
 
 /** The gauge a course stage starts on (see {@link resolveCourseStageStartGauge}). */
@@ -176,9 +183,10 @@ export function resolveCourseStageStartGauge(
   course: ReplayCourseStage,
   selectedGauge: GaugePick,
 ): CourseStageStartGauge {
-  // A qualified pick starts on its own source's course gauge (#1171).
-  const source = resolveGaugePickSource(selectedGauge, rulesetId);
-  const gaugeId = resolveCourseGaugeId(source, course.kind, gaugePickType(selectedGauge));
+  // A qualified pick starts on its own source's course gauge (#1171). A bare pick, the common case, needs no split.
+  const parts = selectedGauge.includes(':') ? splitGaugePick(selectedGauge) : undefined;
+  const source = parts?.source ?? rulesetId;
+  const gaugeId = resolveCourseGaugeId(source, course.kind, parts?.type ?? selectedGauge);
   // The lane mode and the HARD damage multiplier only pick the judging values, which this leaves out.
   const spec = resolveCourseGauge(source, gaugeId, courseStageRulesetOptions(course), '7', 1);
   return { type: spec.id, initial: spec.initial, max: spec.max, border: spec.border, survival: spec.survival };

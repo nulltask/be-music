@@ -2,30 +2,33 @@
 
 # コースと段位認定
 
-**コース**は、複数の譜面を 1 回のプレイにつなげたものです。代表的なのが**段位認定**で、共通の段位ゲージのまま各ステージを続けて遊び、全体に 1 つの結果が付きます。LR2 と beatoraja はそれぞれ独自の形式でコースを定義し、難易度表は表のヘッダーにコースを載せています。Be-Music はこの 3 つを `@be-music/player-engine/course` の `CourseDefinition` という 1 つのモデルに読み込むので、後段はコースの取得元を気にする必要がありません。
+**コース**は複数の譜面を続けて遊ぶ形式です。代表例の**段位認定**では、段位ゲージをステージ間で引き継ぎ、コース全体で一つの結果を出します。
 
-本書はコースのモデル、形式ごとの対応、プレイ規則、記録、リプレイを定義します。ブラウザーの画面遷移は[ブラウザープレイヤー仕様](./player-web.ja.md#コースと段位認定)を参照してください。
+LR2 と beatoraja のコースファイル、難易度表のヘッダー、ナナシグルーヴ2 の譜面リストを読み込めます。どの形式も `@be-music/player-engine/course` の `CourseDefinition` に変換し、共通のコースとして扱います。
+
+ブラウザー版でコース中に画面がどう切り替わるかは、[コースと段位認定](./player-web.ja.md#コースと段位認定)を参照してください。
 
 ```mermaid
 flowchart LR
   lr2[".lr2crs<br/>(LR2, XML)"] -->|parseLR2CourseFile| def["CourseDefinition"]
   bjson["course/*.json<br/>(beatoraja)"] -->|parseBeatorajaCourseFile| def
   table["難易度表 header.json<br/>course / grade"] -->|parseTableHeaderCourses| def
+  n2x[".n2x<br/>(ナナシグルーヴ2)"] -->|parseN2XCourseFile| def
   def -->|"resolveCourseStages<br/>(SHA-256、次に MD5 で照合)"| resolved["ResolvedCourse<br/>ステージ + 開始可否"]
 ```
 
 ## コースのモデル
 
-| フィールド    | 意味                                                                                                                                                                      |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`        | コース名。                                                                                                                                                                |
-| `kind`        | `grade`（段位認定）、`expert`（プレイヤーが選んだゲージでステージをつなぐ）、`nonstop`（ステージを 1 本の連続したプレイにつなぐ）。                                       |
-| `stages`      | 譜面を順番に並べたもの。それぞれ譜面ファイルの `md5` と `sha256`（小文字の 16 進）のどちらか、または両方で指し、手元にない譜面の表示用に `title` と `artist` を持てます。 |
-| `constraints` | beatoraja のコース制約を表ヘッダーの名前で持ちます（下表）。未知の名前は捨て、グループごとに最初の 1 つだけを残します。beatoraja の `CourseData.validate` と同じです。    |
-| `trophies`    | beatoraja のトロフィー（易しい順）：`{ name, missRate, scoreRate }`。BP 率が `missRate` % 以下かつスコア率が `scoreRate` % 以上を満たす最後のトロフィーを獲得します。     |
-| `release`     | beatoraja の `release`。`false` ならそのコースのスコアはランキングに載せません。                                                                                          |
-| `keyMode`     | 想定するキーモード（LR2 の `line`、表の `mode`）。元の形式に書かれているときだけ持ちます。                                                                                |
-| `source`      | コースの取得元。`.lr2crs` なら LR2 の hash の生の値も持ちます。                                                                                                           |
+| フィールド    | 意味                                                                                                                                                                                                                                               |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | コース名。                                                                                                                                                                                                                                         |
+| `kind`        | `grade`（段位認定）、`expert`（プレイヤーが選んだゲージでステージをつなぐ）、`nonstop`（ステージを 1 本の連続したプレイにつなぐ）。                                                                                                                |
+| `stages`      | 譜面を順番に並べたもの。それぞれ譜面ファイルの `md5` と `sha256`（小文字の 16 進）のどちらか、または両方で指し、手元にない譜面の表示用に `title` と `artist` を持てます。`.n2x` のステージは、ホストが譜面を見つけるまで `path` で譜面を指します。 |
+| `constraints` | beatoraja のコース制約を表ヘッダーの名前で持ちます（下表）。未知の名前は捨て、グループごとに最初の 1 つだけを残します。beatoraja の `CourseData.validate` と同じです。                                                                             |
+| `trophies`    | beatoraja のトロフィー（易しい順）：`{ name, missRate, scoreRate }`。BP 率が `missRate` % 以下かつスコア率が `scoreRate` % 以上を満たす最後のトロフィーを獲得します。                                                                              |
+| `release`     | beatoraja の `release`。`false` ならそのコースのスコアはランキングに載せません。                                                                                                                                                                   |
+| `keyMode`     | 想定するキーモード（LR2 の `line`、表の `mode`）。元の形式に書かれているときだけ持ちます。                                                                                                                                                         |
+| `source`      | コースの取得元。`.lr2crs` なら LR2 の hash の生の値も持ちます。                                                                                                                                                                                    |
 
 ### 制約
 
@@ -65,6 +68,10 @@ XML の `<courselist>` に、`title`、`line`（キーモード）、`type`、`h
 
 beatoraja の**ランダムコース**（`RandomCourseData`）は、曲データベースに対する SQL の `WHERE` 句で選んだ譜面から各ステージを抽選します。`parseBeatorajaRandomCourseData` は `name`、`stage[].sql`（`filter` として保持）、`constraint`、`rconstraint`（`distinct`）、`trophy` を読みます。譜面の抽選はホスト側の役割です。
 
+### ナナシグルーヴ2 の `.n2x` 譜面リスト
+
+ナナシグルーヴ2 の譜面リストは、リストの順に遊ぶ EXPERT コースとして開きます。フォルダー構成を保ってリストと譜面を一緒に読み込ませてください。[n2x の読み込みとステージの照合](./n2x-spec.ja.md)
+
 ### 難易度表のヘッダー
 
 表のヘッダー（`header.json`）は、jbmstable-parser の読み方どおりにコースを持ちます。
@@ -73,7 +80,7 @@ beatoraja の**ランダムコース**（`RandomCourseData`）は、曲データ
 - `course` が 1 グループ（`Course[]`）。
 - どちらでもなければ旧形式の `grade` リスト。そのコースにはすべて `grade_mirror` と `gauge_lr2` を付けます。
 
-コースはステージを `charts`（`sha256` を持ちうる表の要素そのもの）または `md5` から取ります。`charts` に hash のない譜面があるコースは読み飛ばします。タイトルのないステージは、beatoraja の `CourseData.validate` と同じく `course N` になります。ヘッダーの `mode`（`beat-7k`、`popn-9k` など）が `keyMode` になります。
+コースはステージを `charts`（`sha256` を持ちうる表の要素そのもの）または `md5` から取ります。`charts` に hash のない譜面があるコースは読み飛ばします。タイトルのないステージは、beatoraja の `CourseData.validate` と同じく `course N` になります。表によっては（Stardust など）`md5` の横に、同じ順でステージの曲名を並べた `song_title` を持ちます。これは beatoraja の形式にはなく beatoraja は読みませんが、Be-Music はステージのタイトルとしてだけ読みます。タイトルはステージがライブラリにない間だけ表示されます。ヘッダーの `mode`（`beat-7k`、`popn-9k` など）が `keyMode` になります。
 
 #### URL から表を読む
 
@@ -127,7 +134,7 @@ flowchart LR
 | `score.notes`                                      | 譜面のノーツ数                                                                                                                                                                                                         |
 | `score.sha256`                                     | 記録のある譜面の SHA-256                                                                                                                                                                                               |
 | `information.n` / `ln`                             | 鍵盤のタップ / ロングノーツ。CN と HCN は終端も数えます（`BMSModelUtils.getTotalNotes` と同じ）                                                                                                                        |
-| `information.s` / `ls`                             | 皿で同じもの                                                                                                                                                                                                           |
+| `information.s` / `ls`                             | スクラッチで同じもの                                                                                                                                                                                                   |
 | `information.total`                                | beatoraja がプレイで使う TOTAL：`#TOTAL`、bmson の `total` は既定値に対する百分率、なければノーツ数から求める beatoraja の既定値（`BMSPlayerRule.validate`）                                                           |
 | `information.density`、`peakdensity`、`enddensity` | 平均・最大・終盤の密度（`computeBeatorajaChartDensityValues`、`SongInformation` に準拠）                                                                                                                               |
 | `information.mainbpm`                              | 判定ノーツが最も多く置かれた BPM（`resolveChartMainBPM`）                                                                                                                                                              |
@@ -209,7 +216,7 @@ flowchart TD
 
 ## ステージを探す
 
-`resolveCourseStages(course, lookup)` は各ステージを手元の譜面に対応させます。ステージが SHA-256 を持てば SHA-256 で、なければ MD5 で照合します。beatoraja の `TableBar` と同じです。両方を持つステージは、SHA-256 に一致する譜面がなければ MD5 で探し直します。ステージが欠けたコースも一覧には出しますが `playable` にはなりません。LR2 はそのステージを「この曲を所持していません」と表示し、beatoraja はコースを開始しません。
+`resolveCourseStages(course, lookup)` は各ステージを手元の譜面に対応させます。ステージが SHA-256 を持てば SHA-256 で、なければ MD5 で照合します。beatoraja の `TableBar` と同じです。両方を持つステージは、SHA-256 に一致する譜面がなければ MD5 で探し直します。ステージが欠けたコースも一覧には出しますが `playable` にはなりません。LR2 はそのステージを「この曲を所持していません」と表示し、beatoraja はコースを開始しません。`path` だけを持つステージ（ホストが譜面を見つけられなかった `.n2x` のステージ）は欠けたステージです。
 
 ## コースを作る
 
@@ -245,11 +252,11 @@ LR2 の RANDOM MIX バーは、レベル・BPM・ステージ数からライブ�
 
 ```mermaid
 flowchart TD
-    count[ステージ数：1-5、またはランダムに 2-5] --> first[1 曲目：キーモード、レベルと BPM の制限]
+    count[ステージ数を決める] --> first[1 曲目を抽選]
     first -->|なし| fail[コースなし]
-    first --> window[BPM の幅：1 曲目の最大 BPM ± 範囲]
-    window --> rest[2 曲目以降：1 つの乱順、曲フォルダごとに 1 曲]
-    rest --> prefer[各ステージ：同じフォルダで好みのレベルに近い譜面]
+    first --> window[許容 BPM を決める]
+    window --> rest[各フォルダーから 1 譜面]
+    rest --> prefer[好みのレベルに合わせる]
     prefer --> course[RANDOM MIX のコース]
 ```
 
@@ -402,6 +409,8 @@ flowchart TD
   next --> lamp["最後にコースのランプは FAILED"]
 ```
 
+ステージの全ノートを判定したあとの ESC は、beatoraja の `BMSPlayer.stopPlay` と同じく、ステージを完了してコースを進めます。NONSTOP では最終ステージの最後のノートを判定したあとに限ります。
+
 コースのステージは単曲のプレイとしてランキングに載せられません。`checkReplayEligibility` は `course-stage` として `unranked` の印を付け、Leaderboard はそのプレイを順位付けせずに保存します。
 
 ### コースのプレイ
@@ -413,12 +422,13 @@ stateDiagram-v2
     [*] --> ステージ: nextStage
     ステージ --> ステージ: recordStage（続く）
     ステージ --> 終了: recordStage（ゲージが尽きた・最後のステージ）
-    ステージ --> 終了: giveUp（ESC）
+    ステージ --> ステージ: giveUp（続く）
+    ステージ --> 終了: giveUp（コース終了）
     終了 --> [*]: buildReplay
 ```
 
 - `nextStage` は次のステージを決めます。コースのロングノート制約を適用した譜面、引き継ぎ状態を入れた `PlayerOptions.course`、ハイスピードを固定するかどうかです。`playSettings` は、プレイヤーの選択の代わりにそのステージで使う設定を返します（`resolveCourseStagePlaySettings`。コースが許すレーンオプション、次に LR2 の GRADE コースのリセット）。
-- `recordStage` はステージのリプレイを記録し、コースが続くかどうかを返します（`goesOnAfter` で先に確かめられます）。`giveUp` は ESC で投げたステージを記録し、コースを落ちたプレイとして終えます。
+- `recordStage` はステージのリプレイを記録し、コースが続くかどうかを返します（`goesOnAfter` で先に確かめられます）。`giveUp` は ESC で中断したステージを失敗として記録し、コースが続くかを返します（`goesOnAfterGivingUp` で事前に確認できます）。
 - `playSeconds` はステージのプレイ時間を合計します。投げたステージは投げたところまでです（`resolveGivenUpPlaySeconds`）。`stageExtras` は、ホストが各ステージについて残したもの（結果のグラフなど）を持ちます。
 - `buildReplay` はコースのリプレイを書きます。遊んだステージに続けて、たどり着かなかった各ステージを、譜面の情報、ファイルのハッシュ、譜面のフィンガープリントとともに並べます。
 

@@ -17,6 +17,17 @@
 - Write `bmson` in prose, `replay` for a recorded replay, and `avatar` for a user's profile image. Keep externally required identifiers and format keys unchanged. Rename persisted schema fields through explicit migrations.
 - Write the product name `Be-Music` in prose and user-facing text (service names such as `Be-Music Play` and `Be-Music Leaderboard`, and `Be-Music Skin` with a capital S). Keep lowercase `be-music` only for identifiers and machine-read values: package names, domains and URLs, file and format names, custom element and CSS names, OAuth scopes, storage keys and other persisted ids. See [the glossary](docs/glossary.md).
 
+## Writing guidelines
+
+- For English prose, apply `writing-clearly-and-concisely`.
+- For Japanese prose, apply `natural-japanese`.
+- Do not translate technical terms unnecessarily.
+- Preserve factual accuracy, nuance, and uncertainty.
+- Avoid literal translations and unnatural phrasing.
+- Follow language-specific punctuation and typography.
+- Keep code, identifiers, URLs, and API names unchanged.
+- Adapt tone to the intended audience and document type.
+
 # Reference Compatibility Rules
 
 - Match the relevant reference implementation's observable behavior. Where applicable references agree or only one defines the behavior, use that behavior as the default.

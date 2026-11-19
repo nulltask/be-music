@@ -126,18 +126,22 @@ export function resolveLR2GradeCoursePlaySettings<T extends LR2GradeResetSetting
 ): T {
   // Spread over `settings` so the other fields a host carries along pass through.
   if (!isLR2GradeCourse(definition)) return settings;
-  const pick = splitGaugePick(settings.gauge);
-  const reset = pick?.type === 'EASY' || pick?.type === 'G-ATTACK';
-  return {
-    ...settings,
-    gauge: !reset ? settings.gauge : pick.source === undefined ? 'GROOVE' : qualifyGaugePick(pick.source, 'GROOVE'),
-    hiddenSudden1P: 'OFF',
-    hiddenSudden2P: 'OFF',
-    autoScratch1P: false,
-    autoScratch2P: false,
-    dpFlip: false,
-    tempo: 1,
-  };
+  return resetLR2GradePlaySettings({ ...settings, gauge: settings.gauge });
+}
+
+function resetLR2GradePlaySettings<T extends LR2GradeResetSettings>(settings: T): T {
+  // A bare pick, the common case, needs no split.
+  const pick = settings.gauge.includes(':') ? splitGaugePick(settings.gauge) : undefined;
+  const type = pick?.type ?? settings.gauge;
+  const reset = type === 'EASY' || type === 'G-ATTACK';
+  if (reset) settings.gauge = pick?.source === undefined ? 'GROOVE' : qualifyGaugePick(pick.source, 'GROOVE');
+  settings.hiddenSudden1P = 'OFF';
+  settings.hiddenSudden2P = 'OFF';
+  settings.autoScratch1P = false;
+  settings.autoScratch2P = false;
+  settings.dpFlip = false;
+  settings.tempo = 1;
+  return settings;
 }
 
 /** Whether the course forbids changing the hi-speed during play (`no_speed`). */
@@ -164,14 +168,11 @@ export function resolveCourseStagePlaySettings<T extends CourseStagePlaySettings
   const allowScratchRandom = !definition.constraints.some(
     (constraint) => constraint === 'grade' || constraint === 'grade_mirror' || constraint === 'grade_random',
   );
-  return resolveLR2GradeCoursePlaySettings(definition, {
-    ...picked,
-    ...(picked.lr2RandomScratch1P === undefined
-      ? {}
-      : { lr2RandomScratch1P: allowScratchRandom && picked.lr2RandomScratch1P }),
-    ...(picked.lr2RandomScratch2P === undefined
-      ? {}
-      : { lr2RandomScratch2P: allowScratchRandom && picked.lr2RandomScratch2P }),
-    ...resolveCourseLaneOptions(definition.constraints, picked),
-  });
+  const settings = { ...picked };
+  if (picked.lr2RandomScratch1P !== undefined)
+    settings.lr2RandomScratch1P = allowScratchRandom && picked.lr2RandomScratch1P;
+  if (picked.lr2RandomScratch2P !== undefined)
+    settings.lr2RandomScratch2P = allowScratchRandom && picked.lr2RandomScratch2P;
+  if (!allowScratchRandom) Object.assign(settings, resolveCourseLaneOptions(definition.constraints, picked));
+  return isLR2GradeCourse(definition) ? resetLR2GradePlaySettings(settings) : settings;
 }

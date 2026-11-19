@@ -2,7 +2,7 @@
 
 # bmson 実装仕様
 
-この文書は、`packages/chart-parser` / `packages/chart-writer` が bmson をどう扱うかを定義します。
+bmson の読み込みは `packages/chart-parser`、書き出しは `packages/chart-writer` が担当します。
 beatoraja など他のプレイヤーが同じフィールドをどう読むかは [BMS / bmson 互換性ノート](./format-compat.ja.md) で比較しています。
 
 ## 一次参照
@@ -224,7 +224,7 @@ flowchart TD
 - beatoraja 拡張は jbms-parser（beatoraja）と同じく読む。どちらも `sound_channels` と同じ `mode_hint` lane map を通り、`x` に対応するレーンがないノートは捨てる。WAV は `sound_channels` の後に `key_channels`、`mine_channels` の順で登録する
   - `key_channels` は隠しノート: 各ノートは BMS 不可視オブジェクト（`3x` / `4x`。拡張の `3A`〜`3Q` / `4A`〜`4Q` を含む）になり、チャンネルのサンプルをそのレーンの keysound として鳴らし、判定はしない。読むのは `x` と `y` だけ
   - `mine_channels` は地雷: 各ノートは BMS 地雷（`Dx` / `Ex`）になり、`damage` を `events[].bmson.damage` に保持。event の値は mine channel 用に登録した WAV スロットなので player はダメージとして読まず、`damage` のない地雷のダメージは 0 %。
-  - beatoraja はロングノート内やノートのある位置の地雷を捨てるが、Be-Music は LR2 が BMS のそうした地雷を残すのと同じく残す（[BMS / bmson 互換性ノート §2.6](./format-compat.ja.md#26-地雷) を参照）
+  - beatoraja はロングノート内やノートのある位置の地雷を捨てるが、Be-Music は LR2 が BMS のそうした地雷を残すのと同じく残す（[BMS / bmson 互換性ノート §2.6](./format-compat-bms.ja.md#26-地雷) を参照）
 - `bga` は `bmson.bga` へ保持
 
 ## BMS/bmson 中間表現 -> bmson 変換 (chart-writer)

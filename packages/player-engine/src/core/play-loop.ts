@@ -136,6 +136,9 @@ async function playChart(
     session.replay && options.replayAbortedAtUs !== undefined ? options.replayAbortedAtUs / 1_000_000 : undefined;
   let settled = false;
   const pastHorizon = (): boolean => {
+    // A host that lets go of its hold before the horizon (ESC once every note is judged) ends the play as soon as
+    // nothing is left to judge, the way the chart's end does.
+    if (hold?.signal.aborted === true && judge.isSettled()) return true;
     if (clock.nowMs() < horizonMs()) return false;
     if (hold === undefined || hold.signal.aborted) return true;
     if (!settled) {

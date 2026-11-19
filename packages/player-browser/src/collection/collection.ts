@@ -12,7 +12,7 @@ import {
 } from '@be-music/shared-utils/core';
 import type { BrowserAssetEntry, BrowserAssetSource, BrowserChartCollection, LoadProgressCallback } from './types.ts';
 import { createEagerDropPathPredicate, isChartFilePath } from '../browser/drop.ts';
-import { restorePackedCollectionChart } from './compact-chart.ts';
+import { restoreDeferredChartFields, restorePackedCollectionChart } from './compact-chart.ts';
 import {
   type BrowserDroppedFile,
   DeferredDroppedFile,
@@ -21,8 +21,15 @@ import {
 } from './dropped-file.ts';
 import { isMaliciousAssetPath, loadAssetBytes } from './file-lookup.ts';
 import { logger } from '../logger.ts';
-import { parseChartThroughCache, type ParsedChartCache } from './parsed-chart-cache.ts';
-import { loadChartSiblings } from './chart-siblings.ts';
+import {
+  parseChartThroughCache,
+  readParsedCharts,
+  type ChartCacheKeyBook,
+  type ParsedChartCache,
+} from './parsed-chart-cache.ts';
+import { hasChartSiblings, loadChartSiblings } from './chart-siblings.ts';
+import { chartFileHashesOfCacheKey, seedChartFileHashes } from './chart-hash.ts';
+import type { ParseChartTaskResult } from '../compute/tasks.ts';
 
 export { loadAssetBytes, loadAssetFile, asLoadedBytes } from './file-lookup.ts';
 export { type BrowserDroppedFile, DeferredDroppedFile, materializeDroppedFiles } from './dropped-file.ts';
@@ -30,6 +37,12 @@ export { type BrowserDroppedFile, DeferredDroppedFile, materializeDroppedFiles }
 const log = logger('drop');
 const MAX_ZIP_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024;
+/** Charts being read, hashed, looked up and parsed at once. */
+const PARSE_READ_CONCURRENCY = 32;
+/** Charts parsed between two yields to the page. */
+const PARSE_YIELD_INTERVAL = 32;
+/** Charts read from the parsed-chart cache per lookup: the page gets to paint between two batches. */
+const KNOWN_CHART_BATCH = 512;
 
 /**
  * Optional progress hook for the dropped-folder loaders. When supplied, the loader fires the callback as it walks
@@ -40,6 +53,12 @@ export interface LoadProgressOptions {
   onProgress?: LoadProgressCallback;
   /** Parsed charts kept across loads, by the SHA-256 of each chart file; charts found there are not parsed again. */
   parsedChartCache?: ParsedChartCache;
+  /**
+   * The cache keys of the chart files the host has seen before: a chart whose key it knows comes from
+   * {@link parsedChartCache} without its file being opened, read or hashed. Used for loose files only (a folder), and
+   * never for an LRX chart, whose key also depends on the files beside it.
+   */
+  chartKeys?: ChartCacheKeyBook;
 }
 
 export class BrowserChartCollectionStore {
@@ -452,50 +471,92 @@ export async function loadChartCollectionFromFiles(
     onProgress?.({ phase: 'parsing', current: 0, total: chartCount });
   }
   const throttledParseProgress = createThrottledProgress(onProgress);
-  // Keep cooperative progress yielding for hosts using the local fallback; workers already run outside the UI thread.
-  const PARSE_YIELD_INTERVAL = 32;
   const items = sources.flatMap((source, index) => chartPathsBySource[index]!.map((path) => ({ source, path })));
   const loadedCharts: Array<LibraryChart | undefined> = Array.from({ length: items.length });
   const parseErrors: Array<BrowserChartCollection['errors'][number] | undefined> = Array.from({ length: items.length });
-  await runWithConcurrency(items, getBrowserWorkerCount(), async ({ source, path }, index) => {
-    try {
-      const chartBytes = await loadAssetBytes(source.files.get(path));
-      if (!chartBytes) {
-        throw new Error(`chart bytes missing for ${path}`);
+  /** Lists a parsed chart: the library entry kept for as long as the chart is in the collection. */
+  const listChart = (
+    index: number,
+    { chart, scored, packed, strings, deferred, md5 }: ParseChartTaskResult,
+    key: string | undefined,
+  ): void => {
+    const { source, path } = items[index]!;
+    // The scored notes and the play variant they were read under, without timing every note: the list shows a count.
+    const libraryChart: LibraryChart = {
+      id: `${source.id}:${path}`,
+      sourceId: source.id,
+      sourceLabel: source.label,
+      sourceKind: source.kind,
+      chartPath: path,
+      directoryLabel: dirname(path) || source.label,
+      fileLabel: basename(path),
+      title: chart.metadata.title || basenameWithoutExtension(path),
+      subtitle: chart.metadata.subtitle,
+      artist: chart.metadata.artist,
+      genre: chart.metadata.genre,
+      playLevel: chart.metadata.playLevel,
+      bpm: chart.metadata.bpm,
+      // The notes the engine scores: FREE ZONE tails are judged by nobody, and mines / invisible objects are not
+      // notes at all. A long note counts once.
+      totalNotes: scored.notes,
+      chart,
+    };
+    loadedCharts[index] = libraryChart;
+    // Every parsed chart stays resident for as long as the song is in the collection, so trim it before keeping
+    // it. Keep the play variant first, while the events are still plain objects: select screens filter the whole
+    // list by it, and a cached answer spares them from unpacking every chart's events. Counting the notes already
+    // worked it out (`resolveChartPlayVariant` over the same chart and path).
+    seedLibraryChartPlayVariant(libraryChart, scored.playVariant);
+    restorePackedCollectionChart(chart, packed, strings);
+    restoreDeferredChartFields(chart, deferred);
+    // The file's hashes are in hand: its cache key starts with its SHA-256, and its MD5 came with the parse.
+    const hashes = chartFileHashesOfCacheKey(key, md5);
+    if (hashes !== undefined) seedChartFileHashes(chart, hashes);
+  };
+  const reportParsed = (path: string): void => {
+    parsedSoFar += 1;
+    throttledParseProgress?.({ phase: 'parsing', current: parsedSoFar, total: chartCount, label: path });
+  };
+  // A chart file the host knows unchanged is not read: its parse comes from the cache under the key the host kept,
+  // a batch of charts per lookup. Whatever the cache no longer has is parsed with the rest below.
+  const chartKeysOf = ({ source, path }: (typeof items)[number]): ChartCacheKeyBook | undefined =>
+    source.kind === 'zip' || hasChartSiblings(path) ? undefined : options.chartKeys;
+  const unread: number[] = [];
+  const known: Array<{ index: number; key: string }> = [];
+  for (const [index, item] of items.entries()) {
+    const key = options.parsedChartCache !== undefined ? chartKeysOf(item)?.known(item.path) : undefined;
+    if (key === undefined) unread.push(index);
+    else known.push({ index, key });
+  }
+  for (let start = 0; start < known.length; start += KNOWN_CHART_BATCH) {
+    const batch = known.slice(start, start + KNOWN_CHART_BATCH);
+    const cached = await readParsedCharts(
+      options.parsedChartCache,
+      batch.map(({ key }) => key),
+    );
+    for (const [offset, { index, key }] of batch.entries()) {
+      const result = cached[offset];
+      if (result === undefined) {
+        unread.push(index);
+        continue;
       }
-      const siblings = await loadChartSiblings(source.files, path, chartBytes);
-      const { chart, scored, packed, strings } = await parseChartThroughCache(
-        { path, bytes: chartBytes, ...(siblings ? { siblings } : {}) },
-        options.parsedChartCache,
-      );
-      // The scored notes and the play variant they were read under, without timing every note: the list shows a count.
-
-      const libraryChart: LibraryChart = {
-        id: `${source.id}:${path}`,
-        sourceId: source.id,
-        sourceLabel: source.label,
-        sourceKind: source.kind,
-        chartPath: path,
-        directoryLabel: dirname(path) || source.label,
-        fileLabel: basename(path),
-        title: chart.metadata.title || basenameWithoutExtension(path),
-        subtitle: chart.metadata.subtitle,
-        artist: chart.metadata.artist,
-        genre: chart.metadata.genre,
-        playLevel: chart.metadata.playLevel,
-        bpm: chart.metadata.bpm,
-        // The notes the engine scores: FREE ZONE tails are judged by nobody, and mines / invisible objects are not
-        // notes at all. A long note counts once.
-        totalNotes: scored.notes,
-        chart,
-      };
-      loadedCharts[index] = libraryChart;
-      // Every parsed chart stays resident for as long as the song is in the collection, so trim it before keeping
-      // it. Keep the play variant first, while the events are still plain objects: select screens filter the whole
-      // list by it, and a cached answer spares them from unpacking every chart's events. Counting the notes already
-      // worked it out (`resolveChartPlayVariant` over the same chart and path).
-      seedLibraryChartPlayVariant(libraryChart, scored.playVariant);
-      restorePackedCollectionChart(chart, packed, strings);
+      listChart(index, result, key);
+      reportParsed(items[index]!.path);
+    }
+  }
+  unread.sort((left, right) => left - right);
+  // More charts in flight than there are workers: a chart spends most of its time waiting on its file, its hash and
+  // the cache, and the pool queues the parses it has no worker for, so files are read while charts are parsed.
+  await runWithConcurrency(unread, PARSE_READ_CONCURRENCY, async (index) => {
+    const { source, path } = items[index]!;
+    try {
+      const chartKeys = chartKeysOf(items[index]!);
+      let key: string | undefined;
+      const result = await parseChartFile(source, path, options.parsedChartCache, (hashed) => {
+        key = hashed;
+        chartKeys?.learned(path, hashed);
+      });
+      listChart(index, result, key);
     } catch (error) {
       parseErrors[index] = {
         sourceId: source.id,
@@ -503,8 +564,8 @@ export async function loadChartCollectionFromFiles(
         message: error instanceof Error ? error.message : 'failed to parse chart',
       };
     }
-    parsedSoFar += 1;
-    throttledParseProgress?.({ phase: 'parsing', current: parsedSoFar, total: chartCount, label: path });
+    reportParsed(path);
+    // Keep cooperative progress yielding for hosts using the local fallback; workers already run outside the UI thread.
     if (parsedSoFar % PARSE_YIELD_INTERVAL === 0) await yieldToTask();
   });
   charts.push(...loadedCharts.filter((chart): chart is LibraryChart => chart !== undefined));
@@ -514,6 +575,21 @@ export async function loadChartCollectionFromFiles(
   }
 
   return { sources, charts, errors };
+}
+
+/** Reads and parses the chart file at `path` (through `cache`); `onKey` receives the cache key it worked out. */
+async function parseChartFile(
+  source: BrowserAssetSource,
+  path: string,
+  cache: ParsedChartCache | undefined,
+  onKey: (key: string) => void,
+): Promise<ParseChartTaskResult> {
+  const chartBytes = await loadAssetBytes(source.files.get(path));
+  if (!chartBytes) {
+    throw new Error(`chart bytes missing for ${path}`);
+  }
+  const siblings = hasChartSiblings(path) ? await loadChartSiblings(source.files, path, chartBytes) : undefined;
+  return parseChartThroughCache({ path, bytes: chartBytes, ...(siblings ? { siblings } : {}) }, cache, onKey);
 }
 
 export function describeChartCollection(collection: BrowserChartCollection): string {

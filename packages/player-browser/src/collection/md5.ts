@@ -13,7 +13,8 @@ const SHIFTS = [
 /** `floor(abs(sin(i + 1)) * 2^32)` for i = 0..63. */
 const SINES = Uint32Array.from({ length: 64 }, (_, index) => Math.floor(Math.abs(Math.sin(index + 1)) * 0x100000000));
 
-const HEX_DIGITS = '0123456789abcdef';
+const HEX_BYTES = Array.from({ length: 256 }, (_, value) => value.toString(16).padStart(2, '0'));
+const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
 
 /** MD5 of `bytes`, as 32 lowercase hex digits. */
 export function md5HexOfBytes(bytes: Uint8Array): string {
@@ -32,9 +33,12 @@ export function md5HexOfBytes(bytes: Uint8Array): string {
   let b0 = 0xefcdab89;
   let c0 = 0x98badcfe;
   let d0 = 0x10325476;
-  const words = new Uint32Array(16);
-  for (let offset = 0; offset < paddedLength; offset += 64) {
-    for (let index = 0; index < 16; index += 1) words[index] = view.getUint32(offset + index * 4, true);
+  const words = new Uint32Array(padded.buffer);
+  if (!LITTLE_ENDIAN) {
+    // MD5 reads little-endian words. Swap them in place when the typed array uses big-endian order.
+    for (let index = 0; index < words.length; index += 1) words[index] = view.getUint32(index * 4, true);
+  }
+  for (let offset = 0; offset < words.length; offset += 16) {
     let a = a0;
     let b = b0;
     let c = c0;
@@ -55,7 +59,7 @@ export function md5HexOfBytes(bytes: Uint8Array): string {
         f = c ^ (b | ~d);
         g = (7 * index) % 16;
       }
-      const sum = (a + f + SINES[index]! + words[g]!) >>> 0;
+      const sum = (a + f + SINES[index]! + words[offset + g]!) >>> 0;
       const shift = SHIFTS[index]!;
       a = d;
       d = c;
@@ -68,13 +72,15 @@ export function md5HexOfBytes(bytes: Uint8Array): string {
     d0 = (d0 + d) >>> 0;
   }
 
-  let hex = '';
-  for (const word of [a0, b0, c0, d0]) {
-    // Little-endian byte order.
-    for (let byte = 0; byte < 4; byte += 1) {
-      const value = (word >>> (byte * 8)) & 0xff;
-      hex += HEX_DIGITS[value >>> 4]! + HEX_DIGITS[value & 0x0f]!;
-    }
-  }
-  return hex;
+  return wordHex(a0) + wordHex(b0) + wordHex(c0) + wordHex(d0);
+}
+
+/** Hex digits for a word's four bytes, in little-endian order. */
+function wordHex(word: number): string {
+  return (
+    HEX_BYTES[word & 0xff]! +
+    HEX_BYTES[(word >>> 8) & 0xff]! +
+    HEX_BYTES[(word >>> 16) & 0xff]! +
+    HEX_BYTES[word >>> 24]!
+  );
 }

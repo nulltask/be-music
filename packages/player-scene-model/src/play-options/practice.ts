@@ -80,21 +80,21 @@ export function resolvePracticeSelection(
   const readsRules = practiceReadsJudgeRankAndTotal(ruleset);
   const gauge = keepPracticeGauge(options.practiceGauge, ruleset);
   const startMs = Math.max(0, Math.trunc(range?.startMs ?? 0));
-  return {
-    startMs,
-    ...(range?.endMs !== undefined && range.endMs > startMs ? { endMs: Math.trunc(range.endMs) } : {}),
-    gauge,
-    // GAUGE CATEGORY is beatoraja's: it follows a beatoraja gauge, under every judge ruleset.
-    ...(practiceGaugeSource(gauge, ruleset) === 'beatoraja' && options.practiceGaugeCategory !== 'MODE'
-      ? { gaugeCategory: options.practiceGaugeCategory }
-      : {}),
-    startGauge: options.practiceStartGauge,
-    restBarsBefore: options.practiceRestBefore,
-    restBarsAfter: options.practiceRestAfter,
-    carriedLongNotes: options.practiceCarriedLongNotes,
-    ...(readsRules && options.practiceJudgeRank > 0 ? { judgeRank: options.practiceJudgeRank } : {}),
-    ...(readsRules && options.practiceTotal > 0 ? { total: options.practiceTotal } : {}),
-  };
+  // Built field by field in the original key order; conditional spreads would copy an object for every optional field.
+  const selection: PracticeSelection = { startMs } as PracticeSelection;
+  if (range?.endMs !== undefined && range.endMs > startMs) selection.endMs = Math.trunc(range.endMs);
+  selection.gauge = gauge;
+  // GAUGE CATEGORY is beatoraja's: it follows a beatoraja gauge, under every judge ruleset.
+  if (practiceGaugeSource(gauge, ruleset) === 'beatoraja' && options.practiceGaugeCategory !== 'MODE') {
+    selection.gaugeCategory = options.practiceGaugeCategory;
+  }
+  selection.startGauge = options.practiceStartGauge;
+  selection.restBarsBefore = options.practiceRestBefore;
+  selection.restBarsAfter = options.practiceRestAfter;
+  selection.carriedLongNotes = options.practiceCarriedLongNotes;
+  if (readsRules && options.practiceJudgeRank > 0) selection.judgeRank = options.practiceJudgeRank;
+  if (readsRules && options.practiceTotal > 0) selection.total = options.practiceTotal;
+  return selection;
 }
 
 /** `ms` as `m:ss.s`, tenths rounded down (`83_456` → `1:23.4`). */

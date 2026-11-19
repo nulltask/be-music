@@ -1,5 +1,23 @@
-import { isLegacyChartPlayOptionProgram, type ChartPlayOptionProgram } from '@be-music/chart-model';
+import {
+  isLegacyChartPlayOptionProgram,
+  playerChartPlayOptionsOf,
+  withPlayerChartPlayOptions,
+  type ChartOptionDiagnostic,
+  type ChartPlayOptionProgram,
+  type PlayerChartPlayOptions,
+} from '@be-music/chart-model';
+import { resolveEffectiveChartPlayOptions, type ChartPlayOptionContext } from './chart-notes-options.ts';
 import type { MineModifier } from './mine-modifier.ts';
+
+/** Resolve a play's program and identify the effective options contributed by the player. */
+export function resolveChartPlayProgram(
+  declared: ChartPlayOptionProgram,
+  player: PlayerChartPlayOptions | undefined,
+  context: ChartPlayOptionContext,
+): { program: ChartPlayOptionProgram; diagnostics: ChartOptionDiagnostic[]; playerOptions: PlayerChartPlayOptions } {
+  const effective = resolveEffectiveChartPlayOptions(withPlayerChartPlayOptions(declared, player), context);
+  return { ...effective, playerOptions: playerChartPlayOptionsOf(declared.options, effective.program.options) };
+}
 
 /** The player's arrangement and mine choices a chart's gameplay options can replace. */
 export interface ChartPlaySelection {
@@ -69,11 +87,12 @@ export function applyChartPlayOptions<T extends ChartPlaySelection>(
   const perSide = crossSide ? 'OFF' : random === 'MIRROR' ? 'MIRROR' : scratch ? 'RANDOM+' : 'RANDOM';
   writable.random1P = perSide;
   writable.random2P = perSide;
-  delete writable.randomFixedLane1P;
-  delete writable.randomFixedLane2P;
-  delete writable.lr2RandomScratch1P;
-  delete writable.lr2RandomScratch2P;
+  // A `delete` of an absent key still costs a runtime call; most selections carry none of these.
+  if ('randomFixedLane1P' in writable) delete writable.randomFixedLane1P;
+  if ('randomFixedLane2P' in writable) delete writable.randomFixedLane2P;
+  if ('lr2RandomScratch1P' in writable) delete writable.lr2RandomScratch1P;
+  if ('lr2RandomScratch2P' in writable) delete writable.lr2RandomScratch2P;
   writable.mRan1P = false;
   writable.mRan2P = false;
-  return { selection: next, ...(crossSide ? { crossSide: { scratch } } : {}) };
+  return crossSide ? { selection: next, crossSide: { scratch } } : { selection: next };
 }

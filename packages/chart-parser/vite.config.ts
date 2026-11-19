@@ -6,6 +6,7 @@ export default defineConfig({
     packageDir: import.meta.dirname,
     entries: {
       index: 'src/index.ts',
+      core: 'src/core/index.ts',
       cli: 'src/cli.ts',
     },
   }),

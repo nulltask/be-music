@@ -1,8 +1,10 @@
 import { unzipSync } from 'fflate';
 import { countScoredNotes } from '@be-music/chart-model';
-import { decodeUTF8Text, parseBMSBytes, parseBmson, parseLRXBytes, parseN2SBytes } from '@be-music/chart-parser';
+import { decodeUTF8Text, parseBMSBytes, parseBmson, parseLRXBytes, parseN2SBytes } from '@be-music/chart-parser/core';
 import { type BeMusicJSON } from '@be-music/chart-source';
 import { compactChartPreservation } from '../collection/chart-preservation.ts';
+import { md5HexOfBytes } from '../collection/md5.ts';
+import { deferChartFields, type DeferredChartFields } from '../collection/compact-chart.ts';
 import { normalizePath } from '@be-music/shared-utils/core';
 import { packEvents, PackedEventStrings, type PackedEvents } from '../collection/packed-events.ts';
 import { timeStretchChannels } from '../runtime/time-stretch.ts';
@@ -22,6 +24,16 @@ export interface ParseChartTaskResult {
   scored: ReturnType<typeof countScoredNotes>;
   packed?: PackedEvents;
   strings: string[];
+  /**
+   * The chart's fields a listing does not read, taken out of `chart` as JSON text (`deferChartFields`); the collection
+   * puts them back as it lists the chart (`restoreDeferredChartFields`).
+   */
+  deferred?: DeferredChartFields;
+  /**
+   * The MD5 (lowercase hex) of the chart file, worked out beside the parse while its bytes are in hand: with the
+   * SHA-256 of its cache key it makes the chart's file hashes, so matching courses and records reads no file again.
+   */
+  md5?: string;
 }
 export function parseChartTask(input: ParseChartTaskInput): ParseChartTaskResult {
   const path = input.path.toLowerCase();
@@ -36,15 +48,16 @@ export function parseChartTask(input: ParseChartTaskInput): ParseChartTaskResult
   compactChartPreservation(chart);
   const strings = new PackedEventStrings();
   const packed = packEvents(chart.events, strings);
-  const values: string[] = [];
-  if (packed) {
-    let maximum = -1;
-    for (const id of packed.channels) maximum = Math.max(maximum, id);
-    for (const id of packed.values) maximum = Math.max(maximum, id);
-    for (let index = 0; index <= maximum; index++) values.push(strings.valueOf(index));
-    chart.events = [];
-  }
-  return { chart, scored, packed, strings: values };
+  if (packed) chart.events = [];
+  const { chart: listing, deferred } = deferChartFields(chart);
+  return {
+    chart: listing,
+    scored,
+    packed,
+    strings: packed ? strings.snapshot() : [],
+    deferred,
+    md5: md5HexOfBytes(input.bytes),
+  };
 }
 export interface ZipTaskInput {
   bytes: Uint8Array;

@@ -88,6 +88,21 @@ describe('fetchTableHeaderCourses', () => {
     expect(fetched).toEqual(['https://example.com/h.json', 'https://example.com/bare.json']);
   });
 
+  test("resolves the header's data_url against the header, and leaves it out when there is none", async () => {
+    const { fetchText } = stubFetch({
+      'https://example.com/sl/header.json': JSON.stringify({ ...HEADER, data_url: 'score.json' }),
+      'https://example.com/abs.json': JSON.stringify({ ...HEADER, data_url: 'https://cdn.example/data.json' }),
+      'https://example.com/none.json': JSON.stringify({ ...HEADER, data_url: ' ' }),
+    });
+    expect((await fetchTableHeaderCourses('https://example.com/sl/header.json', fetchText)).dataURL).toBe(
+      'https://example.com/sl/score.json',
+    );
+    expect((await fetchTableHeaderCourses('https://example.com/abs.json', fetchText)).dataURL).toBe(
+      'https://cdn.example/data.json',
+    );
+    expect(await fetchTableHeaderCourses('https://example.com/none.json', fetchText)).not.toHaveProperty('dataURL');
+  });
+
   test('rejects a page without a header and a header that is not JSON', async () => {
     const { fetchText } = stubFetch({
       'https://example.com/plain.html': '<html></html>',

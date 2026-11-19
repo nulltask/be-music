@@ -63,6 +63,8 @@ export type SelectKeyAction =
   | { readonly type: 'readtext-scroll'; readonly delta: number }
   /** Close the README dialog. */
   | { readonly type: 'readtext-close' }
+  /** Show the README dialog's previous (−1) or next (1) text file. */
+  | { readonly type: 'readtext-tab'; readonly step: 1 | -1 }
   /** Open the folder under the cursor, and do nothing on a chart (LR2's →). */
   | { readonly type: 'open-folder' }
   /** Move the cursor to the next chart of the focused chart's track (LR2's difficulty change). */
@@ -252,11 +254,13 @@ export function resolveSelectKeyAction(
 }
 
 /**
- * The README dialog's keys while it is open: Enter (LR2's decide key), Backspace or Escape close it, the arrows and the
- * page keys scroll it, and nothing else reaches the list behind it.
+ * The README dialog's keys while it is open: Enter (LR2's decide key), Backspace or Escape close it, ← and → switch
+ * between the folder's text files, ↑↓ and the page keys scroll it, and nothing else reaches the list behind it.
  */
 function resolveReadTextKey(event: SessionKeyEvent): SelectKeyAction {
   if (event.key === 'Backspace' || event.key === 'Enter' || event.key === 'Escape') return { type: 'readtext-close' };
+  if (event.key === 'ArrowLeft') return { type: 'readtext-tab', step: -1 };
+  if (event.key === 'ArrowRight') return { type: 'readtext-tab', step: 1 };
   const delta = READTEXT_SCROLL_KEYS[event.key];
   return delta === undefined ? { type: 'swallow' } : { type: 'readtext-scroll', delta };
 }

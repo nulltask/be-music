@@ -117,6 +117,14 @@ export const REPLAY_SIMULATOR_RULESETS: readonly ['lr2', 'beatoraja', '____', 'p
  * where no measurement exists — see `rulesets.ts`).
  */
 export function simulateReplay(replay: BeMusicReplay, options: SimulateReplayOptions): ReplayRulesetResult {
+  return simulateReplayWithRuleset(replay, options.ruleset, options);
+}
+
+function simulateReplayWithRuleset(
+  replay: BeMusicReplay,
+  ruleset: RulesetId,
+  options: Omit<SimulateReplayOptions, 'ruleset'>,
+): ReplayRulesetResult {
   const twoPlayer = replay.play.battleMode === 'TWO-PLAYER' || replay.play.battleMode === 'COUPLE';
   if (options.player === 2 && !twoPlayer) throw new RangeError('Player 2 requires a recorded two-player play.');
   if (twoPlayer) {
@@ -136,7 +144,7 @@ export function simulateReplay(replay: BeMusicReplay, options: SimulateReplayOpt
         .filter((input) => input.channels.length > 0),
     };
   }
-  const config = resolveRulesetConfig(replay, options.ruleset, options);
+  const config = resolveRulesetConfig(replay, ruleset, options);
   const endOnFailure =
     options.endOnFailure ??
     resolveGaugeEndOnFailure(
@@ -155,7 +163,7 @@ export function simulateReplayRulesets(
 ): Record<string, ReplayRulesetResult> {
   const results: Record<string, ReplayRulesetResult> = {};
   for (const ruleset of rulesets) {
-    results[ruleset] = simulateReplay(replay, { ...options, ruleset });
+    results[ruleset] = simulateReplayWithRuleset(replay, ruleset, options);
   }
   return results;
 }
@@ -525,6 +533,10 @@ class ReplaySimulation {
           if (note.timeUs >= untilUs) break;
           if (!note.judged && !note.holding && note.missDeadlineUs < untilUs) {
             events.push({ timeUs: note.missDeadlineUs, kind: 'miss', lane, note });
+            // No input falls inside this span, so a missed Hell Charge head starts ticking at its deadline.
+            if (note.isLong && note.longStyle === 3 && note.missDeadlineUs >= this.lastAdvanceUs) {
+              this.startHCNPassing(lane, note, note.missDeadlineUs);
+            }
           }
         }
         if (lane.hold && lane.hold.tailMissDeadlineUs < untilUs) {
@@ -552,24 +564,8 @@ class ReplaySimulation {
         }
       }
     }
-    // Hell Charge ticks, including those of a head missed in this span: no input falls inside it, so the miss is
-    // certain and its ticks run from the deadline on.
     for (const lane of this.laneList) {
       if (lane.auto) continue;
-      for (let index = lane.sweepCursor; index < lane.notes.length; index += 1) {
-        const note = lane.notes[index]!;
-        if (note.timeUs >= untilUs) break;
-        if (
-          note.isLong &&
-          note.longStyle === 3 &&
-          !note.judged &&
-          !note.holding &&
-          note.missDeadlineUs >= this.lastAdvanceUs &&
-          note.missDeadlineUs < untilUs
-        ) {
-          this.startHCNPassing(lane, note, note.missDeadlineUs);
-        }
-      }
       for (let passing = lane.passing; passing !== undefined; passing = passing.next) {
         passing.counter.advance(Math.min(untilUs, passing.endUs), (gain, atUs) =>
           events.push({ timeUs: atUs, kind: 'hcn-tick', lane, gain }),

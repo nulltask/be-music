@@ -16,6 +16,7 @@ import {
   type ComparedRow,
 } from './compare-results.ts';
 import type { ExportsBenchmarkSnapshot } from './exports.types.ts';
+import { confirmBenchmarkRegressions, findBenchmarkRegressions } from './regressions.ts';
 
 function createSnapshot(
   results: Record<string, number>,
@@ -81,6 +82,47 @@ function createSnapshot(
     ...overrides,
   };
 }
+
+describe('regressions for automatic issue reporting', () => {
+  function snapshot(sha: string, rates: Record<string, number>, samples: Record<string, number[]> = {}) {
+    const value = createSnapshot(rates, { gitSha: sha, aggregation: { strategy: 'median', runCount: 5 } });
+    for (const [key, result] of Object.entries(value.results)) {
+      result.runMedianHz = samples[key] ?? Array<number>(5).fill(result.medianHz);
+    }
+    return value;
+  }
+
+  it('includes exactly 20% and excludes noise, I/O, and incomplete samples', () => {
+    const base = snapshot('base', {
+      boundary: 100,
+      decimalBoundary: 1,
+      near: 100,
+      overlap: 100,
+      incomplete: 100,
+      disk: 100,
+    });
+    const head = snapshot(
+      'head',
+      { boundary: 80, decimalBoundary: 0.8, near: 81, overlap: 70, incomplete: 70, disk: 70 },
+      { overlap: [65, 68, 70, 72, 101], incomplete: [70, 70, 70, 70] },
+    );
+    head.ioBound = ['disk'];
+    expect(findBenchmarkRegressions({ base, head }, 20).map(({ key }) => key)).toEqual(['boundary', 'decimalBoundary']);
+  });
+
+  it('keeps only cases that cross the threshold in both rounds', () => {
+    const base = snapshot('base', { persists: 100, recovers: 100, new: 100 });
+    const initial = { base, head: snapshot('head', { persists: 80, recovers: 75, new: 95 }) };
+    const repeat = { base, head: snapshot('head', { persists: 75, recovers: 81, new: 70 }) };
+    const confirmed = confirmBenchmarkRegressions(initial, repeat, 20);
+    expect(confirmed.map(({ key }) => key)).toEqual(['persists']);
+    expect(confirmed[0]?.initial.deltaPercent).toBeCloseTo(-20);
+    expect(confirmed[0]?.confirmation.deltaPercent).toBeCloseTo(-25);
+    expect(() => confirmBenchmarkRegressions(initial, { ...repeat, head: snapshot('other-head', {}) }, 20)).toThrow(
+      'same base and head commits',
+    );
+  });
+});
 
 describe('resolveOverallVerdict', () => {
   it('uses the median threshold, not isolated case counts', () => {

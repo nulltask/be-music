@@ -2,8 +2,21 @@
 
 # @be-music/app-leaderboard
 
-The Be-Music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. The design is in
-[docs/leaderboard.md](../../docs/leaderboard.md); this README covers running and deploying it.
+This Hono app serves the Be-Music Leaderboard API on Cloudflare Workers and stores data in D1 and R2. [Service specification](../../docs/leaderboard.md)
+
+<details>
+<summary>Table of contents</summary>
+
+- [What is implemented](#what-is-implemented)
+- [Setup](#setup)
+  - [Secrets](#secrets)
+- [Database](#database)
+- [Deploy](#deploy)
+- [Pages](#pages)
+  - [Icons](#icons)
+- [Tests](#tests)
+
+</details>
 
 ## What is implemented
 
@@ -27,7 +40,7 @@ The Be-Music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. T
 
 Not implemented: L4 for new `#RANDOM` outcomes, L5 and rivals. Score share cards are generated in the browser, uploaded through `PUT /api/v0/scores/:id/card` and served by `/scores/:id/card`.
 
-A score submission, in the order the Worker checks it (`src/api/v0.ts`, `src/scores/submit.ts`); the full sequence with the client is in [docs/leaderboard.md section 5.2](../../docs/leaderboard.md#52-sequence):
+The Worker checks submissions in this order (`src/api/v0.ts` and `src/scores/submit.ts`). For the full sequence, including the client, see [docs/leaderboard.md section 5.2](../../docs/leaderboard.md#52-sequence).
 
 ```mermaid
 flowchart TD

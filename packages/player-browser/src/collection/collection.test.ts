@@ -14,6 +14,10 @@ import { parseChart } from '@be-music/chart-parser';
 import { preparePlaybackChart } from '@be-music/player-engine';
 import { DeferredDroppedFile } from './dropped-file.ts';
 import type { BrowserAssetEntry, BrowserAssetSource, LoadProgress } from './types.ts';
+import type { ParseChartTaskResult } from '../compute/tasks.ts';
+import type { ParsedChartCache } from './parsed-chart-cache.ts';
+import { computeSHA256Hex, seededChartFileHashes } from './chart-hash.ts';
+import { md5HexOfBytes } from './md5.ts';
 
 /**
  * The drag-drop loader fires `LoadProgress` events as it walks the `reading` and `parsing` phases so the host UI can
@@ -77,6 +81,139 @@ describe('loadChartCollectionFromFiles with deferred drop handles', () => {
     expect(collection.errors).toEqual([]);
     expect(collection.charts.map((chartEntry) => chartEntry.title)).toEqual(charts.map((_, index) => `Song ${index}`));
     expect(opened).not.toContain('Pack/S00/kick.wav');
+  });
+});
+
+describe('loadChartCollectionFromFiles with the chart keys a host kept', () => {
+  /** A cache in memory that notes how it is read, and a folder's files that note which are opened. */
+  function fixture() {
+    const entries = new Map<string, ParseChartTaskResult>();
+    const lookups: string[][] = [];
+    const cache: ParsedChartCache = {
+      get: async (key) => entries.get(key),
+      getMany: async (keys) => {
+        lookups.push([...keys]);
+        return keys.map((key) => entries.get(key));
+      },
+      set: async (key, value) => {
+        entries.set(key, structuredClone(value));
+      },
+    };
+    const opened: string[] = [];
+    const file = (path: string, contents: string) =>
+      new DeferredDroppedFile(
+        {
+          name: path.split('/').at(-1)!,
+          file: (resolve) => {
+            opened.push(path);
+            resolve(new File([contents], path.split('/').at(-1)!));
+          },
+        },
+        path,
+      );
+    const chart = (title: string) => MINIMAL_BMS.replace('Test', title);
+    const files = () => [
+      file('Pack/a.bms', chart('Alpha')),
+      file('Pack/b.bms', chart('Beta')),
+      file('Pack/kick.wav', ''),
+    ];
+    return { cache, entries, lookups, opened, files };
+  }
+
+  test('reports the key of every chart file it reads', async () => {
+    const { cache, entries, files } = fixture();
+    const learned = new Map<string, string>();
+    const collection = await loadChartCollectionFromFiles(files(), {
+      parsedChartCache: cache,
+      chartKeys: { known: () => undefined, learned: (path, key) => learned.set(path, key) },
+    });
+    expect(collection.charts.map((chartEntry) => chartEntry.title)).toEqual(['Alpha', 'Beta']);
+    expect([...learned.keys()]).toEqual(['Pack/a.bms', 'Pack/b.bms']);
+    expect([...learned.values()].sort()).toEqual([...entries.keys()].sort());
+  });
+
+  test('lists a chart whose key the host kept from the cache, in one lookup, without opening its file', async () => {
+    const { cache, lookups, opened, files } = fixture();
+    const keys = new Map<string, string>();
+    const book = {
+      known: (path: string) => keys.get(path),
+      learned: (path: string, key: string) => keys.set(path, key),
+    };
+    const first = await loadChartCollectionFromFiles(files(), { parsedChartCache: cache, chartKeys: book });
+    expect(opened.sort()).toEqual(['Pack/a.bms', 'Pack/b.bms']);
+    opened.length = 0;
+    const second = await loadChartCollectionFromFiles(files(), { parsedChartCache: cache, chartKeys: book });
+    expect(opened).toEqual([]);
+    expect(lookups).toEqual([[keys.get('Pack/a.bms'), keys.get('Pack/b.bms')]]);
+    expect(second.errors).toEqual([]);
+    expect(second.charts.map((chartEntry) => [chartEntry.id, chartEntry.title, chartEntry.totalNotes])).toEqual(
+      first.charts.map((chartEntry) => [chartEntry.id, chartEntry.title, chartEntry.totalNotes]),
+    );
+    // The chart keeps its notes: they unpack from the cached columns.
+    expect(second.charts[0]!.chart.events.length).toBe(first.charts[0]!.chart.events.length);
+  });
+
+  test('reads a chart the cache no longer has, and keeps the path order', async () => {
+    const { cache, entries, opened, files } = fixture();
+    const keys = new Map<string, string>();
+    const book = {
+      known: (path: string) => keys.get(path),
+      learned: (path: string, key: string) => keys.set(path, key),
+    };
+    await loadChartCollectionFromFiles(files(), { parsedChartCache: cache, chartKeys: book });
+    entries.delete(keys.get('Pack/a.bms')!);
+    opened.length = 0;
+    const collection = await loadChartCollectionFromFiles(files(), { parsedChartCache: cache, chartKeys: book });
+    expect(opened).toEqual(['Pack/a.bms']);
+    expect(collection.charts.map((chartEntry) => chartEntry.title)).toEqual(['Alpha', 'Beta']);
+    expect(entries.has(keys.get('Pack/a.bms')!)).toBe(true);
+  });
+
+  test('lists the same charts from the parses it kept as from the files', async () => {
+    const { cache, entries, files } = fixture();
+    const first = await loadChartCollectionFromFiles(files(), { parsedChartCache: cache });
+    expect(entries.size).toBe(2);
+    const second = await loadChartCollectionFromFiles(files(), { parsedChartCache: cache });
+    const read = (collection: typeof first) =>
+      collection.charts.map((chartEntry) => [chartEntry.title, chartEntry.totalNotes, chartEntry.chart.events.length]);
+    expect(read(second)).toEqual(read(first));
+    expect(second.charts[0]!.chart.resources).toEqual(first.charts[0]!.chart.resources);
+  });
+
+  test("keeps each chart's file hashes with it, read from the file or come back with the cached parse", async () => {
+    const { cache, opened, files } = fixture();
+    const keys = new Map<string, string>();
+    const book = {
+      known: (path: string) => keys.get(path),
+      learned: (path: string, key: string) => keys.set(path, key),
+    };
+    const expected = {
+      sha256: await computeSHA256Hex(new TextEncoder().encode(MINIMAL_BMS.replace('Test', 'Alpha'))),
+      md5: md5HexOfBytes(new TextEncoder().encode(MINIMAL_BMS.replace('Test', 'Alpha'))),
+    };
+    const first = await loadChartCollectionFromFiles(files(), { parsedChartCache: cache, chartKeys: book });
+    expect(seededChartFileHashes(first.charts[0]!.chart)).toEqual(expected);
+    opened.length = 0;
+    const second = await loadChartCollectionFromFiles(files(), { parsedChartCache: cache, chartKeys: book });
+    expect(opened).toEqual([]);
+    expect(seededChartFileHashes(second.charts[0]!.chart)).toEqual(expected);
+    // Without a cache no file is hashed, and no hash is kept.
+    const plain = await loadChartCollectionFromFiles(files());
+    expect(seededChartFileHashes(plain.charts[0]!.chart)).toBeUndefined();
+  });
+
+  test('takes no key without a cache, nor for a chart in an archive', async () => {
+    const { cache, opened, files } = fixture();
+    const known = vi.fn(() => 'stale');
+    await loadChartCollectionFromFiles(files(), { chartKeys: { known, learned: () => {} } });
+    expect(known).not.toHaveBeenCalled();
+    expect(opened.sort()).toEqual(['Pack/a.bms', 'Pack/b.bms']);
+    const collection = await loadChartCollectionFromFiles([makeZipFile('Pack.zip', { 'Song/main.bms': MINIMAL_BMS })], {
+      parsedChartCache: cache,
+      chartKeys: { known, learned: () => {} },
+    });
+    expect(known).not.toHaveBeenCalled();
+    expect(collection.charts.map((chartEntry) => chartEntry.title)).toEqual(['Test']);
   });
 });
 

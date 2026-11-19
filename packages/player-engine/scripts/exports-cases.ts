@@ -438,6 +438,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseAPI.parseLR2CourseFile(benchLR2Course);
     },
   });
+  const benchN2XList = `<bmslist>${Array.from(
+    { length: 16 },
+    (_, index) =>
+      `<bms><file>song${index}\\0${index % 4}_chart.n2s</file><condition><target_ex_score>1</target_ex_score></condition></bms>`,
+  ).join('')}</bmslist>`;
+  define('player-engine.course.parseN2XCourseFile', {
+    run: () => {
+      courseAPI.parseN2XCourseFile(benchN2XList, 'bench');
+    },
+  });
   const benchLR2Parsed = courseAPI.parseLR2CourseFile(benchLR2Course)[0]!;
   define('player-engine.course.countLR2UnplayedStages', {
     run: () => {
@@ -1193,6 +1203,15 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  define('player-engine.replay.resolveChartPlayProgram', {
+    run() {
+      replayAPI.resolveChartPlayProgram(
+        { version: 3, options: { random: 'MIRROR' } },
+        { notes: 'DBLCOPY' },
+        { playVariant: '7', course: true },
+      );
+    },
+  });
   define('player-engine.resolveChartNotesPlayVariant', {
     run() {
       playerAPI.resolveChartNotesPlayVariant('7', 'COPY');
@@ -1299,6 +1318,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.ruleset.resolveMissCount', {
     run: () => {
       rulesetAPI.resolveMissCount({ bad: 3, poor: 5, emptyPoor: 2 }, 10);
+    },
+  });
+  define('player-engine.ruleset.resolvePlugoutScore', {
+    run() {
+      rulesetAPI.resolvePlugoutScore({ pgreat: 900, great: 80, good: 20 }, 1000);
     },
   });
   define('player-engine.ruleset.resolveGaugeEndOnFailure', {

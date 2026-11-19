@@ -141,6 +141,8 @@ describe('captureOptionSettings', () => {
       ghost: 'LEADERBOARD_TOP',
       ghostMode: 'LANE_OVERLAY',
       autoSaveReplay: true,
+      replayDeviceNames: true,
+      bemuseReplayGain: false,
       courseAutoAdvance: true,
       nonstopPlacement: 'lr2',
       submitToLeaderboard: true,
@@ -269,6 +271,9 @@ describe('captureOptionSettings', () => {
       hiSpeed: 2.5,
       hsFix: 'STARTBPM',
       displayAreaInfo: 'ON',
+      bga: 'AUTOPLAY_ONLY',
+      bgaSize: 'NORMAL',
+      scoreGraph: false,
       hiddenSudden1P: 'SUDDEN',
       hiddenSudden2P: 'HID+SUD',
       laneCover: true,
@@ -285,6 +290,8 @@ describe('captureOptionSettings', () => {
       compressorTuning: defaultCompressorTunings(),
       skinSettings: { test: { glow: false, offset: 5, theme: 'light' } },
       courseTableURLs: ['https://example.com/courses.json'],
+      removedDefaultCourseTableURLs: ['https://stellabms.xyz/st/table.html'],
+      bemuseServerURLs: ['https://example.com/server/index.json'],
       replaySlotAutoSave1: 'always',
       replaySlotAutoSave2: 'never',
       replaySlotAutoSave3: 'score-update',
@@ -305,7 +312,14 @@ describe('captureOptionSettings', () => {
       if (key in restored) expect(restored[key as keyof PlayerGUIState], key).toEqual(expected[key]);
     }
     const legacy = optionSettingsFromLegacy(storage, 43).settings;
-    for (const key of ['workerCount', 'compressorTuning', 'skinSettings', 'courseTableURLs'] as const) {
+    for (const key of [
+      'workerCount',
+      'compressorTuning',
+      'skinSettings',
+      'courseTableURLs',
+      'removedDefaultCourseTableURLs',
+      'bemuseServerURLs',
+    ] as const) {
       expect(legacy[key], key).toEqual(expected[key]);
     }
   });

@@ -117,6 +117,9 @@ const PORTRAIT_ROW_LEVEL_X = 25;
 const PORTRAIT_ROW_TITLE_X = 45;
 /** The DJ Rank column of a song row, left of the note count. */
 const ROW_RANK_W = 24;
+/** How faint a course that cannot start is drawn in the list. */
+const DISABLED_ROW_ALPHA = 0.45;
+
 /**
  * The widest a folder or course row's count may run (`12 charts`, `4 stages · 1 missing`): such a row has no fact
  * columns, so its count takes what it needs up to this and the title gets the rest.
@@ -358,7 +361,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         (portrait
           ? this.renderPortraitRow(frame, entry, entryIndex, slot, listWidth)
           : this.renderRow(frame, entry, entryIndex, slot, listWidth)) || needsFrame;
-      fadeChildrenFrom(frame.layer, from, alpha);
+      // A course that cannot start (a stage missing) is drawn faint, as a disabled control is.
+      const disabled = entry.kind === 'course' && !entry.course.playable;
+      fadeChildrenFrom(frame.layer, from, disabled ? alpha * DISABLED_ROW_ALPHA : alpha);
     }
     const visible = this.activeCard !== undefined;
     this.cursorGlow.visible = visible;

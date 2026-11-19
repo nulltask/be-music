@@ -164,12 +164,14 @@ export class SidePlayfieldGhost implements GhostPresentation {
   private readonly side: GhostSide;
   private readonly field: GhostField;
   private readonly target: SidePlayfieldGhostTarget;
+  private readonly maxLongNoteBeatSpan: number;
   private seconds = Number.NEGATIVE_INFINITY;
   private settleCursor = 0;
   private judgmentCursor = 0;
   private inputCursor = 0;
   private secondPlayer: { score: ScoreSummary; playState: PlayState } | undefined;
   private merged: { notes: RuntimeNote[]; liveNotes: readonly RuntimeNote[] } | undefined;
+  private mergedDraw: { notes: RuntimeNote[]; liveNotes: readonly RuntimeNote[] } | undefined;
   private mergedMines: { mines: RuntimeMineNote[]; liveMines: readonly RuntimeMineNote[] } | undefined;
   private readonly presented = new PresentedPlayfield();
 
@@ -178,6 +180,10 @@ export class SidePlayfieldGhost implements GhostPresentation {
     this.side = side;
     this.field = field;
     this.target = target;
+    this.maxLongNoteBeatSpan = field.notes.reduce(
+      (max, note) => Math.max(max, (note.endBeat ?? note.beat) - note.beat),
+      0,
+    );
     this.secondPlayer = this.resolveSecondPlayer(-1);
   }
 
@@ -229,12 +235,22 @@ export class SidePlayfieldGhost implements GhostPresentation {
   public present(play: PlayfieldRuntime): PlayfieldRuntime {
     if (this.merged?.liveNotes !== play.notes)
       this.merged = { notes: mergeByBeat(play.notes, this.field.notes), liveNotes: play.notes };
+    let drawNotes = this.merged.notes;
+    // A seamless PRACTICE loop also draws its next round. Keep that preview in the renderer's list.
+    const liveDrawNotes = play.drawNotes;
+    if (liveDrawNotes !== play.notes) {
+      if (this.mergedDraw?.liveNotes !== liveDrawNotes)
+        this.mergedDraw = { notes: mergeByBeat(liveDrawNotes, this.field.notes), liveNotes: liveDrawNotes };
+      drawNotes = this.mergedDraw.notes;
+    }
     if (this.mergedMines?.liveMines !== play.mineNotes)
       this.mergedMines = { mines: mergeByBeat(play.mineNotes, this.field.mines), liveMines: play.mineNotes };
     return this.presented.present(play, {
       laneChannels: this.side.laneChannels,
       chartPlayVariant: this.side.playVariant,
       notes: this.merged.notes,
+      drawNotes,
+      maxLongNoteBeatSpan: Math.max(play.maxLongNoteBeatSpan, this.maxLongNoteBeatSpan),
       mineNotes: this.mergedMines.mines,
       secondPlayer: this.secondPlayer,
       ghostSide: '2P',

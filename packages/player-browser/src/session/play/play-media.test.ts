@@ -62,9 +62,10 @@ test('a play decodes through the audio service’s chart sample cache', async ()
 
 test('LR2 SILENT releases the samples kept for another chart', async () => {
   const chartSamples = createChartSampleCache();
+  const kick = {};
   chartSamples
-    .claim({ source: {}, chartPath: 'b/chart.bms', pathPrefix: undefined, sampleRate: 48_000 })
-    .set('kick.wav', { buffer: {} as AudioBuffer });
+    .claim({ source: {}, chartPath: 'b/chart.bms', sampleRate: 48_000 }, [kick])
+    .set(kick, { buffer: {} as AudioBuffer });
   await prepareAudio(context({ judgeTimingAutoAdjust: 'LR2-SILENT' }, chartSamples));
   expect(chartSamples.size).toBe(0);
 });

@@ -713,14 +713,13 @@ function normalizeBMSObjectLineEntry(input: unknown): BMSObjectLineEntry | undef
         normalizeChannel(event.channel) === channel &&
         normalizeObjectKey(event.value) !== '00',
     )
-    .map((event) => ({
-      measure,
-      channel,
-      position: event.position,
-      value: event.value,
-      ...(event.bmsLineOrder !== undefined ? { bmsLineOrder: event.bmsLineOrder } : {}),
-      ...(event.bmson ? { bmson: event.bmson } : {}),
-    }));
+    .map((event) => {
+      // Optional fields are assigned, not spread, to keep the hidden classes of parsed events.
+      const copy: BeMusicEvent = { measure, channel, position: event.position, value: event.value };
+      if (event.bmsLineOrder !== undefined) copy.bmsLineOrder = event.bmsLineOrder;
+      if (event.bmson) copy.bmson = event.bmson;
+      return copy;
+    });
 
   const measureLength =
     typeof raw.measureLength === 'number' && Number.isFinite(raw.measureLength) && raw.measureLength > 0

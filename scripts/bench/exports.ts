@@ -42,6 +42,7 @@ interface CLIOptions {
   packages: PackageName[];
   includeInteractive: boolean;
   filter?: string;
+  caseKeys?: ReadonlySet<string>;
 }
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -132,7 +133,7 @@ export async function runExportsBenchmark(options: CLIOptions): Promise<ExportsB
   const exportedFunctionsByPackage = collectExportedFunctionsByPackage(options.packages);
   const exportedKeys = flattenExportedKeys(exportedFunctionsByPackage);
 
-  if (!options.filter) {
+  if (!options.filter && !options.caseKeys) {
     validateCaseCoverage(exportedKeys, benchmarkCases, options.packages);
   }
 
@@ -145,7 +146,7 @@ export async function runExportsBenchmark(options: CLIOptions): Promise<ExportsB
     const exports = exportedFunctionsByPackage[packageName];
     for (const exportName of exports) {
       const key = `${packageName}.${exportName}`;
-      if (!isFilterMatch(key, options.filter)) {
+      if (!isFilterMatch(key, options.filter) || (options.caseKeys !== undefined && !options.caseKeys.has(key))) {
         filteredOutCount += 1;
         continue;
       }
@@ -179,6 +180,7 @@ export async function runExportsBenchmark(options: CLIOptions): Promise<ExportsB
       packages: [...options.packages],
       includeInteractive: options.includeInteractive,
       filter: options.filter,
+      caseKeys: options.caseKeys === undefined ? undefined : [...options.caseKeys],
     },
     exports: exportedFunctionsByPackage,
     totals: {
@@ -521,6 +523,17 @@ function parseArgs(args: string[], defaults: CLIDefaults): CLIOptions {
       continue;
     }
 
+    if (token === '--case-keys') {
+      const keys = resolveCLIValue(args[index + 1], '--case-keys')
+        .split(',')
+        .map((key) => key.trim())
+        .filter(Boolean);
+      if (keys.length === 0) throw new Error('--case-keys must include at least one benchmark key');
+      options.caseKeys = new Set(keys);
+      index += 1;
+      continue;
+    }
+
     throw new Error(`Unknown option: ${token}`);
   }
 
@@ -539,6 +552,7 @@ function printUsage(defaults: CLIDefaults): void {
     '',
     'Advanced options:',
     '  --filter <text>         Run only matching <package>.<export> keys',
+    '  --case-keys <list>      Run only these exact comma-separated benchmark keys',
     '  --include-interactive   Include interactive APIs (player.autoPlay/manualPlay)',
     '',
     'Developer options:',

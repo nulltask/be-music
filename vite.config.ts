@@ -90,8 +90,15 @@ const deterministicJudgeSources = [
   'packages/player-scene-model/src/**/*.ts',
 ];
 const nodeBuiltinMessage = 'Runtime-neutral code must not import Node built-ins; use a runtime adapter.';
+const parserCoreImport = {
+  name: '@be-music/chart-parser',
+  message: 'Use @be-music/chart-parser/core to keep the Node file adapter out of this layer.',
+};
 const nodeBuiltinImports = {
-  paths: builtinModules.filter((name) => !name.startsWith('_')).map((name) => ({ name, message: nodeBuiltinMessage })),
+  paths: [
+    ...builtinModules.filter((name) => !name.startsWith('_')).map((name) => ({ name, message: nodeBuiltinMessage })),
+    parserCoreImport,
+  ],
   patterns: [{ group: ['node:*'], message: nodeBuiltinMessage }],
 };
 const runtimeGlobals = [
@@ -151,13 +158,13 @@ const lowerLayerPatterns = [{ group: webLayerGroup('host', 'session', 'view'), m
 const engineModule = '@be-music/player-engine';
 const engineMessage = `Only a scene session (and runtime/engine-driver.ts) runs the engine (${engineModule}); import its types only.`;
 const engineTypeImports = {
-  paths: [{ name: engineModule, allowTypeImports: true, message: engineMessage }],
+  paths: [parserCoreImport, { name: engineModule, allowTypeImports: true, message: engineMessage }],
 };
 const lowerLayerImports = { ...engineTypeImports, patterns: lowerLayerPatterns };
-const engineDriverImports = { patterns: lowerLayerPatterns };
+const engineDriverImports = { paths: [parserCoreImport], patterns: lowerLayerPatterns };
 const sceneSessionPixiMessage = 'A scene session uses Pixi only for types; the family view draws.';
 const sceneSessionImports = {
-  paths: [{ name: 'pixi.js', allowTypeImports: true, message: sceneSessionPixiMessage }],
+  paths: [parserCoreImport, { name: 'pixi.js', allowTypeImports: true, message: sceneSessionPixiMessage }],
   patterns: [
     { group: ['pixi.js/*', '@pixi/*'], allowTypeImports: true, message: sceneSessionPixiMessage },
     {
@@ -170,6 +177,7 @@ const sceneSessionImports = {
 const familyViewEngineMessage = 'A family view draws frames and returns intents; the scene session drives the engine.';
 const familyViewImports = {
   paths: [
+    parserCoreImport,
     { name: engineModule, message: `${familyViewEngineMessage} Import nothing from ${engineModule}, not even a type.` },
   ],
   patterns: [
@@ -501,6 +509,23 @@ export default defineConfig({
         files: webPlayerServiceSources,
         rules: {
           'no-restricted-imports': ['error', webPlayerServiceImports],
+        },
+      },
+      {
+        files: ['packages/app-leaderboard/src/**/*.ts'],
+        rules: {
+          'no-restricted-imports': [
+            'error',
+            {
+              paths: [
+                parserCoreImport,
+                {
+                  name: engineModule,
+                  message: 'The Leaderboard verifies runs through the replay, course, records, and ruleset entries.',
+                },
+              ],
+            },
+          ],
         },
       },
       {

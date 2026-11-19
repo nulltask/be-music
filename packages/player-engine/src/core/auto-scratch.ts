@@ -22,9 +22,12 @@ export function resolveAutoScratchChannels(
   scratchChannels: Iterable<string>,
 ): ReadonlySet<string> {
   const sides = resolveAutoScratchSides(options);
-  return new Set(
-    [...scratchChannels].filter((channel) =>
-      channel.startsWith('1') ? sides.autoScratch1P : channel.startsWith('2') && sides.autoScratch2P,
-    ),
-  );
+  const channels = new Set<string>();
+  if (!sides.autoScratch1P && !sides.autoScratch2P) return channels;
+  for (const channel of scratchChannels) {
+    if (channel.startsWith('1') ? sides.autoScratch1P : channel.startsWith('2') && sides.autoScratch2P) {
+      channels.add(channel);
+    }
+  }
+  return channels;
 }

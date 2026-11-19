@@ -19,11 +19,16 @@ import { playerText } from '../player-copy.ts';
 import { localized } from '../ui/localized.ts';
 import {
   pickRememberedFolder,
-  readRememberedFolder,
   captureDroppedFolders,
   storedFolders,
   type RememberedFolder,
 } from '../services/remembered-folder.ts';
+import {
+  RememberedFolderSession,
+  type RememberedFolderSessionDeps,
+  type SnapshotFolder,
+} from '../services/folder-snapshots.ts';
+import type { LibraryLoadOrigin } from '../services/library.ts';
 import type { PlayerWebElements } from '../types.ts';
 
 export interface DropTargetOptions {
@@ -32,14 +37,11 @@ export interface DropTargetOptions {
   /** Takes the select screen off the stage while files load, when it is the one showing. */
   readonly leaveSelect: () => Promise<boolean>;
   /** Loads a drop's (or the folder picker's) files (`LibraryService`). */
-  readonly processIncomingFiles: (
-    files: BrowserDroppedFile[],
-    origin?: {
-      readonly entries?: readonly FileSystemEntry[];
-      readonly showLibraryRoot?: boolean;
-      readonly readFiles?: () => Promise<BrowserDroppedFile[]>;
-    },
-  ) => Promise<void>;
+  readonly processIncomingFiles: (files: BrowserDroppedFile[], origin?: LibraryLoadOrigin) => Promise<void>;
+  /** Reads the library's charts again where it stands: a folder listed from its snapshot changed on disk. */
+  readonly refreshCharts: () => Promise<void>;
+  /** How a remembered folder is walked, and where its snapshot is kept (`RememberedFolderSession`). */
+  readonly folders: RememberedFolderSessionDeps;
   /** Loads the "Open files" picker's files (`LibraryService`). */
   readonly loadPickedFiles: (files: File[]) => Promise<void>;
   /** A drop or a file pick has finished loading (the test hook's `loads`). */
@@ -62,6 +64,8 @@ export class DropTarget {
   private folderWrites = Promise.resolve();
   private savedFoldersReady: Promise<void> | undefined;
   private reconnectFolders: RememberedFolder[] = [];
+  /** Each folder loaded on this page, with what the library knows of its files. */
+  private readonly sessions = new Map<RememberedFolder, RememberedFolderSession>();
 
   public constructor(options: DropTargetOptions) {
     this.options = options;
@@ -224,6 +228,10 @@ export class DropTarget {
       const next = await update(this.savedFolders);
       this.savedFolders = await storedFolders(next);
       this.reconnectFolders = this.reconnectFolders.filter((folder) => this.savedFolders.includes(folder));
+      // A folder no longer remembered keeps no snapshot.
+      void this.options.folders.snapshots
+        ?.prune(this.savedFolders as unknown as SnapshotFolder[])
+        .catch((error: unknown) => console.warn('folder snapshots not pruned', error));
       this.renderReconnect();
       this.renderFolderManager();
     });
@@ -258,17 +266,60 @@ export class DropTarget {
     }
   }
 
+  /**
+   * Lists a folder's charts: from its snapshot when it has one, which touches no file, and otherwise by walking it. A
+   * folder listed from its snapshot is then walked in the background ({@link verifyFolder}).
+   */
   private async loadFolder(folder: RememberedFolder): Promise<void> {
+    const loaded = this.sessionOf(folder);
     showLoadingOverlay(this.elements);
     let leftSelect = false;
+    let restored = false;
     try {
       leftSelect = await this.leaveSelect();
-      const files = await readRememberedFolder(folder, (progress) => applyLoadProgress(this.elements, progress));
-      await this.processIncomingFiles(files, { readFiles: () => readRememberedFolder(folder) });
+      let files = await loaded.restore();
+      restored = files !== undefined;
+      files ??= await loaded.read((fileCount) =>
+        applyLoadProgress(this.elements, { phase: 'enumerating', current: fileCount, total: -1 }),
+      );
+      await this.processIncomingFiles(files, {
+        readFiles: () => loaded.read(),
+        chartKeys: loaded,
+        onLoaded: () => {
+          void loaded.save().catch((error: unknown) => console.warn('folder snapshot not kept', error));
+        },
+      });
     } finally {
       hideLoadingOverlay(this.elements);
       if (leftSelect) await this.options.resumeSelect();
       this.recordLoad();
+    }
+    if (restored) void this.verifyFolder(loaded);
+  }
+
+  private sessionOf(folder: RememberedFolder): RememberedFolderSession {
+    let session = this.sessions.get(folder);
+    if (session === undefined) {
+      session = new RememberedFolderSession(folder as unknown as SnapshotFolder, this.options.folders);
+      this.sessions.set(folder, session);
+    }
+    return session;
+  }
+
+  /**
+   * Walks a folder listed from its snapshot, and has the library read it again when it changed since. A folder that
+   * can no longer be read is reported and leaves the library.
+   */
+  private async verifyFolder(session: RememberedFolderSession): Promise<void> {
+    try {
+      if (!(await session.verify())) return;
+    } catch (error) {
+      this.reportFolderError(error);
+    }
+    try {
+      await this.options.refreshCharts();
+    } catch (error) {
+      this.reportFolderError(error);
     }
   }
 
@@ -403,10 +454,30 @@ export class DropTarget {
           this.reportFolderError(error);
         }
       }
-      await this.processIncomingFiles(files, { ...(entries.length > 0 ? { entries } : {}), showLibraryRoot });
+      // A dropped folder that will be remembered keeps the cache keys of its charts, so its snapshot is whole after
+      // this one load: the next visit lists it without reading a file. Folders of one name cannot be told apart by
+      // path, and go without.
+      const names = new Set(handles.map((handle) => handle.name));
+      const sessions = names.size === handles.length ? handles.map((handle) => this.sessionOf(handle)) : [];
+      await this.processIncomingFiles(files, {
+        ...(entries.length > 0 ? { entries } : {}),
+        showLibraryRoot,
+        ...(sessions.length > 0
+          ? {
+              chartKeys: {
+                known: () => undefined,
+                learned: (path, key) =>
+                  sessions.find((session) => path.startsWith(`${session.folder.name}/`))?.learned(path, key),
+              },
+            }
+          : {}),
+      });
       if (handles.length > 0) {
         try {
           await this.rememberLoadedFolders(handles);
+          for (const session of sessions) {
+            void session.capture().catch((error: unknown) => console.warn('folder snapshot not kept', error));
+          }
         } catch (error) {
           this.reportFolderError(error);
         }

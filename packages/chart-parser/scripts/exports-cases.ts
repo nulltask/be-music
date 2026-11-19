@@ -1,5 +1,6 @@
 import { drawRandomOutcomes, type RandomDraws } from '@be-music/chart-model';
-import * as parserAPI from '@be-music/chart-parser';
+import * as parserAPI from '@be-music/chart-parser/core';
+import { parseChartFile } from '@be-music/chart-parser';
 import { zlibSync } from 'fflate';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
@@ -74,80 +75,84 @@ const BENCH_LRX_BYTES = {
 };
 
 export function registerParserExportsCases(define: DefineBenchmarkCase): void {
-  define('chart-parser.canonicalizeBMSCharset', {
+  const defineCore: DefineBenchmarkCase = (key, benchmarkCase) => {
+    define(key, benchmarkCase);
+    define(key.replace('chart-parser.', 'chart-parser.core.'), benchmarkCase);
+  };
+  defineCore('chart-parser.canonicalizeBMSCharset', {
     run: () => {
       parserAPI.canonicalizeBMSCharset('Shift-JIS');
       parserAPI.canonicalizeBMSCharset('utf8');
     },
   });
-  define('chart-parser.decodeBMSText', {
+  defineCore('chart-parser.decodeBMSText', {
     run: (fixtures) => {
       parserAPI.decodeBMSText(fixtures.bmsBuffer);
     },
   });
-  define('chart-parser.decodeUTF8Text', {
+  defineCore('chart-parser.decodeUTF8Text', {
     run: (fixtures) => {
       parserAPI.decodeUTF8Text(fixtures.bmsBuffer);
     },
   });
-  define('chart-parser.extractDeclaredBMSCharset', {
+  defineCore('chart-parser.extractDeclaredBMSCharset', {
     run: () => {
       parserAPI.extractDeclaredBMSCharset('#CHARSET Shift_JIS\n#TITLE Bench\n');
     },
   });
-  define('chart-parser.parseBMS', {
+  defineCore('chart-parser.parseBMS', {
     run: (fixtures) => {
       parserAPI.parseBMS(fixtures.bmsText);
     },
   });
-  define('chart-parser.parseBMSBytes', {
+  defineCore('chart-parser.parseBMSBytes', {
     run: (fixtures) => {
       parserAPI.parseBMSBytes(fixtures.bmsBuffer);
     },
   });
-  define('chart-parser.parseBmson', {
+  defineCore('chart-parser.parseBmson', {
     run: (fixtures) => {
       parserAPI.parseBmson(fixtures.bmsonText);
       parserAPI.parseBmson(JSON.stringify({ ...JSON.parse(fixtures.bmsonText), vendor: { tags: [null, 1] } }));
     },
   });
-  define('chart-parser.isN2SArchive', {
+  defineCore('chart-parser.isN2SArchive', {
     run: (fixtures) => {
       parserAPI.isN2SArchive(benchN2S(fixtures.bmsBuffer));
       parserAPI.isN2SArchive(fixtures.bmsBuffer);
     },
   });
-  define('chart-parser.readN2SArchive', {
+  defineCore('chart-parser.readN2SArchive', {
     run: (fixtures) => {
       parserAPI.readN2SArchive(benchN2S(fixtures.bmsBuffer));
     },
   });
-  define('chart-parser.parseN2SBytes', {
+  defineCore('chart-parser.parseN2SBytes', {
     run: (fixtures) => {
       parserAPI.parseN2SBytes(benchN2S(fixtures.bmsBuffer));
     },
   });
-  define('chart-parser.parseLRX', {
+  defineCore('chart-parser.parseLRX', {
     run: () => {
       parserAPI.parseLRX(BENCH_LRX);
     },
   });
-  define('chart-parser.parseLRXBytes', {
+  defineCore('chart-parser.parseLRXBytes', {
     run: () => {
       parserAPI.parseLRXBytes(BENCH_LRX_BYTES);
     },
   });
-  define('chart-parser.resolveLRXHeaderPath', {
+  defineCore('chart-parser.resolveLRXHeaderPath', {
     run: () => {
       parserAPI.resolveLRXHeaderPath('plugout4/song/001/01.lrs');
     },
   });
-  define('chart-parser.resolveLRXMoviePath', {
+  defineCore('chart-parser.resolveLRXMoviePath', {
     run: () => {
       parserAPI.resolveLRXMoviePath(BENCH_LRX_BYTES.lrs, BENCH_LRX_BYTES.lrh);
     },
   });
-  define('chart-parser.parseChart', {
+  defineCore('chart-parser.parseChart', {
     run: (fixtures) => {
       parserAPI.parseChart(fixtures.bmsText);
     },
@@ -155,15 +160,15 @@ export function registerParserExportsCases(define: DefineBenchmarkCase): void {
   define('chart-parser.parseChartFile', {
     ioBound: true,
     run: async (fixtures) => {
-      await parserAPI.parseChartFile(fixtures.paths.bmsPath);
+      await parseChartFile(fixtures.paths.bmsPath);
     },
   });
-  define('chart-parser.resolveBMSControlFlow', {
+  defineCore('chart-parser.resolveBMSControlFlow', {
     run: (fixtures) => {
       parserAPI.resolveBMSControlFlow(fixtures.controlFlowJSON, { random: () => 0.25 });
     },
   });
-  define('chart-parser.resolveBMSControlFlowWithDraws', {
+  defineCore('chart-parser.resolveBMSControlFlowWithDraws', {
     run: (fixtures) => {
       parserAPI.resolveBMSControlFlowWithDraws(fixtures.controlFlowJSON, benchRandomDraws(fixtures.controlFlowJSON));
     },

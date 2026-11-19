@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { endsBackSpinScratch, hasScratchCounterpart, releasesScratchHold, type InputSource } from './input-source.ts';
+import {
+  createInputSourceTable,
+  endsBackSpinScratch,
+  hasScratchCounterpart,
+  inputSourceKey,
+  isInputSourceDeviceName,
+  normalizeInputSourceDeviceName,
+  releasesScratchHold,
+  type InputSource,
+} from './input-source.ts';
 
 const shift: InputSource = { kind: 'key', device: 'keyboard', label: 'shift-left' };
 const ctrl: InputSource = { kind: 'key', device: 'keyboard', label: 'control-left' };
@@ -46,5 +55,50 @@ describe('single-source BSS policy (#1181)', () => {
     expect(releasesScratchHold(touch, touch)).toBe(true);
     expect(releasesScratchHold(undefined, shift)).toBe(true);
     expect(releasesScratchHold(shift, undefined)).toBe(true);
+  });
+});
+
+describe('device names', () => {
+  const padName = 'IIDX controller (STANDARD GAMEPAD Vendor: 1ccf Product: 1018)';
+  const named: InputSource = { ...ttUp, deviceName: padName };
+
+  test('are not part of a source’s identity', () => {
+    expect(inputSourceKey(named)).toBe(inputSourceKey(ttUp));
+    expect(endsBackSpinScratch(named, ttUp)).toBe(false);
+    expect(releasesScratchHold(named, { ...ttUp, deviceName: 'another pad' })).toBe(true);
+  });
+
+  test('a table drops them unless it keeps device names', () => {
+    const plain = createInputSourceTable();
+    plain.idOf(named);
+    expect(plain.list()).toEqual([{ id: 0, kind: 'turntable', device: 'controller', label: 'tt', direction: 'up' }]);
+
+    const kept = createInputSourceTable({ deviceNames: true });
+    expect(kept.idOf(named)).toBe(0);
+    // The same source from another pad is the same entry, which keeps the name it was first seen with.
+    expect(kept.idOf({ ...ttUp, deviceName: 'another pad' })).toBe(0);
+    expect(kept.idOf(shift)).toBe(1);
+    expect(kept.list()).toEqual([
+      { id: 0, kind: 'turntable', device: 'controller', label: 'tt', direction: 'up', deviceName: padName },
+      { id: 1, kind: 'key', device: 'keyboard', label: 'shift-left' },
+    ]);
+  });
+
+  test('are normalised: control characters removed, trimmed, cut to 128 characters', () => {
+    expect(normalizeInputSourceDeviceName(padName)).toBe(padName);
+    expect(normalizeInputSourceDeviceName('  pad\u0000 name\n ')).toBe('pad name');
+    expect(normalizeInputSourceDeviceName('x'.repeat(200))).toBe('x'.repeat(128));
+    expect(normalizeInputSourceDeviceName(' \t ')).toBeUndefined();
+    expect(normalizeInputSourceDeviceName(undefined)).toBeUndefined();
+  });
+
+  test('a kept name has 1 to 128 characters, no control characters and no surrounding spaces', () => {
+    expect(isInputSourceDeviceName(padName)).toBe(true);
+    expect(isInputSourceDeviceName('x'.repeat(128))).toBe(true);
+    expect(isInputSourceDeviceName('x'.repeat(129))).toBe(false);
+    expect(isInputSourceDeviceName('')).toBe(false);
+    expect(isInputSourceDeviceName(' pad')).toBe(false);
+    expect(isInputSourceDeviceName('pad\u0007')).toBe(false);
+    expect(isInputSourceDeviceName(42)).toBe(false);
   });
 });

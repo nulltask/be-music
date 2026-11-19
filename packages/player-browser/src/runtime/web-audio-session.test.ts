@@ -7,6 +7,7 @@ import {
   createWebAudioSession,
   decodedSampleKey,
   LIVE_TEMPO_RAMP_SECONDS,
+  WEB_AUDIO_SCHEDULE_AHEAD_SECONDS,
 } from './web-audio-session.ts';
 import { SAMPLE_SLICE_FADE_SECONDS } from '@be-music/shared-utils/core';
 
@@ -693,6 +694,74 @@ describe('createWebAudioSession', () => {
 
     expect(trackedBufferSources).toHaveLength(2);
     expect(firstSource.stop).toHaveBeenCalledWith(2);
+  });
+
+  test('reports its write head ahead of the output clock and starts a scheduled sound at its due time', () => {
+    const { audioContext, audioBus, trackedBufferSources, bgmMixer } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([['bgm.wav', makeMockAudioBuffer(5)]]),
+      wavCmdVolumeMultipliers: new Map(),
+      getChartStartContextTime: () => 1,
+    });
+    (audioContext as { currentTime: number }).currentTime = 1.25;
+    const clock = session.getClockState!();
+    expect(clock.outputSeconds).toBeCloseTo(0.25, 9);
+    expect(clock.scheduledSeconds - clock.outputSeconds).toBeCloseTo(WEB_AUDIO_SCHEDULE_AHEAD_SECONDS, 9);
+
+    // Due at 0.28 s of the chart's output clock: context time 1.28, not when it was queued.
+    session.scheduleEventAt(mkEvent('01', '03'), 0.28);
+    expect(trackedBufferSources[0]!.connectedTo).toBe(bgmMixer);
+    expect(trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(1.28);
+    // One already due plays at once.
+    session.scheduleEventAt(mkEvent('01', '03', { measure: 1 }), 0.2);
+    expect(trackedBufferSources[1]!.node.start).toHaveBeenCalledWith(1.25);
+  });
+
+  test('a volume change scheduled ahead applies to the voices that start from its time', () => {
+    const { audioContext, audioBus, createdGains } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([['bgm.wav', makeMockAudioBuffer(5)]]),
+      wavCmdVolumeMultipliers: new Map(),
+    });
+    session.scheduleEventAt(mkEvent('97', '80'), 0.04);
+    // Starts before the change: the old level, so no per-voice gain.
+    session.triggerEvent?.(mkEvent('01', '03'));
+    expect(createdGains).toHaveLength(0);
+    // Starts after it: the new level.
+    session.scheduleEventAt(mkEvent('01', '03', { measure: 1 }), 0.045);
+    expect(createdGains).toHaveLength(1);
+    expect((createdGains[0]!.gain as unknown as { value: number }).value).toBeCloseTo(0x80 / 0xff, 6);
+    // Once the clock passes it, a voice started at once takes it too.
+    (audioContext as { currentTime: number }).currentTime = 0.05;
+    session.triggerEvent?.(mkEvent('01', '03', { measure: 2 }));
+    expect(createdGains).toHaveLength(2);
+  });
+
+  test('a voice queued ahead cuts a same-slot voice started before it, and stays the one a later voice cuts', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([['kick.wav', makeMockAudioBuffer(5)]]),
+      wavCmdVolumeMultipliers: new Map(),
+    });
+    session.scheduleEventAt(mkEvent('01', '01'), 0.04);
+    const queued = trackedBufferSources[0]!.node;
+    // A press of the slot now: it sounds until the queued voice starts, which it must not cancel.
+    session.triggerEvent?.(mkEvent('11', '01'));
+    const pressed = trackedBufferSources[1]!.node;
+    expect(queued.stop).not.toHaveBeenCalled();
+    expect(pressed.stop).toHaveBeenCalledWith(0.04);
+    (audioContext as { currentTime: number }).currentTime = 0.1;
+    session.triggerEvent?.(mkEvent('12', '01'));
+    expect(queued.stop).toHaveBeenCalledWith(0.1);
   });
 
   test('stopChannel halts the most recent BufferSource on that channel', () => {

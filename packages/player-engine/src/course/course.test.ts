@@ -269,6 +269,13 @@ describe('parseTableHeaderCourses', () => {
     expect(byMD5!.stages.map((stage) => stage.title)).toEqual(['course 1', 'course 2']);
   });
 
+  test("titles md5 stages from the table's `song_title`, in the same order, where it names one", () => {
+    const [course] = parseTableHeaderCourses({
+      course: [{ md5: [MD5_A, 7, MD5_B, MD5_A], song_title: ['The Observer', 'skipped', '', 3] }],
+    })[0]!;
+    expect(course!.stages.map((stage) => stage.title)).toEqual(['The Observer', 'course 2', 'course 3']);
+  });
+
   test('reads a single group and the legacy grade list', () => {
     expect(parseTableHeaderCourses({ course: [{ md5: [MD5_A] }] })[0]![0]).toMatchObject({
       name: '新規段位',

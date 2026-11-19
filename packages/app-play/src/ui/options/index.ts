@@ -29,7 +29,8 @@ import {
 import { paneOptions, type PaneBinding } from '../../pane-controls.ts';
 import { migrateOptionValue, practiceReadsJudgeRankAndTotal, type GaugePick } from '@be-music/player-engine/ruleset';
 import { readStoredCompressorTunings, type CompressorTuning } from '../../compressor-tuning.ts';
-import { readStoredCourseTableURLs } from '../../course-table-import.ts';
+import { readStoredCourseTableURLs, removedDefaultCourseTableURLs } from '../../course-table-import.ts';
+import { readStoredBemuseServerURLs } from '../../bemuse-server.ts';
 import { captureOptionSettings } from '../../option-settings.ts';
 import { optionSettingsSync } from '../../option-settings-sync.ts';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
@@ -100,8 +101,21 @@ export interface OptionsDialogDeps {
   readonly silentMode: SilentModeSetting;
   /** The Leaderboard panel, which fills its own folder. */
   readonly leaderboard: Pick<LeaderboardPanel, 'buildFolder'>;
-  /** The library service: "Import table courses" and "Load from URLs" add to the library through it. */
-  readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
+  /**
+   * The library service: the difficulty tables, "Load from URLs" and the Bemuse music servers add to the library through
+   * it, a removed table leaves it, and "Reload folders" reads it again.
+   */
+  readonly library: Pick<
+    LibraryService,
+    | 'importCourseTables'
+    | 'removeCourseTable'
+    | 'courseTableLabel'
+    | 'onCourseTablesChange'
+    | 'loadFromURL'
+    | 'loadBemuseServers'
+    | 'refreshBemuseReplayGain'
+    | 'reloadCharts'
+  >;
   /** The records service, whose best records "Clear best records" empties. */
   readonly records: Pick<RecordsService, 'chartBestRecords'>;
   /** The course-maker service, whose card "My courses…" opens. */
@@ -185,7 +199,17 @@ export class OptionsDialog {
   public readonly guiState: PlayerGUIState;
   public readonly sceneHost: PixiSceneHost;
   public readonly silentMode: SilentModeSetting;
-  public readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
+  public readonly library: Pick<
+    LibraryService,
+    | 'importCourseTables'
+    | 'removeCourseTable'
+    | 'courseTableLabel'
+    | 'onCourseTablesChange'
+    | 'loadFromURL'
+    | 'loadBemuseServers'
+    | 'refreshBemuseReplayGain'
+    | 'reloadCharts'
+  >;
   public readonly records: Pick<RecordsService, 'chartBestRecords'>;
   public readonly courseMaker: Pick<CourseMakerService, 'panel'>;
   public readonly skinSettings: StoredSkinSettings;
@@ -540,10 +564,13 @@ export class OptionsDialog {
    * Status and the FPS graph are not settings and do not come through here.
    */
   public scheduleSettingsSave(): void {
+    const courseTableURLs = readStoredCourseTableURLs();
     const document = captureOptionSettings(this.guiState, {
       compressorTuning: this.compressorTunings,
       skinSettings: this.skinSettings,
-      courseTableURLs: readStoredCourseTableURLs(),
+      courseTableURLs,
+      removedDefaultCourseTableURLs: removedDefaultCourseTableURLs(courseTableURLs),
+      bemuseServerURLs: readStoredBemuseServerURLs(),
       workerCount: getBrowserWorkerCount(),
     });
     optionSettingsSync.save(document);

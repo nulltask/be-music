@@ -4,7 +4,7 @@ Implemented policy: [ADR 0030](../adr/0030-bmson-zero-total.md). The repository 
 
 # Optional bmson zero-TOTAL semantics
 
-Research for #837, checked 2026-10-31 against Be-Music `c3b783a5`. This note proposes an opt-in playback policy; it does not change the existing beatoraja-compatible default.
+Research for #837, checked on 2026-10-31 against Be-Music `c3b783a5`. The proposal adds an opt-in playback policy and keeps the beatoraja-compatible default.
 
 ## Specification and native behavior
 
@@ -20,7 +20,7 @@ The upstream [BMSONDecoder](https://github.com/exch-bms2/jbms-parser/blob/8108cd
 
 ## Original corpus
 
-The 28 bmson paths in the existing [audit manifest](./format-feature-usage.json) were reread from `~/Downloads/bms/BMS_Starter_Pack` and sibling `gdbg_bms_package_20xx` packages. All 28 SHA-256 values match the manifest. Counts below describe original JSON values before parser normalization; denominator is files, not notes.
+The 28 bmson paths in the existing audit manifest were reread from `~/Downloads/bms/BMS_Starter_Pack` and sibling `gdbg_bms_package_20xx` packages. All 28 SHA-256 values match the manifest. Counts below describe original JSON values before parser normalization; denominator is files, not notes.
 
 | Original `info.total` | Files | Of 28 bmson files |
 | --------------------- | ----: | ----------------: |

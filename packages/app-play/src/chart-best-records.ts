@@ -11,7 +11,7 @@ import {
   type RecordSlot,
 } from '@be-music/player-engine/records';
 import { compileChartPlayOptions } from '@be-music/chart-model';
-import { isClearLamp, type RulesetId } from '@be-music/player-engine/ruleset';
+import { isClearLamp, RULESET_IDS, type RulesetId } from '@be-music/player-engine/ruleset';
 import { resolveLibraryChartPlayVariant, type LibraryChart } from '@be-music/player-scene-model';
 
 const STORAGE_KEY = 'be-music.chart-best-records';
@@ -22,7 +22,7 @@ const STORAGE_KEY = 'be-music.chart-best-records';
  */
 const STORAGE_VERSION = 0;
 
-const JUDGE_RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
+const JUDGE_RULESETS: readonly RulesetId[] = RULESET_IDS;
 
 /** How a play was played and judged, as far as which record it keeps goes. */
 export type RecordedPlayKind = RecordPlayKind & {

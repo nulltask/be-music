@@ -63,6 +63,7 @@ import type { BGACue, NonstopStageBGATimeline } from '../../chart/bga-timeline.t
 import type { BeMusicJudgeWindows } from '@be-music/player-skin-sdk';
 import type { RuntimeMineNote, RuntimeNote } from '../../view/shared/playfield/context.ts';
 import type { GhostPresentation } from './ghost/ghost.ts';
+import { createAudioClockSmoother } from './play-clock.ts';
 import type { PlayfieldLaneRect } from '../../view/types.ts';
 
 export class PlaySessionState extends PlayPresentation {
@@ -176,6 +177,11 @@ export class PlaySessionState extends PlayPresentation {
    * (`PlaySession.currentSeconds`).
    */
   audioContextStartTime = 0;
+  /**
+   * The audio clock as the playfield draws it: `currentTime` without its render-callback steps
+   * (`createAudioClockSmoother`), so the notes move by the frame's own time each frame.
+   */
+  readonly drawClock = createAudioClockSmoother();
   /** The stage fades and FIT rates of a stitched NONSTOP chart (`options.nonstop`). */
   nonstopMixer: NonstopStageMixer | undefined;
   paused = false;
@@ -363,6 +369,8 @@ export class PlaySessionState extends PlayPresentation {
   replayViewCursor: ReplayViewCursor | undefined;
   chartEndTimeout: number | undefined;
   chartEndGate: ((seconds: number) => void) | undefined;
+  /** Starts the outro's fade-out at once (`PlayEngineContext.chartEndFade`). */
+  chartEndFade: (() => void) | undefined;
   /**
    * `setTimeout` handles for the scene-exit sequence (fade-out → close, LR2 timers 2 / 3). Cleared on dispose so the
    * deferred host callback can't fire onto a torn-down view.

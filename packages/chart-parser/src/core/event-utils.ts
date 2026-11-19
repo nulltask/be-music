@@ -185,17 +185,15 @@ function normalizeRawEvent(
   }
   const bmson = normalizeEventBmsonExtension(raw.bmson);
   const lrx = normalizeLRXEventExtensions(raw.lrx);
-  return {
-    measure,
-    channel,
-    position,
-    value,
-    ...(typeof raw.bmsLineOrder === 'number' && Number.isSafeInteger(raw.bmsLineOrder) && raw.bmsLineOrder >= 0
-      ? { bmsLineOrder: raw.bmsLineOrder }
-      : {}),
-    ...(bmson ? { bmson } : {}),
-    ...(lrx ? { lrx } : {}),
-  };
+  // Optional fields are assigned rather than spread, so every event shares the hidden classes the parsers' plain event
+  // literals start from; spreads give each call site its own, and the extra shapes slow every event comparison.
+  const normalized: BeMusicEvent = { measure, channel, position, value };
+  if (typeof raw.bmsLineOrder === 'number' && Number.isSafeInteger(raw.bmsLineOrder) && raw.bmsLineOrder >= 0) {
+    normalized.bmsLineOrder = raw.bmsLineOrder;
+  }
+  if (bmson) normalized.bmson = bmson;
+  if (lrx) normalized.lrx = lrx;
+  return normalized;
 }
 
 function normalizeMeasure(value: unknown): number | undefined {

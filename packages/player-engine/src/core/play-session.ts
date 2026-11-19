@@ -7,9 +7,9 @@ import type { TimedPlayableNote } from '../playable-notes.ts';
 import { ChartTextController } from './chart-text.ts';
 import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
 import { resolveEffectiveBattleMode } from './battle-mode.ts';
-import { chartNotesCopies, resolveEffectiveChartPlayOptions } from './chart-notes-options.ts';
+import { chartNotesCopies } from './chart-notes-options.ts';
 import { arrangeChartPlayLanes } from './chart-play-lanes.ts';
-import { resolveChartAddMineModifier } from './chart-play-options.ts';
+import { resolveChartAddMineModifier, resolveChartPlayProgram } from './chart-play-options.ts';
 import { applySevenToNine } from './seven-to-nine.ts';
 import { clampExtraNoteDepth } from './extra-note-modifier.ts';
 import { buildAutoKeyBoundBGAInputs, KeyBoundBGAController } from './key-bound-bga.ts';
@@ -24,11 +24,8 @@ import {
   compileChartOptions,
   compileChartPlayOptions,
   isLegacyChartPlayOptionProgram,
-  playerChartPlayOptionsOf,
   resolveChartOptionsAt,
-  withPlayerChartPlayOptions,
   type ChartOptionProgram,
-  type ChartPlayOptionProgram,
   isPlayLaneSoundChannel,
   type ResolvedChart,
 } from '@be-music/chart-model';
@@ -93,9 +90,6 @@ import { createRealtimeAudioCursor, type RealtimeAudioCursor } from './play-audi
 import { createChainSoundQueue, type ChainSoundQueue } from './chain-audio.ts';
 import type { JudgeStrategy } from './play-strategy.ts';
 import { resolvePracticePlayWindow } from './practice.ts';
-
-/** A program that forces nothing. */
-const EMPTY_CHART_PLAY_PROGRAM: ChartPlayOptionProgram = { version: 1, options: {} };
 
 /** A chart sound the realtime audio fires at its time. */
 type TimedChartSound = { readonly event: BeMusicEvent; readonly seconds: number };
@@ -165,6 +159,11 @@ export interface PlaySession {
   readonly applyJudgeEffect: JudgeCoreEffectSink;
   /** Ends a judging pass of a manual play: LR2's automatic judge timing steps here (`JudgeEffectHandler`). */
   readonly settleJudgeTiming: () => void;
+  /**
+   * Queues a realtime sound due at chart second `seconds` to the audio session: at its due time on the output clock when
+   * the session schedules ahead (`AudioSession.scheduleEventAt`), otherwise at once (`triggerEvent`).
+   */
+  readonly queueAudioEvent: (event: BeMusicEvent, seconds: number) => void;
   /** The chart's volume changes (`#97` / `#98`), queued against the audio write head. */
   readonly volumeChanges: RealtimeAudioCursor<TimedChartSound>;
   /** The chart's background sounds, queued against the audio write head. */
@@ -220,29 +219,20 @@ export async function createPlaySession(
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const replay = options.replayInputs !== undefined;
   let resolvedChart = options.preparedChart?.resolvedChart ?? resolveEngineChart(resolvedJSON, options);
-  // The chart's gameplay program (#844, #932): the host's (a replay's recorded one), or compiled here and narrowed to what
-  // takes effect in this play (`resolveEffectiveChartPlayOptions`).
-  // Without a host program the engine also knows which of its options the player added (#1243); a host that hands its
-  // own program records them through `recordReplay.playerChartPlayOptions`.
-  const declaredChartPlay =
-    options.chartPlayOptionProgram !== undefined
-      ? undefined
-      : compileChartPlayOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing));
+  // A host providing the effective program also supplies its player options through recordReplay.
   const chartPlay =
-    declaredChartPlay === undefined
-      ? { program: structuredClone(options.chartPlayOptionProgram ?? EMPTY_CHART_PLAY_PROGRAM), diagnostics: [] }
-      : resolveEffectiveChartPlayOptions(
-          withPlayerChartPlayOptions(declaredChartPlay, options.playerChartPlayOptions),
+    options.chartPlayOptionProgram !== undefined
+      ? { program: structuredClone(options.chartPlayOptionProgram), diagnostics: [], playerOptions: undefined }
+      : resolveChartPlayProgram(
+          compileChartPlayOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing)),
+          options.playerChartPlayOptions,
           {
             playVariant: resolvedChart.playVariant,
             course: options.course !== undefined,
           },
         );
   const chartPlayOptions = chartPlay.program;
-  const playerChartPlayOptions =
-    declaredChartPlay === undefined
-      ? undefined
-      : playerChartPlayOptionsOf(declaredChartPlay.options, chartPlayOptions.options);
+  const playerChartPlayOptions = chartPlay.playerOptions;
   const chartBaseSpeed = chartPlayOptions.options.baseSpeed ?? 1;
   const speed = playerSpeed * chartBaseSpeed;
   const tempoClock = createTempoClock(speed);
@@ -501,7 +491,8 @@ export async function createPlaySession(
   const replayRecorder =
     options.onReplayRecorded && options.practice === undefined
       ? (() => {
-          const { chartSHA256, chartMD5, recorder, sourceChart, ...hostPlaySettings } = options.recordReplay ?? {};
+          const { chartSHA256, chartMD5, recorder, sourceChart, includeDeviceNames, ...hostPlaySettings } =
+            options.recordReplay ?? {};
           return createReplayRecorder({
             json: resolvedJSON,
             chartOptions,
@@ -512,6 +503,7 @@ export async function createPlaySession(
             chartSHA256,
             chartMD5,
             recorder,
+            ...(includeDeviceNames === true ? { includeDeviceNames: true } : {}),
             laneModeExtension: options.laneModeExtension,
             // The chart the engine was handed is the source when it resolved the control flow itself.
             sourceChart: sourceChart ?? json,
@@ -860,17 +852,27 @@ export async function createPlaySession(
 
   // Realtime audio goes only to a session that takes it; without one nothing is queued (or traced).
   const queuesAudio = audioSession?.triggerEvent !== undefined;
+  // The engine queues these as its write head reaches them; a session that schedules ahead gets each one's due time on
+  // its output clock, so it sounds when due rather than on the tick that reached it.
+  const queueAudioEvent = (event: BeMusicEvent, seconds: number): void => {
+    const clock = session?.clock;
+    if (clock !== undefined && audioSession?.scheduleEventAt !== undefined) {
+      audioSession.scheduleEventAt(event, clock.sourceMsAt(tempoClock.clockMsAt(seconds)) / 1000);
+      return;
+    }
+    audioSession?.triggerEvent?.(event);
+  };
   const volumeChanges = createRealtimeAudioCursor(queuesAudio ? volumeEvents : [], (change) => {
     if (!uiEnabled) {
       writeRealtimeVolumeEventLog(writeOutput, change.seconds, change.event);
     }
-    audioSession!.triggerEvent!(change.event);
+    queueAudioEvent(change.event, change.seconds);
   });
   const backgroundAudio = createRealtimeAudioCursor(queuesAudio ? backgroundTriggers : [], (trigger) => {
     if (!uiEnabled) {
       writeRealtimeTriggeredEventLog(writeOutput, trigger, wavResources[trigger.sampleKey], 'realtime');
     }
-    audioSession!.triggerEvent!(trigger.event);
+    queueAudioEvent(trigger.event, trigger.seconds);
   });
 
   session = {
@@ -918,6 +920,7 @@ export async function createPlaySession(
     chartOptions,
     applyJudgeEffect,
     settleJudgeTiming: () => applyJudgeEffect.settleJudgeTiming(),
+    queueAudioEvent,
     volumeChanges,
     backgroundAudio,
     chainSounds,

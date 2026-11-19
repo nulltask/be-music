@@ -4,6 +4,7 @@ import type { OptionContainer } from '../options-controls.ts';
 import { storeChartBestRecords } from '../../chart-best-records.ts';
 import { LocalDataPanel } from '../../local-data-panel.ts';
 import { parseURLMediaParams } from '../../url-load.ts';
+import { mountBemuseServerManager } from './bemuse-servers.ts';
 import type { ReplayAutoSaveRule } from '../../services/replay-slots.ts';
 import { OPTION_FOLDERS, type OptionFolderSpec } from './folders.ts';
 import type { OptionsDialog } from './index.ts';
@@ -34,6 +35,22 @@ export function buildLibraryFolder(
   const folderManager = document.createElement('div');
   folderManager.dataset.rememberedFolderManager = '';
   library.addElement(folderManager);
+  const bemuseServers = document.createElement('div');
+  library.addElement(bemuseServers);
+  mountBemuseServerManager(bemuseServers, {
+    library: this.library,
+    setStatus: (text) => this.setStatus(text),
+    saveSettings: () => this.scheduleSettingsSave(),
+  });
+  // The select screen's F8 / F2, for a player without a keyboard: the folders, Bemuse servers and tables read again.
+  library.addButton({ title: 'Reload folders' }).on('click', () => void this.library.reloadCharts());
+  // Bemuse's own volume for each server song (its `replaygain`). Read as a play starts, so it is locked while one runs.
+  this.trackPlayOption(
+    library.addBinding(this.guiState, 'bemuseReplayGain', { label: 'Bemuse ReplayGain' }).on('change', ({ value }) => {
+      this.guiState.bemuseReplayGain = value;
+      this.library.refreshBemuseReplayGain();
+    }),
+  );
 
   const urlParams = parseURLMediaParams(window.location.href);
   const urls = {
@@ -62,6 +79,16 @@ export function buildLibraryFolder(
     .on('change', ({ value }) => {
       this.guiState.autoSaveReplay = value;
     });
+  // Off by default: a replay then records each input's coarse device class only. On, it also keeps each controller's
+  // `Gamepad.id`, which often names its vendor and product ids, in every replay it records (files, slots, Leaderboard).
+  // Read as a play starts, so it is locked while one runs.
+  this.trackPlayOption(
+    library
+      .addBinding(this.guiState, 'replayDeviceNames', { label: 'Record device names in replays' })
+      .on('change', ({ value }) => {
+        this.guiState.replayDeviceNames = value;
+      }),
+  );
   // Slots select a replay from history when its result meets the rule or the player assigns it by hand.
   const slots = addFolder(library, OPTION_FOLDERS.replaySlots);
   for (const slot of [1, 2, 3, 4] as const) {

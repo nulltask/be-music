@@ -4,6 +4,8 @@
 
 `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / ナナシグルーヴ2 の `.n2s` / LRX（`.lrs` と隣の `.lrh` / `.lrm`）/ Be-Music JSON の譜面のパーサで、[`@be-music/chart-source`](../chart-source/README.ja.md) の中間表現を出力します。`bms-parse` CLI も含みます。
 
+文字列やバイト列から譜面を読む場合は `@be-music/chart-parser/core` を使います。Node でファイルを開く `parseChartFile` は `@be-music/chart-parser` からインポートできます。
+
 ## 使い方
 
 リポジトリのルートから BMS/bmson を JSON に変換します。

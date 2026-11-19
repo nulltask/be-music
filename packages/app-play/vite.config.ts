@@ -2,7 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { getBuildInfo } from '../../scripts/release/build-info.ts';
 import { acknowledgementsPlugins } from './scripts/acknowledgements.ts';
 import { serviceWorkerPlugin } from './scripts/service-worker-plugin.ts';
-import { retitleHTML, retitleManifest } from '../worker-play/src/app-title.ts';
+import { retitleHTML, retitleManifest } from './src/app-title.ts';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -36,6 +36,9 @@ const ffmpegCoreVersion = (
   JSON.parse(readFileSync(resolve(ffmpegCorePackageRoot, 'package.json'), 'utf8')) as { version: string }
 ).version;
 const URL_LOAD_PROXY_PATH = '/__url-load-proxy';
+// The same User-Agent the deployed proxy sends (`packages/worker-play/src/url-load-proxy.ts`), so the dev server meets
+// a host that refuses a request without one, or keys on it, the way production does.
+const URL_LOAD_PROXY_USER_AGENT = 'Be-Music URL proxy (+https://play.be-music.app)';
 
 const appPackageJSON = resolve(import.meta.dirname, 'package.json');
 const playerBrowserPackageJSON = resolve(repositoryDir, 'packages/player-browser/package.json');
@@ -116,7 +119,7 @@ function ffmpegCorePlugin(sourceDir: string): Plugin {
 /**
  * Titles the dev server's player `Be-Music Play (Development)`: the page, and the web app manifest an installed dev
  * player takes its window title from. A build keeps the production title; the preview Worker retitles it as it serves
- * (`packages/worker-play/src/app-title.ts`).
+ * (`packages/app-play/src/app-title.ts`).
  */
 function developmentTitlePlugin(): Plugin {
   const manifestPath = resolve(import.meta.dirname, 'public/manifest.webmanifest');
@@ -190,6 +193,7 @@ function urlLoadProxyPlugin(): Plugin {
           try {
             upstream = await fetch(target, {
               method: req.method === 'HEAD' ? 'HEAD' : 'GET',
+              headers: { 'user-agent': URL_LOAD_PROXY_USER_AGENT },
               redirect: 'follow',
             });
           } catch (error) {

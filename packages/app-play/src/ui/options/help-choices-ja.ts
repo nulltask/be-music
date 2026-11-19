@@ -93,6 +93,10 @@ export const OPTION_HELP_CHOICES_JA: OptionHelpChoices = {
       ['LR2', 'LR2 の判定幅、ゲージ、ランプ。ロングノートは始点だけを判定します (既定)。'],
       ['beatoraja', 'beatoraja の判定幅とゲージ。LN MODE、CUSTOM JUDGE、Judge algorithm を選べます。'],
       ['????', 'AC の固定の判定幅とゲージ。ロングノートはすべてチャージノートで、ANY KEY (PC) を選べます。'],
+      [
+        'plugout',
+        'plugout4 -ARCADE EDITION- のランクごとの判定幅、ゲージ、10 万点満点のスコアとランプ。ロングノートはすべてチャージノートです。',
+      ],
     ],
     Gauge: GAUGES,
     'Judge algorithm': [
@@ -322,6 +326,15 @@ export const OPTION_HELP_CHOICES_JA: OptionHelpChoices = {
       ['ON', '出ているカバーすべての端に、カバーの長さと緑数字を表示し続けます。'],
       ['SUDDEN+ ONLY', 'SUDDEN+ の端だけに表示し続けます。'],
       ['HID+/LIFT ONLY', 'HIDDEN+ と LIFT の端だけに表示し続けます。'],
+    ],
+    BGA: [
+      ['OFF', 'BGA を表示しません。'],
+      ['ON', 'BGA を表示します (既定)。'],
+      ['AUTOPLAY ONLY', 'AUTO プレイのときだけ BGA を表示します。'],
+    ],
+    'BGA size': [
+      ['NORMAL', 'スキンの通常の枠に BGA を描きます。'],
+      ['EXTEND', 'スキンに大きい枠があれば、そこに BGA を描きます (既定)。'],
     ],
     'Effect 1P': LANE_COVERS,
     'Effect 2P': LANE_COVERS,

@@ -9,7 +9,7 @@
 //
 // Run from the package root (the npm scripts do); `dist/ffmpeg-core/` must already be built.
 
-import { execFileSync } from 'node:child_process';
+import { type ExecFileSyncOptions, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -19,7 +19,16 @@ import { fileURLToPath } from 'node:url';
 const BUCKET = process.argv.includes('--preview') ? 'play-preview' : 'play';
 const MANIFEST_KEY = 'ffmpeg-core.manifest';
 const CORE_DIR = fileURLToPath(new URL('../dist/ffmpeg-core/', import.meta.url));
-const FILES = [
+/** A core file uploaded to the bucket, keyed by its file name. */
+interface CoreFile {
+  name: string;
+  contentType: string;
+}
+
+/** Each core file's md5, keyed by file name. */
+type CoreManifest = Record<string, string>;
+
+const FILES: readonly CoreFile[] = [
   { name: 'ffmpeg-core.wasm', contentType: 'application/wasm' },
   { name: 'ffmpeg-core.js', contentType: 'text/javascript' },
 ];
@@ -27,17 +36,19 @@ const FILES = [
 const force = process.argv.includes('--force');
 const tmpDir = mkdtempSync(join(tmpdir(), 'ffmpeg-core-'));
 
-function wrangler(args, options = {}) {
-  return execFileSync('pnpm', ['exec', 'wrangler', ...args], { encoding: 'utf8', ...options });
+function wrangler(args: string[], options: ExecFileSyncOptions = {}): void {
+  execFileSync('pnpm', ['exec', 'wrangler', ...args], options);
 }
 
-function md5(path) {
+function md5(path: string): string {
   return createHash('md5').update(readFileSync(path)).digest('hex');
 }
 
-const localManifest = Object.fromEntries(FILES.map((file) => [file.name, md5(join(CORE_DIR, file.name))]));
+const localManifest: CoreManifest = Object.fromEntries(
+  FILES.map((file) => [file.name, md5(join(CORE_DIR, file.name))]),
+);
 
-function readRemoteManifest() {
+function readRemoteManifest(): CoreManifest | null {
   const out = join(tmpDir, 'remote.manifest');
   try {
     // A missing object exits non-zero; we treat any read failure as "needs upload" — safe because the worst case is one
@@ -45,13 +56,13 @@ function readRemoteManifest() {
     wrangler(['r2', 'object', 'get', `${BUCKET}/${MANIFEST_KEY}`, '--file', out, '--remote'], {
       stdio: ['ignore', 'ignore', 'ignore'],
     });
-    return JSON.parse(readFileSync(out, 'utf8'));
+    return JSON.parse(readFileSync(out, 'utf8')) as CoreManifest;
   } catch {
     return null;
   }
 }
 
-function put(key, file, contentType) {
+function put(key: string, file: string, contentType: string): void {
   wrangler(['r2', 'object', 'put', `${BUCKET}/${key}`, '--file', file, '--content-type', contentType, '--remote'], {
     stdio: 'inherit',
   });

@@ -17,7 +17,12 @@ import {
   type DifficultyFilter,
   type KeysFilter,
 } from '@be-music/player-scene-model';
-import { COURSE_TABLE_URLS_STORAGE_KEY, parseStoredCourseTableURLs } from './course-table-import.ts';
+import {
+  COURSE_TABLE_URLS_STORAGE_KEY,
+  REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY,
+  parseStoredCourseTableURLs,
+} from './course-table-import.ts';
+import { BEMUSE_SERVER_URLS_STORAGE_KEY, parseStoredBemuseServerURLs } from './bemuse-server.ts';
 import { parseCompressorTunings, type CompressorTuning } from './compressor-tuning.ts';
 import { parseStoredHiSpeed, HI_SPEED_STORAGE_KEY } from './hi-speed-storage.ts';
 import { parseStoredPlayTempoSettings, PLAY_TEMPO_STORAGE_KEY, type PlayTempoSettings } from './play-tempo-settings.ts';
@@ -70,6 +75,8 @@ export interface OptionSettings {
   ghost: PlayerGUIState['ghost'];
   ghostMode: PlayerGUIState['ghostMode'];
   autoSaveReplay: boolean;
+  replayDeviceNames: boolean;
+  bemuseReplayGain: boolean;
   replaySlotAutoSave1: ReplayAutoSaveRule;
   replaySlotAutoSave2: ReplayAutoSaveRule;
   replaySlotAutoSave3: ReplayAutoSaveRule;
@@ -203,6 +210,9 @@ export interface OptionSettings {
   hiSpeed: number;
   hsFix: PlayerGUIState['hsFix'];
   displayAreaInfo: PlayerGUIState['displayAreaInfo'];
+  bga: PlayerGUIState['bga'];
+  bgaSize: PlayerGUIState['bgaSize'];
+  scoreGraph: boolean;
   hiddenSudden1P: PlayerGUIState['hiddenSudden1P'];
   hiddenSudden2P: PlayerGUIState['hiddenSudden2P'];
   laneCover: PlayerGUIState['laneCover'];
@@ -217,6 +227,10 @@ export interface OptionSettings {
   compressorTuning: Record<TunableCompressor, CompressorTuning>;
   skinSettings: Record<string, Record<string, StoredSkinSettingValue>>;
   courseTableURLs: string[];
+  /** The well-known difficulty tables the player removed, so that removing the last table leaves the list empty. */
+  removedDefaultCourseTableURLs: string[];
+  /** The registered Bemuse music servers (Options → Library & records), as index URLs. */
+  bemuseServerURLs: string[];
 }
 
 /** The document in `localStorage` and on the player origin. `settings` holds only the fields that were saved. */
@@ -258,6 +272,8 @@ const LEGACY_KEYS = [
   COMPRESSOR_TUNING_KEY,
   SKIN_SETTINGS_KEY,
   COURSE_TABLE_URLS_STORAGE_KEY,
+  REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY,
+  BEMUSE_SERVER_URLS_STORAGE_KEY,
 ] as const;
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
@@ -333,6 +349,8 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'compressorMaster', booleanOf(raw.compressorMaster));
   assign(settings, 'showInvisibleNotes', booleanOf(raw.showInvisibleNotes));
   assign(settings, 'autoSaveReplay', booleanOf(raw.autoSaveReplay));
+  assign(settings, 'replayDeviceNames', booleanOf(raw.replayDeviceNames));
+  assign(settings, 'bemuseReplayGain', booleanOf(raw.bemuseReplayGain));
   assign(settings, 'replaySlotAutoSave1', oneOf(raw.replaySlotAutoSave1, REPLAY_AUTO_SAVE_RULES));
   assign(settings, 'replaySlotAutoSave2', oneOf(raw.replaySlotAutoSave2, REPLAY_AUTO_SAVE_RULES));
   assign(settings, 'replaySlotAutoSave3', oneOf(raw.replaySlotAutoSave3, REPLAY_AUTO_SAVE_RULES));
@@ -493,6 +511,9 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'laneCover', booleanOf(raw.laneCover));
   if (typeof raw.shutter === 'number' && Number.isFinite(raw.shutter)) settings.shutter = clampShutter(raw.shutter);
   assign(settings, 'displayAreaInfo', oneOf(raw.displayAreaInfo, PLAY_OPTION_CHOICES.displayAreaInfo!));
+  assign(settings, 'bga', oneOf(raw.bga, PLAY_OPTION_CHOICES.bga!));
+  assign(settings, 'bgaSize', oneOf(raw.bgaSize, PLAY_OPTION_CHOICES.bgaSize!));
+  assign(settings, 'scoreGraph', booleanOf(raw.scoreGraph));
   assign(settings, 'hsFix', oneOf(raw.hsFix, PLAY_OPTION_CHOICES.hsFix!));
   assign(settings, 'skinEffects', oneOf(raw.skinEffects, SKIN_EFFECTS));
   assign(settings, 'playLayout', oneOf(raw.playLayout, PLAY_LAYOUTS));
@@ -548,6 +569,14 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   }
   if (Array.isArray(raw.courseTableURLs)) {
     settings.courseTableURLs = parseStoredCourseTableURLs(JSON.stringify(raw.courseTableURLs));
+  }
+  if (Array.isArray(raw.removedDefaultCourseTableURLs)) {
+    settings.removedDefaultCourseTableURLs = parseStoredCourseTableURLs(
+      JSON.stringify(raw.removedDefaultCourseTableURLs),
+    );
+  }
+  if (Array.isArray(raw.bemuseServerURLs)) {
+    settings.bemuseServerURLs = parseStoredBemuseServerURLs(JSON.stringify(raw.bemuseServerURLs));
   }
   return settings;
 }
@@ -616,6 +645,14 @@ export function optionSettingsFromLegacy(
   if (storage?.getItem(COURSE_TABLE_URLS_STORAGE_KEY) != null) {
     settings.courseTableURLs = parseStoredCourseTableURLs(storage.getItem(COURSE_TABLE_URLS_STORAGE_KEY));
   }
+  if (storage?.getItem(REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY) != null) {
+    settings.removedDefaultCourseTableURLs = parseStoredCourseTableURLs(
+      storage.getItem(REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY),
+    );
+  }
+  if (storage?.getItem(BEMUSE_SERVER_URLS_STORAGE_KEY) != null) {
+    settings.bemuseServerURLs = parseStoredBemuseServerURLs(storage.getItem(BEMUSE_SERVER_URLS_STORAGE_KEY));
+  }
   return { version: DOCUMENT_VERSION, updatedAt, settings };
 }
 
@@ -649,6 +686,8 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('ghost');
   assignState('ghostMode');
   assignState('autoSaveReplay');
+  assignState('replayDeviceNames');
+  assignState('bemuseReplayGain');
   assignState('replaySlotAutoSave1');
   assignState('replaySlotAutoSave2');
   assignState('replaySlotAutoSave3');
@@ -783,6 +822,9 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('hiSpeed');
   assignState('hsFix');
   assignState('displayAreaInfo');
+  assignState('bga');
+  assignState('bgaSize');
+  assignState('scoreGraph');
   assignState('hiddenSudden1P');
   assignState('hiddenSudden2P');
   assignState('laneCover');
@@ -802,6 +844,8 @@ export function captureOptionSettings(
     compressorTuning: Record<TunableCompressor, CompressorTuning>;
     skinSettings: ReadonlyMap<string, Record<string, StoredSkinSettingValue>>;
     courseTableURLs: readonly string[];
+    removedDefaultCourseTableURLs: readonly string[];
+    bemuseServerURLs: readonly string[];
     workerCount: number;
     updatedAt?: number;
   },
@@ -821,6 +865,8 @@ export function captureOptionSettings(
     ghost: state.ghost,
     ghostMode: state.ghostMode,
     autoSaveReplay: state.autoSaveReplay,
+    replayDeviceNames: state.replayDeviceNames,
+    bemuseReplayGain: state.bemuseReplayGain,
     replaySlotAutoSave1: state.replaySlotAutoSave1,
     replaySlotAutoSave2: state.replaySlotAutoSave2,
     replaySlotAutoSave3: state.replaySlotAutoSave3,
@@ -955,6 +1001,9 @@ export function captureOptionSettings(
     hiSpeed: state.hiSpeed,
     hsFix: state.hsFix,
     displayAreaInfo: state.displayAreaInfo,
+    bga: state.bga,
+    bgaSize: state.bgaSize,
+    scoreGraph: state.scoreGraph,
     hiddenSudden1P: state.hiddenSudden1P,
     hiddenSudden2P: state.hiddenSudden2P,
     laneCover: state.laneCover,
@@ -969,6 +1018,8 @@ export function captureOptionSettings(
     compressorTuning: extras.compressorTuning,
     skinSettings: Object.fromEntries(extras.skinSettings),
     courseTableURLs: [...extras.courseTableURLs],
+    removedDefaultCourseTableURLs: [...extras.removedDefaultCourseTableURLs],
+    bemuseServerURLs: [...extras.bemuseServerURLs],
   };
   return { version: DOCUMENT_VERSION, updatedAt: extras.updatedAt ?? Date.now(), settings: pickSettings(settings) };
 }
@@ -1015,6 +1066,14 @@ export function writeOptionSettings(document: OptionSettingsDocument, storage: S
     }
     if (settings.courseTableURLs)
       storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, JSON.stringify(settings.courseTableURLs));
+    if (settings.removedDefaultCourseTableURLs) {
+      storage.setItem(
+        REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY,
+        JSON.stringify(settings.removedDefaultCourseTableURLs),
+      );
+    }
+    if (settings.bemuseServerURLs)
+      storage.setItem(BEMUSE_SERVER_URLS_STORAGE_KEY, JSON.stringify(settings.bemuseServerURLs));
   } catch {
     // Blocked or full storage: the visit still has the values in memory.
   }

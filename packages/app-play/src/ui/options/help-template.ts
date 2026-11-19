@@ -50,8 +50,8 @@ export const OPTIONS_HELP_TEMPLATE = html`
         <dl class="help-menu-items">
           <dt>Judgment windows</dt>
           <dd>
-            The rules every play follows: LR2, beatoraja or ????. It decides the windows, gauges, options offered, and
-            which best records the select screen shows.
+            The rules every play follows: LR2, beatoraja, ???? or plugout. It decides the windows, gauges, options
+            offered, and which best records the select screen shows.
           </dd>
           <dt>Record kept</dt>
           <dd>
@@ -414,6 +414,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>How far LIFT raises the 1P judge line, as a fraction of the lane. Changes live.</dd>
           <dt>LIFT height 2P</dt>
           <dd>How far LIFT raises the 2P judge line, as a fraction of the lane. Changes live.</dd>
+          <dt>BGA</dt>
+          <dd>Whether the BGA shows: always, never, or only in AUTO play.</dd>
+          <dt>BGA size</dt>
+          <dd>Draws the BGA in the skin's normal frame or its larger one.</dd>
+          <dt>Score graph</dt>
+          <dd>Shows the skin's score graph during a play.</dd>
           <dt>BPM GUIDE (beatoraja)</dt>
           <dd>Shows upcoming BPM changes on the lanes.</dd>
           <dt>BPM change warning (AC)</dt>
@@ -533,10 +539,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Renames, deletes and exports the courses you made.</dd>
           <dt>NONSTOP placement</dt>
           <dd>Stitches NONSTOP courses as intended, or exactly as LR2 does, quirks included.</dd>
-          <dt>Table URL</dt>
-          <dd>The URL of a difficulty table whose courses to import.</dd>
-          <dt>Import table courses</dt>
-          <dd>Imports the courses of the table at Table URL; it is imported again on later visits.</dd>
+          <dt>Difficulty tables</dt>
+          <dd>
+            The difficulty tables whose courses are listed, imported again each time you open the player. Add one by its
+            page or header JSON URL, remove one to take its courses off the select screen, and add the well-known tables
+            back with Add default tables.
+          </dd>
         </dl>
       </section>
       <section class="help-menu-folder">
@@ -649,14 +657,31 @@ export const OPTIONS_HELP_TEMPLATE = html`
       <section class="help-menu-folder">
         <h4 class="help-menu-folder-title">Library &amp; records</h4>
         <dl class="help-menu-items">
+          <dt>Reload folders</dt>
+          <dd>
+            Reads the library again, as F8 (LR2) or F2 (beatoraja) does on the select screen: your folders, the Bemuse
+            music servers and the difficulty tables. The servers and tables are otherwise read from what this browser
+            kept, and asked again once a day.
+          </dd>
           <dt>Music ZIP URL</dt>
           <dd>The URL of a chart ZIP to load, as <code>?music=</code> does.</dd>
           <dt>Skin ZIP URL</dt>
           <dd>The URL of a skin ZIP to load, as <code>?skin=</code> does.</dd>
           <dt>Load from URLs</dt>
           <dd>Loads the ZIPs at the two URLs above.</dd>
+          <dt>Bemuse ReplayGain</dt>
+          <dd>
+            On by default. Plays each song from a Bemuse music server at the volume its server sets, as Bemuse does. Off
+            plays the charts at their own volume. Locked during play.
+          </dd>
           <dt>Auto-save replays</dt>
           <dd>Downloads each finished play's replay.</dd>
+          <dt>Record device names in replays</dt>
+          <dd>
+            Off by default. When on, a replay also keeps each controller's own name as the browser reports it, which
+            often includes its vendor and product ids. Keyboards and touch have none. The name goes wherever the replay
+            goes, Leaderboard submissions included; judging never reads it.
+          </dd>
           <dt>Clear best records</dt>
           <dd>Deletes the best records kept in this browser (asks first).</dd>
           <dt>Local data…</dt>

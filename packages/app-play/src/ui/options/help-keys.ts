@@ -15,7 +15,7 @@ function laneKeyHelpText(group: LaneKeyGroup, lane: LaneKeyConfigLane, lang: Hel
   }
   if (lane.scratch) {
     return lang === 'ja'
-      ? `5 / 7 / 10 / 14 KEY で ${lane.side} 側の皿を回すキー。Ctrl (1P 側は Space も) は皿の 2 つ目のキーのままです。`
+      ? `5 / 7 / 10 / 14 KEY で ${lane.side} 側のスクラッチを回すキー。Ctrl (1P 側は Space も) はスクラッチの 2 つ目のキーのままです。`
       : `The key that turns the ${lane.side} turntable in 5 / 7 / 10 / 14 KEY. Ctrl (and Space on 1P) stays its second key.`;
   }
   const number = laneKeyConfigLabel(group, lane).split(' ').at(-1);

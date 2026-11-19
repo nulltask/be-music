@@ -1,6 +1,5 @@
-// Select the changed packages for both PR and push comparisons: only the packages whose files changed, not what
-// depends on them. Documentation, test-only and other workflow changes need no measurement. Shared tooling, the root
-// dependency manifests and the CI workflow that runs the benchmark measure all.
+// Select benchmarked packages directly changed in the push. Documentation, test-only and other workflow changes need
+// no measurement. Shared tooling, the root dependency manifests and the CI workflow select the full inventory.
 // Usage: git diff --name-only BASE HEAD | node --conditions=source scripts/bench/affected-packages.ts
 // Prints a comma-separated --packages list; an empty result means CI must skip measurement.
 import { readFileSync } from 'node:fs';

@@ -1,8 +1,10 @@
+import { BEMUSE_SERVER_URLS_STORAGE_KEY } from '../bemuse-server.ts';
+import { strToU8, zipSync } from 'fflate';
 import { readDropEntries, type BrowserChartCollection } from '@be-music/player-browser/collection';
 import type { SceneKind, SelectScene } from '@be-music/player-browser/host';
 import type { BrowseSnapshot, LibraryChart, LibraryCourse } from '@be-music/player-scene-model';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
-import { COURSE_TABLE_URLS_STORAGE_KEY } from '../course-table-import.ts';
+import { COURSE_TABLE_URLS_STORAGE_KEY, DEFAULT_COURSE_TABLE_URLS } from '../course-table-import.ts';
 import { LibraryService, type LibraryServiceOptions } from './library.ts';
 
 // The loading overlay draws with Lit, which needs a DOM: a load here only reports its progress to it.
@@ -52,6 +54,7 @@ function fakeElement(): HTMLDivElement {
       add: (name: string) => classes.add(name),
       remove: (name: string) => classes.delete(name),
       contains: (name: string) => classes.has(name),
+      toggle: (name: string, on: boolean) => (on ? classes.add(name) : classes.delete(name)),
     },
     setAttribute: () => {},
     style: {},
@@ -73,15 +76,24 @@ function stubStorage(entries: Record<string, string> = {}): Map<string, string> 
   return values;
 }
 
-/** `fetch` answering each URL of `pages` with its text, and rejecting the rest as a blocked request does. */
+/**
+ * `fetch` answering each URL of `pages` with its text, and rejecting the rest as a blocked request does. A request
+ * through the same-origin proxy answers for the URL it carries.
+ */
 function stubFetch(pages: Record<string, string>): ReturnType<typeof vi.fn> {
   const fetch = vi.fn(async (url: string) => {
-    const page = pages[url];
+    const page = pages[proxiedURL(url)];
     if (page === undefined) throw new TypeError('Failed to fetch');
     return new Response(page);
   });
   vi.stubGlobal('fetch', fetch);
   return fetch;
+}
+
+/** The URL a `/__url-load-proxy?url=` request carries, else the URL itself. */
+function proxiedURL(url: string): string {
+  const parsed = new URL(url);
+  return parsed.pathname === '/__url-load-proxy' ? (parsed.searchParams.get('url') ?? url) : url;
 }
 
 function harness(overrides: Partial<LibraryServiceOptions> = {}) {
@@ -137,6 +149,22 @@ afterEach(() => {
 });
 
 describe('LibraryService difficulty tables', () => {
+  test('a reload of the folders reads the remembered tables again, with no folder loaded', async () => {
+    stubStorage({ [COURSE_TABLE_URLS_STORAGE_KEY]: JSON.stringify([TABLE_PAGE]) });
+    const fetch = stubFetch({
+      [TABLE_PAGE]: '<meta name="bmstable" content="header.json">',
+      [TABLE_HEADER]: tableHeader(),
+    });
+    const { library, statuses, shown, folders } = harness();
+    await library.reloadCharts();
+    expect(statuses).not.toContain('No folders to reload');
+    expect(fetch.mock.calls.map(([url]) => proxiedURL(url as string))).toEqual([TABLE_PAGE, TABLE_HEADER]);
+    // Asked as revalidations, so an unchanged table comes back as a 304.
+    expect(fetch.mock.calls.every(([, init]) => (init as RequestInit | undefined)?.cache === 'no-cache')).toBe(true);
+    expect(folders()).toContain('Insane');
+    expect(shown).toHaveLength(1);
+  });
+
   test("lists a table's courses by its URL, remembers the URL when asked, and shows the select screen again", async () => {
     const stored = stubStorage();
     stubFetch({ [TABLE_PAGE]: '<meta name="bmstable" content="header.json">', [TABLE_HEADER]: tableHeader() });
@@ -148,11 +176,34 @@ describe('LibraryService difficulty tables', () => {
     // A new library, so the select screen takes it as one rather than redrawing the old one.
     expect(library.collection).not.toBe(before);
     expect(shown).toEqual([library.collection]);
-    expect(JSON.parse(stored.get(COURSE_TABLE_URLS_STORAGE_KEY)!)).toEqual([TABLE_PAGE]);
+    // The first remembered table joins the well-known ones, which were the list until then.
+    expect(JSON.parse(stored.get(COURSE_TABLE_URLS_STORAGE_KEY)!)).toEqual([...DEFAULT_COURSE_TABLE_URLS, TABLE_PAGE]);
 
     // The same table imported again replaces its folder.
     await library.importCourseTables([TABLE_PAGE], false);
     expect(folders().filter((label) => label === 'Insane')).toHaveLength(1);
+  });
+
+  test("removes an imported table's courses by its URL, keeping a group another URL still imports", async () => {
+    stubStorage();
+    stubFetch({ [TABLE_PAGE]: '<meta name="bmstable" content="header.json">', [TABLE_HEADER]: tableHeader() });
+    const { library, folders } = harness();
+    const changed = vi.fn();
+    library.onCourseTablesChange(changed);
+    expect(
+      await library.importCourseTables([TABLE_PAGE, TABLE_HEADER, 'https://nowhere.example/t.html'], false),
+    ).toEqual([TABLE_PAGE, TABLE_HEADER]);
+    expect(library.courseTableLabel(TABLE_PAGE)).toBe('Insane');
+    expect(changed).toHaveBeenCalledTimes(2);
+    // The page and its header are one table: removing one URL keeps the other's folder.
+    await library.removeCourseTable(TABLE_PAGE);
+    expect(library.courseTableLabel(TABLE_PAGE)).toBeUndefined();
+    expect(folders()).toContain('Insane');
+    await library.removeCourseTable(TABLE_HEADER);
+    expect(folders()).not.toContain('Insane');
+    // A URL that never imported changes nothing.
+    await library.removeCourseTable('https://nowhere.example/t.html');
+    expect(changed).toHaveBeenCalledTimes(4);
   });
 
   test('imports a table without remembering it, and leaves a play, decide or result screen up', async () => {
@@ -185,7 +236,11 @@ describe('LibraryService difficulty tables', () => {
   });
 
   test('imports the tables of an earlier visit again once the first select screen is up', async () => {
-    stubStorage({ [COURSE_TABLE_URLS_STORAGE_KEY]: JSON.stringify([TABLE_HEADER]) });
+    // No Bemuse servers: the defaults would load first.
+    stubStorage({
+      [COURSE_TABLE_URLS_STORAGE_KEY]: JSON.stringify([TABLE_HEADER]),
+      [BEMUSE_SERVER_URLS_STORAGE_KEY]: '[]',
+    });
     const fetch = stubFetch({ [TABLE_HEADER]: tableHeader() });
     const { library, folders } = harness();
     let ready!: () => void;
@@ -199,7 +254,78 @@ describe('LibraryService difficulty tables', () => {
     expect(fetch).not.toHaveBeenCalled();
     ready();
     await loaded;
-    expect(fetch).toHaveBeenCalledWith(TABLE_HEADER);
+    expect(fetch.mock.calls.map(([url]) => proxiedURL(url as string))).toEqual([TABLE_HEADER]);
+    expect(folders()).toContain('Insane');
+  });
+});
+
+describe('LibraryService missing course stages', () => {
+  const TABLE_DATA = 'https://table.example/insane/data.json';
+  const header = JSON.stringify({
+    name: 'Insane',
+    data_url: 'data.json',
+    course: [[{ name: 'Dan 1', md5: [MD5[0]] }]],
+  });
+  const songs = JSON.stringify([{ md5: MD5[0], title: 'Song A', url: 'https://venue.example/a' }]);
+  const courseOf = (library: LibraryService): LibraryCourse =>
+    library.collection.courseFolders!.find((folder) => folder.label === 'Insane')!.courses![0]!;
+
+  test("looks a missing stage's pages up in its table's song list, fetched once", async () => {
+    stubStorage();
+    const fetch = stubFetch({ [TABLE_HEADER]: header, [TABLE_DATA]: songs });
+    const { library } = harness();
+    await library.importCourseTables([TABLE_HEADER], false);
+    const course = courseOf(library);
+    expect(course.playable).toBe(false);
+    const expected = [{ stage: 1, title: 'Song A', links: [{ kind: 'song', href: 'https://venue.example/a' }] }];
+    expect(await library.findMissingCourseStages(course)).toEqual(expected);
+    expect(await library.findMissingCourseStages(course)).toEqual(expected);
+    expect(fetch.mock.calls.map(([url]) => proxiedURL(url as string))).toEqual([TABLE_HEADER, TABLE_DATA]);
+  });
+
+  test("titles a focused course's missing stages by its table's song list, for every course of the table", async () => {
+    stubStorage();
+    const fetch = stubFetch({ [TABLE_HEADER]: header, [TABLE_DATA]: songs });
+    const { library } = harness();
+    await library.importCourseTables([TABLE_HEADER], false);
+    expect(courseOf(library).stages.map((stage) => stage.title)).toEqual(['course 1']);
+    await library.titleMissingCourseStages(courseOf(library));
+    expect(courseOf(library).stages.map((stage) => stage.title)).toEqual(['Song A']);
+    // The definition keeps the table's own title: only what the select screen shows changes.
+    expect(courseOf(library).definition.stages[0]!.title).toBe('course 1');
+    await library.titleMissingCourseStages(courseOf(library));
+    await library.findMissingCourseStages(courseOf(library));
+    expect(fetch.mock.calls.map(([url]) => proxiedURL(url as string))).toEqual([TABLE_HEADER, TABLE_DATA]);
+  });
+
+  test('lists the stages without pages when the song list cannot be fetched, and asks again next time', async () => {
+    stubStorage();
+    const fetch = stubFetch({ [TABLE_HEADER]: header });
+    const { library } = harness();
+    await library.importCourseTables([TABLE_HEADER], false);
+    const course = courseOf(library);
+    expect(await library.findMissingCourseStages(course)).toEqual([{ stage: 1, title: 'course 1', links: [] }]);
+    await library.findMissingCourseStages(course);
+    expect(fetch.mock.calls.map(([url]) => proxiedURL(url as string))).toEqual([TABLE_HEADER, TABLE_DATA, TABLE_DATA]);
+  });
+});
+
+describe('LibraryService well-known difficulty tables', () => {
+  // A stored empty list is what earlier builds left with every Options save (and synced to the account).
+  test.each([
+    ['a first visit', {}],
+    ['a visit with an empty list stored', { [COURSE_TABLE_URLS_STORAGE_KEY]: '[]' }],
+  ])('imports the well-known tables on %s, through the same-origin proxy', async (_visit, stored) => {
+    // No Bemuse servers: their defaults would load first.
+    stubStorage({ ...stored, [BEMUSE_SERVER_URLS_STORAGE_KEY]: '[]' });
+    vi.stubGlobal('location', { href: 'https://play.example/' });
+    const fetch = stubFetch({ [DEFAULT_COURSE_TABLE_URLS[0]!]: tableHeader() });
+    const { library, folders } = harness();
+    await library.autoLoad('https://play.example/', Promise.resolve());
+    const requested = fetch.mock.calls.map(([url]) => url as string);
+    expect(requested.map(proxiedURL)).toEqual(DEFAULT_COURSE_TABLE_URLS);
+    expect(requested.every((url) => url.startsWith('https://play.example/__url-load-proxy?url='))).toBe(true);
+    // The tables that could not be fetched are skipped; the one that answered lists its courses.
     expect(folders()).toContain('Insane');
   });
 });
@@ -344,6 +470,14 @@ describe('LibraryService made courses', () => {
       'MY DAN',
     ]);
     expect(view.restore).toHaveBeenCalledWith(navigation);
+  });
+
+  test('lists the made-course folders after charts load from an archive, with no course file loaded', async () => {
+    const { library, folders } = harness();
+    const archive = zipSync({ 'pack/a.bms': strToU8('#PLAYER 1\n#TITLE alpha\n#BPM 120\n#00111:01\n') });
+    await library.processIncomingFiles([new File([archive], 'pack.zip')]);
+    expect(library.collection.charts.map((chart) => chart.title)).toEqual(['alpha']);
+    expect(folders()).toEqual(['MY COURSES', 'MY NONSTOP', 'MY DAN']);
   });
 });
 
@@ -493,6 +627,68 @@ describe('the folder reload', () => {
     await library.reloadCharts();
     expect(library.collection.charts.map((chart) => chart.title).sort()).toEqual(['alpha', 'beta']);
     expect(shown.length).toBeGreaterThan(1);
+  });
+
+  test('reads a changed folder again where the select screen stands, and swaps the library in whole', async () => {
+    const navigation = { folderPath: ['pack'] } as unknown as BrowseSnapshot;
+    const view = { snapshot: vi.fn(() => navigation), setLibrary: vi.fn(), restore: vi.fn() };
+    const { library, shown, statuses } = harness({ selectView: () => view as unknown as SelectScene });
+    const files = new Map([['a.bms', bms('alpha')]]);
+    const entry = folderEntry('pack', files);
+    const onLoaded = vi.fn();
+    await library.processIncomingFiles(await readDropEntries([entry]), { entries: [entry], onLoaded });
+    expect(onLoaded).toHaveBeenCalledTimes(1);
+    const before = library.collection;
+    const shows = shown.length;
+    files.set('b.bms', bms('beta'));
+    const refreshed = library.refreshCharts();
+    // Until the charts are read again, the screens go on with the ones they have.
+    expect(library.collection).toBe(before);
+    await refreshed;
+    expect(library.collection.charts.map((chart) => chart.title).sort()).toEqual(['alpha', 'beta']);
+    expect(library.collection.charts.map((chart) => chart.id).sort()[0]).toBe(before.charts[0]!.id);
+    expect(onLoaded).toHaveBeenCalledTimes(2);
+    // The select screen keeps its place instead of being shown again.
+    expect(shown.length).toBe(shows);
+    expect(view.setLibrary).toHaveBeenCalledWith(library.collection);
+    expect(view.restore).toHaveBeenCalledWith(navigation);
+    expect(statuses.at(-1)).toBe('2 charts loaded');
+  });
+
+  test('leaves a play alone, and reads the changed folder once the select screen shows again', async () => {
+    const view = { snapshot: vi.fn(() => ({})), setLibrary: vi.fn(), restore: vi.fn() };
+    const { library, showing } = harness({ selectView: () => view as unknown as SelectScene });
+    const files = new Map([['a.bms', bms('alpha')]]);
+    const entry = folderEntry('pack', files);
+    await library.processIncomingFiles(await readDropEntries([entry]), { entries: [entry] });
+    files.set('b.bms', bms('beta'));
+    showing.current = 'play';
+    await library.refreshCharts();
+    library.selectShown();
+    expect(library.collection.charts).toHaveLength(1);
+    expect(view.setLibrary).not.toHaveBeenCalled();
+    showing.current = 'select';
+    library.selectShown();
+    await vi.waitFor(() => expect(library.collection.charts).toHaveLength(2));
+    await vi.waitFor(() => expect(view.setLibrary).toHaveBeenCalledWith(library.collection));
+    // Read once: the next showing has nothing left to read.
+    view.setLibrary.mockClear();
+    library.selectShown();
+    await Promise.resolve();
+    expect(view.setLibrary).not.toHaveBeenCalled();
+  });
+
+  test('a load that starts while the charts are read again waits for them, and adds to the new library', async () => {
+    const { library } = harness();
+    const first = folderEntry('first', new Map([['a.bms', bms('alpha')]]));
+    const second = folderEntry('second', new Map([['b.bms', bms('beta')]]));
+    await library.processIncomingFiles(await readDropEntries([first]), { entries: [first] });
+    const refreshed = library.refreshCharts();
+    const loaded = library.processIncomingFiles(await readDropEntries([second]), { entries: [second] });
+    await Promise.all([refreshed, loaded]);
+    expect(library.collection.charts.map((chart) => chart.title).sort()).toEqual(['alpha', 'beta']);
+    await library.reloadCharts();
+    expect(library.collection.charts.map((chart) => chart.title).sort()).toEqual(['alpha', 'beta']);
   });
 
   test('says so when there is nothing to reload', async () => {

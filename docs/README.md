@@ -2,12 +2,15 @@
 
 # Specifications
 
-This directory is a Markdown collection of specifications used in the `be-music` repository.
+These specifications cover chart formats, playback, skins, and services in `be-music`.
 
 - [Architecture: the chart layers, the engine and the package layers](./architecture.md)
 - [Architecture decisions](./adr/README.md)
 - [BMS implementation specification](./bms-spec.md)
 - [bmson implementation specification](./bmson-spec.md)
+- [LRX implementation specification](./lrx-spec.md)
+- [n2s implementation specification](./n2s-spec.md)
+- [n2x implementation specification](./n2x-spec.md)
 - [BMS / bmson compatibility notes (de jure vs de facto)](./format-compat.md)
 - [Be-Music-specific interpretations and behaviour](./be-music-behaviour.md)
 - [Bemuse implementation specification](./bemuse-spec.md)
@@ -16,6 +19,7 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [Browser player implementation notes](./player-web.md)
 - [Scene models (`@be-music/player-scene-model`)](./scene-model.md)
 - [Replay (play history) specification](./replay.md)
+- [Play options](./play-options.md)
 - [Courses and dan certification](./course.md)
 - [Browser verification](./player-web.md#browser-verification)
 - [Be-Music Fingerprint specification](./fingerprint-spec.md)
@@ -25,7 +29,6 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [beatoraja skin implementation notes](./beatoraja-skin.md)
 - [Writing a Be-Music Skin](./be-music-skin.md)
 - [BMS/bmson intermediate representation (`@be-music/chart-source`) implementation specification](./json-spec.md)
-- [Package names and responsibilities](./packages.md)
 - [Shared utilities](./shared-utils.md)
 - [Reusable Player UI and React / Vue integration](../packages/player-ui/README.md)
 - [Glossary](./glossary.md)

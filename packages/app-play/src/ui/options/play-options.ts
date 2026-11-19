@@ -58,6 +58,7 @@ export function buildPlayOptionsFolder(
       LR2: 'lr2',
       beatoraja: 'beatoraja',
       '????': '____',
+      plugout: 'plugout',
     }).on('change', () => {
       this.refreshRulesetChoices();
       this.deps.refreshSelectRecords();
@@ -564,6 +565,24 @@ export function buildPlayOptionsFolder(
   covers
     .addBinding(this.guiState, 'shutter', { label: 'Cover height', min: 0, max: 1, step: 0.01 })
     .on('change', ({ value }) => setCovers({ shutter: value }));
+  // BGA, its frame size and the score graph: LR2's select buttons 72, 73 and 70, offered here for every skin.
+  trackPlayOption(
+    selectBinding(effects, this.guiState, 'bga', 'BGA', { OFF: 'OFF', ON: 'ON', 'AUTOPLAY ONLY': 'AUTOPLAY_ONLY' }).on(
+      'change',
+      ({ value }) => this.setPlayOptions({ bga: value }),
+    ),
+  );
+  trackPlayOption(
+    selectBinding(effects, this.guiState, 'bgaSize', 'BGA size', { NORMAL: 'NORMAL', EXTEND: 'EXTEND' }).on(
+      'change',
+      ({ value }) => this.setPlayOptions({ bgaSize: value }),
+    ),
+  );
+  trackPlayOption(
+    effects
+      .addBinding(this.guiState, 'scoreGraph', { label: 'Score graph' })
+      .on('change', ({ value }) => this.setPlayOptions({ scoreGraph: value })),
+  );
   trackPlayOption(
     effects
       .addBinding(this.guiState, 'bpmGuide', { label: 'BPM GUIDE (beatoraja)' })

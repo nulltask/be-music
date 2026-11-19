@@ -1,4 +1,8 @@
-import { computeChartFileHashes, type BrowserChartCollection } from '@be-music/player-browser/collection';
+import {
+  computeChartFileHashes,
+  seedChartFileHashes,
+  type BrowserChartCollection,
+} from '@be-music/player-browser/collection';
 import type { RecordPlay } from '@be-music/player-engine/records';
 import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import type { RulesetId } from '@be-music/player-engine/ruleset';
@@ -85,6 +89,15 @@ describe('RecordsService chart hashes', () => {
     expect(hashChart).toHaveBeenCalledTimes(1);
   });
 
+  test('takes the hashes the load kept with the chart, without reading its file', async () => {
+    const service = records(library({ 'a.bms': 'abc' }));
+    const chartEntry = chart('a');
+    seedChartFileHashes(chartEntry.chart, { sha256: 'f'.repeat(64), md5: 'e'.repeat(32) });
+    expect(await service.resolveChartHashes(chartEntry)).toEqual({ sha256: 'f'.repeat(64), md5: 'e'.repeat(32) });
+    expect(await service.resolveChartSHA256(chartEntry)).toBe('f'.repeat(64));
+    expect(hashChart).not.toHaveBeenCalled();
+  });
+
   test('keeps a chart that cannot be hashed as unhashed, without hashing it again', async () => {
     const service = records(library({}));
     const chartEntry = chart('missing');
@@ -128,6 +141,17 @@ describe('RecordsService record lookups', () => {
     expect(service.currentRulesetRecords().get(`sha256:${ABC_SHA256}`)?.lamp).toBe('EX_HARD');
     ruleset.current = '____';
     expect(service.lookupChartBestRecord(chartEntry)).toBeUndefined();
+  });
+
+  test('answers by the hashes the load kept with the chart at once, without hashing it', () => {
+    const service = records(library({ 'a.bms': 'abc' }));
+    service.chartBestRecords.set('lr2:path:a.bms', { lamp: 'EASY' });
+    service.chartBestRecords.set(`lr2:sha256:${ABC_SHA256}`, { lamp: 'HARD' });
+    const chartEntry = chart('a');
+    seedChartFileHashes(chartEntry.chart, { sha256: ABC_SHA256, md5: ABC_MD5 });
+    expect(service.lookupChartBestRecord(chartEntry)?.lamp).toBe('HARD');
+    expect(service.peekChartBestRecord(chartEntry)?.lamp).toBe('HARD');
+    expect(hashChart).not.toHaveBeenCalled();
   });
 });
 

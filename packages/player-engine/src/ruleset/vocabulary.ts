@@ -28,6 +28,7 @@ export {
 } from './definitions.ts';
 export { resolveJudgeWindowsMs, type JudgeWindowsMs } from '../core/judge-window.ts';
 export { resolveChartGaugeType } from './chart-gauge.ts';
+export { resolvePlugoutScore } from './plugout.ts';
 export {
   computeScoreRate,
   createEmptyScore,

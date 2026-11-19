@@ -4,6 +4,7 @@ import {
   qualifyPracticeGaugePick,
   resolveGaugeTypes,
   resolvePracticeGaugeTypes,
+  RULESET_IDS,
   splitGaugePick,
   splitPracticeGaugePick,
   splitOptionSource,
@@ -69,7 +70,7 @@ const LANE_OPTION_NAMES: Readonly<Record<string, string>> = {
 
 /** The sources in the order the Options dialog groups them: the judge ruleset's own first. */
 function sourceOrder(ruleset: RulesetId): RulesetId[] {
-  return [ruleset, ...(['lr2', 'beatoraja', '____'] as const).filter((source) => source !== ruleset)];
+  return [ruleset, ...RULESET_IDS.filter((source) => source !== ruleset)];
 }
 
 /**
@@ -245,14 +246,14 @@ export function practiceGaugeItems(
 }
 
 /**
- * The lowest auto-shift gauge under `ruleset`, named as the ruleset's own gauges (#933). LR2 has no ASSIST EASY, so its
- * lowest choice is EASY.
+ * The lowest auto-shift gauge under `ruleset`, named as the ruleset's own gauges (#933). LR2 and plugout have no ASSIST
+ * EASY (the engine reads it as EASY), so their lowest choice is EASY.
  */
 export function bottomShiftableGaugeItems(ruleset: RulesetId): PlayOptionItem<PlayOptions['bottomShiftableGauge']>[] {
-  if (ruleset === 'lr2')
+  if (ruleset === 'lr2' || ruleset === 'plugout')
     return [
       { text: 'EASY', value: 'EASY' },
-      { text: 'GROOVE', value: 'GROOVE' },
+      { text: ruleset === 'lr2' ? 'GROOVE' : 'NORMAL', value: 'GROOVE' },
     ];
   return [
     { text: ruleset === '____' ? 'ASSISTED EASY' : 'ASSIST EASY', value: 'ASSIST-EASY' },

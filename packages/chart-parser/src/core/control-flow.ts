@@ -3,6 +3,7 @@ import {
   cloneJSON,
   type BMSControlFlowCommand,
   type BMSControlFlowEntry,
+  type BeMusicEvent,
   type BeMusicJSON,
   normalizeChannel,
   normalizeObjectKey,
@@ -177,14 +178,16 @@ function applyActiveControlFlowEntry(
     }
     const replayBase: 36 | 62 = json.bms.base === 62 ? 62 : 36;
     for (const event of entry.events) {
-      json.events.push({
+      // Optional fields are assigned, not spread, to keep the hidden classes of the parser's other events.
+      const resolved: BeMusicEvent = {
         measure: entry.measure,
         channel: normalizeChannel(entry.channel),
         position: event.position,
         value: normalizeObjectKey(event.value, replayBase),
-        ...(event.bmsLineOrder !== undefined ? { bmsLineOrder: event.bmsLineOrder } : {}),
-        ...(event.bmson ? { bmson: event.bmson } : {}),
-      });
+      };
+      if (event.bmsLineOrder !== undefined) resolved.bmsLineOrder = event.bmsLineOrder;
+      if (event.bmson) resolved.bmson = event.bmson;
+      json.events.push(resolved);
     }
   }
 }

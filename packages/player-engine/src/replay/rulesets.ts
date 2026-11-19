@@ -9,7 +9,6 @@ import { resolveAutoScratchChannels } from '../core/auto-scratch.ts';
 import { resolveChartJudgeOption } from '../ruleset/chart-judge.ts';
 import { resolveScratchChannels } from './scratch-channels.ts';
 import {
-  createEmptyRulesetNoteCounts,
   resolveRuleset,
   type RulesetChartFacts,
   type RulesetConfig,
@@ -24,58 +23,82 @@ export * from '../ruleset/index.ts';
 /** Derives the ruleset's chart facts from a recorded replay. */
 export function rulesetChartFactsFromReplay(replay: BeMusicReplay): RulesetChartFacts {
   const chart = replay.chart;
-  const notes = createEmptyRulesetNoteCounts();
-  const long: Record<LongNoteMode, number> = { 1: 0, 2: 0, 3: 0 };
-  let normal = 0;
+  const counts = createTally();
   for (const note of chart.notes) {
     if (note.type === 'normal') {
-      normal += 1;
+      counts.normal += 1;
     } else if (note.type === 'long') {
-      long[note.lnMode ?? chart.lnMode] += 1;
+      counts.long[note.lnMode ?? chart.lnMode] += 1;
     }
   }
+  return createChartFacts(replay, counts);
+}
+
+function createChartFacts(replay: BeMusicReplay, { normal, long }: ReplayNoteTally): RulesetChartFacts {
+  const chart = replay.chart;
   const facts: RulesetChartFacts = {
     sourceFormat: chart.sourceFormat,
     laneMode: chart.laneMode,
     lnMode: chart.lnMode,
     judgeRank: chart.judgeRank,
-    notes: { ...notes, normal, long },
+    notes: { normal, long },
   };
   if (chart.totalUnit !== undefined) facts.totalUnit = chart.totalUnit;
   if (chart.total !== undefined) facts.total = chart.total;
   return facts;
 }
 
-/** The recorded notes plugout leaves out of its count (`ReplayNote.uncounted`), other than AUTO SCRATCH's. */
-export function countReplayUncountedNotes(replay: BeMusicReplay): RulesetNoteCounts | undefined {
-  const auto =
-    replay.play.mode === 'auto'
-      ? new Set<string>()
-      : resolveAutoScratchChannels(replay.play, resolveScratchChannels(replay.chart.laneMode));
-  const long: Record<LongNoteMode, number> = { 1: 0, 2: 0, 3: 0 };
-  let normal = 0;
-  for (const note of replay.chart.notes) {
-    if (note.uncounted !== true || auto.has(note.channel)) continue;
-    if (note.type === 'normal') normal += 1;
-    else if (note.type === 'long') long[note.lnMode ?? replay.chart.lnMode] += 1;
-  }
+/** Shared empty set for plays without AUTO SCRATCH. */
+const NO_CHANNELS: ReadonlySet<string> = new Set();
+
+interface ReplayNoteTally {
+  normal: number;
+  long: Record<LongNoteMode, number>;
+}
+
+function createTally(): ReplayNoteTally {
+  return { normal: 0, long: { 1: 0, 2: 0, 3: 0 } };
+}
+
+function tallyCounts({ normal, long }: ReplayNoteTally): RulesetNoteCounts | undefined {
   return normal + long[1] + long[2] + long[3] > 0 ? { normal, long } : undefined;
 }
 
-/** The notes AUTO SCRATCH played in a recorded manual play, as the ruleset facts count them; none without it. */
-export function countReplayAutoScratchNotes(replay: BeMusicReplay): RulesetNoteCounts | undefined {
-  if (replay.play.mode === 'auto') return undefined;
-  const channels = resolveAutoScratchChannels(replay.play, resolveScratchChannels(replay.chart.laneMode));
-  if (channels.size === 0) return undefined;
-  const notes = createEmptyRulesetNoteCounts();
-  const long: Record<LongNoteMode, number> = { 1: 0, 2: 0, 3: 0 };
-  let normal = 0;
-  for (const note of replay.chart.notes) {
-    if (!channels.has(note.channel)) continue;
-    if (note.type === 'normal') normal += 1;
-    else if (note.type === 'long') long[note.lnMode ?? replay.chart.lnMode] += 1;
+/**
+ * The ruleset inputs a recorded play's notes give, counted in one pass: the chart's facts, the notes AUTO SCRATCH played
+ * in a manual play, and the notes plugout leaves out of its count (`ReplayNote.uncounted`) other than AUTO SCRATCH's.
+ */
+function tallyReplayNotes(replay: BeMusicReplay): {
+  facts: RulesetChartFacts;
+  autoScratchNotes: RulesetNoteCounts | undefined;
+  uncountedNotes: RulesetNoteCounts | undefined;
+} {
+  const chart = replay.chart;
+  const auto =
+    replay.play.mode === 'auto'
+      ? NO_CHANNELS
+      : resolveAutoScratchChannels(replay.play, resolveScratchChannels(chart.laneMode));
+  const all = createTally();
+  const autoScratch = createTally();
+  const uncounted = createTally();
+  for (const note of chart.notes) {
+    let tally: ReplayNoteTally | undefined;
+    if (auto.size > 0 && auto.has(note.channel)) tally = autoScratch;
+    else if (note.uncounted === true) tally = uncounted;
+    if (note.type === 'normal') {
+      all.normal += 1;
+      if (tally !== undefined) tally.normal += 1;
+    } else if (note.type === 'long') {
+      const mode = note.lnMode ?? chart.lnMode;
+      all.long[mode] += 1;
+      if (tally !== undefined) tally.long[mode] += 1;
+    }
   }
-  return normal + long[1] + long[2] + long[3] > 0 ? { ...notes, normal, long } : undefined;
+  return {
+    facts: createChartFacts(replay, all),
+    autoScratchNotes: tallyCounts(autoScratch),
+    uncountedNotes: tallyCounts(uncounted),
+  };
 }
 
 /**
@@ -88,9 +111,8 @@ export function resolveRulesetConfig(
   options: ResolveRulesetOptions = {},
 ): RulesetConfig {
   const { course } = replay.play;
-  const autoScratchNotes = countReplayAutoScratchNotes(replay);
-  const uncountedNotes = countReplayUncountedNotes(replay);
-  return resolveRuleset(rulesetChartFactsFromReplay(replay), rulesetId, {
+  const { facts, autoScratchNotes, uncountedNotes } = tallyReplayNotes(replay);
+  return resolveRuleset(facts, rulesetId, {
     ...(autoScratchNotes !== undefined ? { autoScratchNotes } : {}),
     ...(uncountedNotes !== undefined ? { uncountedNotes } : {}),
     selectedGauge: replay.play.gauge,

@@ -57,6 +57,11 @@ export function chartNotesDoubles(option: ChartNotesOption | undefined): boolean
   return option === 'DOUBLE' || option === 'DBLCOPY';
 }
 
+/** Whether a declared NOTES conversion's COPY takes effect: on a 5 / 7 KEY chart outside a course. */
+export function chartNotesCopyRuns(option: ChartNotesOption | undefined, context: ChartPlayOptionContext): boolean {
+  return chartNotesCopies(option) && !context.course && context.playVariant in COPIED_VARIANTS;
+}
+
 /**
  * The part of a declared NOTES conversion that takes effect: COPY only on a 5 / 7 KEY chart outside a course, DOUBLE on
  * the variants nanasigroove defines it for (`legacy`, a version 1 / 2 program: every variant with key lanes). DBLCOPY
@@ -68,7 +73,7 @@ export function resolveChartNotesOption(
   legacy = false,
 ): ChartNotesOption | undefined {
   if (option === undefined) return undefined;
-  const copies = chartNotesCopies(option) && !context.course && context.playVariant in COPIED_VARIANTS;
+  const copies = chartNotesCopyRuns(option, context);
   const doubles =
     chartNotesDoubles(option) &&
     (legacy ? DOUBLED_VARIANTS.has(context.playVariant) : nanasiDoubleSupports(context.playVariant));

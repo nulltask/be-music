@@ -356,14 +356,15 @@ function replayEntries(
       continue;
     }
     for (const event of entry.events) {
+      // Optional fields are assigned, not spread, to keep the hidden classes of parsed events.
       const replayed: BeMusicEvent = {
         measure: entry.measure,
         channel,
         position: event.position,
         value: normalizeObjectKey(event.value, base),
-        ...(event.bmsLineOrder !== undefined ? { bmsLineOrder: event.bmsLineOrder } : {}),
-        ...(event.bmson ? { bmson: event.bmson } : {}),
       };
+      if (event.bmsLineOrder !== undefined) replayed.bmsLineOrder = event.bmsLineOrder;
+      if (event.bmson) replayed.bmson = event.bmson;
       const list = added.get(bucket);
       if (list) {
         list.push(replayed);

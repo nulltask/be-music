@@ -14,6 +14,7 @@ export * from './rejudge.ts';
 export * from './result-lamp.ts';
 export * from './simulate.ts';
 export * from './view.ts';
+export { resolveChartPlayProgram } from '../core/chart-play-options.ts';
 // The chart a play was played on, rebuilt without the engine's audio driver: a verifier needs it to check what a log
 // claims about its chart (a course's unreached stages, a NONSTOP run's stitched chart).
 export { resolveChartRulesetFacts, resolvePlayChart } from '../core/play-chart.ts';

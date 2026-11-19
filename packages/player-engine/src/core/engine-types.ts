@@ -330,8 +330,10 @@ export interface PlayerPlayRuntime {
    * Keeps a play open after its chart is over, so the player's keys still light the lanes (and the chart's remaining
    * background sounds still play) while the host shows its outro. When the chart is over — every note judged and the
    * judge windows passed — `onSettled` runs once; the play then carries on until `signal` aborts, and only then ends
-   * normally (its summary and replay as usual; aborting this signal is not an interrupt). Without it a play ends as
-   * soon as its chart is over. Manual, replay and AUTO play alike.
+   * normally (its summary and replay as usual; aborting this signal is not an interrupt). Aborting it before the chart
+   * is over ends the play once nothing is left to judge, ahead of the judge windows and the chart's remaining
+   * background sounds (the host finishing a play whose notes are all judged). Without it a play ends as soon as its
+   * chart is over. Manual, replay and AUTO play alike.
    */
   holdAfterChart?: { signal: AbortSignal; onSettled?: () => void };
   audioBaseDir?: string;
@@ -591,6 +593,14 @@ export interface AudioSession {
   getActiveAudioFiles?: () => string[];
   getActiveAudioVoiceCount?: () => number;
   triggerEvent?: (event: BeMusicEvent) => void;
+  /**
+   * Plays `event`'s sound at `outputSeconds` on the clock {@link getClockState} reports (`outputSeconds`): the engine
+   * queues the chart's realtime audio (volume changes, background sounds, AUTO play's keysounds) as its write head
+   * (`scheduledSeconds`) reaches it, and a backend whose write head runs ahead of its output places each one at its due
+   * time with this, instead of when the engine's tick reached it. A time already past plays at once. Without it, those
+   * go through {@link triggerEvent} and sound as they are queued.
+   */
+  scheduleEventAt?: (event: BeMusicEvent, outputSeconds: number) => void;
   /**
    * Plays the guide sound of a judgment (beatoraja's GUIDE SE), at once. Present only on a session that has the sound
    * set's guide sounds and a play that turned them on; a sound the set lacks plays nothing.

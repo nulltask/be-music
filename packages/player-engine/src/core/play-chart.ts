@@ -1,6 +1,6 @@
 import { drawRandomOutcomes, resolveChart, type ResolvedChart } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser';
+import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser/core';
 import { rulesetChartFactsFromChart, type RulesetChartFacts } from '../ruleset/index.ts';
 import { preparePlaybackChart } from './bootstrap.ts';
 import type { PlayerOptions, ResolvedPlayChart, ResolvePlayChartOptions } from './engine-types.ts';

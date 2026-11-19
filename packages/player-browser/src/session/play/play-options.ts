@@ -315,6 +315,12 @@ export interface PlaySessionOptions {
   /** Host application stamped into the recorded replay's `recorder` (the engine adds its own version). */
   replayRecorder?: ReplayRecordingOptions['recorder'];
   /**
+   * Record each controller's device name (its `Gamepad.id`) in the replay's `play.inputSources`
+   * (`ReplayRecordingOptions.includeDeviceNames`). Off by default: only the player turns it on, since the name can
+   * identify their hardware.
+   */
+  replayDeviceNames?: boolean;
+  /**
    * 1P gauge variant (`#SRC_BUTTON,type=40`). Selects the ruleset's gauge (the engine resolves the curve) and drives
    * the gauge-on-red-branch op flags (43 / 45).
    */
