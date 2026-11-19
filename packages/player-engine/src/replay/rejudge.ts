@@ -108,10 +108,17 @@ function stopReplayAt(replay: BeMusicReplay, stoppedAtUs: number): BeMusicReplay
  */
 function findFailureStop(replay: BeMusicReplay, options: Omit<SimulateReplayOptions, 'ruleset'>): number | undefined {
   if (replay.play.endOnFailure !== true || replay.play.aborted === true) return undefined;
+  const ruleset = playedRuleset(replay);
+  const gaugeKey = options.player === 2 && replay.play.gauge2P !== undefined ? 'gauge2P' : 'gauge';
+  const gauge = replay.play[gaugeKey];
+  // Older ____ replays used EX-HARD for a bare DEATH pick. Reconstruct their stop on that curve.
+  if (ruleset === '____' && replay.play.course === undefined && (gauge === 'DEATH' || gauge === 'DEATH-CORRECTED')) {
+    replay = { ...replay, play: { ...replay.play, [gaugeKey]: 'EX-HARD' } };
+  }
   let stoppedAtUs: number | undefined;
   simulateReplay(replay, {
     ...options,
-    ruleset: playedRuleset(replay),
+    ruleset,
     onJudgment: undefined,
     onFailure: (atUs) => (stoppedAtUs = atUs),
   });

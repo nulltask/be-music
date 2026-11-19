@@ -99,6 +99,15 @@ describe('rejudgeReplay', () => {
     expect(rejudgeReplay(replay, { ruleset: 'lr2' }).status).toBe('simulated');
   });
 
+  test('uses the legacy failure stop when re-judging a bare DEATH recorded under ____', () => {
+    const legacy = makeReplay({ gauge: 'DEATH', judgeRuleset: '____', endOnFailure: true });
+    expect(rejudgeReplay(legacy, { ruleset: '____' })).toEqual({ status: 'not-simulated', reason: 'gauge' });
+    expect(rejudgeReplay(legacy, { ruleset: 'beatoraja' })).toMatchObject({
+      status: 'simulated',
+      result: { gauge: { type: 'HAZARD' } },
+    });
+  });
+
   test('judges a run that ended on failure only up to that point, and marks a survivor truncated', () => {
     const played = rejudgeReplay(FAILED_EARLY, { ruleset: 'lr2' });
     expect(played.status).toBe('simulated');

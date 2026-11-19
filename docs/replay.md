@@ -304,10 +304,10 @@ flowchart TD
   defines (`P-ATTACK` under beatoraja, `EX-HARD` or `ASSIST-EASY` under LR2, `DEATH` under ???? outside a course); it is
   never mapped to a lookalike. `custom-judge` when the replay used CUSTOM JUDGE, which stays beatoraja's. Gauge
   auto-shift is no reason: it is carried, along the target's own gauge ladder ([Play options](./play-options-modifiers.md#gauge-auto-shift)).
-  The played ruleset reads its own replays, since the engine refuses a bare gauge its ruleset lacks; only a replay
-  recorded before that refusal (a bare `DEATH` played as EX-HARD under That-Which-Must-Not-Be-Named) is `gauge` there too. A source-qualified gauge (`play.gauge: "lr2:P-ATTACK"`) is no
-  reason either: every ruleset re-judges it on that source's gauge, ladder and course gauges, and the result names the
-  source in `gauge.source` ([ADR 0019](./adr/0019-source-qualified-option-values.md)).
+  Older replays that recorded a bare `DEATH` as EX-HARD under That-Which-Must-Not-Be-Named report `gauge` under the
+  played ruleset too. When another ruleset can read the gauge, the simulator uses the old EX-HARD curve to find where
+  the recording stopped on failure. Each target uses a source-qualified gauge (`play.gauge: "lr2:P-ATTACK"`) with its
+  own ladder and course gauges, and reports the source in `gauge.source` ([ADR 0019](./adr/0019-source-qualified-option-values.md)).
 - **truncated**: the play ended where its survival gauge emptied (`play.endOnFailure`), and the target's gauge would have
   survived that point. The run is judged only up to it (`stoppedAtUs`, where the played ruleset's gauge emptied): no input
   is synthesized and no later note is missed. A course is truncated the same way when its played run stopped at a failed

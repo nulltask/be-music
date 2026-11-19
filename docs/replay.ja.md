@@ -308,11 +308,12 @@ flowchart TD
   `gauge` です（beatoraja での `P-ATTACK`、LR2 での `EX-HARD` と `ASSIST-EASY`、コース以外の ???? での
   `DEATH`）。似たゲージには読み替えません。CUSTOM JUDGE を使ったリプレイは、CUSTOM JUDGE が
   beatoraja だけのものなので `custom-judge` です。ゲージオートシフトは理由にならず、対象のゲージの並びで持ち越します
-  （[プレイオプション](./play-options-modifiers.ja.md#ゲージオートシフト)）。エンジンはルールセットにない素のゲージを拒否するので、
-  プレイしたルールセットは自分のリプレイを読めます。その拒否の前に記録したリプレイ（名前を言ってはいけないあのゲーム で EX-HARD として
-  遊んだ素の `DEATH`）だけは、プレイしたルールセットでも `gauge` です。参照元つきのゲージ（`play.gauge: "lr2:P-ATTACK"`）も理由になりません。
-  どのルールセットでも、その参照元のゲージ・ラダー・コースゲージで再判定し、結果の `gauge.source` に参照元を
-  記録します（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)）。
+  （[プレイオプション](./play-options-modifiers.ja.md#ゲージオートシフト)）。
+  名前を言ってはいけないあのゲームで、参照元のない `DEATH` を EX-HARD として記録した旧リプレイは、
+  プレイ時のルールセットでも `gauge` になります。別のルールセットで再判定できる場合は、当時の
+  EX-HARD の増減からゲージが尽きた時刻を求めます。参照元つきのゲージ（`play.gauge: "lr2:P-ATTACK"`）
+  は、その参照元のゲージ、ラダー、コースゲージで再判定し、結果の `gauge.source` に参照元を記録します
+  （[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)）。
 - **truncated**: サバイバルゲージが空になった所でプレイが終わり（`play.endOnFailure`）、対象のゲージならそこを
   生き残る場合です。判定はその時点（`stoppedAtUs`、プレイしたルールセットのゲージが空になった時刻）までで、
   入力を補ったり、その後のノートを見逃しにしたりしません。コースも、プレイしたルールセットで失敗した
