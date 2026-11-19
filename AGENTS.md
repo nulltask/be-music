@@ -82,6 +82,12 @@
   - Keep each body paragraph on a single unwrapped line.
   - Put each list item on its own line.
   - State what changed and why, concisely; lead with the symptom when the change fixes an observable one.
+- Before releasing, tidy the unreleased changesets in a PR to `devel`, so the CHANGELOG states what changed since the last release:
+  - Find the last release with `git log origin/main -i --grep='version packages' -1`. A feature whose commit is not an ancestor of that commit is unreleased.
+  - Fold a fix of an unreleased feature into the entry that introduces the feature, and state the final behaviour there. Drop an entry that only fixes behaviour that never shipped, and reword an entry that compares with unreleased behaviour ("before", "no longer").
+  - Keep a merged entry in the file that introduced the feature: the CHANGELOG cites the commit that added the file.
+  - Remove changesets for packages no longer in the workspace; `changeset version` fails on them.
+  - Check that `pnpm run release:status` succeeds. To preview the CHANGELOG, run `pnpm run release:version`, read `packages/*/CHANGELOG.md`, and discard the output.
 - Releasing: run `pnpm run release:version` on `devel`, commit the generated `packages/*/package.json` and `CHANGELOG.md` together as `chore: version packages`, then merge the `devel -> main` PR to publish. See README "Package Releases".
 
 # Markdown Localization Rules
