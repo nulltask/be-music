@@ -105,3 +105,81 @@ for (const slowSource of ['Bemuse server', 'saved folder', 'difficulty table'] a
     await expect.poll(library).toEqual({ charts: 2, courseFolders: expect.arrayContaining(['Startup Table']) });
   });
 }
+
+test('shows the cached library together before any background refresh responds', async ({ player }) => {
+  const { page } = player;
+  const servers = ['https://first-bemuse.example', 'https://second-bemuse.example'];
+  const table = 'https://startup-table.example/header.json';
+  let release!: () => void;
+  const paused = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let reloading = false;
+  let indexRequests = 0;
+  await page.route('https://*-bemuse.example/**', async (route) => {
+    const url = new URL(route.request().url());
+    const first = url.origin === servers[0];
+    const title = first ? 'First chart' : 'Second chart';
+    const headers = { 'access-control-allow-origin': '*' };
+    if (url.pathname === '/index.json') {
+      if (reloading) {
+        indexRequests += 1;
+        await paused;
+      }
+      const charts = [{ file: 'main.bms' }];
+      if (reloading && first) charts.push({ file: 'new.bms' });
+      await route.fulfill({ headers, json: { songs: [{ path: 'song', bemusepack_url: null, charts }] } });
+    } else if (url.pathname.endsWith('.bms')) {
+      await route.fulfill({
+        headers,
+        body: `#TITLE ${url.pathname.endsWith('new.bms') ? 'New chart' : title}\n#BPM 120\n#WAV01 key.wav\n#00111:01\n`,
+      });
+    } else {
+      await route.fulfill({ headers, status: 404 });
+    }
+  });
+  await page.route('**/__url-load-proxy?**', async (route) => {
+    if (new URL(route.request().url()).searchParams.get('url') !== table) {
+      await route.fulfill({ status: 404 });
+      return;
+    }
+    if (reloading) await paused;
+    await route.fulfill({ json: { name: 'Saved Table', course: [[{ name: 'Dan', md5: ['a'.repeat(32)] }]] } });
+  });
+  await page.route('**/api/player-settings', (route) => route.fulfill({ status: 204 }));
+  await player.open({
+    'be-music.bemuse-server-urls': JSON.stringify(servers.map((url) => `${url}/index.json`)),
+    'be-music.course-table-urls': JSON.stringify([table]),
+  });
+  await expect
+    .poll(async () => (await player.state()).library)
+    .toEqual({
+      charts: 2,
+      courseFolders: expect.arrayContaining(['Saved Table']),
+    });
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const cache = await caches.open('be-music-remote-v1');
+        return (await cache.keys()).filter((request) =>
+          new URL(request.url).searchParams.get('key')?.startsWith('bemuse-library-v1:'),
+        ).length;
+      }),
+    )
+    .toBe(2);
+
+  try {
+    reloading = true;
+    await page.reload();
+    const first = await player.waitFor((state) => state.scene.kind === 'select', 'the first select screen', 10_000);
+    expect(first.library.charts).toBe(2);
+    expect(first.library.courseFolders).toContain('Saved Table');
+    await expect.poll(() => indexRequests).toBe(2);
+    const selected = await player.openFolder('Bemuse first-bemuse.example');
+    expect(selected.cursor?.bar).toMatchObject({ kind: 'chart', title: 'First chart' });
+  } finally {
+    release();
+  }
+  await expect.poll(async () => (await player.state()).library.charts).toBe(3);
+  expect((await player.state()).cursor?.bar).toMatchObject({ kind: 'chart', title: 'First chart' });
+});

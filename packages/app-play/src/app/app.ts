@@ -775,8 +775,22 @@ export class PlayerWebApp {
     // The replay slots load once; the select screen draws them again whenever they change.
     void this.replaySlots.store.load();
     this.replaySlots.store.subscribe(() => this.selectView?.refreshRecords());
-    const initialSelectReady = this.showSelect();
-    void initialSelectReady.then(() => this.dropTarget.restoreFolder());
+    // Prepare the renderer and the saved index together. The first selection does not wait for disk walks or fetches.
+    void this.mountStage().catch(() => undefined);
+    let startRefresh!: () => void;
+    const refreshAfter = new Promise<void>((resolve) => {
+      startRefresh = resolve;
+    });
+    const initialSelectReady = Promise.allSettled([
+      this.library.restoreStartupCache(),
+      this.dropTarget.restoreFolder(refreshAfter),
+    ]).then(async () => {
+      await this.library
+        .finishStartupCache()
+        .catch((error: unknown) => console.warn('Library cache setup failed', error));
+      await this.showSelect();
+      startRefresh();
+    });
     // A page put away (closed, or into the back/forward cache) keeps no decoded samples for a retry.
     window.addEventListener('pagehide', () => this.audio.chartSamples.release());
 

@@ -239,7 +239,7 @@ export class RememberedFolderSession implements ChartCacheKeyBook {
    * Walks the folder and tells whether it differs from what the library was loaded from; the library then reads it
    * again ({@link read}). A folder that cannot be walked rejects, and reads as empty from then on.
    */
-  public async verify(): Promise<boolean> {
+  public async verify(refreshUnchanged = false): Promise<boolean> {
     let listing: FolderListing;
     try {
       listing = await this.deps.list(this.folder);
@@ -247,7 +247,7 @@ export class RememberedFolderSession implements ChartCacheKeyBook {
       this.unreadable = true;
       throw error;
     }
-    if (this.listing !== undefined && sameFolderListing(this.listing, listing)) return false;
+    if (!refreshUnchanged && this.listing !== undefined && sameFolderListing(this.listing, listing)) return false;
     this.walked = listing;
     return true;
   }

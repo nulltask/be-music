@@ -59,6 +59,8 @@ export interface LoadProgressOptions {
    * never for an LRX chart, whose key also depends on the files beside it.
    */
   chartKeys?: ChartCacheKeyBook;
+  /** Skip opening chart files whose parsed results are missing during a cache-only library restore. */
+  onChartCacheMiss?: (path: string) => void;
 }
 
 export class BrowserChartCollectionStore {
@@ -94,31 +96,51 @@ export class BrowserChartCollectionStore {
    */
   public async appendFromFiles(
     files: Iterable<BrowserDroppedFile>,
-    options: LoadProgressOptions = {},
+    options: LoadProgressOptions & { replaceSourceIds?: readonly string[] } = {},
   ): Promise<BrowserChartCollection> {
     const incoming = await loadChartCollectionFromFiles(files, options);
-    if (incoming.sources.length === 0 && incoming.charts.length === 0 && incoming.errors.length === 0) {
+    const replaced = new Set(options.replaceSourceIds);
+    if (
+      incoming.sources.length === 0 &&
+      incoming.charts.length === 0 &&
+      incoming.errors.length === 0 &&
+      !replaced.size
+    ) {
       return this.collection;
     }
     this.dropSeq += 1;
     const prefix = `drop${this.dropSeq}-`;
+    const sourceIds = new Map(
+      incoming.sources.map(({ id }, index) => [id, options.replaceSourceIds?.[index] ?? prefix + id]),
+    );
+    const remapId = (id: string) => sourceIds.get(id) ?? prefix + id;
     const remappedSources: BrowserAssetSource[] = incoming.sources.map((source) => ({
       ...source,
-      id: prefix + source.id,
+      id: remapId(source.id),
     }));
     const remappedCharts: LibraryChart[] = incoming.charts.map((chart) => ({
       ...chart,
-      sourceId: prefix + chart.sourceId,
-      id: prefix + chart.id,
+      sourceId: remapId(chart.sourceId),
+      id: `${remapId(chart.sourceId)}:${chart.chartPath}`,
     }));
     const remappedErrors = incoming.errors.map((error) => ({
       ...error,
-      sourceId: prefix + error.sourceId,
+      sourceId: remapId(error.sourceId),
     }));
+    const current = this.collection;
     this.collection = {
-      sources: [...this.collection.sources, ...remappedSources],
-      charts: [...this.collection.charts, ...remappedCharts],
-      errors: [...this.collection.errors, ...remappedErrors],
+      sources: [
+        ...(replaced.size > 0 ? current.sources.filter(({ id }) => !replaced.has(id)) : current.sources),
+        ...remappedSources,
+      ],
+      charts: [
+        ...(replaced.size > 0 ? current.charts.filter(({ sourceId }) => !replaced.has(sourceId)) : current.charts),
+        ...remappedCharts,
+      ],
+      errors: [
+        ...(replaced.size > 0 ? current.errors.filter(({ sourceId }) => !replaced.has(sourceId)) : current.errors),
+        ...remappedErrors,
+      ],
     };
     return this.collection;
   }
@@ -547,6 +569,10 @@ export async function loadChartCollectionFromFiles(
   unread.sort((left, right) => left - right);
   // More charts in flight than there are workers: a chart spends most of its time waiting on its file, its hash and
   // the cache, and the pool queues the parses it has no worker for, so files are read while charts are parsed.
+  if (options.onChartCacheMiss !== undefined) {
+    for (const index of unread) options.onChartCacheMiss(items[index]!.path);
+    unread.length = 0;
+  }
   await runWithConcurrency(unread, PARSE_READ_CONCURRENCY, async (index) => {
     const { source, path } = items[index]!;
     try {

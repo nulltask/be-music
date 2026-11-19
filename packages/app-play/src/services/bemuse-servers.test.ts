@@ -1,7 +1,12 @@
 import { md5HexOfBytes } from '@be-music/player-browser/collection';
 import { describe, expect, test } from 'vite-plus/test';
 import type { BemuseChunkStore } from './bemuse-chunk-store.ts';
-import { readBemuseServerFiles } from './bemuse-servers.ts';
+import {
+  keepBemuseLibraryIndex,
+  openBemuseLibraryIndex,
+  readBemuseLibraryIndex,
+  readBemuseServerFiles,
+} from './bemuse-servers.ts';
 import { createMemoryRemoteStore } from './remote-cache.ts';
 
 function chunk(payload: string): Uint8Array {
@@ -38,6 +43,34 @@ const read = (indexURL: string, fetch: ReturnType<typeof fakeServer>['fetch']) =
   readBemuseServerFiles(indexURL, { fetch, useCaches: false });
 
 describe('readBemuseServerFiles', () => {
+  test('restores an indexed server without requests, then opens the saved song on demand', async () => {
+    const url = 'https://ex.com/index.json';
+    const server = fakeServer({
+      [url]: { songs: [{ path: 'a', bemusepack_url: null, charts: [{ file: 'A.bms' }] }] },
+      'https://ex.com/a/A.bms': '#TITLE A\n#WAV01 Key.wav\n',
+      'https://ex.com/a/Key.wav': 'WAV',
+    });
+    const store = createMemoryRemoteStore();
+    const remote = { fetch: server.fetch, useCaches: false, remoteStore: store };
+    const cold = await readBemuseServerFiles(url, remote);
+    const index = { songs: cold.indexedSongs, chartKeys: [['Bemuse ex.com/a/A.bms', 'key']] as [string, string][] };
+    await keepBemuseLibraryIndex(url, index, store);
+    server.requested.length = 0;
+    const saved = await readBemuseLibraryIndex(url, store);
+    expect(saved).toEqual(index);
+    const restored = openBemuseLibraryIndex(saved!, remote);
+    expect(restored.songs).toEqual(cold.songs);
+    expect(restored.files.map(({ webkitRelativePath }) => webkitRelativePath)).toEqual(
+      cold.files.map(({ webkitRelativePath }) => webkitRelativePath),
+    );
+    expect(server.requested).toEqual([]);
+    await expect(text(restored.files.find(({ name }) => name === 'Key.wav')!)).resolves.toBe('WAV');
+    server.requested.length = 0;
+    const refreshed = await readBemuseServerFiles(url, { ...remote, displayedIndex: saved!, refreshedSince: Infinity });
+    expect(refreshed.unchanged).toBe(true);
+    expect(server.requested).toEqual([url]);
+  });
+
   test('lays a packaged song out as a folder tree and cuts its sound files out of their chunks on demand', async () => {
     const server = fakeServer({
       'https://ex.com/server/index.json': {

@@ -48,6 +48,18 @@ export interface BemuseServerSong {
   extras: BemuseSongExtras;
 }
 
+interface IndexedBemuseSong {
+  track: BemuseServerTrack;
+  folder: string;
+  paths: string[];
+  extras: BemuseSongExtras;
+}
+
+export interface BemuseLibraryIndex {
+  songs: IndexedBemuseSong[];
+  chartKeys: Array<[string, string]>;
+}
+
 /** What reading a server gave: the folder tree, the songs and the songs it had to leave out. */
 export interface BemuseServerFiles {
   /** The folder the server's songs sit in, as the select screen names it. */
@@ -57,6 +69,8 @@ export interface BemuseServerFiles {
   skipped: Array<{ track: string; reason: string }>;
   /** Where the index came from: kept, fetched, or kept because the fetch failed. */
   indexSource: RemoteCacheSource;
+  indexedSongs: IndexedBemuseSong[];
+  unchanged?: true;
 }
 
 /** How {@link readBemuseServerFiles} reads. */
@@ -71,6 +85,8 @@ export interface BemuseServerReadOptions {
   chunkStore?: BemuseChunkStore;
   /** An index fetched before this time is asked for again: the player reloaded the folders then. */
   refreshedSince?: number;
+  /** An already displayed server listing. Skip re-reading song files when its tracks still match. */
+  displayedIndex?: BemuseLibraryIndex;
   now?: () => number;
 }
 
@@ -389,10 +405,7 @@ async function readSong({ track, folder, fetcher, chunks, cached, remoteStore, n
  * drop, with each song's extras to lay onto its charts once they are parsed (`applyBemuseSongExtras`). A song that
  * cannot be read is left out and reported in `skipped`.
  */
-export async function readBemuseServerFiles(
-  indexURL: string,
-  options: BemuseServerReadOptions = {},
-): Promise<BemuseServerFiles> {
+function bemuseReadContext(options: BemuseServerReadOptions): Omit<SongContext, 'folder' | 'track'> {
   const useCaches = options.useCaches !== false;
   const fetcher = createBemuseFetcher({
     ...(options.fetch ? { fetch: options.fetch } : {}),
@@ -405,13 +418,100 @@ export async function readBemuseServerFiles(
   // answers an unchanged file with a 304 and no body.
   const cached: CachedRead = (key, policy) =>
     readThroughRemoteCache(key, () => fetcher.bytes(key, { cache: 'no-cache' }), remoteStore, policy, now());
+  return { fetcher, remoteStore, now, cached, chunks: new ChunkCache(fetcher, chunkStore) };
+}
+
+const libraryIndexKey = (url: string): string => `bemuse-library-v1:${url}`;
+
+export async function readBemuseLibraryIndex(
+  url: string,
+  store = pageRemoteCacheStore(),
+): Promise<BemuseLibraryIndex | undefined> {
+  try {
+    const entry = await store?.get(libraryIndexKey(url));
+    if (entry === undefined) return undefined;
+    const index = decodeJSON(entry.bytes) as Partial<BemuseLibraryIndex>;
+    return Array.isArray(index.songs) && Array.isArray(index.chartKeys) ? (index as BemuseLibraryIndex) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function keepBemuseLibraryIndex(
+  url: string,
+  index: BemuseLibraryIndex,
+  store = pageRemoteCacheStore(),
+): Promise<void> {
+  await store?.put(libraryIndexKey(url), {
+    bytes: new TextEncoder().encode(JSON.stringify(index)),
+    fetchedAt: Date.now(),
+  });
+}
+
+/** Rebuilds the last file inventory. The first read of a song connects its files to the usual Bemuse readers. */
+export function openBemuseLibraryIndex(
+  index: BemuseLibraryIndex,
+  options: BemuseServerReadOptions = {},
+): Pick<BemuseServerFiles, 'files' | 'songs'> {
+  const context = bemuseReadContext(options);
+  const files: BrowserDroppedFile[] = [];
+  const songs: BemuseServerSong[] = [];
+  for (const { track, folder, paths, extras } of index.songs) {
+    let pending: Promise<Map<string, BrowserDroppedFile>> | undefined;
+    const songFiles = async () => {
+      pending ??= readSong({ ...context, track, folder }).then(
+        (song) => new Map(song.files.map((file) => [file.webkitRelativePath, file])),
+        (error: unknown) => {
+          pending = undefined;
+          throw error;
+        },
+      );
+      return pending;
+    };
+    for (const path of paths) {
+      const relativePath = `${folder}/${path}`;
+      files.push(
+        new RemoteFile(relativePath, async () => {
+          const file = (await songFiles()).get(relativePath);
+          if (file === undefined) throw new Error(`Missing Bemuse file ${relativePath}`);
+          return new Uint8Array(await file.arrayBuffer());
+        }),
+      );
+    }
+    songs.push({ folder, files: new Set(paths.map((path) => path.toLowerCase())), extras });
+  }
+  return { files, songs };
+}
+
+export async function readBemuseServerFiles(
+  indexURL: string,
+  options: BemuseServerReadOptions = {},
+): Promise<BemuseServerFiles> {
+  const context = bemuseReadContext(options);
+  const { cached } = context;
   const indexRead = await cached(indexURL, {
     maxAgeMs: BEMUSE_INDEX_MAX_AGE_MS,
     ...(options.refreshedSince !== undefined ? { refreshedSince: options.refreshedSince } : {}),
   });
   const index = parseBemuseServerIndex(decodeJSON(indexRead.bytes), indexURL);
   const root = `Bemuse ${pathSegment(bemuseServerLabel(indexURL))}`;
-  const chunks = new ChunkCache(fetcher, chunkStore);
+  const displayed = options.displayedIndex?.songs;
+  if (
+    displayed !== undefined &&
+    (indexRead.source === 'stale' ||
+      (displayed.length === index.tracks.length &&
+        index.tracks.every((track, index) => JSON.stringify(track) === JSON.stringify(displayed[index]!.track))))
+  ) {
+    return {
+      folder: root,
+      files: [],
+      songs: [],
+      skipped: [],
+      indexedSongs: [],
+      indexSource: indexRead.source,
+      unchanged: true,
+    };
+  }
   const usedFolders = new Set<string>();
   const folders = index.tracks.map((track) => {
     let name = songFolderName(track);
@@ -419,19 +519,12 @@ export async function readBemuseServerFiles(
     usedFolders.add(name.toLowerCase());
     return `${root}/${name}`;
   });
-  const read: Array<{ files: BrowserDroppedFile[]; song: BemuseServerSong } | undefined> = [];
+  const read: Array<{ files: BrowserDroppedFile[]; song: BemuseServerSong; track: BemuseServerTrack } | undefined> = [];
   const skipped: BemuseServerFiles['skipped'] = [];
   await runWithConcurrency(index.tracks, SONG_CONCURRENCY, async (track, trackIndex) => {
     try {
-      read[trackIndex] = await readSong({
-        track,
-        folder: folders[trackIndex]!,
-        fetcher,
-        chunks,
-        cached,
-        remoteStore,
-        now,
-      });
+      const listed = await readSong({ ...context, track, folder: folders[trackIndex]! });
+      read[trackIndex] = { ...listed, track };
     } catch (error) {
       skipped.push({ track: track.title || track.id, reason: error instanceof Error ? error.message : String(error) });
     }
@@ -443,5 +536,11 @@ export async function readBemuseServerFiles(
     songs: songs.map((entry) => entry.song),
     skipped,
     indexSource: indexRead.source,
+    indexedSongs: songs.map(({ track, song, files }) => ({
+      track,
+      folder: song.folder,
+      paths: files.map((file) => file.webkitRelativePath.slice(song.folder.length + 1)),
+      extras: song.extras,
+    })),
   };
 }

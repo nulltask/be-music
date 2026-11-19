@@ -96,17 +96,27 @@ export class DropTarget {
     }
   }
 
-  public async restoreFolder(): Promise<void> {
+  public async restoreFolder(refreshAfter?: Promise<void>): Promise<void> {
     if (!globalThis.indexedDB || this.folderBusy) return;
     this.folderBusy = true;
     try {
       await this.readSavedFolders();
       for (const folder of [...this.reconnectFolders]) {
         try {
-          if ((await folder.queryPermission({ mode: 'read' })) === 'granted') {
+          if ((await folder.queryPermission({ mode: 'read' })) !== 'granted') continue;
+          if (refreshAfter === undefined) {
             await this.loadFolder(folder, true);
-            this.reconnectFolders = this.reconnectFolders.filter((pending) => pending !== folder);
+          } else {
+            const files = await this.sessionOf(folder).restore();
+            if (files === undefined) {
+              void refreshAfter
+                .then(() => this.loadFolder(folder, true))
+                .catch((error: unknown) => this.reportFolderError(error));
+            } else {
+              await this.loadFolder(folder, true, { files, refreshAfter });
+            }
           }
+          this.reconnectFolders = this.reconnectFolders.filter((pending) => pending !== folder);
         } catch (error) {
           this.reportFolderError(error);
         }
@@ -282,14 +292,19 @@ export class DropTarget {
    * Lists a folder's charts: from its snapshot when it has one, which touches no file, and otherwise by walking it. A
    * folder listed from its snapshot is then walked in the background ({@link verifyFolder}).
    */
-  private async loadFolder(folder: RememberedFolder, startup = false): Promise<void> {
+  private async loadFolder(
+    folder: RememberedFolder,
+    startup = false,
+    cached?: { files: BrowserDroppedFile[]; refreshAfter: Promise<void> },
+  ): Promise<void> {
     const loaded = this.sessionOf(folder);
     if (!startup) showLoadingOverlay(this.elements);
     let leftSelect = false;
     let restored = false;
+    let cacheMiss = false;
     try {
       if (!startup) leftSelect = await this.leaveSelect();
-      let files = await loaded.restore();
+      let files = cached?.files ?? (await loaded.restore());
       restored = files !== undefined;
       files ??= await loaded.read(
         startup
@@ -300,6 +315,14 @@ export class DropTarget {
         startup,
         readFiles: () => loaded.read(),
         chartKeys: loaded,
+        ...(cached === undefined
+          ? {}
+          : {
+              readAuxiliaryAfter: cached.refreshAfter,
+              onChartCacheMiss: () => {
+                cacheMiss = true;
+              },
+            }),
         onLoaded: () => {
           void loaded.save().catch((error: unknown) => console.warn('folder snapshot not kept', error));
         },
@@ -309,7 +332,11 @@ export class DropTarget {
       if (leftSelect) await this.options.resumeSelect();
       this.recordLoad();
     }
-    if (restored) void this.verifyFolder(loaded);
+    if (restored) {
+      void (cached?.refreshAfter ?? Promise.resolve())
+        .then(() => this.verifyFolder(loaded, cacheMiss))
+        .catch((error: unknown) => this.reportFolderError(error));
+    }
   }
 
   private sessionOf(folder: RememberedFolder): RememberedFolderSession {
@@ -325,9 +352,9 @@ export class DropTarget {
    * Walks a folder listed from its snapshot, and has the library read it again when it changed since. A folder that
    * can no longer be read is reported and leaves the library.
    */
-  private async verifyFolder(session: RememberedFolderSession): Promise<void> {
+  private async verifyFolder(session: RememberedFolderSession, cacheMiss: boolean): Promise<void> {
     try {
-      if (!(await session.verify())) return;
+      if (!(await session.verify(cacheMiss))) return;
     } catch (error) {
       this.reportFolderError(error);
     }
