@@ -179,13 +179,22 @@ describe('openFolderListing', () => {
 });
 
 /** A worker that answers a posted folder with `messages`, or fails to start. */
-function fakeWorker(messages: readonly FolderListingWorkerMessage[], options: { fails?: boolean } = {}) {
+function fakeWorker(
+  messages: readonly FolderListingWorkerMessage[],
+  options: { fails?: boolean; transferError?: 'send' | 'receive' } = {},
+) {
   const worker = {
     onmessage: null as ((event: MessageEvent<FolderListingWorkerMessage>) => void) | null,
     onerror: null as ((event: ErrorEvent) => void) | null,
+    onmessageerror: null as ((event: MessageEvent) => void) | null,
     terminate: vi.fn(),
     postMessage: vi.fn(() => {
+      if (options.transferError === 'send') throw new DOMException('Cannot send a directory', 'DataCloneError');
       queueMicrotask(() => {
+        if (options.transferError === 'receive') {
+          worker.onmessageerror?.(new MessageEvent('messageerror'));
+          return;
+        }
         if (options.fails === true) {
           worker.onerror?.({ preventDefault: () => {} } as ErrorEvent);
           return;
@@ -237,6 +246,31 @@ describe('listFolderInWorker', () => {
     await expect(listFolderInWorker(() => worker as unknown as Worker, folder)).resolves.toEqual(here);
     expect(worker.terminate).toHaveBeenCalledTimes(1);
   });
+  test.each(['send', 'receive'] as const)(
+    'walks on the page when the worker cannot %s a message',
+    async (transferError) => {
+      const worker = fakeWorker([], { transferError });
+      await expect(listFolderInWorker(() => worker as unknown as Worker, folder)).resolves.toEqual({
+        text: 'Pack/\na.wav',
+        fileCount: 1,
+        charts: [],
+      });
+      expect(worker.terminate).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test.each(['DataCloneError', 'NotAllowedError', 'SecurityError'])(
+    'walks on the page when the worker reports %s',
+    async (name) => {
+      const worker = fakeWorker([{ error: { name, message: 'worker cannot read the folder' } }]);
+      await expect(listFolderInWorker(() => worker as unknown as Worker, folder)).resolves.toEqual({
+        text: 'Pack/\na.wav',
+        fileCount: 1,
+        charts: [],
+      });
+      expect(worker.terminate).toHaveBeenCalledTimes(1);
+    },
+  );
 });
 
 describe('serveFolderListing', () => {
@@ -244,6 +278,7 @@ describe('serveFolderListing', () => {
     const posted: FolderListingWorkerMessage[] = [];
     const scope: Parameters<typeof serveFolderListing>[0] = {
       onmessage: null,
+      onmessageerror: null,
       postMessage: (message) => posted.push(message),
     };
     serveFolderListing(scope);
@@ -265,5 +300,7 @@ describe('serveFolderListing', () => {
     scope.onmessage!({ data: { folder: unreadable } } as MessageEvent<{ folder: FolderDirectoryLike }>);
     await vi.waitFor(() => expect(posted).toHaveLength(2));
     expect(posted[1]).toEqual({ error: { name: 'NotFoundError', message: 'gone' } });
+    scope.onmessageerror!(new MessageEvent('messageerror'));
+    expect(posted[2]).toMatchObject({ error: { name: 'DataCloneError' } });
   });
 });

@@ -655,6 +655,21 @@ describe('the folder reload', () => {
     expect(statuses.at(-1)).toBe('2 charts loaded');
   });
 
+  test.each([{ files: [] }, { files: [dropped('Pack/readme.txt', 'notes')] }])(
+    'finds new charts when the saved folder listing had no charts (%j)',
+    async ({ files }) => {
+      const { library } = harness();
+      await library.processIncomingFiles(files, {
+        startup: true,
+        readFiles: async () => [dropped('Pack/new.bms', bms('New chart'))],
+      });
+      expect(library.collection.charts).toHaveLength(0);
+
+      await library.refreshCharts();
+      expect(library.collection.charts.map(({ title }) => title)).toEqual(['New chart']);
+    },
+  );
+
   test('leaves a play alone, and reads the changed folder once the select screen shows again', async () => {
     const view = { snapshot: vi.fn(() => ({})), setLibrary: vi.fn(), restore: vi.fn() };
     const { library, showing } = harness({ selectView: () => view as unknown as SelectScene });

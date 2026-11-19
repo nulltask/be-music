@@ -1,9 +1,8 @@
 import { expect, test } from './support.ts';
 
-for (const canRemember of [true, false]) {
-  test(`lists dropped folders in Library when the browser ${canRemember ? 'can' : 'cannot'} remember them`, async ({
-    player,
-  }) => {
+for (const mode of ['remembered', 'session-only', 'worker-transfer-fails'] as const) {
+  const canRemember = mode !== 'session-only';
+  test(`lists dropped folders and restores saved charts (${mode})`, async ({ player }) => {
     const { page } = player;
     await page.route('**/api/player-settings', (route) => route.fulfill({ status: 204 }));
     await page.route('**/__url-load-proxy?**', (route) => route.fulfill({ status: 404 }));
@@ -71,12 +70,28 @@ for (const canRemember of [true, false]) {
     await expect(folders.getByText('Second pack', { exact: true })).toBeVisible();
     if (canRemember) {
       await expect(folders.getByRole('button', { name: 'Remove First pack' })).toBeVisible();
+      if (mode === 'worker-transfer-fails') {
+        await page.addInitScript(() => {
+          const originalPost = Object.getOwnPropertyDescriptor(Worker.prototype, 'postMessage')!
+            .value as Worker['postMessage'];
+          Worker.prototype.postMessage = function (message: unknown, ...args: unknown[]) {
+            if (typeof message === 'object' && message !== null && 'folder' in message) {
+              throw new DOMException('Could not transfer the directory handle', 'DataCloneError');
+            }
+            Reflect.apply(originalPost, this, [message, ...args]);
+          };
+        });
+      }
       await page.reload();
       await player.waitFor((state) => state.scene.kind === 'select', 'the select screen after reload');
       await page.locator('[data-service-header="settings"]').click();
       await dialog.getByRole('tab', { name: 'Library', exact: true }).click();
       await expect(folders.getByText('First pack', { exact: true })).toBeVisible();
       await expect(folders.getByText('Second pack', { exact: true })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect.poll(async () => (await player.state()).library.charts, { timeout: 5_000 }).toBe(2);
+      const selected = await player.openFolder('First pack');
+      expect(selected.cursor?.bar).toMatchObject({ kind: 'chart', title: 'First pack' });
     } else {
       await expect(folders.getByRole('heading', { name: 'Folders loaded for this visit' })).toBeVisible();
       await expect(folders.getByRole('button', { name: 'Remove First pack' })).toHaveCount(0);

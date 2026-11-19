@@ -304,6 +304,8 @@ export class LibraryService {
    */
   public async processIncomingFiles(files: BrowserDroppedFile[], origin: LibraryLoadOrigin = {}): Promise<void> {
     if (files.length === 0) {
+      // A folder's snapshot can be empty while its background walk finds new charts.
+      if (origin.readFiles !== undefined) await this.loadCharts(files, origin);
       return;
     }
     const showLibrary = () => (origin.startup ? this.showStartupLibrary() : this.showSelect());
@@ -354,8 +356,9 @@ export class LibraryService {
     files = files.filter((file) => !tableHeaders.has(file));
     courseFiles.push(...tableHeaders);
     if (files.length === 0 && courseFiles.length > 0) {
+      if (origin.readFiles !== undefined) await this.loadCharts([], origin);
       if (this.courseGroups.length > courseGroupCount) {
-        await this.refreshCourseFolders();
+        if (origin.readFiles === undefined) await this.refreshCourseFolders();
         await showLibrary();
       }
       return;
@@ -405,7 +408,7 @@ export class LibraryService {
     if (carriesBeatorajaTheme) {
       tasks.push(this.loadBeatorajaTheme(themeFiles));
     }
-    if (chartFiles.length > 0) {
+    if (chartFiles.length > 0 || origin.readFiles !== undefined) {
       tasks.push(this.loadCharts(chartFiles, origin));
     }
     const playContinues = this.showing() === 'play';
@@ -439,7 +442,9 @@ export class LibraryService {
       this.setStatus('Theme loaded');
     }
     // Charts list the course folders as they load; course files dropped without charts are listed here.
-    if (chartFiles.length === 0 && courseFiles.length > 0) await this.refreshCourseFolders();
+    if (chartFiles.length === 0 && origin.readFiles === undefined && courseFiles.length > 0) {
+      await this.refreshCourseFolders();
+    }
     // Open what was dropped: its folder, or the folder list when the drop carried several.
     const dropped = navigationAfterDrop(this.collection.charts, previousChartIds, origin.showLibraryRoot);
     if (dropped !== undefined && !origin.startup) this.browseTo(dropped);
