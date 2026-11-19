@@ -412,6 +412,22 @@ describe('parser', () => {
     ]);
   });
 
+  test('BMS: stamps duplicate normal-note lines across branches without changing other events', () => {
+    const parsed = parseChart(
+      ['#00111:0102', '#00211:03', '#RANDOM 1', '#IF 1', '#00111:04', '#ENDIF', '#ENDRANDOM', '#00111:05'].join('\n'),
+    );
+
+    expect(new Map(parsed.events.map((event) => [event.value, event.bmsLineOrder]))).toEqual(
+      new Map([
+        ['01', 0],
+        ['02', 0],
+        ['03', undefined],
+        ['05', 7],
+      ]),
+    );
+    expect(parsed.bms.controlFlow.find((entry) => entry.kind === 'object')?.events[0]?.bmsLineOrder).toBe(4);
+  });
+
   test('BMS: preserves non-control-flow object line boundaries for roundtrip', () => {
     const parsed = parseChart(
       [

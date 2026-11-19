@@ -72,12 +72,7 @@ function resolveBMSJudgeRankPercent(json: BeMusicJSON): number {
     return bmsExRankValueToJudgeRankPercent(defExRank);
   }
 
-  const rankValue = Number.isFinite(json.metadata.rank) ? Math.trunc(json.metadata.rank!) : Number.NaN;
-  if (Number.isFinite(rankValue) && rankValue >= 0 && rankValue < LR2_BMS_RANK_JUDGERANK_PERCENTS.length) {
-    return LR2_BMS_RANK_JUDGERANK_PERCENTS[rankValue as 0 | 1 | 2 | 3 | 4];
-  }
-
-  return LR2_NORMAL_JUDGERANK_PERCENT;
+  return resolveBMSRankJudgeRankPercent(json.metadata.rank ?? Number.NaN);
 }
 
 function resolveBmsonJudgeRankPercent(json: BeMusicJSON): number {
@@ -232,10 +227,13 @@ export function resolveJudgeRankPercent(json: BeMusicJSON): number {
  * grows past it.
  */
 export function resolveJudgeWindowsMs(json: BeMusicJSON, debugBadWindowMs?: number): JudgeWindowsMs {
+  if (json.sourceFormat === 'bmson') {
+    return scaleJudgeWindowsMs(resolveBmsonJudgeRankPercent(json), debugBadWindowMs);
+  }
   const defExRank = resolveBMSDefExRank(json);
   return defExRank !== undefined
     ? resolveBMSJudgeWindowsMsForExRankValue(defExRank, debugBadWindowMs)
-    : scaleJudgeWindowsMs(resolveJudgeRankPercent(json), debugBadWindowMs);
+    : scaleJudgeWindowsMs(resolveBMSRankJudgeRankPercent(json.metadata.rank ?? Number.NaN), debugBadWindowMs);
 }
 
 function scaleJudgeWindowsMs(judgeRankPercent: number, debugBadWindowMs?: number): JudgeWindowsMs {
@@ -244,10 +242,14 @@ function scaleJudgeWindowsMs(judgeRankPercent: number, debugBadWindowMs?: number
       ? debugBadWindowMs
       : LR2_BAD_WINDOW_MS;
   const percent = Number.isFinite(judgeRankPercent) ? Math.max(0, judgeRankPercent) : LR2_NORMAL_JUDGERANK_PERCENT;
+  // The anchors are 25 points apart. The final interval also handles extrapolation beyond EASY.
+  const step = LR2_JUDGE_RANK_ANCHOR_PERCENTS[1];
+  const interval = Math.min(LR2_JUDGE_RANK_ANCHOR_PERCENTS.length - 2, Math.floor(percent / step));
+  const offset = percent - interval * step;
   return {
-    pgreat: clampWindow(interpolateAnchors(LR2_PGREAT_ANCHORS_MS, percent), bad),
-    great: clampWindow(interpolateAnchors(LR2_GREAT_ANCHORS_MS, percent), bad),
-    good: clampWindow(interpolateAnchors(LR2_GOOD_ANCHORS_MS, percent), bad),
+    pgreat: clampWindow(interpolateWindow(LR2_PGREAT_ANCHORS_MS, interval, offset, step), bad),
+    great: clampWindow(interpolateWindow(LR2_GREAT_ANCHORS_MS, interval, offset, step), bad),
+    good: clampWindow(interpolateWindow(LR2_GOOD_ANCHORS_MS, interval, offset, step), bad),
     bad,
   };
 }
@@ -256,18 +258,9 @@ function scaleJudgeWindowsMs(judgeRankPercent: number, debugBadWindowMs?: number
  * Piecewise-linear interpolation of an LR2 window over the judgerank percent anchors; percents beyond the EASY
  * anchor (100) extrapolate along the final segment, matching lr2oraja's `JudgeWindowRule.LR2`.
  */
-function interpolateAnchors(anchors: readonly number[], percent: number): number {
-  const points = LR2_JUDGE_RANK_ANCHOR_PERCENTS;
-  for (let index = 1; index < points.length; index += 1) {
-    if (percent <= points[index]! || index === points.length - 1) {
-      const x0 = points[index - 1]!;
-      const x1 = points[index]!;
-      const y0 = anchors[index - 1]!;
-      const y1 = anchors[index]!;
-      return y0 + ((percent - x0) * (y1 - y0)) / (x1 - x0);
-    }
-  }
-  return anchors.at(-1)!;
+function interpolateWindow(anchors: readonly number[], interval: number, offset: number, step: number): number {
+  const start = anchors[interval]!;
+  return start + (offset * (anchors[interval + 1]! - start)) / step;
 }
 
 function clampWindow(value: number, badWindowMs: number): number {

@@ -57,6 +57,14 @@ export class PackedEventStrings {
     return pairIds;
   }
 
+  get size(): number {
+    return this.values.length;
+  }
+
+  snapshot(): string[] {
+    return this.values.slice();
+  }
+
   valueOf(id: number): string {
     return this.values[id]!;
   }
@@ -95,19 +103,29 @@ const EVENT_KEYS = new Set(['measure', 'channel', 'position', 'value', 'bmson', 
 export function packEvents(events: readonly BeMusicEvent[], strings: PackedEventStrings): PackedEvents | undefined {
   const length = events.length;
   let integral = true;
+  let measureBits = 0;
+  let numeratorBits = 0;
+  let denominatorBits = 0;
   for (const event of events) {
     for (const key in event) {
       if (!EVENT_KEYS.has(key)) return undefined;
     }
-    if (!Number.isInteger(event.measure) || event.measure < -0x80000000 || event.measure > 0x7fffffff) return undefined;
+    if (!isInt32(event.measure)) return undefined;
+    measureBits |= bitsForSignedWidth(event.measure);
     const [numerator, denominator] = event.position;
-    if (!isInt32(numerator) || !isInt32(denominator)) integral = false;
+    if (integral && isInt32(numerator) && isInt32(denominator)) {
+      numeratorBits |= bitsForSignedWidth(numerator);
+      denominatorBits |= bitsForSignedWidth(denominator);
+    } else {
+      integral = false;
+    }
   }
-  const measures = new Int32Array(length);
-  const channels = new Uint32Array(length);
-  const values = new Uint32Array(length);
-  const numerators = integral ? new Int32Array(length) : new Float64Array(length);
-  const denominators = integral ? new Int32Array(length) : new Float64Array(length);
+  const measures = createIntegerColumn(length, measureBits);
+  const largestPossibleId = strings.size + length * 2 - 1;
+  const channels = createIdColumn(length, largestPossibleId);
+  const values = createIdColumn(length, largestPossibleId);
+  const numerators = integral ? createIntegerColumn(length, numeratorBits) : new Float64Array(length);
+  const denominators = integral ? createIntegerColumn(length, denominatorBits) : new Float64Array(length);
   let bmson: Map<number, BmsonEventExtensions> | undefined;
   let lrx: Map<number, LRXEventExtensions> | undefined;
   for (let index = 0; index < length; index += 1) {
@@ -128,38 +146,42 @@ export function packEvents(events: readonly BeMusicEvent[], strings: PackedEvent
   }
   return {
     length,
-    measures: narrowIntegers(measures),
+    measures,
     channels: narrowIds(channels),
     values: narrowIds(values),
-    numerators: numerators instanceof Int32Array ? narrowIntegers(numerators) : numerators,
-    denominators: denominators instanceof Int32Array ? narrowIntegers(denominators) : denominators,
+    numerators,
+    denominators,
     bmson,
     ...(lrx ? { lrx } : {}),
   };
 }
 
-/** `column` in the narrowest signed type that holds every one of its values. */
-function narrowIntegers(column: Int32Array): PackedIntegers {
-  let minimum = 0;
-  let maximum = 0;
-  for (let index = 0; index < column.length; index += 1) {
-    const value = column[index]!;
-    if (value < minimum) minimum = value;
-    else if (value > maximum) maximum = value;
-  }
-  if (minimum >= -0x80 && maximum <= 0x7f) return new Int8Array(column);
-  if (minimum >= -0x8000 && maximum <= 0x7fff) return new Int16Array(column);
-  return column;
+// Invert negative values so both bounds of a signed width are covered by one bit mask.
+function bitsForSignedWidth(value: number): number {
+  return value ^ (value >> 31);
+}
+
+function createIntegerColumn(length: number, bits: number): PackedIntegers {
+  if (bits <= 0x7f) return new Int8Array(length);
+  if (bits <= 0x7fff) return new Int16Array(length);
+  return new Int32Array(length);
+}
+
+function createIdColumn(length: number, maximum: number): PackedIds {
+  if (maximum <= 0xff) return new Uint8Array(length);
+  if (maximum <= 0xffff) return new Uint16Array(length);
+  return new Uint32Array(length);
 }
 
 /** `column` in the narrowest unsigned type that holds its largest id. */
-function narrowIds(column: Uint32Array): PackedIds {
+function narrowIds(column: PackedIds): PackedIds {
+  if (column instanceof Uint8Array) return column;
   let maximum = 0;
   for (let index = 0; index < column.length; index += 1) {
     if (column[index]! > maximum) maximum = column[index]!;
   }
   if (maximum <= 0xff) return new Uint8Array(column);
-  if (maximum <= 0xffff) return new Uint16Array(column);
+  if (maximum <= 0xffff && column instanceof Uint32Array) return new Uint16Array(column);
   return column;
 }
 

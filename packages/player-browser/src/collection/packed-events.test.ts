@@ -82,6 +82,20 @@ describe('packEvents / unpackEvents', () => {
     ]);
   });
 
+  test.each([
+    [-128, Int8Array],
+    [-129, Int16Array],
+    [-32768, Int16Array],
+    [-32769, Int32Array],
+  ])('uses the smallest signed column for %i', (value, Column) => {
+    const strings = new PackedEventStrings();
+    const events: BeMusicEvent[] = [{ measure: value, channel: '11', position: [value, 1], value: '01' }];
+    const packed = packEvents(events, strings)!;
+    expect(packed.measures).toBeInstanceOf(Column);
+    expect(packed.numerators).toBeInstanceOf(Column);
+    expect(unpackEvents(packed, strings)).toEqual(events);
+  });
+
   test('stores non-integer positions as doubles', () => {
     const strings = new PackedEventStrings();
     const events: BeMusicEvent[] = [{ measure: 1, channel: '01', position: [0.5, 3], value: '01' }];

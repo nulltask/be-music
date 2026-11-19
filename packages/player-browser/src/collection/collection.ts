@@ -588,7 +588,7 @@ async function parseChartFile(
   if (!chartBytes) {
     throw new Error(`chart bytes missing for ${path}`);
   }
-  const siblings = await loadChartSiblings(source.files, path, chartBytes);
+  const siblings = hasChartSiblings(path) ? await loadChartSiblings(source.files, path, chartBytes) : undefined;
   return parseChartThroughCache({ path, bytes: chartBytes, ...(siblings ? { siblings } : {}) }, cache, onKey);
 }
 
