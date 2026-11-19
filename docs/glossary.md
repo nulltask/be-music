@@ -2,8 +2,7 @@
 
 # Glossary
 
-This document defines terms used by the `be-music` specifications and implementation.
-The definitions follow general BMS/bmson terminology where possible, but prioritize how this repository uses each term.
+These are the terms used in the `be-music` specifications and implementation. The definitions follow BMS and bmson conventions where those agree with the repository’s usage.
 
 ## Usage Rules
 
@@ -77,7 +76,7 @@ Write the product name **Be-Music** in all prose and user-facing text: documenta
 - **charge note (CN) / hell charge note (HCN)**: Long notes whose tail is judged too (`#LNMODE 2` / `3` as the ruleset plays them). An HCN also drains the gauge while it is not held: while it passes the judgement line it is **gaining** (a key on its lane is down, or its tail was released at GOOD or better) or **draining** (the lane is up; pressing it gains again). Code: the `hell-charge` UI command, the `'draining'` long-note state. An **LN** in the narrow sense (`#LNMODE 1`) judges only its head.
 - **back-spin scratch (BSS)**: A charge note (CN / HCN) on a scratch lane. Its tail is judged on a press from another **input source** than the press that hit its head, not on the release. Only the rulesets that judge a long note's tail have one (beatoraja's CN / HCN and every That-Which-Must-Not-Be-Named long note); LR2 plays it as an LN. Code: `isBackSpinScratch`, `backSpinScratch`.
 - **scratch spin**: The way a scratch press turned the turntable, `'cw'` or `'ccw'` (`ScratchSpin`, the replay's `spin`), for display only. A controller that reports rotation sends the direction it turned; a keyboard uses **odd-even**: a scratch lane's keys alternate as the two directions.
-- **input source**: The physical input a lane press or release came from: one keyboard key, one controller button, a touch zone, or one rotation direction of a turntable. A replay lists them in `play.inputSources` and every input names one by `source`; a source has a coarse `device` class and a normalised `label`, never device-identifying data. Code: `InputSource`, `inputSourceKey`.
+- **input source**: The physical input a lane press or release came from: one keyboard key, one controller button, a touch zone, or one rotation direction of a turntable. A replay lists them in `play.inputSources` and every input names one by `source`; a source has a coarse `device` class and a normalised `label`, and a controller's own name (`deviceName`) only when the player opts in to recording it. Code: `InputSource`, `inputSourceKey`.
 - **mine**: Damage note. Following LR2, a mine explodes when its lane is held as it crosses the judge line or pressed within the `PGREAT` window; the explosion only drains the gauge by the chart-defined damage and is not a judgment.
 - **judgment**: A note evaluation such as `PERFECT`, `GREAT`, `GOOD`, `BAD`, or `POOR`. Use judgment for the result and judge for the verb; use `JudgmentKind` for a kind and `JudgmentTiming` for a timed result. Verb-led engine names and format fields such as `judge` and `judgeRuleset` retain their roles.
 - **FAST/SLOW**: Timing-direction display for early or late hits. The current implementation aggregates only `GREAT` and `GOOD`.
@@ -108,7 +107,7 @@ Write the product name **Be-Music** in all prose and user-facing text: documenta
 
 - **IR (`@be-music/chart-source`)**: Internal intermediate representation for BMS/bmson/JSON charts. It is not an external exchange format.
 - **pure IR**: Design policy that `@be-music/chart-source` stores normalized structure and preservation data without owning score semantics.
-- **sourceFormat**: IR attribute that records whether the chart came from `bms`, `bmson`, or `json`.
+- **sourceFormat**: IR attribute that records whether the chart came from `bms`, `bmson`, `lrx`, or `json`.
 - **round-trip**: Recreate source structure as much as possible through `parse -> IR -> stringify`.
 - **preservation**: Auxiliary source-level data retained for round-trip output, separate from normalized `events` and `measures`.
 - **sourceLines**: BMS preservation data that keeps header, object, and control-flow lines in declaration order.
@@ -155,7 +154,7 @@ Write the product name **Be-Music** in all prose and user-facing text: documenta
 - **structured log**: NDJSON execution log written separately from TUI output, usually under `~/.be-music/logs/player.ndjson`.
 - **video BGA streaming**: Policy that prepares only the first video frame before gameplay starts, then decodes remaining frames progressively.
 - **replay**: A recording for deterministic replay of one play (`*.bmplay.json`), including the resolved chart, input events, and play settings. It is distinct from the summary of the play and from the collection called play history. `bms-replay` re-simulates it under the LR2, beatoraja, and That-Which-Must-Not-Be-Named rulesets.
-- **ghost**: A recorded play shown beside the live one, re-derived from its replay; it only draws, and the live play's judging, records and replay never see it. A ghost's **source** says which replay it plays (the player's own best, a replay slot, a Leaderboard run or a replay file), its **presentation** how it shows (a second playfield, a pacemaker, or a pacemaker with the recorded inputs over the player's own lanes). See [replay.md](./replay.md#ghost).
+- **ghost**: A recorded play shown beside the live one, re-derived from its replay; it only draws, and the live play's judging, records and replay never see it. A ghost's **source** says which replay it plays (the player's own best, a replay slot, a Leaderboard run or a replay file), its **presentation** how it shows (a second playfield, a pacemaker, or a pacemaker with the recorded inputs over the player's own lanes). See [replay.md](./replay-browser.md#ghost).
 - **PlayerSummary**: Final playback summary containing judgment counts, FAST/SLOW, EX-SCORE, SCORE, gauge, and clear state.
 
 ## Courses, Records And View
@@ -166,7 +165,7 @@ Write the product name **Be-Music** in all prose and user-facing text: documenta
 - **give up**: Leaving a course run with ESC. A run given up is a failed run.
 - **stitched play**: The single chart a NONSTOP course is played as, built by stitching its stages with their connections and placement.
 - **IR flag**: Whether a course's runs are ranked, LR2's `ir` column (IR: LR2's internet ranking, not the chart IR above) and beatoraja's `release`; code names it `release`. A course the player made starts unflagged; flagging it is one-way and makes the course read-only.
-- **judge ruleset**: The game whose judge windows, gauges and lamps a play is judged and ranked by: `lr2`, `beatoraja` or `____`.
+- **judge ruleset**: The game whose judge windows, gauges and lamps a play is judged and ranked by: `lr2`, `beatoraja`, `____` or `plugout`.
 - **gauge type**: The gauge the player picks, in LR2's names: `GROOVE`, `HARD`, `DEATH` or `EASY` (`GaugeType`). Each judge ruleset plays it on a gauge of its own line-up, named by its gauge id (`NORMAL`, `HAZARD`, `CLASS`, ...).
 - **clear lamp**: The class of clear a play earned (FAILED to MAX, `ClearLamp`), stored by an append-only rank that is not its order (LIGHT ASSIST EASY, between ASSIST EASY and EASY, is rank 10). Each judge ruleset awards its own subset; one rule lamps every play (`resolveClearLamp`, `resolveCourseClearLamp` in `@be-music/player-engine/ruleset`).
 - **assist class**: How assisted a play is, by the rules of each option's source: `none`, `light`, `assist` or `no-save` (`AssistClass`, `classifyReplayAssists` in `@be-music/player-engine/records`). The judge ruleset decides what follows from it (`resolveRecordPolicy`).

@@ -6,6 +6,22 @@
 timing、note、判定、score、gauge、BGA cue などの共有再生意味論は [Player 実装仕様](./player-spec.ja.md) で定義します。
 browser 固有の PixiJS / WebAudio 挙動は [Browser player 実装メモ](./player-web.ja.md) に記述します。
 
+<details>
+<summary>目次</summary>
+
+- [Runtime 境界](#runtime-境界)
+- [Entry flow](#entry-flow)
+- [Music Select](#music-select)
+- [Preview playback](#preview-playback)
+- [Input model](#input-model)
+- [TUI rendering](#tui-rendering)
+- [BGA と terminal image](#bga-と-terminal-image)
+- [読み込み画面](#読み込み画面)
+- [設定とログ](#設定とログ)
+- [Compatibility boundary](#compatibility-boundary)
+
+</details>
+
 ## Runtime 境界
 
 `@be-music/player-terminal` は、共有 `@be-music/player-engine` engine を使う Node frontend です。
@@ -44,7 +60,7 @@ TTY support がない場合や TUI 初期化に失敗した場合、player は t
 input path が単一 chart の場合、CLI はその chart を parse し、loading screen を準備し、gameplay を実行し、その後 result screen を表示します。
 単一 chart mode の result screen は replay を受け付けます。
 
-input path が directory の場合、CLI は `.bms`、`.bme`、`.bml`、`.pms`、`.bmson` file を再帰的に探索します。
+input path が directory の場合、CLI は `.bms`、`.bme`、`.bml`、`.pms`、`.bmson`、`.n2s`（ナナシグルーヴ2）、LRX の `.lrs` file を再帰的に探索します。
 Music Select list を構築し、次の小さな state machine で遷移します。
 
 - `select`: chart browse、difficulty filter、play mode 変更、high-speed 変更、random entry 選択を扱います。
@@ -122,35 +138,37 @@ target refresh rate の既定値は `60fps` です。`--tui-fps <value>` は任�
 UI worker は可能な限り full frame payload ではなく compact frame patch を受け取ります。
 terminal resize event、pause state、high-speed change、judge/combo update、deferred UI command flush も追跡します。
 
+ロングノートの始点と終点を本体より優先して描き、地雷はそれらより優先します。レーン外の再生位置表示では、現在位置に最も近い行を明るい縦棒で示します。
+
 ## BGA と terminal image
 
-terminal BGA renderer は共有 BGA timeline helper を使い、base、layer、layer2、POOR track に対応します。
-BMP、PNG、JPEG、対応 video frame を読み込み、active frame を ANSI color block または Kitty graphics image へ合成します。
-BMS layer channel は black pixel を transparent として扱います。bmson layer image は black pixel を画像データとして保持します。
-動画コーデックは同梱 LibAV のデコーダーで処理し、H.264、HEVC、VP9/WebM などに対応します。デコーダーや画素形式が非対応の場合、その素材は利用できません。先頭フレームの読み込みは、ファイル末尾で遅延フレームを取り出す場合も含め、変換した1フレームで停止します。
+端末版は共通の BGA タイムラインを使い、ベース、レイヤー、レイヤー 2、POOR を描画します。BMP、PNG、JPEG と対応する動画フレームを読み、ANSI の色付きブロックか Kitty graphics の画像に合成します。BMS のレイヤーでは黒を透明として扱い、bmson のレイヤーでは黒をそのまま描きます。
 
-`#STAGEFILE` は loading screen 専用です。
-terminal 全体に cover fit で描画し、画像が見つからない場合や非対応の場合は text loading へ fallback します。
-`#BANNER` と bmson `info.banner_image` は terminal に十分な幅がある場合、Music Select に表示します。
+同梱の LibAV デコーダーは H.264、HEVC、VP9/WebM などに対応します。デコーダーや画素形式が非対応の場合、その素材は表示できません。先頭フレームの読み込みは、変換済みのフレームが 1 枚できた時点で止まります。ファイル末尾で遅延フレームを取り出す場合も同じです。
 
-Kitty graphics は対応 terminal で既定有効です。
-ANSI rendering を強制する場合は `--no-kitty-graphics` を使います。
-video BGA は既定で progressive decode します。`--no-video-bga-streaming` を使うと旧来の full-predecode behavior に戻します。
+端末に十分な表示幅があれば、選曲画面に `#BANNER` または bmson の `info.banner_image` を表示します。対応端末では既定で Kitty graphics を使います。ANSI で描くには `--no-kitty-graphics` を指定してください。
+
+動画 BGA は既定で順次デコードします。再生前に全フレームをデコードするには `--no-video-bga-streaming` を指定してください。
+
+## 読み込み画面
+
+選曲後、CLI は進捗バーと処理中の手順を標準出力に表示します。`Step` は全体の手順を示し、`Sound` と `Visual` で並行して進む音声と画像の読み込み状況を確認できます。必要に応じて処理中のファイル名や `3/24` のような件数も表示します。
+
+`metadata.stageFile` の画像を読み込めた場合は、縦横比を保って端末全体を覆う `cover` 相当の方法で拡大し、はみ出す分を中央基準で切り取ります。ANSI 表示では、`STAGEFILE` の画像の色を各文字セルの背景に使います。読み込み状況の文字は、背景とのコントラストが高い白か黒で描きます。対応端末で `--kitty-graphics` が有効なら、Kitty graphics protocol で画像を表示します。既定では有効で、`--no-kitty-graphics` を指定するか端末が未対応の場合は ANSI で表示します。
+
+`#STAGEFILE` が未指定、ファイルが見つからない、形式が非対応、またはデコードに失敗した場合は、テキストだけを表示します。`#STAGEFILE` を使うのは読み込み画面です。プレイ画面では最初のベース BGA が始まるまで背景が黒のままです。
 
 ## 設定とログ
 
-CLI は player settings を `~/.be-music/player.json` に保存します。
-この file には次を保存します。
+CLI は `~/.be-music/player.json` に次の設定を保存します。
 
-- play mode: `manual`、`auto-scratch`、`auto`;
-- 共有 `0.5` から `10.0` の範囲で正規化した high-speed;
-- directory ごとの last selected chart file;
-- directory ごとの last Music Select focus key。
+- プレイモード（`manual`、`auto-scratch`、`auto`）
+- ハイスピード（共通の `0.5`〜`10.0` の範囲に収めた値）
+- ディレクトリーごとに最後に選んだ譜面ファイルと、選曲画面のフォーカスキー
 
-command-line の play-mode / high-speed flag は、その実行では persisted value より優先します。
+コマンドラインでプレイモードやハイスピードを指定すると、その実行では指定した値を使います。
 
-structured log の既定 path は `~/.be-music/logs/player.ndjson` です。
-別の出力先を使う場合は `--log-file <path>` を指定します。
+構造化ログの既定の出力先は `~/.be-music/logs/player.ndjson` です。変更するには `--log-file <path>` を指定してください。
 
 ## Compatibility boundary
 
@@ -158,8 +176,8 @@ terminal player は LR2 skin file や beatoraja skin file を読み込みませ�
 独自の TUI を描画し、note、scoring、gauge、input、timing、BGA cue、result summary は共有 engine semantics を使います。
 
 互換ルールセットとゲージは選択できます: `--ruleset <lr2|beatoraja|____>`（既定 `lr2`）と
-`--gauge <GROOVE|EASY|HARD|DEATH>`（既定 `GROOVE`）。各ルールセットが何を支配するかは
-[player-spec.ja.md](./player-spec.ja.md) を参照してください。サバイバル系ゲージが尽きるとその場でプレイを終えます。
+`--gauge <GROOVE|EASY|HARD|DEATH|DEATH-CORRECTED>`（既定 `GROOVE`）。各ルールセットが何を支配するかは
+[判定とゲージ](./player-judgment.ja.md) を参照してください。サバイバル系ゲージが尽きるとその場でプレイを終えます。
 `--no-end-on-failure` は練習用に最後まで判定を続けます（`PlayerOptions.endOnFailure: false`）。
 
 2P independent gauge variant と LR2 / beatoraja skin option panel は browser 側の関心事です。

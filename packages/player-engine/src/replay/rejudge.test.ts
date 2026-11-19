@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { BE_MUSIC_COURSE_REPLAY_FORMAT, type BeMusicCourseReplay } from './course.ts';
+import { BE_MUSIC_COURSE_REPLAY_FORMAT, simulateCourseReplay, type BeMusicCourseReplay } from './course.ts';
 import {
   BE_MUSIC_REPLAY_FORMAT,
   BE_MUSIC_REPLAY_VERSION,
@@ -45,6 +45,9 @@ function makeReplay(
  * A DEATH play under LR2 rules that ended on failure: the press 110 ms early is LR2's BAD, which empties DEATH at
  * 0.89 s, so nothing after it was recorded. The same press is a GOOD under beatoraja, whose HAZARD survives it.
  */
+/** A plain log of the three notes, for the facts of a stage the run never reached. */
+const NOTES_LOG = makeReplay({}, []);
+
 const FAILED_EARLY = makeReplay({ gauge: 'DEATH', judgeRuleset: 'lr2', endOnFailure: true }, [
   { timeUs: 890_000, action: 'down', channels: ['11'], source: 0 },
 ]);
@@ -61,6 +64,9 @@ describe('findReplayNotSimulatedReason', () => {
     expect(findReplayNotSimulatedReason(makeReplay({ gauge: 'DEATH', course: { kind: 'grade' } }), '____')).toBe(
       undefined,
     );
+    // A bare DEATH recorded under That-Which-Must-Not-Be-Named before the engine refused it is reported under its own
+    // ruleset too, not played as the EX-HARD it once was.
+    expect(findReplayNotSimulatedReason(makeReplay({ gauge: 'DEATH', judgeRuleset: '____' }), '____')).toBe('gauge');
     // The second player's own gauge decides for that side.
     const couple = makeReplay({ gauge: 'GROOVE', gauge2P: 'G-ATTACK', battleMode: 'TWO-PLAYER' });
     expect(findReplayNotSimulatedReason(couple, 'beatoraja', 1)).toBeUndefined();
@@ -79,7 +85,7 @@ describe('findReplayNotSimulatedReason', () => {
   test('gauge auto-shift is carried under every ruleset (#933)', () => {
     for (const gaugeAutoShift of ['CONTINUE', 'SURVIVAL_TO_GROOVE', 'BEST_CLEAR', 'SELECT_TO_UNDER'] as const) {
       const autoShift = makeReplay({ judgeRuleset: 'beatoraja', gaugeAutoShift });
-      for (const ruleset of ['lr2', 'beatoraja', '____'] as const)
+      for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const)
         expect(findReplayNotSimulatedReason(autoShift, ruleset)).toBeUndefined();
     }
   });
@@ -91,6 +97,15 @@ describe('rejudgeReplay', () => {
     expect(() => simulateReplay(replay, { ruleset: 'beatoraja' })).toThrow();
     expect(rejudgeReplay(replay, { ruleset: 'beatoraja' })).toEqual({ status: 'not-simulated', reason: 'gauge' });
     expect(rejudgeReplay(replay, { ruleset: 'lr2' }).status).toBe('simulated');
+  });
+
+  test('uses the legacy failure stop when re-judging a bare DEATH recorded under ____', () => {
+    const legacy = makeReplay({ gauge: 'DEATH', judgeRuleset: '____', endOnFailure: true });
+    expect(rejudgeReplay(legacy, { ruleset: '____' })).toEqual({ status: 'not-simulated', reason: 'gauge' });
+    expect(rejudgeReplay(legacy, { ruleset: 'beatoraja' })).toMatchObject({
+      status: 'simulated',
+      result: { gauge: { type: 'HAZARD' } },
+    });
   });
 
   test('judges a run that ended on failure only up to that point, and marks a survivor truncated', () => {
@@ -130,12 +145,14 @@ describe('rejudgeReplay', () => {
   });
 
   test('rejudgeReplayRulesets keys each ruleset’s outcome', () => {
-    const outcomes = rejudgeReplayRulesets(FAILED_EARLY, ['lr2', 'beatoraja', '____']);
+    const outcomes = rejudgeReplayRulesets(FAILED_EARLY, ['lr2', 'beatoraja', '____', 'plugout']);
     expect(Object.fromEntries(Object.entries(outcomes).map(([ruleset, outcome]) => [ruleset, outcome.status]))).toEqual(
       {
         lr2: 'simulated',
         beatoraja: 'truncated',
         ____: 'not-simulated',
+        // DEATH reads as plugout's HAZARD, and 110 ms early is a BAD there too: it fails at the same point.
+        plugout: 'simulated',
       },
     );
   });
@@ -171,5 +188,65 @@ describe('rejudgeCourseReplay', () => {
     const other = rejudgeCourseReplay(course, { ruleset: 'beatoraja' });
     expect(other.status).toBe('truncated');
     if (other.status === 'truncated') expect(other.result.stages[0]!.judge).toMatchObject({ good: 1, poor: 0 });
+  });
+
+  describe('a stage given up with ESC (LR2 goes on past one, the class gauges end the run)', () => {
+    /** A course stage that judges its first note PGREAT and is then given up, and one that plays every note. */
+    function givenUpStage(play: Partial<BeMusicReplay['play']>): BeMusicReplay {
+      return makeReplay({ course: { kind: 'expert' }, ...play, aborted: true, abortedAtUs: 1_200_000 }, [
+        { timeUs: 1_000_000, action: 'down', channels: ['11'], source: 0 },
+        { timeUs: 1_050_000, action: 'up', channels: ['11'], source: 0 },
+      ]);
+    }
+    function fullStage(play: Partial<BeMusicReplay['play']>): BeMusicReplay {
+      return makeReplay(
+        { course: { kind: 'expert' }, ...play },
+        NOTES.flatMap((note) => [
+          { timeUs: note.timeUs, action: 'down' as const, channels: ['11'], source: 0 },
+          { timeUs: note.timeUs + 50_000, action: 'up' as const, channels: ['11'], source: 0 },
+        ]),
+      );
+    }
+    function courseOf(stages: Array<BeMusicReplay | undefined>, facts: BeMusicReplay): BeMusicCourseReplay {
+      return {
+        format: BE_MUSIC_COURSE_REPLAY_FORMAT,
+        version: BE_MUSIC_REPLAY_VERSION,
+        course: { name: 'Test', kind: 'expert', constraints: [], trophies: [] },
+        stages: stages.map((stage) =>
+          stage === undefined
+            ? { played: false, facts: rulesetChartFactsFromReplay(facts) }
+            : { played: true, replay: stage },
+        ),
+      };
+    }
+
+    test('a run the played ruleset ended on a stage given up is truncated where LR2 would have gone on', () => {
+      const stage = givenUpStage({ judgeRuleset: 'beatoraja' });
+      const course = courseOf([stage, undefined], stage);
+      expect(rejudgeCourseReplay(course, { ruleset: 'beatoraja' }).status).toBe('simulated');
+      expect(rejudgeCourseReplay(course, { ruleset: 'lr2' }).status).toBe('truncated');
+      // That-Which-Must-Not-Be-Named's courses run on beatoraja's class gauges, which end the run there too.
+      expect(rejudgeCourseReplay(course, { ruleset: '____' }).status).toBe('simulated');
+    });
+
+    test('a run LR2 went on with past a stage given up stops there under a class gauge, and is FAILED under LR2', () => {
+      const course = courseOf([givenUpStage({ judgeRuleset: 'lr2' }), fullStage({ judgeRuleset: 'lr2' })], NOTES_LOG);
+      const lr2 = simulateCourseReplay(course, { ruleset: 'lr2' });
+      expect(lr2.stagesPlayed).toBe(2);
+      expect(lr2.gauge.cleared).toBe(false);
+      expect(lr2.lamp).toBe('FAILED');
+      const beatoraja = rejudgeCourseReplay(course, { ruleset: 'beatoraja' });
+      expect(beatoraja.status).toBe('simulated');
+      if (beatoraja.status === 'simulated') expect(beatoraja.result.stagesPlayed).toBe(1);
+    });
+
+    test("LR2's course gauge keeps its rule under another ruleset's judging, and the course it goes on in is FAILED", () => {
+      const play = { judgeRuleset: 'beatoraja' as const, gauge: 'lr2:GROOVE' as const };
+      const course = courseOf([givenUpStage(play), fullStage(play)], NOTES_LOG);
+      const result = simulateCourseReplay(course, { ruleset: 'beatoraja' });
+      expect(result.stagesPlayed).toBe(2);
+      expect(result.gauge).toMatchObject({ source: 'lr2', cleared: false });
+      expect(result.lamp).toBe('FAILED');
+    });
   });
 });

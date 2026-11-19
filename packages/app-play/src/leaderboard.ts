@@ -8,10 +8,11 @@ import {
   createChartFingerprintDocument,
   createPlayFingerprintDocument,
   hasControlFlow,
+  isPMSChartPath,
   type BeMusicFingerprintDocument,
 } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
-import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser';
+import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser/core';
 import {
   checkCourseReplayEligibility,
   checkReplayEligibility,
@@ -289,7 +290,7 @@ export function prepareCourseLeaderboardSubmission(
     if (courseStageChartFingerprint(stageChart) !== chartFingerprints[index]) {
       return { ok: false, reason: 'fingerprint-mismatch' };
     }
-    const pms = stageChart.chartPath?.toLowerCase().endsWith('.pms') === true;
+    const pms = isPMSChartPath(stageChart.chartPath);
     rebuilt.push({ stage: index, chart: stageChart.chart, ...(pms ? { pms } : {}) });
   }
   return { ok: true, submission: { courseReplay, stages, stageCharts: rebuilt } };

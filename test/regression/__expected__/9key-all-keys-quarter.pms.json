@@ -641,6 +641,29 @@
               "cleared": false
             }
           },
+          "plugout": {
+            "ruleset": "plugout/0",
+            "judge": {
+              "pgreat": 0,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 144,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 0,
+            "noteCount": 144,
+            "maxCombo": 0,
+            "djLevel": "F",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 2,
+              "cleared": false
+            },
+            "score": 0
+          },
           "engine": {
             "lr2": {
               "total": 144,
@@ -791,6 +814,29 @@
               "cleared": true
             }
           },
+          "plugout": {
+            "ruleset": "plugout/0",
+            "judge": {
+              "pgreat": 144,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 0,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 288,
+            "noteCount": 144,
+            "maxCombo": 144,
+            "djLevel": "AAA",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 100,
+              "cleared": true
+            },
+            "score": 100000
+          },
           "engine": {
             "lr2": {
               "total": 144,
@@ -915,7 +961,7 @@
             "djLevel": "D",
             "gauge": {
               "type": "NORMAL",
-              "final": 5.972222,
+              "final": 5.972238,
               "cleared": false
             }
           },
@@ -940,6 +986,29 @@
               "final": 37.4,
               "cleared": false
             }
+          },
+          "plugout": {
+            "ruleset": "plugout/0",
+            "judge": {
+              "pgreat": 48,
+              "great": 30,
+              "good": 30,
+              "bad": 16,
+              "poor": 20,
+              "emptyPoor": 0
+            },
+            "fast": 30,
+            "slow": 30,
+            "exScore": 126,
+            "noteCount": 144,
+            "maxCombo": 8,
+            "djLevel": "D",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 2,
+              "cleared": false
+            },
+            "score": 48957
           },
           "engine": {
             "lr2": {
@@ -983,7 +1052,7 @@
               "combo": 0,
               "maxCombo": 8,
               "gauge": {
-                "current": 7.166667,
+                "current": 7.166685,
                 "max": 120,
                 "clearThreshold": 85,
                 "initial": 30,

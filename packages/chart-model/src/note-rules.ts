@@ -46,8 +46,7 @@ const BASE36_OBJECT_KEY_PATTERN = /^[0-9A-Z]{2}$/;
  *
  * For a bmson chart (`sourceFormat: 'bmson'`) the value rule never applies: the parser numbers each `mine_channels`
  * WAV slot after the sound channels, so reading it as damage would make the damage depend on how many sound channels
- * the chart has. A bmson mine without a usable `damage` deals {@link DEFAULT_LANDMINE_DAMAGE}, the same fallback as an
- * invalid BMS mine value.
+ * the chart has. A bmson mine without a usable `damage` deals zero damage, matching beatoraja.
  */
 export function resolveLandmineDamage(
   landmineEvent: Pick<BeMusicEvent, 'value' | 'bmson'>,
@@ -59,7 +58,8 @@ export function resolveLandmineDamage(
     return bmsonDamage;
   }
   const objectValue = normalizeObjectKey(landmineEvent.value, base);
-  if (sourceFormat === 'bmson' || !BASE36_OBJECT_KEY_PATTERN.test(objectValue)) {
+  if (sourceFormat === 'bmson') return 0;
+  if (!BASE36_OBJECT_KEY_PATTERN.test(objectValue)) {
     return DEFAULT_LANDMINE_DAMAGE;
   }
   const parsedDamage = Number.parseInt(objectValue, 36);

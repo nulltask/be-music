@@ -1,8 +1,14 @@
 import type { CourseDefinitionGroup } from '@be-music/player-browser/collection';
-import { describe, expect, test } from 'vite-plus/test';
+import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import {
   COURSE_TABLE_URLS_STORAGE_KEY,
+  REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY,
+  removedDefaultCourseTableURLs,
+  storeCourseTableURLs,
+  DEFAULT_COURSE_TABLE_URLS,
   describeCourseTableImportError,
+  createCachedCourseTableFetchText,
+  fetchCourseTableText,
   importCourseTable,
   isTableHeaderFilePath,
   mergeCourseGroup,
@@ -12,6 +18,7 @@ import {
   readTableHeaderFile,
   rememberCourseTableURL,
 } from './course-table-import.ts';
+import { createMemoryRemoteStore } from './services/remote-cache.ts';
 
 const MD5_A = '0123456789abcdef0123456789abcdef';
 
@@ -43,16 +50,64 @@ describe('course table URLs', () => {
     ]);
   });
 
-  test('rememberCourseTableURL stores each URL once', () => {
+  test('the well-known tables are distinct https page URLs', () => {
+    expect(DEFAULT_COURSE_TABLE_URLS.length).toBeGreaterThan(0);
+    expect(new Set(DEFAULT_COURSE_TABLE_URLS).size).toBe(DEFAULT_COURSE_TABLE_URLS.length);
+    for (const url of DEFAULT_COURSE_TABLE_URLS) {
+      expect(normalizeCourseTableURL(url)).toBe(url);
+      expect(new URL(url).protocol).toBe('https:');
+    }
+  });
+
+  test('reads the well-known tables until a list is stored, and reads a stored empty list as none', () => {
     const storage = memoryStorage();
-    expect(readStoredCourseTableURLs(storage)).toEqual([]);
+    expect(readStoredCourseTableURLs(storage)).toEqual(DEFAULT_COURSE_TABLE_URLS);
+    // Earlier builds stored an empty list with every Options save, and synced it to the account.
+    storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, '[]');
+    expect(readStoredCourseTableURLs(storage)).toEqual(DEFAULT_COURSE_TABLE_URLS);
+    storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, '["nope"]');
+    expect(readStoredCourseTableURLs(storage)).toEqual(DEFAULT_COURSE_TABLE_URLS);
+    storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, '["https://a.example/t.html"]');
+    expect(readStoredCourseTableURLs(storage)).toEqual(['https://a.example/t.html']);
+    expect(readStoredCourseTableURLs(undefined)).toEqual([]);
+  });
+
+  test('rememberCourseTableURL stores each URL once, after the well-known tables on first use', () => {
+    const storage = memoryStorage();
     rememberCourseTableURL('https://a.example/t.html', storage);
-    expect(rememberCourseTableURL('https://a.example/t.html', storage)).toEqual(['https://a.example/t.html']);
+    expect(rememberCourseTableURL('https://a.example/t.html', storage)).toEqual([
+      ...DEFAULT_COURSE_TABLE_URLS,
+      'https://a.example/t.html',
+    ]);
     rememberCourseTableURL('https://b.example/h.json', storage);
     expect(JSON.parse(storage.getItem(COURSE_TABLE_URLS_STORAGE_KEY)!)).toEqual([
+      ...DEFAULT_COURSE_TABLE_URLS,
       'https://a.example/t.html',
       'https://b.example/h.json',
     ]);
+    storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, '[]');
+    expect(rememberCourseTableURL('https://c.example/t.html', storage)).toEqual([
+      ...DEFAULT_COURSE_TABLE_URLS,
+      'https://c.example/t.html',
+    ]);
+  });
+
+  test('storeCourseTableURLs records the removed well-known tables, so even an empty list stays empty', () => {
+    const storage = memoryStorage();
+    const [first, second, ...rest] = DEFAULT_COURSE_TABLE_URLS;
+    expect(storeCourseTableURLs([second!, ...rest, 'https://a.example/t.html', 'nope'], storage)).toEqual([
+      second,
+      ...rest,
+      'https://a.example/t.html',
+    ]);
+    expect(JSON.parse(storage.getItem(REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY)!)).toEqual([first]);
+    expect(readStoredCourseTableURLs(storage)).toEqual([second, ...rest, 'https://a.example/t.html']);
+    expect(storeCourseTableURLs([], storage)).toEqual([]);
+    expect(readStoredCourseTableURLs(storage)).toEqual([]);
+    // Adding a removed well-known table back takes it off the removed list.
+    expect(rememberCourseTableURL(first!, storage)).toEqual([first]);
+    expect(JSON.parse(storage.getItem(REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY)!)).toEqual([second, ...rest]);
+    expect(removedDefaultCourseTableURLs(DEFAULT_COURSE_TABLE_URLS)).toEqual([]);
   });
 
   test('blocked storage reads as empty and still returns the URL', () => {
@@ -121,6 +176,96 @@ describe('importCourseTable', () => {
   test('describes a blocked fetch with what to do instead', () => {
     expect(describeCourseTableImportError(new TypeError('Failed to fetch'))).toMatch(/drop it here/u);
     expect(describeCourseTableImportError(new Error('HTTP 404'))).toBe('Course table import failed: HTTP 404');
+  });
+});
+
+describe('fetchCourseTableText', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test('fetches a cross-origin table through the same-origin proxy and a same-origin one directly', async () => {
+    vi.stubGlobal('location', { href: 'https://play.example/' });
+    const fetch = vi.fn(async () => new Response('{}'));
+    vi.stubGlobal('fetch', fetch);
+    await expect(fetchCourseTableText('https://table.example/sl/table.html')).resolves.toBe('{}');
+    expect(fetch).toHaveBeenLastCalledWith(
+      'https://play.example/__url-load-proxy?url=https%3A%2F%2Ftable.example%2Fsl%2Ftable.html',
+    );
+    await fetchCourseTableText('https://play.example/tables/header.json');
+    expect(fetch).toHaveBeenLastCalledWith('https://play.example/tables/header.json');
+  });
+
+  test('rejects a failed response with its status', async () => {
+    vi.stubGlobal('location', { href: 'https://play.example/' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('bad gateway', { status: 502 })),
+    );
+    await expect(fetchCourseTableText('https://table.example/h.json')).rejects.toThrow(
+      'HTTP 502 for https://table.example/h.json',
+    );
+  });
+});
+
+describe('createCachedCourseTableFetchText', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  function setup() {
+    const store = createMemoryRemoteStore();
+    const calls: Array<{ url: string; cache: RequestCache | undefined }> = [];
+    let body = 'v1';
+    let failing = false;
+    const fetchText = async (url: string, init?: RequestInit) => {
+      calls.push({ url, cache: init?.cache });
+      if (failing) throw new TypeError('Failed to fetch');
+      return body;
+    };
+    const sources: string[] = [];
+    let nowMs = 0;
+    const reader = (refreshedSince?: number) =>
+      createCachedCourseTableFetchText({
+        store,
+        fetchText,
+        now: () => nowMs,
+        onRead: (_url, source) => sources.push(source),
+        ...(refreshedSince !== undefined ? { refreshedSince } : {}),
+      });
+    return {
+      calls,
+      sources,
+      reader,
+      setBody: (next: string) => (body = next),
+      setFailing: (next: boolean) => (failing = next),
+      setNow: (next: number) => (nowMs = next),
+    };
+  }
+
+  test('asks a table’s site once a day, as a revalidation', async () => {
+    const h = setup();
+    expect(await h.reader()('https://t.example/h.json')).toBe('v1');
+    h.setBody('v2');
+    h.setNow(DAY - 1);
+    expect(await h.reader()('https://t.example/h.json')).toBe('v1');
+    h.setNow(DAY);
+    expect(await h.reader()('https://t.example/h.json')).toBe('v2');
+    expect(h.calls).toEqual([
+      { url: 'https://t.example/h.json', cache: 'no-cache' },
+      { url: 'https://t.example/h.json', cache: 'no-cache' },
+    ]);
+    expect(h.sources).toEqual(['network', 'cache', 'network']);
+  });
+
+  test('asks again after a reload, and keeps the kept copy while the site is down', async () => {
+    const h = setup();
+    await h.reader()('https://t.example/h.json');
+    h.setBody('v2');
+    h.setNow(10);
+    expect(await h.reader(10)('https://t.example/h.json')).toBe('v2');
+    h.setFailing(true);
+    h.setNow(20);
+    expect(await h.reader(20)('https://t.example/h.json')).toBe('v2');
+    expect(h.sources).toEqual(['network', 'network', 'stale']);
   });
 });
 

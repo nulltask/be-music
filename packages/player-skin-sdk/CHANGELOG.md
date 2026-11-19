@@ -1,5 +1,19 @@
 # @be-music/player-skin-sdk
 
+## 0.13.0
+
+### Minor Changes
+
+- 94b5e2d: `BeMusicGaugeType` is now the gauge pick: `gauge1P` and `gauge2P` can hold a gauge qualified with its source (`lr2:HARD`), which a skin may set and should label by the part after the colon.
+- 0eba217: A practice play can now be told on the stage band. `BeMusicGameplayRuntime.practice` says the play is a PRACTICE run or one a seek made practice, and `resolveStageLabel(course, practice)` names a single chart `PRACTICE PLAY` instead of `FREE PLAY` then.
+- 0d736c1: Add `describeBestRecord`, which turns a chart's best record into what a select card shows (lamp name, score rate and DJ Rank), and `resolveClearLampLight` with `CLEAR_LAMP_LABELS`, `CLEAR_LAMP_SHORT_LABELS` and `CLEAR_LAMP_COLORS`, which light a select bar's clear lamp (FAILED blinks, FULL COMBO and better cycle their hues).
+
+### Patch Changes
+
+- af62160: Default to BMS LNTYPE 1 when the chart omits the header, matching reference playback.
+- 488ba86: Count an LRX chart's keys from its `lanetype`, as the engine does.
+- Updated dependencies: `@be-music/player-engine@0.19.0`, `@be-music/chart-model@0.12.0`, `@be-music/chart-source@0.9.0`, `@be-music/player-scene-model@0.10.0`, `@be-music/shared-utils@0.8.0`
+
 ## 0.12.0
 
 ### Minor Changes

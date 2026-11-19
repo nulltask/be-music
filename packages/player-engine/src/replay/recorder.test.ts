@@ -150,6 +150,13 @@ describe('replay recorder', () => {
     expect(replay.recorder?.engine).toBe(packageJSON.version);
   });
 
+  test('records an LRX chart as LRX, not as BMS', () => {
+    const replay = createReplayRecorder(makeRecorderOptions({ json: { ...makeJSON(), sourceFormat: 'lrx' } })).finalize(
+      { summary: makeSummary() },
+    );
+    expect(replay.chart.sourceFormat).toBe('lrx');
+  });
+
   test('captures chart metadata, noteCount, TOTAL, judge rank, and lnMode from the JSON', () => {
     const recorder = createReplayRecorder(makeRecorderOptions());
     const replay = recorder.finalize({ summary: makeSummary() });
@@ -228,6 +235,38 @@ describe('replay recorder', () => {
     ]);
     // The recorded log parses back as it is.
     expect(parseReplay(JSON.stringify(replay)).play.inputSources).toEqual(replay.play.inputSources);
+  });
+
+  test('records controllers’ device names only when the player opts in', () => {
+    const pad = {
+      kind: 'button',
+      device: 'controller',
+      label: 'p1-b0',
+      deviceName: 'Controller (Vendor: 1ccf Product: 1018)',
+    } as const;
+    const record = (includeDeviceNames?: boolean) => {
+      const recorder = createReplayRecorder(
+        makeRecorderOptions(includeDeviceNames === undefined ? {} : { includeDeviceNames }),
+      );
+      recorder.recordInput('down', 1, pad, ['11']);
+      recorder.recordInput('down', 2, { kind: 'key', device: 'keyboard', label: 'z' }, ['12']);
+      return recorder.finalize({ summary: makeSummary() });
+    };
+    const anonymous = [
+      { id: 0, kind: 'button', device: 'controller', label: 'p1-b0' },
+      { id: 1, kind: 'key', device: 'keyboard', label: 'z' },
+    ];
+    // Off by default.
+    expect(record().play.inputSources).toEqual(anonymous);
+    expect(record(false).play.inputSources).toEqual(anonymous);
+    const named = record(true);
+    expect(named.play.inputSources).toEqual([
+      { ...anonymous[0], deviceName: 'Controller (Vendor: 1ccf Product: 1018)' },
+      anonymous[1],
+    ]);
+    // The name changes nothing else the replay records, and it parses back.
+    expect(named.inputs).toEqual(record().inputs);
+    expect(parseReplay(JSON.stringify(named)).play.inputSources).toEqual(named.play.inputSources);
   });
 
   test('records the host-declared analog scratch algorithm', () => {

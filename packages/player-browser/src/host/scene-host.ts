@@ -12,6 +12,7 @@ import { logger } from '../logger.ts';
 import { createMaxLimitsGPU } from './webgpu-limits.ts';
 import { disableTransientAttachments } from './webgpu-transient.ts';
 import { retainReleasedTextTextures } from '../stage/text-texture-retention.ts';
+import { registerBeatorajaBlendModes } from './beatoraja-blend-modes.ts';
 
 const log = logger('scene-host');
 
@@ -174,15 +175,9 @@ export class PixiSceneHost {
       preference,
       backgroundAlpha: 0,
       resizeTo: container,
-      // `useBackBuffer: true` would enable Pixi's advanced blend modes (subtract / difference /
-      // etc.) on the WebGL backend, but combined with `backgroundAlpha: 0` (the transparent
-      // canvas we want for compositing the skin chrome over the host page) it broke
-      // every-sprite rendering on at least some hardware (skin chrome / STAGEFILE / BGA all
-      // black). Mode 3 (subtract) and mode 9 (difference) silently fall back to "normal" with
-      // this off; that's an acceptable trade since the only authored uses in our 3 sample
-      // skins are ModernChic's BGA-area overlay (blend=9) which was rendering as 'erase'
-      // (alpha hole-punch) before commit 36f23e0 anyway. The fallback to 'normal' is a
-      // closer visual to "no effect" than the alpha hole-punch was.
+      // No `useBackBuffer`: with `backgroundAlpha: 0` it blacked out every sprite on some hardware. Pixi's advanced
+      // blend modes need it on WebGL, so beatoraja's code 3 (subtract) draws as normal there; codes 4 and 9 are plain blend states
+      // (`registerBeatorajaBlendModes`) and need no back buffer.
       // LR2 skins and BGA frames are pixel-art; bilinear filtering and MSAA blur them visibly. Combined with
       // `roundPixels: true` and per-texture nearest sampling on each loaded asset, this gives a fully-crisp
       // pixel-art-style render.
@@ -207,6 +202,7 @@ export class PixiSceneHost {
       gcFrequency: 60_000,
       ...options?.appOptions,
     });
+    registerBeatorajaBlendModes(this.app.renderer);
     // Safari's WebGPU crashes on the transient MSAA textures Pixi makes on Apple GPUs (see `webgpu-transient.ts`).
     if (this.app.renderer instanceof WebGPURenderer) disableTransientAttachments(this.app.renderer);
     // A HUD's changing digits come back to strings rasterized moments ago; keep those textures instead of rasterizing

@@ -1,5 +1,16 @@
 # @be-music/shared-utils
 
+## 0.8.0
+
+### Minor Changes
+
+- e5dce2a: Add `resolveSampleVoiceEnvelope` (a slice envelope widened by a voice's own attack and release), `resolveStereoBalance` (FMOD-style balance gains) and `readSampleFrame` (an interpolated read at a fractional frame).
+- 829cb1b: Allow callers to check fallback paths in bounded batches while keeping the original candidate priority.
+
+### Patch Changes
+
+- 70b30d6: `normalizePath` returns a path that is already normal without splitting it, which is nearly every path of a dropped folder.
+
 ## 0.7.0
 
 ### Minor Changes

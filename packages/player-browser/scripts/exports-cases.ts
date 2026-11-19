@@ -96,6 +96,7 @@ const BENCH_FAMILY_VIEW: playerWebCoreAPI.FamilyView<number, never> = {
 };
 
 const BENCH_BYTES = new Uint8Array([35, 84, 73, 84, 76, 69, 32, 66, 101, 110, 99, 104, 10]);
+const BENCH_HASHED_CHART = createEmptyJSON('bms');
 const BENCH_BMS_FILE = makeBenchFile('Songs/Bench/main.bms', '#TITLE Bench\n#BPM 130\n#00111:0100\n');
 const BENCH_APPEND_BMS_FILE = makeBenchFile('Songs/BenchExtra/main.bms', '#TITLE Bench Extra\n#BPM 130\n#00111:0100\n');
 const BENCH_WAV_FILE = makeBenchFile('Songs/Bench/kick.wav', 'RIFF');
@@ -129,6 +130,13 @@ const BENCH_COURSE_DEFINITION = parseBeatorajaCourseData({
 const BENCH_COURSE_GROUPS = [{ label: 'Bench', courses: [BENCH_COURSE_DEFINITION] }];
 const BENCH_HASHED_SONGS = [{ chart: BENCH_SONG, md5: BENCH_SONG_MD5 }];
 const BENCH_COURSE_LOOKUP = playerWebCoreAPI.createChartHashLookup(BENCH_HASHED_SONGS);
+/** An `.n2x` list naming the bench chart and a chart the drop does not hold. */
+const BENCH_N2X_GROUPS = playerWebCoreAPI.readCourseFile(
+  'list.n2x',
+  new TextEncoder().encode(
+    `<bmslist><bms><file>${BENCH_SONG.chartPath}</file></bms><bms><file>missing.n2s</file></bms></bmslist>`,
+  ),
+);
 const BENCH_RANDOM_COURSE = parseBeatorajaRandomCourseData({
   name: 'Bench Random',
   stage: [{ sql: 'level >= 0' }],
@@ -340,6 +348,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     run: () => {
       playerWebCoreAPI.parsedChartPathKind('Songs/Bench/main.bmson');
       playerWebCoreAPI.parsedChartPathKind('Songs/Bench/main.pms');
+      playerWebCoreAPI.parsedChartPathKind('music/bench/01_bench_n.n2s');
     },
   });
   define('player-browser.parsedChartCacheKey', {
@@ -360,19 +369,44 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       await playerWebCoreAPI.parseChartThroughCache({ path: 'Songs/Bench/main.bms', bytes: BENCH_BYTES }, cache);
     },
   });
+  define('player-browser.chartFileHashesOfCacheKey', {
+    run: () => {
+      playerWebCoreAPI.chartFileHashesOfCacheKey(`${'0'.repeat(64)}:bms`, '0'.repeat(32));
+    },
+  });
+  define('player-browser.seedChartFileHashes', {
+    run: () => {
+      playerWebCoreAPI.seedChartFileHashes(BENCH_HASHED_CHART, { sha256: '0'.repeat(64), md5: '0'.repeat(32) });
+    },
+  });
+  define('player-browser.seededChartFileHashes', {
+    run: () => {
+      playerWebCoreAPI.seededChartFileHashes(BENCH_HASHED_CHART);
+    },
+  });
+  define('player-browser.readParsedCharts', {
+    run: async () => {
+      const parsed = await playerWebCoreAPI.parseChartThroughCache(
+        { path: 'Songs/Bench/main.bms', bytes: BENCH_BYTES },
+        undefined,
+      );
+      const entries = new Map([['kept', parsed]]);
+      const cache = {
+        get: async (key: string) => entries.get(key),
+        getMany: async (keys: readonly string[]) => keys.map((key) => entries.get(key)),
+        set: async () => {},
+      };
+      await playerWebCoreAPI.readParsedCharts(cache, ['kept', 'missing']);
+    },
+  });
   define('player-browser.createAudioService', {
     run: async () => {
       const service = playerWebCoreAPI.createAudioService({ createContext: () => BENCH_SYSTEM_AUDIO_CONTEXT });
       service.setTheme({ sounds: { cursor: { bytes: BENCH_BYTES } } });
       await service.playCue('cursor', { owner: BENCH_AUDIO_OWNER });
-      // The chart sample cache a quick retry reuses: claimed by a play, released on the way back to select.
-      service.chartSamples.claim({
-        source: BENCH_AUDIO_OWNER,
-        chartPath: 'a.bms',
-        pathPrefix: undefined,
-        sampleRate: 48_000,
-      });
-      service.chartSamples.release();
+      // The chart sample cache a quick retry reuses: claimed by a play, released once the select focus leaves its track.
+      service.chartSamples.claim({ source: BENCH_AUDIO_OWNER, chartPath: 'a/a.bms', sampleRate: 48_000 }, []);
+      service.chartSamples.keepTrackOf(BENCH_AUDIO_OWNER, 'b/b.bms');
       service.stopOwned(BENCH_AUDIO_OWNER);
       service.dispose();
     },
@@ -562,6 +596,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.readCourseFile', {
     run: () => {
       playerWebCoreAPI.readCourseFile('Songs/dan.lr2crs', BENCH_LR2CRS_BYTES);
+    },
+  });
+  define('player-browser.bindCourseStagePaths', {
+    run: () => {
+      playerWebCoreAPI.bindCourseStagePaths(BENCH_N2X_GROUPS, BENCH_HASHED_SONGS);
     },
   });
   define('player-browser.createChartHashLookup', {

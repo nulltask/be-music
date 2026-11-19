@@ -6,6 +6,8 @@
 export interface OptionChoice<T> {
   readonly text: string;
   readonly value: T;
+  /** Shown dimmed and not selectable, so the list keeps its order while another setting makes the choice meaningless. */
+  readonly disabled?: boolean;
 }
 
 /** A number control's range and grid; each is optional. */

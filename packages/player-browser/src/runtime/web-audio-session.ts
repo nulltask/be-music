@@ -1,7 +1,7 @@
 import {
   isBmsBGMVolumeChangeChannel,
   isBMSKeyVolumeChangeChannel,
-  isPlayLaneSoundChannel,
+  playsAtKeysoundVolume,
   parseBMSDynamicVolumeGain,
   resolveBmsWAVResources,
   collectBmsWAVPlaybackModifiers,
@@ -18,7 +18,8 @@ import {
 import type { AudioSession, GuideSound } from '@be-music/player-engine';
 import {
   normalizePath,
-  resolveSampleSliceEnvelope,
+  resolveSampleVoiceEnvelope,
+  resolveStereoBalance,
   SAMPLE_SLICE_FADE_SECONDS,
   type SampleSliceEnvelope,
 } from '@be-music/shared-utils/core';
@@ -29,13 +30,28 @@ interface WebAudioSourceHandle {
   node: AudioBufferSourceNode;
   buffer: AudioBuffer;
   gain: GainNode | undefined;
-  /** The NONSTOP stage rate the sample plays at on top of the session's base rate (1 outside a stage). */
+  /**
+   * The rate the sample plays at on top of the session's base rate: its NONSTOP stage's rate (1 outside a stage) times
+   * its trigger's own (an LRX note's `frq`).
+   */
   stageRate: number;
+  /** The nodes of a stereo balance (an LRX note's `pan`) between the source and its bus, disconnected with it. */
+  balance?: readonly AudioNode[];
   startContextSeconds?: number;
 }
 
 /** How long a live tempo change glides the playback rate of the samples already playing, in seconds. */
 export const LIVE_TEMPO_RAMP_SECONDS = 0.03;
+
+/**
+ * How far ahead of the audio clock the session reports its write head (`AudioSinkClockState.scheduledSeconds`), so the
+ * engine queues the chart's background sounds, volume changes and AUTO keysounds that long before they are due, and
+ * {@link WebAudioSession.scheduleEventAt} starts each one at its due time with `start(when)`. Without it, a sound
+ * starts when the engine's ~60 Hz tick reaches it: up to a tick (and the main thread's timer slip) late, a different
+ * amount for each sound. 50 ms covers a tick and a stalled one after it. Nothing a player does waits on it: a press's
+ * keysound still starts at once, and judging reads the output clock.
+ */
+export const WEB_AUDIO_SCHEDULE_AHEAD_SECONDS = 0.05;
 
 /**
  * Per-event playback override produced by the bmson 1.0.0 slicing pipeline. Each entry carries the seek `offset` into
@@ -46,6 +62,16 @@ export interface WebAudioSessionSlicePlayback {
   offsetSeconds: number;
   durationSeconds?: number;
   sliceId?: string;
+  /** An LRX note's own gain, on top of the slot's. */
+  gain?: number;
+  /** An LRX note's stereo balance, −1 (left) to 1 (right). */
+  pan?: number;
+  /** An LRX note's own playback rate. */
+  rate?: number;
+  /** An LRX note's fade-in, in seconds of the sample. */
+  attackSeconds?: number;
+  /** An LRX note's fade-out past the end of `durationSeconds`, in seconds of the sample. */
+  releaseSeconds?: number;
 }
 
 /**
@@ -112,9 +138,11 @@ export interface WebAudioSessionContext {
    */
   tempo?: number;
   /**
-   * Fades the play in over this many seconds as it starts, and crossfades each seek over as long: the sounds of the old
-   * position fade out while the ones of the new fade in, instead of the old ones stopping at once. A PRACTICE play's
-   * loop (#949) goes back to its start with a seek, so its range comes round again smoothly. Absent or 0: no fades.
+   * Crossfades each seek over this many seconds: the sounds of the old position that already started fade out, while
+   * the ones the new position starts partway (still ringing there) fade in, instead of stopping or starting at once.
+   * The sounds the new position starts on time play at full volume from the first, and the old position's sounds that
+   * were queued but had not started yet do not play. A PRACTICE play's loop (#949) goes back to its start with a seek,
+   * so its range comes round again smoothly with its first beat whole. Absent or 0: no fades.
    */
   seekCrossfadeSeconds?: number;
   /**
@@ -125,10 +153,25 @@ export interface WebAudioSessionContext {
   guideSounds?: ReadonlyMap<GuideSound, AudioBuffer>;
 }
 
-/** A crossfade's gains: one before each bus mixer, so one position's voices fade together. */
+/**
+ * A crossfade's gains, before each bus mixer, so one position's voices fade together: `key` / `bgm` for the voices it
+ * starts on time, open from the first, and `partwayKey` / `partwayBGM` for those it starts partway, which fade in.
+ */
 interface CrossfadeGeneration {
   readonly key: GainNode;
   readonly bgm: GainNode;
+  readonly partwayKey: GainNode;
+  readonly partwayBGM: GainNode;
+}
+
+/** Every gain of a crossfade generation. */
+function crossfadeGains(generation: CrossfadeGeneration): GainNode[] {
+  return [generation.key, generation.bgm, generation.partwayKey, generation.partwayBGM];
+}
+
+/** Whether `handle` was queued to start after `now` on the audio clock and has not started yet. */
+function isQueued(handle: { readonly startContextSeconds?: number }, now: number): boolean {
+  return handle.startContextSeconds !== undefined && handle.startContextSeconds > now + 1e-6;
 }
 
 /**
@@ -158,6 +201,12 @@ export interface WebAudioSession extends AudioSession {
    * `start(when)` semantics), so a host that polls on a slightly-late tick won't drop the cue.
    */
   scheduleEvent: (event: BeMusicEvent, audioContextStartSeconds: number) => void;
+  /**
+   * Starts `event`'s sound (or applies its `#xxx97` / `#xxx98` volume) at `outputSeconds` on the clock `getClockState`
+   * reports, the context's from the chart's start: the engine queues the chart's realtime sounds
+   * {@link WEB_AUDIO_SCHEDULE_AHEAD_SECONDS} ahead and this places each at its due time.
+   */
+  scheduleEventAt: NonNullable<AudioSession['scheduleEventAt']>;
 }
 
 /**
@@ -247,23 +296,49 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
   // per-voice at build time instead of being written onto the shared bus mixers.
   let currentBGMDynamicGain = 1;
   let currentKeyDynamicGain = 1;
+  /** Volume changes queued ahead of the audio clock, by time: each applies to the voices that start from its time on. */
+  let pendingGainChanges: Array<{ at: number; bgm: boolean; gain: number }> = [];
+  /** Applies the queued volume changes that are due by `now`. */
+  const settleGainChanges = (now: number): void => {
+    while (pendingGainChanges.length > 0 && pendingGainChanges[0]!.at <= now + 1e-6) {
+      const change = pendingGainChanges.shift()!;
+      if (change.bgm) currentBGMDynamicGain = change.gain;
+      else currentKeyDynamicGain = change.gain;
+    }
+  };
+  /** The dynamic gain of a voice starting at `at`: the volume in force then, queued changes included. */
+  const dynamicGainAt = (bgm: boolean, at: number): number => {
+    let gain = bgm ? currentBGMDynamicGain : currentKeyDynamicGain;
+    for (const change of pendingGainChanges) {
+      if (change.at > at + 1e-6) break;
+      if (change.bgm === bgm) gain = change.gain;
+    }
+    return gain;
+  };
   const crossfadeSeconds =
     context.seekCrossfadeSeconds !== undefined && Number.isFinite(context.seekCrossfadeSeconds)
       ? Math.max(0, context.seekCrossfadeSeconds)
       : 0;
   /** The gains the voices of the position now playing go through, while crossfades are on. */
   let generation: CrossfadeGeneration | undefined;
-  /** Opens the gains for a new position, fading in from silence over the crossfade. */
+  /** Opens the gains for a new position: those of its on-time voices at once, those of its partway ones fading in. */
   const openGeneration = (): void => {
     const now = audioContext.currentTime;
-    const open = (mixer: GainNode): GainNode => {
+    const open = (mixer: GainNode, fadeIn: boolean): GainNode => {
       const gain = audioContext.createGain();
-      gain.gain.value = 0;
       gain.connect(mixer);
-      rampGainTo(gain.gain, 1, now, crossfadeSeconds);
+      if (fadeIn) {
+        gain.gain.value = 0;
+        rampGainTo(gain.gain, 1, now, crossfadeSeconds);
+      }
       return gain;
     };
-    generation = { key: open(audioBus.keyMixer), bgm: open(audioBus.bgmMixer) };
+    generation = {
+      key: open(audioBus.keyMixer, false),
+      bgm: open(audioBus.bgmMixer, false),
+      partwayKey: open(audioBus.keyMixer, true),
+      partwayBGM: open(audioBus.bgmMixer, true),
+    };
   };
   /** Fades the position playing out over the crossfade, stopping its voices and dropping its gains at the end. */
   const closeGeneration = (voices: readonly WebAudioSourceHandle[]): void => {
@@ -271,15 +346,14 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     generation = undefined;
     const now = audioContext.currentTime;
     const endAt = now + crossfadeSeconds;
-    if (closing !== undefined) {
-      rampGainTo(closing.key.gain, 0, now, crossfadeSeconds);
-      rampGainTo(closing.bgm.gain, 0, now, crossfadeSeconds);
-    }
-    for (const handle of voices) stopSource(handle, endAt);
+    const gains = closing === undefined ? [] : crossfadeGains(closing);
+    for (const gain of gains) rampGainTo(gain.gain, 0, now, crossfadeSeconds);
+    // A voice queued ahead of the audio clock that has not started belongs past the old position: it never plays.
+    for (const handle of voices) stopSource(handle, isQueued(handle, now) ? undefined : endAt);
     if (closing === undefined) return;
     setTimeout(
       () => {
-        for (const gain of [closing.key, closing.bgm]) {
+        for (const gain of gains) {
           try {
             gain.disconnect();
           } catch {
@@ -306,6 +380,10 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     return stage === undefined ? 1 : stageMixer!.rate(stage);
   };
 
+  /** A trigger's own rate (an LRX note's `frq`); 1 for any other. */
+  const voiceRateOf = (slice: WebAudioSessionSlicePlayback | undefined): number =>
+    slice?.rate !== undefined && slice.rate > 0 ? slice.rate : 1;
+
   const sliceRateOf = (sampleKey: string): number => {
     const stage = stageMixer?.stageOf(sampleKey);
     return stage === undefined ? 1 : (stageMixer?.sliceRate?.(stage) ?? 1);
@@ -329,6 +407,8 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     bus: AudioNode,
     dynamicGain: number,
     withGainNode: boolean,
+    partway = false,
+    voice?: WebAudioSessionSlicePlayback,
   ): WebAudioSourceHandle | undefined => {
     const buffer = sampleBuffer(path, sampleKey);
     if (!buffer) return undefined;
@@ -342,22 +422,42 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     }
     // While crossfades are on, a voice goes through its position's gains.
     if (generation !== undefined) {
-      if (bus === audioBus.keyMixer) bus = generation.key;
-      else if (bus === audioBus.bgmMixer) bus = generation.bgm;
+      if (bus === audioBus.keyMixer) bus = partway ? generation.partwayKey : generation.key;
+      else if (bus === audioBus.bgmMixer) bus = partway ? generation.partwayBGM : generation.bgm;
     }
-    const rate = basePlaybackRate * stageRate;
+    const voiceRate = voice?.rate !== undefined && voice.rate > 0 ? voice.rate : 1;
+    const rate = basePlaybackRate * stageRate * voiceRate;
     if (rate !== 1) node.playbackRate.value = rate;
+    // An LRX note's balance: the far channel attenuated, the near one left alone.
+    const { left, right } = resolveStereoBalance(voice?.pan ?? 0);
+    let balance: AudioNode[] | undefined;
+    let output: AudioNode = bus;
+    if (left !== 1 || right !== 1) {
+      const splitter = audioContext.createChannelSplitter(2);
+      const merger = audioContext.createChannelMerger(2);
+      const leftGain = audioContext.createGain();
+      const rightGain = audioContext.createGain();
+      leftGain.gain.value = left;
+      rightGain.gain.value = right;
+      splitter.connect(leftGain, 0);
+      splitter.connect(rightGain, 1);
+      leftGain.connect(merger, 0, 0);
+      rightGain.connect(merger, 0, 1);
+      merger.connect(bus);
+      balance = [splitter, leftGain, rightGain, merger];
+      output = splitter;
+    }
     let gain: GainNode | undefined;
-    const combinedGain = (wavCmdVolumeMultipliers.get(sampleKey) ?? 1) * dynamicGain;
+    const combinedGain = (wavCmdVolumeMultipliers.get(sampleKey) ?? 1) * dynamicGain * (voice?.gain ?? 1);
     if (combinedGain !== 1 || withGainNode) {
       gain = audioContext.createGain();
       gain.gain.value = combinedGain;
       node.connect(gain);
-      gain.connect(bus);
+      gain.connect(output);
     } else {
-      node.connect(bus);
+      node.connect(output);
     }
-    return { node, buffer, gain, stageRate };
+    return { node, buffer, gain, stageRate: stageRate * voiceRate, ...(balance ? { balance } : {}) };
   };
 
   const disconnectSource = (handle: WebAudioSourceHandle): void => {
@@ -371,6 +471,13 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
         handle.gain.disconnect();
       } catch {
         // Same as above; source cleanup is best-effort.
+      }
+    }
+    for (const node of handle.balance ?? []) {
+      try {
+        node.disconnect();
+      } catch {
+        // Same as above.
       }
     }
   };
@@ -425,10 +532,11 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
         : audioContext.currentTime;
     const previousSlice = sliceId === undefined ? undefined : activeBySlice.get(sliceId);
     if (previousSlice?.startContextSeconds === startAt) return;
+    settleGainChanges(audioContext.currentTime);
 
     const buffer = sampleBuffer(path, sampleKey);
     if (!buffer) return;
-    const elapsed = elapsedSeconds > 0 ? elapsedInBuffer(sampleKey, elapsedSeconds) : 0;
+    const elapsed = elapsedSeconds > 0 ? elapsedInBuffer(sampleKey, elapsedSeconds) * voiceRateOf(slice) : 0;
     const sliceRate = sliceRateOf(sampleKey);
     const offsetSeconds = clampSampleOffset((slice?.offsetSeconds ?? 0) / sliceRate + elapsed, buffer.duration);
     const durationSeconds = clampSampleDuration(
@@ -436,23 +544,28 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       buffer.duration,
       offsetSeconds,
     );
-    const envelope = resolveSampleSliceEnvelope(
+    // An LRX note's attack only applies from its start; a seek past it plays on at full level.
+    const envelope = resolveSampleVoiceEnvelope(
       offsetSeconds,
       durationSeconds,
       buffer.duration,
       SAMPLE_SLICE_FADE_SECONDS,
+      elapsed > 0 ? 0 : (slice?.attackSeconds ?? 0),
+      slice?.releaseSeconds ?? 0,
     );
     const hasEnvelope = envelope.fadeIn > 0 || envelope.fadeOut > 0;
 
     const channel = normalizeChannel(event.channel);
-    const isPlayerLane = isPlayLaneSoundChannel(channel);
+    const isPlayerLane = playsAtKeysoundVolume(channel, event);
     const bus = isPlayerLane ? audioBus.keyMixer : audioBus.bgmMixer;
     const built = buildSourceNode(
       sampleKey,
       path,
       bus,
-      isPlayerLane ? currentKeyDynamicGain : currentBGMDynamicGain,
+      dynamicGainAt(!isPlayerLane, startAt),
       hasEnvelope,
+      elapsedSeconds > 0,
+      slice,
     );
     if (!built) return;
     const { node } = built;
@@ -463,13 +576,20 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     };
     // Scheduled BGM cues clamp to "now" so a slightly-late polling tick still fires immediately rather than
     // throwing for a past timestamp; player-input keysounds and immediate triggers go through the no-`when` path.
-    if (previousSlice) stopSource(previousSlice, startAt);
-    if (usesMonophonicWAVPlayback(chart, sampleKey)) {
-      const previous = activeBySlot.get(sampleKey);
-      if (previous) {
-        stopSource(previous, startAt);
+    // A voice queued to start after this one (a sound scheduled ahead, then a press) cuts this one when it starts and
+    // stays the latest: the voices of a slot or slice cut each other in the order they sound, not the order queued.
+    let cutAt: number | undefined;
+    const retrigger = (previous: WebAudioSourceHandle | undefined): boolean => {
+      if (previous === undefined) return true;
+      if (isQueued(previous, startAt)) {
+        cutAt = Math.min(cutAt ?? Infinity, previous.startContextSeconds!);
+        return false;
       }
-    }
+      stopSource(previous, startAt);
+      return true;
+    };
+    const latestOfSlice = retrigger(previousSlice);
+    const latestOfSlot = !usesMonophonicWAVPlayback(chart, sampleKey) || retrigger(activeBySlot.get(sampleKey));
     if (hasEnvelope && built.gain) {
       scheduleSliceEnvelope(built.gain.gain, startAt, durationSeconds, envelope, basePlaybackRate * built.stageRate);
     }
@@ -483,8 +603,9 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
 
     activeSources.add(built);
     built.startContextSeconds = startAt;
-    activeBySlot.set(sampleKey, built);
-    if (sliceId !== undefined) activeBySlice.set(sliceId, built);
+    if (cutAt !== undefined) stopSource(built, cutAt);
+    if (latestOfSlot) activeBySlot.set(sampleKey, built);
+    if (sliceId !== undefined && latestOfSlice) activeBySlice.set(sliceId, built);
     if (isPlayerLane) activeByChannel.set(channel, built);
   };
 
@@ -496,17 +617,30 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     const sliceRate = sliceRateOf(sampleKey);
     const start = (slice?.offsetSeconds ?? 0) / sliceRate;
     const end = Math.min(
-      slice?.durationSeconds !== undefined ? start + slice.durationSeconds / sliceRate : buffer.duration,
+      slice?.durationSeconds !== undefined
+        ? start + slice.durationSeconds / sliceRate + (slice.releaseSeconds ?? 0)
+        : buffer.duration,
       buffer.duration,
     );
-    return start + elapsedInBuffer(sampleKey, elapsedSeconds) < end;
+    return start + elapsedInBuffer(sampleKey, elapsedSeconds) * voiceRateOf(slice) < end;
   };
 
-  const applyDynamicVolumeEvent = (event: BeMusicEvent): void => {
+  const applyDynamicVolumeEvent = (event: BeMusicEvent, audioContextSeconds?: number): void => {
     if (disposed) return;
     const gain = parseBMSDynamicVolumeGain(event.value);
     if (gain === undefined) return;
     const clamped = Math.max(0, Math.min(1, gain));
+    const now = audioContext.currentTime;
+    settleGainChanges(now);
+    // Due ahead of the audio clock: it applies to the voices that start from then (`dynamicGainAt`).
+    if (audioContextSeconds !== undefined && audioContextSeconds > now + 1e-6) {
+      const bgm = isBmsBGMVolumeChangeChannel(event.channel);
+      if (!bgm && !isBMSKeyVolumeChangeChannel(event.channel)) return;
+      const at = audioContextSeconds;
+      const index = pendingGainChanges.findIndex((change) => change.at > at);
+      pendingGainChanges.splice(index < 0 ? pendingGainChanges.length : index, 0, { at, bgm, gain: clamped });
+      return;
+    }
     // BGM channel = `97`, key channel = `98`. The dispatcher already gated on
     // `isBMSDynamicVolumeChangeChannel(event.channel)` so one of the two predicates must match — but we still branch
     // explicitly so an unrecognized future channel doesn't accidentally retarget the wrong side. The stored gain is
@@ -571,7 +705,9 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       // We don't actually buffer ahead on the web (Web Audio's BufferSource handles its own scheduling), so the
       // scheduled head matches the output head. Reporting the same value lets the engine's
       // `createAudioPlaybackClockSource` short-circuit its `Math.max` between the two.
-      return { outputSeconds, scheduledSeconds: outputSeconds };
+      // The write head runs ahead: the engine queues the chart's realtime sounds that early and `scheduleEventAt`
+      // starts each at its due time (`WEB_AUDIO_SCHEDULE_AHEAD_SECONDS`).
+      return { outputSeconds, scheduledSeconds: outputSeconds + WEB_AUDIO_SCHEDULE_AHEAD_SECONDS };
     },
     finish: async (): Promise<void> => {
       // Engine finished playback gracefully — let any tail samples ring out naturally. Drop our tracking so a
@@ -595,7 +731,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       activeByChannel.clear();
       activeSources.clear();
       preparedBuffers.clear();
-      for (const gain of generation === undefined ? [] : [generation.key, generation.bgm]) {
+      for (const gain of generation === undefined ? [] : crossfadeGains(generation)) {
         try {
           gain.disconnect();
         } catch {
@@ -630,6 +766,15 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       }
       playSampleEvent(event, audioContextStartSeconds);
     },
+    scheduleEventAt: (event: BeMusicEvent, outputSeconds: number): void => {
+      // The output clock `getClockState` reports is the context's, from the chart's start.
+      const at = resolveChartStartContextTime() + outputSeconds;
+      if (isBmsBGMVolumeChangeChannel(event.channel) || isBMSKeyVolumeChangeChannel(event.channel)) {
+        applyDynamicVolumeEvent(event, at);
+        return;
+      }
+      playSampleEvent(event, at);
+    },
     setTempo: (next: number): void => {
       if (disposed || !(Number.isFinite(next) && next > 0)) return;
       // The chart runs on at the new tempo from where it is now: a NONSTOP chart's fades move with it.
@@ -658,6 +803,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       // The engine applies the volume changes before `seconds` again, from the chart's start values.
       currentBGMDynamicGain = 1;
       currentKeyDynamicGain = 1;
+      pendingGainChanges = [];
       anchorChartAt(seconds);
     },
     stopChannel: (channel: string): void => {

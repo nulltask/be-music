@@ -1,5 +1,6 @@
 import {
   isInputSourceDevice,
+  isInputSourceDeviceName,
   isInputSourceKind,
   isInputSourceLabel,
   isTurntableDirection,
@@ -27,7 +28,10 @@ export interface ReplayAnalogScratch {
   stopMs?: number;
 }
 
-/** Validates `play.inputSources`: well-formed entries, unique ids, and a `direction` exactly on turntable sources. */
+/**
+ * Validates `play.inputSources`: well-formed entries, unique ids, a `direction` exactly on turntable sources, and a
+ * `deviceName` (present only when the player opted in to recording it) that is a kept device name.
+ */
 export function parseReplayInputSources(value: unknown, path = 'play.inputSources'): ReplayInputSource[] {
   if (!Array.isArray(value)) throw new ReplayParseError(`${path}: expected an array`);
   const ids = new Set<number>();
@@ -54,6 +58,14 @@ export function parseReplayInputSources(value: unknown, path = 'play.inputSource
       source.direction = record.direction;
     } else if (record.direction !== undefined) {
       throw new ReplayParseError(`${at}.direction: only a turntable source has a direction`);
+    }
+    if (record.deviceName !== undefined) {
+      if (!isInputSourceDeviceName(record.deviceName)) {
+        throw new ReplayParseError(
+          `${at}.deviceName: expected 1 to 128 characters without control characters or surrounding spaces`,
+        );
+      }
+      source.deviceName = record.deviceName;
     }
     return source;
   });

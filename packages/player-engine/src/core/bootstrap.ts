@@ -20,9 +20,16 @@ import {
   doubleChartNotes,
   resolveChartNotesOption,
 } from './chart-notes-options.ts';
+import { doubleNanasiChartNotes } from './nanasi-notes-double.ts';
 import { withChartOverrides } from './resolved-chart-overrides.ts';
 import { duplicateBattleChart } from './battle-chart.ts';
-import { applyPracticeRange, resolvePracticePlayWindow, resolvePracticeRange } from './practice.ts';
+import {
+  applyPracticeRange,
+  createPracticeLoopPreviewNotes,
+  resolvePracticeLoopShift,
+  resolvePracticePlayWindow,
+  resolvePracticeRange,
+} from './practice.ts';
 import { isDuplicatedBattleMode, resolveEffectiveBattleMode } from './battle-mode.ts';
 import { convertLR2SPToDPChart } from './lr2-sp-to-dp-chart.ts';
 import type { EffectiveBattleMode } from './battle-mode.ts';
@@ -39,7 +46,12 @@ import {
 } from './scroll-modifier.ts';
 import { addLongNotes, clampLongNoteRate, removeLongNoteTails, type LongNoteModifier } from './long-note-modifier.ts';
 import { throwIfAborted } from '@be-music/shared-utils/core';
-import { buildChartTextTimeline, resolveChart, type ResolvedChart } from '@be-music/chart-model';
+import {
+  buildChartTextTimeline,
+  resolveChart,
+  resolveLRXPlayEndSeconds,
+  type ResolvedChart,
+} from '@be-music/chart-model';
 import { normalizeChannel, type BeMusicJSON } from '@be-music/chart-source';
 import { type GrooveGaugeJudgmentKind } from './groove-gauge.ts';
 import {
@@ -63,6 +75,7 @@ import {
 } from '../playable-notes.ts';
 import {
   appendFreeZoneInputChannels,
+  type ChannelLike,
   createInputTokenToChannelsMap,
   createLaneBindings,
   type LaneKeyOverrides,
@@ -104,8 +117,10 @@ export interface PreparedPlaybackChartData {
   dBattleScratch?: boolean;
   /** beatoraja PRACTICE: the range played and the note counts before `PracticeModifier`. */
   practiceStartSeconds?: number;
-  /** Where a PRACTICE play starts: the head of the bar before the range's (`resolvePracticePlayWindow`). */
+  /** Where a PRACTICE play starts: a bar before the range's at least (`resolvePracticePlayWindow`'s first start). */
   practicePlayStartSeconds?: number;
+  /** Where a looping PRACTICE play goes back to: the head of the rest bars before the range, or the range itself. */
+  practiceLoopStartSeconds?: number;
   practiceEndSeconds?: number;
   practiceSourceNotes?: import('../ruleset/facts.ts').RulesetNoteCounts;
   practiceChangedObjectCount?: number;
@@ -137,6 +152,11 @@ export interface PreparedPlaybackChartData {
   invisibleNotes: TimedPlayableNote[];
   renderNotes: TimedPlayableNote[];
   totalSeconds: number;
+  /**
+   * `totalSeconds` is the chart's own end (an LRX chart's, `resolveLRXPlayEndSeconds`): option text, BGA and audio
+   * running longer do not extend it.
+   */
+  fixedEnd?: true;
   laneBindings: LaneBinding[];
   laneDisplayMode: string;
   activeFreeZoneChannels: ReadonlySet<string>;
@@ -182,6 +202,7 @@ export function createInitialPlayerSummary(
     // Ruleset-scoped gauge id (`GROOVE` / `NORMAL` / `HARD` / `EX-HARD` / …) so consumers can label the run's
     // clear lamp without inferring from the threshold, which collides between line-ups.
     type: gauge.spec.id,
+    ...(ruleset.gaugeSource !== ruleset.rulesetId ? { source: ruleset.gaugeSource } : {}),
     survival: gauge.spec.survival,
     failedMidPlay: gauge.failedMidPlay,
     ...(gauge.values ? { values: gauge.values } : {}),
@@ -296,6 +317,8 @@ export function preparePlaybackChart(
      * battle conversion when it copies the chart, and is narrowed to what can take effect (`resolveChartNotesOption`).
      */
     chartNotes?: ChartNotesOption;
+    /** Whether `chartNotes` comes from a version 1 / 2 gameplay program, which keeps Be-Music's earlier readings. */
+    chartNotesLegacy?: boolean;
     /** The player's own lane keys (`LaneModeOptions.laneKeys`). */
     laneKeys?: LaneKeyOverrides;
     /**
@@ -314,10 +337,12 @@ export function preparePlaybackChart(
     : undefined;
   resolved = lr2Extra?.chart ?? resolved;
   const battleSourceVariant = resolved.playVariant;
-  const chartNotes = resolveChartNotesOption(options.chartNotes, {
-    playVariant: battleSourceVariant,
-    course: options.course !== undefined,
-  });
+  const chartNotesLegacy = options.chartNotesLegacy === true;
+  const chartNotes = resolveChartNotesOption(
+    options.chartNotes,
+    { playVariant: battleSourceVariant, course: options.course !== undefined },
+    chartNotesLegacy,
+  );
   // A chart that copies itself onto the 2P side decides the double-play chart, in place of the player's conversion.
   const battleMode = chartNotesCopies(chartNotes)
     ? 'OFF'
@@ -425,16 +450,19 @@ export function preparePlaybackChart(
   });
   resolved = extraResult.chart;
   const invisibleNotes = resolved.invisibleNotes.map(toTimedInvisibleNote);
-  // The chart's NOTES conversion, after the note and mine modifiers (so a doubled partner avoids an added mine) and
-  // before the battle conversion it replaces.
-  let chartNotesChangedObjectCount = chartNotesDoubles(chartNotes)
-    ? doubleChartNotes(notes, landmineNotes, resolved.playVariant)
-    : 0;
+  // The chart's NOTES conversion, after the note and mine modifiers and before the battle conversion it replaces.
+  // nanasigroove copies the chart first and doubles the double-play chart; the version 1 / 2 reading doubles first (so a
+  // doubled partner avoids an added mine).
+  let chartNotesChangedObjectCount = 0;
+  if (chartNotesLegacy && chartNotesDoubles(chartNotes))
+    chartNotesChangedObjectCount += doubleChartNotes(notes, landmineNotes, resolved.playVariant);
   if (chartNotesCopies(chartNotes)) {
-    const copied = copyChartNotes(resolved, notes, landmineNotes, invisibleNotes);
+    const copied = copyChartNotes(resolved, notes, landmineNotes, invisibleNotes, chartNotesLegacy);
     resolved = copied.chart;
     chartNotesChangedObjectCount += copied.changedObjectCount;
   }
+  if (!chartNotesLegacy && chartNotesDoubles(chartNotes))
+    chartNotesChangedObjectCount += doubleNanasiChartNotes(notes, invisibleNotes, resolved.playVariant);
   const dBattleScratch = battleMode === 'D-BATTLE' && options.dBattleScratch === true;
   const duplicateBattle = isDuplicatedBattleMode(battleMode, battleSourceVariant)
     ? duplicateBattleChart(resolved, notes, landmineNotes, invisibleNotes, {
@@ -457,6 +485,10 @@ export function preparePlaybackChart(
   let totalSeconds = Math.max(resolved.lastNoteSeconds, auxiliaryPlaybackEndSeconds, lastTextSeconds);
   for (const note of notes) totalSeconds = Math.max(totalSeconds, note.endSeconds ?? note.seconds);
   for (const mine of landmineNotes) totalSeconds = Math.max(totalSeconds, mine.seconds);
+  // An LRX chart plays for as long as plugout plays it: to its end-of-song note, else 3 s past its last sound note,
+  // whatever still sounds or shows then. A note still to be judged keeps the play going (`play-loop.ts`).
+  const lrxEndSeconds = resolveLRXPlayEndSeconds(resolved);
+  if (lrxEndSeconds !== undefined) totalSeconds = lrxEndSeconds;
   const practiceRange =
     options.practice !== undefined
       ? resolvePracticeRange(
@@ -464,16 +496,24 @@ export function preparePlaybackChart(
           Math.floor(Math.max(totalSeconds, resolved.sampleTriggers.at(-1)?.seconds ?? 0) * 1000),
         )
       : undefined;
-  const practice = practiceRange ? applyPracticeRange(resolved, notes, landmineNotes, practiceRange) : undefined;
+  const practice = practiceRange
+    ? applyPracticeRange(resolved, notes, landmineNotes, practiceRange, options.practice?.carriedLongNotes === true)
+    : undefined;
   resolved = practice?.chart ?? resolved;
   // A practice play runs from the head of the bar before its range to the head of the bar after it (#954).
   const practiceWindow =
     practiceRange && options.practice
-      ? resolvePracticePlayWindow(resolved, options.practice, practiceRange)
+      ? resolvePracticePlayWindow(resolved, options.practice, practiceRange, practice?.carriedFromMs)
       : undefined;
   if (practiceWindow) totalSeconds = practiceWindow.endSeconds;
+  const fixedEnd = lrxEndSeconds !== undefined && practiceWindow === undefined;
   const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
-  const renderNotes = notes;
+  // A seamless PRACTICE loop draws the next round's notes past the range's end, so they come down the lane (#949).
+  const loopShift =
+    practiceWindow && options.practice
+      ? resolvePracticeLoopShift(resolved, options.practice, practiceWindow)
+      : undefined;
+  const renderNotes = loopShift ? [...notes, ...createPracticeLoopPreviewNotes(notes, loopShift)] : notes;
   const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
   const laneModeOptions = {
     player: resolved.source.bms.player,
@@ -504,7 +544,8 @@ export function preparePlaybackChart(
       : {}),
     ...(practiceRange && practice
       ? {
-          practicePlayStartSeconds: practiceWindow?.startSeconds ?? 0,
+          practicePlayStartSeconds: practiceWindow?.firstStartSeconds ?? 0,
+          practiceLoopStartSeconds: practiceWindow?.startSeconds ?? 0,
           practiceStartSeconds: practiceRange.startMs / 1000,
           practiceEndSeconds: practiceRange.endMs / 1000,
           practiceSourceNotes: practice.sourceNotes,
@@ -544,6 +585,7 @@ export function preparePlaybackChart(
     invisibleNotes,
     renderNotes,
     totalSeconds,
+    ...(fixedEnd ? { fixedEnd } : {}),
     laneBindings,
     laneDisplayMode,
     activeFreeZoneChannels,
@@ -600,6 +642,7 @@ export async function initializePlayerUIRuntime({
   stateSignals,
   uiSignals,
   totalSeconds,
+  fixedEnd = false,
   onLoadProgress,
 }: {
   options: PlayerOptions;
@@ -614,6 +657,8 @@ export async function initializePlayerUIRuntime({
   stateSignals: PlayerStateSignals;
   uiSignals: PlayerUISignalBus;
   totalSeconds: number;
+  /** `totalSeconds` is the chart's own end, which a longer BGA does not extend. */
+  fixedEnd?: boolean;
   onLoadProgress: (ratio: number, message: string, detail?: string) => void;
 }): Promise<InitializedPlayerUIRuntime> {
   throwIfAborted(options.signal);
@@ -644,7 +689,7 @@ export async function initializePlayerUIRuntime({
     },
   });
   throwIfAborted(options.signal);
-  const updatedTotalSeconds = Math.max(totalSeconds, uiRuntime?.playbackEndSeconds ?? 0);
+  const updatedTotalSeconds = fixedEnd ? totalSeconds : Math.max(totalSeconds, uiRuntime?.playbackEndSeconds ?? 0);
   const uiEnabled = Boolean(uiRuntime?.tuiEnabled);
 
   return {
@@ -670,10 +715,10 @@ function compareLaneSoundNotes(left: TimedPlayableNote, right: TimedPlayableNote
   return 0;
 }
 
-function collectUniqueNoteChannels(
-  notes: ReadonlyArray<TimedPlayableNote>,
-  landmineNotes: ReadonlyArray<TimedLandmineNote>,
-  invisibleNotes: ReadonlyArray<TimedPlayableNote>,
+export function collectUniqueNoteChannels(
+  notes: readonly ChannelLike[],
+  landmineNotes: readonly ChannelLike[],
+  invisibleNotes: readonly ChannelLike[],
 ): string[] {
   const seen = new Set<string>();
   const channels: string[] = [];
@@ -695,7 +740,7 @@ function collectUniqueNoteChannels(
   return channels;
 }
 
-function resolveActiveFreeZoneChannels(
+export function resolveActiveFreeZoneChannels(
   channels: ReadonlyArray<string>,
   laneBindings: ReadonlyArray<LaneBinding>,
 ): ReadonlySet<string> {
@@ -713,7 +758,7 @@ function resolveActiveFreeZoneChannels(
   return activeFreeZoneChannels;
 }
 
-function isActiveFreeZoneChannel(channel: string, activeFreeZoneChannels: ReadonlySet<string>): boolean {
+export function isActiveFreeZoneChannel(channel: string, activeFreeZoneChannels: ReadonlySet<string>): boolean {
   return activeFreeZoneChannels.has(normalizeChannel(channel));
 }
 

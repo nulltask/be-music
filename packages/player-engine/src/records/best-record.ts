@@ -1,5 +1,5 @@
 import type { ChartPlayOptionProgram, ChartPlayVariant } from '@be-music/chart-model';
-import { chartNotesCopies, resolveChartNotesOption } from '../core/chart-notes-options.ts';
+import { chartNotesCopyRuns } from '../core/chart-notes-options.ts';
 import { isBmsonRecoveryDisabled } from '../ruleset/bmson-total.ts';
 import type { PlayerSummary } from '../core/engine-types.ts';
 import type { ScoreSummary } from '../ruleset/score.ts';
@@ -11,6 +11,7 @@ import {
   resolveClearLamp,
   resolveMissCount,
   type ClearLamp,
+  type PlayClearLampFacts,
 } from '../ruleset/clear-lamp.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import {
@@ -158,13 +159,12 @@ export type RecordPlaySummary = Pick<
  * the BP counts the notes a play that ended early never judged, as {@link recordPlayFromResult}'s does.
  */
 export function recordPlayFromSummary(summary: RecordPlaySummary, maxCombo: number, ruleset?: RulesetId): RecordPlay {
+  const facts: PlayClearLampFacts = { cleared: summary.gauge?.cleared ?? false, score: summary };
+  if (summary.gauge?.type !== undefined) facts.gauge = summary.gauge.type;
+  if (summary.gauge?.source !== undefined) facts.gaugeSource = summary.gauge.source;
+  if (ruleset !== undefined) facts.ruleset = ruleset;
   return {
-    lamp: resolveClearLamp({
-      cleared: summary.gauge?.cleared ?? false,
-      score: summary,
-      ...(summary.gauge?.type !== undefined ? { gauge: summary.gauge.type } : {}),
-      ...(ruleset !== undefined ? { ruleset } : {}),
-    }),
+    lamp: resolveClearLamp(facts),
     exScore: summary.exScore,
     maxCombo,
     missCount: resolveMissCount(summary, unjudgedNotes(summary)),
@@ -234,7 +234,7 @@ export function playKeepsRecord(play: RecordPlayKind & { course: boolean }): boo
  * plays it with `RecordPlayKind.chartCopyLeftOut`.
  */
 export function chartProgramCopiesChart(program: ChartPlayOptionProgram, playVariant: ChartPlayVariant): boolean {
-  return chartNotesCopies(resolveChartNotesOption(program.options.notes, { playVariant, course: false }));
+  return chartNotesCopyRuns(program.options.notes, { playVariant, course: false });
 }
 
 /**

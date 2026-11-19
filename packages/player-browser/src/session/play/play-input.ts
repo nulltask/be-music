@@ -40,7 +40,9 @@ const log = logger('gameplay');
 /** The scene's members the input reads and writes: the play session's members of these names. */
 export interface PlayInputContext extends PlayEngineContext {
   readonly options: PlayEngineContext['options'] &
-    Readonly<Pick<PlaySessionOptions, 'coverKeys' | 'laneKeys' | 'controlKeys' | 'actionKeys' | 'controlScheme'>>;
+    Readonly<
+      Pick<PlaySessionOptions, 'coverKeys' | 'laneKeys' | 'controlKeys' | 'actionKeys' | 'controlScheme' | 'windowHold'>
+    >;
   readonly host: PixiSceneHost | undefined;
   readonly quitHold: QuitHoldController;
   readonly sharedEngineInputSignals: PlayerInputSignalBus | undefined;
@@ -302,7 +304,7 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
       return;
     }
   }
-  // Numpad 0 switches FLOATING HI-SPEED, whatever the judge rules (#774).
+  // Either 0 key switches FLOATING HI-SPEED, whatever the judge rules (#774).
   if (actions.is('play.floating-hi-speed', event)) {
     event.preventDefault();
     changePlayView(ctx, {
@@ -614,9 +616,29 @@ function stepPlayHiSpeed(ctx: PlayInputContext, steps: 1 | -1): void {
  *   beatoraja START + the turntable moves the cover.
  * - START (LR2: or SELECT) pressed twice switches the lane cover.
  * - START and SELECT held for {@link START_SELECT_QUIT_MS} quit; after the last note either one alone ends the play.
+ * - beatoraja's WINDOW HOLD takes START as held until the last note ({@link windowHoldsStart}): every key press runs the
+ *   START + key controls, and START pressed twice no longer switches the lane cover, since START never comes up.
  *
  * Returns whether the key was START or SELECT (a lane key goes on to the lane either way).
  */
+/**
+ * Whether beatoraja's WINDOW HOLD takes START as held now: on, in a play of the player's own (not AUTO play or a
+ * replay), before its last note (beatoraja `ControlInputProcessor.input`: `isWindowHold() && TIMER_PLAY &&
+ * !isNoteEnd()`, `8320241d`).
+ */
+export function windowHoldsStart(
+  ctx: Pick<PlayInputContext, 'playMoments'> & {
+    readonly options: Pick<PlayInputContext['options'], 'windowHold' | 'autoPlay' | 'replay'>;
+  },
+): boolean {
+  return (
+    ctx.options.windowHold === true &&
+    ctx.options.autoPlay !== true &&
+    ctx.options.replay === undefined &&
+    ctx.playMoments.allNotesDoneAtMs === undefined
+  );
+}
+
 function handleStartSelect(ctx: PlayInputContext, changes: readonly ControlButtonChange[]): boolean {
   const scheme = ctx.options.controlScheme ?? 'lr2';
   const tracker = controlButtonsHeld(ctx);
@@ -624,7 +646,9 @@ function handleStartSelect(ctx: PlayInputContext, changes: readonly ControlButto
   for (const change of changes) {
     if (change.type !== 'down') continue;
     const [side, button] = splitControlButton(change.button);
-    const modifierDown = tracker.isDown(`${side}-start`) || (scheme === 'lr2' && tracker.isDown(`${side}-select`));
+    const held = windowHoldsStart(ctx);
+    const modifierDown =
+      held || tracker.isDown(`${side}-start`) || (scheme === 'lr2' && tracker.isDown(`${side}-select`));
     if (button === 'start' || button === 'select') {
       control = true;
       if (isStartAndSelectDown(tracker)) {
@@ -639,7 +663,7 @@ function handleStartSelect(ctx: PlayInputContext, changes: readonly ControlButto
       }
       const switches = button === 'start' || scheme === 'lr2';
       const previous = change.previousDownAt;
-      if (switches && previous !== undefined && change.timeStamp - previous <= START_DOUBLE_PRESS_MS[scheme]) {
+      if (!held && switches && previous !== undefined && change.timeStamp - previous <= START_DOUBLE_PRESS_MS[scheme]) {
         if (!ctx.playState.view.hiSpeed.locked) {
           changePlayView(ctx, { type: 'cover-toggle', part: 'sudden' });
           ctx.theme.moment({ kind: 'view-setting', setting: 'sudden', at: ctx.playClock() });
@@ -654,7 +678,8 @@ function handleStartSelect(ctx: PlayInputContext, changes: readonly ControlButto
       if (adjustWhiteNumber(ctx, longer ? 1 : -1)) {
         ctx.theme.moment({ kind: 'view-setting', setting: 'hi-speed', at: ctx.playClock() });
       }
-      continue;
+      // Under WINDOW HOLD beatoraja runs its START + key controls in the same frame too.
+      if (!held) continue;
     }
     if (!modifierDown) continue;
     if (button === 'scratch-cw' || button === 'scratch-ccw') {

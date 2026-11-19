@@ -3,25 +3,24 @@ import { resolveRandomModes } from '@be-music/player-scene-model';
 import {
   battleModeItems,
   bottomShiftableGaugeItems,
+  crazyNotesItems,
+  gaugeChoices,
+  gaugeItems,
   laneOptionItems,
   laneOptionSource,
   menuLaneCovers,
   practiceGaugeItems,
 } from './play-option-items.ts';
 
-test('PRACTICE lists the judge ruleset’s own gauges, named as it names them (#933)', () => {
-  expect(practiceGaugeItems('lr2').map((item) => item.text)).toEqual([
-    'GROOVE',
-    'HARD',
-    'HAZARD',
-    'EASY',
-    'P.ATTACK',
-    'G.ATTACK',
-    'DEATH corrected',
-  ]);
+test('PRACTICE lists the judge ruleset’s own gauges first, named as it names them (#933)', () => {
+  const own = (ruleset: 'lr2' | 'beatoraja' | '____', count: number) =>
+    practiceGaugeItems(ruleset)
+      .slice(0, count)
+      .map((item) => item.text);
+  expect(own('lr2', 7)).toEqual(['GROOVE', 'HARD', 'HAZARD', 'EASY', 'P.ATTACK', 'G.ATTACK', 'DEATH corrected']);
   expect(practiceGaugeItems('lr2')[2]).toEqual({ text: 'HAZARD', value: 'DEATH' });
-  expect(practiceGaugeItems('lr2').at(-1)).toEqual({ text: 'DEATH corrected', value: 'DEATH-CORRECTED' });
-  expect(practiceGaugeItems('beatoraja').map((item) => item.text)).toEqual([
+  expect(practiceGaugeItems('lr2')[6]).toEqual({ text: 'DEATH corrected', value: 'DEATH-CORRECTED' });
+  expect(own('beatoraja', 9)).toEqual([
     'ASSIST EASY',
     'EASY',
     'NORMAL',
@@ -32,13 +31,20 @@ test('PRACTICE lists the judge ruleset’s own gauges, named as it names them (#
     'EX GRADE',
     'EXHARD GRADE',
   ]);
-  expect(practiceGaugeItems('____').map((item) => item.text)).toEqual([
-    'ASSISTED EASY',
-    'EASY',
-    'NORMAL',
-    'HARD',
-    'EX-HARD',
-  ]);
+  expect(own('____', 5)).toEqual(['ASSISTED EASY', 'EASY', 'NORMAL', 'HARD', 'EX-HARD']);
+});
+
+test('PRACTICE then lists the other sources’ gauges, qualified and named with their source (ADR 0019)', () => {
+  const lr2 = practiceGaugeItems('lr2');
+  // LR2's own seven, then beatoraja's nine, AC's five and plugout's eight.
+  expect(lr2).toHaveLength(7 + 9 + 5 + 8);
+  expect(lr2[7]).toEqual({ text: 'ASSIST EASY (beatoraja)', value: 'beatoraja:ASSIST-EASY' });
+  expect(lr2[7 + 9 + 4]).toEqual({ text: 'EX-HARD (????)', value: '____:EX-HARD' });
+  expect(lr2.slice(-8).every((item) => item.value.startsWith('plugout:'))).toBe(true);
+  expect(practiceGaugeItems('beatoraja')).toContainEqual({ text: 'HAZARD (LR2)', value: 'lr2:DEATH' });
+  // A pick qualified with the judge ruleset itself is listed after the own gauges only while it is selected.
+  expect(lr2.some((item) => item.value === 'lr2:HARD')).toBe(false);
+  expect(practiceGaugeItems('lr2', 'lr2:HARD')[7]).toEqual({ text: 'HARD (LR2)', value: 'lr2:HARD' });
 });
 
 test('the lowest auto-shift gauge reads as the ruleset’s own gauges; LR2 starts at EASY (#933)', () => {
@@ -47,6 +53,11 @@ test('the lowest auto-shift gauge reads as the ruleset’s own gauges; LR2 start
     { text: 'GROOVE', value: 'GROOVE' },
   ]);
   expect(bottomShiftableGaugeItems('beatoraja').map((item) => item.text)).toEqual(['ASSIST EASY', 'EASY', 'NORMAL']);
+  // plugout has no ASSIST EASY (the engine reads it as EASY), so its lowest choice is EASY, as under LR2.
+  expect(bottomShiftableGaugeItems('plugout')).toEqual([
+    { text: 'EASY', value: 'EASY' },
+    { text: 'NORMAL', value: 'GROOVE' },
+  ]);
   expect(bottomShiftableGaugeItems('____')[0]).toEqual({ text: 'ASSISTED EASY', value: 'ASSIST-EASY' });
 });
 
@@ -73,7 +84,7 @@ test('the S-RANDOM AC shares with LR2 sits in the AC group under AC rules', () =
 });
 
 test('every lane option the scene model offers is listed once under every ruleset', () => {
-  for (const ruleset of ['lr2', 'beatoraja', '____'] as const)
+  for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const)
     for (const duplicated of [false, true]) {
       const values = laneOptionItems(ruleset, duplicated).map((item) => item.value);
       expect([...values].sort()).toEqual([...resolveRandomModes(ruleset, duplicated)].sort());
@@ -123,4 +134,124 @@ test('turns the menu covers into a cover-set that leaves the LIFT alone', () => 
   ]);
   expect(hidden[0]).not.toHaveProperty('lift');
   expect(hidden[0]).not.toHaveProperty('liftOn');
+});
+
+test('the gauges list the judge ruleset’s own first, then the other sources’ as qualified picks (ADR 0019, #1171)', () => {
+  expect(gaugeItems('lr2')).toEqual([
+    { text: 'GROOVE', value: 'GROOVE' },
+    { text: 'HARD', value: 'HARD' },
+    { text: 'DEATH', value: 'DEATH' },
+    { text: 'EASY', value: 'EASY' },
+    { text: 'P.ATTACK', value: 'P-ATTACK' },
+    { text: 'G.ATTACK', value: 'G-ATTACK' },
+    { text: 'DEATH corrected', value: 'DEATH-CORRECTED' },
+    { text: 'NORMAL (beatoraja)', value: 'beatoraja:GROOVE' },
+    { text: 'HARD (beatoraja)', value: 'beatoraja:HARD' },
+    { text: 'EX-HARD (beatoraja)', value: 'beatoraja:EX-HARD' },
+    { text: 'HAZARD (beatoraja)', value: 'beatoraja:DEATH' },
+    { text: 'EASY (beatoraja)', value: 'beatoraja:EASY' },
+    { text: 'ASSIST EASY (beatoraja)', value: 'beatoraja:ASSIST-EASY' },
+    { text: 'NORMAL (????)', value: '____:GROOVE' },
+    { text: 'HARD (????)', value: '____:HARD' },
+    { text: 'EX-HARD (????)', value: '____:EX-HARD' },
+    { text: 'EASY (????)', value: '____:EASY' },
+    { text: 'ASSISTED EASY (????)', value: '____:ASSIST-EASY' },
+    { text: 'NORMAL (plugout)', value: 'plugout:GROOVE' },
+    { text: 'HARD (plugout)', value: 'plugout:HARD' },
+    { text: 'HAZARD (plugout)', value: 'plugout:DEATH' },
+    { text: 'EASY (plugout)', value: 'plugout:EASY' },
+    { text: 'EXNORMAL (plugout)', value: 'plugout:EX-GROOVE' },
+    { text: 'EXHARD (plugout)', value: 'plugout:EX-HARD' },
+    { text: 'EXHAZARD (plugout)', value: 'plugout:EX-DEATH' },
+    { text: 'EX EASY (plugout)', value: 'plugout:EX-EASY' },
+  ]);
+  expect(gaugeItems('beatoraja').map((item) => item.text)).toEqual([
+    'NORMAL',
+    'HARD',
+    'EX-HARD',
+    'HAZARD',
+    'EASY',
+    'ASSIST EASY',
+    'GROOVE (LR2)',
+    'HARD (LR2)',
+    'DEATH (LR2)',
+    'EASY (LR2)',
+    'P.ATTACK (LR2)',
+    'G.ATTACK (LR2)',
+    'DEATH corrected (LR2)',
+    'NORMAL (????)',
+    'HARD (????)',
+    'EX-HARD (????)',
+    'EASY (????)',
+    'ASSISTED EASY (????)',
+    'NORMAL (plugout)',
+    'HARD (plugout)',
+    'HAZARD (plugout)',
+    'EASY (plugout)',
+    'EXNORMAL (plugout)',
+    'EXHARD (plugout)',
+    'EXHAZARD (plugout)',
+    'EX EASY (plugout)',
+  ]);
+  expect(gaugeItems('____').map((item) => item.value)).toEqual([
+    'GROOVE',
+    'HARD',
+    'EX-HARD',
+    'EASY',
+    'ASSIST-EASY',
+    'lr2:GROOVE',
+    'lr2:HARD',
+    'lr2:DEATH',
+    'lr2:EASY',
+    'lr2:P-ATTACK',
+    'lr2:G-ATTACK',
+    'lr2:DEATH-CORRECTED',
+    'beatoraja:GROOVE',
+    'beatoraja:HARD',
+    'beatoraja:EX-HARD',
+    'beatoraja:DEATH',
+    'beatoraja:EASY',
+    'beatoraja:ASSIST-EASY',
+    'plugout:GROOVE',
+    'plugout:HARD',
+    'plugout:DEATH',
+    'plugout:EASY',
+    'plugout:EX-GROOVE',
+    'plugout:EX-HARD',
+    'plugout:EX-DEATH',
+    'plugout:EX-EASY',
+  ]);
+});
+
+test('a pick qualified with the judge ruleset is listed while it is selected', () => {
+  // `lr2:HARD` kept across a change to LR2: the select still has an item for it, after LR2's own gauges.
+  const items = gaugeItems('lr2', ['lr2:HARD', 'GROOVE']);
+  expect(items.slice(6, 9)).toEqual([
+    { text: 'DEATH corrected', value: 'DEATH-CORRECTED' },
+    { text: 'HARD (LR2)', value: 'lr2:HARD' },
+    { text: 'NORMAL (beatoraja)', value: 'beatoraja:GROOVE' },
+  ]);
+  expect(items).toHaveLength(gaugeItems('lr2').length + 1);
+  // Another source's pick is in the list already.
+  expect(gaugeItems('lr2', ['beatoraja:HARD'])).toEqual(gaugeItems('lr2'));
+  expect(gaugeChoices({ judgeRuleset: 'beatoraja', gauge: 'beatoraja:EX-HARD', gauge2P: 'lr2:HARD' })).toMatchObject({
+    'EX-HARD': 'EX-HARD',
+    'EX-HARD (beatoraja)': 'beatoraja:EX-HARD',
+    'HARD (LR2)': 'lr2:HARD',
+  });
+});
+
+test('a course bar dims NOTES COPY and DBLCOPY, which a course stage leaves out, and keeps DOUBLE (#1242)', () => {
+  expect(crazyNotesItems(false)).toEqual([
+    { text: 'OFF', value: 'OFF' },
+    { text: 'DOUBLE', value: 'DOUBLE' },
+    { text: 'COPY', value: 'COPY' },
+    { text: 'DBLCOPY', value: 'DBLCOPY' },
+  ]);
+  expect(crazyNotesItems(true)).toEqual([
+    { text: 'OFF', value: 'OFF' },
+    { text: 'DOUBLE', value: 'DOUBLE' },
+    { text: 'COPY', value: 'COPY', disabled: true },
+    { text: 'DBLCOPY', value: 'DBLCOPY', disabled: true },
+  ]);
 });

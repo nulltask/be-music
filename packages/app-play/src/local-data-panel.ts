@@ -6,6 +6,7 @@ import { until } from 'lit/directives/until.js';
 // Local data…). Each entry opens to show its value; values are drawn only when opened, so large stores stay cheap.
 
 import { decompressReplayText } from './services/replay-slots.ts';
+import { dialogShortcutAria, dialogShortcutHint } from './ui/dialog-shortcuts.ts';
 import {
   formatBytes,
   listLocalStorage,
@@ -137,10 +138,27 @@ export class LocalDataPanel {
           ${keyed(this.generation, this.databases)}
         </section>
         <div class="local-data-buttons">
-          <button class="btn" type="button" data-size="sm" data-variant="outline" @click=${() => void this.refresh()}>
-            Refresh
+          <button
+            class="btn"
+            type="button"
+            data-size="sm"
+            data-variant="outline"
+            data-dialog-shortcut="r"
+            aria-keyshortcuts=${dialogShortcutAria('r')}
+            @click=${() => void this.refresh()}
+          >
+            Refresh${dialogShortcutHint('r')}
           </button>
-          <button class="btn" type="button" data-size="sm" @click=${() => this.dialog.close()}>Close</button>
+          <button
+            class="btn"
+            type="button"
+            data-size="sm"
+            data-dialog-shortcut="cancel"
+            aria-keyshortcuts=${dialogShortcutAria('cancel')}
+            @click=${() => this.dialog.close()}
+          >
+            Close${dialogShortcutHint('cancel')}
+          </button>
         </div>
       </div>`,
       this.dialog,

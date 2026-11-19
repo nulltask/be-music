@@ -5,24 +5,24 @@
 // cleared when the database opens. From revision 1 on, a bump comes with a migration step from the revision before it,
 // and the stored records are migrated step by step.
 
-import { parseReplaySlotRecord, type ReplaySlotRecord } from './replay-slots.ts';
+import { parseReplayHistoryRecord, type ReplayHistoryRecord } from './replay-slots.ts';
 
 /** The revision this build writes. */
-export const REPLAY_SLOT_STORAGE_REVISION = 0;
+export const REPLAY_SLOT_STORAGE_REVISION = 1;
 
 /**
  * Migrates one stored record from revision `n - 1` to `n`, keyed by `n`; `undefined` drops the record and its replay.
  * Every revision from 1 to {@link REPLAY_SLOT_STORAGE_REVISION} needs its step.
  */
 export type ReplaySlotMigration = (record: unknown) => unknown;
-export const REPLAY_SLOT_MIGRATIONS: Readonly<Record<number, ReplaySlotMigration>> = {};
+export const REPLAY_SLOT_MIGRATIONS: Readonly<Record<number, ReplaySlotMigration>> = { 1: parseReplayHistoryRecord };
 
 /** What the stored slots need before this build reads them. */
 export interface ReplaySlotRevisionPlan {
   /** Slot keys whose record and replay are removed. */
   readonly remove: readonly string[];
   /** Records rewritten in their migrated shape. */
-  readonly put: readonly ReplaySlotRecord[];
+  readonly put: readonly ReplayHistoryRecord[];
   /** The revision to store, when it changes. */
   readonly revision?: number;
 }
@@ -58,7 +58,7 @@ export function planReplaySlotRevision(input: {
     }
   }
   const remove: string[] = [];
-  const put: ReplaySlotRecord[] = [];
+  const put: ReplayHistoryRecord[] = [];
   const kept = new Set<string>();
   for (const { key, value } of input.records) {
     let migrated: unknown = value;
@@ -66,7 +66,7 @@ export function planReplaySlotRevision(input: {
       if (migrated === undefined) break;
       migrated = step(migrated);
     }
-    const record = migrated === undefined ? undefined : parseReplaySlotRecord(migrated);
+    const record = migrated === undefined ? undefined : parseReplayHistoryRecord(migrated);
     if (record === undefined || record.key !== key) {
       remove.push(key);
       continue;

@@ -37,3 +37,46 @@ A key mode change touches the skin a host draws, the records (kept by chart), co
 ## Consequences
 
 Charts that force NOTES play as double or copied charts in every host, on replay and on the server. The fingerprint now separates charts that differ only in gameplay options. `bmfp0` is the development version, so no bump is needed, and charts without options keep their fingerprints. A replay can no longer strip or add the chart's program without changing the play fingerprint, which then names another chart. The DOUBLE placement is Be-Music's own rule and may differ from nanasigroove. The select screen still classifies a COPY chart by its authored key mode, and a NOTES COPY chart in a course plays single.
+
+## Amendment: nanasigroove's own conversions (#1184)
+
+The readings above were Be-Music's own. nanasigroove 1.552 converts the chart as follows, and Be-Music now does too:
+
+**DOUBLE copies whole lanes, one copy after another.** Each copy takes the source lane as it stands, so a lane that has already received a copy passes it on. The scratch and FREE ZONE are left alone; invisible objects travel with their lane, and mines do not.
+
+| Variant | Copies, in order                                                                             |
+| ------- | -------------------------------------------------------------------------------------------- |
+| 5 KEY   | 1→3, 2→4, 3→5, 4→2, 5→3: keys 3 and 5 carry keys 1, 3 and 5; keys 2 and 4 carry keys 2 and 4 |
+| 7 KEY   | 1→3, 2→4, 3→5, 4→2, 5→7, 6→4, 7→5                                                            |
+| 9 KEY   | 1→3, 2→4, 3→5, 4→2, 5→7, 6→4, 7→9, 8→6, 9→7 (keys 6 to 9 are channels 22 to 25)              |
+| 10 KEY  | 5 KEY on each side                                                                           |
+| 14 KEY  | 7 KEY on each side                                                                           |
+
+Each lane then keeps one object at each instant, preferring in turn the lane's own long note, its own key note, a long note from the same side, a key note from the same side, and otherwise whichever arrived first (the lane's own objects first, then the copies in the order they were made). Be-Music keeps two narrow rules of its own, because a Be-Music lane plays one object at a time:
+
+- The chart's own visible objects always stay. An instant the chart already doubles is the chart's, not DOUBLE's.
+- A long-note copy stays only when both its ends stay. A copy is dropped where it would overlap a long note already on its lane.
+
+nanasigroove defines no DOUBLE for 24 / 48 KEY, so it does nothing there and is diagnosed `unsupported-option`.
+
+**COPY** mirrors the 1P side onto 2P as above, but leaves the mines on 1P. **DBLCOPY** copies first and then doubles both sides of the double-play chart, on the 10 / 14 KEY copies. nanasigroove's COPY also turns 9 KEY into 18 KEY; Be-Music has no 18 KEY mode, so that stays unsupported. The course rule stays Be-Music's.
+
+**The player can select them too.** The Options dialog's **nanasigroove** folder offers **NOTES**: OFF, DOUBLE, COPY or DBLCOPY. A chart's own `774:NOTES_*` wins (`withPlayerChartPlayOptions`). The Leaderboard accepts a replay whose program adds the player's GOOD2BAD / GREAT2BAD, HELLJUDGE or NOTES where the chart sets none, and narrows the program with the replay's own version.
+
+**Replays.** A program with NOTES is now version 3, as with the CRAZY options in [ADR 0033](./0033-chart-authored-gameplay-options.md). Version 1 and 2 programs keep the readings above: mirror-lane DOUBLE on every variant with key lanes, COPY with the mines, and DBLCOPY doubling before it copies. Existing replays and records keep their notes.
+
+## Amendment: the course rule is kept (#1242)
+
+nanasigroove 1.552 has courses of its own, its EXPERT mode. Its manual (`_RESOURCE/05_4_expert.html`, `05_5_exedit.html`) and `_datafiles/course/template.txt` describe a `.crs` text file [C]: the template lists `.bms`, `.bme`, `.bml` and `.pms` stages in one course, so its stages need not share a key mode, and `#OPTCHANGE_NOTES` / `#FIXED_NOTES` let the course leave NOTES to the player, fix it, or draw it at random. Neither says what a chart's own `774:NOTES_COPY` does in such a course, and the game was not run, so that remains unknown.
+
+Be-Music does not read `.crs`. Its courses are LR2's and beatoraja's, each for one key mode (`keyMode`, from LR2's `line` or a table's `mode`; [course.md](../course.md)), so letting COPY turn a stage into a double-play chart would change what an LR2 or beatoraja course means. nanasigroove support exists for charts' `#OPTION` and must not change those options (AGENTS.md). The rule stays as it is: a course stage leaves COPY out, DBLCOPY keeps its DOUBLE, the declaration is diagnosed `unsupported-option`, and the stage does not update its chart's record. Replays and fingerprints are unchanged.
+
+The player's own NOTES follows the same rule, so it no longer does so silently: on a course bar the Options dialog shows COPY and DBLCOPY dimmed and not selectable, and DOUBLE, which a stage still plays, stays offered. A pick made on a chart bar is kept and applies again on the next chart.
+
+## Amendment: a player's NOTES COPY keeps no record (#1243)
+
+The replay recorded only the program a play ran with, which `withPlayerChartPlayOptions` merges from the chart's `#OPTION` and the player's selections, so a chart that forces COPY and a player who selects COPY looked the same, and a player's COPY play of a 7 KEY chart landed in that chart's record.
+
+nanasigroove 1.552's manual says FREE mode allows every option and records the score; only AUTO and VISUAL keep none, and AUTO-SC counts as an EASY clear [C]. It names no limit for NOTES or CRAZY. Be-Music's records are kept per chart and its key mode, though: a chart that forces COPY has a record of the double-play chart, and a course stage that left the copy out does not update it (above). A play the player's COPY copied is not a play of the chart's key mode either, so Be-Music classifies it `no-save` (source `be-music`, option `nanasi-notes:COPY` or `nanasi-notes:DBLCOPY`): it keeps no local record, and the Leaderboard stores it unranked. This is Be-Music's rule, not nanasigroove's. The player's DOUBLE, GOOD2BAD / GREAT2BAD and HELLJUDGE keep the chart's key mode and only make the play harder, so they stay ordinary plays, as nanasigroove records them.
+
+The replay now names the options the player added in `play.playerChartPlayOptions` (`playerChartPlayOptionsOf`): those of the effective program the chart's declaration does not set, as they ran, so a course stage that left the player's COPY out names none and a DBLCOPY that kept its DOUBLE names DOUBLE. Each must equal the program's value. The Leaderboard checks that the field names exactly the options the play document's `playOptions` do not declare. The replay format is still at its development revision, so the field ships without a version bump ([ADR 0019](./0019-source-qualified-option-values.md)); player NOTES has not been released, so no earlier replay lacks it.

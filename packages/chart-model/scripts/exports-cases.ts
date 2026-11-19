@@ -51,6 +51,18 @@ function getBenchFingerprintDocument(
   return document;
 }
 
+const BENCH_LRX_BGA_CHART = createEmptyJSON('lrx');
+BENCH_LRX_BGA_CHART.lrx = {
+  bga: [
+    { slot: 0, tick: 0, image: 0, key: '01', dst: [0, 0, 640, 360], color: [255, 255, 255, 255], accel: 2 },
+    { slot: 0, tick: 480, endTick: 960, image: 3, key: '04', chain: true, dst: [640, 360, 640, 360] },
+  ],
+};
+const lrxBGAChart = BENCH_LRX_BGA_CHART;
+const lrxBGAProgram = chartAPI.resolveLRXBGAProgram(BENCH_LRX_BGA_CHART, (beat) => beat / 2)!;
+const BENCH_LRX_END_CHART = createEmptyJSON('lrx');
+BENCH_LRX_END_CHART.lrx = { endTick: 960 };
+const lrxEndResolved = chartAPI.resolveChart(BENCH_LRX_END_CHART);
 const BENCH_BMSON_BGA = createEmptyJSON('bmson');
 BENCH_BMSON_BGA.bmson.bga = {
   header: [
@@ -92,6 +104,21 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart-model.isChartPlayOptionDeclaration', {
     run: () => {
       chartAPI.isChartPlayOptionDeclaration('774:RANDOM_MIRROR');
+    },
+  });
+  define('chart-model.withPlayerChartPlayOptions', {
+    run: () => {
+      chartAPI.withPlayerChartPlayOptions({ version: 1, options: { random: 'RANDOM' } }, { hellJudge: true });
+    },
+  });
+  define('chart-model.playerChartPlayOptionsOf', {
+    run: () => {
+      chartAPI.playerChartPlayOptionsOf({ judge: 'GREAT2BAD' }, { judge: 'GREAT2BAD', notes: 'COPY' });
+    },
+  });
+  define('chart-model.isLegacyChartPlayOptionProgram', {
+    run: () => {
+      chartAPI.isLegacyChartPlayOptionProgram({ version: 1, options: { judge: 'GOOD2BAD' } });
     },
   });
   define('chart-model.hasChartPlayOptions', {
@@ -358,6 +385,13 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.compareEvents(fixtures.eventA, fixtures.eventB);
     },
   });
+  define('chart-model.isPMSChartPath', {
+    run: () => {
+      chartAPI.isPMSChartPath('Songs/Bench/main.pms');
+      chartAPI.isPMSChartPath('music/bench/01_bench_n.n2s');
+      chartAPI.isPMSChartPath('Songs/Bench.pms/main.bme');
+    },
+  });
   define('chart-model.resolveChartPlayVariant', {
     run: (fixtures) => {
       chartAPI.resolveChartPlayVariant({
@@ -460,6 +494,11 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.resolveReferencedBmsWAVResources(BENCH_EXWAV_CHART);
     },
   });
+  define('chart-model.resolveBmsExWAVDeclarations', {
+    run: () => {
+      chartAPI.resolveBmsExWAVDeclarations(BENCH_EXWAV_CHART);
+    },
+  });
   define('chart-model.collectBmsWAVPlaybackModifiers', {
     run: () => {
       chartAPI.collectBmsWAVPlaybackModifiers(BENCH_EXWAV_CHART);
@@ -521,6 +560,31 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart-model.isPlayLaneSoundChannel', {
     run: () => {
       chartAPI.isPlayLaneSoundChannel('31');
+    },
+  });
+  define('chart-model.resolveLRXBGAProgram', {
+    run: () => {
+      chartAPI.resolveLRXBGAProgram(lrxBGAChart, (beat) => beat / 2);
+    },
+  });
+  define('chart-model.resolveLRXPlayEndSeconds', {
+    run: () => {
+      chartAPI.resolveLRXPlayEndSeconds(lrxEndResolved);
+    },
+  });
+  define('chart-model.sampleLRXBGA', {
+    run: () => {
+      chartAPI.sampleLRXBGA(lrxBGAProgram, 0, 0.75, () => [256, 256]);
+    },
+  });
+  define('chart-model.easeLRXBGA', {
+    run: () => {
+      chartAPI.easeLRXBGA(0, 100, 0, 1, 0.5, 2);
+    },
+  });
+  define('chart-model.playsAtKeysoundVolume', {
+    run: () => {
+      chartAPI.playsAtKeysoundVolume('01', { lrx: { keyVolume: true } });
     },
   });
   define('chart-model.mapBMSLongNoteChannelToPlayable', {

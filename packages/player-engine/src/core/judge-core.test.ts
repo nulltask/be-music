@@ -339,19 +339,22 @@ describe('judge core', () => {
     expect(state.summary.minePoor).toBe(1);
   });
 
-  test.each(['lr2', 'beatoraja', '____'] as const)('%s: a lane held through a mine detonates it', (ruleset) => {
-    const state = createCore(LONG_AND_MINE, ruleset);
-    stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
-    const effects = [...stepJudgeCore(state, advance(2.49)), ...stepJudgeCore(state, advance(2.6))];
-    expect(effects.filter((effect) => effect.kind === 'trace' && effect.name === 'mine-hit')).toHaveLength(1);
-  });
+  test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
+    '%s: a lane held through a mine detonates it',
+    (ruleset) => {
+      const state = createCore(LONG_AND_MINE, ruleset);
+      stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
+      const effects = [...stepJudgeCore(state, advance(2.49)), ...stepJudgeCore(state, advance(2.6))];
+      expect(effects.filter((effect) => effect.kind === 'trace' && effect.name === 'mine-hit')).toHaveLength(1);
+    },
+  );
 
   test.each([
     ['lr2', 0],
-    ['____', 1],
+    ['____', 0],
     ['beatoraja', 0],
   ] as const)('%s: a press just after a mine crossed, inside PGREAT, detonates it %i time(s)', (ruleset, hits) => {
-    // LR2beta3 has no late press window; only the provisional That-Which-Must-Not-Be-Named model keeps symmetric PGREAT.
+    // LR2beta3 has no late press window, That-Which-Must-Not-Be-Named imports LR2's policy, and beatoraja is hold-only.
     const state = createCore(LONG_AND_MINE, ruleset);
     const effects = [...stepJudgeCore(state, advance(2.501)), ...stepJudgeCore(state, press(2.505, '12'))];
     effects.push(...stepJudgeCore(state, advance(2.6)));
@@ -465,6 +468,7 @@ describe('judge core', () => {
 
     test.each([
       ['lr2', 1],
+      ['____', 1],
       ['beatoraja', 0],
     ] as const)('%s: a tap pressed and released just before the crossing detonates %i time(s)', (ruleset, hits) => {
       // Down 3 ms before the mine, up 1 ms before it. LR2 detonates on a press inside ahead-only GREAT; beatoraja only when the
@@ -477,7 +481,7 @@ describe('judge core', () => {
       ).toEqual([hits, hits, hits]);
     });
 
-    test.each(['lr2', 'beatoraja'] as const)(
+    test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
       '%s: a key let go in the frame right after the crossing detonates',
       (r) => {
         expect(
@@ -489,14 +493,42 @@ describe('judge core', () => {
       },
     );
 
-    test.each(['lr2', 'beatoraja'] as const)('%s: at the same µs, the input comes before the crossing', (ruleset) => {
-      // Down exactly at the crossing is down as it crosses.
+    test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
+      '%s: at the same µs, the input comes before the crossing',
+      (ruleset) => {
+        // Down exactly at the crossing is down as it crosses.
+        expect(
+          mineHits(ruleset, [
+            [2500, 'down'],
+            [2600, 'up'],
+          ]),
+        ).toEqual([1, 1, 1]);
+      },
+    );
+
+    test("AC imports LR2's policy: a late press inside PGREAT spares the mine", () => {
       expect(
-        mineHits(ruleset, [
-          [2500, 'down'],
-          [2600, 'up'],
+        mineHits('____', [
+          [2503, 'down'],
+          [2505, 'up'],
+        ]),
+      ).toEqual([0, 0, 0]);
+    });
+
+    test('AC reads the press reach on its own GREAT window, ahead of the line only', () => {
+      // AC's GREAT reaches 33.33 ms: 30 ms ahead detonates, 40 ms ahead does not.
+      expect(
+        mineHits('____', [
+          [2470, 'down'],
+          [2472, 'up'],
         ]),
       ).toEqual([1, 1, 1]);
+      expect(
+        mineHits('____', [
+          [2460, 'down'],
+          [2462, 'up'],
+        ]),
+      ).toEqual([0, 0, 0]);
     });
 
     test('beatoraja: a key let go at the very µs of the crossing is up as it crosses', () => {
@@ -628,7 +660,7 @@ describe('judge core', () => {
     expect(state.activeLongNotes.size).toBe(0);
   });
 
-  test.each(['lr2', 'beatoraja', '____'] as const)(
+  test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
     '%s: a replay produces the same effects however its advances are spaced',
     (ruleset) => {
       const stream = inputs(
@@ -656,7 +688,7 @@ describe('judge core', () => {
 });
 
 describe('practice start', () => {
-  for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+  for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
     test(`${ruleset}: consumes earlier heads and tails without judgments or gauge changes`, () => {
       const state = createCore(LONG_AND_MINE, ruleset, { practiceFromSeconds: 2.75 });
       const gauge = state.summary.gauge?.current;

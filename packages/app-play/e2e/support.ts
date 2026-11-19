@@ -484,6 +484,13 @@ export const test = base.extend<{ player: Player }>({
         errors.push(`console: ${message.text()}`);
       }
     });
+    // An empty Bemuse server list keeps every spec from listing the public servers over the network; a spec that
+    // stores its own list keeps it.
+    await page.addInitScript(() => {
+      if (window.localStorage.getItem('be-music.bemuse-server-urls') === null) {
+        window.localStorage.setItem('be-music.bemuse-server-urls', '[]');
+      }
+    });
     const player = new Player(page);
     await use(player);
     // Checklist item 11: nothing in the flow throws or logs an error.
@@ -498,6 +505,11 @@ export { expect } from '@playwright/test';
  * all. The nightly run plays every test.
  */
 export const SMOKE = { tag: '@smoke' } as const;
+
+/** Assign a smoke test to a CI group. Smoke tests without a group run in the fourth job. */
+export function smokeGroup(group: 1 | 2 | 3): { tag: string[] } {
+  return { tag: [SMOKE.tag, `@smoke-group-${group}`] };
+}
 
 /** The checklist library's song folder and course folder, as the player lists them after a drop of `songs`. */
 export const SONGS = 'fixtures';

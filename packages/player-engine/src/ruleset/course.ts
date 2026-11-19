@@ -1,5 +1,6 @@
 import { createLR2GoodAttackGauge, createLR2PerfectAttackGauge } from './lr2-attack.ts';
 import type { GaugeGutsStep, GaugeSpec, JudgeWindowSetUs, RulesetId, RulesetWindowTables } from './definitions.ts';
+import { resolvePlugoutCourseGauge, resolvePlugoutGaugeId, resolvePlugoutGradeStageStart } from './plugout.ts';
 
 /**
  * Course play (LR2 grade / expert / nonstop courses and beatoraja courses): which gauge a stage runs on and how a
@@ -16,9 +17,60 @@ export type CourseGaugeSet = 'lr2' | '5k' | '7k' | '9k' | '24k';
 /** beatoraja's `NO_GOOD` / `NO_GREAT` course constraints. */
 export type CourseJudgeConstraint = 'no-good' | 'no-great';
 
-/** LR2 advances at HP >= 2; the class gauges of the other rulesets require a positive value. */
-export function isCourseStageFailed(ruleset: string, gauge: { final: number; failedMidPlay?: boolean }): boolean {
-  return gauge.failedMidPlay === true || (ruleset.split('/')[0] === 'lr2' ? gauge.final < 2 : gauge.final <= 0);
+/**
+ * LR2 advances at HP >= 2; the class gauges of the other rulesets require a positive value. The rule is the course
+ * gauge's own: a gauge of another source (`gauge.source`, #1171) keeps that source's rule under this ruleset's judging.
+ */
+export function isCourseStageFailed(
+  ruleset: string,
+  gauge: { final: number; failedMidPlay?: boolean; source?: string },
+): boolean {
+  const source = gauge.source ?? ruleset.split('/')[0];
+  // plugout's course gauges fail as they empty, or (grade NORMAL / EASY) as their lives run out: a gauge left at 0 with
+  // lives to spare passes the stage.
+  if (source === 'plugout') return gauge.failedMidPlay === true;
+  return gauge.failedMidPlay === true || (source === 'lr2' ? gauge.final < 2 : gauge.final <= 0);
+}
+
+/**
+ * Whether a course run goes on after a stage the player gave up with ESC. The rule is the course gauge's own, as the
+ * stage failure rule is (`gauge.source`, #1171):
+ *
+ * - LR2 shows the given-up stage as FAILED and goes on to the next stage while the gauge is at 2 % or more, provided the
+ *   stage judged a GOOD or better; otherwise it returns to the select screen (`LR2body.exe`). The course lamp is then
+ *   FAILED, since a stage was left unplayed.
+ * - beatoraja's class gauges end the run: `BMSPlayer.stopPlay` fails the stage and fills its gauge log with 0 up to the
+ *   chart's end, and `MusicResult` ends a course whose gauge stands at 0 or less. That-Which-Must-Not-Be-Named's courses
+ *   run on these gauges and follow them.
+ * - plugout leaves nothing to follow, and its run ends there: Be-Music's choice, as before LR2's rule was told apart.
+ *
+ * A run that has no last stage (an endless RANDOM MIX) never goes on: ESC is how its player stops it.
+ */
+export function courseGoesOnAfterGivingUp(
+  ruleset: string,
+  result: {
+    gauge: { final: number; failedMidPlay?: boolean; source?: string };
+    judge: { pgreat: number; great: number; good: number };
+  },
+): boolean {
+  return givenUpCourseStageShowsResult(ruleset, result) && !isCourseStageFailed(ruleset, result.gauge);
+}
+
+/**
+ * Whether a course stage the player gave up with ESC shows its result, as FAILED, before the run goes on or ends. LR2
+ * shows it once the stage judged a GOOD or better, whether or not the gauge holds; with none it returns to the select
+ * screen (`LR2body.exe`). Under a gauge of another source the run goes on to the course result with no stage result
+ * shown: Be-Music's narrower choice, since only LR2's screen flow is verified (`gauge.source`, #1171).
+ */
+export function givenUpCourseStageShowsResult(
+  ruleset: string,
+  result: {
+    gauge: { source?: string };
+    judge: { pgreat: number; great: number; good: number };
+  },
+): boolean {
+  const source = result.gauge.source ?? ruleset.split('/')[0];
+  return source === 'lr2' && result.judge.pgreat + result.judge.great + result.judge.good > 0;
 }
 
 export interface RulesetCourseOptions {
@@ -136,9 +188,27 @@ export function resolveClassGauge(gaugeId: string, gaugeSet: CourseGaugeSet): Ga
     initial: 100,
     border: 0,
     survival: true,
-    values: row.values,
-    guts: row.guts,
+    // beatoraja runs its class gauges in Java `float` too; LR2's course HP is `double` (#1090).
+    ...(gaugeSet === 'lr2' ? { values: row.values, guts: row.guts } : float32ClassGaugeRow(row)),
   };
+}
+
+/** The float32 reading of each class gauge row, built once per row: the rows are constant. */
+const FLOAT32_CLASS_GAUGE_ROWS = new WeakMap<ClassGaugeRow, Float32ClassGaugeRow>();
+
+type Float32ClassGaugeRow = Pick<GaugeSpec, 'values' | 'guts'> & { float32: true };
+
+function float32ClassGaugeRow(row: ClassGaugeRow): Float32ClassGaugeRow {
+  let float32 = FLOAT32_CLASS_GAUGE_ROWS.get(row);
+  if (float32 === undefined) {
+    float32 = {
+      values: row.values.map(Math.fround) as unknown as GaugeSpec['values'],
+      guts: row.guts.map((step) => ({ ...step, multiplier: Math.fround(step.multiplier) })),
+      float32: true,
+    };
+    FLOAT32_CLASS_GAUGE_ROWS.set(row, float32);
+  }
+  return float32;
 }
 
 /** The class-gauge set a play mode uses when the course names none (beatoraja's `BMSPlayerRule` per mode). */
@@ -163,6 +233,8 @@ export function resolveDefaultCourseGaugeSet(laneMode: string): CourseGaugeSet {
 export function resolveCourseGaugeId(rulesetId: RulesetId, kind: RulesetCourseKind, selectedGauge: string): string {
   if (rulesetId !== 'lr2' && ['P-ATTACK', 'G-ATTACK'].includes(selectedGauge))
     throw new RangeError('Attack gauges are available only for LR2.');
+  // plugout's course gauge follows the single-play gauge picked (`resolvePlugoutCourseGauge`).
+  if (rulesetId === 'plugout') return resolvePlugoutCourseGauge(resolvePlugoutGaugeId(selectedGauge), kind, 0).id;
   if (rulesetId === 'lr2') {
     const prefix = kind === 'grade' ? 'GRADE' : 'COURSE';
     switch (selectedGauge) {
@@ -204,16 +276,23 @@ export function resolveCourseGauge(
   course: RulesetCourseOptions,
   laneMode: string,
   damage: number,
+  noteCount = 0,
 ): GaugeSpec {
   if (rulesetId !== 'lr2' && ['P-ATTACK', 'G-ATTACK'].includes(gaugeId))
     throw new RangeError('Attack gauges are available only for LR2.');
   const spec =
     rulesetId === 'lr2'
       ? resolveLR2CourseGauge(gaugeId, damage)
-      : resolveClassGauge(gaugeId, course.gaugeSet ?? resolveDefaultCourseGaugeSet(laneMode));
-  const initial = course.initialGauge;
+      : rulesetId === 'plugout'
+        ? resolvePlugoutCourseGauge(gaugeId, course.kind, noteCount)
+        : resolveClassGauge(gaugeId, course.gaugeSet ?? resolveDefaultCourseGaugeSet(laneMode));
+  let initial = course.initialGauge;
   if (initial === undefined || !Number.isFinite(initial)) return spec;
-  return { ...spec, initial: Math.min(spec.max, Math.max(spec.min, initial)) };
+  // plugout starts a grade stage at 0.01 % at least, so a stage left on lives plays its gauge again.
+  if (rulesetId === 'plugout' && course.kind === 'grade') initial = resolvePlugoutGradeStageStart(initial);
+  // Each resolver above builds a new spec, so it is set in place rather than copied.
+  spec.initial = Math.min(spec.max, Math.max(spec.min, initial));
+  return spec;
 }
 
 function collapseWindows(set: JudgeWindowSetUs, constraint: CourseJudgeConstraint): JudgeWindowSetUs {

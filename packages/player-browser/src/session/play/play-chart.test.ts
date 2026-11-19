@@ -95,7 +95,7 @@ describe('applyRandomMode', () => {
     ];
     const expected = chord();
     applyRandomMode(expected, KEYS_1P, name, seededRandom(7), { ruleset: source });
-    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+    for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
       const notes = chord();
       applyRandomMode(notes, KEYS_1P, `${source}:${name}`, seededRandom(7), { ruleset });
       expect(channelsOf(notes)).toEqual(channelsOf(expected));
@@ -105,7 +105,7 @@ describe('applyRandomMode', () => {
   test('RANDOM is one option: every ruleset and every older source-qualified value draws the same arrangement', () => {
     const expected = beatorajaShuffle(KEYS_7, seededRandom(3));
     for (const value of ['RANDOM', 'lr2:RANDOM', 'beatoraja:RANDOM', '____:RANDOM'] as const)
-      for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+      for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
         const notes = notesOn(KEYS_7);
         applyRandomMode(notes, KEYS_1P, value as 'RANDOM', seededRandom(3), { ruleset });
         expect(channelsOf(notes)).toEqual(expected);
@@ -130,7 +130,7 @@ describe('applyRandomMode', () => {
   });
 
   test('a fixed key moves the original key 1 to the chosen key after RANDOM, under every ruleset', () => {
-    for (const ruleset of ['lr2', 'beatoraja', '____'] as const)
+    for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const)
       for (const fixedLane of [1, 3, 7]) {
         const notes = notesOn(KEYS_7);
         applyRandomMode(notes, KEYS_1P, 'RANDOM', seededRandom(11), { ruleset, fixedLane, playVariant: '7' });
@@ -155,7 +155,7 @@ describe('applyRandomMode', () => {
     const lanes = resolveLaneOptionChannels('2P', playVariant);
     const drawn = beatorajaShuffle(lanes, seededRandom(11));
     const fixedLane = lanes.indexOf(drawn[0]!) === 0 ? 2 : 1;
-    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+    for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
       const notes = notesOn(lanes);
       applyRandomMode(notes, lanes, 'RANDOM', seededRandom(11), { ruleset, side: '2P', fixedLane, playVariant });
       expect(channelsOf(notes)).toEqual(drawn);
@@ -844,12 +844,31 @@ test.each([
   }
 });
 
-test.each(['10', '14'] as const)('the shared S-RANDOM choice keeps AC placement in %s KEY', (playVariant) => {
-  const scratch = '16';
-  const notes = notesOn([scratch, '11'], 1);
-  const lanes = resolveLaneOptionChannels('1P', playVariant);
-  applyRandomMode(notes, lanes, 'lr2:S-RANDOM', () => 0.95, { ruleset: '____', scratch, playVariant });
-  expect(channelsOf(notes)).toEqual([scratch, lanes.at(-1)]);
+test.each([
+  ['lr2', 'lr2:S-RANDOM'],
+  ['beatoraja', 'lr2:S-RANDOM'],
+  ['____', 'lr2:S-RANDOM'],
+  ['____', 'S-RANDOM'],
+] as const)('%s judging runs LR2 14 KEY scratch avoidance for %s', (ruleset, mode) => {
+  const json = parseChart('#BPM 120\n#PLAYER 3\n#00116:01\n#00111:01\n#00219:01\n#00229:01', 'bms');
+  const entry: LibraryChart = {
+    id: 'scratch-order',
+    sourceId: 'scratch-order',
+    sourceLabel: 'Scratch order',
+    sourceKind: 'directory',
+    chartPath: 'scratch-order.bms',
+    directoryLabel: '',
+    fileLabel: 'scratch-order.bms',
+    title: 'Scratch order',
+    totalNotes: 4,
+    chart: json,
+  };
+  const play = new PlaySession({ judgeRuleset: ruleset, random1P: mode, randomSeed1P: '48' });
+  play.chart = entry;
+  prepareChart(play, entry);
+  expect(play.resolvedPlayChart?.playVariant).toBe('14');
+  expect(play.notes.find((note) => note.event.channel === '11')?.channel).toBe('11');
+  expect(play.notes.find((note) => note.event.channel === '16')?.channel).toBe('16');
 });
 
 test('10 KEY LR2 S-RANDOM still permits a far draw with a scratch on a bar line', () => {
@@ -861,4 +880,60 @@ test('10 KEY LR2 S-RANDOM still permits a far draw with a scratch on a bar line'
     lr2Objects: [{ op: 2, order: 1, timeMs: 1000 }],
   });
   expect(channelsOf(notes)).toEqual(['16', '15']);
+});
+
+test.each(['MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER', 'CONVERGE'] as const)(
+  'LR2 %s includes the scratch independently for 1P',
+  (mode) => {
+    const notes = notesOn(['16', '11', '26', '21'], 1);
+    const draws = mode === 'RANDOM' ? [0.99] : mode === 'CONVERGE' ? [0, 0, 0.99] : [0, 0.99];
+    applyRandomMode(notes, resolveLaneOptionChannels('1P', '7'), mode, () => draws.shift() ?? 0, {
+      side: '1P',
+      playVariant: '7',
+      scratch: '16',
+      lr2RandomScratch: true,
+    });
+    if (mode === 'MIRROR' || mode === 'RANDOM') expect(notes[0]?.channel).toBe('19');
+    else expect(channelsOf(notes).slice(0, 2).sort()).toEqual(['16', '19']);
+    expect(channelsOf(notes).slice(2)).toEqual(['26', '21']);
+  },
+);
+
+test('LR2 scratch-inclusive RANDOM fixes the source key that lands on scratch', () => {
+  const notes = notesOn(['16', '11', '12', '15']);
+  const draws = [0.99];
+  applyRandomMode(notes, resolveLaneOptionChannels('1P', '5'), 'RANDOM', () => draws.shift() ?? 0, {
+    side: '1P',
+    playVariant: '5',
+    scratch: '16',
+    lr2RandomScratch: true,
+    fixedLane: 2,
+  });
+  expect(channelsOf(notes)).toEqual(['15', '11', '16', '12']);
+});
+
+test('LR2 scratch-inclusive CONVERGE offsets the 2P target from scratch', () => {
+  const notes = notesOn(['21']);
+  applyRandomMode(notes, resolveLaneOptionChannels('2P', '14'), 'lr2:CONVERGE', () => 0.99, {
+    side: '2P',
+    playVariant: '14',
+    scratch: '26',
+    lr2RandomScratch: true,
+    fixedLane: 2,
+  });
+  expect(channelsOf(notes)).toEqual(['22']);
+});
+
+test('scratch inclusion leaves PMS MIRROR and beatoraja S-RANDOM on their key domains', () => {
+  const pms = resolveLaneOptionChannels('1P', '9');
+  const notes = notesOn(pms);
+  applyRandomMode(notes, pms, 'MIRROR', () => 0, { playVariant: '9', scratch: '16', lr2RandomScratch: true });
+  expect(channelsOf(notes)).toEqual([...pms].reverse());
+  const sp = notesOn(['16', '11']);
+  applyRandomMode(sp, KEYS_1P, 'beatoraja:S-RANDOM', () => 0, {
+    playVariant: '7',
+    scratch: '16',
+    lr2RandomScratch: true,
+  });
+  expect(channelsOf(sp)).toEqual(['16', '11']);
 });

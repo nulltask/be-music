@@ -9,16 +9,17 @@ import { resolveLaneOptionChannels, type ChannelLike } from './lane-layout.ts';
 
 /**
  * A chart's forced arrangement (`774:RANDOM_*`, #844) for a host without lane options of its own: the engine's own
- * chart preparation, which the terminal plays through (#932). The domains are those of `applyChartPlayOptions`, which the
- * browser maps onto its lane options:
+ * chart preparation, which the terminal plays through (#932). The browser runs its ALL / ALL+ on a double-play chart
+ * here too (#1245), and maps the others onto its lane options (`applyChartPlayOptions`). The domains are:
  *
  * - `MIRROR`: each side's keys reversed.
  * - `RANDOM`: each side's keys permuted; `RANDOM+` with the side's scratch lanes too (keys only where there are none).
  * - `ALL` / `ALL+` on a double-play chart: one permutation of both sides' keys, with `ALL+` both sides' scratch lanes too;
  *   on a single-play chart they are `RANDOM` / `RANDOM+`.
  *
- * A permutation is drawn uniformly, target by target (as beatoraja's lane shuffle draws it), from `random`. Mines and
- * invisible objects move with the notes of their lane. Changes `channel` in place.
+ * A permutation is drawn uniformly, target by target (as beatoraja's lane shuffle draws it), from `random`, under every
+ * judge ruleset: nanasigroove's catalog gives no algorithm, so this is Be-Music's reading, and no LR2 or beatoraja lane
+ * option runs it. Mines and invisible objects move with the notes of their lane. Changes `channel` in place.
  */
 export function arrangeChartPlayLanes(
   objects: ReadonlyArray<Array<{ channel: string }>>,

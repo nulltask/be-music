@@ -16,8 +16,9 @@
  * - **The play graph.** A play keeps its own `interactive` context and audio bus ({@link createPlayAudioGraph}) for the
  *   lowest key-to-sound latency and so a play's hundreds of sources and its compressors stay apart from the system
  *   sounds; {@link AudioService.openPlayGraph} opens and tracks it. See ADR 0007.
- * - **The chart played last.** {@link AudioService.chartSamples} keeps the decoded samples of one chart past its play,
- *   so a quick retry of it does not decode them again (`runtime/chart-sample-cache.ts`).
+ * - **The chart played last.** {@link AudioService.chartSamples} keeps the decoded samples of one play past it, so a
+ *   quick retry, or a play of another chart of the same track, does not decode them again
+ *   (`runtime/chart-sample-cache.ts`).
  *
  * Routing on the system context:
  *
@@ -89,7 +90,8 @@ export interface AudioServiceSkinSounds extends BeatorajaSkinAudio {
 export interface AudioServicePreview {
   /**
    * Focuses the chart under the cursor; it starts after the focus delay. `undefined` stops it and forgets the focus,
-   * so focusing the same chart again re-arms it. The preview belongs to `owner` until the next focus.
+   * so focusing the same chart again re-arms it. The preview belongs to `owner` until the next focus. A focus off the
+   * track of the chart played last releases its samples ({@link AudioService.chartSamples}).
    */
   focus(target: ChartPreviewTarget | undefined, owner?: AudioOwner): void;
   /**
@@ -97,6 +99,16 @@ export interface AudioServicePreview {
    * previous window or the focus preview short. The preview belongs to `owner` until the next focus or window.
    */
   playWindow(target: ChartPreviewTarget, window: ChartPreviewWindow, owner?: AudioOwner): void;
+  /**
+   * Gets `target`'s `bars` ready to sound at a kept-pitch tempo, stretching what each sounds in the background, nearest
+   * `aroundSeconds` first (`ChartPreviewEngine.prepareWindows`); `undefined` settings stop that.
+   */
+  prepareWindows(
+    target: ChartPreviewTarget,
+    settings: Omit<ChartPreviewWindow, 'startSeconds' | 'endSeconds'> | undefined,
+    bars?: readonly Pick<ChartPreviewWindow, 'startSeconds' | 'endSeconds'>[],
+    aroundSeconds?: number,
+  ): void;
   /** Stops the preview and forgets the focus. */
   stop(): void;
   /** Whether a preview is audible now. */
@@ -126,6 +138,13 @@ export interface ChartPreviewPlayer {
   focus(target: ChartPreviewTarget | undefined): void;
   /** Sounds a window of a chart at once; an engine without it sounds nothing. */
   playWindow?(target: ChartPreviewTarget, window: ChartPreviewWindow): void;
+  /** Stretches a chart's bars in the background; an engine without it stretches each window as it plays. */
+  prepareWindows?(
+    target: ChartPreviewTarget,
+    settings: Omit<ChartPreviewWindow, 'startSeconds' | 'endSeconds'> | undefined,
+    bars?: readonly Pick<ChartPreviewWindow, 'startSeconds' | 'endSeconds'>[],
+    aroundSeconds?: number,
+  ): void;
   stop(): void;
   dispose(): void;
 }
@@ -198,9 +217,11 @@ export interface AudioService {
     options?: { readonly owner?: AudioOwner },
   ): PlayAudioHandle;
   /**
-   * The decoded samples of the chart played last, for a quick retry of it (`loadPlaySamples` reads and fills it). One
-   * chart at most: a play of another chart releases them. The host calls `release()` when a retry is no longer likely
-   * (back on the select screen, `pagehide`); `dispose()` releases them too.
+   * The decoded samples of the chart played last, for a quick retry of it or a play of another chart of its track
+   * (`loadPlaySamples` reads and fills it). One play's samples at most: a play lets go of the files it does not sound,
+   * and a play from another source releases them all. The preview's focus on a chart of another track releases them
+   * (`preview.focus`), the host calls `release()` when a play is no longer likely (`pagehide`), and `dispose()` does
+   * too.
    */
   readonly chartSamples: ChartSampleCache;
   /**
@@ -558,6 +579,9 @@ export function createAudioService(options: AudioServiceOptions = {}): AudioServ
   const preview: AudioServicePreview = {
     focus(target, owner) {
       if (disposed) return;
+      // The samples kept from the last play stay while the cursor is on a chart of its track, for a play of another
+      // chart of it (`ChartSampleCache.keepTrackOf`).
+      chartSamples.keepTrackOf(target?.source, target?.chart.chartPath);
       if (target === undefined) {
         previewEngine?.focus(undefined);
         previewOwner = undefined;
@@ -576,6 +600,12 @@ export function createAudioService(options: AudioServiceOptions = {}): AudioServ
       previewOwner = owner;
       if (system !== undefined) resumeContext(system.context);
       engine.playWindow?.(target, window);
+    },
+    prepareWindows(target, settings, bars, aroundSeconds) {
+      if (disposed) return;
+      // Nothing to stop before the engine exists.
+      if (settings === undefined && previewEngine === undefined) return;
+      ensurePreview()?.prepareWindows?.(target, settings, bars, aroundSeconds);
     },
     stop() {
       previewEngine?.focus(undefined);

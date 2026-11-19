@@ -100,6 +100,7 @@ const PLAY_OPTIONS: PlayOptions = {
   hsFix: 'AVERAGE',
   laneCover: true,
   bga: 'OFF',
+  lr2RandomScratch1P: true,
 };
 
 const HASHES = { sha256: 'f'.repeat(64), md5: 'e'.repeat(32) } as ChartFileHashes;
@@ -125,12 +126,26 @@ function rereplay(tempo: number | null = 1.2): BeMusicReplay {
 }
 
 describe('resolvePlaySceneOptions: a single play', () => {
+  test('records device names in the replay only when the player opted in', () => {
+    expect(resolvePlaySceneOptions(input()).settings).not.toHaveProperty('replayDeviceNames');
+    expect(resolvePlaySceneOptions(input({ guiState: gui({ replayDeviceNames: false }) })).settings).not.toHaveProperty(
+      'replayDeviceNames',
+    );
+    expect(
+      resolvePlaySceneOptions(input({ guiState: gui({ replayDeviceNames: true }) })).settings.replayDeviceNames,
+    ).toBe(true);
+  });
+
   test('takes the Options dialog’s picks, the play options in force and the slider’s tempo', () => {
     const { autoPlay, tempo, settings, course } = resolvePlaySceneOptions(input({ chartHashes: HASHES }));
     expect(autoPlay).toBe(false);
     expect(tempo).toBe(0.9);
     expect(course).toBeUndefined();
     expect(settings).toEqual({
+      actionKeys: undefined,
+      anyKey: undefined,
+      builtInControlScheme: undefined,
+      controlKeys: undefined,
       autoPlay: false,
       autoPauseOnBlur: false,
       laneKeys: {},
@@ -166,9 +181,15 @@ describe('resolvePlaySceneOptions: a single play', () => {
       lr2ExtraLevel: 0,
       lr2ExtraMode: false,
       mineModifier: 'OFF',
+      crazyJudge: 'OFF',
+      crazyHellJudge: false,
+      crazyAddMine: false,
+      crazyNotes: 'OFF',
       noteDurationMs: 500,
       randomFixedLane1P: 0,
       randomFixedLane2P: 0,
+      lr2RandomScratch1P: true,
+      lr2RandomScratch2P: false,
       randomSeed1P: '-1',
       randomSeed2P: '-1',
       scrollModifier: 'OFF',

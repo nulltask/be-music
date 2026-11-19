@@ -95,7 +95,23 @@ export function betterClearLamp(current: ClearLamp, candidate: ClearLamp): Clear
  * and a ruleset this does not know, go up to MAX.
  */
 export function topClearLamp(ruleset: string | undefined): ClearLamp {
+  // plugout's lamps end at PERFECT (0x43a7d0).
+  if (ruleset === 'plugout') return 'PERFECT';
   return ruleset === 'lr2' || ruleset === '____' ? 'FULL_COMBO' : 'MAX';
+}
+
+/**
+ * plugout's gauge lamps (0x43a7d0): NORMAL CLEAR, EASY CLEAR, HARD CLEAR, and FULLCOMBO for a HAZARD clear (PERFECT for
+ * EXHAZARD); an EX gauge clears on its type's lamp. It has no EX HARD lamp. Its course gauges are named for the type
+ * they come from (`COURSE-HARD`, `GRADE`).
+ */
+function plugoutGaugeLamp(gauge: string | undefined): ClearLamp {
+  const id = (gauge ?? 'NORMAL').toUpperCase().replace(/^(COURSE|GRADE)(-|$)/, '');
+  if (id === 'EASY' || id === 'EX-EASY') return 'EASY';
+  if (id === 'HARD' || id === 'EX-HARD') return 'HARD';
+  if (id === 'HAZARD') return 'FULL_COMBO';
+  if (id === 'EX-HAZARD') return 'PERFECT';
+  return 'NORMAL';
 }
 
 /**
@@ -127,6 +143,7 @@ const GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
  * @0x405da0). beatoraja maps HAZARD (gauge type 5) to FULL COMBO in `ClearType`.
  */
 function gaugeClearLamp(gauge: string | undefined, ruleset: string | undefined): ClearLamp {
+  if (ruleset === 'plugout') return plugoutGaugeLamp(gauge);
   const id = gauge?.toUpperCase();
   if (ruleset === 'lr2' && (id === 'DEATH' || id === 'DEATH-CORRECTED')) return 'NORMAL';
   if (ruleset === 'beatoraja' && id === 'HAZARD') return 'FULL_COMBO';
@@ -154,6 +171,7 @@ const COURSE_GAUGE_LAMPS: Readonly<Record<string, ClearLamp>> = {
  * LR2body.exe CheckCourseClear @0x4086d0); beatoraja's follows the class gauge the run played on.
  */
 function courseGaugeClearLamp(gauge: string, ruleset: string, gaugeType: GaugeType): ClearLamp {
+  if (ruleset === 'plugout') return plugoutGaugeLamp(gauge);
   // LR2 resets EASY and G.ATTACK to GROOVE when a grade course starts.
   if (ruleset === 'lr2' && gauge === 'GRADE' && (gaugeType === 'EASY' || gaugeType === 'G-ATTACK')) return 'NORMAL';
   if (ruleset === 'lr2')
@@ -209,10 +227,15 @@ export interface PlayClearLampFacts {
   ruleset?: string;
   /** The ruleset's verdict on the gauge the play ended on. */
   cleared: boolean;
-  /** The gauge the play ran on, by the ruleset's gauge id (`GROOVE`, `HARD`, `EX-HARD`, …); none counts as NORMAL. */
+  /** The gauge the play ran on, by its source's gauge id (`GROOVE`, `HARD`, `EX-HARD`, …); none counts as NORMAL. */
   gauge?: string;
+  /**
+   * The source whose gauge that is, when it is not the judge ruleset's own (`lr2:HARD` under beatoraja judging, #1171).
+   * The gauge's lamp follows its source; the full-combo lamps and the top lamp stay the judge ruleset's.
+   */
+  gaugeSource?: string;
   /** The judgments over the ruleset's `total` judgment notes (PGREATs are `perfect`). */
-  score: { total: number; perfect: number; great: number; good: number; fullCombo?: boolean };
+  score: { total: number; perfect: number; great: number; good: number; fullCombo?: boolean; emptyPoor?: number };
 }
 
 /**
@@ -224,14 +247,16 @@ export function resolveClearLamp(play: PlayClearLampFacts): ClearLamp {
   const fullCombo = isFullCombo(play.score);
   // LR2 CheckClear (0x405da4–0x405dc9) returns FULL COMBO before inspecting the gauge.
   if (play.ruleset === 'lr2' && fullCombo) return 'FULL_COMBO';
-  return finishClearLamp({
+  const lamp = finishClearLamp({
     top: topClearLamp(play.ruleset),
     cleared: play.cleared,
-    gaugeLamp: gaugeClearLamp(play.gauge, play.ruleset),
+    gaugeLamp: gaugeClearLamp(play.gauge, play.gaugeSource ?? play.ruleset),
     fullCombo,
     great: play.score.great,
     good: play.score.good,
   });
+  // plugout's PERFECT also needs no empty POOR; with one it is a FULLCOMBO.
+  return play.ruleset === 'plugout' && lamp === 'PERFECT' && (play.score.emptyPoor ?? 0) > 0 ? 'FULL_COMBO' : lamp;
 }
 
 /** What the clear lamp of a course run is read from. */
@@ -242,6 +267,8 @@ export interface CourseClearLampFacts {
   cleared: boolean;
   /** The course gauge the run ended on (`GRADE`, `COURSE-HARD`, `CLASS`, …). */
   gauge: string;
+  /** The source whose course gauge that is, when it is not the judge ruleset's own (#1171). */
+  gaugeSource?: string;
   /** The gauge the player picked: LR2's course lamps follow it. */
   gaugeType: GaugeType;
   /** Judgment notes over every stage of the course, reached or not. */
@@ -261,11 +288,12 @@ export interface CourseClearLampFacts {
  * class gauge. Kept to the ruleset's own lamps, with FULL COMBO the top lamp for a ruleset this does not know.
  */
 export function resolveCourseClearLamp(run: CourseClearLampFacts): ClearLamp {
-  const known = run.ruleset === 'lr2' || run.ruleset === 'beatoraja' || run.ruleset === '____';
+  const known =
+    run.ruleset === 'lr2' || run.ruleset === 'beatoraja' || run.ruleset === '____' || run.ruleset === 'plugout';
   return finishClearLamp({
     top: known ? topClearLamp(run.ruleset) : 'FULL_COMBO',
     cleared: run.cleared,
-    gaugeLamp: courseGaugeClearLamp(run.gauge, run.ruleset, run.gaugeType),
+    gaugeLamp: courseGaugeClearLamp(run.gauge, run.gaugeSource ?? run.ruleset, run.gaugeType),
     fullCombo: run.fullCombo !== false && run.noteCount > 0 && run.maxCombo >= run.noteCount,
     great: run.judge.great,
     good: run.judge.good,

@@ -99,6 +99,13 @@ export function collectPlayBGAResources(
   );
   for (const key of extras.base) base.add(key);
   for (const key of extras.layer) layer.add(key);
+  // An LRX chart drawn by the compositor can show any of its images: a keyframe chain counts its image id up.
+  if ((chart.lrx?.bga?.length ?? 0) > 0) {
+    for (const key of Object.keys(chart.resources.bmp)) {
+      base.add(key);
+      layer.add(key);
+    }
+  }
   const referenced = new Set<string>([...base, ...layer]);
   const paths = new Map<string, string>();
   for (const [key, path] of Object.entries(chart.resources.bmp)) {
@@ -270,13 +277,13 @@ async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: B
       const bmsColorKey = resolveBMSExBMPColorKey(chart, key);
       if (base.has(key)) {
         const texture = bmsColorKey
-          ? await loadTextureFromBytes(path, bytes, { bmsColorKey })
-          : await loadTextureFromBytes(path, bytes);
+          ? await loadTextureFromBytes(resolved?.path ?? path, bytes, { bmsColorKey })
+          : await loadTextureFromBytes(resolved?.path ?? path, bytes);
         if (isCancelled()) return destroyTexture(texture);
         if (texture) into.textures.set(key, texture);
       }
       if (layer.has(key)) {
-        const texture = await loadTextureFromBytes(path, bytes, {
+        const texture = await loadTextureFromBytes(resolved?.path ?? path, bytes, {
           keyOutBlack: keyOutLayerBlack(key) && bmsColorKey === undefined,
           ...(bmsColorKey ? { bmsColorKey } : {}),
           ...(swBGAColorKey ? { swBGAColorKey } : {}),

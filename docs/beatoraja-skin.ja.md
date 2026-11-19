@@ -2,9 +2,7 @@
 
 # beatoraja skin 実装メモ
 
-この文書は、現在の `@be-music/skin-beatoraja` 実装をまとめます。
-この package は beatoraja の JSON skin と Lua skin theme を renderer 非依存の data structure に parse します。
-PixiJS rendering は `@be-music/player-browser` の責務です。CLI/TUI render path は beatoraja skin を読み込みません。
+`@be-music/skin-beatoraja` は beatoraja の JSON・Lua スキンを、描画方式に依存しないデータに変換します。ブラウザー版の `@be-music/player-browser` は PixiJS で描画します。端末版は beatoraja スキンを読み込みません。
 
 ## 対象範囲
 
@@ -62,7 +60,14 @@ host は entry script の directory とその sub-directory、および 1 階層
 module は cache されるので、後続の `require()` は同じ table を返します。
 beatoraja の `timer_util` / `event_util` helper module は組み込みで用意しており、theme に同梱しなくても `require()` できます。
 
-`os.clock()` は host が渡す scene の経過時間を秒単位で返します。これにより、WMII_FHD のレーザーやキー発光など、遅延付き Lua draw 条件が描画とともに進みます。標準ライブラリーを除外した後、限定的な `os` / `io` 互換 shim を用意します。ファイルシステムやプロセスの操作は何も実行しません。
+`os.clock()` は host が渡す scene の経過時間を秒単位で返します。これにより、WMII_FHD のレーザーやキー発光など、遅延付き Lua draw 条件が描画とともに進みます。標準ライブラリーを除外した後、限定的な `os` / `io` の代替を用意します。プロセスの操作は何も実行しません（`os.execute` と `os.getenv` は nil を返します）。
+
+beatoraja は `io.open` でスキンに実際のファイルを渡します [V]（[SkinLuaAccessor](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/skin/lua/SkinLuaAccessor.java#L318-L370)）。Be-Music には渡せるファイルシステムがないため、プラットフォーム上の方針として、`io` は 1 つの Lua ランタイム（1 つのスキンのシーンを 1 回評価する間）だけメモリに置くファイルを扱います（[`lua-io.ts`](../packages/skin-beatoraja/src/lua-io.ts)）。
+
+- ファイルは、スキンが書き込んだ時点で存在し、書き込んだ内容をそのまま読み戻せます。`os.remove` と `os.rename` も同じファイルを扱います。
+- スキンが書いていないファイルを読み取りで開くと、Lua の仕様どおり失敗します（`nil`、メッセージ、エラー番号 2）。`io.lines` はエラーを送出します。スキン自身の存在確認や `pcall` の分岐は、ファイルがないことを正しく検出できます。`close` 後のハンドルや、開いたモードに合わない操作も失敗を返します。
+- 何も保存せず、実際のファイルも読みません。スキンが持つ履歴やローテーションの一覧は、シーンごとに空から始まります。`io.open` の結果を確認せずに書き込むスキン（ModernChic のリザルト画面など）もそのまま動きます。
+- `luajava` は空の代替のままです。`bindClass` と `new` は空のテーブルを返すため、そのメソッド呼び出しは Lua のエラーになり、スキンは `pcall` で捕捉できます。
 
 ブラウザの `main_state.event_index(id)` は `image.ref` と同じ画像番号の解決処理を使います。MODE/SORT と LNMODE はゼロ始まり、HS-FIX と CLEAR は beatoraja の番号順です。`main_state.set_timer(id, start)` はカスタムアニメーション用タイマー 10000–19999 だけを書き換え、開始時刻はマイクロ秒です。`main_state.timer_off_value` で停止します。Lua と数値指定の描画先タイマーには同じフレームで反映します。不正な書き込みは false を返し、保護されたエンジン・シーン用タイマーは変更しません。カスタムタイマーの状態は1つのスキンインスタンスだけに属します。
 
@@ -211,11 +216,12 @@ sequenceDiagram
 - result は max combo を combo（104）としても読み、75 は 0（LR2 の自己ベストの max combo）とします。play は 75 で max combo を読みます。
 - play 中の 1P のランクの op（200-207）とその「now」の値（340-347）は、それまでに判定した note に対する EX score のランクです。最初の note の前は 100 % なので、play は AAA から始まります。beatoraja の `createNowRank` が `ScoreDataProperty.nowrate` を読むとおりで、note のない譜面ではどれも点きません（#430）。
 - 汎用のランクの op（220-227）は、全 note に対する EX score が届いたランクをすべて点けます（`beatorajaGenericRankOps`）。beatoraja の `BooleanPropertyFactory` が `ScoreDataProperty.qualifyRank`（`rate >= border / 27`）を読むとおりで、AAA なら 8 つすべて、どの score でも F が点き、note のない譜面ではどれも点きません。`computeGenericRankOp` はそのうち最も高いランクを 1 つ返します。
-- リプレイスロット（[replay.ja.md](./replay.ja.md#リプレイスロット)）：選曲画面では op 196 / 197（スロット 1 が空 / リプレイあり）、1196 / 1197、1199 / 1200、1202 / 1203（スロット 2-4）がカーソルの下のバーに従い、1205-1208 が選んだスロットを示し、リプレイボタン（19、316-318）がそのスロットを再生します。リザルト画面では各スロットが none・exists・saved の op（196-198、1196-1204）のどれかを点け、リプレイボタンがそのスロットに保存します（`resolveBeatorajaSelectReplayOps`、`resolveBeatorajaResultReplayOps`、`beatorajaReplayButtonSlot`）。beatoraja の `createReplayProperty` と `getReplayEventConsumer` と同じです。リザルトのスキンのボタンをタップすると、そのボタンだけが働き、画面は先へ進みません。
+- リプレイスロット（[replay.ja.md](./replay-browser.ja.md#リプレイスロット)）：選曲画面では op 196 / 197（スロット 1 が空 / リプレイあり）、1196 / 1197、1199 / 1200、1202 / 1203（スロット 2-4）がカーソルの下のバーに従い、1205-1208 が選んだスロットを示し、リプレイボタン（19、316-318）がそのスロットを再生します。リザルト画面では各スロットが none・exists・saved の op（196-198、1196-1204）のどれかを点け、リプレイボタンがそのスロットに保存します（`resolveBeatorajaSelectReplayOps`、`resolveBeatorajaResultReplayOps`、`beatorajaReplayButtonSlot`）。beatoraja の `createReplayProperty` と `getReplayEventConsumer` と同じです。リザルトのスキンのボタンをタップすると、そのボタンだけが働き、画面は先へ進みません。
 - テーマの `resultclose` と `course_close`（`pickBeatorajaThemeBGMPaths` の `resultClose` / `courseClose`）は、リザルトとコースのリザルトを閉じる音です。beatoraja にはリプレイを保存したときの音はありません。
 - beatoraja にとって別の意味を持つ LR2 の番号がいくつかあります（`IntegerPropertyFactory`、`BooleanPropertyFactory`、`StringPropertyFactory`）。number 92 はメイン BPM（LR2 ではインターネットランキングの順位）、op 400 は CONSTANT のオプション（LR2 ではキーコンフィグのページ）です。beatoraja には number 38-41・93-94、text 17-29、op 34 がないので、何も読みません（result と decide の画面では 0）（#430）。
 - op 400（CONSTANT）は、プレイヤーが[表示用 CONSTANT](./play-options.ja.md#表示用-constant)をオンにしている間、選曲画面とプレイ画面で点きます（`resolveBeatorajaConstantOps`）。beatoraja の `BooleanPropertyFactory` がプレイヤーのプレイ設定を読むとおり、`NO_SPEED` 制約で CONSTANT を描画しないコースでも点いたままです（#776）。
 - [判定タイミングの自動調整](./play-options.ja.md#判定タイミングと自動調整)が LR2 SILENT のプレイでは、組み込みと LR2 のプレイ画面と同じく、`judge[]` の表示（判定の文字とコンボの数字）を描きません（`resolveBeatorajaJudgeDisplayOps`）。beatoraja に SILENT はなく、LR2 は SILENT で NOWJUDGE / NOWCOMBO を隠します（#917）。
+- ブレンドコード 4 と 9 は beatoraja の係数で合成します（`Skin.java` L663-L664 [V]）。コード 4 は描画先にソースの色を掛け、コード 9 は `src × (1 − dst)` を書きます。これは差の絶対値ではありません（src = dst = 0.5 で 0.25）。不透明なテクセルの色は WebGL・WebGPU とも beatoraja と完全に一致します。beatoraja はストレートな色を、アルファが表示されないウィンドウへ合成しますが、Be-Music は乗算済みの色を透明なキャンバスへ合成するため、2 点を合わせ込んでいます。完全に透明なテクセルは描画先を変えません（beatoraja はそのテクセルが持つ色をそのまま合成しますが、乗算済みの色にはその情報が残りません）。半透明のテクセルはその中間になります。また、どちらのコードもアルファは beatoraja の式ではなく通常の合成と同じ被覆を書きます。beatoraja の式のままだとキャンバスに穴が開くためです。式は `skin/beatoraja/blend.ts` とそのテストを参照してください（#1194）。
 
 ### 既知の未対応
 
@@ -229,8 +235,8 @@ state は LR2 theme state と並列に保持されるため、player は両方�
 
 browser renderer は select、decide、gameplay、result skin の共有 view として `BeatorajaPlaySkinView` を使います。
 ファミリーのビューは `TEXT`、`NUM`、`OPTION`、timer、gauge、graph を [scene mapping](#scene-mapping) から読み、chart image、note layer、BGA layer、audio、result history など runtime 固有の部分を自分で提供します。
-select 画面、decide 画面、play 画面、result 画面は player-browser の beatoraja の family view で、`createSelectScene`、`createDecideScene`、`createPlayScene`、`createResultScene` で作ります（[player-web.ja.md](./player-web.ja.md#選曲画面)）。select、decide、result の resolver でセッションのフレームを描き（result の view は `PlayResult` をそのまま読みます）、beatoraja の scene の timer をフレームごとに読みます。select の view は MODE と SORT の imageset のために一覧の位置の一覧の設定を読み（順番は `BEATORAJA_KEYS_FILTERS` と `BEATORAJA_SORTS`、設定の位置は `beatorajaKeysFilterIndex` と `beatorajaSortIndex` で決まります）。ボタンはインテントとして選曲画面のセッションに返ります。オプションのボタンは beatoraja の選曲画面と同じくプレイオプションを切り替えます（`resolveBeatorajaOptionButton`）。LNMODE（308）は LN MODE、`optiondp`（54）は OFF / FLIP / BATTLE / BATTLE AS、75・78・340・341・350-353・360・361 は表示タイミングの自動調整、ゲージオートシフト、判定アルゴリズム、ゲージシフトの下限、EXTRA NOTE の深さ、地雷・スクロール・ロングノートのモード、7 TO 9 です。RANDOM 1P / 2P（42 / 43）は Random 1P / Random 2P を beatoraja 0.8.9 の 10 個の枠でその順に切り替えます。フォーカスした譜面が PMS でなければ `Random.OPTION_GENERAL`（OFF、MIRROR、RANDOM、R-RANDOM、S-RANDOM、SPIRAL、H-RANDOM、ALL-SCR、RANDOM-EX、S-RANDOM-EX）、PMS なら `Random.OPTION_PMS`（OFF、MIRROR、RANDOM、R-RANDOM、S-RANDOM、SPIRAL、H-RANDOM、CONVERGE、RANDOM_PLAYABLE、S_RANDOM_PLAYABLE）です。もう一方の一覧の選択はその枠から進み、beatoraja にない選択（SCATTER など）は枠 0 として扱います。ラベルの画像も同じオプションを読み、RANDOM のラベルは枠の番号を表示します（`resolveBeatorajaPlayOptionIndex`）。PLAY と PRACTICE（315）は通常モードと練習モードで始めます。LNMODE の画像は beatoraja と同じく、選曲画面と決定画面ではプレイヤーの LN MODE を、プレイ画面とリザルト画面では遊んだ譜面のロングノートのモードを表示します。
-play の view は `BeatorajaPlayBridge` を通して描きます。play の state は play のセッションの `PlayState` で、bridge は frame、判定、レーン操作ごとに mapping が解決した op と timer を適用します（[player-web.ja.md](./player-web.ja.md#プレイ画面)）。
+select 画面、decide 画面、play 画面、result 画面は player-browser の beatoraja の family view で、`createSelectScene`、`createDecideScene`、`createPlayScene`、`createResultScene` で作ります（[player-web.ja.md](./player-web-scenes.ja.md#選曲画面)）。select、decide、result の resolver でセッションのフレームを描き（result の view は `PlayResult` をそのまま読みます）、beatoraja の scene の timer をフレームごとに読みます。select の view は MODE と SORT の imageset のために一覧の位置の一覧の設定を読み（順番は `BEATORAJA_KEYS_FILTERS` と `BEATORAJA_SORTS`、設定の位置は `beatorajaKeysFilterIndex` と `beatorajaSortIndex` で決まります）。ボタンはインテントとして選曲画面のセッションに返ります。オプションのボタンは beatoraja の選曲画面と同じくプレイオプションを切り替えます（`resolveBeatorajaOptionButton`）。LNMODE（308）は LN MODE、`optiondp`（54）は OFF / FLIP / BATTLE / BATTLE AS、75・78・340・341・350-353・360・361 は表示タイミングの自動調整、ゲージオートシフト、判定アルゴリズム、ゲージシフトの下限、EXTRA NOTE の深さ、地雷・スクロール・ロングノートのモード、7 TO 9 です。RANDOM 1P / 2P（42 / 43）は Random 1P / Random 2P を beatoraja 0.8.9 の 10 個の枠でその順に切り替えます。フォーカスした譜面が PMS でなければ `Random.OPTION_GENERAL`（OFF、MIRROR、RANDOM、R-RANDOM、S-RANDOM、SPIRAL、H-RANDOM、ALL-SCR、RANDOM-EX、S-RANDOM-EX）、PMS なら `Random.OPTION_PMS`（OFF、MIRROR、RANDOM、R-RANDOM、S-RANDOM、SPIRAL、H-RANDOM、CONVERGE、RANDOM_PLAYABLE、S_RANDOM_PLAYABLE）です。もう一方の一覧の選択はその枠から進み、beatoraja にない選択（SCATTER など）は枠 0 として扱います。ラベルの画像も同じオプションを読み、RANDOM のラベルは枠の番号を表示します（`resolveBeatorajaPlayOptionIndex`）。PLAY と PRACTICE（315）は通常モードと練習モードで始めます。LNMODE の画像は beatoraja と同じく、選曲画面と決定画面ではプレイヤーの LN MODE を、プレイ画面とリザルト画面では遊んだ譜面のロングノートのモードを表示します。
+play の view は `BeatorajaPlayBridge` を通して描きます。play の state は play のセッションの `PlayState` で、bridge は frame、判定、レーン操作ごとに mapping が解決した op と timer を適用します（[player-web.ja.md](./player-web-scenes.ja.md#プレイ画面)）。
 
 browser gameplay path は parser が discovery する chart variant `5`、`7`、`9`、`10`、`14`、`24`、`24d` をすべて mount します。
 keyboard mode のレーンは、upstream の `play24main.lua` が使う `1000` 番台 timer base (`bomb_1p_key10 = 1010` など) で参照します。これらは `runtime-ids.ts` に実装済みです。

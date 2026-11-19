@@ -1,5 +1,32 @@
 # @be-music/chart-model
 
+## 0.12.0
+
+### Minor Changes
+
+- be797a5: Add `resolveBmsExWAVDeclarations`, the `#EXWAVxx` declarations no later `#WAVxx` redefined, which filename, volume and playback resolution now use. `#EXWAVxx` also reads nanasigroove 1.552's `r` rate multiplier (clamped to 1 at or below 0 and to 2 above it, applied after `f`) and a repeated flag letter, which replaces the earlier value; both used to make the line invalid.
+- 398f2dd: `resolveLRXBGAProgram`, `sampleLRXBGA` and `easeLRXBGA` resolve an LRX chart's BGA as plugout draws it: six slots (base, four layers, POOR), each showing its latest note, eased between keyframes by `acc` with the image id counting up.
+- 212d164: `ResolvedNote.chainSounds` lists the LRX chain notes tied to a judged note: each one that follows it on its lane before the lane's next note, with its delay from the note (`ResolvedChainSound`, exported). The chain notes stay in the background sample triggers, at their own times. `playsAtKeysoundVolume` says whether a sound plays at the keysound volume: a play lane's, or an LRX background sound flagged `keyVolume`.
+- 488ba86: Resolve LRX charts: a lane note with a length is a CN lasting its ticks, and `resolveChartPlayVariant` reads the LRX `lanetype` (`ChartPlayVariantInput.lrx`) before the lane rules, so a 10-key chart that leaves the 2P scratch and first key empty is not read as PMS. The fingerprint reads LRX long-note ends from their ticks and carries the `lanetype` among its lane-mode inputs.
+- 7011db4: Add `resolveLRXPlayEndSeconds`, the time an LRX chart's play ends in plugout: at its end-of-song note (`c="309"`), else 3 s after its last sound note.
+- e5dce2a: Give each sample trigger its own playback: `TimedSampleTrigger` gains `sampleGain`, `samplePan`, `samplePlaybackRate`, `sampleAttackSeconds` and `sampleReleaseSeconds`, and an LRX note fills them and its window (`sampleOffsetSeconds` / `sampleDurationSeconds`) from its `vol`, `pan`, `frq`, `atk`, `rls`, `ost` and `len`, stretching the times by plugout's integer `44100 / frq` factor.
+- 346b21a: Add `isPMSChartPath`, which names `.pms` and Nanasi Groove 2's `.n2s` as PMS charts. The play variant and the fingerprint's lane-mode extension use it, so an `.n2s` chart is 9 KEY and fingerprints like the `.pms` file it holds.
+- 355fc10: The chart gameplay program gains version 3, which reads GOOD2BAD, GREAT2BAD, HELLJUDGE and ADDMINE as nanasigroove does; `isLegacyChartPlayOptionProgram` tells older programs apart, and `withPlayerChartPlayOptions` adds a player's own GOOD2BAD / GREAT2BAD and HELLJUDGE where the chart sets none.
+- 5002b99: `PlayerChartPlayOptions` accepts the player's NOTES conversion, which `withPlayerChartPlayOptions` adds where the chart declares none, and a chart gameplay program with NOTES compiles as version 3.
+- cce5da4: Add `playerChartPlayOptionsOf`, which names the CRAZY gameplay options of an effective chart gameplay program that the player added: those the chart's own declaration does not set, as they ran.
+
+### Patch Changes
+
+- e9cb57e: Preserve the later BMS normal-note object at a shared position when resolving or round-tripping charts with source line order.
+- af62160: Default to BMS LNTYPE 1 when the chart omits the header, matching reference playback.
+- d486332: Use only the last active BMS LNOBJ declaration as the long-note end marker. This can change the notes and fingerprint of charts with repeated declarations.
+- 6c53c1b: `#LNOBJ` now pairs only the objects left after a later line of the same measure and channel overwrites an earlier one. An end object a later line replaced with a note used to end the note before it and show up as a tap of its own, and a start replaced by an end object left both as taps; they now pair as the remaining objects say, the same objects the notes are chosen from.
+- a491aac: Keep reverse scroll moving past the chart head when negative BPM has reversed the display, matching LR2. An undefined BMS BPM slot now reverses at 1 BPM, which can change the fingerprint of charts using those slots.
+- beba6e9: An LRX hidden (`dmg="0"`) lane note is also an invisible note on its lane, as plugout makes it the lane's keysound once it plays; it still plays in the background. A hidden chain note follows no note.
+- 4ee342f: Keep the events a fingerprint delta replays in the object shapes of parsed events, so comparing and sorting them stays fast.
+- 624db83: Apply zero damage to bmson mines that omit damage.
+- Updated dependencies: `@be-music/chart-source@0.9.0`, `@be-music/shared-utils@0.8.0`
+
 ## 0.11.0
 
 ### Minor Changes

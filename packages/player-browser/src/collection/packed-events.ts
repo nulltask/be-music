@@ -1,4 +1,4 @@
-import type { BeMusicEvent, BmsonEventExtensions } from '@be-music/chart-source';
+import type { BeMusicEvent, BmsonEventExtensions, LRXEventExtensions } from '@be-music/chart-source';
 
 /** Lookups after which a load's string table also indexes two-character ids by their character codes. */
 const PAIR_TABLE_AFTER = 2048;
@@ -57,27 +57,44 @@ export class PackedEventStrings {
     return pairIds;
   }
 
+  get size(): number {
+    return this.values.length;
+  }
+
+  snapshot(): string[] {
+    return this.values.slice();
+  }
+
   valueOf(id: number): string {
     return this.values[id]!;
   }
 }
 
+/** A column of signed integers, as narrow as its values allow. */
+export type PackedIntegers = Int8Array | Int16Array | Int32Array;
+/** A column of string-table ids, as narrow as its largest id allows. */
+export type PackedIds = Uint8Array | Uint16Array | Uint32Array;
+
 /**
- * Column-oriented copy of a chart's `events`: about 20 bytes per event instead of the ~130 bytes an event object, its
- * `position` tuple and their headers take on the heap.
+ * Column-oriented copy of a chart's `events`. Each column is as narrow as its values allow, which for a typical chart
+ * comes to 6 to 10 bytes per event (20 at the widest) instead of the ~130 bytes an event object, its `position` tuple
+ * and their headers take on the heap. Every chart of a library keeps its columns for as long as it is listed, and a
+ * library read from the parsed-chart cache copies them all, so their size is what the library weighs.
  */
 export interface PackedEvents {
   readonly length: number;
-  readonly measures: Int32Array;
-  readonly channels: Uint32Array;
-  readonly values: Uint32Array;
-  readonly numerators: Int32Array | Float64Array;
-  readonly denominators: Int32Array | Float64Array;
+  readonly measures: PackedIntegers;
+  readonly channels: PackedIds;
+  readonly values: PackedIds;
+  readonly numerators: PackedIntegers | Float64Array;
+  readonly denominators: PackedIntegers | Float64Array;
   /** bmson per-note extensions, by event index. Only bmson charts carry them. */
   readonly bmson: ReadonlyMap<number, BmsonEventExtensions> | undefined;
+  /** LRX per-note values, by event index. Only LRX charts carry them. */
+  readonly lrx?: ReadonlyMap<number, LRXEventExtensions>;
 }
 
-const EVENT_KEYS = new Set(['measure', 'channel', 'position', 'value', 'bmson']);
+const EVENT_KEYS = new Set(['measure', 'channel', 'position', 'value', 'bmson', 'lrx']);
 
 /**
  * Packs `events` into columns. Returns `undefined` when an event carries a field this format doesn't model, in which
@@ -86,20 +103,31 @@ const EVENT_KEYS = new Set(['measure', 'channel', 'position', 'value', 'bmson'])
 export function packEvents(events: readonly BeMusicEvent[], strings: PackedEventStrings): PackedEvents | undefined {
   const length = events.length;
   let integral = true;
+  let measureBits = 0;
+  let numeratorBits = 0;
+  let denominatorBits = 0;
   for (const event of events) {
     for (const key in event) {
       if (!EVENT_KEYS.has(key)) return undefined;
     }
-    if (!Number.isInteger(event.measure) || event.measure < -0x80000000 || event.measure > 0x7fffffff) return undefined;
+    if (!isInt32(event.measure)) return undefined;
+    measureBits |= bitsForSignedWidth(event.measure);
     const [numerator, denominator] = event.position;
-    if (!isInt32(numerator) || !isInt32(denominator)) integral = false;
+    if (integral && isInt32(numerator) && isInt32(denominator)) {
+      numeratorBits |= bitsForSignedWidth(numerator);
+      denominatorBits |= bitsForSignedWidth(denominator);
+    } else {
+      integral = false;
+    }
   }
-  const measures = new Int32Array(length);
-  const channels = new Uint32Array(length);
-  const values = new Uint32Array(length);
-  const numerators = integral ? new Int32Array(length) : new Float64Array(length);
-  const denominators = integral ? new Int32Array(length) : new Float64Array(length);
+  const measures = createIntegerColumn(length, measureBits);
+  const largestPossibleId = strings.size + length * 2 - 1;
+  const channels = createIdColumn(length, largestPossibleId);
+  const values = createIdColumn(length, largestPossibleId);
+  const numerators = integral ? createIntegerColumn(length, numeratorBits) : new Float64Array(length);
+  const denominators = integral ? createIntegerColumn(length, denominatorBits) : new Float64Array(length);
   let bmson: Map<number, BmsonEventExtensions> | undefined;
+  let lrx: Map<number, LRXEventExtensions> | undefined;
   for (let index = 0; index < length; index += 1) {
     const event = events[index]!;
     measures[index] = event.measure;
@@ -111,14 +139,56 @@ export function packEvents(events: readonly BeMusicEvent[], strings: PackedEvent
       bmson ??= new Map();
       bmson.set(index, event.bmson!);
     }
+    if (event.lrx !== undefined) {
+      lrx ??= new Map();
+      lrx.set(index, event.lrx);
+    }
   }
-  return { length, measures, channels, values, numerators, denominators, bmson };
+  return {
+    length,
+    measures,
+    channels: narrowIds(channels),
+    values: narrowIds(values),
+    numerators,
+    denominators,
+    bmson,
+    ...(lrx ? { lrx } : {}),
+  };
+}
+
+// Invert negative values so both bounds of a signed width are covered by one bit mask.
+function bitsForSignedWidth(value: number): number {
+  return value ^ (value >> 31);
+}
+
+function createIntegerColumn(length: number, bits: number): PackedIntegers {
+  if (bits <= 0x7f) return new Int8Array(length);
+  if (bits <= 0x7fff) return new Int16Array(length);
+  return new Int32Array(length);
+}
+
+function createIdColumn(length: number, maximum: number): PackedIds {
+  if (maximum <= 0xff) return new Uint8Array(length);
+  if (maximum <= 0xffff) return new Uint16Array(length);
+  return new Uint32Array(length);
+}
+
+/** `column` in the narrowest unsigned type that holds its largest id. */
+function narrowIds(column: PackedIds): PackedIds {
+  if (column instanceof Uint8Array) return column;
+  let maximum = 0;
+  for (let index = 0; index < column.length; index += 1) {
+    if (column[index]! > maximum) maximum = column[index]!;
+  }
+  if (maximum <= 0xff) return new Uint8Array(column);
+  if (maximum <= 0xffff && column instanceof Uint32Array) return new Uint16Array(column);
+  return column;
 }
 
 /** Rebuilds the event objects {@link packEvents} packed, with the same fields in the same order. */
 export function unpackEvents(packed: PackedEvents, strings: PackedEventStrings): BeMusicEvent[] {
   const events: BeMusicEvent[] = Array.from({ length: packed.length });
-  const { measures, channels, values, numerators, denominators, bmson } = packed;
+  const { measures, channels, values, numerators, denominators, bmson, lrx } = packed;
   for (let index = 0; index < packed.length; index += 1) {
     const event: BeMusicEvent = {
       measure: measures[index]!,
@@ -130,6 +200,8 @@ export function unpackEvents(packed: PackedEvents, strings: PackedEventStrings):
     if (extensions !== undefined) {
       event.bmson = extensions;
     }
+    const lrxExtensions = lrx?.get(index);
+    if (lrxExtensions !== undefined) event.lrx = lrxExtensions;
     events[index] = event;
   }
   return events;

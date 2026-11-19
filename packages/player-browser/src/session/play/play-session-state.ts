@@ -1,3 +1,4 @@
+import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
 import type { BGAOpacityTimelines } from '@be-music/chart-model';
 /**
  * The state of a play the play session works on, apart from what draws it: the chart and its notes, the audio graph,
@@ -7,6 +8,7 @@ import type { BGAOpacityTimelines } from '@be-music/chart-model';
  * (`PlayLayers`).
  */
 import type { BGACameraFeed } from '../../media/bga-camera.ts';
+import type { LRXBGACompositor } from '../../media/lrx-bga-compositor.ts';
 import type { Texture } from 'pixi.js';
 import type { PreparedPlaybackChartData, PlayerSummary } from '@be-music/player-engine';
 import { createEmptyScore, type LongNoteStyle, type ScoreSummary } from '@be-music/player-engine/ruleset';
@@ -61,6 +63,7 @@ import type { BGACue, NonstopStageBGATimeline } from '../../chart/bga-timeline.t
 import type { BeMusicJudgeWindows } from '@be-music/player-skin-sdk';
 import type { RuntimeMineNote, RuntimeNote } from '../../view/shared/playfield/context.ts';
 import type { GhostPresentation } from './ghost/ghost.ts';
+import { createAudioClockSmoother } from './play-clock.ts';
 import type { PlayfieldLaneRect } from '../../view/types.ts';
 
 export class PlaySessionState extends PlayPresentation {
@@ -115,6 +118,8 @@ export class PlaySessionState extends PlayPresentation {
    */
   preparedChart: PreparedPlaybackChartData | undefined;
   notes: RuntimeNote[] = [];
+  /** The notes the lanes draw (`PlayfieldRuntime.drawNotes`). */
+  drawNotes: RuntimeNote[] = [];
   /**
    * Landmine notes (channels D1-D9 / E1-E9). Sorted by `seconds` for the same binary-search-by-time access pattern the
    * playable-note judge loop uses. Hit-test runs in `judge()` BEFORE the playable-note check so a press that lands
@@ -172,6 +177,11 @@ export class PlaySessionState extends PlayPresentation {
    * (`PlaySession.currentSeconds`).
    */
   audioContextStartTime = 0;
+  /**
+   * The audio clock as the playfield draws it: `currentTime` without its render-callback steps
+   * (`createAudioClockSmoother`), so the notes move by the frame's own time each frame.
+   */
+  readonly drawClock = createAudioClockSmoother();
   /** The stage fades and FIT rates of a stitched NONSTOP chart (`options.nonstop`). */
   nonstopMixer: NonstopStageMixer | undefined;
   paused = false;
@@ -307,11 +317,9 @@ export class PlaySessionState extends PlayPresentation {
    * `prepareChart`; the `WebAudioSession` looks each note's event up here and calls `node.start(when, offset, duration)`
    * accordingly so the sliced-WAV authoring intent is preserved.
    *
-   * Stays `undefined` for non-bmson charts (they have no slicing semantics — each note plays its entire WAV from t=0).
+   * Stays `undefined` for charts other than bmson and LRX: each note plays its entire WAV from t=0.
    */
-  bmsonSlicePlayback:
-    | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
-    | undefined;
+  bmsonSlicePlayback: Map<BeMusicEvent, WebAudioSessionSlicePlayback> | undefined;
   autoSampleTriggers: TimedSampleTrigger[] = [];
   /**
    * The engine's judgment counts and scores, as the readouts show them: under LR2 the POOR counter folds the empty POORs
@@ -361,6 +369,8 @@ export class PlaySessionState extends PlayPresentation {
   replayViewCursor: ReplayViewCursor | undefined;
   chartEndTimeout: number | undefined;
   chartEndGate: ((seconds: number) => void) | undefined;
+  /** Starts the outro's fade-out at once (`PlayEngineContext.chartEndFade`). */
+  chartEndFade: (() => void) | undefined;
   /**
    * `setTimeout` handles for the scene-exit sequence (fade-out → close, LR2 timers 2 / 3). Cleared on dispose so the
    * deferred host callback can't fire onto a torn-down view.
@@ -474,6 +484,8 @@ export class PlaySessionState extends PlayPresentation {
    * owns it and disposes it.
    */
   bgaCamera: BGACameraFeed | undefined = undefined;
+  /** An LRX chart's composited BGA (plugout's transforms and layers 203 / 204), made once its images are loaded. */
+  lrxBGA: LRXBGACompositor | undefined = undefined;
   /** True iff we paused because the tab/window backgrounded itself. */
   autoPaused = false;
   /**

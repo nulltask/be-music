@@ -52,6 +52,7 @@ export class BeMusicChartScoreElement extends BeMusicElement {
     previewing: { attribute: false },
     columnBeats: { type: Number, attribute: 'column-beats' },
     beatHeight: { type: Number, attribute: 'beat-height' },
+    tempo: { type: Number },
     disabled: { type: Boolean, reflect: true },
   };
   static override styles: CSSResultGroup = [
@@ -179,6 +180,11 @@ export class BeMusicChartScoreElement extends BeMusicElement {
   declare columnBeats: number;
   /** How tall a beat is, in CSS pixels (default 16). */
   declare beatHeight: number;
+  /**
+   * The play tempo the readouts show (default 1, the chart's own speed): the BPMs are multiplied by it and the STOPs
+   * divided, as a play at that tempo runs them.
+   */
+  declare tempo: number;
   /** Takes no presses: the selection shows, but stays. */
   declare disabled: boolean;
 
@@ -192,6 +198,7 @@ export class BeMusicChartScoreElement extends BeMusicElement {
     super();
     this.columnBeats = 16;
     this.beatHeight = DEFAULT_CHART_SCORE_METRICS.beatHeight;
+    this.tempo = 1;
     this.disabled = false;
   }
 
@@ -385,18 +392,21 @@ export class BeMusicChartScoreElement extends BeMusicElement {
     for (let beat = 1; beat < bar.beats - 1e-9; beat += 1) beatLines.push(chartScoreRowAt(box, beat / bar.beats));
     const laneBox = (lane: number): { x: number; width: number } => lanes.lanes[lane] ?? { x: lanes.left, width: 0 };
     const tempoX = lanes.right + 3;
+    const tempo = Number.isFinite(this.tempo) && this.tempo > 0 ? this.tempo : 1;
     const labels: TemplateResult[] = [];
     if (bar.index === 0)
-      labels.push(svg`<text class="tempo" x=${tempoX} y=${box.bottom - 2}>${formatBPM(layout.initialBPM)}</text>`);
-    for (const tempo of bar.tempos) {
-      const y = chartScoreRowAt(box, tempo.position);
+      labels.push(
+        svg`<text class="tempo" x=${tempoX} y=${box.bottom - 2}>${formatBPM(layout.initialBPM * tempo)}</text>`,
+      );
+    for (const change of bar.tempos) {
+      const y = chartScoreRowAt(box, change.position);
       labels.push(svg`<rect class="tempo" x=${lanes.left} y=${y - 1} width=${laneWidth} height="1"></rect>
-        <text class="tempo" x=${tempoX} y=${Math.max(box.top + 8, y + 3)}>${formatBPM(tempo.bpm)}</text>`);
+        <text class="tempo" x=${tempoX} y=${Math.max(box.top + 8, y + 3)}>${formatBPM(change.bpm * tempo)}</text>`);
     }
     for (const stop of bar.stops) {
       const y = chartScoreRowAt(box, stop.position);
       labels.push(svg`<rect class="stop" x=${lanes.left} y=${y - 1} width=${laneWidth} height="1"></rect>
-        <text class="stop" x=${tempoX} y=${Math.max(box.top + 8, y - 6)}>S${stop.durationMs}</text>`);
+        <text class="stop" x=${tempoX} y=${Math.max(box.top + 8, y - 6)}>S${Math.round(stop.durationMs / tempo)}</text>`);
     }
     return svg`<g part="bar">
       ${beatLines.map((y) => svg`<rect class="beat-line" x=${lanes.left} y=${y - 1} width=${laneWidth} height="1"></rect>`)}

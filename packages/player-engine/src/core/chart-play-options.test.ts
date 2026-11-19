@@ -1,5 +1,5 @@
 import { expect, test } from 'vite-plus/test';
-import { applyChartPlayOptions } from './chart-play-options.ts';
+import { applyChartPlayOptions, resolveChartPlayProgram } from './chart-play-options.ts';
 
 const player = {
   random1P: 'S-RANDOM',
@@ -14,6 +14,39 @@ const dp = { doublePlay: true, hasScratch: true };
 const sp = { doublePlay: false, hasScratch: true };
 const program = (options: object) => ({ version: 1 as const, options });
 
+test('records only effective player options when chart declarations take precedence', () => {
+  expect(
+    resolveChartPlayProgram(
+      { version: 1, options: { judge: 'GOOD2BAD' } },
+      { judge: 'GREAT2BAD', hellJudge: true, notes: 'DBLCOPY' },
+      { playVariant: '7', course: true },
+    ),
+  ).toEqual({
+    program: { version: 3, options: { judge: 'GOOD2BAD', hellJudge: true, notes: 'DOUBLE' } },
+    diagnostics: [{ code: 'unsupported-option', declaration: '774:NOTES_DBLCOPY' }],
+    playerOptions: { hellJudge: true, notes: 'DOUBLE' },
+  });
+});
+
+test('omits a player selection that has no effect', () => {
+  expect(
+    resolveChartPlayProgram({ version: 3, options: {} }, { notes: 'COPY' }, { playVariant: '7', course: true }),
+  ).toEqual({
+    program: { version: 3, options: {} },
+    diagnostics: [{ code: 'unsupported-option', declaration: '774:NOTES_COPY' }],
+    playerOptions: {},
+  });
+});
+
+test('keeps the recorded program version when the chart supplies all options', () => {
+  const declared = { version: 1, options: { notes: 'DOUBLE' } } as const;
+  expect(resolveChartPlayProgram(declared, undefined, { playVariant: '24', course: false })).toEqual({
+    program: declared,
+    diagnostics: [],
+    playerOptions: {},
+  });
+});
+
 test('without a program the player keeps every choice', () => {
   expect(applyChartPlayOptions(player, undefined, dp)).toEqual({ selection: player });
   expect(applyChartPlayOptions(player, program({}), dp)).toEqual({ selection: player });
@@ -22,10 +55,10 @@ test('without a program the player keeps every choice', () => {
 test.each([
   ['MIRROR', sp, 'MIRROR', undefined],
   ['RANDOM', sp, 'RANDOM', undefined],
-  ['RANDOM+', sp, 'RANDOM-EX', undefined],
+  ['RANDOM+', sp, 'RANDOM+', undefined],
   ['RANDOM+', { doublePlay: false, hasScratch: false }, 'RANDOM', undefined],
   ['ALL', sp, 'RANDOM', undefined],
-  ['ALL+', sp, 'RANDOM-EX', undefined],
+  ['ALL+', sp, 'RANDOM+', undefined],
   ['ALL', dp, 'OFF', { scratch: false }],
   ['ALL+', dp, 'OFF', { scratch: true }],
 ])('chart %s replaces both sides (%j)', (random, layout, perSide, crossSide) => {

@@ -145,9 +145,10 @@ export const PLAYER_HELP_TEMPLATE = html`
               </li>
               <li>Subsequent drops add to the library and keep the current theme.</li>
               <li>
-                Course files in a dropped folder (LR2 <code>.lr2crs</code>, beatoraja course <code>.json</code>) list as
-                course folders. Decide <strong>NEW COURSE</strong> in MY COURSES, MY DAN or MY NONSTOP to make your own;
-                <strong>Course → My courses…</strong> in Options renames, deletes and exports them.
+                Course files in a dropped folder (LR2 <code>.lr2crs</code>, beatoraja course <code>.json</code>, Nanasi
+                Groove 2 <code>.n2x</code> chart lists) list as course folders. Decide <strong>NEW COURSE</strong> in MY
+                COURSES, MY DAN or MY NONSTOP to make your own; <strong>Course → My courses…</strong> in Options
+                renames, deletes and exports them.
               </li>
               <li>
                 Or link straight to a pack: open the page with
@@ -200,13 +201,13 @@ export const PLAYER_HELP_TEMPLATE = html`
               </li>
               <li>
                 Text that starts with <code>?</code> is a chart filter, written like an SQL <code>WHERE</code> clause
-                (beatoraja's random-course filters): <code>=</code> <code>!=</code> <code>&lt;</code>
-                <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code>, <code>BETWEEN … AND …</code>,
-                <code>IN (…)</code>, <code>LIKE</code> (<code>%</code> any text, <code>_</code> one character, case
-                ignored for A–Z), <code>IS NULL</code>, <code>AND</code> <code>OR</code> <code>NOT</code> and
-                parentheses, then an optional <code>ORDER BY … DESC</code> and <code>LIMIT n</code> (which replace the
-                sort). Put text in single quotes; <code>=</code> on text is exact and case-sensitive. Keywords may be
-                lower case. A filter that does not parse shows why under the search box and filters nothing.
+                (beatoraja's random-course filters): <code>=</code> <code>!=</code> <code>&lt;</code> <code>&lt;=</code>
+                <code>&gt;</code> <code>&gt;=</code>, <code>BETWEEN … AND …</code>, <code>IN (…)</code>,
+                <code>LIKE</code> (<code>%</code> any text, <code>_</code> one character, case ignored for A–Z),
+                <code>IS NULL</code>, <code>AND</code> <code>OR</code> <code>NOT</code> and parentheses, then an
+                optional <code>ORDER BY … DESC</code> and <code>LIMIT n</code> (which replace the sort). Put text in
+                single quotes; <code>=</code> on text is exact and case-sensitive. Keywords may be lower case. A filter
+                that does not parse shows why under the search box and filters nothing.
               </li>
               <li>
                 Columns: <code>title</code> <code>subtitle</code> <code>artist</code> <code>subartist</code>
@@ -367,7 +368,8 @@ export const PLAYER_HELP_TEMPLATE = html`
               <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
               <li>
                 ドロップしたフォルダに含まれるコースファイル (LR2 の <code>.lr2crs</code>、beatoraja のコースの
-                <code>.json</code>) はコースのフォルダとして並びます。 MY COURSES / MY DAN / MY NONSTOP の
+                <code>.json</code>、ナナシグルーヴ2 の <code>.n2x</code> の譜面リスト)
+                はコースのフォルダとして並びます。 MY COURSES / MY DAN / MY NONSTOP の
                 <strong>NEW COURSE</strong>
                 を決定すると自分でコースを作れます。作ったコースの名前の変更・削除・書き出しは Options の
                 <strong>Course → My courses…</strong> から行えます。
@@ -382,7 +384,7 @@ export const PLAYER_HELP_TEMPLATE = html`
                 >
                 / <kbd>Backspace</kbd> で戻ります。最上位で <kbd>Esc</kbd> を押すと、ドロップ画面へ戻るか確認します。
                 譜面の行をクリック、または現在のスキンの
-                <em>PLAY</em> ボタンでも開始できます。皿でもカーソルを動かせます。
+                <em>PLAY</em> ボタンでも開始できます。スクラッチでもカーソルを動かせます。
               </li>
               <li>
                 鍵盤は LR2 と同じく、白鍵で開始、黒鍵で戻る、鍵盤 6 で AUTO (2 秒押し続けると保存したリプレイ)、鍵盤 4
@@ -469,7 +471,7 @@ export const PLAYER_HELP_TEMPLATE = html`
               <li>
                 START (<kbd>Q</kbd>) + 鍵盤でハイスピード調整 (奇数鍵で下げ、偶数鍵で上げ。LR2 スキンでは SELECT
                 でも同じで、レーンカバー表示中は鍵盤 6 / 7 でカバーを動かします)。beatoraja スキンでは START +
-                皿でカバーを動かし、SELECT + 鍵盤で表示時間 (緑数字) を 1 ms ずつ変えます。START 2
+                スクラッチでカバーを動かし、SELECT + 鍵盤で表示時間 (緑数字) を 1 ms ずつ変えます。START 2
                 回押しでレーンカバーの ON / OFF。START + SELECT を 1
                 秒押し続けると中断し、最後のノーツの後はどちらか一方だけでプレイを終えます。
               </li>

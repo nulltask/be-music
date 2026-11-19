@@ -12,6 +12,7 @@ import {
   resolveChart,
   resolveBmsWAVResources,
   parseBMSExWAV,
+  resolveBmsExWAVDeclarations,
   parseBmsWAVCmd,
   volWAVToLinearGain,
   type ResolvedChart,
@@ -21,11 +22,13 @@ import {
 } from '@be-music/chart-model';
 import {
   createEmptyJSON,
+  LRX_TICKS_PER_BEAT,
   resolveBMSBase,
   normalizeChannel,
   normalizeObjectKey,
   type BeMusicEvent,
   type BeMusicJSON,
+  type LRXEventExtensions,
 } from '@be-music/chart-source';
 import type { NonstopConnection } from '../definition.ts';
 import { NonstopKeyAllocator } from './ids.ts';
@@ -126,6 +129,15 @@ export interface NonstopStitchStage {
    * chart's own `#BACKBMP` is the first stage's.
    */
   backBMP?: string;
+  /**
+   * The stage's `#STAGEFILE` and `#BANNER`, through `assetPath`, and its `#PLAYLEVEL` and `#DIFFICULTY` (#1073). The
+   * stitched chart's own are the first stage's, as its library entry is: LR2's loader reads none of them while it
+   * stitches (OpenLR2 `ParseBMSFile`), so no stage's value is the source's.
+   */
+  stageFile?: string;
+  banner?: string;
+  playLevel?: BeMusicJSON['metadata']['playLevel'];
+  difficulty?: number;
 }
 
 export interface NonstopStitchMap {
@@ -161,7 +173,14 @@ export type StitchNonstopResult =
   | { ok: true; chart: BeMusicJSON; map: NonstopStitchMap }
   | {
       ok: false;
-      reason: 'bmson' | 'id-space' | 'no-stage' | 'stitch-version' | 'generic-layout-mismatch';
+      reason:
+        | 'bmson'
+        | 'id-space'
+        | 'no-stage'
+        | 'stitch-version'
+        | 'generic-layout-mismatch'
+        | 'lrx-mixed'
+        | 'lrx-layout-mismatch';
       stage?: number;
     };
 
@@ -190,6 +209,8 @@ interface StitchedObject {
   value: string;
   stage: number;
   bmson?: BeMusicEvent['bmson'];
+  /** An LRX stage's per-note values, carried into an LRX course (a long note's `length` is set on the grid). */
+  lrx?: LRXEventExtensions;
   endSeconds?: number;
 }
 
@@ -240,8 +261,20 @@ function stitchNonstopCourseAs(
     return { ok: false, reason: 'stitch-version' };
   }
   if (stages.length === 0) return { ok: false, reason: 'no-stage' };
+  // A course of LRX stages stitches into an LRX chart, which keeps each note's own values. LRX does not mix with BMS
+  // or bmson: neither output could carry them.
+  const lrxOutput = stages.every((stage) => stage.chart.sourceFormat === 'lrx');
+  const lrxStage = stages.findIndex((stage) => stage.chart.sourceFormat === 'lrx');
+  if (!lrxOutput && lrxStage >= 0) return { ok: false, reason: 'lrx-mixed', stage: lrxStage };
+  if (lrxOutput) {
+    const laneType = stages[0]!.chart.lrx?.laneType;
+    const other = stages.findIndex((stage) => stage.chart.lrx?.laneType !== laneType);
+    if (other >= 0) return { ok: false, reason: 'lrx-layout-mismatch', stage: other };
+    if (bmsonOutput) return { ok: false, reason: 'id-space' };
+  }
   const unsupported = stages.findIndex(
-    (stage) => stage.chart.sourceFormat !== 'bms' && stage.chart.sourceFormat !== 'bmson',
+    (stage) =>
+      stage.chart.sourceFormat !== 'bms' && stage.chart.sourceFormat !== 'bmson' && stage.chart.sourceFormat !== 'lrx',
   );
   if (unsupported >= 0) return { ok: false, reason: 'bmson', stage: unsupported };
   const bmsonStage = stages.findIndex((stage) => stage.chart.sourceFormat === 'bmson');
@@ -276,10 +309,11 @@ function stitchNonstopCourseAs(
 
   // BMS has one global LNMODE. Version 3 uses per-note bmson types when a BMS stage needs CN/HCN.
   const asBmson =
-    bmsonOutput ||
-    bmsonStage >= 0 ||
-    ((options.stitch ?? NONSTOP_STITCH_VERSION) >= 3 &&
-      resolved.some((stage) => stage.notes.some((note) => isHeldLongNote(note) && note.lnMode !== 1)));
+    !lrxOutput &&
+    (bmsonOutput ||
+      bmsonStage >= 0 ||
+      ((options.stitch ?? NONSTOP_STITCH_VERSION) >= 3 &&
+        resolved.some((stage) => stage.notes.some((note) => isHeldLongNote(note) && note.lnMode !== 1))));
   if (asBmson && bmsonStage < 0)
     resolved = stages.map((stage) => resolveChart(stage.chart, stage.pms === true ? { chartPath: '.pms' } : {}));
   const wavKeys = new NonstopKeyAllocator(asBmson);
@@ -359,13 +393,15 @@ function stitchNonstopCourseAs(
         if (!Number.isFinite(intrinsicGain) || intrinsicGain < 0)
           throw new RangeError(`Invalid stage WAV gain: ${key}`);
         if (intrinsicGain !== 1) (chart.resources.wavGain ??= {})[stitched] = intrinsicGain;
-        const rawExWAV = source.bms.exWAV[key];
+        // Only an EXWAV no later #WAV of the slot redefined carries over (#1197).
+        const rawExWAV = resolveBmsExWAVDeclarations(source)[key];
         const exWAV = rawExWAV === undefined ? undefined : parseBMSExWAV(rawExWAV);
         if (exWAV && rawExWAV !== undefined) {
           const parameters = [
             ['p', exWAV.pan],
             ['v', exWAV.volumeMillibels],
             ['f', exWAV.frequencyHz],
+            ['r', exWAV.rate],
           ].filter((entry) => entry[1] !== undefined);
           chart.bms.exWAV[stitched] =
             `${parameters.map(([flag]) => flag).join('')} ${parameters.map(([, value]) => value).join(' ')} ${assetPath(index, 'wav', exWAV.filename)}`;
@@ -392,6 +428,7 @@ function stitchNonstopCourseAs(
       value: string | undefined,
       bmson?: BeMusicEvent['bmson'],
       endSeconds?: number,
+      lrx?: LRXEventExtensions,
     ): boolean => {
       if (value === undefined) return false;
       objects.push({
@@ -400,6 +437,7 @@ function stitchNonstopCourseAs(
         value,
         stage: index,
         ...(bmson !== undefined ? { bmson } : {}),
+        ...(lrx !== undefined ? { lrx } : {}),
         ...(endSeconds !== undefined ? { endSeconds: stitchedSeconds(index, endSeconds) } : {}),
       });
       return true;
@@ -543,6 +581,11 @@ function stitchNonstopCourseAs(
   convertSeamNotes(objects, stages.length);
   layOnGrid(chart, objects, stops, barLines, stopKeys);
   if (chart.events.length === 0 && objects.length > 0) return { ok: false, reason: 'id-space' };
+  if (lrxOutput) {
+    chart.sourceFormat = 'lrx';
+    const laneType = stages[0]!.chart.lrx?.laneType;
+    chart.lrx = laneType !== undefined ? { laneType } : {};
+  }
 
   const first = stages[0]!.chart.metadata;
   chart.metadata.bpm = STITCHED_BPM;
@@ -553,6 +596,17 @@ function stitchNonstopCourseAs(
     return path ? assetPath(index, 'bmp', path) : undefined;
   });
   if (backBMPs[0] !== undefined) chart.metadata.backBMP = backBMPs[0];
+  // The decide and play screens read these from the chart; the stitched one takes the first stage's, as #BACKBMP.
+  const stageImage = (index: number, path: string | undefined): string | undefined => {
+    const trimmed = path?.trim();
+    return trimmed ? assetPath(index, 'bmp', trimmed) : undefined;
+  };
+  const stageFiles = stages.map((stage, index) => stageImage(index, stage.chart.metadata.stageFile));
+  const banners = stages.map((stage, index) => stageImage(index, stage.chart.metadata.banner));
+  if (stageFiles[0] !== undefined) chart.metadata.stageFile = stageFiles[0];
+  if (banners[0] !== undefined) chart.metadata.banner = banners[0];
+  if (first.playLevel !== undefined) chart.metadata.playLevel = first.playLevel;
+  if (first.difficulty !== undefined) chart.metadata.difficulty = first.difficulty;
   if (perStageRules && !asBmson && stages[0]!.chart.bms.defExRank !== undefined)
     chart.bms.defExRank = stages[0]!.chart.bms.defExRank;
   const total = stages[totalStage]?.chart.metadata.total;
@@ -642,6 +696,14 @@ function stitchNonstopCourseAs(
           lr2StageMarker: before === 'blank1' || before === 'blank2',
           songInfo: stageSongInfo(stages[index]!.chart),
           ...(backBMPs[index] !== undefined ? { backBMP: backBMPs[index] } : {}),
+          ...(stageFiles[index] !== undefined ? { stageFile: stageFiles[index] } : {}),
+          ...(banners[index] !== undefined ? { banner: banners[index] } : {}),
+          ...(stages[index]!.chart.metadata.playLevel !== undefined
+            ? { playLevel: stages[index]!.chart.metadata.playLevel }
+            : {}),
+          ...(stages[index]!.chart.metadata.difficulty !== undefined
+            ? { difficulty: stages[index]!.chart.metadata.difficulty }
+            : {}),
         };
       }),
     },
@@ -661,12 +723,14 @@ function addStageObjects(
     value: string | undefined,
     bmson?: BeMusicEvent['bmson'],
     endSeconds?: number,
+    lrx?: LRXEventExtensions,
   ) => boolean,
   wav: (key: string) => string | undefined,
   bmp: (key: string) => string | undefined,
   asBmson: boolean,
 ): boolean {
   let ok = true;
+  if (chart.sourceFormat === 'lrx') return addLRXStageObjects(chart, push, wav, bmp);
   const triggers = asBmson ? new Map(chart.sampleTriggers.map((trigger) => [trigger.event, trigger])) : undefined;
   const add = (
     seconds: number,
@@ -742,6 +806,48 @@ function addStageObjects(
         add(cue.seconds, channel, cue.key === undefined ? '00' : bmp(cue.key));
       }
     }
+  }
+  return ok;
+}
+
+/**
+ * {@link addStageObjects} for an LRX stage stitched into an LRX course: judged notes on their lanes (a long note keeps
+ * its end, and gets its tick `length` on the grid), every background sound with its LRX values (chain and hidden notes
+ * keep their lane, so chart-model ties them again), and BGA. Its hidden notes are background sounds already, so their
+ * invisible-note copies add nothing.
+ */
+function addLRXStageObjects(
+  chart: ResolvedChart,
+  push: (
+    seconds: number,
+    channel: string,
+    value: string | undefined,
+    bmson?: BeMusicEvent['bmson'],
+    endSeconds?: number,
+    lrx?: LRXEventExtensions,
+  ) => boolean,
+  wav: (key: string) => string | undefined,
+  bmp: (key: string) => string | undefined,
+): boolean {
+  let ok = true;
+  const values = (event: BeMusicEvent): LRXEventExtensions | undefined => {
+    if (event.lrx === undefined) return undefined;
+    const { length: _length, ...rest } = event.lrx;
+    return Object.keys(rest).length > 0 ? rest : undefined;
+  };
+  for (const note of chart.notes) {
+    const endSeconds = note.kind === 'ln' ? note.endSeconds : undefined;
+    // A long note always carries an LRX block, for the grid to give it its length.
+    const lrx = endSeconds !== undefined ? (values(note.event) ?? {}) : values(note.event);
+    if (!push(note.seconds, note.channel, wav(note.sampleKey), undefined, endSeconds, lrx)) ok = false;
+  }
+  for (const event of chart.sortedEvents) {
+    const channel = normalizeChannel(event.channel);
+    const value = normalizeObjectKey(event.value, chart.idBase, false);
+    const seconds = chart.timing.eventToSeconds(event);
+    if (channel === '01') {
+      if (!push(seconds, '01', wav(value), undefined, undefined, values(event))) ok = false;
+    } else if (BGA_CHANNELS.has(channel) && !push(seconds, channel, bmp(value))) ok = false;
   }
   return ok;
 }
@@ -895,11 +1001,27 @@ function layOnGrid(
         (toMeasures(object.endSeconds) - toMeasures(object.seconds)) * 4 * (chart.bmson.info.resolution ?? 240),
       );
     } else if (bmson !== undefined) delete bmson.l;
+    // An LRX long note's end is its length in LRX ticks, 480 to a quarter of the 150-BPM measure grid.
+    const lrx =
+      object.lrx !== undefined
+        ? {
+            ...object.lrx,
+            ...(object.endSeconds !== undefined && laneOf(object) !== undefined
+              ? {
+                  length: Math.max(
+                    1,
+                    Math.round((toMeasures(object.endSeconds) - toMeasures(object.seconds)) * 4 * LRX_TICKS_PER_BEAT),
+                  ),
+                }
+              : {}),
+          }
+        : undefined;
     chart.events.push({
       ...place(object.seconds),
       channel: object.channel,
       value: object.value,
       ...(bmson !== undefined ? { bmson } : {}),
+      ...(lrx !== undefined ? { lrx } : {}),
     });
   }
   for (const stop of stops) {

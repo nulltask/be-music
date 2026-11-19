@@ -12,7 +12,7 @@ import {
 } from '@be-music/shared-utils/core';
 import type { BrowserAssetEntry, BrowserAssetSource, BrowserChartCollection, LoadProgressCallback } from './types.ts';
 import { createEagerDropPathPredicate, isChartFilePath } from '../browser/drop.ts';
-import { restorePackedCollectionChart } from './compact-chart.ts';
+import { restoreDeferredChartFields, restorePackedCollectionChart } from './compact-chart.ts';
 import {
   type BrowserDroppedFile,
   DeferredDroppedFile,
@@ -21,7 +21,15 @@ import {
 } from './dropped-file.ts';
 import { isMaliciousAssetPath, loadAssetBytes } from './file-lookup.ts';
 import { logger } from '../logger.ts';
-import { parseChartThroughCache, type ParsedChartCache } from './parsed-chart-cache.ts';
+import {
+  parseChartThroughCache,
+  readParsedCharts,
+  type ChartCacheKeyBook,
+  type ParsedChartCache,
+} from './parsed-chart-cache.ts';
+import { hasChartSiblings, loadChartSiblings } from './chart-siblings.ts';
+import { chartFileHashesOfCacheKey, seedChartFileHashes } from './chart-hash.ts';
+import type { ParseChartTaskResult } from '../compute/tasks.ts';
 
 export { loadAssetBytes, loadAssetFile, asLoadedBytes } from './file-lookup.ts';
 export { type BrowserDroppedFile, DeferredDroppedFile, materializeDroppedFiles } from './dropped-file.ts';
@@ -29,6 +37,12 @@ export { type BrowserDroppedFile, DeferredDroppedFile, materializeDroppedFiles }
 const log = logger('drop');
 const MAX_ZIP_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024;
+/** Charts being read, hashed, looked up and parsed at once. */
+const PARSE_READ_CONCURRENCY = 32;
+/** Charts parsed between two yields to the page. */
+const PARSE_YIELD_INTERVAL = 32;
+/** Charts read from the parsed-chart cache per lookup: the page gets to paint between two batches. */
+const KNOWN_CHART_BATCH = 512;
 
 /**
  * Optional progress hook for the dropped-folder loaders. When supplied, the loader fires the callback as it walks
@@ -39,6 +53,16 @@ export interface LoadProgressOptions {
   onProgress?: LoadProgressCallback;
   /** Parsed charts kept across loads, by the SHA-256 of each chart file; charts found there are not parsed again. */
   parsedChartCache?: ParsedChartCache;
+  /**
+   * The cache keys of the chart files the host has seen before: a chart whose key it knows comes from
+   * {@link parsedChartCache} without its file being opened, read or hashed. Used for loose files only (a folder), and
+   * never for an LRX chart, whose key also depends on the files beside it.
+   */
+  chartKeys?: ChartCacheKeyBook;
+  /** Skip opening chart files whose parsed results are missing during a cache-only library restore. */
+  onChartCacheMiss?: (path: string) => void;
+  /** Cancels background collection reads before publishing a new library. */
+  signal?: AbortSignal;
 }
 
 export class BrowserChartCollectionStore {
@@ -74,31 +98,52 @@ export class BrowserChartCollectionStore {
    */
   public async appendFromFiles(
     files: Iterable<BrowserDroppedFile>,
-    options: LoadProgressOptions = {},
+    options: LoadProgressOptions & { replaceSourceIds?: readonly string[] } = {},
   ): Promise<BrowserChartCollection> {
     const incoming = await loadChartCollectionFromFiles(files, options);
-    if (incoming.sources.length === 0 && incoming.charts.length === 0 && incoming.errors.length === 0) {
+    options.signal?.throwIfAborted();
+    const replaced = new Set(options.replaceSourceIds);
+    if (
+      incoming.sources.length === 0 &&
+      incoming.charts.length === 0 &&
+      incoming.errors.length === 0 &&
+      !replaced.size
+    ) {
       return this.collection;
     }
     this.dropSeq += 1;
     const prefix = `drop${this.dropSeq}-`;
+    const sourceIds = new Map(
+      incoming.sources.map(({ id }, index) => [id, options.replaceSourceIds?.[index] ?? prefix + id]),
+    );
+    const remapId = (id: string) => sourceIds.get(id) ?? prefix + id;
     const remappedSources: BrowserAssetSource[] = incoming.sources.map((source) => ({
       ...source,
-      id: prefix + source.id,
+      id: remapId(source.id),
     }));
     const remappedCharts: LibraryChart[] = incoming.charts.map((chart) => ({
       ...chart,
-      sourceId: prefix + chart.sourceId,
-      id: prefix + chart.id,
+      sourceId: remapId(chart.sourceId),
+      id: `${remapId(chart.sourceId)}:${chart.chartPath}`,
     }));
     const remappedErrors = incoming.errors.map((error) => ({
       ...error,
-      sourceId: prefix + error.sourceId,
+      sourceId: remapId(error.sourceId),
     }));
+    const current = this.collection;
     this.collection = {
-      sources: [...this.collection.sources, ...remappedSources],
-      charts: [...this.collection.charts, ...remappedCharts],
-      errors: [...this.collection.errors, ...remappedErrors],
+      sources: [
+        ...(replaced.size > 0 ? current.sources.filter(({ id }) => !replaced.has(id)) : current.sources),
+        ...remappedSources,
+      ],
+      charts: [
+        ...(replaced.size > 0 ? current.charts.filter(({ sourceId }) => !replaced.has(sourceId)) : current.charts),
+        ...remappedCharts,
+      ],
+      errors: [
+        ...(replaced.size > 0 ? current.errors.filter(({ sourceId }) => !replaced.has(sourceId)) : current.errors),
+        ...remappedErrors,
+      ],
     };
     return this.collection;
   }
@@ -156,15 +201,17 @@ export async function readDropEntries(
   entries: readonly FileSystemEntry[],
   options: LoadProgressOptions = {},
 ): Promise<BrowserDroppedFile[]> {
+  const { signal } = options;
+  signal?.throwIfAborted();
   const listed: ListedDropEntry[] = [];
   // Total is unknown while we're still walking the FileSystem tree (the FileSystemEntry API doesn't expose a
   // directory's file count up-front), so we report `total: -1` and let the host UI show an indeterminate
   // "Collecting…" indicator.
   options.onProgress?.({ phase: 'enumerating', current: 0, total: -1 });
   for (const entry of entries) {
-    await listDropEntries(entry, '', listed, options.onProgress);
+    await listDropEntries(entry, '', listed, options.onProgress, signal);
   }
-  const files = await openListedDropEntries(listed);
+  const files = await openListedDropEntries(listed, signal);
   options.onProgress?.({ phase: 'enumerating', current: files.length, total: files.length });
   return files;
 }
@@ -205,7 +252,9 @@ async function listDropEntries(
   prefix: string,
   listed: ListedDropEntry[],
   onProgress?: LoadProgressCallback,
+  signal?: AbortSignal,
 ): Promise<void> {
+  signal?.throwIfAborted();
   if (entry.isFile) {
     const path = `${prefix}${entry.name}`;
     listed.push({ entry: entry as FileSystemFileEntry, path });
@@ -220,17 +269,20 @@ async function listDropEntries(
     const reader = (entry as FileSystemDirectoryEntry).createReader();
     const nextPrefix = `${prefix}${entry.name}/`;
     while (true) {
+      signal?.throwIfAborted();
       let batch: FileSystemEntry[];
       try {
         batch = await new Promise<FileSystemEntry[]>((resolve, reject) => {
           reader.readEntries(resolve, reject);
         });
       } catch (error) {
+        signal?.throwIfAborted();
         // A directory readEntries failure aborts iteration on THIS directory — the parent walk continues with what we
         // already collected. Logged because this is unusual (file-system errors are uncommon in dropped folders).
         log.warn(`skipped (readEntries failed): ${nextPrefix}`, error);
         return;
       }
+      signal?.throwIfAborted();
       if (batch.length === 0) {
         return;
       }
@@ -239,13 +291,19 @@ async function listDropEntries(
       // Chrome's FileSystem API has an internal in-flight cap that, when exceeded, silently rejects later calls —
       // observable on the user side as a partial / interrupted load. Bounding the walk here keeps disk I/O saturated
       // without tripping that cap. Children are wrapped in `.catch` so one bad sub-tree doesn't reject the whole pool.
-      await runWithConcurrency(batch, ENTRY_WALK_CONCURRENCY, async (child) => {
-        try {
-          await listDropEntries(child, nextPrefix, listed, onProgress);
-        } catch (error) {
-          log.warn(`skipped (child walk failed): ${nextPrefix}${child.name}`, error);
-        }
-      });
+      await runWithConcurrency(
+        batch,
+        ENTRY_WALK_CONCURRENCY,
+        async (child) => {
+          try {
+            await listDropEntries(child, nextPrefix, listed, onProgress, signal);
+          } catch (error) {
+            signal?.throwIfAborted();
+            log.warn(`skipped (child walk failed): ${nextPrefix}${child.name}`, error);
+          }
+        },
+        signal === undefined ? {} : { signal },
+      );
     }
   }
 }
@@ -255,7 +313,11 @@ async function listDropEntries(
  * {@link DeferredDroppedFile} handles. On a large BMS pack the song audio / BGA make up nearly every file, so this
  * skips almost all of the per-file `file()` round trips that used to dominate the drop.
  */
-async function openListedDropEntries(listed: readonly ListedDropEntry[]): Promise<BrowserDroppedFile[]> {
+async function openListedDropEntries(
+  listed: readonly ListedDropEntry[],
+  signal?: AbortSignal,
+): Promise<BrowserDroppedFile[]> {
+  signal?.throwIfAborted();
   const isEager = createEagerDropPathPredicate(listed.map((item) => normalizePath(item.path)));
   const files: Array<BrowserDroppedFile | undefined> = listed.map((item) =>
     isEager(normalizePath(item.path)) ? undefined : new DeferredDroppedFile(item.entry, item.path),
@@ -264,20 +326,28 @@ async function openListedDropEntries(listed: readonly ListedDropEntry[]): Promis
   for (let index = 0; index < files.length; index += 1) {
     if (files[index] === undefined) eagerIndices.push(index);
   }
-  await runWithConcurrency(eagerIndices, ENTRY_WALK_CONCURRENCY, async (index) => {
-    const { entry, path } = listed[index]!;
-    try {
-      const file = await new Promise<File>((resolve, reject) => {
-        entry.file(resolve, reject);
-      });
-      files[index] = withRelativePath(file, path);
-    } catch (error) {
-      // A single file failing to materialize (permission denied, stale entry, network drive disconnect, …) shouldn't
-      // kill the entire drop. Log and skip — the resulting collection simply omits that file, matching what real LR2
-      // does when an asset is missing.
-      log.warn(`skipped (entry.file failed): ${path}`, error);
-    }
-  });
+  await runWithConcurrency(
+    eagerIndices,
+    ENTRY_WALK_CONCURRENCY,
+    async (index) => {
+      const { entry, path } = listed[index]!;
+      try {
+        const file = await new Promise<File>((resolve, reject) => {
+          entry.file(resolve, reject);
+        });
+        signal?.throwIfAborted();
+        files[index] = withRelativePath(file, path);
+      } catch (error) {
+        signal?.throwIfAborted();
+        // A single file failing to materialize (permission denied, stale entry, network drive disconnect, …) shouldn't
+        // kill the entire drop. Log and skip — the resulting collection simply omits that file, matching what real LR2
+        // does when an asset is missing.
+        log.warn(`skipped (entry.file failed): ${path}`, error);
+      }
+    },
+    signal === undefined ? {} : { signal },
+  );
+  signal?.throwIfAborted();
   return files.filter((file): file is BrowserDroppedFile => file !== undefined);
 }
 
@@ -354,7 +424,8 @@ export async function loadChartCollectionFromFiles(
   files: Iterable<BrowserDroppedFile>,
   options: LoadProgressOptions = {},
 ): Promise<BrowserChartCollection> {
-  const onProgress = options.onProgress;
+  const { onProgress, signal } = options;
+  signal?.throwIfAborted();
   const sources: BrowserAssetSource[] = [];
   const looseFiles = new Map<string, BrowserAssetEntry>();
   const looseLabels = new Set<string>();
@@ -421,6 +492,7 @@ export async function loadChartCollectionFromFiles(
   });
   sources.push(...zipSources.filter((source): source is BrowserAssetSource => source !== undefined));
   errors.push(...zipErrors.flat());
+  signal?.throwIfAborted();
   // Final 100 % emit for the read phase — the throttled wrapper may have suppressed the last one.
   onProgress?.({ phase: 'reading', current: fileList.length, total: fileList.length });
 
@@ -451,60 +523,123 @@ export async function loadChartCollectionFromFiles(
     onProgress?.({ phase: 'parsing', current: 0, total: chartCount });
   }
   const throttledParseProgress = createThrottledProgress(onProgress);
-  // Keep cooperative progress yielding for hosts using the local fallback; workers already run outside the UI thread.
-  const PARSE_YIELD_INTERVAL = 32;
   const items = sources.flatMap((source, index) => chartPathsBySource[index]!.map((path) => ({ source, path })));
   const loadedCharts: Array<LibraryChart | undefined> = Array.from({ length: items.length });
   const parseErrors: Array<BrowserChartCollection['errors'][number] | undefined> = Array.from({ length: items.length });
-  await runWithConcurrency(items, getBrowserWorkerCount(), async ({ source, path }, index) => {
-    try {
-      const chartBytes = await loadAssetBytes(source.files.get(path));
-      if (!chartBytes) {
-        throw new Error(`chart bytes missing for ${path}`);
-      }
-      const { chart, scored, packed, strings } = await parseChartThroughCache(
-        { path, bytes: chartBytes },
-        options.parsedChartCache,
-      );
-      // The scored notes and the play variant they were read under, without timing every note: the list shows a count.
-
-      const libraryChart: LibraryChart = {
-        id: `${source.id}:${path}`,
-        sourceId: source.id,
-        sourceLabel: source.label,
-        sourceKind: source.kind,
-        chartPath: path,
-        directoryLabel: dirname(path) || source.label,
-        fileLabel: basename(path),
-        title: chart.metadata.title || basenameWithoutExtension(path),
-        subtitle: chart.metadata.subtitle,
-        artist: chart.metadata.artist,
-        genre: chart.metadata.genre,
-        playLevel: chart.metadata.playLevel,
-        bpm: chart.metadata.bpm,
-        // The notes the engine scores: FREE ZONE tails are judged by nobody, and mines / invisible objects are not
-        // notes at all. A long note counts once.
-        totalNotes: scored.notes,
-        chart,
-      };
-      loadedCharts[index] = libraryChart;
-      // Every parsed chart stays resident for as long as the song is in the collection, so trim it before keeping
-      // it. Keep the play variant first, while the events are still plain objects: select screens filter the whole
-      // list by it, and a cached answer spares them from unpacking every chart's events. Counting the notes already
-      // worked it out (`resolveChartPlayVariant` over the same chart and path).
-      seedLibraryChartPlayVariant(libraryChart, scored.playVariant);
-      restorePackedCollectionChart(chart, packed, strings);
-    } catch (error) {
-      parseErrors[index] = {
-        sourceId: source.id,
-        path,
-        message: error instanceof Error ? error.message : 'failed to parse chart',
-      };
-    }
+  /** Lists a parsed chart: the library entry kept for as long as the chart is in the collection. */
+  const listChart = (
+    index: number,
+    { chart, scored, packed, strings, deferred, md5 }: ParseChartTaskResult,
+    key: string | undefined,
+  ): void => {
+    const { source, path } = items[index]!;
+    // The scored notes and the play variant they were read under, without timing every note: the list shows a count.
+    const libraryChart: LibraryChart = {
+      id: `${source.id}:${path}`,
+      sourceId: source.id,
+      sourceLabel: source.label,
+      sourceKind: source.kind,
+      chartPath: path,
+      directoryLabel: dirname(path) || source.label,
+      fileLabel: basename(path),
+      title: chart.metadata.title || basenameWithoutExtension(path),
+      subtitle: chart.metadata.subtitle,
+      artist: chart.metadata.artist,
+      genre: chart.metadata.genre,
+      playLevel: chart.metadata.playLevel,
+      bpm: chart.metadata.bpm,
+      // The notes the engine scores: FREE ZONE tails are judged by nobody, and mines / invisible objects are not
+      // notes at all. A long note counts once.
+      totalNotes: scored.notes,
+      chart,
+    };
+    loadedCharts[index] = libraryChart;
+    // Every parsed chart stays resident for as long as the song is in the collection, so trim it before keeping
+    // it. Keep the play variant first, while the events are still plain objects: select screens filter the whole
+    // list by it, and a cached answer spares them from unpacking every chart's events. Counting the notes already
+    // worked it out (`resolveChartPlayVariant` over the same chart and path).
+    seedLibraryChartPlayVariant(libraryChart, scored.playVariant);
+    restorePackedCollectionChart(chart, packed, strings);
+    restoreDeferredChartFields(chart, deferred);
+    // The file's hashes are in hand: its cache key starts with its SHA-256, and its MD5 came with the parse.
+    const hashes = chartFileHashesOfCacheKey(key, md5);
+    if (hashes !== undefined) seedChartFileHashes(chart, hashes);
+  };
+  const reportParsed = (path: string): void => {
     parsedSoFar += 1;
     throttledParseProgress?.({ phase: 'parsing', current: parsedSoFar, total: chartCount, label: path });
-    if (parsedSoFar % PARSE_YIELD_INTERVAL === 0) await yieldToTask();
-  });
+  };
+  // A chart file the host knows unchanged is not read: its parse comes from the cache under the key the host kept,
+  // a batch of charts per lookup. Whatever the cache no longer has is parsed with the rest below.
+  const chartKeysOf = ({ source, path }: (typeof items)[number]): ChartCacheKeyBook | undefined =>
+    source.kind === 'zip' || hasChartSiblings(path) ? undefined : options.chartKeys;
+  const unread: number[] = [];
+  const known: Array<{ index: number; key: string }> = [];
+  for (const [index, item] of items.entries()) {
+    const key = options.parsedChartCache !== undefined ? chartKeysOf(item)?.known(item.path) : undefined;
+    if (key === undefined) unread.push(index);
+    else known.push({ index, key });
+  }
+  for (let start = 0; start < known.length; start += KNOWN_CHART_BATCH) {
+    signal?.throwIfAborted();
+    const batch = known.slice(start, start + KNOWN_CHART_BATCH);
+    const cached = await readParsedCharts(
+      options.parsedChartCache,
+      batch.map(({ key }) => key),
+    );
+    signal?.throwIfAborted();
+    for (const [offset, { index, key }] of batch.entries()) {
+      const result = cached[offset];
+      if (result === undefined) {
+        unread.push(index);
+        continue;
+      }
+      listChart(index, result, key);
+      reportParsed(items[index]!.path);
+    }
+  }
+  unread.sort((left, right) => left - right);
+  // More charts in flight than there are workers: a chart spends most of its time waiting on its file, its hash and
+  // the cache, and the pool queues the parses it has no worker for, so files are read while charts are parsed.
+  if (options.onChartCacheMiss !== undefined) {
+    for (const index of unread) options.onChartCacheMiss(items[index]!.path);
+    unread.length = 0;
+  }
+  await runWithConcurrency(
+    unread,
+    signal === undefined ? PARSE_READ_CONCURRENCY : 1,
+    async (index) => {
+      const { source, path } = items[index]!;
+      try {
+        const chartKeys = chartKeysOf(items[index]!);
+        let key: string | undefined;
+        const result = await parseChartFile(
+          source,
+          path,
+          options.parsedChartCache,
+          (hashed) => {
+            key = hashed;
+            chartKeys?.learned(path, hashed);
+          },
+          signal,
+        );
+        signal?.throwIfAborted();
+        listChart(index, result, key);
+      } catch (error) {
+        signal?.throwIfAborted();
+        parseErrors[index] = {
+          sourceId: source.id,
+          path,
+          message: error instanceof Error ? error.message : 'failed to parse chart',
+        };
+      }
+      reportParsed(path);
+      // Keep cooperative progress yielding for hosts using the local fallback; workers already run outside the UI thread.
+      if (parsedSoFar % PARSE_YIELD_INTERVAL === 0) await yieldToTask();
+    },
+    signal === undefined ? {} : { signal },
+  );
+  signal?.throwIfAborted();
   charts.push(...loadedCharts.filter((chart): chart is LibraryChart => chart !== undefined));
   errors.push(...parseErrors.filter((error): error is BrowserChartCollection['errors'][number] => error !== undefined));
   if (chartCount > 0) {
@@ -512,6 +647,23 @@ export async function loadChartCollectionFromFiles(
   }
 
   return { sources, charts, errors };
+}
+
+/** Reads and parses the chart file at `path` (through `cache`); `onKey` receives the cache key it worked out. */
+async function parseChartFile(
+  source: BrowserAssetSource,
+  path: string,
+  cache: ParsedChartCache | undefined,
+  onKey: (key: string) => void,
+  signal?: AbortSignal,
+): Promise<ParseChartTaskResult> {
+  const chartBytes = await loadAssetBytes(source.files.get(path));
+  signal?.throwIfAborted();
+  if (!chartBytes) {
+    throw new Error(`chart bytes missing for ${path}`);
+  }
+  const siblings = hasChartSiblings(path) ? await loadChartSiblings(source.files, path, chartBytes) : undefined;
+  return parseChartThroughCache({ path, bytes: chartBytes, ...(siblings ? { siblings } : {}) }, cache, onKey, signal);
 }
 
 export function describeChartCollection(collection: BrowserChartCollection): string {
@@ -622,15 +774,42 @@ function resolveChartAssetKeyInFolder(
   assetPath: string,
   excludedEntries?: ReadonlySet<BrowserAssetEntry>,
 ): string | undefined {
-  // bmson 1.0.0 spec MUST: reject malicious paths at the chart-asset entry point. `findCaseInsensitiveMapPath` also
-  // vets each candidate as defense-in-depth, but short-circuiting here means we don't even synthesize the joined
-  // `${base}/${assetPath}` candidate for a path the chart never had any business referencing.
-  if (isMaliciousAssetPath(assetPath)) {
-    return undefined;
-  }
-  const base = dirname(chartPath);
+  const parts = chartAssetPathParts(assetPath);
+  return parts === undefined
+    ? undefined
+    : resolveChartAssetPartsKey(source, dirname(chartPath), parts, excludedEntries);
+}
+
+/** An asset path as the folder lookup reads it: normalized, and its file name alone. */
+interface ChartAssetPathParts {
+  readonly normalized: string;
+  readonly baseName: string;
+}
+
+/**
+ * `assetPath` split for {@link resolveChartAssetPartsKey}, or `undefined` for a malicious path. bmson 1.0.0 spec MUST:
+ * reject malicious paths at the chart-asset entry point. `findCaseInsensitiveMapPath` also vets each candidate as
+ * defense-in-depth, but short-circuiting here means we don't even synthesize the joined `${base}/${assetPath}`
+ * candidate for a path the chart never had any business referencing.
+ */
+function chartAssetPathParts(assetPath: string): ChartAssetPathParts | undefined {
+  if (isMaliciousAssetPath(assetPath)) return undefined;
   const normalized = normalizePath(assetPath);
-  const baseName = basename(normalized);
+  return { normalized, baseName: basename(normalized) };
+}
+
+/**
+ * The key an asset is found under from the chart folder `base`: the path joined to the folder, the path from the top of
+ * the source, the file name in the folder, then the file name at the top. `missed` holds paths already looked up and
+ * missed in the same resolution; they are not looked up again, and this lookup's misses join them.
+ */
+function resolveChartAssetPartsKey(
+  source: BrowserAssetSource,
+  base: string,
+  { normalized, baseName }: ChartAssetPathParts,
+  excludedEntries?: ReadonlySet<BrowserAssetEntry>,
+  missed?: Set<string>,
+): string | undefined {
   const candidates = [
     normalizePath(`${base}/${normalized}`),
     normalized,
@@ -638,8 +817,12 @@ function resolveChartAssetKeyInFolder(
     baseName,
   ];
   for (const candidate of candidates) {
+    if (missed?.has(candidate)) continue;
     const key = findCaseInsensitiveMapPath(source.files, candidate, { rejectCandidate: isMaliciousAssetPath });
-    if (key === undefined) continue;
+    if (key === undefined) {
+      missed?.add(candidate);
+      continue;
+    }
     const entry = source.files.get(key);
     if (entry !== undefined && !excludedEntries?.has(entry)) {
       return key;
@@ -648,20 +831,6 @@ function resolveChartAssetKeyInFolder(
   return undefined;
 }
 
-/**
- * Audio-asset variant of `resolveChartAsset` that walks codec substitutions when the chart's declared file isn't
- * present.
- *
- * BMS charts almost always declare `#WAVxx test.wav`, but real-world archives ship the audio as `.opus` / `.ogg` /
- * `.mp3` to save space. Mirrors the `packages/player-engine` audio loader's "try the alternative codecs before giving up"
- * behavior, with the order tweaked for the browser case:
- *
- * - 1. `.opus` (highest compression-to-quality ratio) 2. `.ogg` (broadly supported, small) 3. `.mp3` (universal,
- *   slightly larger) 4. `.wav` (always-correct fallback) 5. the original path verbatim (covers `.flac` / `.oga` / etc.)
- *
- * Case is handled by `resolveChartAsset` itself (case-insensitive lookup), so this list no longer needs explicit
- * upper-case duplicates — `kick.OPUS` and `kick.opus` both resolve through the lower-cased extension variant.
- */
 export interface ResolveChartAudioAssetOptions {
   /**
    * BMS spec — `#PATH_WAV <prefix>` declares a directory the chart's WAVs live under. The resolver tries each codec
@@ -673,6 +842,7 @@ export interface ResolveChartAudioAssetOptions {
   excludedEntries?: ReadonlySet<BrowserAssetEntry>;
 }
 
+/** Try the authored name, then alternate audio extensions, in the chart folder before its parent. */
 export function resolveChartAudioAsset(
   source: BrowserAssetSource,
   chartPath: string,
@@ -784,33 +954,23 @@ function joinPathWAVPrefix(prefix: string | undefined, samplePath: string): stri
 function audioFallbackPaths(path: string): string[] {
   const lastSlash = path.lastIndexOf('/');
   const dotIndex = path.lastIndexOf('.');
-  // bmson 1.0.0 spec — "A file extension may be omitted. If file extension is omitted, then the implementation should
-  // search for compatible sound file with that name." The previous shape returned just `[path]` for extensionless
-  // inputs, which skipped the codec walk entirely and broke any bmson chart that authors `sound_channels[].name`
-  // without a dot. We now walk the same fallback list for both cases — the only difference is whether `path` is the
-  // bare base or the already-suffixed variant we strip back to one.
-  const hasExtension = dotIndex >= 0 && dotIndex >= lastSlash;
-  const base = hasExtension ? path.slice(0, dotIndex) : path;
-  // Order is "most-likely-shipped first" so the case-insensitive file lookup short-circuits fast on the common archive
-  // formats. `.m4a` (AAC) is included to match the spec example ("Try piano.wav, piano.ogg, piano.m4a, …").
-  const candidates = [`${base}.opus`, `${base}.ogg`, `${base}.mp3`, `${base}.wav`, `${base}.m4a`];
-  if (!candidates.includes(path)) {
-    candidates.push(path);
-  }
-  return candidates;
+  // bmson permits extensionless names, which get the same fallback list.
+  const base = dotIndex > lastSlash ? path.slice(0, dotIndex) : path;
+  const alternatives = [`${base}.opus`, `${base}.ogg`, `${base}.mp3`, `${base}.wav`, `${base}.m4a`];
+  const authored = path.toLowerCase();
+  return [path, ...alternatives.filter((candidate) => candidate.toLowerCase() !== authored)];
 }
 
 /**
  * Image-asset variant of {@link resolveChartAsset} that walks the common BMS image-format extensions before giving up.
  * BMS charts historically declare `#BMPxx test.bmp`, but archives ship the actual graphic as `.png` / `.jpg` / `.gif`
- * more often than as a real Windows bitmap. Mirrors {@link resolveChartAudioAsset}'s codec-walking behavior, with the
- * order tuned for graphics:
+ * more often than as a real Windows bitmap. Mirrors {@link resolveChartAudioAsset}'s codec-walking behavior:
  *
- * - 1. `.webp` (first, so a pack re-encoded to WebP to save space wins over any leftover originals) 2. `.png`
- *   (lossless, broadly supported, the modern default) 3. `.jpg` / `.jpeg` (lossy, smaller — common for photo BGA) 4.
- *   `.gif` (legacy but still seen in older charts) 5. `.bmp` (the literal `#BMPxx` extension) 6. the original path
- *   verbatim — keeps video BGA references (`.mpg` / `.mp4` / `.webm` / …) and any exotic format not in the list above
- *   resolving correctly.
+ * - 1. the path the chart names, as LR2 tries it before any other extension (OpenLR2 `LR2f.cpp` L14607-L14673). A
+ *   same-stem file is not guaranteed to hold the same picture, so it never replaces a file that is there (#1192).
+ * - 2. when that file is missing, the same name as `.webp`, `.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, without repeating
+ *   the named extension. The order is a Be-Music policy: LR2 tries `.png`, `.jpg`, `.bmp` and beatoraja `.jpg`,
+ *   `.jpeg`, `.gif`, `.bmp`, `.png`, `.tga`; `.webp` is first so a pack re-encoded to save space resolves.
  *
  * The bytes are decoded by content, not by the declared extension, so a `#BMPxx foo.bmp` resolved to `foo.webp` decodes
  * as WebP.
@@ -835,13 +995,26 @@ export function resolveChartBGAAsset(
   chartPath: string,
   assetPath: string,
 ): { entry: BrowserAssetEntry; path: string; key: string } | undefined {
-  // Every extension in the chart's folder before any in its parent, as LR2 does.
-  for (const folderChartPath of chartLookupFolders(chartPath)) {
-    for (const candidate of imageFallbackPaths(assetPath)) {
-      const key = resolveChartAssetKeyInFolder(source, folderChartPath, candidate);
-      const entry = key === undefined ? undefined : source.files.get(key);
-      if (key !== undefined && entry !== undefined) {
-        return { entry, path: candidate, key };
+  const primary = imageFallbackPaths(assetPath);
+  const stills = isVideoExtensionPath(assetPath)
+    ? stillImageFallbackPaths(assetPath.slice(0, assetPath.lastIndexOf('.')))
+    : [];
+  // Each candidate is split once and each folder named once; a path missed once stays missed, since the bare forms
+  // recur across folders.
+  const missed = new Set<string>();
+  // Exhaust the video candidates across both folders before trying still images.
+  for (const paths of [primary, stills]) {
+    // Split lazily: a hit in the chart's own folder usually comes on the first candidate or two.
+    const split: (ChartAssetPathParts | null | undefined)[] = [];
+    for (const folderChartPath of chartLookupFolders(chartPath)) {
+      const base = dirname(folderChartPath);
+      for (let index = 0; index < paths.length; index += 1) {
+        const candidate = paths[index]!;
+        const candidateParts = (split[index] ??= chartAssetPathParts(candidate) ?? null);
+        if (candidateParts === null) continue;
+        const key = resolveChartAssetPartsKey(source, base, candidateParts, undefined, missed);
+        const entry = key === undefined ? undefined : source.files.get(key);
+        if (key !== undefined && entry !== undefined) return { entry, path: candidate, key };
       }
     }
   }
@@ -861,24 +1034,19 @@ function imageFallbackPaths(path: string): string[] {
   if (dotIndex < 0 || dotIndex < lastSlash) {
     return [path];
   }
-  // A declared video falls back to the same name under the other video extensions (see VIDEO_FALLBACK_EXTENSIONS).
-  // Don't walk image extensions when the chart explicitly declared a video BGA — `_scualee.mpg` paired with a same-
-  // basename `_scualee.png` (cover art / static fallback frame shipped alongside the actual video) would otherwise have
-  // the resolver pick the PNG. The BGA loader only checks the declared path's extension to decide between the image vs.
-  // video pipeline, so feeding PNG bytes through the video path makes ffmpeg.wasm pick `png_pipe` and emit a 1-frame
-  // MP4 — visually a frozen still during gameplay. Returning just the original path here keeps the video reference
-  // resolving to its own file.
   if (isVideoExtensionPath(path)) {
     const videoBase = path.slice(0, dotIndex);
     const declared = path.slice(dotIndex + 1).toLowerCase();
     return [path, ...VIDEO_FALLBACK_EXTENSIONS.filter((ext) => ext !== declared).map((ext) => `${videoBase}.${ext}`)];
   }
   const base = path.slice(0, dotIndex);
-  const candidates = [`${base}.webp`, `${base}.png`, `${base}.jpg`, `${base}.jpeg`, `${base}.gif`, `${base}.bmp`];
-  if (!candidates.includes(path)) {
-    candidates.push(path);
-  }
-  return candidates;
+  const authored = path.toLowerCase();
+  // The file the chart names first, as LR2 looks images up: a same-stem file is not guaranteed to be the same picture.
+  return [path, ...stillImageFallbackPaths(base).filter((candidate) => candidate.toLowerCase() !== authored)];
+}
+
+function stillImageFallbackPaths(base: string): string[] {
+  return ['webp', 'png', 'jpg', 'jpeg', 'gif', 'bmp'].map((extension) => `${base}.${extension}`);
 }
 
 /**

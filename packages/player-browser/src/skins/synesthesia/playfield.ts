@@ -10,7 +10,12 @@ import {
   type Projected,
   type Vec3,
 } from './space.ts';
-import { BURST_SKIRT_FRAME_BUDGET, burstGrainCount } from './burst-budget.ts';
+import {
+  BURST_FRAME_BUDGET,
+  BURST_SKIRT_FRAME_BUDGET,
+  burstGrainCount,
+  judgmentParticleMultiplier,
+} from './burst-budget.ts';
 import { drawReticle, sharedShapeBatch } from './draw.ts';
 import { SYN_GLOW_SIZE, synGlowTexture } from './style.ts';
 import {
@@ -326,9 +331,9 @@ const POWDER_TRAIL_SIZE = 0.85;
 const POWDER_GLINT_SIZE = 0.94;
 const PARTICLE_CACHE = new Map<number, BurstParticle[]>();
 
-function cachedBurst(seed: number, count = BURST_PARTICLES_MAX): BurstParticle[] {
+function cachedBurst(seed: number, count: number): BurstParticle[] {
   let particles = PARTICLE_CACHE.get(seed);
-  if (!particles) {
+  if (!particles || particles.length < count) {
     particles = burstParticles(seed, count);
     PARTICLE_CACHE.set(seed, particles);
     // Live bombs never exceed a few dozen; keep the cache bounded.
@@ -363,7 +368,16 @@ function maskShape(top: number, bottom: number, runs: readonly { left: number; r
  * The smaller sparks fly as square voxels rather than round glows, like shattering wireframes.
  * Everything is additive, so overlapping hits bloom into each other like light instead of stacking opaque shapes.
  */
-export function renderSynesthesiaBombs({ layer, pool, bombs, combo, effects, lanes, nowMs }: PixiBombsContext): void {
+export function renderSynesthesiaBombs({
+  layer,
+  pool,
+  bombs,
+  combo,
+  effects,
+  settings,
+  lanes,
+  nowMs,
+}: PixiBombsContext): void {
   // Keep hit effects inside each playfield, clear of the score, gauge and central BGA.
   if (layer && lanes?.length) {
     let mask = bombMasks.get(layer);
@@ -402,16 +416,25 @@ export function renderSynesthesiaBombs({ layer, pool, bombs, combo, effects, lan
   // Keep colour the hero: when many hits overlap, dim the white parts (flash, pillar, streak) so additive stacking
   // doesn't burn the line to white, while sparks keep most of their colour.
   const crowd = 1 / Math.sqrt(Math.max(1, bombs.length / 2));
+  const multiplier = judgmentParticleMultiplier(settings);
+  const amount = profile.amount * multiplier;
+  const grains = burstGrainCount(
+    BURST_PARTICLES,
+    BURST_PARTICLES_PER_TIER,
+    tier,
+    amount,
+    bombs.length,
+    BURST_FRAME_BUDGET * multiplier,
+  );
+  const skirt = burstGrainCount(
+    BURST_SKIRT,
+    BURST_SKIRT_PER_TIER,
+    tier,
+    amount,
+    bombs.length,
+    BURST_SKIRT_FRAME_BUDGET * multiplier,
+  );
   for (const bomb of bombs) {
-    const grains = burstGrainCount(BURST_PARTICLES, BURST_PARTICLES_PER_TIER, tier, profile.amount, bombs.length);
-    const skirt = burstGrainCount(
-      BURST_SKIRT,
-      BURST_SKIRT_PER_TIER,
-      tier,
-      profile.amount,
-      bombs.length,
-      BURST_SKIRT_FRAME_BUDGET,
-    );
     renderBomb(pool, bomb, tier, crowd, profile.amount, grains, skirt);
   }
 }
@@ -549,7 +572,7 @@ function renderBomb(
   // 2 + 3. Sparks: hairline trails and powder grains go through the shared batch (one fill per colour bucket instead of
   // one per grain); the few coarse grains get a glow sprite. Everything here is additive, so draw order is free and no
   // depth sort (or per-frame spark list) is needed.
-  const particles = cachedBurst(bomb.seed);
+  const particles = cachedBurst(bomb.seed, Math.max(BURST_PARTICLES_MAX, grains));
   const count = Math.min(particles.length, grains);
   const radius = unit * 4.6 * (1 + 0.1 * tier);
   const gravity = unit * 3.2;
@@ -614,7 +637,7 @@ function renderBomb(
   }
   // 3b. Skirt: fine, dimmer powder thrown out sideways along the judgement line. It rises at most about a lane's width
   // and settles back, so the burst reads fuller while the lanes above — where the next notes fall — stay clear.
-  const skirtParticles = cachedBurst(bomb.seed ^ SKIRT_SEED, BURST_SKIRT_MAX);
+  const skirtParticles = cachedBurst(bomb.seed ^ SKIRT_SEED, Math.max(BURST_SKIRT_MAX, skirt));
   const skirtCount = Math.min(skirtParticles.length, skirt);
   for (let index = 0; index < skirtCount; index += 1) {
     const particle = skirtParticles[index]!;

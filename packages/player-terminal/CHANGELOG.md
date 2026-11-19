@@ -1,5 +1,21 @@
 # @be-music/player-terminal
 
+## 0.10.0
+
+### Minor Changes
+
+- 7436dd8: `--gauge` accepts a source-qualified gauge such as `lr2:HARD` or `beatoraja:EX-HARD`, which runs that source's gauge under whichever ruleset judges the play.
+- 488ba86: Play LRX charts: the CLI finds `.lrs` files when scanning a directory and reads each with its `.lrh` header and `.lrm` BGA file; the chart list's cache follows changes to the header too.
+- 346b21a: Play Nanasi Groove 2 `.n2s` charts: the CLI finds them when scanning a directory and opens them like `.pms` files.
+- 7accbed: `bms-player --ruleset plugout` plays under the `plugout` ruleset, `--gauge plugout:EX-EASY` and the other plugout gauges run its gauges, and `bms-replay --ruleset` accepts `plugout` (`all` includes it).
+
+### Patch Changes
+
+- af62160: Default to BMS LNTYPE 1 when the chart omits the header, matching reference playback.
+- 9791117: Start the chart-selection worker only when a library has charts to sort, and reuse it for later scans.
+- e5dce2a: The chart preview plays LRX background sounds that plugout mixes with the keysounds (chain notes, hidden notes and most background columns) at the keysound volume, and tells LRX charts whose notes differ only in their sound values apart in its cache.
+- Updated dependencies: `@be-music/player-engine@0.19.0`, `@be-music/chart-parser@0.8.0`, `@be-music/chart-model@0.12.0`, `@be-music/chart-source@0.9.0`, `@be-music/chart-audio-renderer@0.5.4`, `@be-music/player-node-audio@0.2.9`, `@be-music/shared-utils@0.8.0`
+
 ## 0.9.7
 
 ### Patch Changes

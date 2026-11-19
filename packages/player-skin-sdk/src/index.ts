@@ -13,7 +13,8 @@
  * - Play state: judgment words (`judgeDisplayWord`, the flashing GREAT of a PERFECT), moments (combo milestones, the
  *   clear line, full combo, count-in progress), effect levels, input impulses, and the loading caption.
  * - Sound: `audioDrive` turns the frame's audio analysis into ready-to-use drive values.
- * - Chart facts: select-row facts (`resolveChartRowFacts`), result lamp and track rows, and judgment-timing histograms
+ * - Chart facts: select-row facts (`resolveChartRowFacts`), best records and clear-lamp lights for select bars
+ *   (`describeBestRecord`, `resolveClearLampLight`), result lamp and track rows, and judgment-timing histograms
  *   (`binJudgmentTimings`).
  * - Skin settings: `resolveBeMusicSkinSettings` fills in and checks the values of a skin's `settings` schema.
  * - Text and motion: tabular figure layout, the default text face, easing, staged timelines, roll-up counters, and a
@@ -50,6 +51,7 @@ export * from './audio-drive.ts';
 export * from './chart-stats.ts';
 export * from './result-track.ts';
 export * from './select-list.ts';
+export * from './select-record.ts';
 
 /** Framework-free range clamping shared with the core packages. */
 export { clamp } from '@be-music/shared-utils/core';

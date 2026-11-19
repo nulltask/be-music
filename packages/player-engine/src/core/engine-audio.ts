@@ -76,14 +76,18 @@ export async function createDebugActiveAudioEstimator(
   const windows: DebugSampleWindow[] = triggers
     .map((trigger) => {
       const startSeconds = Math.max(0, trigger.seconds);
-      const durationSeconds =
+      const sampleSeconds =
         typeof trigger.sampleDurationSeconds === 'number' && Number.isFinite(trigger.sampleDurationSeconds)
-          ? Math.max(0, trigger.sampleDurationSeconds)
+          ? Math.max(0, trigger.sampleDurationSeconds) + (trigger.sampleReleaseSeconds ?? 0)
           : Math.max(
               0,
               (sampleDurationSecondsByKey.get(trigger.sampleKey) ?? DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS) -
                 Math.max(0, trigger.sampleOffsetSeconds),
             );
+      // Seconds of the sample sound for 1 / rate seconds at a trigger's own rate (an LRX note's `frq`).
+      const rate =
+        trigger.samplePlaybackRate !== undefined && trigger.samplePlaybackRate > 0 ? trigger.samplePlaybackRate : 1;
+      const durationSeconds = sampleSeconds / rate;
       return {
         sampleKey: trigger.sampleKey,
         startSeconds,

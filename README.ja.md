@@ -2,9 +2,7 @@
 
 # Be-Music
 
-[パッケージの責務](./docs/packages.ja.md)
-
-Be-Music は、BMS・bmson 譜面を遊び、扱うためのオープンソースプロジェクトです。ブラウザ版・ターミナル版のプレイヤー、オンラインランキング、譜面処理・プレイエンジン・スキン・UI のための再利用可能な TypeScript パッケージを提供します。
+Be-Music は BMS・bmson 譜面を扱うオープンソースのツールキットです。ブラウザー版と端末版のプレイヤー、オンラインランキング、譜面処理・プレイエンジン・スキン・UI に使える TypeScript パッケージを提供します。
 
 ## 特徴
 
@@ -58,7 +56,7 @@ Be-Music は、BMS・bmson 譜面を遊び、扱うためのオープンソー�
 - [`@be-music/chart-source`](./packages/chart-source/README.ja.md): Be-Music 内部処理専用の BMS/bmson 中間表現 (JSON互換) の pure IR
 - [`@be-music/chart-model`](./packages/chart-model/README.ja.md): beat 解決、イベント順序、ロングノート解決などの譜面意味論 helper
 - [`@be-music/shared-utils`](./packages/shared-utils/README.ja.md): 全パッケージで再利用する汎用ユーティリティ。browser-safe な core helper と Node 向け helper は狭い subpath export で分けています
-- [`@be-music/chart-parser`](./packages/chart-parser/README.ja.md): `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON のパーサ
+- [`@be-music/chart-parser`](./packages/chart-parser/README.ja.md): `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / `.n2s` / LRX / JSON のパーサ
 - [`@be-music/chart-writer`](./packages/chart-writer/README.ja.md): JSON から `.bms` / `.bmson` への文字列化
 - [`@be-music/chart-audio-renderer`](./packages/chart-audio-renderer/README.ja.md): 譜面をレンダリングして `.wav` / `.aiff` を出力
 - [`@be-music/player-engine`](./packages/player-engine/README.ja.md): 規則と再生 engine を共有する package。1 つのプレイループ（手動・AUTO・リプレイ）、判定、score、gauge とクリアランプ、自己ベスト、コースの実行と NONSTOP、リプレイの形式、ホストが差し込む runtime 契約
@@ -219,11 +217,11 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 
 - snapshot 出力: `tmp/bench/exports*.json`
 - compare 出力: 任意の Markdown と summary JSON
-- GitHub Actions では、`devel` / `main` 向け PR で base/head 比較を PR comment として投稿します
-- GitHub Actions では、`devel` / `main` への push でも直前 revision 比較を実行し、対象 commit へ commit comment を投稿します
-- PR・push とも、ファイルが変更されたパッケージだけを測定し、そのパッケージに依存するパッケージは測定しません。ドキュメントと `*.test.*` / `*.spec.*` の変更は除外し、測定対象でないパッケージだけの変更はスキップします。共通ツール・ロックファイル・ルート設定の変更は全件を測定します。CI の各ケースの測定時間 50 ms・ウォームアップ 25 ms は維持します。
-- CI は base と head を同一 runner で交互に（head、base、head、base…）3 回ずつ計測し、ホスト間のノイズや一時的な遅さが両方に等しくかかるようにします
+- GitHub Actions は `devel` / `main` への push 時だけベンチマークを実行します。`devel` では push したコミットを実行時点の `main` と比較します。`main` では push 前後のコミットを比較します。結果は push したコミットにコメントします。
+- 計測対象は push で変更されたファイルから選びます。ドキュメントと `*.test.*` / `*.spec.*` は除外し、共通ツール・ロックファイル・ルート設定が変わった場合は全パッケージを測定します。各ケースのウォームアップは 25 ms、測定時間は 50 ms です。
+- CI は同じランナー上で比較する 2 つのコミットを交互に 5 回ずつ測定し、ランナーの負荷が比較に与える影響を抑えます。
 - 速い関数は 1 回の計測サンプルの中で何度も呼び出し（1 サンプル約 50 µs）、ナノ秒単位のケースもタイマーの分解能に埋もれずに計測します。時間は 1 回の呼び出しあたりで表示します
 - 回帰・改善と判定するのは、中央値の変化がしきい値（CI では 8%）を超え、かつ base と head の各回の計測値が重ならないケースだけです。しきい値を超えても計測値が重なるものは「within noise」として別に表示します
+- `devel` への push で ops/s の中央値が 20% 以上低下したケースだけを、同じ `main` のコミットと再比較します。両方の計測でしきい値に達し、比較元と比較先の測定範囲が重ならないケースごとに `perf` ラベル付きの Issue を作成します。同じケースの Issue が開いていれば概要を更新します。
 - `ioBound` を付けたケース（ファイルシステムに触るもの）は、時間が OS のキャッシュやディスクに左右されるため、判定せずに別枠で表示します
 - コメントは判定結果から始まり、base / head のコミットへのリンク、変更したパッケージのケース、追加・削除された公開関数を載せ、ノイズ・除外・実行条件は折りたたんで表示します

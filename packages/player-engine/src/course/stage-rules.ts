@@ -1,4 +1,4 @@
-import type { GaugeType } from '../ruleset/gauge-type.ts';
+import { qualifyGaugePick, splitGaugePick, type GaugePick } from '../ruleset/gauge-type.ts';
 import type { ReplayCourseStage } from '../replay/format.ts';
 import type { CourseConstraint, CourseDefinition } from './definition.ts';
 import { optionValueName, type QualifiedOptionValue } from '../ruleset/option-source.ts';
@@ -34,6 +34,8 @@ export type CourseLaneOption =
   | 'ALL-SCR'
   | 'RANDOM-EX'
   | 'S-RANDOM-EX'
+  // nanasigroove's, which only a chart's `774:RANDOM_RANDOM+` selects (#1244).
+  | 'RANDOM+'
   | 'RANDOM_PLAYABLE'
   | 'S_RANDOM_PLAYABLE'
   | 'CONVERGE'
@@ -97,7 +99,8 @@ export function isLR2GradeCourse(definition: Pick<CourseDefinition, 'kind' | 'so
 
 /** The play settings LR2 resets when a GRADE course starts. */
 export interface LR2GradeResetSettings {
-  gauge: GaugeType;
+  /** The gauge pick, bare or qualified with its source (`lr2:EASY`). */
+  gauge: GaugePick;
   /** Each side's lane cover, as the select screen names it. */
   hiddenSudden1P: 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
   hiddenSudden2P: 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
@@ -110,8 +113,9 @@ export interface LR2GradeResetSettings {
 
 /**
  * The settings an LR2 GRADE course plays its stages with (OpenLR2 `Main.cpp` M1124-M1170, which LR2 applies when the
- * course starts): EASY and G.ATTACK gauge picks play on GROOVE; HIDDEN / SUDDEN, the assists (auto
- * scratch), DP FLIP and the play tempo (LR2's pitch) are turned off. A course that is not an LR2 GRADE course
+ * course starts): EASY and G.ATTACK gauge picks play on GROOVE, a source-qualified one on its own source's
+ * (`beatoraja:EASY` on `beatoraja:GROOVE`; the reset reads the gauge type, a Be-Music choice no reference defines);
+ * HIDDEN / SUDDEN, the assists (auto scratch), DP FLIP and the play tempo (LR2's pitch) are turned off. A course that is not an LR2 GRADE course
  * ({@link isLR2GradeCourse}) keeps the settings. The lane options are reset by the course's `grade` constraint
  * ({@link resolveCourseLaneOptions}). LR2 writes the resets into its config; a host applies them to the course's
  * stages only, so the player's own settings come back afterwards.
@@ -122,16 +126,22 @@ export function resolveLR2GradeCoursePlaySettings<T extends LR2GradeResetSetting
 ): T {
   // Spread over `settings` so the other fields a host carries along pass through.
   if (!isLR2GradeCourse(definition)) return settings;
-  return {
-    ...settings,
-    gauge: settings.gauge === 'EASY' || settings.gauge === 'G-ATTACK' ? 'GROOVE' : settings.gauge,
-    hiddenSudden1P: 'OFF',
-    hiddenSudden2P: 'OFF',
-    autoScratch1P: false,
-    autoScratch2P: false,
-    dpFlip: false,
-    tempo: 1,
-  };
+  return resetLR2GradePlaySettings({ ...settings, gauge: settings.gauge });
+}
+
+function resetLR2GradePlaySettings<T extends LR2GradeResetSettings>(settings: T): T {
+  // A bare pick, the common case, needs no split.
+  const pick = settings.gauge.includes(':') ? splitGaugePick(settings.gauge) : undefined;
+  const type = pick?.type ?? settings.gauge;
+  const reset = type === 'EASY' || type === 'G-ATTACK';
+  if (reset) settings.gauge = pick?.source === undefined ? 'GROOVE' : qualifyGaugePick(pick.source, 'GROOVE');
+  settings.hiddenSudden1P = 'OFF';
+  settings.hiddenSudden2P = 'OFF';
+  settings.autoScratch1P = false;
+  settings.autoScratch2P = false;
+  settings.dpFlip = false;
+  settings.tempo = 1;
+  return settings;
 }
 
 /** Whether the course forbids changing the hi-speed during play (`no_speed`). */
@@ -140,7 +150,10 @@ export function isCourseHiSpeedLocked(constraints: readonly CourseConstraint[]):
 }
 
 /** The player's picks a course may override for a stage: the lane options and what LR2 resets on a GRADE course. */
-export interface CourseStagePlaySettings extends CourseLaneOptions, LR2GradeResetSettings {}
+export interface CourseStagePlaySettings extends CourseLaneOptions, LR2GradeResetSettings {
+  lr2RandomScratch1P?: boolean;
+  lr2RandomScratch2P?: boolean;
+}
 
 /**
  * The settings a stage plays with in place of the player's picks: the lane options the course allows
@@ -152,8 +165,14 @@ export function resolveCourseStagePlaySettings<T extends CourseStagePlaySettings
   definition: Pick<CourseDefinition, 'kind' | 'source' | 'constraints'>,
   picked: T,
 ): T {
-  return resolveLR2GradeCoursePlaySettings(definition, {
-    ...picked,
-    ...resolveCourseLaneOptions(definition.constraints, picked),
-  });
+  const allowScratchRandom = !definition.constraints.some(
+    (constraint) => constraint === 'grade' || constraint === 'grade_mirror' || constraint === 'grade_random',
+  );
+  const settings = { ...picked };
+  if (picked.lr2RandomScratch1P !== undefined)
+    settings.lr2RandomScratch1P = allowScratchRandom && picked.lr2RandomScratch1P;
+  if (picked.lr2RandomScratch2P !== undefined)
+    settings.lr2RandomScratch2P = allowScratchRandom && picked.lr2RandomScratch2P;
+  if (!allowScratchRandom) Object.assign(settings, resolveCourseLaneOptions(definition.constraints, picked));
+  return isLR2GradeCourse(definition) ? resetLR2GradePlaySettings(settings) : settings;
 }

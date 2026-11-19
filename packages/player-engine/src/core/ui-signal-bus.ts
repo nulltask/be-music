@@ -68,6 +68,11 @@ export interface PlayerGaugeSummary {
    * Free-form because each ruleset has its own line-up.
    */
   type?: string;
+  /**
+   * The source whose gauge {@link type} names, when the play runs another source's gauge than the judge ruleset's own
+   * (`'lr2:HARD'` under beatoraja judging, #1171). Absent: the judge ruleset's own.
+   */
+  source?: 'lr2' | 'beatoraja' | '____' | 'plugout';
   /** True for gauges that fail at 0 % instead of clearing on a threshold (HARD / EX-HARD / HAZARD families). */
   survival?: boolean;
   /** True once a survival gauge bottomed out mid-play; the run keeps judging but can no longer clear. */

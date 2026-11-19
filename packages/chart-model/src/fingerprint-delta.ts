@@ -34,7 +34,6 @@ import {
   parseRational,
   parseTimeline,
   parseTotal,
-  usesInferredLongNoteType,
   type ChartItems,
   type LaneNotesCache,
   type FingerprintLength,
@@ -357,13 +356,15 @@ function replayEntries(
       continue;
     }
     for (const event of entry.events) {
+      // Optional fields are assigned, not spread, to keep the hidden classes of parsed events.
       const replayed: BeMusicEvent = {
         measure: entry.measure,
         channel,
         position: event.position,
         value: normalizeObjectKey(event.value, base),
-        ...(event.bmson ? { bmson: event.bmson } : {}),
       };
+      if (event.bmsLineOrder !== undefined) replayed.bmsLineOrder = event.bmsLineOrder;
+      if (event.bmson) replayed.bmson = event.bmson;
       const list = added.get(bucket);
       if (list) {
         list.push(replayed);
@@ -371,12 +372,6 @@ function replayEntries(
         added.set(bucket, [replayed]);
       }
       touched.add(bucket);
-      if (bucket.startsWith('lane:') && usesInferredLongNoteType(json)) {
-        const side = channel.charCodeAt(0);
-        if (side === 0x35 || side === 0x36) {
-          touched.add(ALL_LANES);
-        }
-      }
     }
   }
   if (touched.has(ALL_LANES)) {

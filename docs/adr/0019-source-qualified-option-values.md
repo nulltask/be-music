@@ -98,3 +98,33 @@ A comparison of the lane options across LR2 (OpenLR2), beatoraja and the AC / PC
 - **Older values keep working.** `lr2:RANDOM`, `beatoraja:RANDOM`, `____:RANDOM` and `____:S-RANDOM` read as `RANDOM` and `lr2:S-RANDOM` (`canonicalOptionValue`): saved settings migrate as they are read, and replays, which record the arrangement, are not rewritten. An LR2 RANDOM button steps OFF, MIRROR, RANDOM, `lr2:S-RANDOM`, SCATTER and `lr2:CONVERGE`; a beatoraja button's RANDOM slot is the bare RANDOM.
 
 CONVERGE and BATTLE stay qualified: their sources define them differently. The differences the comparison found that remain are tracked in [#1076](https://github.com/nulltask/be-music/issues/1076) and [#1077](https://github.com/nulltask/be-music/issues/1077).
+
+## Amendment: a source-qualified gauge keeps its source under every ruleset (#1171)
+
+The decision table already lists the gauge as carried with a qualified value keeping its source; the engine implemented only the bare reading. A gauge pick now takes its source (`lr2:HARD`, `beatoraja:EX-HARD`, `____:ASSIST-EASY`), and the pick keeps that source whichever ruleset judges the play.
+
+```mermaid
+flowchart LR
+  pick["Gauge pick"] --> qualified{"Qualified?"}
+  qualified -->|"lr2:HARD"| source["LR2's gauges"]
+  qualified -->|"HARD"| own["The judging ruleset's own"]
+  source --> play["Judged by the selected ruleset"]
+  own --> play
+```
+
+- **What follows the gauge's source:** the gauge table and its TOTAL reading (LR2's integer TOTAL and default curve, beatoraja's mode tables, AC's unit), the 2 % mine floor of LR2's GROOVE and EASY, the gauge auto-shift ladder, the lowest auto-shift gauge read on that ladder, SURVIVAL TO GROOVE's fallback gauge, the course gauge the pick maps to with the value carried between stages, the rule that ends a course stage (LR2's course gauges below 2 %, a class gauge at 0), and the lamp a clear on that gauge earns.
+- **What stays with the judge ruleset:** judgment windows, note selection, long-note style, mine trigger and its POOR count, the HCN tick rule, the score, the top lamp and the full-combo lamps, and LR2's rule that a course clears only with every note judged.
+- **Note count.** A source's gauge scales over the number of judgments the judge ruleset issues, so a play of PGREATs still recovers the source's TOTAL. LR2's gauge under AC judging therefore counts a charge note twice, as AC judges it [I]. No reference defines this combination; it is a Be-Music composition.
+- **A qualified pick names a gauge its own source's menu offers** (`resolveGaugeTypes`): `lr2:EX-HARD`, `beatoraja:P-ATTACK` and `____:DEATH` are refused, never mapped to a lookalike. A pick qualified with the judge ruleset is that ruleset's bare gauge. PRACTICE's GAUGE TYPE took qualified picks later (see the next amendment).
+- **Replays.** `play.gauge` and `play.gauge2P` hold the pick as selected. A result whose gauge is another source's names it in `gauge.source`; an absent field is the judging ruleset's own, so existing replays and results keep their meaning. A qualified pick is never a reason for `not-simulated`: `lr2:P-ATTACK` is re-judged under beatoraja and AC on LR2's P.ATTACK. A reader that predates this refuses a qualified gauge, which is the intended failure (see Consequences).
+- **Hosts.** The terminal player takes a qualified pick through `--gauge`. The Options dialog lists the judge ruleset's own gauges as bare values, then the other sources' as qualified picks named with their source (`HARD (LR2)`), grouped like the lane options. A ruleset change keeps a qualified pick and resets a bare one the new ruleset lacks to GROOVE (`keepGaugePick`). Skin buttons keep their source's cells: they label a qualified pick by its gauge type and step on from it to a bare gauge. LR2's GRADE-course reset of EASY and G.ATTACK reads the gauge type and keeps the source (`beatoraja:EASY` plays on `beatoraja:GROOVE`) [I]. These readings ship under the development revision `/0`.
+
+## Amendment: PRACTICE's GAUGE TYPE takes another source's gauge
+
+The #1171 amendment kept PRACTICE on the judge ruleset's own gauge list, which left a gauge rule selectable everywhere but in PRACTICE: beatoraja's ASSIST EASY could not be practised under LR2 judging. PRACTICE's GAUGE TYPE now takes a source-qualified pick too (`beatoraja:ASSIST-EASY`, `lr2:G-ATTACK`, `____:ASSISTED-EASY`), as the play's gauge pick does.
+
+- **What follows the gauge's source:** the gauge as that source's PRACTICE builds it, its TOTAL reading of PRACTICE's TOTAL (LR2 uses it as is; beatoraja scales it by the notes left in the range for NORMAL and gentler gauges; AC reads none), GAUGE VALUE clamped to that gauge's range, beatoraja's GAUGE CATEGORY for a beatoraja gauge, and the gauge auto-shift ladder. The gauge counts the judgments the judge ruleset issues, as a qualified gauge pick does.
+- **What follows the judge ruleset:** the windows and PRACTICE's JUDGERANK, and whether JUDGERANK and TOTAL are offered at all (AC rules offer neither) [I].
+- **Lists.** A qualified PRACTICE pick names a gauge on its own source's PRACTICE list (`splitPracticeGaugePick`); `lr2:ASSIST-EASY` is refused. The Options dialog and the bar picker list the judge ruleset's own PRACTICE gauges as bare values, then the other sources' as qualified picks named with their source (`ASSIST EASY (beatoraja)`). A ruleset change keeps a qualified pick and resets a bare one the new ruleset lacks to its default (`keepPracticeGauge`).
+- **The play's own gauge pick does not apply to PRACTICE**, which plays on its GAUGE TYPE: a pick the judge ruleset lacks (`beatoraja:ASSIST-EASY` under LR2) used to stop a practice play with a RangeError.
+- A practice play saves nothing and is never re-judged, so nothing changes for replays or results.

@@ -257,6 +257,10 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     // replay (`*.bmplay.json`) preserved turn it on from the Options dialog checkbox; it then downloads when the result
     // scene mounts.
     autoSaveReplay: false,
+    // A replay records only coarse device classes unless the player opts in to the controllers' own names.
+    replayDeviceNames: false,
+    // Bemuse server songs play at the volume Bemuse plays them at, unless the player turns it off.
+    bemuseReplayGain: true,
     // Every replay slot saves by itself until the player picks otherwise (`DEFAULT_REPLAY_AUTO_SAVE_RULES`): the best EX
     // score, the best lamp, the fewest BP and the latest play.
     replaySlotAutoSave1: DEFAULT_REPLAY_AUTO_SAVE_RULES[0]!,
@@ -284,11 +288,14 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     randomSeed2P: '-1',
     randomFixedLane1P: 0,
     randomFixedLane2P: 0,
+    lr2RandomScratch1P: false,
+    lr2RandomScratch2P: false,
     random2P: 'OFF',
     dpFlip: false,
     bpmGuide: false,
     bpmChangeWarning: false,
     guideSE: false,
+    windowHold: false,
     judgeCounts: true,
     judgeDetailSplit: false,
     judgeDetail: 'OFF',
@@ -347,6 +354,9 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     practiceStartGauge: 20,
     practiceJudgeRank: 0,
     practiceTotal: 0,
+    practiceRestBefore: 1,
+    practiceRestAfter: 1,
+    practiceCarriedLongNotes: true,
     customJudgeKeyPerfectGreat: 400,
     customJudgeKeyGreat: 400,
     customJudgeKeyGood: 100,
@@ -359,6 +369,10 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     extraNoteDepth: 0,
     extraNoteScratch: false,
     mineModifier: 'OFF',
+    crazyJudge: 'OFF',
+    crazyHellJudge: false,
+    crazyAddMine: false,
+    crazyNotes: 'OFF',
     scrollModifier: 'OFF',
     scrollSection: 4,
     scrollRate: 0.5,
@@ -378,6 +392,9 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     hiSpeed: readStoredHiSpeed(storage),
     hsFix: 'OFF',
     displayAreaInfo: 'OFF',
+    bga: 'ON',
+    bgaSize: 'EXTEND',
+    scoreGraph: true,
     hiddenSudden1P: 'OFF',
     hiddenSudden2P: 'OFF',
     laneCover: false,
@@ -385,6 +402,8 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     // Skin-family routing defaults to `'auto'`: beatoraja > LR2 > default, picked per-scene from what's loaded.
     // The Options dialog's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
     // in the dropdown only when their theme is loaded (see `rebuildSkinFamilyPicker` in `ui/options/skin.ts`).
+    confirmDroppedSkin: true,
+    skipDroppedSkin: false,
     skinFamilyOverride: 'auto',
     builtInSkin: inputs.builtInSkinId(readStoredBuiltInSkinId(storage)),
     skinEffects: readStoredSkinEffects(storage, inputs.signals),

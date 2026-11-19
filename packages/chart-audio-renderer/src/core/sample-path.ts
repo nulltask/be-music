@@ -1,6 +1,9 @@
 import { extname } from '@be-music/shared-utils/core';
 import { resolveFirstExistingPath } from '@be-music/shared-utils/path';
 
+// Filesystem lookups for alternate extensions can share libuv's default four filesystem threads.
+const SAMPLE_PATH_LOOKUP = { fallbackConcurrency: 4 };
+
 export interface ResolveSamplePathOptions {
   /**
    * BMS spec — `#PATH_WAV <prefix>` declares a directory the chart's WAVs live under, e.g. `wav/` so that `#WAV01
@@ -21,13 +24,13 @@ export async function resolveSamplePath(
   options: ResolveSamplePathOptions = {},
 ): Promise<string | undefined> {
   const candidates = createSamplePathCandidates(samplePath, options);
-  const found = await resolveFirstExistingPath(baseDir, candidates, signal);
+  const found = await resolveFirstExistingPath(baseDir, candidates, signal, SAMPLE_PATH_LOOKUP);
   if (found !== undefined) return found;
   // As LR2: every candidate once more one folder up, so a 差分 (alternate difficulty) chart shipped in a sub-folder finds
   // the keysounds beside its parent.
   // `..` rather than a string `dirname`: `baseDir` is a file-system path (absolute, maybe Windows), which the resolver
   // normalises with Node's `path.resolve`.
-  return resolveFirstExistingPath(`${baseDir.replace(/[\\/]+$/u, '')}/..`, candidates, signal);
+  return resolveFirstExistingPath(`${baseDir.replace(/[\\/]+$/u, '')}/..`, candidates, signal, SAMPLE_PATH_LOOKUP);
 }
 
 /**

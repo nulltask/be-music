@@ -412,6 +412,38 @@ describe('parser', () => {
     ]);
   });
 
+  test('BMS: stamps duplicate normal-note lines across branches without changing other events', () => {
+    const parsed = parseChart(
+      ['#00111:0102', '#00211:03', '#RANDOM 1', '#IF 1', '#00111:04', '#ENDIF', '#ENDRANDOM', '#00111:05'].join('\n'),
+    );
+
+    expect(new Map(parsed.events.map((event) => [event.value, event.bmsLineOrder]))).toEqual(
+      new Map([
+        ['01', 0],
+        ['02', 0],
+        ['03', undefined],
+        ['05', 7],
+      ]),
+    );
+    expect(parsed.bms.controlFlow.find((entry) => entry.kind === 'object')?.events[0]?.bmsLineOrder).toBe(4);
+  });
+
+  test('BMS: counts complete slots in captured and preserved object streams', () => {
+    const parsed = parseChart(
+      ['#BASE 62', '#00111:0a!000BZ discarded', '#RANDOM 1', '#IF 1', '#00211:000aZ', '#ENDIF', '#ENDRANDOM'].join(
+        '\n',
+      ),
+    );
+    const eventSlots = (events: typeof parsed.events) => events.map(({ position, value }) => [position, value]);
+    expect(eventSlots(parsed.events)).toEqual([
+      [[0, 3], '0a'],
+      [[2, 3], '0B'],
+    ]);
+    expect(eventSlots(parsed.preservation.bms.objectLines[0]!.events)).toEqual(eventSlots(parsed.events));
+    const captured = parsed.bms.controlFlow.find((entry) => entry.kind === 'object');
+    expect(eventSlots(captured!.events)).toEqual([[[1, 2], '0a']]);
+  });
+
   test('BMS: preserves non-control-flow object line boundaries for roundtrip', () => {
     const parsed = parseChart(
       [
@@ -1968,3 +2000,35 @@ function sortEventsByTime(events: readonly BeMusicEvent[]): string[] {
     )
     .map((event) => event.channel);
 }
+
+describe('#WAV and #EXWAV share a slot, the later line winning as in nanasigroove (#1197)', () => {
+  test('a later #WAV redefines the EXWAV and a later #EXWAV takes the slot back', () => {
+    const later = parseChart(['#EXWAV01 v -600 ex.wav', '#WAV01 plain.wav', '#00111:01', ''].join('\n'));
+    expect(later.bms.exWAVOverridden).toEqual(['01']);
+    expect(later.bms.exWAV['01']).toBe('v -600 ex.wav');
+    const back = parseChart(['#EXWAV01 v -600 ex.wav', '#WAV01 plain.wav', '#EXWAV01 v -300 ex2.wav', ''].join('\n'));
+    expect(back.bms.exWAVOverridden).toBeUndefined();
+    expect(
+      parseChart(['#WAV01 plain.wav', '#EXWAV01 v -600 ex.wav', ''].join('\n')).bms.exWAVOverridden,
+    ).toBeUndefined();
+  });
+
+  test('file order decides across control flow, as for any shared definition', () => {
+    const source = (...lines: string[]) =>
+      resolveBMSControlFlow(parseChart(['#RANDOM 1', '#IF 1', ...lines, ''].join('\n')), { random: () => 0 });
+    // A branch #WAV after a top-level #EXWAV is applied and redefines it.
+    const branchWAV = resolveBMSControlFlow(
+      parseChart(['#EXWAV01 v -600 ex.wav', '#RANDOM 1', '#IF 1', '#WAV01 plain.wav', '#ENDIF', ''].join('\n')),
+      { random: () => 0 },
+    );
+    expect(branchWAV.bms.exWAVOverridden).toEqual(['01']);
+    // A branch #EXWAV before a later #WAV is redefined by it; the declaration stays as authored.
+    const laterWAV = resolveBMSControlFlow(
+      parseChart(['#RANDOM 1', '#IF 1', '#EXWAV01 v -600 ex.wav', '#ENDIF', '#WAV01 plain.wav', ''].join('\n')),
+      { random: () => 0 },
+    );
+    expect(laterWAV.bms.exWAV['01']).toBe('v -600 ex.wav');
+    expect(laterWAV.bms.exWAVOverridden).toEqual(['01']);
+    expect(source('#WAV01 plain.wav', '#EXWAV01 v -600 ex.wav', '#ENDIF').bms.exWAVOverridden).toBeUndefined();
+  });
+});

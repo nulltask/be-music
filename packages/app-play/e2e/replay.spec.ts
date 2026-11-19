@@ -1,5 +1,5 @@
 import type { BeMusicReplay } from '@be-music/player-engine/replay';
-import { expect, openWithLibrary, SMOKE, SONGS, test, type Player } from './support.ts';
+import { expect, openWithLibrary, smokeGroup, SONGS, test, type Player } from './support.ts';
 
 /**
  * Checklist item 12 on the built-in family: the status line around a play, the replay's live tempo and view
@@ -65,7 +65,7 @@ test('the status line follows a play, and its log records the live tempo and vie
 
 test(
   "a replay follows the log's tempo and hi-speed with Replay / ghost on, and the viewer's with it off",
-  SMOKE,
+  smokeGroup(2),
   async ({ player }) => {
     await openWithLibrary(player);
     const replay = await playWithLiveChanges(player);

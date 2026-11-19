@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { parseChart, resolveBMSControlFlowWithDraws } from '../../../chart-parser/src/index.ts';
 import { resolveChartRulesetFacts, resolvePlayChart } from './engine.ts';
+import { preparePlaybackChart } from './bootstrap.ts';
+import { resolveEngineChart } from './play-chart.ts';
+import { rulesetChartFactsFromChart } from '../ruleset/chart-facts.ts';
 
 const SOURCE = parseChart(
   ['#RANDOM 2', '#IF 1', '#00111:01', '#ENDIF', '#IF 2', '#00112:01', '#ENDIF', '#ENDRANDOM'].join('\n'),
@@ -41,6 +44,20 @@ describe('resolvePlayChart', () => {
 });
 
 describe('resolveChartRulesetFacts', () => {
+  test.each([
+    ['5 KEY SP', '#LNMODE 2\n#00111:01\n#00117:01\n#00151:0101\n#001D1:01\n#00232:01', '.bms'],
+    ['9 KEY (PMS-STD)', '#00111:01\n#00122:01\n#001D1:01\n#00232:01', '.pms'],
+    ['5 KEY SP', '#001D1:01\n#00232:01', '.bms'],
+    ['UNKNOWN', '#TITLE Empty', '.bms'],
+  ])('matches playback facts for %s', (laneMode, input, laneModeExtension) => {
+    const json = parseChart(input, 'bms');
+    const options = { laneModeExtension };
+    const playback = preparePlaybackChart(resolveEngineChart(json, options), options);
+    const facts = resolveChartRulesetFacts(json, options);
+    expect(facts.laneMode).toBe(laneMode);
+    expect(facts).toEqual(rulesetChartFactsFromChart(json, playback));
+  });
+
   test('counts the chart notes a ruleset needs, taking the first #RANDOM branch', () => {
     const json = parseChart(
       [

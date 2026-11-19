@@ -1,8 +1,9 @@
 import { expect, test } from 'vite-plus/test';
-import { DEFAULT_PLAY_OPTIONS } from './choices.ts';
+import { DEFAULT_PLAY_OPTIONS, resolvePlayOptionValue } from './choices.ts';
 import {
   formatPracticeTime,
   keepPracticeGauge,
+  practiceGaugeSource,
   resolvePracticeSelection,
   type PracticePlayOptions,
 } from './practice.ts';
@@ -15,6 +16,9 @@ const OPTIONS: PracticePlayOptions = {
   practiceStartGauge: 40,
   practiceJudgeRank: 50,
   practiceTotal: 300,
+  practiceRestBefore: 2,
+  practiceRestAfter: 0,
+  practiceCarriedLongNotes: false,
 };
 
 test('a PRACTICE gauge is the judge ruleset’s own, else its default', () => {
@@ -33,6 +37,9 @@ test('beatoraja PRACTICE takes every setting', () => {
     gauge: 'HARD',
     gaugeCategory: 'LR2',
     startGauge: 40,
+    restBarsBefore: 2,
+    restBarsAfter: 0,
+    carriedLongNotes: false,
     judgeRank: 50,
     total: 300,
   });
@@ -44,6 +51,9 @@ test('LR2 PRACTICE has no GAUGE CATEGORY and reads JUDGERANK and TOTAL (#933)', 
     endMs: 9000,
     gauge: 'DEATH',
     startGauge: 40,
+    restBarsBefore: 2,
+    restBarsAfter: 0,
+    carriedLongNotes: false,
     judgeRank: 50,
     total: 300,
   });
@@ -55,6 +65,9 @@ test('AC PRACTICE sets only the range and the gauge (#933)', () => {
     endMs: 9000,
     gauge: 'EX-HARD',
     startGauge: 40,
+    restBarsBefore: 2,
+    restBarsAfter: 0,
+    carriedLongNotes: false,
   });
 });
 
@@ -63,6 +76,10 @@ test('no range plays the whole chart, and a 0 JUDGERANK or TOTAL keeps the chart
     startMs: 0,
     gauge: 'GROOVE',
     startGauge: 20,
+    // One bar of rest on either side by default, and a long note held into the range kept.
+    restBarsBefore: 1,
+    restBarsAfter: 1,
+    carriedLongNotes: true,
   });
 });
 
@@ -76,4 +93,25 @@ test('a range without an end, or one that does not end after its start, plays to
 test('formatPracticeTime writes m:ss.s, tenths rounded down', () => {
   expect(formatPracticeTime(83_456)).toBe('1:23.4');
   expect(formatPracticeTime(0)).toBe('0:00.0');
+});
+
+test('PRACTICE may play on another source’s gauge, qualified with it (ADR 0019)', () => {
+  const borrowed = { ...OPTIONS, practiceGauge: 'beatoraja:ASSIST-EASY' } as const;
+  // The pick and beatoraja's GAUGE CATEGORY follow a beatoraja gauge under LR2 judging.
+  expect(resolvePracticeSelection(borrowed, 'lr2', RANGE)).toMatchObject({
+    gauge: 'beatoraja:ASSIST-EASY',
+    gaugeCategory: 'LR2',
+  });
+  // An LR2 gauge under beatoraja judging has no GAUGE CATEGORY.
+  expect(
+    resolvePracticeSelection({ ...OPTIONS, practiceGauge: 'lr2:G-ATTACK' }, 'beatoraja', RANGE),
+  ).not.toHaveProperty('gaugeCategory');
+  expect(practiceGaugeSource('beatoraja:ASSIST-EASY', 'lr2')).toBe('beatoraja');
+  expect(practiceGaugeSource('GROOVE', 'lr2')).toBe('lr2');
+  // A ruleset change keeps a qualified pick and resets a bare one the new ruleset lacks.
+  expect(keepPracticeGauge('beatoraja:ASSIST-EASY', 'lr2')).toBe('beatoraja:ASSIST-EASY');
+  expect(keepPracticeGauge('ASSIST-EASY', 'lr2')).toBe('GROOVE');
+  // Stored settings take a qualified pick and refuse one its source lacks.
+  expect(resolvePlayOptionValue('practiceGauge', 'beatoraja:ASSIST-EASY')).toBe('beatoraja:ASSIST-EASY');
+  expect(resolvePlayOptionValue('practiceGauge', 'lr2:ASSIST-EASY')).toBeUndefined();
 });

@@ -47,7 +47,7 @@ export const OPTIONS_HELP_JA = html`
       <dl class="help-menu-items">
         <dt>Judgment windows</dt>
         <dd>
-          すべてのプレイが従うルール。LR2、beatoraja、????。判定の幅、ゲージ、選べるオプション、選曲画面に出すベスト記録が変わります。
+          すべてのプレイが従うルール。LR2、beatoraja、????、plugout。判定の幅、ゲージ、選べるオプション、選曲画面に出すベスト記録が変わります。
         </dd>
         <dt>Record kept</dt>
         <dd>
@@ -72,6 +72,11 @@ export const OPTIONS_HELP_JA = html`
         <dd>DP や 2 人プレイでの 2P 側のレーンのオプション。Random 1P と同じ一覧から選びます。</dd>
         <dt>H-RANDOM threshold BPM (beatoraja)</dt>
         <dd>H-RANDOM、ALL-SCR、7-to-9 のスクラッチで、連打とみなす 16 分音符の BPM。</dd>
+        <dt>Include scratch 1P / 2P (LR2)</dt>
+        <dd>
+          5・7・10・14 KEY で、その側の MIRROR、RANDOM、LR2 S-RANDOM、SCATTER、LR2 CONVERGE
+          の配置にスクラッチを含めます。
+        </dd>
         <dt>Fixed key 1P (LR2; 0=default)</dt>
         <dd>LR2 の CONVERGE で 1P 側のノーツを集めるレーン。0 はモードの既定。</dd>
         <dt>Fixed key 2P (LR2; 0=default)</dt>
@@ -102,8 +107,8 @@ export const OPTIONS_HELP_JA = html`
         <dt>Gauge auto-shift</dt>
         <dd>
           ゲージが尽きたときの扱い。NONE、CONTINUE、SURVIVAL TO GROOVE、BEST CLEAR、SELECT TO UNDER (beatoraja
-          の方式)。ルールごとに自分のゲージの並びで切り替えます。たとえば LR2 では HAZARD から HARD、GROOVE、EASY
-          の順です。
+          の方式)。LR2・AC では Be-Music の拡張として、各ルールのゲージ順に適用します。たとえば LR2 の難しい順は
+          HAZARD、HARD、GROOVE、EASY です。
         </dd>
         <dt>Lowest auto-shift gauge</dt>
         <dd>
@@ -332,6 +337,11 @@ export const OPTIONS_HELP_JA = html`
           に合わせてスクロール速度を一定に保ちます。MAXBPM、MINBPM、AVERAGE、STARTBPM、CONSTANT
           (LR2。どのルールでも選べます)。
         </dd>
+        <dt>WINDOW HOLD (beatoraja)</dt>
+        <dd>
+          プレイの開始から最後のノーツまで START を押しているものとして扱います。鍵盤を押すたびに、START +
+          その鍵盤と同じくハイスピードやレーンカバーも変わります。AUTO プレイとリプレイでは効きません。
+        </dd>
         <dt>Normal HI-SPEED (AC 32 measured)</dt>
         <dd>Hi-speed のスライダーの代わりに、AC で実測した 20 段階から速度を選びます。</dd>
         <dt>Normal HS level</dt>
@@ -343,7 +353,8 @@ export const OPTIONS_HELP_JA = html`
         <dd>プレイ中のカバーと LIFT の変更を受け付けません。Enter 2 回でフローティングの緑数字に戻します。</dd>
         <dt>FLOATING HI-SPEED (AC 32 measured)</dt>
         <dd>
-          カバーを動かしても、ハイスピードを合わせて変えて緑数字を保ちます。プレイ中はテンキーの 0 で切り替えます。
+          カバーを動かしても、ハイスピードを合わせて変えて緑数字を保ちます。プレイ中は上段またはテンキーの 0
+          で切り替えます。
         </dd>
         <dt>Floating speed</dt>
         <dd>
@@ -377,6 +388,12 @@ export const OPTIONS_HELP_JA = html`
         <dd>LIFT で 1P 側の判定ラインを上げる高さ (レーンに対する割合)。プレイ中にも変えられます。</dd>
         <dt>LIFT height 2P</dt>
         <dd>LIFT で 2P 側の判定ラインを上げる高さ (レーンに対する割合)。プレイ中にも変えられます。</dd>
+        <dt>BGA</dt>
+        <dd>BGA を表示するかどうか。常に表示、表示しない、AUTO プレイのときだけ表示、から選びます。</dd>
+        <dt>BGA size</dt>
+        <dd>BGA をスキンの通常の枠と大きい枠のどちらに描くか。</dd>
+        <dt>Score graph</dt>
+        <dd>プレイ中にスキンのスコアグラフを表示します。</dd>
         <dt>BPM GUIDE (beatoraja)</dt>
         <dd>これから来る BPM の変化をレーン上に表示します。</dd>
         <dt>BPM change warning (AC)</dt>
@@ -496,10 +513,11 @@ export const OPTIONS_HELP_JA = html`
         <dd>自分で作ったコースの名前の変更、削除、書き出し。</dd>
         <dt>NONSTOP placement</dt>
         <dd>NONSTOP のコースを意図どおりにつなぐか、LR2 の挙動 (不具合も含む) のとおりにつなぐか。</dd>
-        <dt>Table URL</dt>
-        <dd>コースを読み込む難易度表の URL。</dd>
-        <dt>Import table courses</dt>
-        <dd>Table URL の難易度表からコースを読み込みます。次に開いたときにも読み込みます。</dd>
+        <dt>難易度表</dt>
+        <dd>
+          コースを並べる難易度表の一覧。プレイヤーを開くたびに取り込み直します。表のページかヘッダー JSON の URL
+          で追加し、削除するとその表のコースが選曲画面から消えます。外した有名な表は「既定の表を追加」で戻せます。
+        </dd>
       </dl>
     </section>
     <section class="help-menu-folder">
@@ -611,14 +629,31 @@ export const OPTIONS_HELP_JA = html`
     <section class="help-menu-folder">
       <h4 class="help-menu-folder-title">Library &amp; records</h4>
       <dl class="help-menu-items">
+        <dt>Reload folders</dt>
+        <dd>
+          選曲画面の F8 (LR2) / F2 (beatoraja) と同じく、ライブラリを読み直します。フォルダ、Bemuse
+          音楽サーバー、難易度表が対象です。サーバーと難易度表はふだんはこのブラウザに保存した内容から読み、1 日に 1
+          回だけ取り直します。
+        </dd>
         <dt>Music ZIP URL</dt>
         <dd><code>?music=</code> と同じく、読み込む譜面の ZIP の URL。</dd>
         <dt>Skin ZIP URL</dt>
         <dd><code>?skin=</code> と同じく、読み込むスキンの ZIP の URL。</dd>
         <dt>Load from URLs</dt>
         <dd>上の 2 つの URL の ZIP を読み込みます。</dd>
+        <dt>Bemuse ReplayGain</dt>
+        <dd>
+          既定はオンです。Bemuse 音楽サーバーの曲を、Bemuse
+          と同じくサーバーが決めた音量で鳴らします。オフにすると譜面そのままの音量で鳴らします。プレイ中は変えられません。
+        </dd>
         <dt>Auto-save replays</dt>
         <dd>プレイが終わるたびにリプレイをダウンロードします。</dd>
+        <dt>Record device names in replays</dt>
+        <dd>
+          既定はオフです。オンにすると、ブラウザが報告するコントローラーの名前 (多くはベンダー ID と製品 ID を含みます)
+          もリプレイに記録します。キーボードとタッチには名前がありません。名前はリプレイと一緒に、Leaderboard
+          への送信にも含まれます。判定には使いません。
+        </dd>
         <dt>Clear best records</dt>
         <dd>このブラウザのベスト記録を消します (確認があります)。</dd>
         <dt>Local data…</dt>

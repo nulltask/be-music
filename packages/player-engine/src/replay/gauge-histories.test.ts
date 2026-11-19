@@ -8,6 +8,7 @@ import {
 } from './format.ts';
 import { resolveReplayGaugeHistories } from './gauge-histories.ts';
 import { resolveReplayJudgmentTimeline } from './judgment-timeline.ts';
+import { resolveRulesetConfig } from './rulesets.ts';
 
 function makeReplay(
   notes: ReplayNote[],
@@ -86,6 +87,60 @@ describe('resolveReplayGaugeHistories', () => {
       'HARD',
       'DEATH',
     ]);
+  });
+
+  test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
+    'matches individual %s runs with mines, HCN ticks and a qualified gauge',
+    (ruleset) => {
+      const replay = makeReplay(
+        [
+          tap(500_000),
+          { ...tap(1_000_000), type: 'mine', damage: 60 },
+          { ...tap(2_000_000), type: 'long', lnMode: 3, endTimeUs: 3_000_000 },
+          tap(4_000_000),
+        ],
+        [
+          ...press(500_000),
+          { timeUs: 995_000, action: 'down', channels: ['11'], source: 0 },
+          { timeUs: 1_020_000, action: 'up', channels: ['11'], source: 0 },
+          { timeUs: 2_000_000, action: 'down', channels: ['11'], source: 0 },
+          { timeUs: 3_000_000, action: 'up', channels: ['11'], source: 0 },
+          ...press(4_000_000),
+        ],
+        { gauge: 'beatoraja:HARD', endOnFailure: true },
+      );
+      for (const history of resolveReplayGaugeHistories(replay, { ruleset })) {
+        const { events } = resolveReplayJudgmentTimeline(replay, {
+          ruleset,
+          gauge: history.gauge,
+          gaugeAutoShift: 'NONE',
+          endOnFailure: false,
+        });
+        expect(history.samples).toEqual(events.map(({ atUs, gauge }) => ({ atUs, gauge })));
+      }
+    },
+  );
+
+  test('preserves course gauge carry and the initial marker for a two-player replay', () => {
+    const replay = makeReplay(
+      [...NOTES, ...NOTES.map((note) => ({ ...note, channel: '21' }))],
+      [...INPUTS, ...INPUTS.map((input) => ({ ...input, channels: ['21'] }))],
+      {
+        battleMode: 'TWO-PLAYER',
+        course: { kind: 'grade', carryIn: { combo: 1, maxCombo: 2, gauge: 52, gauges: { GRADE: 37 } } },
+      },
+    );
+    for (const history of resolveReplayGaugeHistories(replay, { courseKind: 'grade' })) {
+      const forced = { gauge: history.gauge, gaugeAutoShift: 'NONE' as const };
+      const spec = resolveRulesetConfig(replay, 'lr2', forced).gauge;
+      expect(history.initial).toBe(spec.max > 0 ? (spec.initial / spec.max) * 100 : 0);
+      const { events } = resolveReplayJudgmentTimeline(replay, {
+        ...forced,
+        ruleset: 'lr2',
+        endOnFailure: false,
+      });
+      expect(history.samples).toEqual(events.map(({ atUs, gauge }) => ({ atUs, gauge })));
+    }
   });
 
   test('leaves out the judgments after the play stopped', () => {

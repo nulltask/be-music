@@ -2,7 +2,12 @@ import { describe, expect, test } from 'vite-plus/test';
 import { parseBMS } from '@be-music/chart-parser';
 import { resolveChart } from '@be-music/chart-model';
 import { preparePlaybackChart } from './bootstrap.ts';
-import { resolvePracticePlayWindow, resolvePracticeRange } from './practice.ts';
+import {
+  createPracticeLoopPreviewNotes,
+  resolvePracticeLoopShift,
+  resolvePracticePlayWindow,
+  resolvePracticeRange,
+} from './practice.ts';
 import { resolveRuleset } from '../ruleset/definitions.ts';
 import type { RulesetChartFacts } from '../ruleset/facts.ts';
 
@@ -36,6 +41,26 @@ test('PracticeModifier moves every object outside the range to the background', 
     ['01', 4],
     ['01', 8],
   ]);
+});
+
+test('a long note held into the range from before it stays with carriedLongNotes, played from its head', () => {
+  const source = () => resolveChart(parseBMS(SOURCE), { playVariant: '7' });
+  // [5.0, 8.0): the LN on 12 from 4 s to 6 s starts before the range and ends in it.
+  const practice = { startMs: 5000, endMs: 8000, gauge: 'NORMAL', startGauge: 20 } as const;
+  const dropped = preparePlaybackChart(source(), { practice });
+  expect(dropped.notes).toEqual([]);
+  // The range starts in bar 2 (4 s): the play starts a bar before it.
+  expect(dropped.practicePlayStartSeconds).toBe(2);
+  const carried = preparePlaybackChart(source(), { practice: { ...practice, carriedLongNotes: true } });
+  expect(carried.notes.map((note) => [note.channel, note.seconds, note.endSeconds])).toEqual([['12', 4, 6]]);
+  expect(carried.practiceChangedObjectCount).toBe(dropped.practiceChangedObjectCount! - 1);
+  // The LN's head lies in bar 2 too: the rest bar before it is the same.
+  expect(carried.practicePlayStartSeconds).toBe(2);
+  // A long note that also ends past the range still leaves, and so does one wholly before it.
+  const past = preparePlaybackChart(source(), {
+    practice: { startMs: 5000, endMs: 5500, gauge: 'NORMAL', startGauge: 20, carriedLongNotes: true },
+  });
+  expect(past.notes).toEqual([]);
 });
 
 test('the source limits keep the end at least 1000 ms after the start', () => {
@@ -78,7 +103,7 @@ test('PRACTICE scales TOTAL by the remaining notes up to NORMAL and sets the gau
   const lr2Normal = resolveRuleset(FACTS, 'beatoraja', {
     practice: { sourceNotes, gauge: 'HARD', gaugeCategory: 'LR2', startGauge: 100 },
   });
-  expect(lr2Normal.gauge.guts).toEqual([{ threshold: 30, multiplier: 0.6 }]);
+  expect(lr2Normal.gauge.guts).toEqual([{ threshold: 30, multiplier: Math.fround(0.6) }]);
   // A gauge of another ruleset is refused: PRACTICE lists the judge ruleset's own.
   expect(() => resolveRuleset(FACTS, 'lr2', { practice: { sourceNotes, gauge: 'NORMAL', startGauge: 20 } })).toThrow(
     RangeError,
@@ -127,6 +152,60 @@ test('PRACTICE under AC rules sets only the gauge: its windows are fixed and its
   );
 });
 
+test('PRACTICE plays on its own gauge whatever the play’s gauge pick is', () => {
+  const sourceNotes = { normal: 200, long: { 1: 0, 2: 0, 3: 0 } };
+  // A pick of another source's gauge, one the judge ruleset lacks, used to stop the practice play with a RangeError.
+  for (const [ruleset, selectedGauge, gauge] of [
+    ['lr2', 'beatoraja:ASSIST-EASY', 'GROOVE'],
+    ['lr2', 'beatoraja:EX-HARD', 'HARD'],
+    ['beatoraja', 'lr2:P-ATTACK', 'NORMAL'],
+    ['____', 'lr2:G-ATTACK', 'EASY'],
+  ] as const)
+    expect(
+      resolveRuleset(FACTS, ruleset, { selectedGauge, practice: { sourceNotes, gauge, startGauge: 20 } }).gauge,
+    ).toMatchObject({ id: gauge, initial: 20 });
+  // Without PRACTICE the pick still names its source's gauge.
+  expect(() => resolveRuleset(FACTS, 'lr2', { selectedGauge: 'ASSIST-EASY' })).toThrow(/no ASSIST-EASY/);
+});
+
+test('PRACTICE plays on another source’s gauge when its GAUGE TYPE names one (ADR 0019)', () => {
+  const sourceNotes = { normal: 200, long: { 1: 0, 2: 0, 3: 0 } };
+  // beatoraja's ASSIST EASY under LR2 judging: beatoraja's gauge and TOTAL reading, LR2's windows.
+  const lr2 = resolveRuleset(FACTS, 'lr2', { practice: { sourceNotes, gauge: 'GROOVE', startGauge: 20 } });
+  const borrowed = resolveRuleset(FACTS, 'lr2', {
+    practice: { sourceNotes, gauge: 'beatoraja:ASSIST-EASY', startGauge: 30 },
+  });
+  const beatoraja = resolveRuleset(FACTS, 'beatoraja', {
+    practice: { sourceNotes, gauge: 'ASSIST-EASY', startGauge: 30 },
+  });
+  expect(borrowed.gaugeSource).toBe('beatoraja');
+  expect(borrowed.gauge).toMatchObject({ id: 'ASSIST-EASY', initial: 30, border: beatoraja.gauge.border });
+  expect(borrowed.windows).toEqual(lr2.windows);
+  expect(borrowed.rulesetId).toBe('lr2');
+  // LR2's P.ATTACK under beatoraja judging, and AC's ASSISTED EASY under LR2.
+  expect(
+    resolveRuleset(FACTS, 'beatoraja', { practice: { sourceNotes, gauge: 'lr2:P-ATTACK', startGauge: 20 } }).gauge.id,
+  ).toBe('P-ATTACK');
+  expect(
+    resolveRuleset(FACTS, 'lr2', { practice: { sourceNotes, gauge: '____:ASSISTED-EASY', startGauge: 20 } }).gauge.id,
+  ).toBe('ASSISTED-EASY');
+  // A pick qualified with the judge ruleset is its own gauge.
+  expect(resolveRuleset(FACTS, 'lr2', { practice: { sourceNotes, gauge: 'lr2:HARD', startGauge: 60 } })).toMatchObject({
+    gaugeSource: 'lr2',
+    gauge: { id: 'HARD', initial: 60 },
+  });
+  // A source's pick names a gauge on that source's own PRACTICE list; a bare one the judge ruleset's.
+  for (const [ruleset, gauge] of [
+    ['lr2', 'lr2:ASSIST-EASY'],
+    ['lr2', 'ASSIST-EASY'],
+    ['beatoraja', 'beatoraja:GROOVE'],
+    ['beatoraja', 'unknown:HARD'],
+  ] as const)
+    expect(() =>
+      resolveRuleset(FACTS, ruleset, { practice: { sourceNotes, gauge: gauge as 'GROOVE', startGauge: 20 } }),
+    ).toThrow(RangeError);
+});
+
 test('PRACTICE plays a single chart under every ruleset', () => {
   const sourceNotes = { normal: 200, long: { 1: 0, 2: 0, 3: 0 } };
   for (const [ruleset, gauge] of [
@@ -140,10 +219,18 @@ test('PRACTICE plays a single chart under every ruleset', () => {
 });
 
 describe('resolvePracticePlayWindow (#954)', () => {
-  const windowOf = (lines: string[], range: { startMs: number; endMs?: number }) => {
+  const playWindowOf = (
+    lines: string[],
+    range: { startMs: number; endMs?: number },
+    rest: { restBarsBefore?: number; restBarsAfter?: number } = {},
+  ) => {
     const chart = resolveChart(parseBMS(['#BPM 120', ...lines, '#00911:01', ''].join('\n')), { playVariant: '7' });
     const resolved = resolvePracticeRange({ ...range, gauge: 'NORMAL', startGauge: 20 }, 20_000);
-    return resolvePracticePlayWindow(chart, range, resolved);
+    return resolvePracticePlayWindow(chart, { ...range, ...rest }, resolved);
+  };
+  const windowOf = (...args: Parameters<typeof playWindowOf>) => {
+    const { startSeconds, endSeconds } = playWindowOf(...args);
+    return { startSeconds, endSeconds };
   };
 
   test('starts a bar before the range’s bar and ends a bar after the bar its end lies in', () => {
@@ -154,6 +241,36 @@ describe('resolvePracticePlayWindow (#954)', () => {
     // A range in the first bar starts at the chart's start; one in the second starts there too.
     expect(windowOf([], { startMs: 500, endMs: 1500 })).toEqual({ startSeconds: 0, endSeconds: 2 });
     expect(windowOf([], { startMs: 2000, endMs: 3000 })).toEqual({ startSeconds: 0, endSeconds: 4 });
+  });
+
+  test('rests the bars asked for on either side, none at 0', () => {
+    const range = { startMs: 4000, endMs: 8000 };
+    expect(windowOf([], range, { restBarsBefore: 0, restBarsAfter: 0 })).toEqual({ startSeconds: 4, endSeconds: 8 });
+    expect(windowOf([], range, { restBarsBefore: 1, restBarsAfter: 1 })).toEqual({ startSeconds: 2, endSeconds: 10 });
+    expect(windowOf([], range, { restBarsBefore: 2, restBarsAfter: 2 })).toEqual({ startSeconds: 0, endSeconds: 12 });
+    // A rest reaching past the first bar starts at the chart's start.
+    expect(windowOf([], range, { restBarsBefore: 8 }).startSeconds).toBe(0);
+    // Each side is its own: no rest before, three bars after.
+    expect(windowOf([], range, { restBarsBefore: 0, restBarsAfter: 3 })).toEqual({ startSeconds: 4, endSeconds: 14 });
+  });
+
+  test('starts the first round a bar before the range at least, so its notes come down the lane', () => {
+    const range = { startMs: 4000, endMs: 8000 };
+    // No rest before: the loop starts at the range, the first round a bar before it.
+    expect(playWindowOf([], range, { restBarsBefore: 0 })).toMatchObject({ startSeconds: 4, firstStartSeconds: 2 });
+    // A rest before: the first round starts with the loop.
+    expect(playWindowOf([], range, { restBarsBefore: 2 })).toMatchObject({ startSeconds: 0, firstStartSeconds: 0 });
+    expect(playWindowOf([], range)).toMatchObject({ startSeconds: 2, firstStartSeconds: 2 });
+    // A range in the first bar has no bar before it: the chart's start.
+    expect(playWindowOf([], { startMs: 0, endMs: 2000 }, { restBarsBefore: 0 })).toMatchObject({
+      startSeconds: 0,
+      firstStartSeconds: 0,
+    });
+  });
+
+  test('rests without an END TIME: none ends at the range’s end, more bars end further out', () => {
+    expect(windowOf([], { startMs: 4000 }, { restBarsAfter: 0 }).endSeconds).toBe(21);
+    expect(windowOf([], { startMs: 4000 }, { restBarsAfter: 3 }).endSeconds).toBe(26);
   });
 
   test('reads odd measure lengths', () => {
@@ -173,7 +290,90 @@ describe('resolvePracticePlayWindow (#954)', () => {
     });
   });
 
+  test('leads from the bar a long note kept from before the range starts in', () => {
+    const chart = resolveChart(parseBMS(['#BPM 120', '#00911:01', ''].join('\n')), { playVariant: '7' });
+    const range = { startMs: 8000, endMs: 10000 };
+    // The kept long note starts at 3.0, in bar 1: one bar of rest before it starts at the chart's start, none at bar 1.
+    expect(resolvePracticePlayWindow(chart, { ...range }, range, 3000)).toMatchObject({
+      startSeconds: 0,
+      endSeconds: 12,
+    });
+    expect(resolvePracticePlayWindow(chart, { ...range, restBarsBefore: 0 }, range, 3000)).toMatchObject({
+      startSeconds: 2,
+      firstStartSeconds: 0,
+    });
+    // One that starts in the range's own bar or later changes nothing.
+    expect(resolvePracticePlayWindow(chart, { ...range }, range, 9000)).toMatchObject({ startSeconds: 6 });
+  });
+
   test('without an END TIME, ends 1000 ms past the range’s end as before', () => {
     expect(windowOf([], { startMs: 4500 })).toEqual({ startSeconds: 2, endSeconds: 22 });
+  });
+
+  test('rests are bars, Be-Music’s policy, not beatoraja’s 1000 ms on either side (#1191)', () => {
+    // 60 BPM: a bar is 4 s, heads at 0, 4, 8, 12, 16. A range snapped to bars 2-3 rests a whole bar on either side,
+    // 4 s, where beatoraja's `starttime - 1000` / `endtime + 1000` would play from 7 s to 13 s.
+    const slow = windowOf(['#00003:3C'], { startMs: 8000, endMs: 12000 });
+    expect(slow).toEqual({ startSeconds: 4, endSeconds: 16 });
+    expect(slow).not.toEqual({ startSeconds: 7, endSeconds: 13 });
+    // 240 BPM: a bar is 1 s, so the same rest is 1 s, as beatoraja's.
+    expect(windowOf(['#00003:F0'], { startMs: 4000, endMs: 6000 })).toEqual({ startSeconds: 3, endSeconds: 7 });
+  });
+
+  test('without an END TIME, one bar of rest is 1000 ms whatever the tempo; more bars are bars (#1191)', () => {
+    // The range runs to the chart's end (21 s here). At 240 BPM a bar is 1 s, at 60 BPM 4 s: one bar of rest still
+    // ends 1000 ms after, not a bar after.
+    expect(windowOf(['#00003:F0'], { startMs: 4000 }).endSeconds).toBe(22);
+    expect(windowOf(['#00003:3C'], { startMs: 4000 }).endSeconds).toBe(22);
+    // Two bars end at the head of the second bar after the one the end lies in, when that is later.
+    expect(windowOf(['#00003:F0'], { startMs: 4000 }, { restBarsAfter: 2 }).endSeconds).toBe(23);
+    expect(windowOf(['#00003:3C'], { startMs: 4000 }, { restBarsAfter: 2 }).endSeconds).toBe(28);
+  });
+});
+
+describe('the seamless PRACTICE loop', () => {
+  const chartOf = (lines: string[] = []) =>
+    resolveChart(parseBMS(['#BPM 120', ...lines, '#00911:01', ''].join('\n')), { playVariant: '7' });
+
+  test('moves back from the range’s end to the loop’s start, in seconds and beats', () => {
+    // 120 BPM: two seconds and four beats a bar; the loop from 4.0 to 8.0 is two bars.
+    const window = { startSeconds: 4, endSeconds: 8 };
+    const practice = { loop: true, endMs: 8000, restBarsAfter: 0 } as const;
+    expect(resolvePracticeLoopShift(chartOf(), practice, window)).toEqual({ seconds: 4, beats: 8 });
+    // At 240 BPM from bar 2 (4.0): the same four seconds are sixteen beats.
+    expect(resolvePracticeLoopShift(chartOf(['#00203:F0']), practice, window)).toEqual({ seconds: 4, beats: 16 });
+    // A rest after the range loops seamlessly too: the window's end is the rest's.
+    expect(resolvePracticeLoopShift(chartOf(), { ...practice, restBarsAfter: 1 }, window)).toEqual({
+      seconds: 4,
+      beats: 8,
+    });
+    // A 1 s stop at 5.0 (the middle of bar 2) moves no beat: 2 beats before it and 4 after it.
+    expect(resolvePracticeLoopShift(chartOf(['#STOP01 96', '#00209:0001']), practice, window)).toEqual({
+      seconds: 4,
+      beats: 6,
+    });
+    // Not seamless: no loop, or the whole chart.
+    expect(resolvePracticeLoopShift(chartOf(), { ...practice, loop: false }, window)).toBeUndefined();
+    expect(resolvePracticeLoopShift(chartOf(), { ...practice, endMs: undefined }, window)).toBeUndefined();
+  });
+
+  test('draws the next round’s notes, shifted, standing for their notes but judged on their own', () => {
+    const tap = {
+      event: { measure: 2, channel: '11', position: [0, 1], value: '01' },
+      channel: '11',
+      beat: 8,
+      seconds: 4,
+      judged: true,
+    } as const;
+    const long = { ...tap, channel: '12', beat: 10, seconds: 5, endBeat: 11, endSeconds: 5.5, judged: false };
+    const [tapPreview, longPreview] = createPracticeLoopPreviewNotes([{ ...tap }, long], { seconds: 4, beats: 8 });
+    expect(tapPreview).toMatchObject({ channel: '11', beat: 16, seconds: 8, judged: false });
+    expect(longPreview).toMatchObject({ beat: 18, seconds: 9, endBeat: 19, endSeconds: 9.5 });
+    // A later change to the note's lane (a lane option applied after) moves its preview too.
+    long.channel = '14';
+    expect(longPreview!.channel).toBe('14');
+    // Judging the preview leaves the note alone.
+    longPreview!.judged = true;
+    expect(long.judged).toBe(false);
   });
 });

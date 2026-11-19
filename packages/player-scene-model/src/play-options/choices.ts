@@ -13,7 +13,12 @@ import {
   PRACTICE_GAUGE_TYPES,
   canonicalOptionValue,
   clampCustomJudgeRate,
-  isGaugeType,
+  gaugePickType,
+  isGaugePick,
+  isPracticeGaugePick,
+  resolveGaugeTypes,
+  splitGaugePick,
+  type GaugePick,
   isQualifiedOptionName,
   splitOptionSource,
   type RulesetId,
@@ -79,15 +84,23 @@ export const HIDDEN_SUDDEN_CYCLE: readonly HiddenSuddenMode[] = ['OFF', 'HIDDEN'
 /** Cycle for boolean OFF/ON LR2 buttons (e.g. autoscratch). */
 export const BOOLEAN_CYCLE: readonly boolean[] = [false, true];
 
-/** Source display spelling, without changing the recorded gauge identifier. */
-export function formatGaugeLabel(id: string | undefined): string | undefined {
-  return id === 'P-ATTACK'
-    ? 'P.ATTACK'
-    : id === 'G-ATTACK'
-      ? 'G.ATTACK'
-      : id === 'DEATH-CORRECTED'
-        ? 'DEATH corrected'
-        : id;
+/**
+ * Source display spelling, without changing the recorded gauge identifier. A source-qualified pick reads as its gauge
+ * type (`lr2:P-ATTACK` as P.ATTACK), as ADR 0019 has a skin label it.
+ */
+export function formatGaugeLabel(pick: string | undefined): string | undefined {
+  switch (pick) {
+    case 'P-ATTACK':
+      return 'P.ATTACK';
+    case 'G-ATTACK':
+      return 'G.ATTACK';
+    case 'DEATH-CORRECTED':
+      return 'DEATH corrected';
+  }
+  // Only a source-qualified pick needs splitting; a bare one reads as it is.
+  if (pick === undefined || !pick.includes(':')) return pick;
+  const type = splitGaugePick(pick)?.type;
+  return type === undefined ? pick : formatGaugeLabel(type);
 }
 
 /**
@@ -176,6 +189,7 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   bpmGuide: false,
   bpmChangeWarning: false,
   guideSE: false,
+  windowHold: false,
   judgeCounts: true,
   judgeDetailSplit: false,
   judgeDetail: 'OFF',
@@ -245,6 +259,9 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   practiceStartGauge: 20,
   practiceJudgeRank: 0,
   practiceTotal: 0,
+  practiceRestBefore: 1,
+  practiceRestAfter: 1,
+  practiceCarriedLongNotes: true,
   customJudgeKeyPerfectGreat: 400,
   customJudgeKeyGreat: 400,
   customJudgeKeyGood: 100,
@@ -255,6 +272,10 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   lr2ExtraMode: false,
   lr2ExtraLevel: 0,
   mineModifier: 'OFF',
+  crazyJudge: 'OFF',
+  crazyHellJudge: false,
+  crazyAddMine: false,
+  crazyNotes: 'OFF',
   scrollModifier: 'OFF',
   scrollSection: 4,
   scrollRate: 0.5,
@@ -270,6 +291,8 @@ export const DEFAULT_PLAY_OPTIONS: Readonly<PlayOptions> = {
   randomSeed2P: '-1',
   randomFixedLane1P: 0,
   randomFixedLane2P: 0,
+  lr2RandomScratch1P: false,
+  lr2RandomScratch2P: false,
   random2P: 'OFF',
   gauge1P: 'GROOVE',
   gauge2P: 'GROOVE',
@@ -303,6 +326,10 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   judgeAlgorithm: ['combo', 'duration', 'lowest'],
   longNoteModifier: ['OFF', 'LEGACY', 'REMOVE', 'ADD_LN', 'ADD_CN', 'ADD_HCN', 'ADD_ALL'],
   mineModifier: ['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'],
+  crazyJudge: ['OFF', 'GOOD2BAD', 'GREAT2BAD'],
+  crazyHellJudge: BOOLEAN_CYCLE,
+  crazyAddMine: BOOLEAN_CYCLE,
+  crazyNotes: ['OFF', 'DOUBLE', 'COPY', 'DBLCOPY'],
   scrollModifier: ['OFF', 'REMOVE', 'ADD', 'SOFTLANDING-1', 'SOFTLANDING-2'],
   gaugeAutoShift: GAUGE_AUTO_SHIFTS,
   bmsonTotalMode: ['beatoraja', 'spec'],
@@ -313,6 +340,7 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   bpmGuide: BOOLEAN_CYCLE,
   bpmChangeWarning: BOOLEAN_CYCLE,
   guideSE: BOOLEAN_CYCLE,
+  windowHold: BOOLEAN_CYCLE,
   judgeCounts: BOOLEAN_CYCLE,
   judgeDetailSplit: BOOLEAN_CYCLE,
   judgeDetail: ['OFF', 'FAST_SLOW', 'MS'],
@@ -364,11 +392,14 @@ export const PLAY_OPTION_CHOICES: PlayOptionChoices = {
   // Every ruleset's PRACTICE gauges; a menu offers the judge ruleset's own (`resolvePracticeGaugeTypes`).
   practiceGauge: PRACTICE_GAUGE_TYPES,
   practiceGaugeCategory: ['MODE', 'FIVEKEYS', 'SEVENKEYS', 'PMS', 'KEYBOARD', 'LR2'],
+  practiceCarriedLongNotes: BOOLEAN_CYCLE,
   lr2ExtraMode: BOOLEAN_CYCLE,
   lr2ExtraLevel: [0, 1, 2],
   autoScratch1P: BOOLEAN_CYCLE,
   autoScratch2P: BOOLEAN_CYCLE,
   dpFlip: BOOLEAN_CYCLE,
+  lr2RandomScratch1P: BOOLEAN_CYCLE,
+  lr2RandomScratch2P: BOOLEAN_CYCLE,
   random1P: resolveRandomModes('lr2', true),
   random2P: resolveRandomModes('lr2'),
   gauge1P: LR2_GAUGE_TYPES,
@@ -411,6 +442,8 @@ const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PlayOptions]?: (value: 
   practiceStartGauge: (value) => clamp(Math.trunc(value), 1, 120),
   practiceJudgeRank: (value) => (value <= 0 ? 0 : clamp(Math.trunc(value), 1, 400)),
   practiceTotal: (value) => (value <= 0 ? 0 : clamp(Math.trunc(value), 10, 5000)),
+  practiceRestBefore: (value) => clamp(Math.trunc(value), 0, 8),
+  practiceRestAfter: (value) => clamp(Math.trunc(value), 0, 8),
   customJudgeKeyPerfectGreat: (value) => clampCustomJudgeRate('keyPerfectGreat', value),
   customJudgeKeyGreat: (value) => clampCustomJudgeRate('keyGreat', value),
   customJudgeKeyGood: (value) => clampCustomJudgeRate('keyGood', value),
@@ -445,7 +478,10 @@ export function resolvePlayOptionValue<K extends keyof PlayOptions>(
 ): PlayOptions[K] | undefined {
   if (!Object.hasOwn(DEFAULT_PLAY_OPTIONS, key)) return undefined;
   if (key === 'randomSeed1P' || key === 'randomSeed2P') return parseLaneRandomSeed(value) as PlayOptions[K] | undefined;
-  if (key === 'gauge1P' || key === 'gauge2P') return isGaugeType(value) ? (value as PlayOptions[K]) : undefined;
+  // A gauge is a bare type or one qualified with a source that defines it (`lr2:HARD`; `lr2:EX-HARD` is refused).
+  if (key === 'gauge1P' || key === 'gauge2P') return isGaugePick(value) ? (value as PlayOptions[K]) : undefined;
+  // PRACTICE's GAUGE TYPE may name another source's gauge (`beatoraja:ASSIST-EASY`), as a gauge pick does.
+  if (key === 'practiceGauge') return isPracticeGaugePick(value) ? (value as PlayOptions[K]) : undefined;
   // A bare colliding name from before ADR 0019 stays valid: it is the judge ruleset's own. A merged value reads as the
   // option it was merged into.
   if (key === 'random1P' || key === 'random2P')
@@ -475,7 +511,23 @@ export function cyclePlayOptionValue<K extends keyof PlayOptions>(
   if (!Object.hasOwn(PLAY_OPTION_CHOICES, key)) return undefined;
   const choices = PLAY_OPTION_CHOICES[key] as readonly PlayOptions[K][] | undefined;
   if (!choices || choices.length === 0) return undefined;
-  return nextChoice(choices, current, step);
+  let index = choices.indexOf(current);
+  // A gauge button steps LR2's own cells: a qualified pick steps on from its gauge type, to a bare gauge.
+  if (index < 0 && (key === 'gauge1P' || key === 'gauge2P'))
+    index = choices.indexOf(gaugePickType(current as GaugePick) as PlayOptions[K]);
+  return stepChoice(choices, index, step);
+}
+
+/**
+ * The gauge pick to keep when the judge ruleset becomes `ruleset` (ADR 0019, #1171). A source-qualified pick stays as it
+ * is: it names its source's gauge, which no ruleset change touches. A bare pick is the judge ruleset's own gauge of that
+ * name, so it stays while `ruleset` offers it (`resolveGaugeTypes`) and falls back to GROOVE otherwise, as LR2's
+ * P.ATTACK does under beatoraja.
+ */
+export function keepGaugePick(pick: GaugePick, ruleset: RulesetId): GaugePick {
+  const parts = splitGaugePick(pick);
+  if (parts === undefined) return 'GROOVE';
+  return parts.source !== undefined || resolveGaugeTypes(ruleset).includes(parts.type) ? pick : 'GROOVE';
 }
 
 /**
@@ -484,7 +536,11 @@ export function cyclePlayOptionValue<K extends keyof PlayOptions>(
  * moves to on a click.
  */
 export function nextChoice<T>(choices: readonly T[], current: T, step: number = 1): T {
-  const index = choices.indexOf(current);
+  return stepChoice(choices, choices.indexOf(current), step);
+}
+
+/** The choice one `step` direction from `index`, wrapping around either end; the first when `index` is -1. */
+function stepChoice<T>(choices: readonly T[], index: number, step: number): T {
   if (index < 0) return choices[0]!;
   const delta = step < 0 ? -1 : 1;
   return choices[(index + delta + choices.length) % choices.length]!;

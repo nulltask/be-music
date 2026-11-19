@@ -2,6 +2,7 @@ import { createEmptyJSON } from '@be-music/chart-source';
 import { describe, expect, test } from 'vite-plus/test';
 import type { BeMusicReplay } from '../replay/format.ts';
 import { rulesetChartFactsFromReplay } from '../replay/rulesets.ts';
+import { resolvePlugoutDefaultTotal } from './plugout.ts';
 import { GAUGE_JUDGE_BAD, GAUGE_JUDGE_EMPTY_POOR, RulesetGauge } from './gauge.ts';
 import {
   countBaseNotes,
@@ -68,7 +69,7 @@ describe('ruleset/facts', () => {
 
   test("beatoraja's HAZARD keeps its own table", () => {
     const spec = resolveRuleset(facts(), 'beatoraja', { selectedGauge: 'DEATH' }).gauge;
-    expect(spec.values).toEqual([0.15, 0.06, 0, -100, -100, -10]);
+    expect(spec.values).toEqual([0.15, 0.06, 0, -100, -100, -10].map(Math.fround));
   });
 
   test('the debug judge-window override reaches the ruleset window tables', () => {
@@ -148,7 +149,8 @@ describe('effective TOTAL', () => {
   // 100 base notes: LR2 default (100 / 5 + 200) × 0.8 = 176; beatoraja default max(260, 760.5 / 7.5) = 260.
   const lr2Default = resolveLR2DefaultTotal(100);
   const beatorajaDefault = resolveBeatorajaDefaultTotal(100);
-  const defaults = { lr2: lr2Default, beatoraja: beatorajaDefault, ____: lr2Default } as const;
+  // plugout: LR2's curve without the ×0.8, truncated — 100 / 5 + 200 = 220.
+  const defaults = { lr2: lr2Default, beatoraja: beatorajaDefault, ____: lr2Default, plugout: 220 } as const;
 
   test('the default formulas give the expected values for 100 notes', () => {
     expect(lr2Default).toBeCloseTo(176, 9);
@@ -167,7 +169,7 @@ describe('effective TOTAL', () => {
     expect(resolveRuleset(facts({ total: 179.68 }), 'beatoraja').effectiveTotal).toBe(179.68);
   });
 
-  for (const id of ['lr2', 'beatoraja', '____'] as const) {
+  for (const id of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
     describe(id, () => {
       test('BMS #TOTAL is an absolute TOTAL', () => {
         expect(resolveRuleset(facts({ total: 300 }), id).effectiveTotal).toBe(300);
@@ -203,7 +205,8 @@ describe('effective TOTAL', () => {
   test('the lr2 GROOVE gauge recovers from the effective TOTAL of a bmson chart', () => {
     // 100 % of the LR2 default over 100 notes: +1.76 per PGREAT, not +1.00 (an absolute TOTAL 100).
     const gauge = resolveRuleset(facts({ sourceFormat: 'bmson', total: 100 }), 'lr2').gauge;
-    expect(gauge.values[0]).toBeCloseTo(lr2Default / 100, 9);
+    // LR2 divides in float32: `total / (float)notes` (#1090).
+    expect(gauge.values[0]).toBe(Math.fround(lr2Default / 100));
   });
 });
 
@@ -244,7 +247,7 @@ describe('ruleset chart-facts adapters agree', () => {
 
     expect(fromChart).toEqual(fromReplay);
     // …and therefore resolve identical rulesets.
-    for (const id of ['lr2', 'beatoraja', '____'] as const) {
+    for (const id of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
       expect(resolveRuleset(fromChart, id).noteCount).toBe(resolveRuleset(fromReplay, id).noteCount);
       expect(resolveRuleset(fromChart, id).effectiveTotal).toBe(resolveRuleset(fromReplay, id).effectiveTotal);
     }
@@ -273,16 +276,18 @@ describe('ruleset chart-facts adapters agree', () => {
     };
     const fromReplay = rulesetChartFactsFromReplay(replay);
     expect(fromChart).toEqual(fromReplay);
-    for (const id of ['lr2', 'beatoraja', '____'] as const) {
+    for (const id of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
       const live = resolveRuleset(fromChart, id).effectiveTotal;
       expect(resolveRuleset(fromReplay, id).effectiveTotal).toBe(live);
       // 150 % of the ruleset's default for one note, never an absolute TOTAL 150.
       const fallback =
         id === 'beatoraja'
           ? resolveBeatorajaDefaultTotal(1)
-          : id === 'lr2'
-            ? Math.trunc(resolveLR2DefaultTotal(1))
-            : resolveLR2DefaultTotal(1);
+          : id === 'plugout'
+            ? resolvePlugoutDefaultTotal(1)
+            : id === 'lr2'
+              ? Math.trunc(resolveLR2DefaultTotal(1))
+              : resolveLR2DefaultTotal(1);
       expect(live).toBeCloseTo(fallback * 1.5, 9);
     }
   });
@@ -299,14 +304,15 @@ describe('beatoraja TOTAL counts charge tails', () => {
     const chart = facts({ notes, total: 165 });
     const rule = resolveRuleset(chart, 'beatoraja');
     expect(rule.noteCount).toBe(count);
-    expect(rule.gauge.values[0]).toBeCloseTo(165 / count, 12);
+    // beatoraja's TOTAL modifier rounds to float32 (#1090).
+    expect(rule.gauge.values[0]).toBe(Math.fround(165 / count));
     expect(resolveRuleset(chart, 'beatoraja', { gauge: 'HARD' }).gauge.values[0]).toBeCloseTo(
       Math.min(0.15, 10 / count),
-      12,
+      6,
     );
     const lr2 = resolveRuleset(chart, 'lr2');
     expect(lr2.noteCount).toBe(countBaseNotes(notes));
-    expect(lr2.gauge.values[0]).toBeCloseTo(165 / countBaseNotes(notes), 12);
+    expect(lr2.gauge.values[0]).toBe(Math.fround(165 / countBaseNotes(notes)));
   });
 
   test('uses judgment notes for default TOTAL and bmson percentage TOTAL', () => {
@@ -333,6 +339,18 @@ test('keeps EX-HARD source tables distinct from HAZARD and rejects a new LR2 EX-
   expect(ac.values.slice(3)).toEqual([-10, -18, -10]);
   expect(ac.death).toBeUndefined();
   expect(() => resolveRuleset(chart, 'lr2', { selectedGauge: 'EX-HARD' })).toThrow(/no EX-HARD/);
+});
+
+test('refuses a bare DEATH under That-Which-Must-Not-Be-Named outside a course, as LR2 refuses EX-HARD', () => {
+  const chart = facts();
+  for (const selectedGauge of ['DEATH', 'DEATH-CORRECTED'] as const) {
+    expect(() => resolveRuleset(chart, '____', { selectedGauge })).toThrow(new RegExp(`no ${selectedGauge} gauge`));
+  }
+  // Another source's DEATH keeps its source's gauge, and a course stage plays DEATH on the course gauges.
+  expect(resolveRuleset(chart, '____', { selectedGauge: 'lr2:DEATH' }).gauge.id).toBe('DEATH');
+  expect(resolveRuleset(chart, '____', { selectedGauge: 'DEATH', course: { kind: 'grade' } }).gauge.id).toBe(
+    'EXHARDCLASS',
+  );
 });
 
 test('uses each source ASSIST EASY border and damage without changing input assists', () => {

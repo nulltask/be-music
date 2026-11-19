@@ -5,7 +5,15 @@
  * chart, so the host can tell the player which ones to change instead of leaving the play screen black.
  */
 
-import { canonicalOptionValue, optionValueSources, splitOptionSource } from '@be-music/player-engine/ruleset';
+import {
+  canonicalOptionValue,
+  optionValueSources,
+  resolveGaugeTypes,
+  splitGaugePick,
+  splitOptionSource,
+  type GaugePick,
+  type RulesetId,
+} from '@be-music/player-engine/ruleset';
 import type { PlaySessionOptions } from './play-options.ts';
 
 /**
@@ -17,13 +25,32 @@ function optionLabel(value: string): string {
   const { name } = splitOptionSource(current);
   const sources = optionValueSources(current);
   if (sources.length === 0) return name;
-  return `${name} (${sources.map((source) => (source === 'lr2' ? 'LR2' : source === '____' ? '????' : source)).join(' / ')})`;
+  return `${name} (${sources.map(sourceLabel).join(' / ')})`;
 }
 
-/** The play options that convert the chart, as the Options dialog labels them. */
+function sourceLabel(source: RulesetId): string {
+  return source === 'lr2' ? 'LR2' : source === '____' ? '????' : source;
+}
+
+/**
+ * A gauge pick the judge ruleset does not define itself, as the Options dialog labels it: another source's gauge
+ * (`lr2:HARD` under beatoraja reads `HARD (LR2)`), or a bare gauge the ruleset's own menu lacks (LR2's P-ATTACK under
+ * beatoraja, which the engine refuses). `undefined` for the ruleset's own gauge, which is never the mismatch.
+ */
+function foreignGaugeLabel(pick: GaugePick | undefined, ruleset: RulesetId): string | undefined {
+  const parts = splitGaugePick(pick);
+  if (parts === undefined) return undefined;
+  if (parts.source === undefined) return resolveGaugeTypes(ruleset).includes(parts.type) ? undefined : parts.type;
+  return parts.source === ruleset ? undefined : `${parts.type} (${sourceLabel(parts.source)})`;
+}
+
+/**
+ * The play options that convert the chart, with the gauges and the judge ruleset that reads them, as the Options dialog
+ * labels them.
+ */
 export type PlayOptionMismatchSource = Pick<
   PlaySessionOptions,
-  'random1P' | 'random2P' | 'battleMode' | 'lr2ExtraMode' | 'longNoteModifier'
+  'random1P' | 'random2P' | 'battleMode' | 'lr2ExtraMode' | 'longNoteModifier' | 'gauge' | 'gauge2P' | 'judgeRuleset'
 >;
 
 /** The chart could not be prepared with the selected play options. */
@@ -38,7 +65,10 @@ export class PlayOptionMismatchError extends RangeError {
   }
 }
 
-/** The selected options that convert the chart, labelled as the Options dialog shows them. */
+/**
+ * The selected options that convert the chart, labelled as the Options dialog shows them, and each gauge that is not the
+ * judge ruleset's own (`Gauge: HARD (LR2)`).
+ */
 export function describeChartConvertingOptions(options: PlayOptionMismatchSource): string[] {
   const labels: string[] = [];
   if (options.random1P !== undefined && options.random1P !== 'OFF')
@@ -50,6 +80,11 @@ export function describeChartConvertingOptions(options: PlayOptionMismatchSource
   if (options.lr2ExtraMode === true) labels.push('EXTRA MODE (LR2)');
   if (options.longNoteModifier !== undefined && options.longNoteModifier !== 'OFF')
     labels.push(`Long notes: ${options.longNoteModifier}`);
+  const ruleset = options.judgeRuleset ?? 'lr2';
+  const gauge = foreignGaugeLabel(options.gauge, ruleset);
+  if (gauge !== undefined) labels.push(`Gauge: ${gauge}`);
+  const gauge2P = foreignGaugeLabel(options.gauge2P, ruleset);
+  if (gauge2P !== undefined) labels.push(`Gauge 2P: ${gauge2P}`);
   return labels;
 }
 

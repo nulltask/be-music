@@ -8,6 +8,7 @@ import {
   recordControlKey,
   START_SELECT_QUIT_MS,
   trackPlayKey,
+  windowHoldsStart,
 } from './play-input.ts';
 import { HISPEED_STEP } from '@be-music/player-scene-model';
 import { PlaySession } from './play-session.ts';
@@ -135,10 +136,27 @@ describe('play adjustment keys', () => {
     expect(play.playState).toBe(state);
   });
 
+  test.each(['Numpad0', 'Digit0'])('%s switches floating hi-speed', (code) => {
+    const play = new PlaySession();
+    handleSharedEngineExitKey(play, key(code));
+    expect(play.playState.view.hiSpeed.floating).toBeDefined();
+    handleSharedEngineExitKey(play, key(code));
+    expect(play.playState.view.hiSpeed.floating).toBeUndefined();
+  });
+
+  test('a lane bound to the number-row 0 takes precedence over floating hi-speed', () => {
+    const play = new PlaySession();
+    play.preparedChart = { laneBindings: [{ inputTokens: ['0'] }] } as unknown as typeof play.preparedChart;
+    handleSharedEngineExitKey(play, key('Digit0'));
+    expect(play.playState.view.hiSpeed.floating).toBeUndefined();
+    handleSharedEngineExitKey(play, key('Numpad0'));
+    expect(play.playState.view.hiSpeed.floating).toBeDefined();
+  });
+
   test('held one-shot keys do not pause, restart or switch floating mode', () => {
     const play = new PlaySession();
     const restart = vi.spyOn(play, 'requestRestart');
-    for (const name of ['Pause', 'Tab', 'F5', 'Numpad0']) {
+    for (const name of ['Pause', 'Tab', 'F5', 'Numpad0', 'Digit0']) {
       handleSharedEngineExitKey(play, key(name, { repeat: true }));
     }
     expect(play.paused).toBe(false);
@@ -231,6 +249,35 @@ describe('START and SELECT in a play', () => {
     expect(adjust.mock.calls.map(([, delta]) => delta)).toEqual([-1, 1]);
     expect(play.getHiSpeed()).toBe(2);
     adjust.mockRestore();
+  });
+
+  test("beatoraja's WINDOW HOLD takes START as held until the last note, in the player's own play only (#1131)", () => {
+    const play = coveredPlay();
+    play.options.controlScheme = 'beatoraja';
+    play.options.windowHold = true;
+    expect(windowHoldsStart(play)).toBe(true);
+    // A lane key alone steps the hi-speed, and the turntable moves the cover, as with START held.
+    handleSharedEngineExitKey(play, key('KeyF'));
+    expect(play.getHiSpeed()).toBeCloseTo(2 + HISPEED_STEP);
+    handleSharedEngineExitKey(play, key('ShiftLeft'));
+    expect(play.playState.view.covers[0]?.sudden).toBeCloseTo(0.01);
+    // START never comes up, so pressing it twice switches nothing.
+    const suddenOn = play.playState.view.covers[0]?.suddenOn;
+    handleSharedEngineExitKey(play, key('KeyQ', { timeStamp: 0 }));
+    release(play, 'KeyQ', 50);
+    handleSharedEngineExitKey(play, key('KeyQ', { timeStamp: 100 }));
+    expect(play.playState.view.covers[0]?.suddenOn).toBe(suddenOn);
+    release(play, 'KeyQ', 150);
+    // After the last note, in AUTO play or in a replay, keys are only keys.
+    play.playMoments.allNotesDoneAtMs = 1000;
+    expect(windowHoldsStart(play)).toBe(false);
+    play.playMoments.allNotesDoneAtMs = undefined;
+    play.options.autoPlay = true;
+    expect(windowHoldsStart(play)).toBe(false);
+    play.options.autoPlay = false;
+    play.options.windowHold = false;
+    handleSharedEngineExitKey(play, key('KeyD'));
+    expect(play.getHiSpeed()).toBeCloseTo(2 + HISPEED_STEP);
   });
 
   test('START pressed twice switches the lane cover', () => {

@@ -10,7 +10,8 @@ import {
   type BeMusicGameplayRuntime,
   type BeMusicJudgeDetail,
 } from '@be-music/player-skin-sdk';
-import { addHUDText, addHUDNumber, type ChildPool } from '../pixi-kit/index.ts';
+import { addHUDNumber, type ChildPool } from '../pixi-kit/index.ts';
+import { addSynesthesiaHUDText as addHUDText } from './figures.ts';
 import {
   SYN_AMBER,
   SYN_EMBER,

@@ -86,16 +86,29 @@ describe('simulateReplay mines', () => {
     return Math.round((without.gauge.final - withMine.gauge.final) * 1000) / 1000;
   }
 
-  test('LR2beta3 and provisional That-Which-Must-Not-Be-Named distinguish ahead-only and symmetric mine press reach', () => {
-    // Pressed 3 ms after the crossing: beatoraja damages only a key that is down as the mine crosses the line.
+  test('LR2beta3 and That-Which-Must-Not-Be-Named, which imports its policy, reach a mine only ahead of the line', () => {
+    // Pressed 3 ms after the crossing: no ruleset has a late press window.
     const late = [down(1_003_000), up(1_020_000)];
     expect(mineDamage('lr2', late)).toBe(0);
-    expect(mineDamage('____', late)).toBeGreaterThan(0);
+    expect(mineDamage('____', late)).toBe(0);
     expect(mineDamage('beatoraja', late)).toBe(0);
-    // Pressed 3 ms before and let go before the crossing: the same.
+    // Pressed 3 ms before and let go before the crossing: beatoraja damages only a key that is down at the crossing.
     const early = [down(997_000), up(999_000)];
     expect(mineDamage('lr2', early)).toBe(10);
+    expect(mineDamage('____', early)).toBeGreaterThan(0);
     expect(mineDamage('beatoraja', early)).toBe(0);
+  });
+
+  test('a mine hit counts one POOR under LR2 and That-Which-Must-Not-Be-Named and none under beatoraja, from one replay', () => {
+    const replay = makeReplay({
+      notes: [filler, mine],
+      inputs: [down(500_000), up(510_000), down(900_000), up(1_100_000)],
+    });
+    const results = simulateReplayRulesets(replay);
+    expect(results.lr2).toMatchObject({ judge: { pgreat: 1, poor: 1 }, minePoor: 1, maxCombo: 1, exScore: 2 });
+    expect(results.____).toMatchObject({ judge: { pgreat: 1, poor: 1 }, minePoor: 1, maxCombo: 1, exScore: 2 });
+    expect(results.beatoraja).toMatchObject({ judge: { pgreat: 1, poor: 0 }, maxCombo: 1, exScore: 2 });
+    expect(results.beatoraja).not.toHaveProperty('minePoor');
   });
 
   test('a key held through the crossing detonates a mine under every ruleset, once', () => {
@@ -134,7 +147,7 @@ describe('simulateReplay', () => {
   test('a single note hit dead-on scores PGREAT on every ruleset', () => {
     const replay = makeReplay({ notes: [note(1_000_000)], inputs: [down(1_000_000)] });
     const results = simulateReplayRulesets(replay);
-    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+    for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
       const result = results[ruleset]!;
       expect(result.judge, ruleset).toEqual({ pgreat: 1, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 });
       expect(result.exScore, ruleset).toBe(2);
@@ -215,7 +228,7 @@ describe('simulateReplay', () => {
   test('unplayed notes miss as POOR and drain the gauge', () => {
     const replay = makeReplay({ notes: [note(1_000_000), note(2_000_000)] });
     const results = simulateReplayRulesets(replay);
-    for (const ruleset of ['lr2', 'beatoraja', '____'] as const) {
+    for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
       const result = results[ruleset]!;
       expect(result.judge.poor, ruleset).toBe(2);
       expect(result.exScore, ruleset).toBe(0);
@@ -416,7 +429,7 @@ describe('ruleset helpers', () => {
   });
 });
 
-test.each(['lr2', 'beatoraja', '____'] as const)(
+test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
   '%s re-simulates strict zero-total from the typed play setting',
   (ruleset) => {
     const replay = makeReplay({

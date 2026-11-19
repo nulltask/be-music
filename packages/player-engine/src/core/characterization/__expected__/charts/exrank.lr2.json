@@ -4,16 +4,16 @@
     "endedAtMs": 4451.667,
     "summary": {
       "total": 4,
-      "perfect": 0,
+      "perfect": 2,
       "fast": 0,
-      "slow": 3,
-      "great": 3,
+      "slow": 1,
+      "great": 1,
       "good": 0,
       "bad": 1,
       "poor": 0,
       "emptyPoor": 0,
-      "exScore": 3,
-      "score": 75000,
+      "exScore": 5,
+      "score": 125000,
       "combo": 2,
       "maxCombo": 2,
       "gauge": {
@@ -84,30 +84,30 @@
       "results": {
         "native": {
           "ruleset": "be-music/native",
-          "judge": {"pgreat":0,"great":3,"good":0,"bad":1,"poor":0,"emptyPoor":0},
+          "judge": {"pgreat":2,"great":1,"good":0,"bad":1,"poor":0,"emptyPoor":0},
           "fast": 0,
-          "slow": 3,
-          "exScore": 3,
+          "slow": 1,
+          "exScore": 5,
           "noteCount": 4,
           "maxCombo": 2,
-          "djLevel": "D",
+          "djLevel": "B",
           "gauge": {"type":"GROOVE","final":100,"cleared":true},
-          "score": 75000
+          "score": 125000
         }
       }
     },
     "simulated": {
       "lr2": {
         "ruleset": "lr2/0",
-        "judge": {"pgreat":0,"great":3,"good":0,"bad":1,"poor":0,"emptyPoor":0},
+        "judge": {"pgreat":2,"great":1,"good":0,"bad":1,"poor":0,"emptyPoor":0},
         "fast": 0,
-        "slow": 3,
-        "exScore": 3,
+        "slow": 1,
+        "exScore": 5,
         "noteCount": 4,
         "maxCombo": 2,
-        "djLevel": "D",
+        "djLevel": "B",
         "gauge": {"type":"GROOVE","final":100,"cleared":true},
-        "score": 75000
+        "score": 125000
       },
       "beatoraja": {
         "ruleset": "beatoraja/0",
@@ -130,6 +130,18 @@
         "maxCombo": 4,
         "djLevel": "F",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
+      },
+      "plugout": {
+        "ruleset": "plugout/0",
+        "judge": {"pgreat":0,"great":4,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "fast": 0,
+        "slow": 4,
+        "exScore": 4,
+        "noteCount": 4,
+        "maxCombo": 4,
+        "djLevel": "C",
+        "gauge": {"type":"NORMAL","final":100,"cleared":true},
+        "score": 50000
       }
     },
     "audio": [
@@ -146,8 +158,8 @@
       "0.000 READY combo=0 gauge=20",
       "535.000 GREAT combo=1 ch=11 delta=35 gauge=60",
       "1535.000 BAD combo=0 ch=12 delta=35 gauge=56",
-      "2535.000 GREAT combo=1 ch=13 delta=35 gauge=96",
-      "3035.000 GREAT combo=2 ch=14 delta=35 gauge=100"
+      "2535.000 PERFECT combo=1 ch=13 delta=35 gauge=96",
+      "3035.000 PERFECT combo=2 ch=14 delta=35 gauge=100"
     ],
     "ui": [
       "535.000 flash-lane 11",
@@ -204,16 +216,16 @@
       "--- Result ---",
       "TOTAL  : 4",
       "GAUGE  : 100.00 / 100.00 CLEAR (TOTAL 160)",
-      "PGREAT : 0",
-      "GREAT  : 3",
+      "PGREAT : 2",
+      "GREAT  : 1",
       "GOOD   : 0",
       "BAD    : 1",
       "POOR   : 0",
       "EMPTY  : 0",
       "FAST   : 0",
-      "SLOW   : 3",
-      "EX-SCORE: 3 / 8 (37.50%)",
-      "SCORE   : 75000 / 200000 (37.50%)"
+      "SLOW   : 1",
+      "EX-SCORE: 5 / 8 (62.50%)",
+      "SCORE   : 125000 / 200000 (62.50%)"
     ]
   },
   "replay": {
@@ -221,16 +233,16 @@
     "endedAtMs": 4466.667,
     "summary": {
       "total": 4,
-      "perfect": 0,
+      "perfect": 2,
       "fast": 0,
-      "slow": 3,
-      "great": 3,
+      "slow": 1,
+      "great": 1,
       "good": 0,
       "bad": 1,
       "poor": 0,
       "emptyPoor": 0,
-      "exScore": 3,
-      "score": 75000,
+      "exScore": 5,
+      "score": 125000,
       "combo": 2,
       "maxCombo": 2,
       "gauge": {
@@ -281,8 +293,8 @@
       "0.000 READY combo=0 gauge=20",
       "550.000 GREAT combo=1 ch=11 delta=35 gauge=60",
       "1550.000 BAD combo=0 ch=12 delta=35 gauge=56",
-      "2550.000 GREAT combo=1 ch=13 delta=35 gauge=96",
-      "3050.000 GREAT combo=2 ch=14 delta=35 gauge=100"
+      "2550.000 PERFECT combo=1 ch=13 delta=35 gauge=96",
+      "3050.000 PERFECT combo=2 ch=14 delta=35 gauge=100"
     ],
     "ui": [
       "550.000 press-lane 11",
@@ -416,6 +428,18 @@
         "maxCombo": 4,
         "djLevel": "AAA",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
+      },
+      "plugout": {
+        "ruleset": "plugout/0",
+        "judge": {"pgreat":4,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "fast": 0,
+        "slow": 0,
+        "exScore": 8,
+        "noteCount": 4,
+        "maxCombo": 4,
+        "djLevel": "AAA",
+        "gauge": {"type":"NORMAL","final":100,"cleared":true},
+        "score": 100000
       }
     },
     "audio": [

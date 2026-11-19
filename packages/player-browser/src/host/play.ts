@@ -6,7 +6,7 @@
 import { BGACameraFeed } from '../media/bga-camera.ts';
 import type { GuideSound, ResolvedPlayChart } from '@be-music/player-engine';
 import type { BeMusicReplay, ReplayCourseStage } from '@be-music/player-engine/replay';
-import type { RulesetId } from '@be-music/player-engine/ruleset';
+import { gaugePickType, type RulesetId } from '@be-music/player-engine/ruleset';
 import {
   DEFAULT_PLAY_OPTIONS,
   resolvePlayOptions,
@@ -319,8 +319,9 @@ function createPlayView(
       ...(settings.scoreGraph !== undefined ? { scoreGraph: settings.scoreGraph } : {}),
       ...(settings.battleMode !== undefined ? { battleMode: settings.battleMode } : {}),
       ...(settings.lr2ExtraMode !== undefined ? { lr2ExtraMode: settings.lr2ExtraMode } : {}),
-      ...(settings.gauge2P !== undefined ? { gauge2P: settings.gauge2P } : {}),
-      gauge: play.resolveSelectedGauge(),
+      // A view labels the gauge by its type; the source of a qualified pick (`lr2:HARD`) stays with the engine.
+      ...(settings.gauge2P !== undefined ? { gauge2P: gaugePickType(settings.gauge2P) } : {}),
+      gauge: gaugePickType(play.resolveSelectedGauge()),
       courseGauge: course !== undefined,
       ...(course?.view !== undefined ? { course: course.view } : {}),
       ...(options.replay !== undefined ? { replay: true } : {}),
@@ -670,6 +671,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       ...settings,
       ...(kit.family === 'built-in' && LIFT_SKINS.has(kit.skin.id) ? { coverKeys: true } : {}),
       controlScheme: resolveControlScheme(kit.family, settings.builtInControlScheme),
+      ...(playOptions.windowHold ? { windowHold: true } : {}),
       // beatoraja's GUIDE SE: the sound set's judgment sounds, when the player turned them on.
       ...(playOptions.guideSE ? { guideSounds: resolveGuideSounds(options.sounds) } : {}),
       judgeTimingAutoAdjust: playOptions.judgeTimingAutoAdjust,
@@ -691,6 +693,10 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
         : {}),
       hRandomThresholdBPM: playOptions.hRandomThresholdBPM,
       mineModifier: playOptions.mineModifier,
+      crazyJudge: playOptions.crazyJudge,
+      crazyHellJudge: playOptions.crazyHellJudge,
+      crazyAddMine: playOptions.crazyAddMine,
+      crazyNotes: playOptions.crazyNotes,
       scrollModifier: playOptions.scrollModifier,
       scrollSection: playOptions.scrollSection,
       scrollRate: playOptions.scrollRate,
@@ -720,6 +726,8 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
       randomSeed2P: playOptions.randomSeed2P,
       randomFixedLane1P: playOptions.randomFixedLane1P,
       randomFixedLane2P: playOptions.randomFixedLane2P,
+      lr2RandomScratch1P: playOptions.lr2RandomScratch1P,
+      lr2RandomScratch2P: playOptions.lr2RandomScratch2P,
       classicHiSpeed: playOptions.classicHiSpeed,
       floatingHiSpeed: playOptions.floatingHiSpeed,
       fixedDisplayArea: playOptions.fixedDisplayArea,
@@ -830,6 +838,10 @@ function resolvePracticeSessionOptions(
     battleMode: 'OFF',
     longNoteModifier: 'OFF',
     mineModifier: 'OFF',
+    crazyJudge: 'OFF',
+    crazyHellJudge: false,
+    crazyAddMine: false,
+    crazyNotes: 'OFF',
     scrollModifier: 'OFF',
     extraNoteDepth: 0,
     lr2ExtraMode: false,

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vite-plus/test';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import { classifyPlannedAssists, resolvePlannedRecordPolicy, type PlannedPlay } from './planned-assists.ts';
 
-const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
+const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____', 'plugout'];
 const options = (plan: PlannedPlay) => classifyPlannedAssists(plan).findings.map((finding) => finding.option);
 const conditional = (plan: PlannedPlay) =>
   classifyPlannedAssists(plan).conditionalFindings.map((finding) => finding.option);
@@ -47,6 +47,16 @@ describe('classifyPlannedAssists', () => {
     expect(conditional({ autoScratch2P: true })).toEqual(['auto-scratch']);
     expect(conditional({ randomLane: { p2: 'H-RANDOM' } })).toEqual(['H-RANDOM']);
     expect(options({ randomLane: { p2: 'SCATTER' } })).toEqual(['SCATTER']);
+    // The player's NOTES COPY keeps no record only on a 5 / 7 KEY chart outside a course, which it copies (#1243).
+    expect(classifyPlannedAssists({ playerChartPlayOptions: { notes: 'DBLCOPY' } })).toMatchObject({
+      findings: [],
+      conditionalFindings: [{ option: 'nanasi-notes:DBLCOPY', assistClass: 'no-save' }],
+    });
+    expect(conditional({ playerChartPlayOptions: { notes: 'COPY', hellJudge: true } })).toEqual(['nanasi-notes:COPY']);
+    expect(classifyPlannedAssists({ playerChartPlayOptions: { notes: 'DOUBLE', judge: 'GOOD2BAD' } })).toEqual({
+      findings: [],
+      conditionalFindings: [],
+    });
   });
 
   test('a conditional finding is not repeated when it is already certain', () => {

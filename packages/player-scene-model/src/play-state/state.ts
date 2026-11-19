@@ -46,6 +46,8 @@ export interface PlayState {
   /** The gauge in percent, as of the last frame. */
   readonly gauge: number;
   readonly gaugeType?: string;
+  /** The source of that gauge, when it is not the judge ruleset's own (`lr2:HARD` under beatoraja judging). */
+  readonly gaugeSource?: string;
   readonly cleared: boolean;
   /** The EX score, as of the last frame. */
   readonly exScore: number;
@@ -155,6 +157,7 @@ function applyFrame(state: PlayState, frame: PlayFrameInput): PlayState {
   const totalSeconds = frame.totalSeconds > 0 ? frame.totalSeconds : state.totalSeconds;
   const cleared = gauge?.cleared ?? state.cleared;
   const gaugeType = gauge?.type ?? state.gaugeType;
+  const gaugeSource = gauge?.source ?? state.gaugeSource;
   // The engine's own combos, when the frame carries them, win over what the judgments counted.
   const combo = frame.summary.combo ?? state.combo;
   const maxCombo = frame.summary.maxCombo !== undefined ? Math.max(frame.summary.maxCombo, combo) : state.maxCombo;
@@ -165,6 +168,7 @@ function applyFrame(state: PlayState, frame: PlayFrameInput): PlayState {
     totalSeconds === state.totalSeconds &&
     cleared === state.cleared &&
     gaugeType === state.gaugeType &&
+    gaugeSource === state.gaugeSource &&
     combo === state.combo &&
     maxCombo === state.maxCombo &&
     courseCombo === state.courseCombo
@@ -180,6 +184,7 @@ function applyFrame(state: PlayState, frame: PlayFrameInput): PlayState {
     combo,
     maxCombo,
     ...(gaugeType !== undefined ? { gaugeType } : {}),
+    ...(gaugeSource !== undefined ? { gaugeSource } : {}),
     ...(courseCombo !== undefined ? { courseCombo } : {}),
   };
   // The graphs start at the gauge the play starts with; without a starting gauge given, the first frame tells it.
@@ -291,6 +296,7 @@ function applySeek(state: PlayState, event: Extract<PlayEvent, { type: 'seek' }>
   }
   const { lastJudgeDeltaMs: _previousDelta, ...kept } = state;
   const gaugeType = gauge?.type ?? state.gaugeType;
+  const gaugeSource = gauge?.source ?? state.gaugeSource;
   const courseCombo =
     state.courseCombo !== undefined && summary.course !== undefined
       ? {
@@ -304,6 +310,7 @@ function applySeek(state: PlayState, event: Extract<PlayEvent, { type: 'seek' }>
     gauge: gauge !== undefined ? gaugePercent(gauge) : gaugeValue,
     cleared: gauge?.cleared ?? false,
     ...(gaugeType !== undefined ? { gaugeType } : {}),
+    ...(gaugeSource !== undefined ? { gaugeSource } : {}),
     exScore: summary.exScore,
     combo: snapshot.combo,
     maxCombo: Math.max(snapshot.maxCombo, snapshot.combo),

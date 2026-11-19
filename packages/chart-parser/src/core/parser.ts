@@ -11,7 +11,6 @@ import { normalizeASCIIBase36Code } from '@be-music/shared-utils/core';
 import { buildBMSObjectLineEntry, upsertMeasureLength } from './event-utils.ts';
 import type { BmsonDocument } from './bmson.ts';
 import {
-  createControlFlowObjectEntry,
   resolveControlFlow,
   resolveControlFlowAliasDirective,
   type ControlFlowCaptureFrameType,
@@ -61,6 +60,12 @@ export function parseBMS(input: string): BeMusicJSON {
     json.bms.base = 62;
   }
 
+  // The first object line of each normal-channel measure, with the events it made (its preserved entry's and, outside
+  // control flow, their copies in `json.events`), so a duplicate line can stamp both with their line orders.
+  const firstNormalObjectLines = new Map<
+    number,
+    { order: number; events: BeMusicJSON['events'] | undefined; copyStart: number | undefined }
+  >();
   forEachLine(input, (rawLine) => {
     const line = rawLine.trim();
     if (!line.startsWith('#')) {
@@ -70,38 +75,50 @@ export function parseBMS(input: string): BeMusicJSON {
     const second = line.charCodeAt(1);
     const startsWithMeasure = second >= 0x30 && second <= 0x39;
     if (startsWithMeasure) {
-      const objectLine = parseObjectDataLine(line);
-      if (!objectLine) {
+      const bmsLineOrder = json.preservation.bms.sourceLines.length;
+      const parsedLine = parseObjectDataLine(line);
+      if (!parsedLine) {
         return;
       }
-      const { measure, channel, data } = objectLine;
-      if (controlFlowCaptureStack.length > 0) {
-        const controlFlowObject = createControlFlowObjectEntry(measure, channel, data, base);
-        if (controlFlowObject) {
-          json.bms.controlFlow.push(controlFlowObject);
-          json.preservation.bms.sourceLines.push(controlFlowObject);
+      const { measure, channel, data } = parsedLine;
+      const objectLine = buildBMSObjectLineEntry(measure, channel, data, base);
+      if (!objectLine) return;
+      const entry = { kind: 'object' as const, ...objectLine };
+      json.preservation.bms.sourceLines.push(entry);
+      const captured = controlFlowCaptureStack.length > 0;
+      const copyStart = captured ? undefined : json.events.length;
+      if (channel[0] === '1' || channel[0] === '2') {
+        const key = measure * 256 + (channel[0] === '2' ? 128 : 0) + channel.charCodeAt(1);
+        const first = firstNormalObjectLines.get(key);
+        if (first === undefined) {
+          firstNormalObjectLines.set(key, { order: bmsLineOrder, events: entry.events, copyStart });
+        } else {
+          if (first.events !== undefined) {
+            for (let index = 0; index < first.events.length; index += 1) {
+              first.events[index]!.bmsLineOrder = first.order;
+              if (first.copyStart !== undefined) json.events[first.copyStart + index]!.bmsLineOrder = first.order;
+            }
+            first.events = undefined;
+          }
+          for (const event of entry.events) event.bmsLineOrder = bmsLineOrder;
         }
+      }
+      if (captured) {
+        json.bms.controlFlow.push(entry);
       } else {
-        // Tokenized once: the preserved line and the chart's events come from the same entry.
-        const objectLine = buildBMSObjectLineEntry(measure, channel, data, base);
-        if (objectLine) {
-          json.preservation.bms.objectLines.push(objectLine);
-          json.preservation.bms.sourceLines.push({
-            kind: 'object',
-            ...objectLine,
-          });
-          if (objectLine.measureLength !== undefined) {
-            upsertMeasureLength(json, measure, objectLine.measureLength, measureByIndex);
-          }
-          for (const event of objectLine.events) {
-            // A copy per event: the chart's events must not alias the preserved line's.
-            json.events.push({
-              measure,
-              channel,
-              position: [event.position[0], event.position[1]],
-              value: event.value,
-            });
-          }
+        json.preservation.bms.objectLines.push(objectLine);
+        if (objectLine.measureLength !== undefined) {
+          upsertMeasureLength(json, measure, objectLine.measureLength, measureByIndex);
+        }
+        for (const event of entry.events) {
+          const copy: BeMusicJSON['events'][number] = {
+            measure,
+            channel,
+            position: [event.position[0], event.position[1]],
+            value: event.value,
+          };
+          if (event.bmsLineOrder !== undefined) copy.bmsLineOrder = event.bmsLineOrder;
+          json.events.push(copy);
         }
       }
       return;
@@ -146,8 +163,8 @@ export function parseBMS(input: string): BeMusicJSON {
     // base-62 charts (`#BASE 62`) put lowercase letters in indexed-header keys (e.g. `#WAV0a`), so most charts skip
     // this entirely and the JSON stays compact.
     const commandCaseDiffers = command !== commandRaw;
-    const definitionKey = resolveHeaderDefinitionKey(command, commandRaw, base);
     if (controlFlowCaptureStack.length > 0) {
+      const definitionKey = resolveHeaderDefinitionKey(command, commandRaw, base);
       const headerEntry: BMSControlFlowHeaderEntry = {
         kind: 'header',
         command,
@@ -169,11 +186,15 @@ export function parseBMS(input: string): BeMusicJSON {
 
     // LR2 and beatoraja apply header lines in file order: a top-level line overrides the same header in any branch
     // above it, taken or not.
-    if (definitionKey !== undefined && value.length > 0) {
-      for (const entry of capturedHeadersByKey.get(definitionKey) ?? []) {
-        entry.overriddenByLaterHeader = true;
+    if (capturedHeadersByKey.size > 0 && value.length > 0) {
+      const definitionKey = resolveHeaderDefinitionKey(command, commandRaw, base);
+      if (definitionKey !== undefined) {
+        const captured = capturedHeadersByKey.get(definitionKey);
+        if (captured !== undefined) {
+          for (const entry of captured) entry.overriddenByLaterHeader = true;
+          capturedHeadersByKey.delete(definitionKey);
+        }
       }
-      capturedHeadersByKey.delete(definitionKey);
     }
 
     json.preservation.bms.sourceLines.push({
@@ -432,7 +453,8 @@ function forEachLine(input: string, visitor: (line: string) => void): void {
  */
 function detectBMSBase(input: string): 36 | 62 {
   let resolved: 36 | 62 = 36;
-  for (const match of input.matchAll(BASE_DIRECTIVE_REGEX)) {
+  // A failed exec resets the global regexp for the next chart.
+  for (let match = BASE_DIRECTIVE_REGEX.exec(input); match !== null; match = BASE_DIRECTIVE_REGEX.exec(input)) {
     resolved = match[1] === '62' ? 62 : 36;
   }
   return resolved;

@@ -11,7 +11,7 @@ beatoraja skin's IR ops).
 
 ## 1. Scope
 
-The service verifies chart and course replays and stores results and personal bests under `lr2`, `beatoraja` and `____`. Be-Music Fingerprints identify charts. Public pages show scores, charts, courses and players, with share images for scores.
+The service verifies chart and course replays and stores results and personal bests under `lr2`, `beatoraja`, `____` and `plugout`. Be-Music Fingerprints identify charts. Public pages show scores, charts, courses and players, with share images for scores.
 
 The protocol does not guarantee human input. The service does not distribute chart or audio assets.
 
@@ -76,7 +76,7 @@ trust. The service does not enforce a minimum client version.
 
 ### 5.2 Sequence
 
-The [package README flowchart](../packages/app-leaderboard/README.md) shows the processing order: authentication and rate limits, input validation, duplicate detection, fingerprint verification, simulation under three rulesets, then R2 and D1 storage.
+The [package README flowchart](../packages/app-leaderboard/README.md) shows the processing order: authentication and rate limits, input validation, duplicate detection, fingerprint verification, simulation under four rulesets, then R2 and D1 storage.
 
 Resubmitting the same play from its owner returns the stored result; submission from another account is rejected. Unknown charts require a chart document. R2 writes precede the D1 update. Share images are uploaded through a separate API after the score submission.
 
@@ -85,7 +85,7 @@ Resubmitting the same play from its owner returns the stored result; submission 
 - L0 parses the replay (`parseReplay`), refusing a malformed one with `invalid-replay`. Every input must name a source in the replay's input-source table (`play.inputSources`, [`replay.md`](./replay.md#input-sources)), whose entries hold a coarse device class and a normalised label only; a replay recorded before input sources is refused rather than guessed. The table and the sources are part of the play's identity (`identifyPlay`), so they are stored as submitted. Rankings do not split by device class yet.
 - L1 re-simulates inputs instead of trusting the replay’s result cache.
 - L2 rejects AUTO and classifies assists. Tempo changes and standalone course stages are stored as unranked; ESC aborts are ranked as failed plays.
-- L3 checks that the play document and, on registration, chart document hash to the claimed fingerprints. The play document then also checks the replay's chart gameplay program: `chart.chartPlayOptions` must be the document's `playOptions` narrowed to the play (a course stage leaves out NOTES COPY; a NONSTOP run applies none), or the play is rejected with `chart-play-options-mismatch` ([ADR 0035](./adr/0035-chart-authored-notes-options.md), `src/scores/chart-play-options.ts`).
+- L3 checks that the play document and, on registration, chart document hash to the claimed fingerprints. The play document then also checks the replay's chart gameplay program: `chart.chartPlayOptions` must be the document's `playOptions` narrowed to the play (a course stage leaves out NOTES COPY; a NONSTOP run applies none), or the play is rejected with `chart-play-options-mismatch` ([ADR 0035](./adr/0035-chart-authored-notes-options.md), `src/scores/chart-play-options.ts`). `play.playerChartPlayOptions` must name exactly the options the document's `playOptions` do not declare, so a player's NOTES COPY, which keeps no record, cannot pass for the chart's (#1243).
 - L4 holds when chart and play fingerprints are identical or the play fingerprint is already verified for the chart. Composing new control-flow outcomes is not implemented.
 
 L5 (equivalence of replay notes and play-document timings) and input anomaly detection are not implemented. See `src/scores/played-chart.ts` for document verification.
@@ -96,8 +96,8 @@ L5 (equivalence of replay notes and play-document timings) and input anomaly det
 
 A manual play that seeks is practice (`PlayResult.practice`). Its first seek discards the replay recorder, and beatoraja PRACTICE records none, so neither has a replay to send: the web app skips best-record writes, Leaderboard submission and replay auto-save for that result, even if a host supplies replay data alongside it. Seeking a course stage or NONSTOP run also excludes the entire course and every later stage; course results remain available without a replay. Sending practice plays needs their range in the replay, and is left to a later change.
 
-- **Three rulesets.** Every play is re-simulated under `lr2`, `beatoraja` and `____`, and appears in all three
-  rankings. The ruleset the player actually played (`play.judgeRuleset`) is stored and shown as a mark, and a ranking
+- **Four rulesets.** Every play is re-simulated under `lr2`, `beatoraja`, `____` and `plugout`, and appears in all
+  four rankings. The ruleset the player actually played (`play.judgeRuleset`) is stored and shown as a mark, and a ranking
   can be filtered to "played under this ruleset" only.
 - **Re-judging outcomes** ([ADR 0019](./adr/0019-source-qualified-option-values.md), `rejudgeReplay` in
   [Replays](./replay.md#re-judging-under-another-ruleset)): a ruleset that cannot read the play (a gauge it does not
@@ -123,7 +123,7 @@ A manual play that seeks is practice (`PlayResult.practice`). Its first seek dis
   emptied) are stored and count as plays. So are **plays given up with ESC** (`play.aborted`): a play quit mid-way is
   ranked as a failed play under every ruleset, whatever its gauge stood at, as LR2 and beatoraja save one.
 - **Lamps and BP per ruleset** follow each game: under `lr2` a DEATH clear is a NORMAL clear (LR2body.exe `CheckClear`);
-  beatoraja gives HAZARD the FULL COMBO lamp when the gauge determines the lamp. That-Which-Must-Not-Be-Named reads DEATH as EX-HARD. New submissions use the updated beatoraja lamp and previously stored results retain their lamp. Every ruleset counts empty POORs in BP, LR2 included. BP also counts the notes a play never judged because it failed or was given up mid-way, as both games count them.
+  beatoraja gives HAZARD the FULL COMBO lamp when the gauge determines the lamp. That-Which-Must-Not-Be-Named has no DEATH outside a course: a play is refused, and a replay with a bare DEATH is not re-judged under it. New submissions use the updated beatoraja lamp and previously stored results retain their lamp. Every ruleset counts empty POORs in BP, LR2 included. BP also counts the notes a play never judged because it failed or was given up mid-way, as both games count them.
   The lamp and BP come from the rules every client uses (`resolveRulesetResultLamp` and `resolveRulesetResultMissCount` in `@be-music/player-engine/replay`, `resolveClearLamp` and `resolveMissCount` in `@be-music/player-engine/ruleset`): a full combo needs every note judged GOOD or better, so a chart without notes takes its gauge's lamp. Lamps are stored as their rank (`clearLampRank`): 1 FAILED, 2 ASSIST EASY, 3 EASY, 4 NORMAL, 5 HARD, 6 EX HARD, 7 FULL COMBO, 8 PERFECT, 9 MAX.
 - **Personal bests, beatoraja style**: the best EX score, the best clear lamp and the fewest misses are kept separately,
   each pointing at the score that set it, so each best identifies its score and replay. Misses count for every
@@ -160,7 +160,7 @@ with its own rankings per ruleset, and never as single-chart plays.
   be here, not a reason to refuse it. The stages must be judged under one ruleset, play under the course's constraints
   (its gauge set and judge constraint, and a lane option the course allows), and carry in exactly what the previous
   stage left once re-simulated (gauge, course combo and course max combo; the first stage carries in nothing). The run
-  is re-simulated under `lr2`, `beatoraja` and `____` with `simulateCourseReplay`; the client's cached results are
+  is re-simulated under `lr2`, `beatoraja`, `____` and `plugout` with `simulateCourseReplay`; the client's cached results are
   ignored.
 - **Unreached stages.** Their notes count as BP, so their note counts must not be the client's word. Every unreached
   stage's chart is required (`stage-chart-required`), must hash to the chart fingerprint the log names for the stage
@@ -232,7 +232,7 @@ sequenceDiagram
     end
     A->>A: simulateCourseReplay under the played ruleset
     A->>A: constraints, carry-in, failed vs given up
-    A->>A: simulateCourseReplay under lr2, beatoraja, ____
+    A->>A: simulateCourseReplay under lr2, beatoraja, ____, plugout
     A->>R: PUT course replay, new chart documents
     A->>D: batch: charts, course, course score + results, course bests
     A-->>C: 201 { courseScoreId, courseFingerprint, results, ranks }

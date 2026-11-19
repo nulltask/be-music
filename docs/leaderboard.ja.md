@@ -11,7 +11,7 @@ Leaderboard は Be-Music のオンラインのスコアランキングで、LR2 
 
 ## 1. 対象
 
-譜面とコースのリプレイを検証し、`lr2`、`beatoraja`、`____` ごとに結果と自己ベストを保存します。譜面は Be-Music Fingerprint で識別します。スコア、譜面、コース、プレイヤーの公開ページとスコア共有画像を配信します。
+譜面とコースのリプレイを検証し、`lr2`、`beatoraja`、`____`、`plugout` ごとに結果と自己ベストを保存します。譜面は Be-Music Fingerprint で識別します。スコア、譜面、コース、プレイヤーの公開ページとスコア共有画像を配信します。
 
 入力が人間によるものかは保証しません。譜面や音声素材は配信しません。
 
@@ -76,7 +76,7 @@ Accounts はゲスト、パスキー、設定済みの Discord / Google を提�
 
 ### 5.2 送信処理
 
-[パッケージ README のフロー図](../packages/app-leaderboard/README.ja.md)に処理順を示します。認証とレート制限、入力の検証、重複判定、fingerprint の検証、3 ルールセットでの再計算、R2 と D1 への保存の順に進みます。
+[パッケージ README のフロー図](../packages/app-leaderboard/README.ja.md)に処理順を示します。認証とレート制限、入力の検証、重複判定、fingerprint の検証、4 ルールセットでの再計算、R2 と D1 への保存の順に進みます。
 
 同じプレイを同じアカウントが再送すると保存済みの結果を返し、別アカウントからの再送は拒否します。未知の譜面には chart document が必要です。R2 への書き込み後に D1 を更新します。共有画像はスコア送信とは別の API でアップロードします。
 
@@ -85,7 +85,7 @@ Accounts はゲスト、パスキー、設定済みの Discord / Google を提�
 - L0: リプレイをパースし（`parseReplay`）、不正なものは `invalid-replay` で拒否します。どの入力もリプレイの入力ソースの表（`play.inputSources`、[`replay.ja.md`](./replay.ja.md#入力ソース)）にあるソースを指さなければならず、表の各項目は大まかなデバイスの種別と正規化したラベルだけを持ちます。入力ソース以前に記録したリプレイは推測せずに拒否します。表とソースはプレイの識別（`identifyPlay`）に含まれるので、送られたとおりに保存します。デバイスの種別によるランキングの分割はまだありません。
 - L1: 入力から結果を再計算し、リプレイの結果キャッシュは使いません。
 - L2: AUTO を拒否し、アシストを分類します。テンポ変更と単独のコースステージはランキング対象外として保存し、ESC 中断は失敗として順位付けします。
-- L3: play document と、登録時の chart document が申告した fingerprint と一致するか確認します。続けて play document でリプレイの譜面指定ゲームプレイプログラムも確認します。`chart.chartPlayOptions` は、文書の `playOptions` をそのプレイに合わせて絞ったもの（コースのステージは NOTES COPY を外し、NONSTOP は何も適用しない）でなければならず、違えば `chart-play-options-mismatch` で拒否します（[ADR 0035](./adr/0035-chart-authored-notes-options.ja.md)、`src/scores/chart-play-options.ts`）。
+- L3: play document と、登録時の chart document が申告した fingerprint と一致するか確認します。続けて play document でリプレイの譜面指定ゲームプレイプログラムも確認します。`chart.chartPlayOptions` は、文書の `playOptions` をそのプレイに合わせて絞ったもの（コースのステージは NOTES COPY を外し、NONSTOP は何も適用しない）でなければならず、違えば `chart-play-options-mismatch` で拒否します（[ADR 0035](./adr/0035-chart-authored-notes-options.ja.md)、`src/scores/chart-play-options.ts`）。`play.playerChartPlayOptions` は文書の `playOptions` が宣言していないオプションをちょうど示さなければならず、記録を残さないプレイヤーの NOTES COPY を譜面のものと偽れません（#1243）。
 - L4: chart と play の fingerprint が同一、または検証済みの play fingerprint と一致する場合に成立します。新しい制御構文の分岐結果の合成は未実装です。
 
 L5（リプレイのノーツと play document の時刻の同値性）と、入力の異常検知は未実装です。実装は `src/scores/played-chart.ts` を参照してください。
@@ -96,7 +96,7 @@ L5（リプレイのノーツと play document の時刻の同値性）と、入
 
 手動プレイでシークすると練習扱い（`PlayResult.practice`）になります。最初のシークでリプレイの記録を破棄し、beatoraja の PRACTICE もリプレイを記録しないので、どちらも送るリプレイがありません。ホストがリプレイデータも渡した場合を含め、Web アプリはその結果のベスト記録更新・Leaderboard 送信・リプレイ自動保存を行いません。コースのステージや NONSTOP でシークすると、コース全体と後続ステージも対象外になります。リプレイがなくてもコース結果は表示できます。練習のプレイを送るには練習範囲をリプレイに記録する必要があり、後の変更に回します。
 
-- **3 つのルールセット。** すべてのプレイを `lr2`、`beatoraja`、`____` で計算し直し、3 つのランキングすべてに
+- **4 つのルールセット。** すべてのプレイを `lr2`、`beatoraja`、`____`、`plugout` で計算し直し、4 つのランキングすべてに
   載せます。実際にプレイしたルールセット（`play.judgeRuleset`）を保存して印として表示し、「このルールセットで
   プレイしたもの」だけに絞り込めるようにします。
 - **再判定の結果**（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)、[リプレイ](./replay.ja.md#ほかのルールセットでの再判定)の
@@ -122,7 +122,7 @@ L5（リプレイのノーツと play document の時刻の同値性）と、入
   は保存し、プレイ回数に数えます。**ESC で投げたプレイ**（`play.aborted`）も同じです。LR2 と beatoraja が保存するのと
   同じく、途中で投げたプレイはゲージの値に関係なく、どのルールセットでも落ちたプレイとして順位付けします。
 - **ランプと BP はルールセットごとに各ゲームに従います**: `lr2` では DEATH でのクリアは NORMAL です（LR2body.exe の
-  `CheckClear`）。beatoraja では、ゲージからランプを決める場合に HAZARD は FULL COMBO になります。名前を言ってはいけないあのゲームは DEATH を EX-HARD として扱います。新規送信には更新後の beatoraja のランプを適用し、保存済み結果のランプは維持します。BP には LR2 も含めどのルールセットでも
+  `CheckClear`）。beatoraja では、ゲージからランプを決める場合に HAZARD は FULL COMBO になります。名前を言ってはいけないあのゲームにはコースの外の DEATH がありません。そのプレイは拒否し、出所のない DEATH のリプレイはこのルールセットで再判定しません。新規送信には更新後の beatoraja のランプを適用し、保存済み結果のランプは維持します。BP には LR2 も含めどのルールセットでも
   空 POOR を数えます。この規則より前に保存された `lr2` の結果は、マイグレーション `0012` で書き直しました。BP には、途中で落ちたり ESC で投げたりして判定されなかったノートも両ゲームと同じく数えます（#584）。この規則より前に保存された BP はそのままです。
   ランプと BP はどのクライアントとも同じ規則で決めます（`@be-music/player-engine/replay` の `resolveRulesetResultLamp` と `resolveRulesetResultMissCount`、`@be-music/player-engine/ruleset` の `resolveClearLamp` と `resolveMissCount`）。フルコンボにはすべてのノートが GOOD 以上である必要があるので、ノートのない譜面はゲージのランプになります。ランプはその順位（`clearLampRank`）で保存します。1 FAILED、2 ASSIST EASY、3 EASY、4 NORMAL、5 HARD、6 EX HARD、7 FULL COMBO、8 PERFECT、9 MAX です。
 - **自己ベストは beatoraja 方式**: EX スコア、クリアランプ、ミス数のベストを別々に持ち、それぞれ達成したスコアを
@@ -159,7 +159,7 @@ L5（リプレイのノーツと play document の時刻の同値性）と、入
   理由にはなりません。ステージはすべて同じルールセットで判定され、コースの制約（ゲージ表、判定の制約、コースが許す
   レーンオプション）に従い、前のステージを計算し直して残った状態（ゲージ、コースのコンボ、コースの最大コンボ。最初の
   ステージは何も引き継がない）をそのまま引き継いでいる必要があります。プレイは `simulateCourseReplay` で `lr2`、
-  `beatoraja`、`____` の下で計算し直し、クライアントがキャッシュした結果は使いません。
+  `beatoraja`、`____`、`plugout` の下で計算し直し、クライアントがキャッシュした結果は使いません。
 - **到達しなかったステージ。** そのノートは BP に数えるので、ノート数をクライアントの申告に任せません。到達しなかった
   ステージの譜面は必須で（`stage-chart-required`）、ログがそのステージに記録した譜面フィンガープリントになる必要が
   あり（`stage-chart-fingerprint-mismatch`。これがコースのキーにもなる）、クライアント自身が使う
@@ -232,7 +232,7 @@ sequenceDiagram
     end
     A->>A: プレイしたルールセットで simulateCourseReplay
     A->>A: 制約、引き継ぎ、落ちたか投げたか
-    A->>A: lr2、beatoraja、____ で simulateCourseReplay
+    A->>A: lr2、beatoraja、____、plugout で simulateCourseReplay
     A->>R: PUT コースのリプレイ、新しい譜面ドキュメント
     A->>D: batch: 譜面、コース、コースのスコアと結果、コースのベスト
     A-->>C: 201 { courseScoreId, courseFingerprint, results, ranks }

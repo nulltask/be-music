@@ -3,7 +3,7 @@ import type { ControlActionOverrides, ControlKeyOverrides, ControlScheme } from 
 import type { DecideScene, PlayScene, ResultScene, SelectScene } from '@be-music/player-browser/host';
 import type { SkinFamilyId } from '@be-music/player-browser/skin';
 import type { ReplayPlaybackOptions } from '@be-music/player-engine/replay';
-import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
+import type { GaugePick, RulesetId } from '@be-music/player-engine/ruleset';
 import type { BrowseSort, DifficultyFilter, KeysFilter, HSFix, PlayOptions } from '@be-music/player-scene-model';
 import type { PlayTempoSettings } from './play-tempo-settings.ts';
 import type { ReplayAutoSaveRule } from './services/replay-slots.ts';
@@ -169,6 +169,18 @@ export interface PlayerGUIState extends PlayTempoSettings {
    */
   autoSaveReplay: boolean;
   /**
+   * When true (off by default), a recorded replay keeps each controller's device name (its `Gamepad.id`, which often
+   * names the vendor and product ids) in `play.inputSources`, wherever the replay goes: saved files, replay slots and
+   * Leaderboard submissions. Toggled from the Options dialog's "Record device names in replays" checkbox; latched at
+   * song start.
+   */
+  replayDeviceNames: boolean;
+  /**
+   * Whether a Bemuse server song plays at the volume its ReplayGain (`replaygain` in the server's index) sets, as
+   * Bemuse plays it. On by default; off plays the charts at their own `#VOLWAV`. Read as a play starts.
+   */
+  bemuseReplayGain: boolean;
+  /**
    * Each replay slot's auto-save rule (beatoraja's `autosavereplay`), applied as a result opens against the best record
    * before the play (`DEFAULT_REPLAY_AUTO_SAVE_RULES` until the player picks others); `never` leaves the slot to be
    * saved by hand.
@@ -220,18 +232,26 @@ export interface PlayerGUIState extends PlayTempoSettings {
   hiSpeed: number;
   hsFix: HSFix;
   displayAreaInfo: PlayOptions['displayAreaInfo'];
+  bga: PlayOptions['bga'];
+  bgaSize: PlayOptions['bgaSize'];
+  scoreGraph: boolean;
   hiddenSudden1P: PlayOptions['hiddenSudden1P'];
   hiddenSudden2P: PlayOptions['hiddenSudden2P'];
   laneCover: PlayOptions['laneCover'];
   shutter: PlayOptions['shutter'];
-  /** Gauge variant for the next play. Two-way synced with the LR2 select scene's PLAY OPTION panel. */
-  gauge: GaugeType;
+  /**
+   * Gauge for the next play: the judge ruleset's own (`HARD`) or another source's, qualified (`lr2:HARD`, ADR 0019).
+   * Two-way synced with the LR2 select scene's PLAY OPTION panel.
+   */
+  gauge: GaugePick;
   /** 1P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
   hRandomThresholdBPM: number;
   randomSeed1P: string;
   randomSeed2P: string;
   randomFixedLane1P: number;
   randomFixedLane2P: number;
+  lr2RandomScratch1P: boolean;
+  lr2RandomScratch2P: boolean;
   random1P: PlayOptions['random1P'];
   /** 2P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
   random2P: PlayOptions['random1P'];
@@ -253,6 +273,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
   guideSE: PlayOptions['guideSE'];
+  windowHold: PlayOptions['windowHold'];
   judgeCounts: PlayOptions['judgeCounts'];
   judgeDetailSplit: PlayOptions['judgeDetailSplit'];
   judgeDetail: PlayOptions['judgeDetail'];
@@ -301,6 +322,9 @@ export interface PlayerGUIState extends PlayTempoSettings {
   practiceStartGauge: number;
   practiceJudgeRank: number;
   practiceTotal: number;
+  practiceRestBefore: number;
+  practiceRestAfter: number;
+  practiceCarriedLongNotes: boolean;
   customJudgeKeyPerfectGreat: number;
   customJudgeKeyGreat: number;
   customJudgeKeyGood: number;
@@ -311,6 +335,10 @@ export interface PlayerGUIState extends PlayTempoSettings {
   lr2ExtraMode: boolean;
   lr2ExtraLevel: PlayOptions['lr2ExtraLevel'];
   mineModifier: PlayOptions['mineModifier'];
+  crazyJudge: PlayOptions['crazyJudge'];
+  crazyHellJudge: boolean;
+  crazyAddMine: boolean;
+  crazyNotes: PlayOptions['crazyNotes'];
   scrollModifier: PlayOptions['scrollModifier'];
   scrollSection: number;
   scrollRate: number;
@@ -352,6 +380,8 @@ export interface PlayerGUIState extends PlayTempoSettings {
    * they had LR2 selected then dropped a beatoraja-only theme that wiped the LR2 state), `PlayerWebApp.rebuildSkinFamilyPicker`
    * silently resets to `'auto'` so the GUI never displays an unhonorable value.
    */
+  confirmDroppedSkin: boolean;
+  skipDroppedSkin: boolean;
   skinFamilyOverride: SkinFamilyOverride;
   /**
    * Read-only status text (loading summaries, "Playing: …", recording state, etc.). Bound to a disabled string

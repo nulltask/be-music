@@ -30,10 +30,10 @@ const LOCAL_STORAGE_KEYS: Readonly<Record<string, string>> = {
 const DATABASES: Readonly<Record<string, { description: string; stores: Readonly<Record<string, string>> }>> = {
   'be-music': { description: 'Courses you made', stores: { courses: 'Saved courses' } },
   'be-music-replays': {
-    description: 'Replay slots',
+    description: 'Replay history and slots',
     stores: {
-      replaySlots: 'What each slot holds',
-      replaySlotData: 'Each slot’s replay, gzip-compressed',
+      replaySlots: 'Replay history and slot selections',
+      replaySlotData: 'Replay files, gzip-compressed',
       meta: 'Storage revision',
     },
   },
@@ -42,6 +42,17 @@ const DATABASES: Readonly<Record<string, { description: string; stores: Readonly
     stores: {
       parsedCharts: 'Each chart’s parse result, by the SHA-256 of its file',
       meta: 'The build that parsed them',
+    },
+  },
+  'be-music-folders': {
+    description: 'Folders you opened or dropped, to open them again on the next visit',
+    stores: { folders: 'The remembered folders' },
+  },
+  'be-music-folder-snapshots': {
+    description: 'What each remembered folder held when it was last loaded, so its charts are listed at once',
+    stores: {
+      folders: 'The folders that have a snapshot',
+      snapshots: 'Each folder’s file listing, and the size, modification time and parse key of its chart files',
     },
   },
 };

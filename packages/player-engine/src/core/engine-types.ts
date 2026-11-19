@@ -1,4 +1,9 @@
-import type { ChartOptionProgram, ChartOptionDiagnostic, ChartPlayOptionProgram } from '@be-music/chart-model';
+import type {
+  ChartOptionProgram,
+  ChartOptionDiagnostic,
+  ChartPlayOptionProgram,
+  PlayerChartPlayOptions,
+} from '@be-music/chart-model';
 import type { ChartTextStage } from './chart-text.ts';
 export type { ChartTextStage } from './chart-text.ts';
 import type { BattleMode } from './battle-mode.ts';
@@ -21,7 +26,7 @@ import { type TUINoteHeight } from './ui-options.ts';
 import { type AudioSinkClockState } from '../audio-clock.ts';
 import { type PlayerGaugeSummary, type PlayerUISignalBus } from './ui-signal-bus.ts';
 import { type PlayerInputSignalBus } from './input-signal-bus.ts';
-import type { GaugeType, GaugeAutoShift } from '../ruleset/gauge-type.ts';
+import type { GaugePick, GaugeAutoShift } from '../ruleset/gauge-type.ts';
 import { type LongNoteStyle, type RulesetId, type RulesetWindowTables } from '../ruleset/index.ts';
 import { type ReplayRecordingOptions } from '../replay/recorder.ts';
 import type { BeMusicReplay, ReplayCourseStage, ReplayInputEvent, ReplayInputSource } from '../replay/format.ts';
@@ -133,7 +138,7 @@ export interface PlayerPlaySettings {
   hRandomThresholdBPM?: number;
   battleMode?: BattleMode;
   /** The 2P player's gauge in a two-player play (`battleMode: 'TWO-PLAYER'`); absent plays the 1P gauge. */
-  gauge2P?: string;
+  gauge2P?: GaugePick;
   /** LR2 D-BATTLE: scratch objects stay playable, as LR2's hidden `randSC` command keeps them (buttons 12 + 13 at decide). */
   dBattleScratch?: boolean;
   lr2ExtraMode?: boolean;
@@ -156,8 +161,12 @@ export interface PlayerPlaySettings {
    * Gauge the player selected, as an LR2-family id (`'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`). Mapped onto the
    * active ruleset's own line-up — `'GROOVE'` is beatoraja's `NORMAL`, `'DEATH'` is its `HAZARD`, and so on.
    * Defaults to `recordReplay.gauge`, then `'GROOVE'`. The replay records the gauge the play ran on.
+   *
+   * A value qualified with a source (`'lr2:HARD'`, `'beatoraja:EX-HARD'`, `'____:EASY'`) runs that source's gauge
+   * under whichever ruleset judges the play, with the source's auto-shift ladder, fallback gauge and course gauges
+   * (ADR 0019, #1171).
    */
-  gauge?: GaugeType;
+  gauge?: GaugePick;
   /**
    * The compat ruleset the play is judged under: `'lr2'` (default), `'beatoraja'` or `'____'`. It owns every judge
    * rule — the windows (beatoraja's SEVENKEYS windows scaled by its judgerank, That-Which-Must-Not-Be-Named's fixed ±16.67 / ±33.33 /
@@ -259,6 +268,12 @@ export interface PlayerPlayRuntime {
    * the engine applies the judge modifiers and records the program.
    */
   chartPlayOptionProgram?: ChartPlayOptionProgram;
+  /**
+   * The player's own nanasigroove judgment options (GOOD2BAD / GREAT2BAD, HELLJUDGE), added to the chart's where the
+   * chart sets none (`withPlayerChartPlayOptions`). Ignored when {@link chartPlayOptionProgram} is given: that program is
+   * the effective one.
+   */
+  playerChartPlayOptions?: PlayerChartPlayOptions;
   /** Diagnostics retained by a host compiling stage-owned programs before playback. */
   chartOptionDiagnostics?: readonly ChartOptionDiagnostic[];
   /** Stage-owned chart text supplied by a NONSTOP host; overrides flattened TEXT definitions. */
@@ -315,8 +330,10 @@ export interface PlayerPlayRuntime {
    * Keeps a play open after its chart is over, so the player's keys still light the lanes (and the chart's remaining
    * background sounds still play) while the host shows its outro. When the chart is over — every note judged and the
    * judge windows passed — `onSettled` runs once; the play then carries on until `signal` aborts, and only then ends
-   * normally (its summary and replay as usual; aborting this signal is not an interrupt). Without it a play ends as
-   * soon as its chart is over. Manual, replay and AUTO play alike.
+   * normally (its summary and replay as usual; aborting this signal is not an interrupt). Aborting it before the chart
+   * is over ends the play once nothing is left to judge, ahead of the judge windows and the chart's remaining
+   * background sounds (the host finishing a play whose notes are all judged). Without it a play ends as soon as its
+   * chart is over. Manual, replay and AUTO play alike.
    */
   holdAfterChart?: { signal: AbortSignal; onSettled?: () => void };
   audioBaseDir?: string;
@@ -576,6 +593,14 @@ export interface AudioSession {
   getActiveAudioFiles?: () => string[];
   getActiveAudioVoiceCount?: () => number;
   triggerEvent?: (event: BeMusicEvent) => void;
+  /**
+   * Plays `event`'s sound at `outputSeconds` on the clock {@link getClockState} reports (`outputSeconds`): the engine
+   * queues the chart's realtime audio (volume changes, background sounds, AUTO play's keysounds) as its write head
+   * (`scheduledSeconds`) reaches it, and a backend whose write head runs ahead of its output places each one at its due
+   * time with this, instead of when the engine's tick reached it. A time already past plays at once. Without it, those
+   * go through {@link triggerEvent} and sound as they are queued.
+   */
+  scheduleEventAt?: (event: BeMusicEvent, outputSeconds: number) => void;
   /**
    * Plays the guide sound of a judgment (beatoraja's GUIDE SE), at once. Present only on a session that has the sound
    * set's guide sounds and a play that turned them on; a sound the set lacks plays nothing.

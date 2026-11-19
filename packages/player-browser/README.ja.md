@@ -2,7 +2,7 @@
 
 # @be-music/player-browser
 
-Be-Music プレイヤーの browser の PixiJS ランタイムです。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作ります。音声サービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持ちます。[`@be-music/app-play`](../app-play/README.ja.md) がこれをプレイヤーのアプリに組み込みます。
+Be-Music のブラウザー版を PixiJS で動かすパッケージです。ホスト API は選曲・決定・プレイ・リザルトの各シーンセッションを作り、組み込み・LR2・beatoraja のビューで描画します。音声、譜面ライブラリー、スキンの読み込み、プレイの録画も扱います。[`@be-music/app-play` への組み込み](../app-play/README.ja.md)
 
 [Browser player 実装メモ](../../docs/player-web.ja.md) を参照してください。
 
@@ -18,7 +18,7 @@ Be-Music プレイヤーの browser の PixiJS ランタイムです。選曲・
 - タッチ主体の端末でのタッチ操作とタッチ用 gameplay layout、縦向きステージを持つスキンの縦画面表示、スキンごとの設定
 - LR2 の select / decide / gameplay / result skin を parse して PixiJS で描画
 - beatoraja の select / decide / gameplay / result skin を parse して PixiJS で描画
-- 画面ごとに 1 つのシーンセッションが振る舞い（一覧の操作、譜面の準備、エンジン、入力、音、終了処理）をすべてのファミリーに共通に持ち、built-in・LR2・beatoraja のファミリービューは描いてインテントを返すだけ（[シーンセッションとファミリービュー](../../docs/player-web.ja.md#シーンセッションとファミリービュー)）
+- 画面ごとに 1 つのシーンセッションが振る舞い（一覧の操作、譜面の準備、エンジン、入力、音、終了処理）をすべてのファミリーに共通に持ち、built-in・LR2・beatoraja のファミリービューは描いてインテントを返すだけ（[シーンセッションとファミリービュー](../../docs/player-web-scenes.ja.md#シーンセッションとファミリービュー)）
 - destination 補間、sprite transform、number、text、slider、bargraph を扱う共通 LR2 Pixi helper
 - destination sampling、source cell selection、text、value、slider、gauge、graph、timing visualizer、note、marker、BGA、runtime op/timer wiring を扱う共通 beatoraja Pixi helper
 - note、timing、scroll distance、BGA cue、score、result は terminal player と共通の再生意味論を使用

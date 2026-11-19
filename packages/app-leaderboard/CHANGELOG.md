@@ -1,5 +1,17 @@
 # @be-music/app-leaderboard
 
+## 0.6.0
+
+### Minor Changes
+
+- 2831f33: Scores and course stages of LRX charts are accepted and their format is stored and shown as LRX.
+- 7accbed: Every chart and course play is also re-simulated and ranked under the `plugout` ruleset, which the pages and API name as plugout.
+
+### Patch Changes
+
+- cce5da4: A submitted replay must name exactly the nanasigroove options the player added (`play.playerChartPlayOptions`), so a player's NOTES COPY, which is stored unranked, cannot pass for the chart's own.
+- Updated dependencies: `@be-music/player-engine@0.19.0`, `@be-music/chart-model@0.12.0`, `@be-music/shared-utils@0.8.0`
+
 ## 0.5.6
 
 ### Patch Changes

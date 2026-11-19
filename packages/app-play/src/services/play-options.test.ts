@@ -12,11 +12,14 @@ const gui: GUIPlayOptions = {
   randomSeed2P: '-1',
   randomFixedLane1P: 0,
   randomFixedLane2P: 0,
+  lr2RandomScratch1P: false,
+  lr2RandomScratch2P: false,
   random2P: 'RANDOM',
   dpFlip: true,
   bpmGuide: true,
   bpmChangeWarning: true,
   guideSE: true,
+  windowHold: true,
   judgeCounts: false,
   judgeDetailSplit: true,
   judgeDetail: 'MS',
@@ -78,6 +81,9 @@ const gui: GUIPlayOptions = {
   practiceStartGauge: 20,
   practiceJudgeRank: 0,
   practiceTotal: 0,
+  practiceRestBefore: 1,
+  practiceRestAfter: 1,
+  practiceCarriedLongNotes: true,
   customJudgeKeyPerfectGreat: 400,
   customJudgeKeyGreat: 400,
   customJudgeKeyGood: 100,
@@ -88,6 +94,10 @@ const gui: GUIPlayOptions = {
   lr2ExtraMode: false,
   lr2ExtraLevel: 0,
   mineModifier: 'OFF',
+  crazyJudge: 'OFF',
+  crazyHellJudge: false,
+  crazyAddMine: false,
+  crazyNotes: 'OFF',
   scrollModifier: 'OFF',
   scrollSection: 4,
   scrollRate: 0.5,
@@ -102,6 +112,9 @@ const gui: GUIPlayOptions = {
   hiSpeed: 3.5,
   hsFix: 'STARTBPM',
   displayAreaInfo: 'ON',
+  bga: 'AUTOPLAY_ONLY',
+  bgaSize: 'NORMAL',
+  scoreGraph: false,
   hiddenSudden1P: 'SUDDEN',
   hiddenSudden2P: 'HID+SUD',
   laneCover: true,
@@ -119,11 +132,14 @@ describe('playOptionsFromGUI', () => {
       randomSeed2P: '-1',
       randomFixedLane1P: 0,
       randomFixedLane2P: 0,
+      lr2RandomScratch1P: false,
+      lr2RandomScratch2P: false,
       random2P: 'RANDOM',
       dpFlip: true,
       bpmGuide: true,
       bpmChangeWarning: true,
       guideSE: true,
+      windowHold: true,
       judgeCounts: false,
       judgeDetailSplit: true,
       judgeDetail: 'MS',
@@ -185,6 +201,9 @@ describe('playOptionsFromGUI', () => {
       practiceStartGauge: 20,
       practiceJudgeRank: 0,
       practiceTotal: 0,
+      practiceRestBefore: 1,
+      practiceRestAfter: 1,
+      practiceCarriedLongNotes: true,
       customJudgeKeyPerfectGreat: 400,
       customJudgeKeyGreat: 400,
       customJudgeKeyGood: 100,
@@ -195,6 +214,10 @@ describe('playOptionsFromGUI', () => {
       lr2ExtraMode: false,
       lr2ExtraLevel: 0,
       mineModifier: 'OFF',
+      crazyJudge: 'OFF',
+      crazyHellJudge: false,
+      crazyAddMine: false,
+      crazyNotes: 'OFF',
       scrollModifier: 'OFF',
       scrollSection: 4,
       scrollRate: 0.5,
@@ -209,6 +232,9 @@ describe('playOptionsFromGUI', () => {
       hiSpeed: 3.5,
       hsFix: 'STARTBPM',
       displayAreaInfo: 'ON',
+      bga: 'AUTOPLAY_ONLY',
+      bgaSize: 'NORMAL',
+      scoreGraph: false,
       hiddenSudden1P: 'SUDDEN',
       hiddenSudden2P: 'HID+SUD',
       laneCover: true,
@@ -238,11 +264,14 @@ describe('copyPlayOptionsToGUI', () => {
       randomSeed2P: '-1',
       randomFixedLane1P: 0,
       randomFixedLane2P: 0,
+      lr2RandomScratch1P: false,
+      lr2RandomScratch2P: false,
       random2P: 'OFF',
       dpFlip: false,
       bpmGuide: false,
       bpmChangeWarning: false,
       guideSE: false,
+      windowHold: false,
       judgeCounts: true,
       judgeDetailSplit: false,
       judgeDetail: 'OFF',
@@ -286,6 +315,10 @@ describe('copyPlayOptionsToGUI', () => {
       fixedDisplayArea: false,
       judgeAlgorithm: 'combo',
       mineModifier: 'OFF',
+      crazyJudge: 'OFF',
+      crazyHellJudge: false,
+      crazyAddMine: false,
+      crazyNotes: 'OFF',
       scrollModifier: 'OFF',
       scrollSection: 4,
       scrollRate: 0.5,
@@ -311,6 +344,9 @@ describe('copyPlayOptionsToGUI', () => {
       practiceStartGauge: 20,
       practiceJudgeRank: 0,
       practiceTotal: 0,
+      practiceRestBefore: 1,
+      practiceRestAfter: 1,
+      practiceCarriedLongNotes: true,
       customJudgeKeyPerfectGreat: 400,
       customJudgeKeyGreat: 400,
       customJudgeKeyGood: 100,
@@ -328,6 +364,9 @@ describe('copyPlayOptionsToGUI', () => {
       hiSpeed: 2,
       hsFix: 'OFF',
       displayAreaInfo: 'OFF',
+      bga: 'ON',
+      bgaSize: 'EXTEND',
+      scoreGraph: true,
       hiddenSudden1P: 'OFF',
       hiddenSudden2P: 'OFF',
       laneCover: false,
@@ -369,6 +408,8 @@ describe('PlayOptionsService', () => {
       randomSeed2P: '-1',
       randomFixedLane1P: 0,
       randomFixedLane2P: 0,
+      lr2RandomScratch1P: false,
+      lr2RandomScratch2P: false,
       hiSpeed: 2,
     });
     service.update({ random1P: 'BACKWARDS' as PlayOptions['random1P'], hiSpeed: 2.0000000001 });
@@ -472,6 +513,23 @@ describe('previous arrangement selection', () => {
     expect(service.arrangementFor('chart')).toBeDefined();
     service.update({ longNoteRate: 0.5 });
     expect(service.arrangementFor('chart')).toBeUndefined();
+  });
+  test("restores nanasigroove's ADDMINE as its own option, keeping the Mines choice beside it", () => {
+    const service = new PlayOptionsService();
+    const replay = previous();
+    replay.play.mineModifier = 'NANASI_ADD';
+    replay.play.options = { ...replay.play.options, mineModifier: 'ADD_NEAR', crazyAddMine: true };
+    service.rememberArrangement('chart', replay);
+    expect(service.reusePreviousArrangement('beatoraja')).toMatchObject({
+      mineModifier: 'ADD_NEAR',
+      crazyAddMine: true,
+    });
+    replay.play.mineModifier = 'REMOVE';
+    service.rememberArrangement('chart', replay);
+    expect(service.reusePreviousArrangement('beatoraja')).toMatchObject({
+      mineModifier: 'REMOVE',
+      crazyAddMine: false,
+    });
   });
 });
 

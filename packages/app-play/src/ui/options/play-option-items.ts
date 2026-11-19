@@ -1,7 +1,15 @@
 import {
   optionValueSources,
+  qualifyGaugePick,
+  qualifyPracticeGaugePick,
+  resolveGaugeTypes,
   resolvePracticeGaugeTypes,
+  RULESET_IDS,
+  splitGaugePick,
+  splitPracticeGaugePick,
   splitOptionSource,
+  type GaugePick,
+  type GaugeType,
   type RulesetId,
 } from '@be-music/player-engine/ruleset';
 import {
@@ -10,6 +18,7 @@ import {
   resolveRandomModes,
   type LaneCoverState,
   type PlayOptions,
+  type PracticeGaugePick,
   type PracticeGaugeType,
   type RandomMode,
 } from '@be-music/player-scene-model';
@@ -18,10 +27,17 @@ import {
 export interface PlayOptionItem<T> {
   text: string;
   value: T;
+  /** Shown dimmed and not selectable (`OptionChoice.disabled`). */
+  disabled?: boolean;
 }
 
 /** How the Options dialog names each source. */
-const SOURCE_LABELS: Readonly<Record<RulesetId, string>> = { lr2: 'LR2', beatoraja: 'beatoraja', ____: '????' };
+const SOURCE_LABELS: Readonly<Record<RulesetId, string>> = {
+  lr2: 'LR2',
+  beatoraja: 'beatoraja',
+  ____: '????',
+  plugout: 'plugout',
+};
 
 /** The source of each lane option only one source defines (ADR 0019's registry, as the Options dialog groups them). */
 const LANE_OPTION_SOURCES: Readonly<Record<string, RulesetId>> = {
@@ -54,7 +70,7 @@ const LANE_OPTION_NAMES: Readonly<Record<string, string>> = {
 
 /** The sources in the order the Options dialog groups them: the judge ruleset's own first. */
 function sourceOrder(ruleset: RulesetId): RulesetId[] {
-  return [ruleset, ...(['lr2', 'beatoraja', '____'] as const).filter((source) => source !== ruleset)];
+  return [ruleset, ...RULESET_IDS.filter((source) => source !== ruleset)];
 }
 
 /**
@@ -119,12 +135,72 @@ export function battleModeItems(ruleset: RulesetId): PlayOptionItem<PlayOptions[
       { text: 'BATTLE (????)', value: '____:BATTLE' },
       ...(ruleset === '____' ? [{ text: '2P PLAY (????)', value: 'TWO-PLAYER' as const }] : []),
     ],
+    // plugout's two-player play is LR2's BATTLE, listed under LR2.
+    plugout: [],
   };
   return [
     { text: 'OFF', value: 'OFF' },
     { text: 'CHART HEADER', value: 'AUTO' },
     ...sourceOrder(ruleset).flatMap((source) => groups[source]),
   ];
+}
+
+/** plugout's names for its gauges (the select skin's NORMAL / HARD / HAZARD / EASY and their EX variants). */
+const PLUGOUT_GAUGE_NAMES: Partial<Readonly<Record<GaugeType, string>>> = {
+  GROOVE: 'NORMAL',
+  DEATH: 'HAZARD',
+  'EX-GROOVE': 'EXNORMAL',
+  'EX-HARD': 'EXHARD',
+  'EX-DEATH': 'EXHAZARD',
+  'EX-EASY': 'EX EASY',
+};
+
+/** A gauge's name as its source spells it: beatoraja's and AC's GROOVE is NORMAL, beatoraja's DEATH its HAZARD. */
+function gaugeName(source: RulesetId, type: GaugeType): string {
+  if (source === 'plugout') return PLUGOUT_GAUGE_NAMES[type] ?? formatGaugeLabel(type) ?? type;
+  if (type === 'ASSIST-EASY') return source === '____' ? 'ASSISTED EASY' : 'ASSIST EASY';
+  if (type === 'DEATH' && source === 'beatoraja') return 'HAZARD';
+  if (type === 'GROOVE' && source !== 'lr2') return 'NORMAL';
+  return formatGaugeLabel(type) ?? type;
+}
+
+/**
+ * The Options dialog's gauges under `ruleset`, grouped by source like the lane options (ADR 0019, #1171): the judge
+ * ruleset's own gauges as bare values, then each other source's gauges as qualified picks named with their source, so
+ * `lr2:HARD` reads `HARD (LR2)` under beatoraja. A qualified pick keeps its source's gauge whichever ruleset judges.
+ *
+ * `selected` are the picks the dialog holds. One qualified with the judge ruleset itself (`lr2:HARD` under LR2, kept
+ * across a ruleset change) plays as the bare gauge does, so it is listed after the own gauges only while it is selected.
+ */
+export function gaugeItems(ruleset: RulesetId, selected: readonly GaugePick[] = []): PlayOptionItem<GaugePick>[] {
+  const qualified = (source: RulesetId, type: GaugeType): PlayOptionItem<GaugePick> => ({
+    text: `${gaugeName(source, type)} (${SOURCE_LABELS[source]})`,
+    value: qualifyGaugePick(source, type),
+  });
+  const kept = resolveGaugeTypes(ruleset).filter((type) =>
+    selected.some((pick) => {
+      const parts = splitGaugePick(pick);
+      return parts?.source === ruleset && parts.type === type;
+    }),
+  );
+  return [
+    ...resolveGaugeTypes(ruleset).map((type) => ({ text: gaugeName(ruleset, type), value: type })),
+    ...kept.map((type) => qualified(ruleset, type)),
+    ...sourceOrder(ruleset)
+      .slice(1)
+      .flatMap((source) => resolveGaugeTypes(source).map((type) => qualified(source, type))),
+  ];
+}
+
+/** {@link gaugeItems} for the dialog's state, as a select's label-to-value choices. */
+export function gaugeChoices(state: {
+  judgeRuleset: RulesetId;
+  gauge: GaugePick;
+  gauge2P: GaugePick;
+}): Record<string, GaugePick> {
+  return Object.fromEntries(
+    gaugeItems(state.judgeRuleset, [state.gauge, state.gauge2P]).map((item) => [item.text, item.value]),
+  );
 }
 
 /** How the Options dialog spells each PRACTICE gauge id. */
@@ -136,29 +212,48 @@ const PRACTICE_GAUGE_NAMES: Readonly<Partial<Record<PracticeGaugeType, string>>>
   EXHARDCLASS: 'EXHARD GRADE',
 };
 
-/**
- * PRACTICE's GAUGE TYPE under `ruleset`: the judge ruleset's own gauges (#933), named as that ruleset names them (LR2's
- * DEATH is its HAZARD).
- */
-export function practiceGaugeItems(ruleset: RulesetId): PlayOptionItem<PracticeGaugeType>[] {
-  return resolvePracticeGaugeTypes(ruleset).map((value) => ({
-    text:
-      ruleset === 'lr2' && value === 'DEATH'
-        ? 'HAZARD'
-        : (PRACTICE_GAUGE_NAMES[value] ?? formatGaugeLabel(value) ?? value),
-    value,
-  }));
+/** A PRACTICE gauge's name as its source spells it (LR2's DEATH is its HAZARD). */
+function practiceGaugeName(source: RulesetId, type: PracticeGaugeType): string {
+  return source === 'lr2' && type === 'DEATH'
+    ? 'HAZARD'
+    : (PRACTICE_GAUGE_NAMES[type] ?? formatGaugeLabel(type) ?? type);
 }
 
 /**
- * The lowest auto-shift gauge under `ruleset`, named as the ruleset's own gauges (#933). LR2 has no ASSIST EASY, so its
- * lowest choice is EASY.
+ * PRACTICE's GAUGE TYPE under `ruleset`, grouped by source like the play's gauges (ADR 0019): the judge ruleset's own
+ * gauges (#933) as bare values, named as that ruleset names them, then each other source's PRACTICE gauges as qualified
+ * picks named with their source (`ASSIST EASY (beatoraja)` under LR2), which keep that source's gauge.
+ *
+ * `selected` is the pick the dialog holds: one qualified with the judge ruleset itself (kept across a ruleset change)
+ * plays as the bare gauge does, so it is listed after the own gauges only while it is selected.
+ */
+export function practiceGaugeItems(
+  ruleset: RulesetId,
+  selected?: PracticeGaugePick,
+): PlayOptionItem<PracticeGaugePick>[] {
+  const qualified = (source: RulesetId, type: PracticeGaugeType): PlayOptionItem<PracticeGaugePick> => ({
+    text: `${practiceGaugeName(source, type)} (${SOURCE_LABELS[source]})`,
+    value: qualifyPracticeGaugePick(source, type),
+  });
+  const kept = splitPracticeGaugePick(selected);
+  return [
+    ...resolvePracticeGaugeTypes(ruleset).map((type) => ({ text: practiceGaugeName(ruleset, type), value: type })),
+    ...(kept?.source === ruleset ? [qualified(ruleset, kept.type)] : []),
+    ...sourceOrder(ruleset)
+      .slice(1)
+      .flatMap((source) => resolvePracticeGaugeTypes(source).map((type) => qualified(source, type))),
+  ];
+}
+
+/**
+ * The lowest auto-shift gauge under `ruleset`, named as the ruleset's own gauges (#933). LR2 and plugout have no ASSIST
+ * EASY (the engine reads it as EASY), so their lowest choice is EASY.
  */
 export function bottomShiftableGaugeItems(ruleset: RulesetId): PlayOptionItem<PlayOptions['bottomShiftableGauge']>[] {
-  if (ruleset === 'lr2')
+  if (ruleset === 'lr2' || ruleset === 'plugout')
     return [
       { text: 'EASY', value: 'EASY' },
-      { text: 'GROOVE', value: 'GROOVE' },
+      { text: ruleset === 'lr2' ? 'GROOVE' : 'NORMAL', value: 'GROOVE' },
     ];
   return [
     { text: ruleset === '____' ? 'ASSISTED EASY' : 'ASSIST EASY', value: 'ASSIST-EASY' },
@@ -181,4 +276,18 @@ export function menuLaneCovers(
     hidden,
     hiddenOn,
   }));
+}
+
+/**
+ * nanasigroove's NOTES choices for the bar under the cursor. A course keeps one key mode, so a course stage leaves COPY
+ * out and DBLCOPY keeps its DOUBLE (ADR 0035): on a course bar COPY and DBLCOPY are shown but cannot be picked, while
+ * DOUBLE, which a stage still plays, stays offered. A pick made on a chart bar is kept, so it returns with the chart.
+ */
+export function crazyNotesItems(course: boolean): PlayOptionItem<PlayOptions['crazyNotes']>[] {
+  return [
+    { text: 'OFF', value: 'OFF' },
+    { text: 'DOUBLE', value: 'DOUBLE' },
+    { text: 'COPY', value: 'COPY', ...(course ? { disabled: true } : {}) },
+    { text: 'DBLCOPY', value: 'DBLCOPY', ...(course ? { disabled: true } : {}) },
+  ];
 }

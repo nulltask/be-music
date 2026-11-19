@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { resolveSampleSliceEnvelope, sampleSliceEnvelopeGain, transformStereoPCM } from './audio-transform.ts';
+import {
+  readSampleFrame,
+  resolveSampleSliceEnvelope,
+  resolveSampleVoiceEnvelope,
+  resolveStereoBalance,
+  sampleSliceEnvelopeGain,
+  transformStereoPCM,
+} from './audio-transform.ts';
 
 describe('sample PCM transform', () => {
   test('combines pitch rate with output resampling without changing the source', () => {
@@ -88,5 +95,34 @@ describe('sample slice envelope', () => {
     for (let frame = 10; frame < 10 + fade; frame += 1) {
       expect(sampleSliceEnvelopeGain(frame, 10, previous) + sampleSliceEnvelopeGain(frame - 10, 10, next)).toBe(1);
     }
+  });
+});
+
+describe('sample voice shaping', () => {
+  test('a voice envelope widens the slice ramps by its own attack and release', () => {
+    // Whole file: no slice ramps, the attack alone; a release needs audio past the window.
+    expect(resolveSampleVoiceEnvelope(0, undefined, 100, 2, 10, 20)).toEqual({ fadeIn: 10, fadeOut: 0 });
+    expect(resolveSampleVoiceEnvelope(0, 40, 100, 2, 10, 20)).toEqual({ fadeIn: 10, fadeOut: 20 });
+    // The cut ramps stay as a minimum, and neither ramp outlasts the audio.
+    expect(resolveSampleVoiceEnvelope(10, 40, 100, 2, 1, 1)).toEqual({ fadeIn: 2, fadeOut: 2 });
+    expect(resolveSampleVoiceEnvelope(0, 5, 10, 2, 50, 50)).toEqual({ fadeIn: 5, fadeOut: 5 });
+    expect(resolveSampleVoiceEnvelope(0, 40, 100, 2)).toEqual(resolveSampleSliceEnvelope(0, 40, 100, 2));
+  });
+
+  test('a stereo balance fades the far channel only', () => {
+    expect(resolveStereoBalance(0)).toEqual({ left: 1, right: 1 });
+    expect(resolveStereoBalance(0.25)).toEqual({ left: 0.75, right: 1 });
+    expect(resolveStereoBalance(-1)).toEqual({ left: 1, right: 0 });
+    expect(resolveStereoBalance(3)).toEqual({ left: 0, right: 1 });
+    expect(resolveStereoBalance(Number.NaN)).toEqual({ left: 1, right: 1 });
+  });
+
+  test('a fractional frame reads between its neighbours, and nothing outside the channel', () => {
+    const channel = Float32Array.of(0, 1, 0.5);
+    expect(readSampleFrame(channel, 1)).toBe(1);
+    expect(readSampleFrame(channel, 0.25)).toBeCloseTo(0.25, 9);
+    expect(readSampleFrame(channel, 2.5)).toBeCloseTo(0.25, 9);
+    expect(readSampleFrame(channel, -1)).toBe(0);
+    expect(readSampleFrame(channel, 3)).toBe(0);
   });
 });

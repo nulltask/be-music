@@ -13,7 +13,8 @@ import {
   type ScorePace,
 } from '@be-music/player-skin-sdk';
 import type { Container, Graphics } from 'pixi.js';
-import { addHUDNumber, addHUDText, type ChildPool } from '../pixi-kit/index.ts';
+import { addHUDNumber, type ChildPool } from '../pixi-kit/index.ts';
+import { addSynesthesiaHUDText as addHUDText } from './figures.ts';
 import { drawFrame } from './draw.ts';
 import { drawSongInfoLayers } from './song-info.ts';
 import { clampPercent, drawGaugeCells } from './player-hud.ts';
@@ -343,7 +344,7 @@ function drawStage(draw: CabinetDraw, rect: BeMusicRect, runtime: Runtime, contr
   );
   addHUDText(
     layer,
-    resolveStageLabel(runtime.course).toUpperCase(),
+    resolveStageLabel(runtime.course, runtime.practice).toUpperCase(),
     rect.x + rect.w / 2,
     rect.y + 5,
     {

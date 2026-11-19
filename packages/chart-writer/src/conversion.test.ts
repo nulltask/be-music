@@ -151,12 +151,12 @@ describe('BMS → bmson conversion', () => {
     expect(mineDamages(parseBmson(JSON.stringify(output)))).toEqual(mineDamages(source));
   });
 
-  test('a mine whose value is not a damage encoding leaves `damage` out, so both sides deal the default', () => {
+  test('writes the BMS fallback explicitly for a mine with an invalid damage encoding', () => {
     // Under #BASE 62 the lower-case `0a` is not an upper-case base-36 damage; without #WAV00 the sample is silent.
     const source = bms('#BASE 62', '#BPM 120', '#WAV01 key.wav', '#00111:01', '#001D1:0a');
     const output = toBmson(source);
 
-    expect(output.mine_channels).toEqual([{ name: '', notes: [{ x: 1, y: 960 }] }]);
+    expect(output.mine_channels).toEqual([{ name: '', notes: [{ x: 1, y: 960, damage: 4 }] }]);
     expect(mineDamages(parseBmson(JSON.stringify(output)))).toEqual(mineDamages(source));
   });
 });
@@ -222,7 +222,7 @@ describe('bmson → BMS conversion', () => {
     [2.4, '02', 2],
     [2.5, '03', 3],
     [5000, 'ZZ', 1295],
-    [undefined, '04', 4],
+    [undefined, '01', 1],
   ])('a mine with `damage` %s is written as the BMS mine value %s', (damage, value, dealt) => {
     const source = bmson({
       info: { title: 'Mine', init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
@@ -280,5 +280,210 @@ describe('bmson → BMS conversion', () => {
       );
       expect(headerLines(output, 'TOTAL')).toEqual([]);
     }
+  });
+});
+
+describe('conversion losses that change gameplay are reported (#1198)', () => {
+  const collect = (run: (onDiagnostic: (diagnostic: { code: string; message: string }) => void) => void) => {
+    const diagnostics: Array<{ code: string; message: string }> = [];
+    run((diagnostic) => diagnostics.push(diagnostic));
+    return diagnostics;
+  };
+  const mines = (...damages: Array<number | undefined>) =>
+    bmson({
+      info: { title: 'Mines', init_bpm: 120, resolution: 240 },
+      sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],
+      mine_channels: [
+        {
+          name: 'mine.wav',
+          notes: damages.map((damage, index) => ({
+            x: 2,
+            y: 240 * (index + 1),
+            ...(damage !== undefined ? { damage } : {}),
+          })),
+        },
+      ],
+    });
+
+  test('bmson → BMS: a mine damage BMS cannot hold is reported with the count', () => {
+    // 0 becomes 1, 2.5 rounds to 3 and 2000 clamps to 1295; 10 is kept as it is.
+    const diagnostics = collect((onDiagnostic) => stringifyBMS(mines(0, 2.5, 2000, 10), { onDiagnostic }));
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['mine-damage']);
+    expect(diagnostics[0]!.message).toMatch(/^3 mine\(s\)/);
+  });
+
+  test('bmson → BMS: a mine without damage is reported separately, written with the least damage BMS holds', () => {
+    const diagnostics = collect((onDiagnostic) => stringifyBMS(mines(undefined, 10), { onDiagnostic }));
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['mine-damage']);
+    expect(diagnostics[0]!.message).toMatch(/^1 mine\(s\) have no damage/);
+  });
+
+  test('bmson → BMS: mines whose damage BMS holds exactly report nothing', () => {
+    expect(collect((onDiagnostic) => stringifyBMS(mines(1, 10, 1295), { onDiagnostic }))).toEqual([]);
+  });
+
+  test.each([
+    [undefined, []],
+    [100, []],
+    [260, ['total']],
+    [0, ['total']],
+  ] as const)('bmson → BMS: total %s reports %j', (total, codes) => {
+    const source = bmson({
+      info: { title: 'Total', init_bpm: 120, resolution: 240, ...(total !== undefined ? { total } : {}) },
+      sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],
+    });
+    const diagnostics = collect((onDiagnostic) => stringifyBMS(source, { onDiagnostic }));
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(codes);
+  });
+
+  test('bmson → BMS: long notes of different types report the lost per-note mode; one type does not', () => {
+    const longNotes = (...types: number[]) =>
+      bmson({
+        info: { title: 'LN', init_bpm: 120, resolution: 240 },
+        sound_channels: [{ name: 'key.wav', notes: types.map((t, index) => ({ x: index + 1, y: 0, l: 240, t })) }],
+      });
+    expect(
+      collect((onDiagnostic) => stringifyBMS(longNotes(1, 2), { onDiagnostic })).map((diagnostic) => diagnostic.code),
+    ).toEqual(['long-note-mode']);
+    expect(collect((onDiagnostic) => stringifyBMS(longNotes(2, 2), { onDiagnostic }))).toEqual([]);
+  });
+
+  test('BMS → bmson: an absolute #TOTAL is reported; a chart without one is not', () => {
+    const withTotal = bms('#TITLE Total', '#BPM 120', '#TOTAL 300', '#WAV01 key.wav', '#00111:01');
+    const diagnostics = collect((onDiagnostic) => stringifyBmson(withTotal, { onDiagnostic }));
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['total']);
+    expect(diagnostics[0]!.message).toContain('#TOTAL 300');
+    const withoutTotal = bms('#TITLE Total', '#BPM 120', '#WAV01 key.wav', '#00111:01');
+    expect(collect((onDiagnostic) => stringifyBmson(withoutTotal, { onDiagnostic }))).toEqual([]);
+  });
+
+  test('a caller can refuse a lossy conversion by throwing from the handler', () => {
+    expect(() =>
+      stringifyBMS(mines(0), {
+        onDiagnostic: (diagnostic) => {
+          throw new RangeError(diagnostic.message);
+        },
+      }),
+    ).toThrow(/1 mine\(s\)/);
+  });
+
+  test('BMS → bmson: #STP, #EXRANK and SPEED, which bmson has no field for, are each reported with their count', () => {
+    const source = bms(
+      '#TITLE Directives',
+      '#BPM 120',
+      '#WAV01 key.wav',
+      '#STP 001.500 1000',
+      '#STP 002.000 500',
+      '#EXRANK01 50',
+      '#SPEED01 1.5',
+      '#SPEED02 1',
+      '#00111:01',
+      '#001A0:01',
+      '#002SP:0102',
+    );
+    const diagnostics = collect((onDiagnostic) => stringifyBmson(source, { onDiagnostic }));
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['stp', 'exrank', 'speed']);
+    expect(diagnostics.map((diagnostic) => diagnostic.message.split(' ')[0])).toEqual(['2', '1', '2']);
+  });
+
+  test('BMS → bmson: negative or undefined #BPMxx and STOPs without a positive #STOPxx are reported with their count', () => {
+    const source = bms(
+      '#TITLE Timing',
+      '#BPM 120',
+      '#WAV01 key.wav',
+      '#BPM01 -120',
+      '#BPM02 0',
+      '#BPM03 150',
+      '#STOP01 0',
+      '#STOP02 -48',
+      '#STOP03 96',
+      '#00111:01',
+      '#00108:0104',
+      '#00208:0203',
+      '#00109:010402',
+      '#00209:03',
+    );
+    const diagnostics = collect((onDiagnostic) => stringifyBmson(source, { onDiagnostic }));
+    // `#BPM01` is negative and `04` undefined (both reverse in play); a zero `#BPM02` is ignored in play too, so it is no
+    // loss. `#STOP01` is zero, `#STOP02` negative and `04` undefined, which each move the later notes in play.
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['bpm', 'stop']);
+    expect(diagnostics.map((diagnostic) => diagnostic.message.split(' ')[0])).toEqual(['2', '3']);
+    const output = JSON.parse(stringifyBmson(source)) as { bpm_events: unknown[]; stop_events: unknown[] };
+    expect(output.bpm_events).toHaveLength(1);
+    expect(output.stop_events).toHaveLength(1);
+  });
+
+  test('bmson → bmson: a bmson source reports no BPM or STOP loss, since bmson skips those values itself', () => {
+    const source = bmson({
+      version: '1.0.0',
+      info: { title: 'Timing', init_bpm: 120, resolution: 240 },
+      bpm_events: [{ y: 240, bpm: 150 }],
+      stop_events: [{ y: 480, duration: 240 }],
+      sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0, l: 0, c: false }] }],
+    });
+    const diagnostics = collect((onDiagnostic) => stringifyBmson(source, { onDiagnostic }));
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('bpm');
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('stop');
+  });
+
+  test('bmson → BMS: end keysounds (`up`) and continued sound slices (`c`) are reported with their count', () => {
+    const source = bmson({
+      info: { title: 'Slices', init_bpm: 120, resolution: 240 },
+      sound_channels: [
+        {
+          name: 'phrase.wav',
+          notes: [
+            { x: 1, y: 0, l: 240, c: false },
+            { x: 2, y: 240, l: 0, c: true },
+            { x: 3, y: 480, l: 0, c: true },
+          ],
+        },
+        { name: 'tail.wav', notes: [{ x: 1, y: 240, l: 0, c: false, up: true }] },
+      ],
+    });
+    const diagnostics = collect((onDiagnostic) => stringifyBMS(source, { onDiagnostic }));
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['ln-end-sound', 'sound-continuation']);
+    expect(diagnostics.map((diagnostic) => diagnostic.message.split(' ')[0])).toEqual(['1', '2']);
+  });
+
+  test('a chart without those directives or fields reports none of them', () => {
+    const plain = bms('#TITLE Plain', '#BPM 120', '#WAV01 key.wav', '#00111:01');
+    expect(collect((onDiagnostic) => stringifyBmson(plain, { onDiagnostic }))).toEqual([]);
+    const restart = bmson({
+      info: { title: 'Restart', init_bpm: 120, resolution: 240 },
+      sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0, l: 0, c: false }] }],
+    });
+    expect(collect((onDiagnostic) => stringifyBMS(restart, { onDiagnostic }))).toEqual([]);
+  });
+
+  test('bmson → bmson and BMS → BMS report no conversion loss', () => {
+    expect(collect((onDiagnostic) => stringifyBmson(mines(0, 2.5), { onDiagnostic }))).toEqual([]);
+    const source = bms(
+      '#TITLE Total',
+      '#BPM 120',
+      '#TOTAL 300',
+      '#WAV01 key.wav',
+      '#STP 001.500 1000',
+      '#EXRANK01 50',
+      '#SPEED01 1.5',
+      '#00111:01',
+      '#001D2:0A',
+      '#001A0:01',
+      '#002SP:01',
+    );
+    expect(collect((onDiagnostic) => stringifyBMS(source, { onDiagnostic }))).toEqual([]);
+    const sliced = bmson({
+      info: { title: 'Slices', init_bpm: 120, resolution: 240 },
+      sound_channels: [
+        {
+          name: 'phrase.wav',
+          notes: [
+            { x: 1, y: 0, l: 0, c: false },
+            { x: 2, y: 240, l: 0, c: true },
+          ],
+        },
+      ],
+    });
+    expect(collect((onDiagnostic) => stringifyBmson(sliced, { onDiagnostic }))).toEqual([]);
   });
 });

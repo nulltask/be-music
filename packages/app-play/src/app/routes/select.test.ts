@@ -74,6 +74,7 @@ interface FakeSelect {
   readonly setLibrary: ReturnType<typeof vi.fn<(library: BrowserChartCollection) => void>>;
   readonly restore: ReturnType<typeof vi.fn<(snapshot: BrowseSnapshot) => void>>;
   readonly snapshot: ReturnType<typeof vi.fn<() => BrowseSnapshot>>;
+  readonly focused: ReturnType<typeof vi.fn<SelectScene['focused']>>;
   readonly dispose: ReturnType<typeof vi.fn<() => void>>;
 }
 
@@ -87,6 +88,7 @@ function fakeSelect(kit: SelectSceneKit, options: SelectSceneOptions): FakeSelec
     setLibrary: vi.fn(),
     restore: vi.fn(),
     snapshot: vi.fn(() => ({ folderPath: [`left on ${kit.family}`] }) as unknown as BrowseSnapshot),
+    focused: vi.fn(() => undefined),
     dispose: vi.fn(),
   };
 }
@@ -147,6 +149,7 @@ function harness(options: { charts?: LibraryChart[] } = {}) {
     library: {
       collection: { sources: [], charts: options.charts ?? [chartEntry('a')], errors: [] } as BrowserChartCollection,
       reloadCharts: vi.fn(async () => {}),
+      titleMissingCourseStages: vi.fn(async () => {}),
     },
     records: {
       lookupChartBestRecord: vi.fn<SelectRouteDeps['records']['lookupChartBestRecord']>(() => undefined),
@@ -519,6 +522,17 @@ describe('SelectRoute: what the screen tells the app', () => {
     expect(h.deps.showChartDiagnostics).toHaveBeenLastCalledWith(chart.chart, chart.chartPath);
     focus?.(undefined);
     expect(h.deps.showChartDiagnostics).toHaveBeenLastCalledWith(undefined, undefined);
+  });
+
+  test('a focused course asks the library to title the stages it is missing; a chart does not', async () => {
+    const h = harness();
+    await h.route.showSelect();
+    const { focus } = lastMade(h).options.on;
+    focus?.({ kind: 'chart', chart: chartEntry('a') });
+    expect(h.deps.library.titleMissingCourseStages).not.toHaveBeenCalled();
+    const course = { id: 'Table#0', stages: [{ title: 'course 1' }], playable: false } as unknown as LibraryCourse;
+    focus?.({ kind: 'course', course });
+    expect(h.deps.library.titleMissingCourseStages).toHaveBeenCalledWith(course);
   });
 
   test('a chart started goes to its decide screen, with AUTO only from the skin’s AUTO', async () => {

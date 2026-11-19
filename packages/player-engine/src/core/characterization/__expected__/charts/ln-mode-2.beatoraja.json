@@ -128,6 +128,18 @@
         "maxCombo": 4,
         "djLevel": "C",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
+      },
+      "plugout": {
+        "ruleset": "plugout/0",
+        "judge": {"pgreat":6,"great":1,"good":0,"bad":1,"poor":1,"emptyPoor":0},
+        "fast": 1,
+        "slow": 0,
+        "exScore": 13,
+        "noteCount": 10,
+        "maxCombo": 4,
+        "djLevel": "B",
+        "gauge": {"type":"NORMAL","final":100,"cleared":true},
+        "score": 65000
       }
     },
     "audio": [
@@ -482,6 +494,18 @@
         "maxCombo": 10,
         "djLevel": "AAA",
         "gauge": {"type":"NORMAL","final":100,"cleared":true}
+      },
+      "plugout": {
+        "ruleset": "plugout/0",
+        "judge": {"pgreat":10,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "fast": 0,
+        "slow": 0,
+        "exScore": 20,
+        "noteCount": 10,
+        "maxCombo": 10,
+        "djLevel": "AAA",
+        "gauge": {"type":"NORMAL","final":100,"cleared":true},
+        "score": 100000
       }
     },
     "audio": [

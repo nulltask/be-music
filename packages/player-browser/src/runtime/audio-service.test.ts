@@ -130,7 +130,7 @@ describe('createAudioService', () => {
     expect(service.skinSounds.play('missing.wav', 1)).toBe(false);
     expect(service.getContext()).toBeUndefined();
     expect(service.analyzer.sample(0)).toBe(SILENT_AUDIO);
-    service.preview.focus({} as ChartPreviewTarget, scene);
+    service.preview.focus({ chart: { chartPath: 'a.bms' } } as ChartPreviewTarget, scene);
     expect(service.preview.playing).toBe(false);
   });
 
@@ -281,7 +281,7 @@ describe('createAudioService', () => {
       return engine;
     });
     const { service, fake } = createService(undefined, { createPreviewEngine, preview: { focusDelayMs: 5 } });
-    const target = { chart: { id: 'a' }, source: { id: 's' } } as unknown as ChartPreviewTarget;
+    const target = { chart: { id: 'a', chartPath: 'a.bms' }, source: { id: 's' } } as unknown as ChartPreviewTarget;
     await service.playBGM({ bytes: new Uint8Array([1]) }, { owner: scene });
     const duck = busOf(fake.sources[0]!);
     service.preview.focus(target, scene);
@@ -312,13 +312,46 @@ describe('createAudioService', () => {
   });
 
   it('sounds a window of a chart through the preview engine, owned until the owner stops', () => {
-    const engine: ChartPreviewPlayer = { focus: vi.fn(), playWindow: vi.fn(), stop: vi.fn(), dispose: vi.fn() };
+    const engine: ChartPreviewPlayer = {
+      focus: vi.fn(),
+      playWindow: vi.fn(),
+      prepareWindows: vi.fn(),
+      stop: vi.fn(),
+      dispose: vi.fn(),
+    };
     const { service } = createService(undefined, { createPreviewEngine: () => engine });
-    const target = { chart: { id: 'a' }, source: { id: 's' } } as unknown as ChartPreviewTarget;
+    const target = { chart: { id: 'a', chartPath: 'a.bms' }, source: { id: 's' } } as unknown as ChartPreviewTarget;
     service.preview.playWindow(target, { startSeconds: 2, endSeconds: 4 }, scene);
     expect(engine.playWindow).toHaveBeenCalledWith(target, { startSeconds: 2, endSeconds: 4 });
     service.stopOwned(scene);
     expect(engine.focus).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it('passes a picker’s bars and tempo to the preview engine to stretch in the background', () => {
+    const engine: ChartPreviewPlayer = {
+      focus: vi.fn(),
+      playWindow: vi.fn(),
+      prepareWindows: vi.fn(),
+      stop: vi.fn(),
+      dispose: vi.fn(),
+    };
+    let created = 0;
+    const { service } = createService(undefined, {
+      createPreviewEngine: () => {
+        created += 1;
+        return engine;
+      },
+    });
+    const target = { chart: { id: 'a', chartPath: 'a.bms' }, source: { id: 's' } } as unknown as ChartPreviewTarget;
+    // Stopping before any preview builds no engine.
+    service.preview.prepareWindows(target, undefined);
+    expect(created).toBe(0);
+    const settings = { tempo: 0.8, keepPitch: true, stretchAlgorithm: 'wsola' } as const;
+    const bars = [{ startSeconds: 0, endSeconds: 2 }];
+    service.preview.prepareWindows(target, settings, bars, 1);
+    expect(engine.prepareWindows).toHaveBeenCalledWith(target, settings, bars, 1);
+    service.preview.prepareWindows(target, undefined);
+    expect(engine.prepareWindows).toHaveBeenLastCalledWith(target, undefined, undefined, undefined);
   });
 
   it('analyses the music bus once the context exists', async () => {
@@ -389,16 +422,27 @@ describe('createAudioService', () => {
 
   it('keeps one chart sample cache and releases it on dispose', () => {
     const { service } = createService();
-    const lease = service.chartSamples.claim({
-      source: {},
-      chartPath: 'a.bms',
-      pathPrefix: undefined,
-      sampleRate: 48_000,
-    });
-    lease.set('kick.wav', { buffer: {} as AudioBuffer });
+    const kick = {};
+    const lease = service.chartSamples.claim({ source: {}, chartPath: 'a.bms', sampleRate: 48_000 }, [kick]);
+    lease.set(kick, { buffer: {} as AudioBuffer });
     expect(service.chartSamples.size).toBe(1);
     service.dispose();
     expect(service.chartSamples.size).toBe(0);
     expect(service.chartSamples.key).toBeUndefined();
+  });
+
+  it('keeps the chart samples while the preview focuses the same track, and releases them off it', () => {
+    const { service } = createService();
+    const source = { id: 's' };
+    const kick = {};
+    service.chartSamples
+      .claim({ source, chartPath: 'Songs/a/normal.bms', sampleRate: 48_000 }, [kick])
+      .set(kick, { buffer: {} as AudioBuffer });
+    const focus = (chartPath: string): void =>
+      service.preview.focus({ chart: { id: chartPath, chartPath }, source } as unknown as ChartPreviewTarget, scene);
+    focus('Songs/a/hyper.bms');
+    expect(service.chartSamples.size).toBe(1);
+    focus('Songs/b/normal.bms');
+    expect(service.chartSamples.size).toBe(0);
   });
 });

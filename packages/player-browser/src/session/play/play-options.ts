@@ -13,7 +13,7 @@ import type {
   ReplayRecordingOptions,
   ReplayPlaybackOptions,
 } from '@be-music/player-engine/replay';
-import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
+import type { GaugePick, RulesetId } from '@be-music/player-engine/ruleset';
 import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { GuideSound, ResolvedPlayChart } from '@be-music/player-engine';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
@@ -30,6 +30,16 @@ export interface SkinAdjust {
 
 /** The play skin where it is drawn. */
 export const NO_SKIN_ADJUST: SkinAdjust = { x: 0, y: 0, scale: 1 };
+
+/**
+ * The mine option a play of the player's own selection runs: nanasigroove's ADDMINE (`NANASI_ADD`) while the player has
+ * it on, otherwise the beatoraja mine option they picked under Mines.
+ */
+export function resolvePlayerMineModifier(
+  options: Pick<PlaySessionOptions, 'mineModifier' | 'crazyAddMine'>,
+): import('@be-music/player-engine/lanes').MineModifier | undefined {
+  return options.crazyAddMine === true ? 'NANASI_ADD' : options.mineModifier;
+}
 import type { TempoPitchMode, TimeStretchAlgorithm } from '../../runtime/play-tempo.ts';
 import type { BeMusicEffectLevel } from '../../skin/be-music/types.ts';
 
@@ -198,6 +208,14 @@ export interface PlaySessionOptions {
   extraNoteDepth?: number;
   extraNoteScratch?: boolean;
   mineModifier?: import('@be-music/player-scene-model').PlayOptions['mineModifier'];
+  /** nanasigroove's GOOD2BAD / GREAT2BAD the player picked; a chart's own wins. */
+  crazyJudge?: import('@be-music/player-scene-model').PlayOptions['crazyJudge'];
+  /** nanasigroove's HELLJUDGE the player picked; a chart's own wins. */
+  crazyHellJudge?: boolean;
+  /** nanasigroove's ADDMINE the player picked: it replaces `mineModifier` while on (`resolvePlayerMineModifier`). */
+  crazyAddMine?: boolean;
+  /** nanasigroove's NOTES conversion the player picked; a chart's own wins. */
+  crazyNotes?: import('@be-music/player-scene-model').PlayOptions['crazyNotes'];
   scrollModifier?: import('@be-music/player-scene-model').PlayOptions['scrollModifier'];
   scrollSection?: number;
   scrollRate?: number;
@@ -224,6 +242,11 @@ export interface PlaySessionOptions {
   actionKeys?: ControlActionOverrides;
   /** The key map the play reads its keys by (the skin family's, `resolveControlScheme`). Defaults to LR2's. */
   controlScheme?: ControlScheme;
+  /**
+   * beatoraja's WINDOW HOLD (#1131): until the last note the play takes START as held, so every key press also runs the
+   * START + key controls of {@link controlScheme}. Not in AUTO play or a replay, as beatoraja runs them in PLAY only.
+   */
+  windowHold?: boolean;
   /** The key map of the built-in skins, from which the host takes `controlScheme` on a built-in skin. */
   builtInControlScheme?: ControlScheme;
   /**
@@ -241,6 +264,8 @@ export interface PlaySessionOptions {
   randomSeed2P?: string;
   randomFixedLane1P?: number;
   randomFixedLane2P?: number;
+  lr2RandomScratch1P?: boolean;
+  lr2RandomScratch2P?: boolean;
   random1P?: RandomMode;
   /** 2P side note arrangement (`#SRC_BUTTON,type=43`). */
   random2P?: RandomMode;
@@ -290,12 +315,18 @@ export interface PlaySessionOptions {
   /** Host application stamped into the recorded replay's `recorder` (the engine adds its own version). */
   replayRecorder?: ReplayRecordingOptions['recorder'];
   /**
+   * Record each controller's device name (its `Gamepad.id`) in the replay's `play.inputSources`
+   * (`ReplayRecordingOptions.includeDeviceNames`). Off by default: only the player turns it on, since the name can
+   * identify their hardware.
+   */
+  replayDeviceNames?: boolean;
+  /**
    * 1P gauge variant (`#SRC_BUTTON,type=40`). Selects the ruleset's gauge (the engine resolves the curve) and drives
    * the gauge-on-red-branch op flags (43 / 45).
    */
-  gauge?: GaugeType;
+  gauge?: GaugePick;
   /** The 2P player's gauge of a two-player play (`battleMode: 'TWO-PLAYER'`). */
-  gauge2P?: GaugeType;
+  gauge2P?: GaugePick;
   /** That-Which-Must-Not-Be-Named M-RAN per player: MIRROR after a RANDOM-type arrangement in two-player play. */
   mRan1P?: boolean;
   mRan2P?: boolean;

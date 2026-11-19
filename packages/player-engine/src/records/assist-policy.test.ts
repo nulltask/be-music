@@ -279,6 +279,32 @@ describe('classifyReplayAssists', () => {
     expect(classOf({ randomLane: { p1: 'RANDOM-EX', p2: 'RANDOM-EX' } }, forced)).toBe('none');
     // Other assists of the player still count.
     expect(classOf({ randomLane: { p1: 'RANDOM-EX' }, autoScratch: true }, forced)).toBe('light');
+    // nanasigroove's RANDOM+, as a chart RANDOM+ is recorded since #1244, is no LR2 or beatoraja assist.
+    expect(classOf({ randomLane: { p1: 'RANDOM+', p2: 'RANDOM+' } }, forced)).toBe('none');
+    expect(classOf({ randomLane: { p1: 'RANDOM+' } })).toBe('none');
+  });
+
+  test("the player's NOTES COPY keeps no record, while the chart's COPY and the player's other choices are no assist (#1243)", () => {
+    expect(classifyReplayAssists(replay({ playerChartPlayOptions: { notes: 'COPY' } }))).toEqual([
+      { option: 'nanasi-notes:COPY', source: 'be-music', assistClass: 'no-save' },
+    ]);
+    expect(classOf({ playerChartPlayOptions: { notes: 'DBLCOPY' } })).toBe('no-save');
+    expect(classOf({ playerChartPlayOptions: { notes: 'DOUBLE', judge: 'GREAT2BAD', hellJudge: true } })).toBe('none');
+    // A chart that forces COPY keeps the record of the double-play chart it makes.
+    expect(classOf({}, { chartPlayOptions: { version: 3, options: { notes: 'COPY' } } })).toBe('none');
+  });
+
+  test('a play on single-source input (touch, a controller button) is no assist, whatever the BSS rule it played (#1181)', () => {
+    // The lenient BSS rule is an input capability adaptation (ADR 0040): it sets no assist class and keeps the record.
+    const inputSources = [
+      { id: 0, kind: 'button' as const, device: 'touch' as const, label: 'scratch' },
+      { id: 1, kind: 'button' as const, device: 'controller' as const, label: 'b8' },
+    ];
+    expect(classifyReplayAssists(replay({ inputSources }))).toEqual([]);
+    expect(resolveReplayRecordPolicy(replay({ inputSources }))).toMatchObject({
+      keepsRecord: true,
+      leaderboard: 'main',
+    });
   });
 
   test('counts the 2P AUTO SCRATCH only on a chart with a 2P side', () => {
@@ -307,29 +333,35 @@ const dBattle: AssistFinding = { option: 'D-BATTLE', source: 'lr2', assistClass:
 const scatter: AssistFinding = { option: 'SCATTER', source: 'lr2', assistClass: 'light' };
 
 describe('resolveRecordPolicy', () => {
-  test.each<RulesetId>(['lr2', 'beatoraja', '____'])('keeps an unassisted play whole under %s', (ruleset) => {
-    expect(resolveRecordPolicy([], ruleset)).toEqual({
-      ruleset,
-      assistClass: 'none',
-      keepsRecord: true,
-      updatesScore: true,
-      recordSlot: 'main',
-      keepsCourseRecord: true,
-      leaderboard: 'main',
-      keepsReplay: true,
-    });
-  });
+  test.each<RulesetId>(['lr2', 'beatoraja', '____', 'plugout'])(
+    'keeps an unassisted play whole under %s',
+    (ruleset) => {
+      expect(resolveRecordPolicy([], ruleset)).toEqual({
+        ruleset,
+        assistClass: 'none',
+        keepsRecord: true,
+        updatesScore: true,
+        recordSlot: 'main',
+        keepsCourseRecord: true,
+        leaderboard: 'main',
+        keepsReplay: true,
+      });
+    },
+  );
 
-  test.each<RulesetId>(['lr2', 'beatoraja', '____'])('keeps nothing from a no-save play under %s', (ruleset) => {
-    expect(resolveRecordPolicy([light, noSave], ruleset)).toMatchObject({
-      assistClass: 'no-save',
-      keepsRecord: false,
-      updatesScore: false,
-      keepsCourseRecord: false,
-      leaderboard: 'unranked',
-      keepsReplay: true,
-    });
-  });
+  test.each<RulesetId>(['lr2', 'beatoraja', '____', 'plugout'])(
+    'keeps nothing from a no-save play under %s',
+    (ruleset) => {
+      expect(resolveRecordPolicy([light, noSave], ruleset)).toMatchObject({
+        assistClass: 'no-save',
+        keepsRecord: false,
+        updatesScore: false,
+        keepsCourseRecord: false,
+        leaderboard: 'unranked',
+        keepsReplay: true,
+      });
+    },
+  );
 
   // Each ruleset's consequence of an assisted play: lamp only, the lamp limited by that ruleset's rule.
   test.each<[RulesetId, AssistFinding[], object]>([
@@ -388,3 +420,13 @@ describe('applyRecordPolicyLamp', () => {
     expect(applyRecordPolicyLamp('HARD', {})).toBe('HARD');
   });
 });
+
+test.each(['MIRROR', 'RANDOM', 'lr2:S-RANDOM', 'SCATTER', 'lr2:CONVERGE'] as const)(
+  'LR2 scratch inclusion keeps the record policy of %s',
+  (mode) => {
+    const play = { judgeRuleset: 'lr2' as const, randomLane: { p1: mode } };
+    expect(resolveReplayRecordPolicy(replay({ ...play, options: { lr2RandomScratch1P: true } }))).toEqual(
+      resolveReplayRecordPolicy(replay(play)),
+    );
+  },
+);

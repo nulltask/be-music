@@ -107,3 +107,31 @@ test('never starts automatic SSO for APIs, assets, embeds, prefetches or non-GET
     vi.unstubAllGlobals();
   }
 });
+
+test('reaches the issuer through its Service Binding when one is bound', async () => {
+  const issuer = 'https://bound-accounts.example/api/auth';
+  const binding = vi.fn(async (request: Request) => {
+    expect(request.url).toBe(`${issuer}/.well-known/openid-configuration`);
+    return Response.json({
+      issuer,
+      authorization_endpoint: `${issuer}/oauth2/authorize`,
+      token_endpoint: `${issuer}/oauth2/token`,
+      jwks_uri: `${issuer}/jwks`,
+    });
+  });
+  const fetchSpy = vi.fn();
+  vi.stubGlobal('fetch', fetchSpy);
+  try {
+    const response = await handleAuth(new Request(`${env.PUBLIC_ORIGIN}/api/auth/sign-in`), {
+      ...env,
+      AUTH_ISSUER: issuer,
+      ACCOUNTS: { fetch: binding },
+    });
+    expect(response?.status).toBe(302);
+    expect(new URL(response!.headers.get('location')!).href).toMatch(`${issuer}/oauth2/authorize?`);
+    expect(binding).toHaveBeenCalledOnce();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

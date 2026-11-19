@@ -1,11 +1,14 @@
+import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
 import type { PlayJudgeSideState } from './play-presentation.ts';
 import { collectLR2SortObjects } from './lr2-sort-objects.ts';
 import {
   buildChartOptionTimeline,
   compileChartPlayOptions,
+  isLegacyChartPlayOptionProgram,
   type BGAOpacityTimelines,
   type ChartOptionDiagnostic,
   type ChartPlayOptionProgram,
+  type PlayerChartPlayOptions,
 } from '@be-music/chart-model';
 /**
  * Chart preparation for a play (`PlaySession`), whichever family draws it: resolves the chart's `#RANDOM` / `#SWITCH`
@@ -42,13 +45,14 @@ import {
 import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
 import {
   applyChartPlayOptions,
+  arrangeChartPlayLanes,
   preparePlaybackChart,
   resolveChartNotesPlayVariant,
-  resolveEffectiveChartPlayOptions,
   resolvePlayChart,
   type ChartPlaySelection,
   type PreparedPlaybackChartData,
 } from '@be-music/player-engine';
+import { resolveChartPlayProgram } from '@be-music/player-engine/replay';
 import {
   isPlayableInputChannel,
   randomizeSRandomNotes,
@@ -77,7 +81,7 @@ import type { PlayerGaugeSummary } from '@be-music/player-engine/signals';
 import {
   createEmptyScore,
   resolveOptionSource,
-  type GaugeType,
+  type GaugePick,
   type RulesetId,
   type ScoreSummary,
 } from '@be-music/player-engine/ruleset';
@@ -91,7 +95,7 @@ import {
   type NonstopStageBGATimeline,
 } from '../../chart/bga-timeline.ts';
 import { resolvePlayTempoRange, type PlayTempoRange } from './tempo-range.ts';
-import type { PlaySessionOptions } from './play-options.ts';
+import { resolvePlayerMineModifier, type PlaySessionOptions } from './play-options.ts';
 import type { LongNoteTracker } from './long-note-tracker.ts';
 import { changesScrollRate, collectResolvedLaneTimelineBeats } from '../../chart/note-draw-window.ts';
 import { createPlaceholderGaugeState } from './placeholder-gauge.ts';
@@ -114,6 +118,7 @@ import { resolveLaneSides } from '../../chart/lane-sides.ts';
 import type { SecondPlayerState } from './play-state.ts';
 import { isSilentJudgeTimingPlay } from './play-media.ts';
 import { applyUndefinedLongNoteMode } from '@be-music/player-engine/course';
+import { collectTriggerVoicePlayback } from '../../runtime/play-tempo.ts';
 
 /** Whether a battle mode copies one SP chart onto both sides (each copy keeps a 2P source channel). */
 const isDuplicatedBattle = (mode: string): boolean =>
@@ -152,6 +157,8 @@ export interface PlayChartContext {
       | 'randomSeed2P'
       | 'randomFixedLane1P'
       | 'randomFixedLane2P'
+      | 'lr2RandomScratch1P'
+      | 'lr2RandomScratch2P'
       | 'hRandomThresholdBPM'
       | 'random1P'
       | 'random2P'
@@ -179,6 +186,10 @@ export interface PlayChartContext {
       | 'scrollRate'
       | 'scrollModifier'
       | 'mineModifier'
+      | 'crazyAddMine'
+      | 'crazyJudge'
+      | 'crazyHellJudge'
+      | 'crazyNotes'
       | 'autoScratch1P'
       | 'autoScratch2P'
     >
@@ -196,6 +207,8 @@ export interface PlayChartContext {
   chartPlay:
     | {
         program: ChartPlayOptionProgram | undefined;
+        /** The options of {@link program} the player added (#1243), which the replay records apart from the chart's. */
+        player: PlayerChartPlayOptions;
         selection: ChartPlaySelection;
         diagnostics: readonly ChartOptionDiagnostic[];
       }
@@ -205,6 +218,7 @@ export interface PlayChartContext {
   laneTimelineBeats: Float64Array;
   preparedChart: PreparedPlaybackChartData | undefined;
   notes: TimedPlayableNote[];
+  drawNotes: TimedPlayableNote[];
   mineNotes: TimedLandmineNote[];
   invisibleNotes: TimedPlayableNote[];
   maxLongNoteBeatSpan: number;
@@ -215,9 +229,7 @@ export interface PlayChartContext {
   battleSourceVariant: ChartPlayVariant | undefined;
   touchTokenByChannel: Map<string, string> | undefined;
   wavCmdVolumeMultipliers: Map<string, number>;
-  bmsonSlicePlayback:
-    | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
-    | undefined;
+  bmsonSlicePlayback: Map<BeMusicEvent, WebAudioSessionSlicePlayback> | undefined;
   autoSampleTriggers: TimedSampleTrigger[];
   score: ScoreSummary;
   playState: PlayState;
@@ -252,7 +264,7 @@ export interface PlayChartContext {
   displayedScore: number;
   chartEnded: boolean;
   /** The gauge the run plays on (a replay's recorded pick wins). */
-  resolveSelectedGauge(): GaugeType;
+  resolveSelectedGauge(): GaugePick;
 }
 
 export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): void {
@@ -363,11 +375,27 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   // whose stages keep one key mode), so the arrangement maps onto the double-play lanes.
   const chartPlayEffect =
     arrangement === undefined
-      ? resolveEffectiveChartPlayOptions(compileChartPlayOptions(buildChartOptionTimeline(resolved)), {
-          playVariant,
-          course: ctx.options.course !== undefined,
-        })
-      : { program: arrangement.chart.chartPlayOptions, diagnostics: [] };
+      ? resolveChartPlayProgram(
+          compileChartPlayOptions(buildChartOptionTimeline(resolved)),
+          {
+            ...(ctx.options.crazyJudge === 'GOOD2BAD' || ctx.options.crazyJudge === 'GREAT2BAD'
+              ? { judge: ctx.options.crazyJudge }
+              : {}),
+            ...(ctx.options.crazyHellJudge === true ? { hellJudge: true as const } : {}),
+            ...(ctx.options.crazyNotes !== undefined && ctx.options.crazyNotes !== 'OFF'
+              ? { notes: ctx.options.crazyNotes }
+              : {}),
+          },
+          {
+            playVariant,
+            course: ctx.options.course !== undefined,
+          },
+        )
+      : {
+          program: arrangement.chart.chartPlayOptions,
+          diagnostics: [],
+          playerOptions: { ...arrangement.play.playerChartPlayOptions },
+        };
   const chartPlayProgram = chartPlayEffect.program;
   const chartNotes = chartPlayProgram?.options.notes;
   const arrangedVariant = resolveChartNotesPlayVariant(playVariant, chartNotes);
@@ -377,19 +405,26 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       random2P: ctx.options.random2P,
       randomFixedLane1P: ctx.options.randomFixedLane1P,
       randomFixedLane2P: ctx.options.randomFixedLane2P,
+      lr2RandomScratch1P: ctx.options.lr2RandomScratch1P,
+      lr2RandomScratch2P: ctx.options.lr2RandomScratch2P,
       mRan1P: ctx.options.mRan1P,
       mRan2P: ctx.options.mRan2P,
-      mineModifier: ctx.options.mineModifier,
+      mineModifier: resolvePlayerMineModifier(ctx.options),
     },
     arrangement === undefined ? chartPlayProgram : undefined,
     { doublePlay: ['10', '14', '48'].includes(arrangedVariant), hasScratch: arrangedVariant !== '9' },
   );
   const lanes = chartArrangement.selection;
-  ctx.chartPlay = { program: chartPlayProgram, selection: lanes, diagnostics: chartPlayEffect.diagnostics };
+  ctx.chartPlay = {
+    program: chartPlayProgram,
+    player: chartPlayEffect.playerOptions,
+    selection: lanes,
+    diagnostics: chartPlayEffect.diagnostics,
+  };
   let resolvedPlay = resolveChart(resolved, {
     randomDraws,
     playVariant: playVariant,
-    inferBmsLNTypeWhenMissing: true,
+    inferBmsLNTypeWhenMissing: false,
   });
 
   // The invisible / keysound array is always prepared even when the overlay is off — so the Tweakpane toggle can flip
@@ -422,8 +457,14 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       longNoteRate: arrangement?.play.longNoteRate ?? ctx.options.longNoteRate,
       judgeRuleset: arrangement?.play.judgeRuleset ?? ctx.options.judgeRuleset,
       battleMode: arrangement ? (arrangement.play.battleMode ?? 'OFF') : ctx.options.battleMode,
-      dBattleScratch: arrangement ? (arrangement.play.dBattleScratch ?? false) : ctx.options.dBattleScratch,
-      practice: arrangement ? undefined : ctx.options.practiceRange,
+      dBattleScratch: arrangement
+        ? (arrangement.play.dBattleScratch ?? false)
+        : ctx.options.dBattleScratch || lanes.lr2RandomScratch1P || lanes.lr2RandomScratch2P,
+      // A PRACTICE play loops its range (`play-engine.ts`), which a seamless loop's drawn notes need to know.
+      practice:
+        arrangement || ctx.options.practiceRange === undefined
+          ? undefined
+          : { ...ctx.options.practiceRange, loop: true },
       autoScratch1P: arrangement
         ? (arrangement.play.battleAssist1P ?? arrangement.play.autoScratch1P ?? arrangement.play.autoScratch)
         : ctx.options.autoScratch1P,
@@ -457,7 +498,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       scrollSection: arrangement?.play.scrollSection ?? ctx.options.scrollSection,
       scrollRate: arrangement?.play.scrollRate ?? ctx.options.scrollRate,
       scrollModifierTimeline: arrangement?.play.scrollModifierTimeline,
-      ...(arrangement?.play.mineModifier?.startsWith('ADD_')
+      ...(arrangement?.play.mineModifier?.startsWith('ADD_') || arrangement?.play.mineModifier === 'NANASI_ADD'
         ? {
             mineModifierPlacements: modifierNotes!
               .filter((note) => note.type === 'mine')
@@ -471,6 +512,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
           }
         : {}),
       chartNotes,
+      chartNotesLegacy: chartPlayProgram !== undefined && isLegacyChartPlayOptionProgram(chartPlayProgram),
       // LR2 copies 1P's arranged lanes to 2P, mines included, when both players pick the same lane option (#1086). A
       // replay rebuilds its 2P mines only when it recorded them.
       twoPlayerMines: arrangement
@@ -488,6 +530,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   ctx.preparedChart = prepared;
   ctx.touchTokenByChannel = undefined;
   ctx.notes = prepared.notes;
+  // The same notes, and past a seamless PRACTICE loop's end the next round's: drawn only.
+  ctx.drawNotes = prepared.renderNotes;
   ctx.mineNotes = prepared.landmineNotes;
   ctx.invisibleNotes = prepared.invisibleNotes;
   // The recorded rates and seed must rebuild what the play recorded: a different count means another chart.
@@ -563,11 +607,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       const mode = side === '1P' ? lanes.random1P : lanes.random2P;
       return mode === 'RANDOM_PLAYABLE' ? Math.random : createBeatorajaLaneRandom(resolvedSeed);
     };
-    // RANDOM / MIRROR / S-RANDOM — shuffle the 1P / 2P keyboard lanes independently. Scratch (channels 16 /
-    // 26) and the 24 / 48 KEY wheel never move (`resolveLaneOptionChannels`). Per LR2 convention, the shuffle is drawn at chart-prepare time so a single play session has a
-    // stable arrangement (F5-restart re-rolls it). Mine channels are included in the same shuffle pass so a mine on
-    // lane 4 lands wherever the shuffle moved lane 4 — keeping the mine's visual relationship to the surrounding chord
-    // intact.
+    // Arrange each side independently at chart preparation. LR2 can include the scratch in its draw.
     const battleRandom =
       lanes.random1P === 'SYNCHRONIZE-RANDOM' || lanes.random1P === 'SYMMETRY-RANDOM' ? lanes.random1P : undefined;
     // Two players with the same lane option play one arrangement: LR2 copies 1P's lanes after shuffling them
@@ -592,15 +632,21 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         ctx.mineNotes,
         ctx.invisibleNotes,
       );
-    const hasLR2DoubleRandom =
-      playVariant === '14' &&
-      [lanes.random1P, lanes.random2P].some((mode) =>
-        usesLR2DoubleRandom(mode ?? 'OFF', ctx.options.judgeRuleset ?? 'lr2'),
+    const usesLR2Sort = [
+      { mode: lanes.random1P, includeScratch: lanes.lr2RandomScratch1P },
+      { mode: lanes.random2P, includeScratch: lanes.lr2RandomScratch2P },
+    ].some(({ mode, includeScratch }) => {
+      const ruleset = ctx.options.judgeRuleset ?? 'lr2';
+      const selectedMode = mode ?? 'OFF';
+      return (
+        (playVariant === '14' && usesLR2DoubleRandom(selectedMode, ruleset)) ||
+        (includeScratch === true &&
+          usesLR2Scratch(selectedMode, playVariant, ruleset) &&
+          ['S-RANDOM', 'SCATTER', 'CONVERGE'].includes(resolveOptionSource(selectedMode, ruleset).name))
       );
-    const lr2Objects = hasLR2DoubleRandom
-      ? collectLR2SortObjects(resolvedPlay, ctx.options.course !== undefined)
-      : undefined;
-    const sourceChannels = hasLR2DoubleRandom
+    });
+    const lr2Objects = usesLR2Sort ? collectLR2SortObjects(resolvedPlay, ctx.options.course !== undefined) : undefined;
+    const sourceChannels = usesLR2Sort
       ? new Map([...ctx.notes, ...ctx.mineNotes, ...ctx.invisibleNotes].map((note) => [note, note.channel]))
       : undefined;
     applyRandomMode(
@@ -612,6 +658,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         ruleset: ctx.options.judgeRuleset ?? 'lr2',
         hRandomThresholdBPM: ctx.options.hRandomThresholdBPM,
         fixedLane: lanes.randomFixedLane1P,
+        lr2RandomScratch: lanes.lr2RandomScratch1P,
+        lr2ScratchSourceVariant: prepared.battleSourceVariant,
         scratch: playVariant === '9' ? undefined : '16',
         scratchLanes:
           playVariant === '9'
@@ -639,6 +687,8 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
         ruleset: ctx.options.judgeRuleset ?? 'lr2',
         hRandomThresholdBPM: ctx.options.hRandomThresholdBPM,
         fixedLane: lanes.randomFixedLane2P,
+        lr2RandomScratch: lanes.lr2RandomScratch2P,
+        lr2ScratchSourceVariant: prepared.battleSourceVariant,
         scratch: playVariant === '9' ? undefined : '26',
         scratchLanes:
           playVariant === '9'
@@ -657,23 +707,20 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       ctx.mineNotes as Array<{ channel: string }>,
       ctx.invisibleNotes as Array<{ channel: string }>,
     );
-    // Chart ALL / ALL+ (#844): one shuffle across both sides' keys, with ALL+ their scratch lanes too.
+    // Chart ALL / ALL+ (#844): one shuffle across both sides' keys, with ALL+ their scratch lanes too. It is
+    // nanasigroove's, drawn as the engine draws it for every host and judge ruleset, not through an LR2 or beatoraja
+    // lane option (#1245).
     if (chartArrangement.crossSide !== undefined) {
-      const scratchLanes =
-        playVariant === '9'
-          ? []
-          : PLAY_MODE_LAYOUTS[playVariant].lanes.filter((lane) => lane.kind !== 'key').map((lane) => lane.channel);
-      applyRandomMode(
-        ctx.notes as Array<{ channel: string }>,
+      arrangeChartPlayLanes(
         [
-          ...resolveLaneOptionChannels('1P', playVariant, prepared.laneBindings),
-          ...resolveLaneOptionChannels('2P', playVariant, prepared.laneBindings),
+          ctx.notes as Array<{ channel: string }>,
+          ctx.mineNotes as Array<{ channel: string }>,
+          ctx.invisibleNotes as Array<{ channel: string }>,
         ],
-        chartArrangement.crossSide.scratch ? 'RANDOM-EX' : 'RANDOM',
+        chartArrangement.crossSide.scratch ? 'ALL+' : 'ALL',
+        playVariant,
         laneRandom('1P'),
-        { ruleset: 'lr2', scratchLanes },
-        ctx.mineNotes as Array<{ channel: string }>,
-        ctx.invisibleNotes as Array<{ channel: string }>,
+        prepared.laneBindings,
       );
     }
     if (twoPlayer) {
@@ -789,7 +836,9 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
             },
           ]),
         )
-      : undefined;
+      : resolved.sourceFormat === 'lrx'
+        ? collectTriggerVoicePlayback(resolvedPlay.sampleTriggers)
+        : undefined;
   ctx.chartDurationSeconds = Math.max(ctx.chartLastNoteEndSeconds, ctx.autoSampleTriggers.at(-1)?.seconds ?? 0);
   // Initialize gauge with the actual playable-note count and the chart's #TOTAL value so PG/GR gain matches LR2: a
   // long chart with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a short TOTAL=160 100-note chart gets +1.6
@@ -844,6 +893,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
       ctx.bgaTimeline.layer.length > 0 ||
       (ctx.bgaTimeline.layer2?.length ?? 0) > 0 ||
       ctx.bgaTimeline.poor.length > 0 ||
+      (resolved.lrx?.bga?.length ?? 0) > 0 ||
       (ctx.options.nonstop?.bmsonBGA?.some((cue) => cue.sequences.length > 0) ?? false) ||
       (ctx.options.nonstop?.keyBoundBGA ?? buildKeyBoundBGATimeline(resolvedPlay.source, resolvedPlay.timing)).length >
         0);
@@ -1015,9 +1065,17 @@ type BareRandomMode = Exclude<RandomMode, `${string}:${string}`>;
 
 function usesLR2DoubleRandom(mode: string, ruleset: RulesetId): boolean {
   const { name, source } = resolveOptionSource(mode, ruleset);
-  // AC shares the persisted S-RANDOM value, but its 14 KEY scratch rule is unverified.
+  return source === 'lr2' && (name === 'CONVERGE' || name === 'S-RANDOM');
+}
+
+function usesLR2Scratch(mode: RandomMode, variant: ChartPlayVariant | undefined, ruleset: RulesetId): boolean {
+  if (variant !== '5' && variant !== '7' && variant !== '10' && variant !== '14') return false;
+  const { name, source } = resolveOptionSource(mode, ruleset);
   return (
-    source === 'lr2' && (name === 'CONVERGE' || (name === 'S-RANDOM' && ruleset !== '____' && mode !== '____:S-RANDOM'))
+    name === 'MIRROR' ||
+    name === 'RANDOM' ||
+    name === 'SCATTER' ||
+    (source === 'lr2' && (name === 'S-RANDOM' || name === 'CONVERGE'))
   );
 }
 
@@ -1030,6 +1088,8 @@ export function applyRandomMode(
     ruleset?: RulesetId;
     hRandomThresholdBPM?: number;
     fixedLane?: number;
+    lr2RandomScratch?: boolean;
+    lr2ScratchSourceVariant?: ChartPlayVariant;
     scratch?: string;
     scratchLanes?: readonly string[];
     doublePlay?: boolean;
@@ -1064,6 +1124,10 @@ export function applyRandomMode(
   if (mode === 'S-RANDOM-EX' && allLanes.length > 0 && (options.scratchLanes?.length ?? 0) === 0)
     throw new RangeError('S-RANDOM-EX requires scratch lanes.');
   if (mode === 'OFF' || allLanes.length === 0) return;
+  const includeScratch =
+    options.lr2RandomScratch === true &&
+    options.scratch !== undefined &&
+    usesLR2Scratch(selectedMode, options.playVariant, options.ruleset ?? 'lr2');
   if (
     mode === 'S-RANDOM' ||
     mode === 'SCATTER' ||
@@ -1085,10 +1149,17 @@ export function applyRandomMode(
       ),
     ];
     const lr2Double =
-      options.playVariant === '14' &&
       options.scratch !== undefined &&
-      usesLR2DoubleRandom(selectedMode, options.ruleset ?? 'lr2')
-        ? { scratch: options.scratch, flipped: options.flipped, objects: options.lr2Objects }
+      (includeScratch || (options.playVariant === '14' && usesLR2DoubleRandom(selectedMode, options.ruleset ?? 'lr2')))
+        ? {
+            scratch: options.scratch,
+            flipped: options.flipped,
+            objects: options.lr2Objects,
+            includeScratch,
+            avoidFarKeys:
+              (includeScratch ? (options.lr2ScratchSourceVariant ?? options.playVariant) : options.playVariant) ===
+              '14',
+          }
         : undefined;
     const timedNotes = entries.map(({ note, kind }) => {
       const timed = note as {
@@ -1129,6 +1200,7 @@ export function applyRandomMode(
             doublePlay: options.doublePlay,
             flipped: options.flipped,
             correctedNineKey: mode === 'SCATTER-CORRECTED',
+            lr2Scratch: includeScratch ? lr2Double : undefined,
           })
         : mode === 'S-RANDOM-EX'
           ? randomizeSRandomNotes(timedNotes, [...allLanes, ...options.scratchLanes!], {
@@ -1157,8 +1229,9 @@ export function applyRandomMode(
                         thresholdBPM: options.hRandomThresholdBPM,
                       })
                     : randomizeLR2ConvergeNotes(timedNotes, allLanes, {
-                        target:
-                          mode === 'CONVERGE' && options.side === '2P'
+                        target: includeScratch
+                          ? (allLanes[(options.fixedLane ?? 0) - 1] ?? options.scratch!)
+                          : mode === 'CONVERGE' && options.side === '2P'
                             ? resolveLR2SecondSideConvergeTarget(allLanes, options.fixedLane ?? 0)
                             : (allLanes[(options.fixedLane ?? 0) - 1] ?? options.scratch ?? allLanes[4]!),
                         scratch: options.scratch,
@@ -1190,9 +1263,14 @@ export function applyRandomMode(
     });
     return;
   }
-  if (mode === 'RANDOM-EX' && (options.scratchLanes?.length ?? 0) === 0)
-    throw new RangeError('RANDOM-EX requires scratch lanes.');
-  const domainLanes = mode === 'RANDOM-EX' ? [...allLanes, ...options.scratchLanes!] : allLanes;
+  // nanasigroove's RANDOM+ (a chart's `774:RANDOM_RANDOM+`, #1244) shuffles the keys and the scratch as RANDOM-EX does.
+  const withScratch = mode === 'RANDOM-EX' || mode === 'RANDOM+';
+  if (withScratch && (options.scratchLanes?.length ?? 0) === 0) throw new RangeError(`${mode} requires scratch lanes.`);
+  const domainLanes = includeScratch
+    ? [options.scratch!, ...allLanes]
+    : withScratch
+      ? [...allLanes, ...options.scratchLanes!]
+      : allLanes;
   if (domainLanes.length < 2) return;
 
   const remapAll = (map: Map<string, string>): void => {
@@ -1231,10 +1309,27 @@ export function applyRandomMode(
     return;
   }
 
-  if (mode === 'RANDOM' || mode === 'RANDOM-EX') {
+  if (mode === 'RANDOM' && includeScratch) {
+    // LR2 shuffles scratch (slot 0) and the keys in source-lane order.
+    const destinations = [...domainLanes];
+    for (let source = 0; source < destinations.length - 1; source++) {
+      const other = source + drawLaneRandomIndex(destinations.length - source, rng);
+      [destinations[source], destinations[other]] = [destinations[other]!, destinations[source]!];
+    }
+    const scratchSource = destinations.indexOf(options.scratch!);
+    const fixed = options.fixedLane ?? 0;
+    // The native randFix check is on the 1P table and scans only key slots for the scratch destination.
+    if (options.side !== '2P' && fixed > 0 && fixed < destinations.length && scratchSource > 0) {
+      [destinations[fixed], destinations[scratchSource]] = [destinations[scratchSource]!, destinations[fixed]!];
+    }
+    remapAll(new Map(domainLanes.map((lane, index) => [lane, destinations[index]!])));
+    return;
+  }
+
+  if (mode === 'RANDOM' || withScratch) {
     // LR2, beatoraja and That-Which-Must-Not-Be-Named define RANDOM alike, one chart-wide shuffle of the keys, so every
     // source draws it as beatoraja 0.8.9's LaneRandomShuffleModifier does: the seed then gives beatoraja's arrangement.
-    // RANDOM-EX is the same draw over the keys and the scratch.
+    // RANDOM-EX, and nanasigroove's RANDOM+, are the same draw over the keys and the scratch.
     const available = [...domainLanes];
     const map = new Map<string, string>();
     for (const target of domainLanes) {

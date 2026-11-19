@@ -1,6 +1,3 @@
-/**
- * Stable package root. Implementation modules are split under `./core/`.
- */
-export * from './core/parser.ts';
-export { parseBMSBytes } from './core/bms-bytes.ts';
+/** The compatibility entry, including the Node file adapter. */
+export * from './core/index.ts';
 export { parseChartFile, type ParseChartFileOptions } from './node-file.ts';

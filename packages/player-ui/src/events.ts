@@ -15,6 +15,8 @@ export interface BeMusicUIEventMap {
   'readme-request': undefined;
   /** `<be-music-readme-dialog>`: the player asked to close it (its close button, Escape or the backdrop). */
   'readme-close': undefined;
+  /** `<be-music-readme-dialog>`: the player chose the text file at `index` of its tabs. */
+  'readme-tab': { index: number };
   'gesture-request': undefined;
   'play-request': { autoPlay: boolean };
   'auto-play-change': { autoPlay: boolean };

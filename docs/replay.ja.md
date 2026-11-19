@@ -2,12 +2,40 @@
 
 # リプレイ（プレイ履歴）仕様
 
-このドキュメントは Be-Music のリプレイ（ゲームプレイ中に記録されるプレイ履歴ファイル）と、そこから
-LR2 / beatoraja / 名前を言ってはいけないあのゲームのリザルトを再現するツールについて説明します。
+Be-Music のリプレイには、プレイ時の譜面、入力、適用した設定が入ります。シミュレーターはこの記録から結果を再現し、別のルールセットでも再判定できます。
+
+<details>
+<summary>目次</summary>
+
+- [関連ページ](#関連ページ)
+- [設計原則: 「結果ログ」ではなく「入力リプレイ」](#設計原則-結果ログではなく入力リプレイ)
+  - [入力ソース](#入力ソース)
+- [記録](#記録)
+  - [解放のない入力](#解放のない入力)
+- [互換ルールセット](#互換ルールセット)
+- [LR2 / beatoraja / 名前を言ってはいけないあのゲーム リザルトの再現](#lr2--beatoraja--名前を言ってはいけないあのゲーム-リザルトの再現)
+  - [ほかのルールセットでの再判定](#ほかのルールセットでの再判定)
+  - [再現度に関する注意](#再現度に関する注意)
+- [コースのリプレイ](#コースのリプレイ)
+  - [コースのリプレイを再生する](#コースのリプレイを再生する)
+- [CLI](#cli)
+- [バージョニング](#バージョニング)
+- [譜面の実効表示オプション](#譜面の実効表示オプション)
+- [bmson TOTAL 0 の任意設定](#bmson-total-0-の任意設定)
+
+</details>
+
+## 関連ページ
+
+- [ブラウザーのリプレイ再生・履歴・ゴースト](./replay-browser.ja.md)
+  - <a name="リプレイ再生"></a>[リプレイ再生](./replay-browser.ja.md#リプレイ再生)
+  - <a name="リプレイスロット"></a>[リプレイスロット](./replay-browser.ja.md#リプレイスロット)
+  - <a name="ゴースト"></a>[ゴースト](./replay-browser.ja.md#ゴースト)
+  - <a name="プレイヤーが見ていたもの"></a>[プレイヤーが見ていたもの](./replay-browser.ja.md#プレイヤーが見ていたもの)
 
 ## 設計原則: 「結果ログ」ではなく「入力リプレイ」
 
-リプレイは意図的に**判定結果の列ではありません**。正本となるデータは次の 3 つです。
+リプレイには、判定を計算し直すためのデータを記録します。元になるデータは次の 3 つです。
 
 1. **`chart`** — 実際に画面を流れた解決済み譜面。`#RANDOM` 制御構文の解決後、レーンシャッフル
    （RANDOM / MIRROR / S-RANDOM）と DP FLIP の適用後の最終配置です。ロングノートは `timeUs` / `endTimeUs`
@@ -41,7 +69,7 @@ LR2 / beatoraja / 名前を言ってはいけないあのゲームのリザル�
    プロトコルのない端末）エンジンが推定した `up` には `inferred: true` が付きます。これはエンジンがキーを離したとみなした
    瞬間です。`inferred` は診断用で、リプレイとシミュレータは他の `up` と同じに読みます。スクラッチの押下には、表示用に
    ターンテーブルを回した向き `spin: 'cw' | 'ccw'` が付くことがあります（リプレイのターンテーブルのアニメーション）。判定は
-   `source` を読みます（[`player-spec.ja.md`](./player-spec.ja.md#入力ソース) を参照）。
+   `source` を読みます（[`player-spec.ja.md`](./player-judgment.ja.md#入力ソース) を参照）。
    入力は判定へ変換せず、ノート ID への割り当ても
    行わず、空 POOR の原因になる「ノートに対応しない入力」もすべて残します。ソートキーは常に
    `(timeUs, seq)` で、`seq` が同時刻イベントの順序を確定します。
@@ -105,8 +133,14 @@ LR2 / beatoraja / 名前を言ってはいけないあのゲームのリザル�
   `down`）が必須です。デバイスが軸を報告しても 2 つのボタンを報告しても、ターンテーブルは常に 2 つのソースです。
 - `device` は大まかな種別だけです。`keyboard`、`controller`、`touch` のいずれかです。`label` は正規化した名前（空白を
   含まない小文字の印字可能 ASCII、32 文字以内）です。キーボードのキーの最初のトークン（`'shift-left'`、`'z'`）、タッチ
-  領域のレーンのキー、コントローラーの `b1` / `tt` などです。リプレイはデバイスを識別するデータを記録しません。
-  `Gamepad.id`、ベンダー ID やプロダクト ID、シリアルは記録しません。
+  領域のレーンのキー、コントローラーの `b1` / `tt` などです。ラベルにデバイスを識別するデータを入れることはありません。
+- `deviceName`（省略可）は、ホストが報告したデバイス自身の名前です。ブラウザーの `Gamepad.id` で、多くはベンダー ID と
+  プロダクト ID を含みます。プレイヤーが選んだときだけ記録します（Web プレイヤーの「Record device names in
+  replays」、`ReplayRecordingOptions.includeDeviceNames`。既定はオフ）。記録したときは、Leaderboard への送信も含めて
+  リプレイと一緒に渡ります。キーボードとタッチには名前がありません。ソースの同一性には含めず、判定でも読まないので、
+  同じプレイは名前の有無にかかわらず同じ `inputs` を記録します。ソースは最初に見た名前を持ち続けます。プレイの途中で同じ
+  スロットに別のコントローラーをつないでも、同じソースです。レコーダーは制御文字を除き、前後の空白を落とし、128 文字で
+  切ります。シリアルは記録しません。
 - レーンに割り当てた物理キーはそれぞれ独立したソースです。スクラッチレーンの Shift、Ctrl、Space は 3 つです。各レーンの
   タッチ領域はひとつです。
 - `play.analogScratch`（省略可）は、ホストがアナログのターンテーブル軸を押下と解放に変えたときの、バージョン付きの
@@ -114,12 +148,13 @@ LR2 / beatoraja / 名前を言ってはいけないあのゲームのリザル�
   記録しません。シミュレータがアルゴリズムを実行し直すことはありません。
 
 `parseReplay` は、id の重複、未知の `kind` や `device`、正規化した名前でないラベル、`direction` のないターンテーブルの
-ソース（またはそれ以外のソースの `direction`）、表にない `source` を指す入力を拒否します。`play.inputSources` のない
+ソース（またはそれ以外のソースの `direction`）、空・128 文字超・制御文字や前後の空白を含む `deviceName`、表にない
+`source` を指す入力を拒否します。`play.inputSources` のない
 ログや、入力が `source` を持たないログ（入力ソース以前に記録したログの `tokens`）は、推測せずに拒否します。形式はまだ
 リビジョン 0 で、古いログを読める必要はありません。ソースをチャンネルに変えるのは引き続きホストの役目で、レーンの選択は
 引き続き `channels` が正本です。
 
-**実際に効いたプレイオプション。** 選択時のスナップショット（`play.options`、[プレイヤーが見ていたもの](#プレイヤーが見ていたもの) を参照）とは別に、`play` は判定と譜面を決める型付きフィールドを持ち、オプションが OFF の間はそれぞれ省略されます。`judgeAlgorithm` と `customJudge`（beatoraja の判定アルゴリズムと CUSTOM JUDGE の倍率）、`gaugeAutoShift` と `bottomShiftableGauge`、`autoScratch1P` / `autoScratch2P`、`anyKey`（ANY KEY。`inputs` は各キー自身のレーンを残し、リプレイで割り当て直します）、変更内容を伴う譜面変更オプション — `longNoteModifier`・`longNoteRate`・`longNoteModifierChangeCount`、`mineModifier`・`mineModifierChangeCount`、`scrollModifier`・`scrollSection`・`scrollRate`・`scrollModifierTimeline`・`scrollModifierChanged`、`extraNoteDepth`・`extraNoteScratch`・`extraNoteChangeCount`、LR2 EXTRA MODE の `lr2ExtraMode`・`lr2ExtraLevel`・`lr2ExtraEffectiveLevel`・`lr2ExtraConvertedObjectCount`・`lr2ExtraTempo`、7 TO 9 の `sevenToNinePattern`・`sevenToNineType`・`sevenToNineThresholdBPM`・`sevenToNineApplied` — そしてバトル・変換モードの `battleMode`、元譜面の `battleSourceVariant`、`battleTempo`、`battleAssist1P` / `battleAssist2P`、`battleChangedObjectCount`、`battleDroppedObjectCount`、LR2 D-BATTLE の `dBattleScratch` です。`chart.notes` はこれらすべてを適用した後の譜面なので、リプレイやシミュレーションが再抽選することはありません。生成された LN の始点は `generatedLongNote: true`、生成された地雷は `silent: true` と解決済みの `damage`、移動したノートは `sourceChannel` を持ちます。`chart.headerBPM` と `chart.bpmRange` は、テンポで譜面を分類するオプションが読むヘッダ BPM と BPM の最小・最大を保持します。
+**実際に効いたプレイオプション。** 選択時のスナップショット（`play.options`、[プレイヤーが見ていたもの](./replay-browser.ja.md#プレイヤーが見ていたもの) を参照）とは別に、`play` は判定と譜面を決める型付きフィールドを持ち、オプションが OFF の間はそれぞれ省略されます。`judgeAlgorithm` と `customJudge`（beatoraja の判定アルゴリズムと CUSTOM JUDGE の倍率）、`gaugeAutoShift` と `bottomShiftableGauge`、`autoScratch1P` / `autoScratch2P`、`anyKey`（ANY KEY。`inputs` は各キー自身のレーンを残し、リプレイで割り当て直します）、変更内容を伴う譜面変更オプション — `longNoteModifier`・`longNoteRate`・`longNoteModifierChangeCount`、`mineModifier`・`mineModifierChangeCount`、`scrollModifier`・`scrollSection`・`scrollRate`・`scrollModifierTimeline`・`scrollModifierChanged`、`extraNoteDepth`・`extraNoteScratch`・`extraNoteChangeCount`、LR2 EXTRA MODE の `lr2ExtraMode`・`lr2ExtraLevel`・`lr2ExtraEffectiveLevel`・`lr2ExtraConvertedObjectCount`・`lr2ExtraTempo`、7 TO 9 の `sevenToNinePattern`・`sevenToNineType`・`sevenToNineThresholdBPM`・`sevenToNineApplied` — そしてバトル・変換モードの `battleMode`、元譜面の `battleSourceVariant`、`battleTempo`、`battleAssist1P` / `battleAssist2P`、`battleChangedObjectCount`、`battleDroppedObjectCount`、LR2 D-BATTLE の `dBattleScratch` です。`chart.notes` はこれらすべてを適用した後の譜面なので、リプレイやシミュレーションが再抽選することはありません。生成された LN の始点は `generatedLongNote: true`、生成された地雷は `silent: true` と解決済みの `damage`、移動したノートは `sourceChannel` を持ちます。`chart.headerBPM` と `chart.bpmRange` は、テンポで譜面を分類するオプションが読むヘッダ BPM と BPM の最小・最大を保持します。
 
 **2 人プレイ。** 2 人プレイ（`play.battleMode: "TWO-PLAYER"`：LR2 の BATTLE、または名前を言ってはいけないあのゲームの 2 人プレイ）は、両プレイヤーの押下を 1 本の `inputs` に記録し、それぞれ自分の側のチャンネル（`1x` / `2x`）に載せます。`results.native` は 1P、`results.secondPlayer` は 2P の結果で、形は同じです。`play.gauge2P` は 2P のゲージです。ログの再シミュレーションは、ライブのプレイと同じく各サイドを個別に判定します。
 
@@ -135,7 +170,9 @@ TypeScript 型・シリアライザ・防御的パーサは
 します。`PlayerOptions.onReplayRecorded` を設定すると記録が有効になり、エンジンは prepared chart を
 スナップショットし、判定対象の押下（`lane-input`）と解放（`kitty-state` release。解放を伝えない入力では
 エンジンが推定した解放、[解放のない入力](#解放のない入力)）を `pressedAt` 補正済みの譜面相対時刻で記録し、空 POOR を native キャッシュ用にカウントし、`autoPlay` / `manualPlay` の解決直前
-（ESC 中断時を含む）に組み上がった `BeMusicReplay` をコールバックへ渡します。エンジンが知り得ない
+（ESC 中断時を含む）に組み上がった `BeMusicReplay` をコールバックへ渡します。すべてのノートの判定が済んだあとの
+ESC は中断ではありません。ホストが `holdAfterChart` を早めに放し、判定するものがなくなった時点でプレイは完了として
+終わります。エンジンが知り得ない
 ホスト側設定（選択ゲージ、レーンオプションのラベル、DP FLIP、自由形式の `native` 追加情報、fingerprint の
 計算元になる元の譜面）は `PlayerOptions.recordReplay` で渡します。`#RANDOM` / `#SWITCH` の draws は、エンジンが
 もともと必要とする `PlayerOptions.randomDraws` から取ります。
@@ -159,13 +196,11 @@ TypeScript 型・シリアライザ・防御的パーサは
 - どのプレイ画面（`createPlayScene`）も、記録したログを `on.finish(result, replay)` に渡します。途中で抜けたプレイのログは
   `waitForReplay()` で待ちます。
 - プレイヤーはリザルトシーンのマウント時に `<タイトル>-<タイムスタンプ>.bmplay.json` を自動ダウンロードします。
-  Options ダイアログ の **Library & records** フォルダにある **Auto-save play history** チェックボックス（デフォルト OFF）で制御します。リプレイ関連
+  Options ダイアログ の **Library & records** フォルダにある **Auto-save replays** チェックボックス（デフォルト OFF）で制御します。リプレイ関連
   オプションは曲の開始時にラッチされ、曲の途中では変更できません — プレイ中はコントロールが disabled
   になり、曲開始時点の値がそのプレイに適用されます。
-- Options ダイアログ の **Play options** フォルダが記録対象のプレイ設定（オートプレイ、ゲージ、Random 1P/2P、DP FLIP、
-  オートスクラッチ）を持ちます。判定幅（LR2 / beatoraja / 名前を言ってはいけないあのゲーム）は **Developer** フォルダにあります。LR2 の選曲画面の
-  PLAY OPTION パネルに対応項目がある設定は双方向に同期します。その中の **Replay / ghost** フォルダで、リプレイが
-  記録された表示設定のどこまでを再現するかを選びます（[プレイヤーが見ていたもの](#プレイヤーが見ていたもの)）。
+
+設定は [Options ダイアログ](./player-web.ja.md#options-ダイアログ) を参照してください。画面の再現範囲は [プレイヤーが見ていたもの](./replay-browser.ja.md#プレイヤーが見ていたもの) で説明します。
 
 ### 解放のない入力
 
@@ -204,8 +239,8 @@ kitty キーボードプロトコルのない端末は、キーを 1 回の押�
 
 ## 互換ルールセット
 
-**このプレイヤーは独自の判定ロジックを持ちません。** すべてのライブプレイは 3 つの互換ルールセット
-`'lr2'`（デフォルト）/ `'beatoraja'` / `'____'` のいずれかで動作し（`PlayerOptions.judgeRuleset`）、
+**このプレイヤーは独自の判定ロジックを持ちません。** すべてのライブプレイは 4 つの互換ルールセット
+`'lr2'`（デフォルト）/ `'beatoraja'` / `'____'` / `'plugout'`（[ADR 0044](./adr/0044-plugout-ruleset.ja.md)）のいずれかで動作し（`PlayerOptions.judgeRuleset`）、
 判定に関わる決定はすべてルールセットが所有します。
 
 - 判定幅（符号付き・文脈別: 鍵盤 / スクラッチ、通常ノート / ロングノート終端）。LR2 の `#EXRANKxx` タイムラインを含む
@@ -227,148 +262,6 @@ kitty キーボードプロトコルのない端末は、キーを 1 回の押�
 
 `bms-player` では `--ruleset <lr2|beatoraja|____>` と `--gauge <GROOVE|EASY|HARD|DEATH>` で指定できます。
 
-## リプレイ再生
-
-`*.bmplay.json` ファイルをブラウザプレイヤーへドロップすると、対応する楽曲がロード済みの場合にリプレイ再生が
-始まります（曲フォルダとログを同時にドロップしても動作します — 曲のロード後にリプレイが始まります）。
-楽曲のマッチングは譜面ファイルのハッシュ（`chart.sha256` — セッションやファイル移動をまたいで安定）を最優先し、
-次に記録された `play.native.chartPath`、どちらも無い古いログはタイトル＋アーティストで照合します。
-どの譜面とも一致しなければ、選曲画面に戻り、読み込むべき譜面をダイアログで示します。
-
-リプレイは共有エンジン内で記録済み入力列を決定論的に再駆動します（`PlayerOptions.replayInputs`）。各イベントは
-記録された譜面相対マイクロ秒の時刻ちょうどで発火し、ライブのレーン入力は無視され（ESC / ポーズ / ハイスピは
-有効）、リプレイ実行では新しいリプレイを記録しません。ログは解決済みの最終配置を保存しているため、譜面準備
-では RANDOM / MIRROR を引き直す代わりに記録済みチャンネルを再適用します（`applyReplayArrangement`）— つまり
-シャッフルされたプレイも正確にリプレイできます。新しい MIRROR/RANDOM は、空レーンを含む確定したモード全体の鍵盤を対象とし、スクラッチとホイールは固定します。旧方式で記録した配置も保存済みのチャンネルを再生し、修正後のシャッフルで解釈し直しません。
-
-譜面の `#RANDOM` / `#SWITCH` 行はログの
-`play.randomDraws` で解決するので、リプレイは記録時の枝を遊びます。ブラウザのプレイセッション（`session/play/play-chart.ts`）は自分で
-その draws を使って解決し（`resolvePlayChart(chart, { randomDraws })`）、元の譜面をエンジンに解決させるホストは
-`replayInputs` と一緒に `PlayerOptions.randomDraws` として渡します。読み込んだ譜面のために引かれていない draws や、
-draws のないログで新しく引いた分岐が記録時と異なる場合は再整列できないため、食い違った譜面を遊ぶ代わりに
-ステータス表示でエラーになります。リプレイは記録時のスキンファミリーに関わらず、
-そのときのゲームプレイのファミリー自身のプレイ画面で再生されます。
-
-ESC で中断したログのリプレイは、再シミュレーションと同じく中断した所で止まります。ホストは `play.abortedAtUs` を
-`PlayerOptions.replayAbortedAtUs` として渡し、エンジンはその譜面時刻まで判定してから、ESC としてリプレイを
-終えます。結果はライブのプレイと同じです。AUTO で遊んだログのリプレイも（空の）入力を `replayInputs` として渡すので、
-これもリプレイです。`replayTempoChanges` に従い、どちらのリプレイも再生したテンポを記録しません。
-
-ブラウザーのリプレイは `PlayScene.seek(seconds)` または ← / →（5 秒）でシークできます。同じエンジンが記録された入力を先頭から再適用し、判定・ゲージ・コンボ・保持中のロングノート・記録されたテンポ・表示設定を目標位置に復元します。一時停止中は停止したままで、中断したリプレイでは記録された終了位置より先へ進めません。記録されたテンポと表示設定を優先するかは引き続き Replay / ghost オプションで決まります。シークしても新しいリプレイは記録しません。コースのステージや NONSTOP でシークすると、[ADR 0016](./adr/0016-seek-play-loop-command.ja.md) に従いコース全体を練習扱いにします。後続ステージもリプレイを記録せず、コースのリプレイは出力できません。
-
-手動シークは `PlaySceneOptions.allowSeek: 'practice'` で有効にします。最初のシークでリプレイの記録を破棄します。目標より前に始まるノートはロングノートの終端も含めて得点なしで消化済みにし、スコア・コンボ・ゲージをプレイ開始時の値に戻します。一時停止中は停止したままです。結果には `practice: true` が付き、ベスト記録・Leaderboard 送信・リプレイ自動保存の対象外になります。プレイヤーでは単曲とコースのステージで手動シークを有効にします。コース進行はリプレイ記録とは独立したステージ結果から引き継ぎます。
-
-[PRACTICE](./play-options.ja.md#practice) のプレイもリプレイを記録しません。`PlayerOptions.practice` があるあいだエンジンはログを作らないので、保存も自動保存も送信もしません。範囲はエンジンに譜面の時刻（ミリ秒の `practice.startMs` と `practice.endMs`）として渡します。譜面の表示で選んだ小節の、最初の小節の小節線から最後の小節を閉じる小節線までです（`@be-music/player-ui` の `chartScoreRangeTimes`）。小節を選んでいなければ譜面全体です。これまでに記録したリプレイは変わりません。どれも PRACTICE の範囲を持っていません。
-
-## リプレイスロット
-
-ブラウザーのプレイヤーは、譜面ごとに 4 つ、コースごとに 4 つまでのリプレイをブラウザーに保存します。beatoraja が譜面とコースごとに 4 つのリプレイファイルを持つのと同じです（`PlayDataAccessor`）。リザルト画面がプレイをスロットに保存し、選曲画面がスロットのリプレイを再生します。スロットから再生したリプレイは、ドロップしたリプレイと同じく記録を残さず、ランキングにも送りません。
-
-```mermaid
-flowchart LR
-  result[リザルト画面] -->|"キー 1-4・リプレイボタン・カード・自動保存の条件"| store[(IndexedDB)]
-  store -->|"スロットの状態"| select[選曲画面]
-  select -->|"V・リプレイボタン・カード"| replay[リプレイ]
-```
-
-- **スロットの中身。** 譜面のスロットは譜面フィンガープリント（`chart.chartFingerprint`。フィンガープリントを計算できない譜面は `sha256:<ファイルハッシュ>`）、コースのスロットはコースフィンガープリント（`computeCourseReplayFingerprint`。NONSTOP コースはつなぎ方と配置を含みます）をキーにします。スロットはリプレイを `.bmplay.json` / `.bmcourse.json` のテキストのまま gzip で圧縮し、IndexedDB の `be-music-replays` データベース（プレイヤーの `be-music` とは別）の `replaySlotData` に保存します。`replaySlots` には小さな記録（タイトル、EX スコアとその率、ランプ、サイズ、保存日時）を並べて保存するので、画面はリプレイを読まずにスロットを一覧できます。スロットに保存すると、それまでの中身を置き換えます。
-- **保存形式のリビジョン。** `be-music-replays` に保存する内容の形は、IndexedDB のバージョンとは別の保存形式のリビジョンで管理し、`meta` ストアに保存します。ページで初めて使うときに、保存済みのスロットをそのビルドのリビジョンにそろえます。今は 0 です。リビジョン 0 ではマイグレーションなしに形を変えることがあり、スロットの記録として読めなくなった保存済みのスロットはリプレイごと消します。リビジョン 1 以降は、上げるたびに 1 つ前のリビジョンからのマイグレーションを用意し、保存済みのスロットを 1 段ずつ移行します。移行で落としたスロットや、より新しいリビジョンの読めないスロットは消します。記録のないリプレイはどちらの場合も消します。
-- **保存できるもの。** beatoraja の `MusicResult` / `CourseResult` がスコアを残せる PLAY だけを保存するのと同じく、ベスト記録が数えられる通常のプレイ（AUTO、リプレイ、練習ではないもの）と、コースの記録を残すコースのラン（EXPERT、GRADE、NONSTOP）だけを保存します。コースの各ステージのリザルトは何も保存せず、コースは 1 回のランとして保存します。保存できないリザルトでも、どのスロットにリプレイがあるかは表示します。
-- **手動の保存。** リザルト画面のキー 1-4（beatoraja の `ControlKeys.NUM1`-`NUM4`）、beatoraja のリザルトスキンのリプレイボタン（19、316-318）、リプレイスロットのカードで、スロット 1-4 に保存します。入力が開いてから画面が出始めるまでの間だけです。各スロットにはリザルトごとに 1 回だけ保存します（beatoraja の `ReplayStatus.SAVED`）。
-- **自動保存の条件。** Options ダイアログ → Library & records → **Replay slots** で、スロットごとに条件を決めます。リザルトが開いたとき、プレイ前のベスト記録と比べて適用します（beatoraja の `ReplayAutoSaveConstraint`）。保存しない、EX スコアの更新（または同点）、BP の更新（または同数）、最大コンボの更新（または同数）、クリアランプの更新（または同等）、いずれかの更新、常に、から選びます。初めてのプレイは、beatoraja が空のスコアを読むのと同じく、どの種類でも更新として数えます。beatoraja の既定はすべて「保存しない」ですが、Be-Music は既定で保存し、どのスロットにも何かが残るようにします。スロット 1 は EX スコアの更新、スロット 2 はクリアランプの更新、スロット 3 は BP の更新、スロット 4 は常に（最新のプレイ）です。「Auto-save play history」のダウンロードは別の機能で、変わりません。
-- **容量の上限。** すべてのスロットで、圧縮後のリプレイの合計 500 MB を共有します。上限を超える保存では、EX スコア率（EX スコア ÷ その最大値）の低いリプレイから、同じ率なら古い保存から順に消します。保存しようとするリプレイ自身が上限を超えて残る中で最も低いときは保存せず、ステータス行でそう伝えます。ブラウザーが書き込みを拒んだとき（容量の上限、ストレージのブロック）は、すべてのスロットをそのままにして、そう伝えます。
-- **再生。** beatoraja の選曲スキンでは、カーソルがバーに乗るとリプレイのある最初のスロットを選びます（beatoraja の `RESET_REPLAY`）。4 か 6 番目のレーンキー（F）で次のスロットに移り（`NEXT_REPLAY`）、7 番目のレーンキー（V）で再生します（`REPLAY`。リプレイのあるスロットがなければ通常どおり遊びます）。スキンのリプレイボタンはそれぞれのスロットを再生します。ほかの種類では、リプレイスロットのカードがバーのリプレイを Replay、Download、Delete とともに一覧します。
-- **音。** LR2 にも beatoraja にもリプレイを保存したときの音はないので、保存しても何も鳴らしません。beatoraja のテーマの `resultclose` / `course_close` は、リザルトがフェードアウトを始めるときに鳴ります（[player-web.ja.md](./player-web.ja.md#リザルト画面)）。
-
-## ゴースト
-
-ゴーストは、記録されたプレイを今のプレイの横に見せるものです。ブラウザーのプレイヤーは、1 つを選ぶ前に比べられるよう、いくつかの形を並べて作っています（[#418](https://github.com/nulltask/be-music/issues/418)、[#934](https://github.com/nulltask/be-music/issues/934)）。それぞれは **ソース**（どのリプレイを再生するか）と **見せ方**（どう見せるか）の組で、別々に選べます。
-
-```mermaid
-flowchart LR
-  subgraph sources[ソース]
-    best[(自己ベスト)]
-    slot[(リプレイスロット)]
-    top[(Leaderboard の 1 位)]
-    file[(リプレイファイル)]
-  end
-  sources --> timeline["判定タイムライン<br/>（再シミュレーション）"]
-  timeline --> field[2 つ目のプレイフィールド]
-  timeline --> pace[ペースメーカー]
-  pace --> overlay[レーンへの重ね表示]
-  field --> builtin[組み込みのビュー]
-  overlay --> builtin
-  pace --> skins[すべてのビュー]
-```
-
-- **オプション。** Options ダイアログ → Play options → **Replay / ghost**:
-  - **Ghost** でソースを選びます。OFF（既定）、OWN BEST、REPLAY SLOT 1-4、LEADERBOARD TOP、REPLAY FILE です。
-  - **Ghost mode** で見せ方を選びます。SECOND PLAYFIELD（既定）、PACEMAKER、PACEMAKER + LANES です。
-  - **Ghost status** は、カーソルのバーで選んだゴーストを見せられるか、見せられない理由を示します。見せ方が組み込みスキン専用、譜面に 2 つ目のプレイフィールドの余地がない、ソースにその譜面のリプレイがない、のいずれかです。
-  - **Ghost replay file…** で REPLAY FILE 用の `*.bmplay.json` を選びます。この訪問の間だけ保持し、記録された譜面のゴーストにだけなります。
-
-  どれも曲の開始時に確定し、プレイ中は無効です。Ghost と Ghost mode はコースのバーでも無効です。リプレイ、コースのステージ、NONSTOP のランではゴーストを見せません。
-
-- **ソース。**
-  - OWN BEST は、その譜面のリプレイスロットのうち EX スコアが最も高いもの（同点なら新しい保存）です。スロット 1 の既定の条件がこれを更新し続けます。
-  - REPLAY SLOT n は、その譜面のそのスロットです。
-  - LEADERBOARD TOP は、プレイを判定するルールセットでの、その譜面の Leaderboard ランキング（アシストなし）の 1 位のリプレイです。`GET /api/v0/charts/:chartFingerprint/leaderboard?limit=1` の後に `GET /api/v0/scores/:id/replay` で取ります。Leaderboard にない譜面や、読めないリプレイではゴーストなしで遊びます。
-  - REPLAY FILE は、選んだファイルがその譜面で記録されたものならそれです。
-
-  プレイは読み込み中にソースを読み、譜面は BGA と同じくそれを待ちます。
-
-- **タイムライン。** リプレイを、記録されたルールセットでリプレイシミュレーターにかけ直します（`@be-music/player-engine/replay` の `resolveReplayJudgmentTimeline`）。判定を付けた順に、レーン、ノート、時刻、その時点のコンボ、EX スコア、ゲージを並べます。時計も乱数も読まないので、同じリプレイからはいつも同じゴーストになります。
-- **2 つ目のプレイフィールド**（SECOND PLAYFIELD、組み込みスキンのみ）。シングルプレイ譜面では、今のフィールドとゴーストのフィールドを、中央の BGA を挟んで独立したプレイヤーとして並べます（`twoPlayer: true`）。レーン順は 7 KEY なら 14 KEY、5 KEY なら 10 KEY を使い、ゴーストは 2P のレーンに置きます。通常の DP 譜面は共通のプレイフィールドのままです。ゴーストのノートはリプレイ自身のもの（そのレーンオプション）で、シミュレーションが決着させた秒に消えます。今のプレイのハイスピードで流れるので、ゴーストのノートと対応する今のノートは同時に判定ラインに届きます。キービームとボムは記録された押下と判定に従い、判定は 2P 側に表示し、スコア、コンボ、ゲージは 2 人目の HUD に表示します。後ろへシークすると巻き戻り、前へ飛ぶと途中の演出を再生せずに追いつきます。余地があるのは、バトルモードなしの 5 / 7 KEY のシングルプレイ譜面だけです。
-- **ペースメーカー**（PACEMAKER、すべての種類、どの譜面でも）。ゴーストは自分のフィールドを持ちません。今のプレイが判定したのと同じ数のノートを判定した時点（空 POOR は数えません）のリプレイの位置に立ちます。LR2 や beatoraja のゴーストと同じ進め方なので、今のプレイヤーのハイスピード、カバー、タイミングに左右されません。プレイのターゲットになります。
-  - 組み込みスキンのスコアグラフでは、ソースにちなんだ名前（MY GHOST、SLOT n、TOP、FILE）のペースメーカーのバーになり、TARGET の差はこれに対して数えます。
-  - LR2 スキンでは、数値 151（今のターゲット EX）と 153（EX との差）、バーグラフ 14 / 15（今と譜面全体のターゲット）として読みます。
-  - beatoraja スキンでは、数値 121-123（譜面全体のターゲット EX とそのレート）として読みます。
-- **レーンへの重ね表示**（PACEMAKER + LANES、組み込みスキンのみ、どの譜面でも）。ペースメーカーに加えて、リプレイに記録された押下を自分のレーンの上に中抜きの紫のビームで、判定を判定ラインのすぐ上に判定の色の短いバーで描きます。輪郭とバーだけでレーンを塗りつぶさないので、自分のビーム、ボム、ノートは読みやすいままです。リプレイのレーンはリプレイ自身のものなので、別の RANDOM で記録されたゴーストは今のノートとは別のレーンを押します。
-- **しないこと。** ゴーストは音を鳴らさず、入力も受けません（そのレーンへのタッチはどこにも届きません）。今のプレイの判定、ベスト記録、リプレイの記録、リプレイスロット、Leaderboard への送信はゴーストを見ません。エンジンには今のノートだけを渡します。
-- **残る点。** ゴーストは見る人のルールセットではなく、リプレイに記録されたルールセットで再シミュレーションします。2 つ目のプレイフィールドは記録されたハイスピードとカバーを使わず、ロングノートの押しっぱなしも見せません。タッチモードでも 2 つ目のプレイフィールドは 10 / 14 KEY を組み合わせたレーンモデルを使い、`twoPlayerSideInset` のあるステージでは BGA を挟んで独立したレーンを配置します。ペースメーカーとレーンへの重ね表示は今のプレイの配置のままです。
-
-## プレイヤーが見ていたもの
-
-`play.view` と `play.viewChanges` は判定とは別に、どのシーンでも共通の単位で表示設定を記録します。
-
-| フィールド     | 単位                                                                                                                                                                                                 |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hiSpeed`      | シーンが描画に使ったスクロール倍率。そのシーン自身のスケールで、HS-FIX を掛けた値で表します。                                                                                                        |
-| `hiSpeedScale` | `hiSpeed` のスケール。`be-music`（組み込みと LR2 のシーン。1 拍あたり `PIXELS_PER_BEAT × hiSpeed` デザインピクセル）か `beatoraja`（1 のときレーンが 4 拍）。省略時は見る人のスケール。              |
-| `hsFix`        | シーンがスクロールに使った HS-FIX モード（`OFF`、`MAXBPM` など）。どのシーンも記録します。                                                                                                           |
-| `visibleMs`    | ノートが SUDDEN+ の下に見えている時間（整数 ms。白数字で、× 0.6 が緑数字）。譜面のメイン BPM（後述）で、`#SCROLL` / `#SPEED` を除いた値です。                                                        |
-| `covers`       | レーンのあるプレイサイドごとに、レーンの高さに対する割合（0〜1）。`sudden` は上から、`hidden` は判定ラインのすぐ上、`lift` は判定ラインを持ち上げる量。組み込みと LR2 のシーンは LIFT を描きません。 |
-
-beatoraja のシーンの HIDDEN カバーはリフトより上のレーンに対する比率なので、`比率 × (1 − lift)` を記録します。
-
-**`visibleMs` と LIFT。** どのシーンも `visibleMs` を beatoraja の白数字として記録し、LIFT は差し引きません。LR2 には LIFT がないため、beatoraja に従います。beatoraja の [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L321-L330) は、持ち上げた判定ラインより上のレーンを、そのレーンに合わせた速さでノートが流れるように描きます（`rxhs = (hu - hl) * hispeed * speed`。`hl` はリフトの分だけ上がります）。そのため LIFT はレーンを短くしますが、ノートがレーンを流れきる時間は変えません。表示する白数字は `region * (1 - lanecover)` で、`region = 240000 / nbpm / hispeed / speed / nscroll` です。リフトの項はありません（`currentduration`、321〜330 行）。ハイスピード固定のモードも同じ式をハイスピードについて解きます（`resetHispeed`、[206〜210 行](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L206-L210)）。シーンモデルはこれを一か所で計算します。`resolveWhiteNumber` はハイスピード 1 で指定した拍数の長さのレーンについて求め（beatoraja のシーンでは 4 拍、組み込みと LR2 のシーンでは配置したレーンを `PIXELS_PER_BEAT` で割った拍数）、`resolveHiSpeedForWhiteNumber` はその逆です。組み込みと LR2 のシーンは LIFT を描かないので、その白数字はノートが見えている時間そのものです。
-
-**メイン BPM。** `visibleMs` は譜面のメイン BPM、つまり判定するノートが最も多く置かれた BPM（`@be-music/chart-model` の `resolveChartMainBPM`）で求めます。これは beatoraja の値です。[`LaneRenderer.init`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L130-L152) はタイムラインの BPM ごとに [`TimeLine.getTotalNotes()`](https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/TimeLine.java#L139-L156)（通常ノート、ロングノートの始点、CN / HCN の終点。地雷と不可視ノートは数えない）を足し合わせ、最も多い BPM を HS-FIX `MAINBPM` の基準にします。メイン BPM での白数字と緑数字も同じ値を読みます（[`IntegerPropertyFactory`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/skin/property/IntegerPropertyFactory.java#L541-L560)、541〜560 行）。LR2 には従うべきメイン BPM の定義がない（スキンの数値は最高・最低・現在の BPM だけ）ため、beatoraja に従います。どの種類のプレイ画面も、HS-FIX `AVERAGE` がハイスピードを合わせるのと同じメイン BPM を使うので、ログの `visibleMs` を求める BPM は遊んだ種類によって変わりません。同数のときは先に現れる BPM を選びます（beatoraja はハッシュマップの順序）。ノートのない譜面は開始 BPM を使います。
-
-**古いログ。** この規則より前は、組み込みと LR2 の画面は最も長く続いた BPM を使い、beatoraja の画面は地雷とロングノートの終点もすべて数えていました。これらが食い違う譜面（BPM のギミックや、ノートの少ない別の BPM が長く続く譜面）では、古いログの `visibleMs` は今のプレイが記録する値と異なります。そのため別のハイスピードの尺度で再生すると、わずかに違うハイスピードで流れることがあります。記録したときと同じ尺度での再生は記録した `hiSpeed` で描くので影響を受けず、判定にも影響はありません。
-
-シーンは表示設定を決まった精度で記録します（`roundReplayView`）。`hiSpeed` は 1/1000 刻み、`visibleMs` は整数 ms、カバーの各値は小数 4 桁です。浮動小数点の誤差（0.1 のカバーが `0.09999999999999999` になるなど）はログに残らず、変更にも数えません。
-
-**選択したプレイオプション。** `play.options` に、参照元のオプション選択一式を記録します。AUTO 開始やコースによる RANDOM 無効化など、開始時の制約も反映します。途中の変更は、譜面時刻のマイクロ秒を使う `{ timeUs, values }` を `play.optionChanges` に記録し、同時刻の変更も順序を維持します。プリミティブ値と未知の参照元固有名を、型変換せずに往復できます。`resolveReplayOptionsAt` は巻き戻しシークを含め、その時点の値を復元します。ブラウザーでは記録した選択を再生に使い、プレイ中のハイスピード変更も実効値の `viewChanges` と併せて残します。動的な表示変更は値が変わったフレームごとに保持します。このスナップショットは任意の名前を実行する指示ではありません。再生の実効値は型付きの譜面・エンジン設定と表示・テンポの時系列が担います。スコアの採用・更新・ランキングの方針は、独立した Leaderboard 側の関心事です。判定タイミングの自動調整の `judgeTimingAutoAdjust` は方式（`"OFF"`、`"BEATORAJA"`、`"LR2-ON"`、`"LR2-SILENT"`）です。方式ができる前のリプレイは真偽値を持ち、読み手はそれを `"BEATORAJA"`（`true`）か `"OFF"` として読みます（`resolveJudgeTimingAutoAdjust`）。自動調整の各更新は `play.optionChanges` に `judgeTimingMs` として入ります（[プレイオプション](play-options.ja.md#判定タイミングと自動調整)を参照）。
-
-**操作ボタン。** `play.controlInputs` には、レーンではない操作ボタン（START と SELECT）の押下と解放を、`inputs` と同じ譜面時刻で `{ seq, timeUs, action: 'down' | 'up', button, code }` として記録します。`button` はホストが名付けた論理ボタン（`'1P-start'`、`'2P-select'`）、`code` は物理キー（`KeyboardEvent.code`）です。診断用で、ボタンが何をしたかはその結果の側（`viewChanges` やプレイの終わり）に記録され、シミュレータは読みません。リプレイの再生では記録しません。
-
-**記録。** すべてのプレイ画面（組み込み、LR2、beatoraja）は開始時の表示設定を `recordReplay.view` として渡し、毎フレーム表示設定を読み取ります。`createReplayViewCoalescer` がそれを変更にまとめます。変わったフィールドだけを持ち（`diffReplayView`。カバーが変わったサイドはそのカバー全体）、描画フレームごとに変わった値を記録します（`minIntervalMs: 0`）。素早く変更した値も再現できます。シーンは変更を `{ kind: 'view', change }` の入力コマンドとして送り、エンジンはそのコマンドを取り出した譜面時刻を付けます。組み込みと LR2 のシーンでプレイ中に変わるのはハイスピード（矢印キー、ホストの `setHiSpeed`）です。カバーはプレイごとに固定で、レーンが配置されると最初の変更が `visibleMs` を運びます。beatoraja のシーンではハイスピード、レーンカバー、リフト、HIDDEN カバーのすべてが変わります（矢印キー、PageUp / PageDown、ホイール、Home / End、譜面のレーンが使わないときの H / J / K、スキンのカバーボタン 330〜332）。開始時のカバーはプレイオプションのとおりです。
-
-**リプレイ。** リプレイは記録された表示設定を再生位置に沿って表示します。再生位置の譜面時刻で `resolveReplayViewAt` を引き、見る人の `ReplayPlaybackOptions`（`tempo`、`hiSpeed`、SUDDEN+ / HIDDEN+ の `covers`、`lift`。既定ですべてオン）で見る人自身の設定と `resolveReplayView` を合わせます。オフにした項目は見る人自身の設定のままです。ハイスピードは `resolveReplayHiSpeed` に従います。
-
-```mermaid
-flowchart TD
-  toggle{hiSpeed オン?} -->|いいえ| own[見る人のもの]
-  toggle -->|はい| scale{同じスケール?}
-  scale -->|はい| recorded[記録された hiSpeed]
-  scale -->|いいえ| visible{visibleMs あり?}
-  visible -->|はい| match[visibleMs になるハイスピード]
-  visible -->|いいえ| recorded
-```
-
-同じスケール（または `hiSpeedScale` のないログ）なら、記録されたハイスピードを HS-FIX 込みで描かれたとおりに使い、見る人の HS-FIX は重ねません。スケールが違うと同じ数値でも速さが違うため、記録された表示時間になるハイスピードを、自分のレーンと表示している SUDDEN+ から求めます（`resolveHiSpeedForWhiteNumber`。組み込みと LR2 では配置したレーン、beatoraja では 4 拍のレーン）。リプレイはどの種類のプレイ画面でも再生されます。beatoraja の画面は LIFT を描くので記録された LIFT を見せます（HIDDEN+ はその上のレーンに対して設定し、カバーは記録されたレーンの割合で描かれます）。組み込みと LR2 の画面は LIFT を描かないので、`lift` の切り替えはそこでは何も変えません。`tempo` の切り替えは記録されたテンポ（`play.tempo`、`play.tempoChanges`）を扱います。[ゴースト](#ゴースト)は記録された表示設定を読みません。そのフィールドは今のプレイのハイスピードで流れます。
-
 ## LR2 / beatoraja / 名前を言ってはいけないあのゲーム リザルトの再現
 
 `@be-music/player-engine/replay` の `simulateReplay(replay, { ruleset })` が 1 ルールセットで入力列を再生し、
@@ -376,17 +269,18 @@ flowchart TD
 空 POOR・ゲージ表がルールセットごとに異なります。定数の出典は
 [`packages/player-engine/src/ruleset/definitions.ts`](../packages/player-engine/src/ruleset/definitions.ts) に記載しています。
 
-| 項目                  | LR2 (`lr2/0`)                                           | beatoraja (`beatoraja/0`)                                    | 名前を言ってはいけないあのゲーム (`____/0`)                      |
-| --------------------- | ------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------- |
-| 出典                  | lr2oraja / OpenLR2                                      | beatoraja master                                             | コミュニティ実測 (https://iidx.org)                              |
-| 判定幅（RANK NORMAL） | ±18/±40/±100/±200 ms                                    | ±15/±45/±112.5/late 210 · early 165 ms（7K, judgerank 75 %） | ±16.67/±33.33/±116.67/±250 ms                                    |
-| ランクスケーリング    | LR2 アンカー補間、BAD 固定                              | judgerank 線形、空 POOR 窓固定                               | なし                                                             |
-| ノート選択            | Lowest + multi-BAD 連鎖                                 | Combo（デフォルト。duration / lowest / score 選択可）        | Lowest                                                           |
-| ロングノート          | 全て LN（終端確定の 1 判定）                            | ノートごとの LN / CN / HCN                                   | 全て CN（mode 3 は HCN ゲージ）                                  |
-| 空 POOR 窓            | 早側のみ 1000 ms                                        | late 150 / early 500 ms（7K）                                | 未測定 — beatoraja の窓を代用                                    |
-| 空 POOR でコンボ切断  | しない                                                  | 5K / PMS のみ                                                | しない                                                           |
-| マネースコア          | `(4·PG + 2·GR + GD) × 50000 / notes`                    | —                                                            | —（BISTROVER で廃止）                                            |
-| ゲージ                | lr2oraja LR2 表（2 % 未満即死、32 % 未満ダメージ ×0.6） | beatoraja ネイティブ表                                       | https://iidx.org 表（a 値回復、HARD は 30 % 以下でダメージ半減） |
+| 項目                  | LR2 (`lr2/0`)                                           | beatoraja (`beatoraja/0`)                                    | 名前を言ってはいけないあのゲーム (`____/0`)                          |
+| --------------------- | ------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------- |
+| 出典                  | lr2oraja / OpenLR2                                      | beatoraja master                                             | コミュニティ実測 (https://iidx.org)                                  |
+| 判定幅（RANK NORMAL） | ±18/±40/±100/±200 ms                                    | ±15/±45/±112.5/late 210 · early 165 ms（7K, judgerank 75 %） | ±16.67/±33.33/±116.67/±250 ms                                        |
+| ランクスケーリング    | LR2 アンカー補間、BAD 固定                              | judgerank 線形、空 POOR 窓固定                               | なし                                                                 |
+| ノート選択            | Lowest + multi-BAD 連鎖                                 | Combo（デフォルト。duration / lowest / score 選択可）        | Lowest                                                               |
+| ロングノート          | 全て LN（終端確定の 1 判定）                            | ノートごとの LN / CN / HCN                                   | 全て CN（mode 3 は HCN ゲージ）                                      |
+| 空 POOR 窓            | 早側のみ 1000 ms                                        | late 150 / early 500 ms（7K）                                | 未測定 — beatoraja の窓を代用                                        |
+| CN の離しの判定幅     | —                                                       | モードごとのロングノート終端の表                             | ±200 ms 以内は PGREAT のみ、BAD は +220 / −280 ms まで（範囲は暫定） |
+| 空 POOR でコンボ切断  | しない                                                  | 5K / PMS のみ                                                | しない                                                               |
+| マネースコア          | `(4·PG + 2·GR + GD) × 50000 / notes`                    | —                                                            | —（BISTROVER で廃止）                                                |
+| ゲージ                | lr2oraja LR2 表（2 % 未満即死、32 % 未満ダメージ ×0.6） | beatoraja ネイティブ表                                       | https://iidx.org 表（a 値回復、HARD は 30 % 以下でダメージ半減）     |
 
 EX スコアは全ルールセットで PGREAT × 2 + GREAT × 1、DJ LEVEL は 名前を言ってはいけないあのゲームの 9 分率です。チャージノート系の
 ルールセットはロングノートの始点・終端を 2 判定ノートとして数えます（各ルールセットの分母は
@@ -414,12 +308,18 @@ flowchart TD
   `gauge` です（beatoraja での `P-ATTACK`、LR2 での `EX-HARD` と `ASSIST-EASY`、コース以外の ???? での
   `DEATH`）。似たゲージには読み替えません。CUSTOM JUDGE を使ったリプレイは、CUSTOM JUDGE が
   beatoraja だけのものなので `custom-judge` です。ゲージオートシフトは理由にならず、対象のゲージの並びで持ち越します
-  （[プレイオプション](./play-options.ja.md#ゲージオートシフト)）。プレイしたルールセットは
-  常に自分のゲージで判定します。
+  （[プレイオプション](./play-options-modifiers.ja.md#ゲージオートシフト)）。
+  名前を言ってはいけないあのゲームで、参照元のない `DEATH` を EX-HARD として記録した旧リプレイは、
+  プレイ時のルールセットでも `gauge` になります。別のルールセットで再判定できる場合は、当時の
+  EX-HARD の増減からゲージが尽きた時刻を求めます。参照元つきのゲージ（`play.gauge: "lr2:P-ATTACK"`）
+  は、その参照元のゲージ、ラダー、コースゲージで再判定し、結果の `gauge.source` に参照元を記録します
+  （[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)）。
 - **truncated**: サバイバルゲージが空になった所でプレイが終わり（`play.endOnFailure`）、対象のゲージならそこを
   生き残る場合です。判定はその時点（`stoppedAtUs`、プレイしたルールセットのゲージが空になった時刻）までで、
   入力を補ったり、その後のノートを見逃しにしたりしません。コースも、プレイしたルールセットで失敗した
-  ステージで止まり、対象のゲージならそこを生き残る場合に同じく truncated になります。truncated の結果は
+  ステージで止まり、対象のゲージならそこを生き残る場合と、投げたステージで止まり、対象のコースゲージならそこから
+  先へ進む場合（LR2 のもの。[コース — ゲージが尽きたら終わる](./course.ja.md#ゲージが尽きたら終わる)）に同じく truncated に
+  なります。投げたステージでランを終えるゲージで再模擬したコースは、そのステージで止まります。truncated の結果は
   順位が付きません。
 - **simulated**: それ以外です。同じ時点までに対象のゲージも空になる場合を含みます。
 
@@ -431,8 +331,9 @@ flowchart TD
 - LR2 ルールセットは lr2oraja に従い、OpenLR2 の書き起こしと相互検証しています。両者が食い違う LN 頭の
   見逃し POOR 閾値は lr2oraja の挙動を採用しています。DEATH ゲージは lr2oraja の beatoraja 由来の `HAZARD_LR2` 表では
   なく LR2 本体に従います（回復なし、空 POOR は減少なし）。
-- 名前を言ってはいけないあのゲームの内部仕様は非公開です。判定幅・ゲージ表・DJ LEVEL 境界は現在のコミュニティ実測の合意値であり、
-  空 POOR 窓と CN 終端窓は未測定のため beatoraja の値を代用、HCN のゲージ tick は実測されている
+- 名前を言ってはいけないあのゲームの内部仕様は非公開です。判定幅・ゲージ表・DJ LEVEL 境界は現在のコミュニティ実測の合意値です [C]。
+  空 POOR 窓と CN 終端窓は未測定の暫定値で、beatoraja のミス窓と SEVENKEYS のロングノート終端窓を借りています。これは beatoraja の根拠 [V] で、
+  このゲームの根拠ではありません（[#1189](https://github.com/nulltask/be-music/issues/1189)）。HCN のゲージ tick は実測されている
   16 分音符間隔の代わりに固定 200 ms を使用しています。「ほぼ一致」は期待できますが、ビット単位の
   完全一致は保証されません。
 - beatoraja は FIVEKEYS、SEVENKEYS、PMS、KEYBOARD のゲージ表とモード別のデフォルト TOTAL を使います。エンジンのフレームは PMS の最大値 120 を含む実際の範囲を持ち、リプレイの `gauge.final` と結果のゲージはその最大値に対する百分率です。PMS の「1 ノートにつき空 POOR 1 回」規則は未対応です。
@@ -486,7 +387,7 @@ flowchart TD
 
 `checkCourseReplayEligibility` は、NONSTOP のプレイをつないだプレイで確かめます。つないだプレイは単曲と同じ確認を通り（オートプレイは拒否し、ESC で投げたプレイは落ちたプレイとします）、`play.course.kind: 'nonstop'` を持ち、`nonstop.stages` がコースの全ステージを覆っている必要があります。各ステージは譜面を記録している必要があります。結果は、つないだプレイのフィンガープリントを `nonstop` に持ち、`stages` は空です。ステージは単体で遊んだものではないので、検証する側はステージの譜面から作り直します（記録した抽選結果、コースの制約、記録したつなぎ方・配置・結合規則で `prepareNonstopCourse` し、`resolveNonstopRun` を求めます。[コースと段位認定](./course.ja.md#nonstop-コース) と [リーダーボードの設計](./leaderboard.ja.md#61-コースのランキング) を参照）。
 
-bmson を含む NONSTOP の `chart.judgeRank.stageRanks` は、`table: "bmson"`（生の `judge_rank`）と `table: "bms-exrank"`（生の `#DEFEXRANK`）も受け付け、時刻0の初期エントリーを持ちます。LR2 と beatoraja はこのステージ別の判定幅を適用します。結合規則バージョン 4 以降の NONSTOP のリプレイは `table: "bms-exrank-change"`（ステージ自身の `#EXRANKxx` の変更、チャンネル `A0`、`#DEFEXRANK` と同じ単位）も持ち、単体の譜面と同じく LR2 だけが適用します。省略可能な `chart.totalUnit` は TOTAL の単位を `absolute` または `percent` で指定します。通常のリプレイでは従来どおり `sourceFormat` から単位を決めます。
+bmson を含む NONSTOP の `chart.judgeRank.stageRanks` は、`table: "bmson"`（生の `judge_rank`）と `table: "bms-exrank"`（生の `#DEFEXRANK`）も受け付け、時刻0の初期エントリーを持ちます。LR2 と beatoraja はこのステージ別の判定幅を適用します。結合規則バージョン 4 以降の NONSTOP のリプレイは `table: "bms-exrank-change"`（ステージ自身の `#EXRANKxx` の変更、チャンネル `A0`、`#DEFEXRANK` と同じ単位）も持ち、単体の譜面と同じく LR2 だけが適用します。省略可能な `chart.totalUnit` は TOTAL の単位を `absolute` または `percent` で指定します。通常のリプレイでは従来どおり `sourceFormat` から単位を決めます。`chart.sourceFormat` は `bms`、`bmson`、`lrx` のどれかで、LRX 譜面のランクと TOTAL は BMS 譜面と同じく読みます。`uncounted: true` の付いたノーツは、レーンの先頭にある LRX のチェインノーツです。どの ruleset も判定し、plugout と同じく `plugout` だけがノーツ数から除きます。
 
 ### コースのリプレイを再生する
 
@@ -508,11 +409,11 @@ flowchart TD
 
 - **全ステージの譜面が必要です。** 各ステージは、そのステージが示す譜面でライブラリと照合します（`listCourseReplayStageCharts`、`matchesCourseReplayStageChart`）。SHA-256 があればそれ、なければ MD5、それもなければ譜面フィンガープリントです。到達したステージもしなかったステージも同じ扱いで、LR2 の `coursePlayable` と beatoraja の `MusicSelector`（433-437）も、ステージの譜面が欠けたコースのリプレイは始めません。欠けていればダイアログで一覧を示し、何も始めません。
 - **ステージは順に再生します。** 各ステージを、持ち込んだ状態（`play.course.carryIn`）とともにそれぞれのリプレイから、通常のコースの流れで再生します。コースの決定画面、各ステージのリザルト、最後にコースのリザルトです。LR2 がステージのリザルトを飛ばすのは AUTO のときだけでリプレイでは飛ばさず（`Main.cpp` M1280-M1310、M1376-M1379）、beatoraja も `CourseResult` の前に各ステージの `MusicResult`（179-212）を出します。AUTO で遊んだステージのリザルトは、通常の AUTO のプレイと同じく飛ばします。
-- **記録されたプレイが止まったところで止まります**（`planCourseReplayPlayback`）。最初に投げ出した（`play.aborted`、通常のプレイと同じくそのままコースのリザルトへ進みます）か落ちた（記録されたゲージで `isCourseStageFailed` が判定）ステージのあと、なければ最後に遊んだステージのあとです。コースのリザルトは記録されたもの（`results.native`）です。
+- **記録されたプレイが止まったところで止まります**（`planCourseReplayPlayback`）。記録されたプレイがそこで終わった最初の投げ出したステージ（`play.aborted`）か、落ちた（記録されたゲージで `isCourseStageFailed` が判定）ステージのあと、なければ最後に遊んだステージのあとです。投げ出したステージは、通常のプレイと同じく、結果を FAILED として表示するか、表示しません（[course.ja.md](course.ja.md#ゲージが尽きたら終わる)）。コースのリザルトは記録されたもの（`results.native`）です。
 - **NONSTOP のプレイは 1 譜面として再生します。** LR2 が NONSTOP のコースを再生するのと同じです（`LR2f.cpp` L18116-L18117、`Main.cpp` M806）。記録どおりに（`nonstop.placement`、`nonstop.stitch`、各ステージの `randomDraws`）コースをつなぎ直し、`nonstop.replay` を再生します。
 - **何も残しません。** コースのリプレイは、ステージやコースのベスト、ランプ、トロフィー、プレイ回数を更新せず、リプレイを保存せず、Leaderboard にも送りません。LR2 もリプレイのときはコースリザルトの保存から早く戻ります（`LR2f.cpp` L9599）。beatoraja の `CourseResult.updateScoreDatabase` はモードを確かめずに書くので、コースのリプレイでもプレイ回数やクリア回数が増えますが、Be-Music はこれに倣いません。
 - **リザルトはリプレイであることを示します。** リプレイのプレイと、そこから続くすべてのリザルト（各ステージ、コース、NONSTOP）は `PlayResult.fromReplay` を持ち、LR2 スキンはプレイ画面とリザルト画面で REPLAY OFF（op 82）の代わりに REPLAY PLAYING（op 84）を点けます。LR2 も op 84 をリプレイの間ずっと点けたままにします（`LR2f.cpp` L4740-L4741）。
-- 再生中の ESC は、ドロップしたリプレイと同じく再生を止めて選曲画面に戻ります。NONSTOP のリプレイでは F5 や R でもう一度再生します。
+- 再生中の ESC は、ドロップしたリプレイと同じく再生を止めて選曲画面に戻ります。NONSTOP のリプレイでは F5 や R でもう一度再生します。ステージ（NONSTOP のリプレイでは結合した譜面）のノートの判定がすべて済んだあとは、ライブのプレイと同じく ESC でステージを終え、次のステージかリザルトへ進みます。
 
 ## CLI
 
@@ -551,15 +452,16 @@ beatoraja/0    1174   82.68%   AA   ...
 パースでき（ID は書かれたまま保持します）、再計算やリプレイでは現在のルールが適用されます。古いルールで再生する互換経路は
 ないため、数値が変わることがあります。キャッシュは正ではないので、そうしたエントリは単に古いものとして扱います。
 
-| リビジョン                       | 変更                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lr2/0`、`beatoraja/0`、`____/0` | 開発用のリビジョン（上記）。`/1` から、地雷がルールセットの規則に従うようになりました。LR2beta3 は早い側の GREAT 境界の手前の押下・押したままの通過・地雷ごとの POOR/BP 1回加算を使います。暫定 `____` は左右対称 PGREAT と判定幅への保持進入を維持し、`beatoraja` では地雷の通過時にキーが押されている場合だけ爆発します（エンジン）。負の BPM の譜面は LR2 の逆スクロールに従い、反転より後の入力は鏡映したクロックで判定し、そこにある地雷は止まったままで、ノートを未判定のまま残したプレイは FAILED になります。`lr2` の DEATH ゲージは LR2 に従い、回復せず、空 POOR では減りません。 |
+- **`lr2/0`、`beatoraja/0`、`____/0`** 開発用のリビジョン（上記）。`/1` から、地雷がルールセットの規則に従うようになりました。LR2beta3 は早い側の GREAT 境界の手前の押下・押したままの通過・地雷ごとの POOR/BP 1回加算を使います。地雷のない `____` は LR2 の方針を自身の GREAT 窓で取り入れ（暫定だった左右対称 PGREAT・ゲージのみのモデルを置き換え、その結果は残しません）、`beatoraja` では地雷の通過時にキーが押されている場合だけ爆発します（エンジン）。負の BPM の譜面は LR2 の逆スクロールに従い、反転より後の入力は鏡映したクロックで判定し、そこにある地雷は止まったままで、ノートを未判定のまま残したプレイは FAILED になります。`lr2` の DEATH ゲージは LR2 に従い、回復せず、空 POOR では減りません。 `lr2` では、BMS 譜面の `#DEFEXRANK`（`chart.judgeRank.sourceExRank`）と `#EXRANKxx` は、LR2 のランクの間を補間するのではなく `#RANK 2` の判定幅を伸縮します。これらの譜面の判定には `chart.judgeRank.percent` を使わなくなりました。
+- **`plugout/0`** 最初のリビジョン。plugout4 -ARCADE EDITION- の判定幅、チャージノーツ、ゲージ、コースゲージ、スコア、ランプ（[ADR 0044](./adr/0044-plugout-ruleset.ja.md)）。
 
 ## 譜面の実効表示オプション
 
 省略可能な `chart.chartOptions` は、元のプレイで受理した実効表示プログラムを記録します。version 1 の形は `{ version: 1, initial: { hiSpeed? }, cues: [{ timeUs, state: { hiSpeed? } }] }` です。各命令は完全な譜面側の状態であり、空の状態は強制速度を解除して保存されたユーザーの view へ戻します。時刻は非負の安全な整数マイクロ秒で、非減少順です。HI-SPEED は 0.25–100 の有限数とし、未知のプロファイルバージョンや状態フィールドを拒否します。version 2 は省略可能な状態フィールド `hidden`・`changeHS`・`crazySize`・`crazyWave` を加えます。値はそれぞれ [ADR 0032](./adr/0032-chart-authored-visual-families.ja.md) に挙げた ID です（例：`{ hidden: 'SUDDEN', changeHS: 'ACCEL' }`）。これらを持つ version 1 のプログラムは拒否するため、古い記録が後から実装した系列を有効にすることはありません。version 3 は `hidden: 'M-SUDDEN'`、`crazyWave` の値 `YWAVE`・`YWAVE2`・`XYWAVE`・`XYWAVE2`・`3DWAVE`・`3DWAVE2`、フィールド `crazyColor`・`crazySpin`・`crazyClone`・`crazyLine`・`crazyJudge`・`crazyDark`・`crazyReverse` を加えます（[ADR 0036](./adr/0036-chart-authored-skin-level-options.ja.md)）。これらを持つ version 2 のプログラムも同じく拒否します。新しい記録は version 3 で書きます。M-SUDDEN の間にプレイヤーが動かした SUDDEN+ カバーの高さは、ほかのカバーの変更と同じく `play.view` に記録します。
 
 省略可能な `chart.chartPlayOptions` は、プレイで使った譜面指定のゲームプレイオプションを記録します。形は `{ version: 1, options: { random?, judge?, hellJudge?, addMine?, notes? } }` で、`random` は `MIRROR`・`RANDOM`・`RANDOM+`・`ALL`・`ALL+`、`judge` は `GOOD2BAD` か `GREAT2BAD`、`notes` は `DOUBLE`・`COPY`・`DBLCOPY` です。効いたものだけを持ちます。コースのステージは NOTES COPY を外すため、プログラムに `notes` はありません（DBLCOPY なら `DOUBLE`）。写した譜面の `chart.laneMode` はダブルプレイのモードで、再生は記録した `notes` でノーツを再び変換します（[ADR 0035](./adr/0035-chart-authored-notes-options.ja.md)）。配置と地雷の結果はすでに `chart.notes` にあります。シミュレーションは記録した判定変更を適用し、ソースを再コンパイルしないため、このフィールドのないリプレイは元の判定を保ちます。未知のバージョン・フィールド・値は拒否します。[ADR 0033](./adr/0033-chart-authored-gameplay-options.ja.md)を参照してください。
+
+省略可能な `play.playerChartPlayOptions` は、それらのオプションのうち、譜面の `#OPTION` ではなくプレイヤーが選んだものを示します。形は `{ judge?, hellJudge?, notes? }` で、`judge` は `GOOD2BAD` か `GREAT2BAD`、`hellJudge` は `true`、`notes` は `DOUBLE`・`COPY`・`DBLCOPY` です。どれも `chart.chartPlayOptions` の値と同じでなければなりません。ここにプレイヤーの COPY か DBLCOPY があると、そのプレイは `no-save` になります（[play-options.ja.md](./play-options.ja.md)、[#1243](https://github.com/nulltask/be-music/issues/1243)）。
 
 ホストは再生時に `PlayerOptions.chartOptionProgram` として渡します。browser はフィールドのない古い記録には空のプログラムを明示し、元の動作を維持します。既存の実効プロファイルへソース宣言を再解釈して追加しません。`play.options`・`play.view` とその変更には元のユーザー速度を保持し、強制表示は譜面プロファイルで再現します。譜面の値を永続的なユーザー設定へ書き込まず、解除時に正確なユーザー view を復元できます。シミュレーションは表示操作を無視し、スコア・入力 replay・fingerprint・記録可否は変えません。[ADR 0026](./adr/0026-chart-authored-display-options.ja.md)を参照してください。NONSTOP は合成した実効プログラムを記録します。切り出したステージの記録には所有する範囲だけを残し、ステージ offset を引きます。FIT を二重に適用せず、遊んだ先頭の状態を復元し、有限のステージ終了で解除します。切り詰めた未プレイの前方区間には、未観測の強制状態を作りません。
 
@@ -569,4 +471,4 @@ CHART HEADER（AUTO）は AUTO 自体ではなく、実効 COUPLE・TWO-PLAYER�
 
 ## bmson TOTAL 0 の任意設定
 
-プレイ設定 `bmsonTotalMode` の既定は `beatoraja`。`spec` は正規化済み百分率 TOTAL 0 で正の回復だけを抑制する。Browser の Play options に **bmson TOTAL 0**、Terminal に `--bmson-total-mode spec` を用意する。型付き replay 値を優先し、省略時は再生側の選択にかかわらず互換動作を保つ。影響を受ける手動プレイ・コースは `unranked: 'bmson-total'` として保存・シミュレーションし、通常のベスト記録・ランキングを更新しない。正の TOTAL で設定を選ぶだけなら従来どおり比較する。ダメージ・開始 HP・引継ぎ・chart fingerprint は変わらない。[ADR 0030](./adr/0030-bmson-zero-total.ja.md) を参照。
+リプレイの `play.bmsonTotalMode` を使います。省略時の挙動と記録の扱いは [bmson TOTAL の方針](./adr/0030-bmson-zero-total.ja.md) を参照してください。

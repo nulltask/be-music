@@ -1,9 +1,8 @@
-import { resolveGaugeTypes } from '@be-music/player-engine/ruleset';
 import { HISPEED_MAX, HISPEED_MIN, HISPEED_STEP, PLAY_OPTION_CHOICES } from '@be-music/player-scene-model';
 import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
 import { OptionFolder } from '../options-controls.ts';
 import type { OptionsDialog } from './index.ts';
-import { laneOptionItems } from './play-option-items.ts';
+import { gaugeChoices, laneOptionItems } from './play-option-items.ts';
 import { hiSpeedControl, onGrid } from './play-options.ts';
 // The quick options panel: the options a player changes most between charts and during one, in a panel that opens and
 // closes at the stage's bottom right, on the select and play screens. Its controls set the same values as the Options
@@ -52,13 +51,7 @@ export function buildQuickOptionsPanel(this: OptionsDialog, container: HTMLEleme
       changed();
     }),
   );
-  this.quickGaugeController = selectBinding(
-    panel,
-    this.guiState,
-    'gauge',
-    'Gauge',
-    resolveGaugeTypes(this.guiState.judgeRuleset),
-  );
+  this.quickGaugeController = selectBinding(panel, this.guiState, 'gauge', 'Gauge', gaugeChoices(this.guiState));
   track(
     this.quickGaugeController.on('change', ({ value }) => {
       this.setPlayOptions({ gauge1P: value });

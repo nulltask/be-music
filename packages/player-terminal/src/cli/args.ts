@@ -8,7 +8,13 @@ import {
   type ImageResizeAlgorithm,
   type TUINoteHeight,
 } from '@be-music/player-engine/display';
-import { RULESET_IDS, type GaugeType, type RulesetId } from '@be-music/player-engine/ruleset';
+import {
+  isGaugePick,
+  RULESET_IDS,
+  type GaugePick,
+  type GaugeType,
+  type RulesetId,
+} from '@be-music/player-engine/ruleset';
 import { HIGH_SPEED_STEP, MAX_HIGH_SPEED, MIN_HIGH_SPEED } from './config.ts';
 
 export interface CLIArgs {
@@ -39,8 +45,11 @@ export interface CLIArgs {
   /** Compat ruleset the engine judges under (`PlayerOptions.judgeRuleset`). Defaults to LR2. */
   judgeRuleset?: RulesetId;
   bmsonTotalMode?: import('@be-music/player-engine/ruleset').BmsonTotalMode;
-  /** Gauge pick, in LR2's names; each ruleset maps it onto its own line-up. Defaults to `GROOVE`. */
-  gauge?: GaugeType;
+  /**
+   * Gauge pick, in LR2's names; each ruleset maps it onto its own line-up. Defaults to `GROOVE`. Qualified with a source
+   * (`lr2:HARD`), it runs that source's gauge under whichever ruleset judges.
+   */
+  gauge?: GaugePick;
   /** `false` keeps judging after a survival gauge empties (`PlayerOptions.endOnFailure`); omitted ends the play there. */
   endOnFailure?: boolean;
   debugActiveAudio: boolean;
@@ -100,8 +109,20 @@ function parseCLIRuleset(rawValue: string): RulesetId {
   return match;
 }
 
-function parseCLIGauge(rawValue: string): GaugeType {
-  const value = rawValue.trim().toUpperCase();
+function parseCLIGauge(rawValue: string): GaugePick {
+  const trimmed = rawValue.trim();
+  const colon = trimmed.indexOf(':');
+  if (colon >= 0) {
+    // `<source>:<NAME>`: that source's gauge, whatever ruleset judges (`lr2:HARD`, `beatoraja:EX-HARD`).
+    const qualified = `${trimmed.slice(0, colon).toLowerCase()}:${trimmed.slice(colon + 1).toUpperCase()}`;
+    if (!isGaugePick(qualified)) {
+      throw new Error(
+        `Unknown --gauge "${rawValue}". A qualified gauge is <source>:<NAME>, a gauge the source defines (lr2:HARD).`,
+      );
+    }
+    return qualified;
+  }
+  const value = trimmed.toUpperCase();
   const match = CLI_GAUGES.find((gauge) => gauge === value);
   if (!match) {
     throw new Error(`Unknown --gauge "${rawValue}". Expected one of: ${CLI_GAUGES.join(', ')}.`);
@@ -116,7 +137,7 @@ function createDefaultCLIArgs(): CLIArgs {
     kittyGraphics: true,
     videoBGAStreaming: true,
     imageResizeAlgorithm: DEFAULT_IMAGE_RESIZE_ALGORITHM,
-    inferBmsLNTypeWhenMissing: true,
+    inferBmsLNTypeWhenMissing: false,
     showInvisibleNotes: false,
     compressor: true,
     limiter: true,
@@ -410,7 +431,7 @@ function parseImageResizeAlgorithmArg(raw: string | undefined): ImageResizeAlgor
 export function printUsage(): void {
   process.stdout.write(
     [
-      'Usage: bms-player <input.(bms|bme|bml|pms|bmson|json)|directory> [options]',
+      'Usage: bms-player <input.(bms|bme|bml|pms|bmson|n2s|lrs|json)|directory> [options]',
       '',
       'Essential options:',
       '  --auto                    Enable auto play mode (default: off)',
@@ -434,7 +455,7 @@ export function printUsage(): void {
       '',
       'Advanced tuning:',
       '  --show-invisible-notes    Show invisible channels (31-39/41-49) in TUI as green notes',
-      '  --ln-type-auto            Auto-detect BMS #LNTYPE when omitted (default: on)',
+      '  --ln-type-auto            Auto-detect omitted BMS #LNTYPE (default: Type 1)',
       '  --no-ln-type-auto         Disable BMS #LNTYPE auto-detection when omitted',
       '  --render-audio <path>     Render audio preview before playing',
       '  --volume <value>          Global volume multiplier applied before bus-specific volumes (default: 1)',
@@ -460,8 +481,9 @@ export function printUsage(): void {
       'Developer/debug:',
       '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
       '  --bmson-total-mode <mode>  bmson TOTAL 0: beatoraja (default) | spec (no recovery)',
-      '  --ruleset <name>       Compat ruleset: lr2 (default) | beatoraja | ____',
-      `  --gauge <name>         Gauge: GROOVE (default) | ${CLI_GAUGES.slice(1).join(' | ')}`,
+      '  --ruleset <name>       Compat ruleset: lr2 (default) | beatoraja | ____ | plugout',
+      `  --gauge <name>         Gauge: GROOVE (default) | ${CLI_GAUGES.slice(1).join(' | ')},`,
+      "                         or <source>:<NAME> for a source's gauge under any ruleset (lr2:HARD, beatoraja:EX-HARD)",
       '  --no-end-on-failure    Keep playing after a survival gauge empties (default: the play ends there)',
       '  --debug-judge-window <ms> Override BAD window for debugging',
     ].join('\n') + '\n',

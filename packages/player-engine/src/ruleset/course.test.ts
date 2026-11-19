@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
   applyCourseJudgeConstraint,
+  courseGoesOnAfterGivingUp,
+  givenUpCourseStageShowsResult,
   isCourseStageFailed,
   resolveCourseGauge,
   resolveCourseGaugeId,
@@ -74,11 +76,11 @@ describe('resolveCourseGauge', () => {
       id: 'CLASS',
       initial: 100,
       survival: true,
-      values: [0.15, 0.12, 0.06, -1.5, -3, -1.5],
+      values: [0.15, 0.12, 0.06, -1.5, -3, -1.5].map(Math.fround),
     });
-    expect(resolveCourseGauge('beatoraja', 'CLASS', { kind: 'grade' }, '9-key', 1).values).toEqual([
-      0.15, 0.12, 0.06, -1.5, -3, -3,
-    ]);
+    expect(resolveCourseGauge('beatoraja', 'CLASS', { kind: 'grade' }, '9-key', 1).values).toEqual(
+      [0.15, 0.12, 0.06, -1.5, -3, -3].map(Math.fround),
+    );
     expect(resolveCourseGauge('beatoraja', 'EXCLASS', { kind: 'grade', gaugeSet: 'lr2' }, '7-key-sp', 1)).toMatchObject(
       {
         id: 'EXCLASS',
@@ -86,9 +88,10 @@ describe('resolveCourseGauge', () => {
         guts: [{ threshold: 30, multiplier: 0.6 }],
       },
     );
-    expect(resolveCourseGauge('____', 'EXHARDCLASS', { kind: 'grade', gaugeSet: '5k' }, '7-key-sp', 1).values).toEqual([
-      0.01, 0.01, 0, -2.5, -5, -2.5,
-    ]);
+    // beatoraja's class gauge keeps its Java `float` table under any judge ruleset (#1090).
+    expect(resolveCourseGauge('____', 'EXHARDCLASS', { kind: 'grade', gaugeSet: '5k' }, '7-key-sp', 1).values).toEqual(
+      [0.01, 0.01, 0, -2.5, -5, -2.5].map(Math.fround),
+    );
   });
 
   test('a carried-in gauge value replaces the start value, clamped to the range', () => {
@@ -218,4 +221,18 @@ test('course advancement follows the LR2 two-percent boundary and other sources 
   expect(isCourseStageFailed('lr2', { final: 100, failedMidPlay: true })).toBe(true);
   expect(isCourseStageFailed('beatoraja', { final: 1 })).toBe(false);
   expect(isCourseStageFailed('beatoraja/0', { final: 0 })).toBe(true);
+});
+
+test('a stage given up shows its result under an LR2 gauge that judged a GOOD or better, whether or not the run goes on', () => {
+  const judged = { pgreat: 0, great: 0, good: 1 };
+  const none = { pgreat: 0, great: 0, good: 0 };
+  expect(givenUpCourseStageShowsResult('lr2', { gauge: {}, judge: judged })).toBe(true);
+  // The gauge below 2 % ends the run, and the stage result still shows first.
+  expect(courseGoesOnAfterGivingUp('lr2', { gauge: { final: 1 }, judge: judged })).toBe(false);
+  expect(givenUpCourseStageShowsResult('lr2', { gauge: {}, judge: judged })).toBe(true);
+  expect(givenUpCourseStageShowsResult('lr2', { gauge: {}, judge: none })).toBe(false);
+  expect(givenUpCourseStageShowsResult('beatoraja', { gauge: {}, judge: judged })).toBe(false);
+  // A qualified gauge follows its source under another ruleset (#1171).
+  expect(givenUpCourseStageShowsResult('beatoraja', { gauge: { source: 'lr2' }, judge: judged })).toBe(true);
+  expect(givenUpCourseStageShowsResult('lr2', { gauge: { source: 'beatoraja' }, judge: judged })).toBe(false);
 });

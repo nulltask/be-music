@@ -2,30 +2,33 @@
 
 # Courses and dan certification
 
-A **course** chains several charts into one run. The best-known kind is **dan certification (段位認定)**: the stages are played back to back on one shared class gauge, and the whole run gets a single result. LR2 and beatoraja each define courses in their own formats, and difficulty tables publish theirs inside the table header. Be-Music reads all three into one model, `CourseDefinition` in `@be-music/player-engine/course`, so nothing downstream needs to know where a course came from.
+A **course** groups several charts into one run. In **dan certification (段位認定)**, the stages share a class gauge and the run produces a single result.
 
-This document defines the course model, format mappings, play rules, records and replays. See the [browser player specification](./player-web.md#courses-and-dan-certification) for scene transitions.
+Be-Music imports LR2 and beatoraja course files, difficulty-table headers, and Nanasi Groove 2 chart lists. All four sources become a `CourseDefinition` in `@be-music/player-engine/course`, so the player uses the same model for every course.
+
+For how the browser moves between course screens, see [Courses and dan certification](./player-web.md#courses-and-dan-certification).
 
 ```mermaid
 flowchart LR
   lr2[".lr2crs<br/>(LR2, XML)"] -->|parseLR2CourseFile| def["CourseDefinition"]
   bjson["course/*.json<br/>(beatoraja)"] -->|parseBeatorajaCourseFile| def
   table["table header.json<br/>course / grade"] -->|parseTableHeaderCourses| def
+  n2x[".n2x<br/>(Nanasi Groove 2)"] -->|parseN2XCourseFile| def
   def -->|"resolveCourseStages<br/>(by SHA-256, then MD5)"| resolved["ResolvedCourse<br/>stages + playable"]
 ```
 
 ## The course model
 
-| Field         | Meaning                                                                                                                                                                                      |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`        | Course title.                                                                                                                                                                                |
-| `kind`        | `grade` (dan certification), `expert` (chained stages on the player's gauge) or `nonstop` (stages stitched into one continuous play).                                                        |
-| `stages`      | The charts in order, each by chart-file `md5` and / or `sha256` (lower-case hex), with an optional `title` and `artist` to show for a chart that is not found locally.                       |
-| `constraints` | beatoraja's course constraints by their table-header name (below). Unknown names are dropped and only the first constraint of each group is kept, as beatoraja's `CourseData.validate` does. |
-| `trophies`    | beatoraja trophies, easiest first: `{ name, missRate, scoreRate }`. A result earns the last trophy whose BP rate is at most `missRate` % and whose score rate is at least `scoreRate` %.     |
-| `release`     | beatoraja's `release`. `false` keeps the course's scores off any ranking.                                                                                                                    |
-| `keyMode`     | The key mode the course is meant for, when the source says (LR2 `line`, table `mode`).                                                                                                       |
-| `source`      | Which format the course came from, with the raw LR2 hash for `.lr2crs`.                                                                                                                      |
+| Field         | Meaning                                                                                                                                                                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | Course title.                                                                                                                                                                                                                             |
+| `kind`        | `grade` (dan certification), `expert` (chained stages on the player's gauge) or `nonstop` (stages stitched into one continuous play).                                                                                                     |
+| `stages`      | The charts in order, each by chart-file `md5` and / or `sha256` (lower-case hex), with an optional `title` and `artist` to show for a chart that is not found locally. An `.n2x` stage names its chart by `path` until the host finds it. |
+| `constraints` | beatoraja's course constraints by their table-header name (below). Unknown names are dropped and only the first constraint of each group is kept, as beatoraja's `CourseData.validate` does.                                              |
+| `trophies`    | beatoraja trophies, easiest first: `{ name, missRate, scoreRate }`. A result earns the last trophy whose BP rate is at most `missRate` % and whose score rate is at least `scoreRate` %.                                                  |
+| `release`     | beatoraja's `release`. `false` keeps the course's scores off any ranking.                                                                                                                                                                 |
+| `keyMode`     | The key mode the course is meant for, when the source says (LR2 `line`, table `mode`).                                                                                                                                                    |
+| `source`      | Which format the course came from, with the raw LR2 hash for `.lr2crs`.                                                                                                                                                                   |
 
 ### Constraints
 
@@ -65,6 +68,10 @@ An array of `CourseData` objects, or a single object (beatoraja's fallback read)
 
 beatoraja's **random courses** (`RandomCourseData`) draw each stage from the charts an SQL `WHERE` clause selects in its song database. `parseBeatorajaRandomCourseData` reads `name`, `stage[].sql` (kept as `filter`), `constraint`, `rconstraint` (`distinct`) and `trophy`; drawing the charts is the host's job.
 
+### Nanasi Groove 2 `.n2x` chart lists
+
+Nanasi Groove 2 chart lists open as EXPERT courses. The stages follow list order. Import the list and its charts together with their folder paths intact. [n2x import and stage resolution](./n2x-spec.md)
+
 ### Difficulty-table headers
 
 The table header (`header.json`) carries courses the way jbmstable-parser reads them:
@@ -73,7 +80,7 @@ The table header (`header.json`) carries courses the way jbmstable-parser reads 
 - `course` as one group (`Course[]`);
 - otherwise the legacy `grade` list. Its courses all get `grade_mirror` and `gauge_lr2`.
 
-A course takes its stages from `charts` (full table elements, which may carry `sha256`) or from `md5`. One whose charts lack a hash is skipped, and a stage without a title becomes `course N`, as beatoraja's `CourseData.validate` names it. The header's `mode` (`beat-7k`, `popn-9k`, …) sets `keyMode`.
+A course takes its stages from `charts` (full table elements, which may carry `sha256`) or from `md5`. One whose charts lack a hash is skipped, and a stage without a title becomes `course N`, as beatoraja's `CourseData.validate` names it. Some tables (Stardust, for one) add `song_title` beside `md5`, the stages' titles in the same order: it is no part of beatoraja's format, which ignores it, and Be-Music reads it only for a stage's title, which shows while the stage is not in the library. The header's `mode` (`beat-7k`, `popn-9k`, …) sets `keyMode`.
 
 #### Loading a table from its URL
 
@@ -137,7 +144,7 @@ No source, so refused: `song.folder`, `stagefile`, `banner`, `backbmp`, `preview
 
 ## NONSTOP courses
 
-An LR2 NONSTOP course (`.lr2crs` type 1) is not played stage by stage: LR2's chart loader stitches its stages (at most five) into one chart and plays it as a single run ([`ParseBMSFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680), `LR2body.exe` 0x4b0690). The LR2-compatible placement accepts BMS stages. The intended placement also accepts bmson stages and mixed courses. This section covers how the stages are placed and stitched; the browser player plays the stitched chart ([player-web.md](player-web.md)).
+An LR2 NONSTOP course (`.lr2crs` type 1) is not played stage by stage: LR2's chart loader stitches its stages (at most five) into one chart and plays it as a single run ([`ParseBMSFile`](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L25680), `LR2body.exe` 0x4b0690). The LR2-compatible placement accepts BMS stages. The intended placement also accepts bmson stages and mixed courses. A course of LRX stages (plugout's NONSTOP) stitches into an LRX chart that keeps each note's sound values, chain notes and hidden notes, with its long notes as CNs; LRX does not mix with BMS or bmson (`lrx-mixed`), and its stages share one lane type (`lrx-layout-mismatch`). This section covers how the stages are placed and stitched; the browser player plays the stitched chart ([player-web.md](player-web.md)).
 
 **Connections.** Each stage but the last has a connection to the next, stored in the first ten characters of the course hash (`courseKeys`, `0`-`5`) and read by `parseLR2NonstopConnections` into `CourseDefinition.connections`:
 
@@ -178,7 +185,7 @@ flowchart LR
 - **Rank and TOTAL.** The stitched chart opens with the first stage's `#RANK` and uses the last stage's `#TOTAL`; LR2 overwrites TOTAL stage by stage. Each later stage's `#RANK` then takes over (`map.stageRanks`, below).
 - **Judgment rank of later stages** (`resolveNonstopStageRanks`). LR2's loader turns a later stage's `#RANK` into an object at the stage's start ([L26301-L26313](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26301-L26313)), which moves earlier with the rest of the stage when it is cut, and the play loop sets the judge windows when it gets there ([L12831-L12877](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12831-L12877), `LR2body.exe` 0x42be2f). With `placement: 'lr2'` the change comes there, at the stage's own time zero, which can be several measures before the previous stage's last notes; a stage without `#RANK` keeps the rank in force; and the windows come from LR2's own NONSTOP table (`resolveLR2NonstopRankWindowsMs`), which differs from the one a chart opens with (0x4b5835) for VERY HARD (PGREAT ±12 / GREAT ±24 / GOOD ±60 ms instead of ±8 / ±24 / ±40) and HARD (GOOD ±80 ms instead of ±60). The default `'intended'` placement switches halfway between the previous stage's last note and the stage's first one, to the windows a chart opening with that `#RANK` gets, and reads a stage without `#RANK` as NORMAL.
 - **BPM readout** (`resolveNonstopTempo`, `nonstopBPMAt`). The stitched chart runs at 150 BPM, but LR2 shows each stage's own BPM: its loader inserts a later stage's `#BPM` as a BPM object (× the FIT rate) at the stage's start ([L26257-L26273](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26257-L26273)), and the play loop's BPM object sets the readout ([L12717-L12724](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L12717-L12724)). `map.tempo` holds that readout: by default each stage's BPM over its own window; with `placement: 'lr2'` in LR2's event order (a later stage's `#BPM` from its time zero, and a stage's BPM changes from its last-measure line on dropped, except the last stage's, [L26970-L26976](https://github.com/GOMazk/OpenLR2/blob/583a38503555e59c4bafa49d60b9d0714c9007c2/LR2f.cpp#L26970-L26976)).
-- **For the host.** The result's map gives each stage its keys (for its sound bus and BGA layer), its window, the sound fades and the 3 s BGA crossfade the connection calls for, and whether LR2 announces the stage (only after a BLANK connection), plus the BPM readout (`tempo`) and the judge rank changes (`stageRanks`, for the engine's `stageRanks` option, which the replay records as `chart.judgeRank.stageRanks` so a replay and a re-simulation judge with them). `assetPath` lets the host prefix each stage's file paths. Each stage's `#BACKBMP` comes through `assetPath` as `map.stages[].backBMP`, and the stitched chart's own `#BACKBMP` is the first stage's. The browser's play screens show the shown stage's: an LR2 skin moves it with the stage it announces (after a BLANK connection), keeping the first stage's present / absent ops (194 / 195) as it is set up once; a beatoraja skin moves it at each stage's window. A stage without `#BACKBMP` shows none.
+- **For the host.** The result's map gives each stage its keys (for its sound bus and BGA layer), its window, the sound fades and the 3 s BGA crossfade the connection calls for, and whether LR2 announces the stage (only after a BLANK connection), plus the BPM readout (`tempo`) and the judge rank changes (`stageRanks`, for the engine's `stageRanks` option, which the replay records as `chart.judgeRank.stageRanks` so a replay and a re-simulation judge with them). `assetPath` lets the host prefix each stage's file paths. Each stage's `#BACKBMP` comes through `assetPath` as `map.stages[].backBMP`, and the stitched chart's own `#BACKBMP` is the first stage's. The browser's play screens show the shown stage's: an LR2 skin moves it with the stage it announces (after a BLANK connection), keeping the first stage's present / absent ops (194 / 195) as it is set up once; a beatoraja skin moves it at each stage's window. A stage without `#BACKBMP` shows none. Each stage's `#STAGEFILE` and `#BANNER` come through `assetPath` the same way, with its `#PLAYLEVEL` and `#DIFFICULTY`, as `map.stages[].stageFile`, `banner`, `playLevel` and `difficulty`, and the stitched chart's own are the first stage's, so the decide and play screens show them as the NONSTOP entry, which is built from the first stage's, does ([#1073](https://github.com/nulltask/be-music/issues/1073)). LR2's loader reads none of them while it stitches (OpenLR2 `ParseBMSFile` reads `#PLAYLEVEL` only into its key-mode check) [R], so no stage's value is the source's; the screens do not switch them per stage.
 - **Each stage's own rules** (stitching rule version 4). The stitched chart keeps what a stage would do alone:
   - In bmson output, a BMS stage's keysounds still restart on retrigger (one voice per slot) and its layer images still key out black (`resources.wavSourceFormat` / `bmpSourceFormat`).
   - `#DEFEXRANK` applies in BMS output too: the first stage's becomes the chart's, and a later stage's takes over as `bms-exrank`.
@@ -209,7 +216,7 @@ flowchart TD
 
 ## Finding the stages
 
-`resolveCourseStages(course, lookup)` matches each stage to a local chart: by SHA-256 when the stage has one, else by MD5, as beatoraja's `TableBar` does. A stage carrying both falls back to its MD5 when no chart has the SHA-256. A course with a missing stage is still listed, but it is not `playable`; LR2 shows such a stage as a song you do not own, and beatoraja refuses to start the course.
+`resolveCourseStages(course, lookup)` matches each stage to a local chart: by SHA-256 when the stage has one, else by MD5, as beatoraja's `TableBar` does. A stage carrying both falls back to its MD5 when no chart has the SHA-256. A course with a missing stage is still listed, but it is not `playable`; LR2 shows such a stage as a song you do not own, and beatoraja refuses to start the course. A stage still named only by `path` (an `.n2x` stage the host found no chart for) is missing.
 
 ## Making a course
 
@@ -245,11 +252,11 @@ LR2's RANDOM MIX bar draws a course from the library by level, BPM and stage cou
 
 ```mermaid
 flowchart TD
-    count[Stage count: 1-5, or 2-5 at random] --> first[Stage 1: key mode, level and BPM limits]
+    count[Set stage count] --> first[Draw first stage]
     first -->|none| fail[No course]
-    first --> window[BPM window: stage 1 max BPM ± range]
-    window --> rest[Stages 2+: one random order, one per song folder]
-    rest --> prefer[Each stage: the chart of its folder nearest the favorite level]
+    first --> window[Set BPM window]
+    window --> rest[One chart per folder]
+    rest --> prefer[Match favorite level]
     prefer --> course[RANDOM MIX course]
 ```
 
@@ -362,6 +369,8 @@ A course stage runs on the ruleset's course gauge, not on the single-chart gauge
 
 **`beatoraja`** plays every course on its class gauges (`GrooveGauge.create`): GROOVE and EASY map to `CLASS`, HARD to `EXCLASS`, DEATH to `EXHARDCLASS`. The table set comes from the course's `gauge_*` constraint, or from the play mode when it names none (5 / 10 keys → `5k`, PMS → `9k`, 24 / 48 keys → `24k`, otherwise `7k`). They start at 100 with no TOTAL modifier. **`____`** has no published class gauge, so it uses beatoraja's.
 
+**`plugout`** follows plugout4 -ARCADE EDITION-: expert and nonstop courses scale NORMAL and EASY damage by each stage's note count, and grade courses scale it by the gauge and then play on 24 lives once the gauge empties. Every plugout course gauge starts at 100, never recovers and clears above 0. The tables are in [ADR 0044](./adr/0044-plugout-ruleset.md#course-gauges).
+
 lr2oraja and LR2oraja Endless Dream play courses on beatoraja's `GAUGE_LR2` class gauges with LR2's death border and damage-reduction threshold; how that compares with these rules, and why Be-Music does not follow it, is in [lr2oraja courses](./research/lr2oraja-courses.md).
 
 ### Judgment constraints
@@ -377,7 +386,30 @@ lr2oraja and LR2oraja Endless Dream play courses on beatoraja's `GAUGE_LR2` clas
 
 A survival gauge that empties ends the play there (`PlayerOptions.endOnFailure`, default `true`), so a course stage ends the moment its gauge empties, and the course is failed. The judgment that emptied the gauge is the last one counted.
 
-A stage given up with ESC also ends the course as a failed run. This departs from LR2 on purpose: `LR2body.exe` shows the given-up stage's result as FAILED and, when the gauge is still at 2 % or more and stages remain, goes on to the next stage (the course lamp is FAILED in the end, since a stage was left unplayed); with no GOOD or better judged it returns to the select screen without saving. Be-Music treats ESC as giving up the course.
+A stage given up with ESC does not clear, and what follows is the course gauge's own rule, as the stage failure rule is (`courseGoesOnAfterGivingUp`; a gauge of another source keeps its source's rule, #1171). LR2 and beatoraja differ here:
+
+| Course gauge                                                                             | After a stage given up                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LR2                                                                                      | Goes on to the next stage, starting from the gauge the stage was given up at, while the gauge is at 2 % or more and the stage judged a GOOD or better (`LR2body.exe`). The course lamp is FAILED in the end, since a stage was left unplayed. Otherwise the run ends there. |
+| beatoraja's class gauges (and That-Which-Must-Not-Be-Named's courses, which run on them) | Ends the run as a failed one: `BMSPlayer.stopPlay` fails the stage and fills its gauge log with 0 to the chart's end, and `MusicResult` ends a course whose gauge stands at 0 or less [V].                                                                                  |
+| plugout                                                                                  | Ends the run as a failed one. plugout leaves nothing to follow; this is Be-Music's choice.                                                                                                                                                                                  |
+
+An endless run (RANDOM MIX drawn one stage at a time) always ends on a stage given up, since ESC is how its player stops it. Under an LR2 gauge, a stage given up that judged a GOOD or better shows its result as FAILED first, as `LR2body.exe` does, whether the run goes on or ends there (`givenUpCourseStageShowsResult`); **Skip stage results** skips it, as it skips any stage result. Under any other gauge, and for a stage with no GOOD or better, no stage result shows: the next stage, or the course result, follows at once. Showing none under beatoraja's gauges is Be-Music's narrower choice, since only LR2's screen flow has been checked. Where LR2 returns to the select screen without saving (a stage with no GOOD or better judged), Be-Music ends the run and keeps it as a failed one, as it keeps every play it does not leave to AUTO or a replay.
+
+```mermaid
+flowchart TD
+  esc(["ESC on a course stage"]) --> source{"course gauge's source"}
+  source -- "LR2" --> judged{"GOOD or better judged"}
+  source -- "class gauges, plugout" --> fail["course result: FAILED"]
+  judged -- "yes" --> stage["stage result: FAILED"]
+  judged -- "no" --> fail
+  stage --> holds{"gauge at 2 % or more,\na stage left"}
+  holds -- "yes" --> next["next stage, from the gauge left"]
+  holds -- "no" --> fail
+  next --> lamp["course lamp FAILED at the end"]
+```
+
+Pressing ESC after every note has been judged finishes the stage and continues the course, as in beatoraja’s `BMSPlayer.stopPlay`. For NONSTOP, this applies after the last note of the last stage.
 
 A course stage cannot be ranked as a single-chart play: `checkReplayEligibility` marks it `unranked` as `course-stage`, and the Leaderboard stores such a play without ranking it.
 
@@ -390,12 +422,13 @@ stateDiagram-v2
     [*] --> Stage: nextStage
     Stage --> Stage: recordStage (goes on)
     Stage --> Over: recordStage (gauge empty or last stage)
-    Stage --> Over: giveUp (ESC)
+    Stage --> Stage: giveUp (goes on)
+    Stage --> Over: giveUp (ends run)
     Over --> [*]: buildReplay
 ```
 
 - `nextStage` plans the next stage: its chart with the course's long-note constraint applied, `PlayerOptions.course` with the carry-in, and whether the hi-speed is locked. `playSettings` gives the settings it plays with in place of the player's picks (`resolveCourseStagePlaySettings`: the lane options the course allows, then an LR2 GRADE course's resets).
-- `recordStage` records a stage's replay and says whether the run goes on (`goesOnAfter` asks first); `giveUp` records a stage given up with ESC and ends the run as a failed one.
+- `recordStage` records a stage's replay and says whether the run goes on (`goesOnAfter` asks first); `giveUp` records a stage given up with ESC as failed and returns whether the run goes on (`goesOnAfterGivingUp` asks first).
 - `playSeconds` adds up the stages' play time, a stage given up up to where it was left (`resolveGivenUpPlaySeconds`). `stageExtras` keeps what the host kept of each stage, such as its result graphs.
 - `buildReplay` writes the course replay: the stages played, then every stage never reached with its chart facts, its file hashes and its chart fingerprint.
 
@@ -432,6 +465,7 @@ flowchart TD
 
 - **Which runs count.** A run that keeps a best record (`resolveCourseBestRecordUpdate`: not auto-played, not at another tempo, every stage judged under one ruleset), of a GRADE course, cleared (any lamp but FAILED). An EXPERT or NONSTOP course certifies nothing, whatever it is named.
 - **Which dan.** Read from the course name (`resolveCourseDanRank` in `@be-music/player-engine/records`), after NFKC normalisation: Overjoy; 発狂 (or `insane`) with 皆伝 or a dan; 皆伝; 中伝; a dan (`初段`, `七段`, `7段`, `7th dan`); a kyu (`十級`, `1st kyu`). 段位 (as in 段位認定) is not a dan. A name that names none certifies nothing.
+- **Custom courses.** Dan rank is local progression inferred from the title. Course provenance and certification are unverified. Two GRADE courses that match the same rank both contribute to that ruleset and key mode. If a title contains several rank markers, the recognition order above applies.
 - **The ladder** (`DAN_RANKS`), lowest first: 十級 … 一級, 初段 … 十段, 中伝, 皆伝, 発狂初段 … 発狂十段, 発狂皆伝, Overjoy. A higher rank replaces a lower one; a lower clear leaves the rank alone.
 - **Key mode.** The one the course names (LR2 `line`, a table's `mode`), else the one all its stages' charts share (`resolveDanCourseKeyMode`). A course whose stages differ keeps no rank.
 - **New plays only.** Ranks come from runs played from now on; course records kept before are not read back into ranks.

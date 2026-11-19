@@ -177,6 +177,7 @@ function harness(options: { family?: 'built-in' | 'beatoraja'; beatorajaMounts?:
     replayRecorder: { name: 'be-music-web' },
     selectNavigation: () => AT_COURSE_BAR,
     setStatus: vi.fn<CourseRouteDeps['setStatus']>(),
+    showMissingCourseStages: vi.fn<CourseRouteDeps['showMissingCourseStages']>(),
     startNonstopCourse: vi.fn<CourseRouteDeps['startNonstopCourse']>(async () => {}),
     showSelect: vi.fn<CourseRouteDeps['showSelect']>(async () => {}),
     showDecide: vi.fn<CourseRouteDeps['showDecide']>(async () => {}),
@@ -234,16 +235,17 @@ describe('CourseRoute: starting a course', () => {
     expect(h.courses.takeReturnNavigation()).toBe(AT_COURSE_BAR);
   });
 
-  test('a NEW COURSE bar starts making a course, and a course with a missing stage says why; neither runs', async () => {
+  test('a NEW COURSE bar starts making a course, and a course with a missing stage lists it; neither runs', async () => {
     const h = harness();
     await h.route.startCourse(grade(['a'], { newCourse: true }));
     expect(h.deps.courseMaker.maker.start).toHaveBeenCalledWith('grade');
     expect(h.deps.setStatus).toHaveBeenLastCalledWith('Making a course: decide charts to add them, then save');
+    expect(h.deps.showMissingCourseStages).not.toHaveBeenCalled();
 
-    await h.route.startCourse(
-      grade(['a'], { playable: false, stages: [{ title: 'a', chart: chartEntry('a') }, { title: 'x' }] }),
-    );
+    const missing = grade(['a'], { playable: false, stages: [{ title: 'a', chart: chartEntry('a') }, { title: 'x' }] });
+    await h.route.startCourse(missing);
     expect(h.deps.setStatus).toHaveBeenLastCalledWith('Dan: 1 stage is not in the collection');
+    expect(h.deps.showMissingCourseStages).toHaveBeenCalledWith(missing);
     expect(h.courses.active).toBeUndefined();
     expect(h.courses.takeReturnNavigation()).toBeUndefined();
     expect(h.deps.showDecide).not.toHaveBeenCalled();
@@ -638,7 +640,7 @@ describe('CourseRoute: a course replay', () => {
     expect(h.deps.leaderboard.maybeSubmitCourse).not.toHaveBeenCalled();
   });
 
-  test('a stage the recorded run gave up ends the run as given up', async () => {
+  test('a stage the recorded run gave up and ended on ends the playback there, as given up', async () => {
     const h = harness();
     const log = gradeReplay([stageLog(70), stageLog(50, { aborted: true })]);
     await h.route.startCourseReplay(grade(['a', 'b', 'c']), log);
@@ -647,8 +649,10 @@ describe('CourseRoute: a course replay', () => {
     h.route.continueCourse();
     await vi.waitFor(() => expect(h.deps.playChart).toHaveBeenCalledTimes(2));
     recordCourseStage(h.courses.active!, PLAYED_BACK);
-    expect(h.courses.active!.run.finished).toBe(true);
-    await h.route.showCourseResult();
+    // The recorded run has no third stage, so the playback goes to the course result, whatever LR2's gauge would do.
+    expect(h.route.continueCourse()).toBe(true);
+    await vi.waitFor(() => expect(h.deps.showResult).toHaveBeenCalled());
+    expect(h.deps.playChart).toHaveBeenCalledTimes(2);
     expect(h.deps.showResult.mock.calls[0]![0]).toMatchObject({ cleared: false, lamp: 'FAILED', fromReplay: true });
   });
 

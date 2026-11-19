@@ -438,6 +438,16 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseAPI.parseLR2CourseFile(benchLR2Course);
     },
   });
+  const benchN2XList = `<bmslist>${Array.from(
+    { length: 16 },
+    (_, index) =>
+      `<bms><file>song${index}\\0${index % 4}_chart.n2s</file><condition><target_ex_score>1</target_ex_score></condition></bms>`,
+  ).join('')}</bmslist>`;
+  define('player-engine.course.parseN2XCourseFile', {
+    run: () => {
+      courseAPI.parseN2XCourseFile(benchN2XList, 'bench');
+    },
+  });
   const benchLR2Parsed = courseAPI.parseLR2CourseFile(benchLR2Course)[0]!;
   define('player-engine.course.countLR2UnplayedStages', {
     run: () => {
@@ -1177,10 +1187,27 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  define('player-engine.arrangeChartPlayLanes', {
+    run() {
+      const notes = ['11', '12', '13', '14', '15', '16', '21', '22', '23', '24', '25', '26'].map((channel) => ({
+        channel,
+      }));
+      playerAPI.arrangeChartPlayLanes([notes], 'ALL+', '10', () => 0.5);
+    },
+  });
   define('player-engine.resolveEffectiveChartPlayOptions', {
     run() {
       playerAPI.resolveEffectiveChartPlayOptions(
         { version: 1, options: { random: 'MIRROR', notes: 'DBLCOPY' } },
+        { playVariant: '7', course: true },
+      );
+    },
+  });
+  define('player-engine.replay.resolveChartPlayProgram', {
+    run() {
+      replayAPI.resolveChartPlayProgram(
+        { version: 3, options: { random: 'MIRROR' } },
+        { notes: 'DBLCOPY' },
         { playVariant: '7', course: true },
       );
     },
@@ -1261,6 +1288,20 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       courseAPI.isCourseStageFailed('beatoraja', { final: 1 });
     },
   });
+  define('player-engine.course.courseGoesOnAfterGivingUp', {
+    run: () => {
+      const judge = { pgreat: 10, great: 2, good: 1 };
+      courseAPI.courseGoesOnAfterGivingUp('lr2', { gauge: { final: 40 }, judge });
+      courseAPI.courseGoesOnAfterGivingUp('beatoraja', { gauge: { final: 40 }, judge });
+    },
+  });
+  define('player-engine.course.givenUpCourseStageShowsResult', {
+    run: () => {
+      const judge = { pgreat: 10, great: 2, good: 1 };
+      courseAPI.givenUpCourseStageShowsResult('lr2', { gauge: {}, judge });
+      courseAPI.givenUpCourseStageShowsResult('beatoraja', { gauge: {}, judge });
+    },
+  });
   define('player-engine.ruleset.resolveCourseClearLamp', {
     run: () => {
       rulesetAPI.resolveCourseClearLamp({
@@ -1277,6 +1318,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.ruleset.resolveMissCount', {
     run: () => {
       rulesetAPI.resolveMissCount({ bad: 3, poor: 5, emptyPoor: 2 }, 10);
+    },
+  });
+  define('player-engine.ruleset.resolvePlugoutScore', {
+    run() {
+      rulesetAPI.resolvePlugoutScore({ pgreat: 900, great: 80, good: 20 }, 1000);
     },
   });
   define('player-engine.ruleset.resolveGaugeEndOnFailure', {
@@ -1314,6 +1360,26 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       rulesetAPI.isPracticeGaugeType('HAZARD', '____');
     },
   });
+  define('player-engine.ruleset.splitPracticeGaugePick', {
+    run() {
+      rulesetAPI.splitPracticeGaugePick('GROOVE');
+      rulesetAPI.splitPracticeGaugePick('beatoraja:ASSIST-EASY');
+      rulesetAPI.splitPracticeGaugePick('lr2:ASSIST-EASY');
+    },
+  });
+  define('player-engine.ruleset.isPracticeGaugePick', {
+    run() {
+      rulesetAPI.isPracticeGaugePick('beatoraja:ASSIST-EASY', 'lr2');
+      rulesetAPI.isPracticeGaugePick('ASSIST-EASY', 'lr2');
+      rulesetAPI.isPracticeGaugePick('HARD');
+    },
+  });
+  define('player-engine.ruleset.qualifyPracticeGaugePick', {
+    run() {
+      rulesetAPI.qualifyPracticeGaugePick('beatoraja', 'ASSIST-EASY');
+      rulesetAPI.qualifyPracticeGaugePick('lr2', 'G-ATTACK');
+    },
+  });
   define('player-engine.ruleset.practiceReadsJudgeRankAndTotal', {
     run() {
       rulesetAPI.practiceReadsJudgeRankAndTotal('lr2');
@@ -1323,6 +1389,31 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
   define('player-engine.ruleset.resolveGaugeTypes', {
     run: () => {
       rulesetAPI.resolveGaugeTypes('beatoraja');
+    },
+  });
+  define('player-engine.ruleset.splitGaugePick', {
+    run() {
+      rulesetAPI.splitGaugePick('lr2:HARD');
+    },
+  });
+  define('player-engine.ruleset.isGaugePick', {
+    run() {
+      rulesetAPI.isGaugePick('beatoraja:EX-HARD');
+    },
+  });
+  define('player-engine.ruleset.gaugePickType', {
+    run() {
+      rulesetAPI.gaugePickType('lr2:HARD');
+    },
+  });
+  define('player-engine.ruleset.resolveGaugePickSource', {
+    run() {
+      rulesetAPI.resolveGaugePickSource('HARD', 'beatoraja');
+    },
+  });
+  define('player-engine.ruleset.qualifyGaugePick', {
+    run() {
+      rulesetAPI.qualifyGaugePick('lr2', 'HARD');
     },
   });
   define('player-engine.ruleset.isGaugeType', {

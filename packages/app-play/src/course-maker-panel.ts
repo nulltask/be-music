@@ -25,6 +25,7 @@ import {
 import { COURSE_NAME_PROMPT, type CourseMaker } from '@be-music/player-browser/collection';
 import { formatLR2RandomMixSetting } from '@be-music/skin-lr2/state';
 import { playerText } from './player-copy.ts';
+import { dialogShortcutAria, dialogShortcutHint } from './ui/dialog-shortcuts.ts';
 
 /** LR2's names of the NONSTOP connections. */
 export const CONNECTION_LABELS: Readonly<Record<NonstopConnection, string>> = {
@@ -393,6 +394,8 @@ export class CourseMakerPanel {
             data-size="sm"
             data-variant="outline"
             ?disabled=${courses.length === 0}
+            data-dialog-shortcut="l"
+            aria-keyshortcuts=${dialogShortcutAria('l')}
             @click=${() =>
               // LR2 plays a course's first five stages: a longer course is written as those.
               download(
@@ -400,7 +403,7 @@ export class CourseMakerPanel {
                 serializeLR2CourseFile(this.maker.courses, { maxStages: LR2_MAX_PLAYED_STAGES }),
               )}
           >
-            ${copy.exportLr2}
+            ${copy.exportLr2}${dialogShortcutHint('l')}
           </button>
           <button
             class="btn"
@@ -408,12 +411,21 @@ export class CourseMakerPanel {
             data-size="sm"
             data-variant="outline"
             ?disabled=${!courses.some((course) => course.kind !== 'nonstop')}
+            data-dialog-shortcut="b"
+            aria-keyshortcuts=${dialogShortcutAria('b')}
             @click=${() => download('my-courses.json', serializeBeatorajaCourseFile(this.maker.courses), 'application/json')}
           >
-            ${copy.exportBeatoraja}
+            ${copy.exportBeatoraja}${dialogShortcutHint('b')}
           </button>
-          <button class="btn" type="button" data-size="sm" @click=${() => this.dialog.close()}>
-            ${playerText().shell.close}
+          <button
+            class="btn"
+            type="button"
+            data-size="sm"
+            data-dialog-shortcut="cancel"
+            aria-keyshortcuts=${dialogShortcutAria('cancel')}
+            @click=${() => this.dialog.close()}
+          >
+            ${playerText().shell.close}${dialogShortcutHint('cancel')}
           </button>
         </div>
       </div>`,

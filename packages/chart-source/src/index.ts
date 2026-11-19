@@ -13,10 +13,13 @@ export interface BmsonExtraFields {
 }
 
 import { normalizeASCIIBase36Code, normalizeASCIIBase62Code } from '@be-music/shared-utils/core';
+import { cloneLRXExtensions, type LRXEventExtensions, type LRXExtensions } from './lrx.ts';
+
+export { LRX_TICKS_PER_BEAT, type LRXBGACue, type LRXEventExtensions, type LRXExtensions } from './lrx.ts';
 
 export const BMS_JSON_FORMAT = 'be-music-json/0.1.0' as const;
 
-export type BeMusicSourceFormat = 'bms' | 'bmson' | 'json';
+export type BeMusicSourceFormat = 'bms' | 'bmson' | 'lrx' | 'json';
 
 export type BeMusicPlayLevel = number | string;
 
@@ -97,7 +100,11 @@ export interface BeMusicEvent {
   channel: string;
   position: BeMusicPosition;
   value: string;
+  /** Relative BMS source line order for objects on normal note channels. */
+  bmsLineOrder?: number;
   bmson?: BmsonEventExtensions;
+  /** LRX note values (sound parameters, long-note length, chain notes); only on events of an LRX chart. */
+  lrx?: LRXEventExtensions;
 }
 
 export interface BmsonInfoExtensions extends BmsonExtraFields {
@@ -355,6 +362,11 @@ export interface BMSExtensions {
    */
   wavCmds: string[];
   exWAV: Record<string, string>;
+  /**
+   * Slots whose `#EXWAVxx` a later `#WAVxx` redefines (#1197): nanasigroove keeps one table for both, so the line later
+   * in the file wins. The `exWAV` declarations stay as authored; `@be-music/chart-model` skips these slots' EXWAV.
+   */
+  exWAVOverridden?: string[];
   exBMP: Record<string, string>;
   bga: Record<string, string>;
   scroll: Record<string, number>;
@@ -404,7 +416,9 @@ export interface ChartDiagnostic {
     | 'stacked-note-length'
     | 'missing-reference'
     | 'unsupported-option'
-    | 'invalid-option';
+    | 'invalid-option'
+    | 'unsupported-lane-type'
+    | 'unsupported-channel';
   readonly message: string;
   readonly subject?: string;
   readonly position:
@@ -428,6 +442,8 @@ export interface BeMusicJSON {
   events: BeMusicEvent[];
   bms: BMSExtensions;
   bmson: BmsonExtensions;
+  /** The LRX values with no BMS counterpart; only on a chart read from LRX. */
+  lrx?: LRXExtensions;
   preservation: BeMusicPreservation;
 }
 
@@ -575,6 +591,7 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
       changeOption: { ...json.bms.changeOption },
       songText: { ...json.bms.songText },
       exWAV: { ...json.bms.exWAV },
+      ...(json.bms.exWAVOverridden !== undefined ? { exWAVOverridden: [...json.bms.exWAVOverridden] } : {}),
       exBMP: { ...json.bms.exBMP },
       bga: { ...json.bms.bga },
       scroll: { ...json.bms.scroll },
@@ -621,6 +638,7 @@ export function cloneJSON(json: BeMusicJSON): BeMusicJSON {
         poorEvents,
       },
     },
+    ...(json.lrx !== undefined ? { lrx: cloneLRXExtensions(json.lrx) } : {}),
     preservation: {
       bms: {
         sourceLines: bmsSourceLines,
@@ -847,13 +865,18 @@ export function ensureMeasure(json: BeMusicJSON, index: number): BeMusicMeasure 
 }
 
 function cloneEvent(event: BeMusicEvent): BeMusicEvent {
-  return {
+  // Optional fields are assigned, not spread, so clones share the hidden classes of parsed events; extra shapes slow
+  // every event comparison. The key order matches the declaration's.
+  const cloned: BeMusicEvent = {
     measure: event.measure,
     channel: event.channel,
     position: [event.position[0], event.position[1]],
     value: event.value,
-    bmson: event.bmson ? { ...event.bmson, ...copyExtras(event.bmson) } : undefined,
   };
+  if (event.bmsLineOrder !== undefined) cloned.bmsLineOrder = event.bmsLineOrder;
+  cloned.bmson = event.bmson ? { ...event.bmson, ...copyExtras(event.bmson) } : undefined;
+  if (event.lrx !== undefined) cloned.lrx = { ...event.lrx };
+  return cloned;
 }
 
 function cloneControlFlowEntry(entry: BMSControlFlowEntry): BMSControlFlowEntry {

@@ -46,8 +46,23 @@ describe('resolveChartNotesOption', () => {
     ['DBLCOPY', '7', false, 'DBLCOPY'],
     ['DBLCOPY', '7', true, 'DOUBLE'],
     ['DBLCOPY', '10', false, 'DOUBLE'],
+    ['DOUBLE', '24', false, undefined],
   ] as const)('%s on %s KEY (course %s) → %s', (option, playVariant, course, expected) => {
     expect(resolveChartNotesOption(option, { playVariant, course })).toBe(expected);
+  });
+
+  test('versions 1 and 2 double every variant with key lanes', () => {
+    expect(resolveChartNotesOption('DOUBLE', { playVariant: '24', course: false }, true)).toBe('DOUBLE');
+    expect(resolveChartNotesOption('DOUBLE', { playVariant: 'generic-6', course: false }, true)).toBeUndefined();
+    expect(
+      resolveEffectiveChartPlayOptions(
+        { version: 3, options: { notes: 'DOUBLE' } },
+        { playVariant: '24', course: false },
+      ),
+    ).toEqual({
+      program: { version: 3, options: {} },
+      diagnostics: [{ code: 'unsupported-option', declaration: '774:NOTES_DOUBLE' }],
+    });
   });
 
   test('the play variant a copy plays as', () => {
@@ -82,7 +97,7 @@ describe('resolveChartNotesOption', () => {
   });
 });
 
-describe('doubleChartNotes', () => {
+describe('doubleChartNotes (versions 1 and 2)', () => {
   test('adds each key note on its mirror lane where that lane is free', () => {
     // 7 KEY: 11↔19, 12↔18, 13↔15; 14 is the middle key; 16 is the scratch.
     const notes = [note('11', 1), note('14', 1), note('16', 1), note('12', 2), note('18', 2), note('13', 3, 4)];
@@ -120,13 +135,23 @@ describe('doubleChartNotes', () => {
 });
 
 describe('copyChartNotes', () => {
-  test('copies a 7 KEY chart onto the 2P side as its mirror image, mines and scratch included', () => {
-    const chart = resolveChart(parseBMS('#BPM 120\n#00111:01\n#00116:01\n#00113:00010000\n#00119:00000001\n#001D2:0A'));
-    const notes = chart.notes.map((entry) => ({ ...entry, judged: false }) as TimedPlayableNote);
-    const mines = chart.mines.map((entry) => ({ ...entry, judged: false, mine: true }) as TimedLandmineNote);
+  const chart = resolveChart(parseBMS('#BPM 120\n#00111:01\n#00116:01\n#00113:00010000\n#00119:00000001\n#001D2:0A'));
+  const objects = () => ({
+    notes: chart.notes.map((entry) => ({ ...entry, judged: false }) as TimedPlayableNote),
+    mines: chart.mines.map((entry) => ({ ...entry, judged: false, mine: true }) as TimedLandmineNote),
+  });
+
+  test('copies a 7 KEY chart onto the 2P side as its mirror image, scratch included and mines left on 1P', () => {
+    const { notes, mines } = objects();
     const copied = copyChartNotes(chart, notes, mines, []);
     expect(copied.chart.playVariant).toBe('14');
     expect(notes.map((entry) => entry.channel).sort()).toEqual(['11', '13', '16', '19', '21', '25', '26', '29']);
+    expect(mines.map((entry) => entry.channel)).toEqual(['12']);
+  });
+
+  test('versions 1 and 2 copy the mines too', () => {
+    const { notes, mines } = objects();
+    copyChartNotes(chart, notes, mines, [], true);
     expect(mines.map((entry) => entry.channel).sort()).toEqual(['12', '28']);
     expect(() => copyChartNotes(resolveChart(parseBMS('#PLAYER 3\n#00111:01\n#00121:01')), [], [], [])).toThrow();
   });
@@ -154,8 +179,44 @@ describe('preparePlaybackChart with a chart NOTES conversion', () => {
     ]);
   });
 
-  test('DBLCOPY doubles, then copies the doubled side', () => {
+  const channels = (prepared: { notes: readonly TimedPlayableNote[] }) =>
+    prepared.notes.map((entry) => entry.channel).sort();
+
+  test('DOUBLE copies the lanes as nanasigroove does', () => {
+    // 11 at 2 s, 12 at 3 s, 19 at 3.5 s: 13 and 15 get 11, 14 gets 12, 19 gets 11 and 15 gets 19 through it.
+    const prepared = preparePlaybackChart(source, { chartNotes: 'DOUBLE' });
+    expect(prepared.chartNotesChangedObjectCount).toBe(5);
+    expect(lanes(prepared.notes)).toEqual(['2:11', '2:13', '2:15', '2:16', '2:19', '3:12', '3:14', '3.5:15', '3.5:19']);
+  });
+
+  test('DBLCOPY copies, then doubles both sides of the double-play chart', () => {
     const prepared = preparePlaybackChart(source, { chartNotes: 'DBLCOPY' });
+    expect(prepared.resolvedChart.playVariant).toBe('14');
+    expect(prepared.chartNotesChangedObjectCount).toBe(14);
+    expect(channels(prepared)).toEqual([
+      '11',
+      '12',
+      '13',
+      '14',
+      '15',
+      '15',
+      '16',
+      '19',
+      '19',
+      '21',
+      '23',
+      '24',
+      '25',
+      '25',
+      '26',
+      '28',
+      '29',
+      '29',
+    ]);
+  });
+
+  test('versions 1 and 2: DBLCOPY doubles, then copies the doubled side', () => {
+    const prepared = preparePlaybackChart(source, { chartNotes: 'DBLCOPY', chartNotesLegacy: true });
     expect(prepared.notes.map((entry) => entry.channel).sort()).toEqual([
       '11',
       '11',
@@ -180,7 +241,13 @@ describe('preparePlaybackChart with a chart NOTES conversion', () => {
     expect(copied.chartNotes).toBeUndefined();
     const doubled = preparePlaybackChart(source, { chartNotes: 'DBLCOPY', course: { kind: 'grade' } });
     expect(doubled.chartNotes).toBe('DOUBLE');
-    expect(doubled.notes).toHaveLength(7);
+    expect(doubled.notes).toHaveLength(9);
+    const legacy = preparePlaybackChart(source, {
+      chartNotes: 'DBLCOPY',
+      chartNotesLegacy: true,
+      course: { kind: 'grade' },
+    });
+    expect(legacy.notes).toHaveLength(7);
   });
 });
 

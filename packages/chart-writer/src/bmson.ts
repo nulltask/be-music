@@ -1,3 +1,4 @@
+import { resolveLandmineDamage } from '@be-music/chart-model';
 import { collectBmsonExtraFields, type JSONFields } from '@be-music/chart-source';
 import { resolveChartLongNoteMode } from '@be-music/chart-model';
 import {
@@ -14,7 +15,7 @@ import {
   resolveLNOBJLongNotes,
   sortEvents,
 } from '@be-music/chart-model';
-import { parseBmson } from '@be-music/chart-parser';
+import { parseBmson } from '@be-music/chart-parser/core';
 import {
   normalizeChannel,
   normalizeObjectKey,
@@ -85,10 +86,20 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
   // BPM / STOP slot when re-emitted as bmson.
   const idBase = resolveBMSBase(json);
 
+  // BMS objects bmson has no field for, counted for `onDiagnostic`.
+  let speedObjects = 0;
+  let exRankObjects = 0;
+  // BMS BPM and STOP objects the player plays as LR2 does but bmson cannot hold (`collectTempoChanges`,
+  // `collectStopChanges`): a negative or undefined `#BPMxx`, and a STOP without a positive `#STOPxx`.
+  let reversingBPMObjects = 0;
+  let unsetStopObjects = 0;
+  const playsBMSTimingRules = json.sourceFormat === 'bms';
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
     const isSampleChannel = isSampleTriggerChannel(channel);
     if (!isSampleChannel && channel !== '03' && channel !== '08' && channel !== '09' && channel !== 'SC') {
+      if (channel === 'SP') speedObjects += 1;
+      else if (channel === 'A0') exRankObjects += 1;
       continue;
     }
 
@@ -189,6 +200,9 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
       const bpm = json.resources.bpm[normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson')];
       if (typeof bpm === 'number' && bpm > 0) {
         bpmEvents.push({ ...collectBmsonExtraFields(event.bmson?.extraFields, 'bpm'), y, bpm });
+      } else if (playsBMSTimingRules && (bpm === undefined || (Number.isFinite(bpm) && bpm < 0))) {
+        // A zero `#BPMxx` is ignored in play as well, so only these change the chart.
+        reversingBPMObjects += 1;
       }
       continue;
     }
@@ -201,6 +215,8 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
           y,
           duration: Math.round((stopUnits * resolution) / 48),
         });
+      } else if (playsBMSTimingRules) {
+        unsetStopObjects += 1;
       }
       continue;
     }
@@ -223,7 +239,7 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
   const bmson: Record<string, unknown> = {
     ...collectBmsonExtraFields(json.bmson.extraFields, 'root'),
     version: resolveBmsonVersionForOutput(json),
-    info: createBmsonInfoForOutput(json, resolution, modeHint),
+    info: createBmsonInfoForOutput(json, resolution, modeHint, options.onDiagnostic),
     lines: mapBmsonLineValues(
       resolveBmsonLinesForOutput(json, resolution),
       json.bmson.lineExtraFields,
@@ -244,6 +260,11 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
   if (bga) {
     bmson.bga = bga;
   }
+  reportBMSOnlyDirectives(
+    json,
+    { speedObjects, exRankObjects, reversingBPMObjects, unsetStopObjects },
+    options.onDiagnostic,
+  );
 
   return `${JSON.stringify(bmson, null, indent)}\n`;
 }
@@ -456,7 +477,12 @@ function resolveBmsonVersionForOutput(json: BeMusicJSON): string {
   return '1.0.0';
 }
 
-function createBmsonInfoForOutput(json: BeMusicJSON, resolution: number, modeHint: string): Record<string, unknown> {
+function createBmsonInfoForOutput(
+  json: BeMusicJSON,
+  resolution: number,
+  modeHint: string,
+  report?: ChartExportDiagnosticHandler,
+): Record<string, unknown> {
   const info = json.bmson.info;
   const metadataPlayLevel = resolveBmsonCompatiblePlayLevel(json.metadata.playLevel);
   const output: Record<string, unknown> = {
@@ -490,6 +516,15 @@ function createBmsonInfoForOutput(json: BeMusicJSON, resolution: number, modeHin
   const total = resolveBmsonTotalForOutput(json);
   if (total !== undefined) {
     output.total = total;
+  } else if (
+    typeof json.metadata.total === 'number' &&
+    Number.isFinite(json.metadata.total) &&
+    json.metadata.total > 0
+  ) {
+    report?.({
+      code: 'total',
+      message: `#TOTAL ${json.metadata.total} is an absolute gauge TOTAL, which bmson total (a percentage of the player's default) cannot express; no total is written and the player's default applies.`,
+    });
   }
 
   if (typeof info.backImage === 'string') {
@@ -569,6 +604,46 @@ function resolveBmsonTotalForOutput(json: BeMusicJSON): number | undefined {
     return total;
   }
   return undefined;
+}
+
+/**
+ * Reports the BMS directives bmson has no field for, which the output leaves out: `#STP` stops, `#EXRANKxx` changes,
+ * negative or undefined `#BPMxx` (LR2's reverse scroll) and STOPs without a positive `#STOPxx` (all four change
+ * judging), and `SPEED` changes (the scroll).
+ */
+function reportBMSOnlyDirectives(
+  json: BeMusicJSON,
+  counts: { speedObjects: number; exRankObjects: number; reversingBPMObjects: number; unsetStopObjects: number },
+  report: ChartExportDiagnosticHandler | undefined,
+): void {
+  if (report === undefined) return;
+  const { speedObjects, exRankObjects, reversingBPMObjects, unsetStopObjects } = counts;
+  const stops = (json.bms.stp ?? []).filter((stp) => typeof stp === 'string' && stp.length > 0).length;
+  if (stops > 0)
+    report({
+      code: 'stp',
+      message: `${stops} #STP stop(s) are left out: bmson has no field for them, so every later note comes earlier.`,
+    });
+  if (exRankObjects > 0)
+    report({
+      code: 'exrank',
+      message: `${exRankObjects} #EXRANK change(s) (channel A0) are left out: bmson has no field for them, so the judgment rank stays at judge_rank.`,
+    });
+  if (reversingBPMObjects > 0)
+    report({
+      code: 'bpm',
+      message: `${reversingBPMObjects} BPM change(s) to a negative or undefined #BPM (channel 08) are left out: bmson has no reverse scroll, so the chart keeps its previous BPM and never reverses.`,
+    });
+  if (unsetStopObjects > 0)
+    report({
+      code: 'stop',
+      message: `${unsetStopObjects} STOP(s) without a positive #STOP (channel 09) are left out: bmson has no negative stop, so the notes after each stay where they are instead of coming 1/192 of a measure earlier.`,
+    });
+  if (speedObjects > 0)
+    report({
+      code: 'speed',
+      message: `${speedObjects} SPEED change(s) (channel SP) are left out: bmson has no field for them, so the scroll speed does not change.`,
+    });
 }
 
 function resolveBmsonCompatiblePlayLevel(value: BeMusicJSON['metadata']['playLevel']): number | undefined {
@@ -828,7 +903,6 @@ function laneExtensionChannelToPlayableChannel(channel: string): string | undefi
 
 /** BMS mines explode with `#WAV00`; their object value is the damage. */
 export const BMS_MINE_SAMPLE_KEY = '00';
-const BASE36_MINE_VALUE_PATTERN = /^[0-9A-Z]{2}$/;
 export const BMSON_LONG_NOTE_TYPES: ReadonlySet<number> = new Set([1, 2, 3]);
 
 interface BMSLongNotesForBmsonOutput {
@@ -846,7 +920,7 @@ function resolveBMSLongNotesForBmsonOutput(json: BeMusicJSON): BMSLongNotesForBm
   const lnobj = resolveLNOBJLongNotes(json);
   const startToEndBeat = new Map(lnobj.startToEndBeat);
   const endEvents = new Set(lnobj.endEvents);
-  const legacy = resolveBMSLongNotes(json, { inferLNTypeWhenMissing: true });
+  const legacy = resolveBMSLongNotes(json);
   for (const note of legacy.notes) {
     if (note.endBeat !== undefined) {
       startToEndBeat.set(note.event, note.endBeat);
@@ -859,24 +933,11 @@ function resolveBMSLongNotesForBmsonOutput(json: BeMusicJSON): BMSLongNotesForBm
 }
 
 /**
- * The bmson `damage` of a mine, as Be-Music's player resolves it: an authored `bmson.damage` wins; a BMS (or JSON)
- * mine's value is its damage read in base 36 (LR2 / beatoraja, no halving); otherwise `damage` is left out, which
- * deals the same default as an invalid BMS value.
+ * Preserve explicit damage and materialize the BMS fallback when converting to bmson.
  */
 function resolveMineDamageForBmsonOutput(json: BeMusicJSON, event: BeMusicEvent, idBase: 36 | 62): number | undefined {
-  const authored = event.bmson?.damage;
-  if (typeof authored === 'number' && Number.isFinite(authored) && authored >= 0) {
-    return authored;
-  }
-  if (json.sourceFormat === 'bmson') {
-    return undefined;
-  }
-  const value = normalizeObjectKey(event.value, idBase);
-  if (!BASE36_MINE_VALUE_PATTERN.test(value)) {
-    return undefined;
-  }
-  const damage = Number.parseInt(value, 36);
-  return damage > 0 ? damage : undefined;
+  if (json.sourceFormat === 'bmson') return event.bmson?.damage;
+  return resolveLandmineDamage(event, idBase, json.sourceFormat);
 }
 
 /**

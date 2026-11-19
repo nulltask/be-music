@@ -102,11 +102,12 @@ jobs:
             run: vp run check
           - task: build
             run: vp run build
-          # The unit tests are the longest job; two runners take half of the test files each.
-          - task: test 1/2
-            run: vp test run --shard=1/2
-          - task: test 2/2
-            run: vp test run --shard=2/2
+          - task: test 1/3
+            run: vp test run --shard=1/3
+          - task: test 2/3
+            run: vp test run --shard=2/3
+          - task: test 3/3
+            run: vp test run --shard=3/3
 
     steps:
       - name: Checkout
@@ -131,188 +132,6 @@ jobs:
   # Per-case time is longer than the local default so tinybench gets enough samples;
   # compare treats the median change as the verdict, not the per-case count.
   # Per-case lists also compare median ops/s (tinybench p50), not mean throughput.
-  benchmark-pr:
-    name: Benchmark (PR)
-    needs: changes
-    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' &&
-      (github.base_ref == 'devel' || github.base_ref == 'main') &&
-      needs.changes.outputs.bench_changed == 'true'
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 75
-    env:
-      BENCH_TIME_MS: 50
-      BENCH_WARMUP_TIME_MS: 25
-      BENCH_REPEATS: 3
-      BENCH_REGRESSION_THRESHOLD: 8
-    permissions:
-      contents: read
-      pull-requests: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
-      # `pnpm`, and caches the package store.
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@cab1ab9eaff52d4857875f4f2c016e36af8f2c76 # v1.22.0
-        with:
-          node-version-file: .node-version
-          cache: true
-          run-install: false
-
-      - name: Select benchmark packages
-        id: scope
-        shell: bash
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
-            git ls-files > "$RUNNER_TEMP/bench-changed-files"
-          else
-            git diff --no-renames --name-only "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/bench-changed-files"
-          fi
-          packages="$(node --conditions=source scripts/bench/affected-packages.ts < "$RUNNER_TEMP/bench-changed-files")"
-          echo "packages=$packages" >> "$GITHUB_OUTPUT"
-          if [ -z "$packages" ]; then
-            echo "No benchmarked runtime packages changed; measurement skipped." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "Benchmarking $packages: 3 paired runs per revision." >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Detect benchmark support
-        if: steps.scope.outputs.packages != ''
-        id: detect-bench
-        shell: bash
-        run: |
-          set -euo pipefail
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          BASE_PKG_JSON="$(mktemp)"
-          trap 'rm -f "$BASE_PKG_JSON"' EXIT
-          if ! git show "${BASE_SHA}:package.json" > "$BASE_PKG_JSON" 2>/dev/null; then
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); process.exit(pkg.scripts && pkg.scripts['bench'] ? 0 : 1);" "$BASE_PKG_JSON"; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Install dependencies
-        if: steps.scope.outputs.packages != ''
-        run: vp install
-
-      # Head and base take turns (head, base, head, base, …), so a slow stretch on the shared runner slows both sides
-      # alike; the comparison then reads each side's run-to-run spread to tell a change from noise.
-      - name: Prepare base worktree
-        id: prepare-base
-        if: steps.scope.outputs.packages != '' && steps.detect-bench.outputs.available == 'true'
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -euo pipefail
-          BASE_DIR="${RUNNER_TEMP}/bench-base"
-          git worktree add --detach "$BASE_DIR" "${{ github.event.pull_request.base.sha }}"
-          (cd "$BASE_DIR" && pnpm install --frozen-lockfile --prefer-offline)
-          echo "dir=$BASE_DIR" >> "$GITHUB_OUTPUT"
-
-      - name: Run benchmarks (interleaved)
-        if: steps.scope.outputs.packages != ''
-        id: run-bench
-        shell: bash
-        env:
-          BASE_DIR: ${{ steps.prepare-base.outputs.dir }}
-          BENCH_PACKAGES: ${{ steps.scope.outputs.packages }}
-        run: |
-          set -euo pipefail
-          mkdir -p tmp/bench/head-runs tmp/bench/base-runs
-          base_ok=false
-          if [ -n "${BASE_DIR:-}" ]; then base_ok=true; fi
-          for run_index in $(seq 1 "$BENCH_REPEATS"); do
-            BENCH_GIT_SHA="${{ github.event.pull_request.head.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
-            if [ "$base_ok" = true ]; then
-              if ! (cd "$BASE_DIR" && BENCH_GIT_SHA="${{ github.event.pull_request.base.sha }}" pnpm run bench --output "$GITHUB_WORKSPACE/tmp/bench/base-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"); then
-                echo "::warning::The base benchmark failed; the report shows the head only."
-                base_ok=false
-                rm -f tmp/bench/base-runs/*.json
-              fi
-            fi
-          done
-          echo "base_ok=$base_ok" >> "$GITHUB_OUTPUT"
-
-      - name: Aggregate benchmark snapshots
-        if: steps.scope.outputs.packages != ''
-        shell: bash
-        run: |
-          set -euo pipefail
-          pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
-          if [ "${{ steps.run-bench.outputs.base_ok }}" = true ]; then
-            pnpm run bench:aggregate -- --output tmp/bench/base.json tmp/bench/base-runs/*.json
-          fi
-
-      - name: Generate benchmark report
-        if: steps.scope.outputs.packages != ''
-        shell: bash
-        run: |
-          set -euo pipefail
-          # The benchmarked packages this change touches, listed first in the report.
-          CHANGED_PACKAGES="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" -- packages 2>/dev/null | sed -n 's#^packages/\([^/]*\)/.*#\1#p' | sort -u | paste -sd, - || true)"
-          args=(--head tmp/bench/head.json --output tmp/bench/pr-benchmark.md --summary tmp/bench/pr-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12 --repository-url "${{ github.server_url }}/${{ github.repository }}" --changed-packages "$CHANGED_PACKAGES")
-          if [ -f tmp/bench/base.json ]; then
-            args+=(--base tmp/bench/base.json)
-          fi
-          pnpm run bench:compare "${args[@]}"
-
-      - name: Post benchmark comment
-        if: steps.scope.outputs.packages != ''
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          retries: 3
-          script: |
-            const fs = require('node:fs');
-            const marker = '<!-- be-music-exports-benchmark -->';
-            const body = fs.readFileSync('tmp/bench/pr-benchmark.md', 'utf8').trim();
-            const issue_number = context.issue.number;
-            const { owner, repo } = context.repo;
-
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner,
-              repo,
-              issue_number,
-              per_page: 100,
-            });
-
-            const existing = comments.find((comment) => {
-              return (
-                comment.user?.type === 'Bot' &&
-                typeof comment.body === 'string' &&
-                comment.body.includes(marker)
-              );
-            });
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number,
-                body,
-              });
-            }
-
-  # Same-VM pairing as benchmark-pr; do not split base/head across jobs.
   benchmark-push:
     name: Benchmark (Push)
     needs: changes
@@ -322,10 +141,12 @@ jobs:
     env:
       BENCH_TIME_MS: 50
       BENCH_WARMUP_TIME_MS: 25
-      BENCH_REPEATS: 3
+      BENCH_REPEATS: 5
       BENCH_REGRESSION_THRESHOLD: 8
+      BENCH_ISSUE_THRESHOLD: 20
     permissions:
       contents: write
+      issues: write
 
     steps:
       - name: Checkout
@@ -361,27 +182,32 @@ jobs:
           if [ -z "$packages" ]; then
             echo "No benchmarked runtime packages changed; measurement skipped." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "Benchmarking $packages: 3 paired runs per revision." >> "$GITHUB_STEP_SUMMARY"
+            echo "Benchmarking $packages: $BENCH_REPEATS paired runs." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Detect benchmark support
         if: steps.scope.outputs.packages != ''
         id: detect-bench
         shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          BASE_SHA="${{ github.event.before }}"
-          ZERO_SHA="0000000000000000000000000000000000000000"
-          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "$ZERO_SHA" ]; then
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            # The new main tip is the head. Compare it with main before this push.
+            BASE_SHA="$(git rev-parse --verify --quiet "${BEFORE_SHA}^{commit}" || true)"
+          else
+            git fetch --no-tags origin refs/heads/main
+            BASE_SHA="$(git rev-parse --verify 'FETCH_HEAD^{commit}')"
           fi
+          echo "BENCH_BASE_SHA=$BASE_SHA" >> "$GITHUB_ENV"
           BASE_PKG_JSON="$(mktemp)"
           trap 'rm -f "$BASE_PKG_JSON"' EXIT
-          if ! git show "${BASE_SHA}:package.json" > "$BASE_PKG_JSON" 2>/dev/null; then
+          if [ -z "$BASE_SHA" ] || ! git show "${BASE_SHA}:package.json" > "$BASE_PKG_JSON" 2>/dev/null; then
             echo "available=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "Benchmark baseline (main): $BASE_SHA" >> "$GITHUB_STEP_SUMMARY"
           if node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); process.exit(pkg.scripts && pkg.scripts['bench'] ? 0 : 1);" "$BASE_PKG_JSON"; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
@@ -402,7 +228,7 @@ jobs:
         run: |
           set -euo pipefail
           BASE_DIR="${RUNNER_TEMP}/bench-base"
-          git worktree add --detach "$BASE_DIR" "${{ github.event.before }}"
+          git worktree add --detach "$BASE_DIR" "$BENCH_BASE_SHA"
           (cd "$BASE_DIR" && pnpm install --frozen-lockfile --prefer-offline)
           echo "dir=$BASE_DIR" >> "$GITHUB_OUTPUT"
 
@@ -421,7 +247,7 @@ jobs:
           for run_index in $(seq 1 "$BENCH_REPEATS"); do
             BENCH_GIT_SHA="${{ github.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
             if [ "$base_ok" = true ]; then
-              if ! (cd "$BASE_DIR" && BENCH_GIT_SHA="${{ github.event.before }}" pnpm run bench --output "$GITHUB_WORKSPACE/tmp/bench/base-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"); then
+              if ! (cd "$BASE_DIR" && BENCH_GIT_SHA="$BENCH_BASE_SHA" pnpm run bench --output "$GITHUB_WORKSPACE/tmp/bench/base-runs/run-${run_index}.json" --packages "$BENCH_PACKAGES" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"); then
                 echo "::warning::The base benchmark failed; the report shows the head only."
                 base_ok=false
                 rm -f tmp/bench/base-runs/*.json
@@ -454,6 +280,7 @@ jobs:
           pnpm run bench:compare "${args[@]}"
 
       - name: Post benchmark comment
+        id: benchmark-comment
         if: steps.scope.outputs.packages != ''
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
@@ -481,19 +308,120 @@ jobs:
             });
 
             if (existing) {
-              await github.rest.repos.updateCommitComment({
+              const { data } = await github.rest.repos.updateCommitComment({
                 owner,
                 repo,
                 comment_id: existing.id,
                 body,
               });
+              core.setOutput('url', data.html_url);
             } else {
-              await github.rest.repos.createCommitComment({
+              const { data } = await github.rest.repos.createCommitComment({
                 owner,
                 repo,
                 commit_sha,
                 body,
               });
+              core.setOutput('url', data.html_url);
+            }
+
+      - name: Confirm benchmark regressions
+        id: confirm-regressions
+        if: github.ref == 'refs/heads/devel' && steps.run-bench.outputs.base_ok == 'true'
+        shell: bash
+        env:
+          BASE_DIR: ${{ steps.prepare-base.outputs.dir }}
+        run: |
+          set -euo pipefail
+          args=("$BENCH_ISSUE_THRESHOLD" tmp/bench/base.json tmp/bench/head.json)
+          candidates="$(node scripts/bench/regressions.ts "${args[@]}")"
+          keys="$(jq -r 'map(.key) | join(",")' <<< "$candidates")"
+          if [ -z "$keys" ]; then exit 0; fi
+          packages="$(jq -r 'map(.key | split(".")[0]) | unique | join(",")' <<< "$candidates")"
+          echo "Confirming $(jq length <<< "$candidates") benchmark cases."
+          benchmark_args=(--packages "$packages" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS")
+          base_runner=scripts/bench/exports.ts
+          base_args=("${benchmark_args[@]}")
+          base_help="$(cd "$BASE_DIR" && node --conditions=source "$base_runner" --help)"
+          if [[ "$base_help" == *--case-keys* ]]; then
+            base_args+=(--case-keys "$keys")
+          else
+            base_runner="$(node scripts/bench/legacy-case-runner.ts "$BASE_DIR" "$keys")"
+          fi
+          mkdir -p tmp/bench/confirm-head-runs tmp/bench/confirm-base-runs
+          for run_index in $(seq 1 "$BENCH_REPEATS"); do
+            BENCH_GIT_SHA="$GITHUB_SHA" pnpm run bench --output "tmp/bench/confirm-head-runs/run-${run_index}.json" "${benchmark_args[@]}" --case-keys "$keys"
+            (cd "$BASE_DIR" && BENCH_GIT_SHA="$BENCH_BASE_SHA" node --conditions=source "$base_runner" --output "$GITHUB_WORKSPACE/tmp/bench/confirm-base-runs/run-${run_index}.json" "${base_args[@]}")
+          done
+          pnpm run bench:aggregate -- --output tmp/bench/confirm-head.json tmp/bench/confirm-head-runs/*.json
+          pnpm run bench:aggregate -- --output tmp/bench/confirm-base.json tmp/bench/confirm-base-runs/*.json
+          node scripts/bench/regressions.ts "${args[@]}" tmp/bench/confirm-base.json tmp/bench/confirm-head.json > tmp/bench/confirmed-regressions.json
+          echo "count=$(jq length tmp/bench/confirmed-regressions.json)" >> "$GITHUB_OUTPUT"
+
+      - name: File confirmed benchmark regressions
+        if: steps.confirm-regressions.outputs.count != '' && steps.confirm-regressions.outputs.count != '0'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          BENCH_REPORT_URL: ${{ steps.benchmark-comment.outputs.url }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const { setTimeout: delay } = require('node:timers/promises');
+            const rows = JSON.parse(fs.readFileSync('tmp/bench/confirmed-regressions.json', 'utf8'));
+            const base = process.env.BENCH_BASE_SHA;
+            const head = context.sha;
+            const { owner, repo } = context.repo;
+            const repository = `${context.serverUrl}/${owner}/${repo}`;
+            const summaryStart = '<!-- be-music-benchmark-summary:start -->';
+            const summaryEnd = '<!-- be-music-benchmark-summary:end -->';
+            const runNumber = Number(process.env.GITHUB_RUN_NUMBER);
+            const percent = (row) => `${(-row.deltaPercent).toFixed(1)}%`;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', per_page: 100,
+            });
+            const tracked = issues.filter((item) => !item.pull_request && item.user?.login === 'github-actions[bot]');
+            let wroteIssue = false;
+            for (const row of rows) {
+              const marker = `<!-- be-music-benchmark-case:${encodeURIComponent(row.key)} -->`;
+              const issue = tracked.find((item) => item.body?.includes(marker));
+              const currentBody = issue?.body ?? '';
+              const start = currentBody.indexOf(summaryStart);
+              const end = start === -1 ? -1 : currentBody.indexOf(summaryEnd, start);
+              const previousSummary = end === -1 ? '' : currentBody.slice(start, end);
+              const previousRun = /<!-- be-music-benchmark-run:(\d+) -->/.exec(previousSummary)?.[1];
+              if (previousRun !== undefined && Number(previousRun) > runNumber) continue;
+
+              const summary = [
+                summaryStart,
+                `<!-- be-music-benchmark-run:${runNumber} -->`,
+                '## Latest confirmed regression',
+                '',
+                `\`${row.key}\` lost at least ${process.env.BENCH_ISSUE_THRESHOLD}% throughput on [devel \`${head.slice(0, 8)}\`](${repository}/commit/${head}) compared with [main \`${base.slice(0, 8)}\`](${repository}/commit/${base}) in both measurement rounds. Each round alternated between the same commits on one runner, with ${process.env.BENCH_REPEATS} runs per commit and no overlap between their ranges.`,
+                '',
+                '| Initial ops/s loss | Confirmed ops/s loss |',
+                '| ---: | ---: |',
+                `| ${percent(row.initial)} | ${percent(row.confirmation)} |`,
+                '',
+                `[Benchmark report](${process.env.BENCH_REPORT_URL}) · [Workflow run](${repository}/actions/runs/${context.runId})`,
+                summaryEnd,
+              ].join('\n');
+              const body = end === -1
+                ? [currentBody || marker, summary].join('\n\n')
+                : currentBody.slice(0, start) + summary + currentBody.slice(end + summaryEnd.length);
+              if (body === currentBody) continue;
+
+              // Space out issue writes when a single run confirms many cases.
+              if (wroteIssue) await delay(1000);
+              if (issue) {
+                await github.rest.issues.update({ owner, repo, issue_number: issue.number, body });
+              } else {
+                await github.rest.issues.create({
+                  owner, repo, labels: ['perf'],
+                  title: `Performance regression in ${row.key}`,
+                  body,
+                });
+              }
+              wroteIssue = true;
             }
 
   # The release builds the SEA binaries on these three runners (release.yml), and its install runs every package's

@@ -42,6 +42,7 @@ import { OptionsDialog, type OptionsDialogDeps } from '../ui/options/index.ts';
 import { confirmSkinDrop, promptSkinDrop } from '../ui/skin-drop-prompt.ts';
 import { showPlayOptionMismatch } from '../ui/play-option-mismatch.ts';
 import { showMissingReplayCharts } from '../ui/replay-missing.ts';
+import { showMissingCourseStages } from '../ui/course-missing.ts';
 import { readDeviceSignals, type DeviceProfile } from '../device-profile.ts';
 import { captureScreenshot, finalizeRecordingIfActive, toggleRecording } from '../recording-controller.ts';
 import type { PlayerGUIState, PlayerScene, PlayerWebElements, SkinFamilyOverride } from '../types.ts';
@@ -58,6 +59,8 @@ import { RecordingService } from '../services/recording.ts';
 import { StatusLine } from '../services/status.ts';
 import { CourseMakerService } from '../services/course-maker.ts';
 import { LibraryService } from '../services/library.ts';
+import { listFolderInWorker } from '../services/folder-listing.ts';
+import { createIndexedDBFolderSnapshotStore } from '../services/folder-snapshots.ts';
 import { RecordsService } from '../services/records.ts';
 import { CourseRunService } from '../services/courses.ts';
 import { BeatorajaThemeService } from '../services/themes/beatoraja.ts';
@@ -67,6 +70,7 @@ import { FamilyKits } from './family-kits.ts';
 import { controlSettingsOf } from '../control-keys.ts';
 import { showExitMenu } from '../ui/exit-menu.ts';
 import { PracticeBarsDialog } from '../ui/practice-bars.ts';
+import { storePlayTempoSettings } from '../play-tempo-settings.ts';
 import { PracticeBarsMemory } from '../ui/practice-bars-model.ts';
 import { createFpsOverlay } from '../ui/fps-overlay.ts';
 import { openHelpModal, setHelpKeyboardSource, watchHelpExpanded } from '../help-modal.ts';
@@ -120,6 +124,7 @@ export class PlayerWebApp {
   private readonly router = new SceneRouter<PlayerScene, PlayScene, SelectScene>({
     host: {
       setScene: async (scene, role) => {
+        if (role === 'decide' || role === 'play') this.library.pauseBackgroundRefresh();
         await this.mountStage();
         this.chartDiagnostics.show();
         await this.sceneHost.setScene(scene);
@@ -276,6 +281,7 @@ export class PlayerWebApp {
   private readonly replaySlotsPanel = new ReplaySlotsPanel({
     service: this.replaySlots,
     replay: (slot) => this.selectView?.replay(slot),
+    replayHistory: (record) => void this.replayRoute.startReplayFromHistory(record),
     setStatus: (text) => this.status.set(text),
   });
   /**
@@ -308,7 +314,7 @@ export class PlayerWebApp {
       devicePixelRatio: window.devicePixelRatio || 1,
       builtInSkinId: (stored) => BE_MUSIC_SKINS.resolve(stored).id,
       actions: {
-        openFolder: () => this.elements.chartInput.click(),
+        openFolder: () => void this.dropTarget.openFolder(),
         openFiles: () => this.elements.filesInput.click(),
         record: () => {
           void toggleRecording(this.recording.deps());
@@ -376,6 +382,7 @@ export class PlayerWebApp {
     this.library = new LibraryService({
       elements,
       resolveChartHashes: (chartEntry) => this.records.resolveChartHashes(chartEntry),
+      bemuseReplayGain: () => this.guiState.bemuseReplayGain,
       courseMaker: this.courseMaker.maker,
       selectView: () => this.selectView,
       showing: () => this.router.current?.identity.kind,
@@ -395,14 +402,39 @@ export class PlayerWebApp {
       confirmSkinDrop: (families) => {
         const preferred = this.pendingSkinSystem;
         this.pendingSkinSystem = undefined;
-        return confirmSkinDrop(families, preferred);
+        const policy = this.guiState.confirmDroppedSkin
+          ? 'ask'
+          : this.guiState.skipDroppedSkin
+            ? 'keep-current'
+            : 'apply';
+        return confirmSkinDrop(families, preferred, policy, (apply) => {
+          this.guiState.confirmDroppedSkin = false;
+          this.guiState.skipDroppedSkin = !apply;
+          this.optionsDialog.confirmDroppedSkinController?.refresh();
+          this.optionsDialog.scheduleSettingsSave();
+        });
       },
       applyDroppedSkin: (family) => this.applyDroppedSkin(family),
     });
     this.dropTarget = new DropTarget({
       elements,
       leaveSelect: () => this.leaveSelect(),
-      processIncomingFiles: (files) => this.library.processIncomingFiles(files),
+      processIncomingFiles: (files, origin, signal) => this.library.processIncomingFiles(files, origin, signal),
+      runBackgroundRefresh: (work) => this.library.runBackgroundRefresh(work),
+      refreshCharts: () => this.library.refreshCharts(),
+      folders: {
+        // A remembered folder is walked off the page's thread.
+        list: (folder, onProgress, signal) =>
+          listFolderInWorker(
+            () => new Worker(new URL('../folder-listing-worker.ts', import.meta.url), { type: 'module' }),
+            folder,
+            onProgress,
+            signal,
+          ),
+        snapshots: createIndexedDBFolderSnapshotStore(),
+      },
+      resumeSelect: () => (this.router.current ? Promise.resolve() : this.showSelect()),
+      setStatus: (text) => this.status.set(text),
       loadPickedFiles: (files) => this.library.loadPickedFiles(files),
       recordLoad: () => this.testHook?.recordLoad(),
     });
@@ -422,7 +454,8 @@ export class PlayerWebApp {
       playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       showResult: (data, mode) => this.resultRoute.showResult(data, mode),
       showBeatorajaResult: (data, options) => this.resultRoute.showBeatorajaResult(data, options),
-      courseReplaySlots: (courseLog, native, kept) => this.resultRoute.courseReplaySlots(courseLog, native, kept),
+      courseReplaySlots: (courseLog, native, kept, fromReplay) =>
+        this.resultRoute.courseReplaySlots(courseLog, native, kept, fromReplay),
       unlockReplayOptions: () => this.unlockReplayOptions(),
       onRunResult: (course) => this.courseRoute.noteNonstopResult(course),
     });
@@ -439,13 +472,16 @@ export class PlayerWebApp {
       replayRecorder: REPLAY_RECORDER,
       selectNavigation: () => this.selectView?.snapshot() ?? this.lastSelectNavigation,
       setStatus: (text) => this.status.set(text),
+      showMissingCourseStages: (course) =>
+        showMissingCourseStages(course, (missing) => this.library.findMissingCourseStages(missing)),
       startNonstopCourse: (course, options) => this.nonstopRoute.startNonstopCourse(course, options),
       showSelect: () => this.showSelect(),
       showDecide: (chartEntry, overrides, then) => this.decideRoute.showDecide(chartEntry, overrides, then),
       playChart: (chartEntry, overrides) => this.playRoute.playChart(chartEntry, overrides),
       showResult: (data, mode) => this.resultRoute.showResult(data, mode),
       showBeatorajaResult: (data, options) => this.resultRoute.showBeatorajaResult(data, options),
-      courseReplaySlots: (courseLog, native, kept) => this.resultRoute.courseReplaySlots(courseLog, native, kept),
+      courseReplaySlots: (courseLog, native, kept, fromReplay) =>
+        this.resultRoute.courseReplaySlots(courseLog, native, kept, fromReplay),
       unlockReplayOptions: () => this.unlockReplayOptions(),
     });
     this.optionsDialog = new OptionsDialog(this.optionsDialogDeps());
@@ -489,6 +525,21 @@ export class PlayerWebApp {
             this.setPlayOptions(changes);
             copyPlayOptionsToGUI(this.playOptions.current, this.guiState);
             this.optionsDialog.refreshRulesetChoices();
+            this.optionsDialog.refreshPlayOptionControllers();
+          },
+          tempo: () => ({
+            percent: this.guiState.tempoEnabled ? this.guiState.tempoPercent : 0,
+            pitchMode: this.guiState.tempoPitchMode,
+            stretchAlgorithm: this.guiState.tempoStretchAlgorithm,
+          }),
+          // As the Options dialog's Tempo page: a tempo other than 0 turns the tempo on; kept and saved.
+          setTempo: ({ percent, pitchMode }) => {
+            if (percent !== undefined) {
+              this.guiState.tempoPercent = percent;
+              this.guiState.tempoEnabled = percent !== 0;
+            }
+            if (pitchMode !== undefined) this.guiState.tempoPitchMode = pitchMode;
+            storePlayTempoSettings(this.guiState);
             this.optionsDialog.refreshPlayOptionControllers();
           },
         });
@@ -727,9 +778,22 @@ export class PlayerWebApp {
     // The replay slots load once; the select screen draws them again whenever they change.
     void this.replaySlots.store.load();
     this.replaySlots.store.subscribe(() => this.selectView?.refreshRecords());
-    // The first scene shown mounts the Pixi host (`mountStage`). Keep its promise so URL auto-load (below) drives its own
-    // `showSelect` only once the first select screen is up.
-    const initialSelectReady = this.showSelect();
+    // Prepare the renderer and the saved index together. The first selection does not wait for disk walks or fetches.
+    void this.mountStage().catch(() => undefined);
+    let startRefresh!: () => void;
+    const refreshAfter = new Promise<void>((resolve) => {
+      startRefresh = resolve;
+    });
+    const initialSelectReady = Promise.allSettled([
+      this.library.restoreStartupCache(),
+      this.dropTarget.restoreFolder(refreshAfter),
+    ]).then(async () => {
+      await this.library
+        .finishStartupCache()
+        .catch((error: unknown) => console.warn('Library cache setup failed', error));
+      await this.showSelect();
+      startRefresh();
+    });
     // A page put away (closed, or into the back/forward cache) keeps no decoded samples for a retry.
     window.addEventListener('pagehide', () => this.audio.chartSamples.release());
 
@@ -785,8 +849,7 @@ export class PlayerWebApp {
       }
     });
 
-    // `?music=<url.zip>` / `?skin=<url.zip>` auto-load, then the difficulty tables imported in an earlier visit, once the
-    // first select screen is up.
+    // Restore the remote library once the select screen is up. Local folders load independently.
     void this.library.autoLoad(window.location.href, initialSelectReady);
   }
 
@@ -900,12 +963,12 @@ export class PlayerWebApp {
 
   /**
    * Shows the select screen (`SelectRoute.showSelect`): at start-up, and on every way back to it. The decoded samples
-   * kept for a quick retry go: the next play is most likely another chart, and they would sit through the select
-   * screen.
+   * of the play stay while the cursor is on a chart of its track, so another chart of it plays without decoding them
+   * again; a focus on any other chart releases them (`AudioServicePreview.focus`).
    */
   private async showSelect(): Promise<void> {
-    this.audio.chartSamples.release();
     await this.selectRoute.showSelect();
+    this.library.selectShown();
     // A RANDOM MIX run that just ended offers to save its course over the select screen.
     void this.courseRoute.offerRandomMixSave();
   }
@@ -917,6 +980,7 @@ export class PlayerWebApp {
    * at select). The Options dialog disables its skin controls with them (`OptionsDialog.lockForPlay`).
    */
   private lockReplayOptionsForPlay(liveTempo = false, chartEntry?: LibraryChart): void {
+    this.library.pauseBackgroundRefresh();
     this.replayAutoSave.latch(this.guiState.autoSaveReplay);
     this.leaderboard.lockForPlay(chartEntry);
     this.optionsDialog.lockForPlay(liveTempo);

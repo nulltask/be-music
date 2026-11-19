@@ -3,7 +3,7 @@
 // and the next visit still restores it (`option-settings-sync.ts`).
 
 import type { TunableCompressor } from '@be-music/player-browser/audio';
-import { isGaugeType, isRulesetId, migrateOptionValue, type RulesetId } from '@be-music/player-engine/ruleset';
+import { isGaugePick, isRulesetId, migrateOptionValue, type RulesetId } from '@be-music/player-engine/ruleset';
 import {
   DIFFICULTY_FILTER_CYCLE,
   KEYS_FILTER_CYCLE,
@@ -17,7 +17,16 @@ import {
   type DifficultyFilter,
   type KeysFilter,
 } from '@be-music/player-scene-model';
-import { COURSE_TABLE_URLS_STORAGE_KEY, parseStoredCourseTableURLs } from './course-table-import.ts';
+import {
+  COURSE_TABLE_URLS_STORAGE_KEY,
+  REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY,
+  parseStoredCourseTableURLs,
+} from './course-table-import.ts';
+import {
+  BEMUSE_SERVER_URLS_STORAGE_KEY,
+  parseStoredBemuseServerURLs,
+  readStoredBemuseServerURLs,
+} from './bemuse-server.ts';
 import { parseCompressorTunings, type CompressorTuning } from './compressor-tuning.ts';
 import { parseStoredHiSpeed, HI_SPEED_STORAGE_KEY } from './hi-speed-storage.ts';
 import { parseStoredPlayTempoSettings, PLAY_TEMPO_STORAGE_KEY, type PlayTempoSettings } from './play-tempo-settings.ts';
@@ -70,6 +79,8 @@ export interface OptionSettings {
   ghost: PlayerGUIState['ghost'];
   ghostMode: PlayerGUIState['ghostMode'];
   autoSaveReplay: boolean;
+  replayDeviceNames: boolean;
+  bemuseReplayGain: boolean;
   replaySlotAutoSave1: ReplayAutoSaveRule;
   replaySlotAutoSave2: ReplayAutoSaveRule;
   replaySlotAutoSave3: ReplayAutoSaveRule;
@@ -86,6 +97,8 @@ export interface OptionSettings {
   randomSeed2P: string;
   randomFixedLane1P: number;
   randomFixedLane2P: number;
+  lr2RandomScratch1P: boolean;
+  lr2RandomScratch2P: boolean;
   random2P: RandomMode;
   dpFlip: boolean;
   classicHiSpeed: boolean;
@@ -103,6 +116,7 @@ export interface OptionSettings {
   bpmGuide: boolean;
   bpmChangeWarning: boolean;
   guideSE: PlayerGUIState['guideSE'];
+  windowHold: PlayerGUIState['windowHold'];
   judgeCounts: PlayerGUIState['judgeCounts'];
   judgeDetailSplit: PlayerGUIState['judgeDetailSplit'];
   judgeDetail: PlayerGUIState['judgeDetail'];
@@ -151,6 +165,9 @@ export interface OptionSettings {
   practiceStartGauge: number;
   practiceJudgeRank: number;
   practiceTotal: number;
+  practiceRestBefore: number;
+  practiceRestAfter: number;
+  practiceCarriedLongNotes: boolean;
   customJudgeKeyPerfectGreat: number;
   customJudgeKeyGreat: number;
   customJudgeKeyGood: number;
@@ -161,6 +178,10 @@ export interface OptionSettings {
   lr2ExtraMode: boolean;
   lr2ExtraLevel: PlayerGUIState['lr2ExtraLevel'];
   mineModifier: PlayerGUIState['mineModifier'];
+  crazyJudge: PlayerGUIState['crazyJudge'];
+  crazyHellJudge: boolean;
+  crazyAddMine: boolean;
+  crazyNotes: PlayerGUIState['crazyNotes'];
   scrollModifier: PlayerGUIState['scrollModifier'];
   scrollSection: number;
   scrollRate: number;
@@ -177,6 +198,8 @@ export interface OptionSettings {
   sort: BrowseSort;
   keysFilter: KeysFilter;
   difficultyFilter: DifficultyFilter;
+  confirmDroppedSkin: boolean;
+  skipDroppedSkin: boolean;
   skinFamilyOverride: SkinFamilyOverride;
   masterVolume: number;
   muted: boolean;
@@ -191,6 +214,9 @@ export interface OptionSettings {
   hiSpeed: number;
   hsFix: PlayerGUIState['hsFix'];
   displayAreaInfo: PlayerGUIState['displayAreaInfo'];
+  bga: PlayerGUIState['bga'];
+  bgaSize: PlayerGUIState['bgaSize'];
+  scoreGraph: boolean;
   hiddenSudden1P: PlayerGUIState['hiddenSudden1P'];
   hiddenSudden2P: PlayerGUIState['hiddenSudden2P'];
   laneCover: PlayerGUIState['laneCover'];
@@ -205,6 +231,10 @@ export interface OptionSettings {
   compressorTuning: Record<TunableCompressor, CompressorTuning>;
   skinSettings: Record<string, Record<string, StoredSkinSettingValue>>;
   courseTableURLs: string[];
+  /** The well-known difficulty tables the player removed, so that removing the last table leaves the list empty. */
+  removedDefaultCourseTableURLs: string[];
+  /** The registered Bemuse music servers (Options → Library & records), as index URLs. */
+  bemuseServerURLs: string[];
 }
 
 /** The document in `localStorage` and on the player origin. `settings` holds only the fields that were saved. */
@@ -246,6 +276,8 @@ const LEGACY_KEYS = [
   COMPRESSOR_TUNING_KEY,
   SKIN_SETTINGS_KEY,
   COURSE_TABLE_URLS_STORAGE_KEY,
+  REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY,
+  BEMUSE_SERVER_URLS_STORAGE_KEY,
 ] as const;
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
@@ -321,6 +353,8 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'compressorMaster', booleanOf(raw.compressorMaster));
   assign(settings, 'showInvisibleNotes', booleanOf(raw.showInvisibleNotes));
   assign(settings, 'autoSaveReplay', booleanOf(raw.autoSaveReplay));
+  assign(settings, 'replayDeviceNames', booleanOf(raw.replayDeviceNames));
+  assign(settings, 'bemuseReplayGain', booleanOf(raw.bemuseReplayGain));
   assign(settings, 'replaySlotAutoSave1', oneOf(raw.replaySlotAutoSave1, REPLAY_AUTO_SAVE_RULES));
   assign(settings, 'replaySlotAutoSave2', oneOf(raw.replaySlotAutoSave2, REPLAY_AUTO_SAVE_RULES));
   assign(settings, 'replaySlotAutoSave3', oneOf(raw.replaySlotAutoSave3, REPLAY_AUTO_SAVE_RULES));
@@ -332,6 +366,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'bpmGuide', booleanOf(raw.bpmGuide));
   assign(settings, 'bpmChangeWarning', booleanOf(raw.bpmChangeWarning));
   assign(settings, 'guideSE', resolvePlayOptionValue('guideSE', raw.guideSE));
+  assign(settings, 'windowHold', resolvePlayOptionValue('windowHold', raw.windowHold));
   assign(settings, 'judgeCounts', resolvePlayOptionValue('judgeCounts', raw.judgeCounts));
   assign(settings, 'judgeDetailSplit', resolvePlayOptionValue('judgeDetailSplit', raw.judgeDetailSplit));
   assign(settings, 'judgeDetail', resolvePlayOptionValue('judgeDetail', raw.judgeDetail));
@@ -381,6 +416,10 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'scrollRate', resolvePlayOptionValue('scrollRate', raw.scrollRate));
   assign(settings, 'scrollModifier', resolvePlayOptionValue('scrollModifier', raw.scrollModifier));
   assign(settings, 'mineModifier', resolvePlayOptionValue('mineModifier', raw.mineModifier));
+  assign(settings, 'crazyJudge', resolvePlayOptionValue('crazyJudge', raw.crazyJudge));
+  assign(settings, 'crazyHellJudge', booleanOf(raw.crazyHellJudge));
+  assign(settings, 'crazyAddMine', booleanOf(raw.crazyAddMine));
+  assign(settings, 'crazyNotes', resolvePlayOptionValue('crazyNotes', raw.crazyNotes));
   assign(settings, 'sevenToNinePattern', resolvePlayOptionValue('sevenToNinePattern', raw.sevenToNinePattern));
   assign(settings, 'sevenToNineType', resolvePlayOptionValue('sevenToNineType', raw.sevenToNineType));
   assign(settings, 'battleMode', migrateStoredOption('battleMode', raw.battleMode, storedRuleset));
@@ -396,6 +435,13 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'practiceStartGauge', resolvePlayOptionValue('practiceStartGauge', raw.practiceStartGauge));
   assign(settings, 'practiceJudgeRank', resolvePlayOptionValue('practiceJudgeRank', raw.practiceJudgeRank));
   assign(settings, 'practiceTotal', resolvePlayOptionValue('practiceTotal', raw.practiceTotal));
+  assign(settings, 'practiceRestBefore', resolvePlayOptionValue('practiceRestBefore', raw.practiceRestBefore));
+  assign(settings, 'practiceRestAfter', resolvePlayOptionValue('practiceRestAfter', raw.practiceRestAfter));
+  assign(
+    settings,
+    'practiceCarriedLongNotes',
+    resolvePlayOptionValue('practiceCarriedLongNotes', raw.practiceCarriedLongNotes),
+  );
   assign(
     settings,
     'customJudgeKeyPerfectGreat',
@@ -445,21 +491,33 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'ghostMode', oneOf(raw.ghostMode, GHOST_MODES));
   assign(settings, 'nonstopPlacement', oneOf(raw.nonstopPlacement, ['intended', 'lr2'] as const));
   assign(settings, 'judgeRuleset', isRulesetId(raw.judgeRuleset) ? raw.judgeRuleset : undefined);
-  assign(settings, 'gauge', isGaugeType(raw.gauge) ? raw.gauge : undefined);
+  assign(settings, 'gauge', isGaugePick(raw.gauge) ? raw.gauge : undefined);
   assign(settings, 'hRandomThresholdBPM', resolvePlayOptionValue('hRandomThresholdBPM', raw.hRandomThresholdBPM));
-  for (const key of ['randomFixedLane1P', 'randomFixedLane2P', 'randomSeed1P', 'randomSeed2P'] as const)
+  for (const key of [
+    'randomFixedLane1P',
+    'randomFixedLane2P',
+    'randomSeed1P',
+    'randomSeed2P',
+    'lr2RandomScratch1P',
+    'lr2RandomScratch2P',
+  ] as const)
     assign(settings, key, resolvePlayOptionValue(key, raw[key]));
   assign(settings, 'random1P', migrateStoredOption('random1P', raw.random1P, storedRuleset));
   assign(settings, 'random2P', migrateStoredOption('random2P', raw.random2P, storedRuleset));
   assign(settings, 'sort', oneOf(raw.sort, SORT_CYCLE));
   assign(settings, 'keysFilter', oneOf(raw.keysFilter, KEYS_FILTER_CYCLE));
   assign(settings, 'difficultyFilter', oneOf(raw.difficultyFilter, DIFFICULTY_FILTER_CYCLE));
+  assign(settings, 'confirmDroppedSkin', booleanOf(raw.confirmDroppedSkin));
+  assign(settings, 'skipDroppedSkin', booleanOf(raw.skipDroppedSkin));
   assign(settings, 'skinFamilyOverride', oneOf(raw.skinFamilyOverride, SKIN_FAMILIES));
   assign(settings, 'hiddenSudden1P', oneOf(raw.hiddenSudden1P, PLAY_OPTION_CHOICES.hiddenSudden1P!));
   assign(settings, 'hiddenSudden2P', oneOf(raw.hiddenSudden2P, PLAY_OPTION_CHOICES.hiddenSudden2P!));
   assign(settings, 'laneCover', booleanOf(raw.laneCover));
   if (typeof raw.shutter === 'number' && Number.isFinite(raw.shutter)) settings.shutter = clampShutter(raw.shutter);
   assign(settings, 'displayAreaInfo', oneOf(raw.displayAreaInfo, PLAY_OPTION_CHOICES.displayAreaInfo!));
+  assign(settings, 'bga', oneOf(raw.bga, PLAY_OPTION_CHOICES.bga!));
+  assign(settings, 'bgaSize', oneOf(raw.bgaSize, PLAY_OPTION_CHOICES.bgaSize!));
+  assign(settings, 'scoreGraph', booleanOf(raw.scoreGraph));
   assign(settings, 'hsFix', oneOf(raw.hsFix, PLAY_OPTION_CHOICES.hsFix!));
   assign(settings, 'skinEffects', oneOf(raw.skinEffects, SKIN_EFFECTS));
   assign(settings, 'playLayout', oneOf(raw.playLayout, PLAY_LAYOUTS));
@@ -515,6 +573,15 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   }
   if (Array.isArray(raw.courseTableURLs)) {
     settings.courseTableURLs = parseStoredCourseTableURLs(JSON.stringify(raw.courseTableURLs));
+  }
+  if (Array.isArray(raw.removedDefaultCourseTableURLs)) {
+    settings.removedDefaultCourseTableURLs = parseStoredCourseTableURLs(
+      JSON.stringify(raw.removedDefaultCourseTableURLs),
+    );
+  }
+  if (Array.isArray(raw.bemuseServerURLs)) {
+    const urls = parseStoredBemuseServerURLs(JSON.stringify(raw.bemuseServerURLs));
+    if (urls.length > 0 || raw.bemuseServerURLs.length === 0) settings.bemuseServerURLs = urls;
   }
   return settings;
 }
@@ -583,6 +650,14 @@ export function optionSettingsFromLegacy(
   if (storage?.getItem(COURSE_TABLE_URLS_STORAGE_KEY) != null) {
     settings.courseTableURLs = parseStoredCourseTableURLs(storage.getItem(COURSE_TABLE_URLS_STORAGE_KEY));
   }
+  if (storage?.getItem(REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY) != null) {
+    settings.removedDefaultCourseTableURLs = parseStoredCourseTableURLs(
+      storage.getItem(REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY),
+    );
+  }
+  if (storage?.getItem(BEMUSE_SERVER_URLS_STORAGE_KEY) != null) {
+    settings.bemuseServerURLs = readStoredBemuseServerURLs(storage);
+  }
   return { version: DOCUMENT_VERSION, updatedAt, settings };
 }
 
@@ -616,6 +691,8 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('ghost');
   assignState('ghostMode');
   assignState('autoSaveReplay');
+  assignState('replayDeviceNames');
+  assignState('bemuseReplayGain');
   assignState('replaySlotAutoSave1');
   assignState('replaySlotAutoSave2');
   assignState('replaySlotAutoSave3');
@@ -632,11 +709,14 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('randomSeed2P');
   assignState('randomFixedLane1P');
   assignState('randomFixedLane2P');
+  assignState('lr2RandomScratch1P');
+  assignState('lr2RandomScratch2P');
   assignState('random2P');
   assignState('dpFlip');
   assignState('bpmGuide');
   assignState('bpmChangeWarning');
   assignState('guideSE');
+  assignState('windowHold');
   assignState('judgeCounts');
   assignState('judgeDetailSplit');
   assignState('judgeDetail');
@@ -696,6 +776,9 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('practiceStartGauge');
   assignState('practiceJudgeRank');
   assignState('practiceTotal');
+  assignState('practiceRestBefore');
+  assignState('practiceRestAfter');
+  assignState('practiceCarriedLongNotes');
   assignState('customJudgeKeyPerfectGreat');
   assignState('customJudgeKeyGreat');
   assignState('customJudgeKeyGood');
@@ -708,6 +791,10 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('extraNoteDepth');
   assignState('extraNoteScratch');
   assignState('mineModifier');
+  assignState('crazyJudge');
+  assignState('crazyHellJudge');
+  assignState('crazyAddMine');
+  assignState('crazyNotes');
   assignState('scrollModifier');
   assignState('scrollSection');
   assignState('scrollRate');
@@ -724,6 +811,8 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('sort');
   assignState('keysFilter');
   assignState('difficultyFilter');
+  assignState('confirmDroppedSkin');
+  assignState('skipDroppedSkin');
   assignState('skinFamilyOverride');
   assignState('masterVolume');
   assignState('muted');
@@ -738,6 +827,9 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('hiSpeed');
   assignState('hsFix');
   assignState('displayAreaInfo');
+  assignState('bga');
+  assignState('bgaSize');
+  assignState('scoreGraph');
   assignState('hiddenSudden1P');
   assignState('hiddenSudden2P');
   assignState('laneCover');
@@ -757,6 +849,8 @@ export function captureOptionSettings(
     compressorTuning: Record<TunableCompressor, CompressorTuning>;
     skinSettings: ReadonlyMap<string, Record<string, StoredSkinSettingValue>>;
     courseTableURLs: readonly string[];
+    removedDefaultCourseTableURLs: readonly string[];
+    bemuseServerURLs: readonly string[];
     workerCount: number;
     updatedAt?: number;
   },
@@ -776,6 +870,8 @@ export function captureOptionSettings(
     ghost: state.ghost,
     ghostMode: state.ghostMode,
     autoSaveReplay: state.autoSaveReplay,
+    replayDeviceNames: state.replayDeviceNames,
+    bemuseReplayGain: state.bemuseReplayGain,
     replaySlotAutoSave1: state.replaySlotAutoSave1,
     replaySlotAutoSave2: state.replaySlotAutoSave2,
     replaySlotAutoSave3: state.replaySlotAutoSave3,
@@ -792,11 +888,14 @@ export function captureOptionSettings(
     randomSeed2P: state.randomSeed2P,
     randomFixedLane1P: state.randomFixedLane1P,
     randomFixedLane2P: state.randomFixedLane2P,
+    lr2RandomScratch1P: state.lr2RandomScratch1P,
+    lr2RandomScratch2P: state.lr2RandomScratch2P,
     random2P: state.random2P,
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
     guideSE: state.guideSE,
+    windowHold: state.windowHold,
     judgeCounts: state.judgeCounts,
     judgeDetailSplit: state.judgeDetailSplit,
     judgeDetail: state.judgeDetail,
@@ -856,6 +955,9 @@ export function captureOptionSettings(
     practiceStartGauge: state.practiceStartGauge,
     practiceJudgeRank: state.practiceJudgeRank,
     practiceTotal: state.practiceTotal,
+    practiceRestBefore: state.practiceRestBefore,
+    practiceRestAfter: state.practiceRestAfter,
+    practiceCarriedLongNotes: state.practiceCarriedLongNotes,
     customJudgeKeyPerfectGreat: state.customJudgeKeyPerfectGreat,
     customJudgeKeyGreat: state.customJudgeKeyGreat,
     customJudgeKeyGood: state.customJudgeKeyGood,
@@ -868,6 +970,10 @@ export function captureOptionSettings(
     extraNoteDepth: state.extraNoteDepth,
     extraNoteScratch: state.extraNoteScratch,
     mineModifier: state.mineModifier,
+    crazyJudge: state.crazyJudge,
+    crazyHellJudge: state.crazyHellJudge,
+    crazyAddMine: state.crazyAddMine,
+    crazyNotes: state.crazyNotes,
     scrollModifier: state.scrollModifier,
     scrollSection: state.scrollSection,
     scrollRate: state.scrollRate,
@@ -884,6 +990,8 @@ export function captureOptionSettings(
     sort: state.sort,
     keysFilter: state.keysFilter,
     difficultyFilter: state.difficultyFilter,
+    confirmDroppedSkin: state.confirmDroppedSkin,
+    skipDroppedSkin: state.skipDroppedSkin,
     skinFamilyOverride: state.skinFamilyOverride,
     masterVolume: state.masterVolume,
     muted: state.muted,
@@ -898,6 +1006,9 @@ export function captureOptionSettings(
     hiSpeed: state.hiSpeed,
     hsFix: state.hsFix,
     displayAreaInfo: state.displayAreaInfo,
+    bga: state.bga,
+    bgaSize: state.bgaSize,
+    scoreGraph: state.scoreGraph,
     hiddenSudden1P: state.hiddenSudden1P,
     hiddenSudden2P: state.hiddenSudden2P,
     laneCover: state.laneCover,
@@ -912,6 +1023,8 @@ export function captureOptionSettings(
     compressorTuning: extras.compressorTuning,
     skinSettings: Object.fromEntries(extras.skinSettings),
     courseTableURLs: [...extras.courseTableURLs],
+    removedDefaultCourseTableURLs: [...extras.removedDefaultCourseTableURLs],
+    bemuseServerURLs: [...extras.bemuseServerURLs],
   };
   return { version: DOCUMENT_VERSION, updatedAt: extras.updatedAt ?? Date.now(), settings: pickSettings(settings) };
 }
@@ -958,6 +1071,14 @@ export function writeOptionSettings(document: OptionSettingsDocument, storage: S
     }
     if (settings.courseTableURLs)
       storage.setItem(COURSE_TABLE_URLS_STORAGE_KEY, JSON.stringify(settings.courseTableURLs));
+    if (settings.removedDefaultCourseTableURLs) {
+      storage.setItem(
+        REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY,
+        JSON.stringify(settings.removedDefaultCourseTableURLs),
+      );
+    }
+    if (settings.bemuseServerURLs)
+      storage.setItem(BEMUSE_SERVER_URLS_STORAGE_KEY, JSON.stringify(settings.bemuseServerURLs));
   } catch {
     // Blocked or full storage: the visit still has the values in memory.
   }

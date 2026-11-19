@@ -3,15 +3,46 @@
 // library service (`services/library.ts`) refreshes the course folders.
 import type { CourseDefinitionGroup } from '@be-music/player-browser/collection';
 import { fetchTableHeaderCourses, parseTableHeaderCourses, type TableFetchText } from '@be-music/player-engine/course';
+import {
+  COURSE_TABLE_MAX_AGE_MS,
+  readThroughRemoteCache,
+  type RemoteCacheSource,
+  type RemoteCacheStore,
+} from './services/remote-cache.ts';
 import { PLAYER_STORAGE_PREFIX } from './ui/options/folders.ts';
+import { resolveURLLoadFetchURL } from './url-load.ts';
 
 /** `localStorage` key of the difficulty-table URLs whose courses are imported again on load. */
 export const COURSE_TABLE_URLS_STORAGE_KEY = `${PLAYER_STORAGE_PREFIX}course-table-urls`;
+/** `localStorage` key of the well-known tables ({@link DEFAULT_COURSE_TABLE_URLS}) the player removed from the list. */
+export const REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY = `${PLAYER_STORAGE_PREFIX}course-table-removed-defaults`;
+
+/**
+ * Well-known difficulty tables whose headers list courses, imported until the player stores a list of their own. Each
+ * is the page URL players share; its `bmstable` meta names the header. Tables whose header lists no course (Overjoy,
+ * DP Stella) are left out, since an import of one only reports that it has none.
+ */
+export const DEFAULT_COURSE_TABLE_URLS: readonly string[] = [
+  // NEW GENERATION 通常難易度表 (▽) and 発狂難易度表 (▼)
+  'https://rattoto10.jounin.jp/table.html',
+  'https://rattoto10.jounin.jp/table_insane.html',
+  // Satellite, Stella, DP Satellite
+  'https://stellabms.xyz/sl/table.html',
+  'https://stellabms.xyz/st/table.html',
+  'https://stellabms.xyz/dp/table.html',
+  // Stardust, Starlight
+  'https://mqppppp.neocities.org/StardustTable.html',
+  'https://djkuroakari.github.io/starlighttable.html',
+  // Luminous (LN)
+  'https://ladymade-star.github.io/luminous/table.html',
+];
 
 /** A difficulty table's courses, read as one course group. */
 export interface ImportedCourseTable {
   group: CourseDefinitionGroup;
   headerURL: string;
+  /** The table's song list (`data_url`), where the download pages of its courses' stages are looked up. */
+  dataURL?: string;
 }
 
 /** The trimmed URL when it is an absolute http(s) URL, else `undefined`. */
@@ -43,13 +74,47 @@ export function parseStoredCourseTableURLs(raw: string | null | undefined): stri
   }
 }
 
-/** The remembered table URLs; empty when none are stored or storage is blocked. */
+/**
+ * The remembered table URLs: the stored list, or {@link DEFAULT_COURSE_TABLE_URLS} while none is stored, less the
+ * well-known tables the player removed. Empty when storage is blocked. A stored empty list reads as none: builds before
+ * the well-known tables stored one with every Options save (and synced it to their account), so it says nothing about
+ * the tables the player wants; removing the last table records the removed well-known tables instead.
+ */
 export function readStoredCourseTableURLs(storage: Pick<Storage, 'getItem'> | undefined = defaultStorage()): string[] {
+  if (storage === undefined) return [];
   try {
-    return parseStoredCourseTableURLs(storage?.getItem(COURSE_TABLE_URLS_STORAGE_KEY));
+    const urls = parseStoredCourseTableURLs(storage.getItem(COURSE_TABLE_URLS_STORAGE_KEY));
+    const removed = parseStoredCourseTableURLs(storage.getItem(REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY));
+    return (urls.length > 0 ? urls : [...DEFAULT_COURSE_TABLE_URLS]).filter((url) => !removed.includes(url));
   } catch {
     return [];
   }
+}
+
+/** The well-known tables `urls` lacks: what a stored list records as removed, so an empty list stays empty. */
+export function removedDefaultCourseTableURLs(urls: readonly string[]): string[] {
+  return DEFAULT_COURSE_TABLE_URLS.filter((url) => !urls.includes(url));
+}
+
+/**
+ * Stores `urls` as the remembered tables, with the well-known tables it lacks as removed, and returns what was stored;
+ * blocked storage keeps it for this session.
+ */
+export function storeCourseTableURLs(
+  urls: readonly string[],
+  storage: Pick<Storage, 'setItem'> | undefined = defaultStorage(),
+): string[] {
+  const stored = parseStoredCourseTableURLs(JSON.stringify(urls));
+  try {
+    storage?.setItem(COURSE_TABLE_URLS_STORAGE_KEY, JSON.stringify(stored));
+    storage?.setItem(
+      REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY,
+      JSON.stringify(removedDefaultCourseTableURLs(stored)),
+    );
+  } catch {
+    // Private windows / blocked storage: the list still applies for this session.
+  }
+  return stored;
 }
 
 /** Adds `url` to the remembered table URLs (once) and returns the new list; blocked storage keeps it for this session. */
@@ -58,13 +123,8 @@ export function rememberCourseTableURL(
   storage: Pick<Storage, 'getItem' | 'setItem'> | undefined = defaultStorage(),
 ): string[] {
   const urls = readStoredCourseTableURLs(storage);
-  if (!urls.includes(url)) urls.push(url);
-  try {
-    storage?.setItem(COURSE_TABLE_URLS_STORAGE_KEY, JSON.stringify(urls));
-  } catch {
-    // Private windows / blocked storage: the import still applies for this session.
-  }
-  return urls;
+  if (urls.includes(url)) return urls;
+  return storeCourseTableURLs([...urls, url], storage);
 }
 
 /** `groups` with `group` added, replacing the group that has the same label in place. */
@@ -78,13 +138,13 @@ export function mergeCourseGroup(
 }
 
 /**
- * A status line for a failed import. `fetch` rejects with a bare `TypeError` when the request is blocked, which for a
- * difficulty table is almost always a missing CORS header, so that case says so.
+ * A status line for a failed import. `fetch` rejects with a bare `TypeError` when the request never completes (offline,
+ * or a host that serves no proxy route and a table site that sends no CORS header), so that case says what to do.
  */
 export function describeCourseTableImportError(error: unknown): string {
   if (error instanceof TypeError) {
     return (
-      'Course table import failed: the site does not let other pages read it. Save the table’s header file ' +
+      'Course table import failed: the table could not be fetched from here. Save the table’s header file ' +
       '(the JSON its page names in <meta name="bmstable">, usually header.json) and drop it here instead'
     );
   }
@@ -92,11 +152,63 @@ export function describeCourseTableImportError(error: unknown): string {
   return `Course table import failed: ${message}`;
 }
 
-/** Fetches a URL's body as text with the browser `fetch`, rejecting a non-2xx response. */
-export async function fetchCourseTableText(url: string): Promise<string> {
-  const response = await fetch(url);
+/**
+ * Fetches a URL's body as text with the browser `fetch`, rejecting a non-2xx response. A cross-origin URL goes through
+ * the player's same-origin proxy (as `?music=` archives do), since most table sites send no CORS header. Relative
+ * header URLs still resolve against `url` itself, not the proxy.
+ */
+export async function fetchCourseTableText(url: string, init?: RequestInit): Promise<string> {
+  const fetchURL = resolveURLLoadFetchURL(url);
+  const response = await (init === undefined ? fetch(fetchURL) : fetch(fetchURL, init));
   if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
   return response.text();
+}
+
+/**
+ * A table fetch that keeps what it read between visits (the table's page, header and song list), so the tables load
+ * again without asking their sites for a day ({@link COURSE_TABLE_MAX_AGE_MS}), or until `refreshedSince` (a reload of
+ * the folders). A read due goes to the site as a revalidation (`no-cache`), which the proxy passes on with the
+ * browser's validators, and a site that cannot be reached leaves the copy kept last time in use. `onRead` hears where
+ * each read came from.
+ */
+export function createCachedCourseTableFetchText(options: {
+  store: RemoteCacheStore | undefined;
+  refreshedSince?: number;
+  cacheOnly?: boolean;
+  signal?: AbortSignal;
+  now?: () => number;
+  fetchText?: (url: string, init?: RequestInit) => Promise<string>;
+  onRead?: (url: string, source: RemoteCacheSource) => void;
+}): TableFetchText {
+  const fetchText = options.fetchText ?? fetchCourseTableText;
+  const now = options.now ?? Date.now;
+  return async (url) => {
+    const { signal } = options;
+    signal?.throwIfAborted();
+    if (options.cacheOnly) {
+      const kept = await options.store?.get(`table:${url}`);
+      if (kept === undefined) throw new Error('Difficulty table is not cached');
+      return new TextDecoder().decode(kept.bytes);
+    }
+    const read = await readThroughRemoteCache(
+      `table:${url}`,
+      async () => {
+        signal?.throwIfAborted();
+        return new TextEncoder().encode(
+          await fetchText(url, { cache: 'no-cache', ...(signal === undefined ? {} : { signal }) }),
+        );
+      },
+      options.store,
+      {
+        maxAgeMs: COURSE_TABLE_MAX_AGE_MS,
+        ...(options.refreshedSince !== undefined ? { refreshedSince: options.refreshedSince } : {}),
+      },
+      now(),
+    );
+    signal?.throwIfAborted();
+    options.onRead?.(url, read.source);
+    return new TextDecoder().decode(read.bytes);
+  };
 }
 
 /** Reads a difficulty table's courses from its page or header URL. Throws when the table has no course. */
@@ -106,7 +218,11 @@ export async function importCourseTable(
 ): Promise<ImportedCourseTable> {
   const table = await fetchTableHeaderCourses(url, fetchText);
   if (table.courses.length === 0) throw new Error(`${table.label} lists no course`);
-  return { group: { label: table.label, courses: table.courses }, headerURL: table.headerURL };
+  return {
+    group: { label: table.label, courses: table.courses },
+    headerURL: table.headerURL,
+    ...(table.dataURL !== undefined ? { dataURL: table.dataURL } : {}),
+  };
 }
 
 function defaultStorage(): Storage | undefined {

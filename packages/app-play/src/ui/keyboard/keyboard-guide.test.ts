@@ -55,7 +55,7 @@ describe('buildKeyboardGuide', () => {
     const guide = buildKeyboardGuide('result', 'lr2', {}, 'ja');
     expect(rowOf(guide, '1P-keys')?.name).toBe('1P 鍵盤 1〜7');
     expect(rowOf(guide, 'result.retry')?.name).toBe('リトライ');
-    expect(controlButtonName('2P-scratch-cw', 'ja')).toBe('2P 皿 ↻');
+    expect(controlButtonName('2P-scratch-cw', 'ja')).toBe('2P スクラッチ ↻');
     expect(keyboardKeyName('ControlRight')).toBe('Right Ctrl');
   });
 
@@ -65,9 +65,10 @@ describe('buildKeyboardGuide', () => {
     expect(lift?.codes).toEqual(['Fn', 'ArrowRight']);
     expect(rowOf(windows, 'play.pause')?.keys).toEqual(['Pause (no key)', 'Tab']);
     const floating = windows.actions.find((row) => row.keys.includes('Fn+M'));
-    expect(floating?.codes).toEqual(['Fn', 'KeyM']);
+    expect(floating?.codes).toEqual(['Fn', 'KeyM', 'Digit0']);
+    expect(floating?.keys).toContain('0');
     const mac = buildKeyboardGuide('play', 'lr2', {}, 'ja', 'mac', 'laptop');
-    expect(mac.actions.some((row) => row.keys.includes('Num 0 (キーなし)'))).toBe(true);
+    expect(rowOf(mac, 'play.floating-hi-speed')?.keys).toEqual(['Num 0 (キーなし)', '0']);
     expect(mac.actions.some((row) => row.keys.includes('fn+→'))).toBe(true);
     // A full keyboard names the keys themselves.
     expect(buildKeyboardGuide('play', 'lr2', {}).actions.some((row) => row.keys.includes('End'))).toBe(true);

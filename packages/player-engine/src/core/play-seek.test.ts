@@ -84,4 +84,8 @@ describe('isPracticeLoopDue', () => {
     expect(isPracticeLoopDue({ ...tick, nowSec: 2, settled: false, closed: true })).toBe(true);
     expect(isPracticeLoopDue({ ...tick, nowSec: 6, settled: false, pastHorizon: true })).toBe(true);
   });
+  test('loops a seamless play at the range’s end without waiting for the last judgments', () => {
+    expect(isPracticeLoopDue({ ...tick, settled: false, seamless: true })).toBe(true);
+    expect(isPracticeLoopDue({ ...tick, nowSec: 4.19, settled: false, seamless: true })).toBe(false);
+  });
 });

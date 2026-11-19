@@ -12,7 +12,9 @@ import type { BeatorajaThemeBundle } from '@be-music/player-browser/skin';
 import {
   formatGaugeLabel,
   isDuplicatedBattleChoice,
+  keepGaugePick,
   keepPracticeGauge,
+  practiceGaugeSource,
   type PlayOptions,
 } from '@be-music/player-scene-model';
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
@@ -25,14 +27,10 @@ import {
   type OptionRow,
 } from '../options-controls.ts';
 import { paneOptions, type PaneBinding } from '../../pane-controls.ts';
-import {
-  migrateOptionValue,
-  practiceReadsJudgeRankAndTotal,
-  resolveGaugeTypes,
-  type GaugeType,
-} from '@be-music/player-engine/ruleset';
+import { migrateOptionValue, practiceReadsJudgeRankAndTotal, type GaugePick } from '@be-music/player-engine/ruleset';
 import { readStoredCompressorTunings, type CompressorTuning } from '../../compressor-tuning.ts';
-import { readStoredCourseTableURLs } from '../../course-table-import.ts';
+import { readStoredCourseTableURLs, removedDefaultCourseTableURLs } from '../../course-table-import.ts';
+import { readStoredBemuseServerURLs } from '../../bemuse-server.ts';
 import { captureOptionSettings } from '../../option-settings.ts';
 import { optionSettingsSync } from '../../option-settings-sync.ts';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
@@ -68,7 +66,9 @@ import { buildLibraryFolder } from './library.ts';
 import { PlayLock } from './play-lock.ts';
 import {
   battleModeItems,
+  crazyNotesItems,
   bottomShiftableGaugeItems,
+  gaugeItems,
   laneOptionItems,
   menuLaneCovers,
   practiceGaugeItems,
@@ -79,10 +79,11 @@ import { detectRenderResolution, scheduleFirstRunResolutionDetect } from './rend
 import { applyBeatorajaSkinSwitchIfActive, rebuildBeatorajaSkinPickers } from './skin-pickers.ts';
 import { buildSkinFolder, rebuildLR2ThemePicker, rebuildSkinFamilyPicker, rebuildSkinSettingsFolder } from './skin.ts';
 import { OptionHelp } from './help.ts';
+import { OptionSearch } from './search.ts';
 import { buildKeyConfigFolder } from './keys.ts';
 import { relabelOptions } from './labels.ts';
 import { buildTempoFolder } from './tempo.ts';
-import { onPlayerLangChange, playerLang } from '../../player-copy.ts';
+import { onPlayerLangChange, playerLang, playerText } from '../../player-copy.ts';
 import { describeRecordConsequence } from '../../services/record-consequence.ts';
 import { releaseFocusOnClose } from '../dialog-focus.ts';
 /**
@@ -100,8 +101,21 @@ export interface OptionsDialogDeps {
   readonly silentMode: SilentModeSetting;
   /** The Leaderboard panel, which fills its own folder. */
   readonly leaderboard: Pick<LeaderboardPanel, 'buildFolder'>;
-  /** The library service: "Import table courses" and "Load from URLs" add to the library through it. */
-  readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
+  /**
+   * The library service: the difficulty tables, "Load from URLs" and the Bemuse music servers add to the library through
+   * it, a removed table leaves it, and "Reload folders" reads it again.
+   */
+  readonly library: Pick<
+    LibraryService,
+    | 'importCourseTables'
+    | 'removeCourseTable'
+    | 'courseTableLabel'
+    | 'onCourseTablesChange'
+    | 'loadFromURL'
+    | 'loadBemuseServers'
+    | 'refreshBemuseReplayGain'
+    | 'reloadCharts'
+  >;
   /** The records service, whose best records "Clear best records" empties. */
   readonly records: Pick<RecordsService, 'chartBestRecords'>;
   /** The course-maker service, whose card "My courses…" opens. */
@@ -185,7 +199,17 @@ export class OptionsDialog {
   public readonly guiState: PlayerGUIState;
   public readonly sceneHost: PixiSceneHost;
   public readonly silentMode: SilentModeSetting;
-  public readonly library: Pick<LibraryService, 'importCourseTables' | 'loadFromURL'>;
+  public readonly library: Pick<
+    LibraryService,
+    | 'importCourseTables'
+    | 'removeCourseTable'
+    | 'courseTableLabel'
+    | 'onCourseTablesChange'
+    | 'loadFromURL'
+    | 'loadBemuseServers'
+    | 'refreshBemuseReplayGain'
+    | 'reloadCharts'
+  >;
   public readonly records: Pick<RecordsService, 'chartBestRecords'>;
   public readonly courseMaker: Pick<CourseMakerService, 'panel'>;
   public readonly skinSettings: StoredSkinSettings;
@@ -249,11 +273,11 @@ export class OptionsDialog {
   public randomSeed2PController: PaneBinding | undefined;
   public random1PController: OptionBinding<PlayOptions['random1P']> | undefined;
   public random2PController: OptionBinding<PlayOptions['random2P']> | undefined;
-  public gaugeController: OptionBinding<GaugeType> | undefined;
+  public gaugeController: OptionBinding<GaugePick> | undefined;
   /** The quick options panel (`quick-options.ts`), and the controls on it whose choices or visibility follow others. */
   public quickOptionsPanel: OptionFolder | undefined;
   public quickRandom1PController: OptionBinding<PlayOptions['random1P']> | undefined;
-  public quickGaugeController: OptionBinding<GaugeType> | undefined;
+  public quickGaugeController: OptionBinding<GaugePick> | undefined;
   public quickHsFixController: OptionBinding<PlayOptions['hsFix']> | undefined;
   public quickHiSpeedController: PaneBinding | undefined;
   public bottomShiftableGaugeController: OptionBinding<PlayOptions['bottomShiftableGauge']> | undefined;
@@ -292,6 +316,8 @@ export class OptionsDialog {
   public ghostController: OptionBinding<GhostSourceSetting> | undefined;
   /** "Ghost mode": how the ghost shows. Disabled with "Ghost". */
   public ghostModeController: OptionBinding<GhostModeSetting> | undefined;
+  /** nanasigroove's NOTES, whose COPY and DBLCOPY a course bar dims. */
+  public crazyNotesController: OptionBinding<PlayOptions['crazyNotes']> | undefined;
   /** "Ghost status": whether the bar under the cursor would show the picked ghost, or why not. */
   public ghostStatusController: PaneBinding | undefined;
   /** What "Ghost status" shows. */
@@ -309,6 +335,7 @@ export class OptionsDialog {
   /** LR2 tab holding the discovered theme picker. */
   public lr2SkinPage: Pick<OptionContainer, 'addBinding'> | undefined;
   /** Native list whose options follow loaded theme families without replacing its event handlers. */
+  public confirmDroppedSkinController: OptionBinding<boolean> | undefined;
   public skinFamilyController: OptionBinding<SkinFamilyOverride> | undefined;
   /** Native theme list, refreshed as drops discover new themes. */
   public lr2ThemeController: OptionBinding<string> | undefined;
@@ -442,10 +469,23 @@ export class OptionsDialog {
     this.gui = gui;
     // Help's own text for each control, beside it; rows made since the last opening (a theme's pickers) get theirs too.
     const help = new OptionHelp(dialog, playerLang);
+    const search = new OptionSearch(
+      dialog,
+      body,
+      (row) => help.text(row),
+      () => playerText().shell.optionsSearchEmpty,
+    );
     gui.on('fold', (event) => {
       if (event.expanded) {
         help.attach();
         relabelOptions(gui, playerLang());
+        // The search field is the dialog's first control, so opening focuses it: type to find an option. A touch
+        // screen would raise its keyboard over the dialog, so there the focus goes to the selected tab.
+        if (matchMedia('(pointer: coarse)').matches) {
+          dialog.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus();
+        }
+      } else {
+        search.clear();
       }
       // The select screen's keys change options too, so the row is read again as the dialog opens.
       if (event.expanded) this.refreshRecordConsequence();
@@ -524,10 +564,13 @@ export class OptionsDialog {
    * Status and the FPS graph are not settings and do not come through here.
    */
   public scheduleSettingsSave(): void {
+    const courseTableURLs = readStoredCourseTableURLs();
     const document = captureOptionSettings(this.guiState, {
       compressorTuning: this.compressorTunings,
       skinSettings: this.skinSettings,
-      courseTableURLs: readStoredCourseTableURLs(),
+      courseTableURLs,
+      removedDefaultCourseTableURLs: removedDefaultCourseTableURLs(courseTableURLs),
+      bemuseServerURLs: readStoredBemuseServerURLs(),
       workerCount: getBrowserWorkerCount(),
     });
     optionSettingsSync.save(document);
@@ -542,11 +585,17 @@ export class OptionsDialog {
   }
   /**
    * Tells the menu about the bar under the cursor: "Ghost status" says whether a play of it would show the picked ghost
-   * (`resolveGhostStatus`), and a course bar disables "Ghost" and "Ghost mode", their choices kept for the charts.
+   * (`resolveGhostStatus`), and a course bar disables "Ghost" and "Ghost mode", their choices kept for the charts. A
+   * course bar also dims NOTES COPY and DBLCOPY, which a course stage leaves out (`refreshCourseBarChoices`).
    */
   public setGhostAvailability(facts: GhostBarFacts | undefined): void {
     this.ghostBar = facts;
     this.refreshGhostAvailability();
+    this.refreshCourseBarChoices();
+  }
+  /** Offers NOTES COPY and DBLCOPY on a chart bar and dims them on a course bar, keeping the pick for the charts. */
+  public refreshCourseBarChoices(): void {
+    if (this.crazyNotesController) this.crazyNotesController.options = crazyNotesItems(this.ghostBar?.course === true);
   }
   /** The "Record" row: what the options picked do to a play's record, before it is played. */
   public recordConsequenceController: PaneBinding | undefined;
@@ -679,13 +728,15 @@ export class OptionsDialog {
     if (this.gauge2PController) this.gauge2PController.hidden = !twoPlayer;
     for (const controller of this.mRanControllers) controller.hidden = !twoPlayer;
     if (this.lr2ExtraLevelController) this.lr2ExtraLevelController.unavailable = !this.guiState.lr2ExtraMode;
+    // nanasigroove's ADDMINE replaces the beatoraja mine option while it is on.
+    if (this.mineModifierController) this.mineModifierController.unavailable = this.guiState.crazyAddMine;
     if (!beatoraja && this.guiState.longNoteMode !== 'LN') {
       this.guiState.longNoteMode = 'LN';
       this.setPlayOptions({ longNoteMode: 'LN' });
     }
     if (this.longNoteModeController) this.longNoteModeController.hidden = !beatoraja;
-    // PRACTICE is offered under every ruleset (#933): its gauge list is the judge ruleset's own gauges, GAUGE CATEGORY
-    // is beatoraja's alone, and AC reads neither JUDGERANK nor TOTAL.
+    // PRACTICE is offered under every ruleset (#933): its gauge list is the judge ruleset's own gauges, then the other
+    // sources' (ADR 0019), GAUGE CATEGORY is beatoraja's alone, and AC reads neither JUDGERANK nor TOTAL.
     const practice = this.guiState.practice;
     this.practiceControllers.forEach((controller, index) => {
       controller.hidden = index > 0 && !practice;
@@ -696,10 +747,12 @@ export class OptionsDialog {
       this.setPlayOptions({ practiceGauge });
     }
     if (this.practiceGaugeController) {
-      this.practiceGaugeController.options = practiceGaugeItems(ruleset);
+      this.practiceGaugeController.options = practiceGaugeItems(ruleset, this.guiState.practiceGauge);
       this.practiceGaugeController.refresh();
     }
-    if (this.practiceGaugeCategoryController) this.practiceGaugeCategoryController.hidden = !practice || !beatoraja;
+    if (this.practiceGaugeCategoryController)
+      this.practiceGaugeCategoryController.hidden =
+        !practice || practiceGaugeSource(this.guiState.practiceGauge, ruleset) !== 'beatoraja';
     for (const controller of this.practiceJudgeRankAndTotalControllers)
       controller.hidden = !practice || !practiceReadsJudgeRankAndTotal(ruleset);
     if (!beatoraja && this.guiState.customJudge) {
@@ -769,30 +822,22 @@ export class OptionsDialog {
         controller.refresh();
       }
     }
-    const choices = resolveGaugeTypes(this.guiState.judgeRuleset);
-    if (!choices.includes(this.guiState.gauge)) {
-      this.guiState.gauge = 'GROOVE';
-      this.setPlayOptions({ gauge1P: 'GROOVE' });
+    // The judge ruleset's own gauges, then the other sources' as qualified picks (ADR 0019, #1171). A qualified pick
+    // survives a ruleset change; a bare one the new ruleset does not offer falls back to GROOVE (keepGaugePick).
+    const gauge = keepGaugePick(this.guiState.gauge, ruleset);
+    if (gauge !== this.guiState.gauge) {
+      this.guiState.gauge = gauge;
+      this.setPlayOptions({ gauge1P: gauge });
     }
-    if (!choices.includes(this.guiState.gauge2P)) {
-      this.guiState.gauge2P = 'GROOVE';
-      this.setPlayOptions({ gauge2P: 'GROOVE' });
+    const gauge2P = keepGaugePick(this.guiState.gauge2P, ruleset);
+    if (gauge2P !== this.guiState.gauge2P) {
+      this.guiState.gauge2P = gauge2P;
+      this.setPlayOptions({ gauge2P });
     }
+    const gauges = gaugeItems(ruleset, [gauge, gauge2P]);
     for (const controller of [this.gaugeController, this.gauge2PController, this.quickGaugeController]) {
       if (!controller) continue;
-      controller.options = paneOptions(choices).map((item) => ({
-        ...item,
-        text:
-          item.value === 'ASSIST-EASY'
-            ? this.guiState.judgeRuleset === '____'
-              ? 'ASSISTED EASY'
-              : 'ASSIST EASY'
-            : item.value === 'DEATH' && this.guiState.judgeRuleset === 'beatoraja'
-              ? 'HAZARD'
-              : item.value === 'GROOVE' && this.guiState.judgeRuleset !== 'lr2'
-                ? 'NORMAL'
-                : (formatGaugeLabel(item.text) ?? item.text),
-      }));
+      controller.options = gauges;
       controller.refresh();
     }
   }

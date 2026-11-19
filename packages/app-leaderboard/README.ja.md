@@ -2,14 +2,27 @@
 
 # @be-music/app-leaderboard
 
-Be-Music の Leaderboard API です。Cloudflare Workers 上の Hono アプリで、D1 と R2 を使います。設計は
-[docs/leaderboard.ja.md](../../docs/leaderboard.ja.md) にあり、この README は動かし方とデプロイ方法を扱います。
+Be-Music Leaderboard の API を Cloudflare Workers 上で提供する Hono アプリです。データの保存には D1 と R2 を使います。[サービス仕様](../../docs/leaderboard.ja.md)
+
+<details>
+<summary>目次</summary>
+
+- [実装済みのもの](#実装済みのもの)
+- [準備](#準備)
+  - [Secrets](#secrets)
+- [データベース](#データベース)
+- [デプロイ](#デプロイ)
+- [ページ](#ページ)
+  - [アイコン](#アイコン)
+- [テスト](#テスト)
+
+</details>
 
 ## 実装済みのもの
 
 - 独立した Accounts に OIDC でログイン。ゲスト、パスキー、設定済みの Discord／Google に対応。
 - `POST /api/v0/scores`: リプレイ（gzip）を送信します。サーバーは対象かどうかの判定と、play / chart fingerprint の
-  ドキュメントの確認（検証レイヤー L1〜L3、`#RANDOM` のない譜面では L4 も）を行い、`lr2`・`beatoraja`・`____` で再計算し、
+  ドキュメントの確認（検証レイヤー L1〜L3、`#RANDOM` のない譜面では L4 も）を行い、`lr2`・`beatoraja`・`____`・`plugout` で再計算し、
   ログを R2 に保存して自己ベストを更新します。再送された同じプレイはそれと分かり、別のアカウントからの同じプレイは
   拒否します。
 - `GET /api/v0/charts/:chartFingerprint/leaderboard` と `.../leaderboard/me`: ランキング。アシスト付きのプレイ、匿名の
@@ -24,7 +37,7 @@ Be-Music の Leaderboard API です。Cloudflare Workers 上の Hono アプリ�
 
 未実装: 新しい `#RANDOM` の結果に対する L4 と L5、ライバル。スコア共有画像はブラウザーで生成し、`PUT /api/v0/scores/:id/card` で送信して `/scores/:id/card` で配信します。
 
-スコアの送信を、Worker が確かめる順に示します（`src/api/v0.ts`、`src/scores/submit.ts`）。クライアントを含む全体のシーケンスは [docs/leaderboard.ja.md 5.2 節](../../docs/leaderboard.ja.md#52-送信処理) にあります。
+Worker はスコアの送信を次の順で検証します（`src/api/v0.ts`、`src/scores/submit.ts`）。クライアントを含む処理全体は [docs/leaderboard.ja.md 5.2 節](../../docs/leaderboard.ja.md#52-送信処理) を参照してください。
 
 ```mermaid
 flowchart TD
@@ -35,7 +48,7 @@ flowchart TD
   dup -->|"はい、別のアカウント"| e409["409"]
   dup -->|いいえ| docs{"ドキュメントが fingerprint<br/>と一致（L1〜L4）?"}
   docs -->|いいえ| reject["409 / 422"]
-  docs -->|はい| sim["lr2・beatoraja・____<br/>で再計算"]
+  docs -->|はい| sim["lr2・beatoraja・____・plugout<br/>で再計算"]
   sim --> store["R2: リプレイ<br/>D1: スコア、結果、ベスト"]
   store --> r201["201: 結果と順位"]
 ```

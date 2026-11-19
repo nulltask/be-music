@@ -39,7 +39,7 @@ export function resolveHeaderCommandAlias(
 }
 
 /** Header commands whose lines add up instead of replacing each other, so file order never makes one override another. */
-const REPEATABLE_HEADER_COMMANDS: ReadonlySet<string> = new Set(['STP', 'WAVCMD', 'LNOBJ', 'OPTION']);
+const REPEATABLE_HEADER_COMMANDS: ReadonlySet<string> = new Set(['STP', 'WAVCMD', 'OPTION']);
 
 /**
  * Which definition a header line sets, for the file-order rule: the command, plus the normalized object key of an
@@ -53,7 +53,8 @@ export function resolveHeaderDefinitionKey(command: string, commandRaw: string, 
   if (indexed) {
     const directive = indexed[1]!;
     const keyRaw = base === 62 ? commandRaw.slice(directive.length) : indexed[2]!;
-    return `${directive}${normalizeObjectKey(keyRaw, base)}`;
+    // #WAV and #EXWAV define one slot, as nanasigroove stores them in one table (#1197).
+    return `${directive === 'EXWAV' ? 'WAV' : directive}${normalizeObjectKey(keyRaw, base)}`;
   }
   return command;
 }
@@ -268,6 +269,9 @@ function applyIndexedHeaderLine(
   switch (directive) {
     case 'WAV':
       applyIndexedStringValue(json.resources.wav, key, value);
+      // nanasigroove keeps #WAV and #EXWAV in one table, so a later #WAV replaces the slot's EXWAV (#1197).
+      if (value.length > 0 && key in json.bms.exWAV && !json.bms.exWAVOverridden?.includes(key))
+        (json.bms.exWAVOverridden ??= []).push(key);
       return;
     case 'BMP':
       applyIndexedStringValue(json.resources.bmp, key, value);
@@ -289,6 +293,10 @@ function applyIndexedHeaderLine(
       return;
     case 'EXWAV':
       applyIndexedStringValue(json.bms.exWAV, key, value);
+      if (value.length > 0 && json.bms.exWAVOverridden !== undefined) {
+        json.bms.exWAVOverridden = json.bms.exWAVOverridden.filter((slot) => slot !== key);
+        if (json.bms.exWAVOverridden.length === 0) delete json.bms.exWAVOverridden;
+      }
       return;
     case 'EXBMP':
       applyIndexedStringValue(json.bms.exBMP, key, value);

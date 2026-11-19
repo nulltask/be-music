@@ -24,7 +24,8 @@ import {
   STAGE_WIDTH as DESIGN_WIDTH,
   stageProgress,
 } from '@be-music/player-skin-sdk';
-import { addHUDNumber, addHUDText, type ChildPool } from '../pixi-kit/index.ts';
+import { addHUDNumber, type ChildPool } from '../pixi-kit/index.ts';
+import { addSynesthesiaHUDText as addHUDText } from './figures.ts';
 
 /** Stand-in for a layout without a BGA (a page-wide keyboard field): milestones then play in their area. */
 const NO_MONITOR: BeMusicRect = { x: 0, y: 0, w: 0, h: 0 };

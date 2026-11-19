@@ -2,7 +2,7 @@ import { resolveChartOptionsAt } from '@be-music/chart-model';
 import { keyBoundBGAResourceKey } from '../../chart/key-bound-bga.ts';
 import { canDrawBGAPixelsOnGPU, drawBGAPixelsOnGPU } from '../../media/bga-gpu-pixels.ts';
 import { isColorKeyVideoCanvas } from '../../media/color-key-video.ts';
-import type { BGACameraFeed } from '../../media/bga-camera.ts';
+import type { BGAFeed } from '../../media/bga-camera.ts';
 import { fitBGACameraRect } from '../../media/bga-camera-fit.ts';
 /**
  * The chart's BGA on the built-in and LR2 play screens: composites the base, layer and POOR
@@ -65,7 +65,8 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
   }
   ctx.bgaLayerPool.begin();
   ctx.bgaTargetsScratch.length = 0;
-  const camera = ctx.play.bgaCamera;
+  // The camera, else an LRX chart's composited BGA (plugout's transforms and layers 203 / 204).
+  const camera = ctx.play.bgaCamera ?? (ctx.options.bga !== 'OFF' ? ctx.play.lrxBGA : undefined);
   if (camera !== undefined) {
     renderCameraBGA(ctx, camera);
     return;
@@ -401,7 +402,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
  * (`fitBGACameraRect`). It shows whatever the BGA setting and whether the chart has a BGA, since the player turned it
  * on. The chart's videos pause; when the camera goes, the next frame starts the active cues' videos again at chart time.
  */
-function renderCameraBGA(ctx: BGARendererContext, camera: BGACameraFeed): void {
+function renderCameraBGA(ctx: BGARendererContext, camera: BGAFeed): void {
   for (const [slot, active] of Object.entries(ctx.play.bgaActiveVideos)) {
     const video = active === undefined ? undefined : ctx.play.bgaVideos.get(active.key)?.video;
     if (video !== undefined && !video.paused) video.pause();

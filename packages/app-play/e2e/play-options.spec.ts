@@ -344,7 +344,7 @@ for (const skin of ['plain', 'native', 'synesthesia'] as const) {
     await player.waitFor((state) => state.play?.hiSpeed === 2.75, 'source half-step');
     await player.key('PageDown');
     await player.waitFor((state) => (state.play?.hiSpeed ?? 0) < 2.25, 'cover-coupled source speed');
-    await player.key('Numpad0');
+    await player.key('Digit0');
     await player.key('Numpad0');
     await player.waitForResult(0);
     const replay = await player.lastReplay();

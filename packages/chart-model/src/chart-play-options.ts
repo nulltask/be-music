@@ -40,14 +40,23 @@ export interface ChartPlayOptions {
 
 /**
  * The recorded form: versioned, so a later profile never reinterprets an older replay. `notes` joined version 1 without a
- * bump. Version 2 records the chart’s BASE-SPEED while keeping the player tempo relative to it.
+ * bump. Version 2 records the chart’s BASE-SPEED while keeping the player tempo relative to it. Version 3 reads the
+ * CRAZY gameplay options as nanasigroove 1.552 plays them: GOOD2BAD / GREAT2BAD change the gauge instead of the judge
+ * windows, HELLJUDGE narrows each judgment by its own ratio, ADDMINE places nanasigroove's mines, and NOTES DOUBLE /
+ * COPY / DBLCOPY convert the chart as nanasigroove does. Versions 1 and 2
+ * keep their earlier readings (`isLegacyChartPlayOptionProgram`).
  */
 export interface ChartPlayOptionProgram {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   options: ChartPlayOptions;
 }
 
-export const CHART_PLAY_OPTION_PROGRAM_VERSION = 2;
+export const CHART_PLAY_OPTION_PROGRAM_VERSION = 3;
+
+/** Whether `program` predates version 3, so its CRAZY gameplay options keep their earlier Be-Music readings. */
+export function isLegacyChartPlayOptionProgram(program: ChartPlayOptionProgram): boolean {
+  return program.version < 3;
+}
 
 type Patch = (options: ChartPlayOptions) => ChartPlayOptions;
 
@@ -117,7 +126,62 @@ export function compileChartPlayOptions(timeline: Pick<ChartOptionTimeline, 'ini
     const patch = parseChartPlayOption(resolveChartLegacyOptionAlias(declaration) ?? declaration);
     if (patch !== undefined) options = patch(options);
   }
-  return { version: options.baseSpeed === undefined ? 1 : CHART_PLAY_OPTION_PROGRAM_VERSION, options };
+  const crazy =
+    options.judge !== undefined ||
+    options.hellJudge === true ||
+    options.addMine === true ||
+    options.notes !== undefined;
+  return { version: crazy ? CHART_PLAY_OPTION_PROGRAM_VERSION : options.baseSpeed === undefined ? 1 : 2, options };
+}
+
+/**
+ * The CRAZY gameplay options a player can select in place of a chart's (#1177, #1184, #1185). The player's ADDMINE is
+ * the mine option `NANASI_ADD` in `@be-music/player-engine`.
+ */
+export type PlayerChartPlayOptions = Pick<ChartPlayOptions, 'judge' | 'hellJudge' | 'notes'>;
+
+/**
+ * `program` with the player's CRAZY gameplay selections added where the chart sets none: the chart's own choice wins
+ * within each family (GOOD2BAD / GREAT2BAD, HELLJUDGE, NOTES), as nanasigroove lets a chart's `#OPTION` override the
+ * player's. A program that gains a selection is version 3, whose readings are nanasigroove's.
+ */
+export function withPlayerChartPlayOptions(
+  program: ChartPlayOptionProgram,
+  player: PlayerChartPlayOptions | undefined,
+): ChartPlayOptionProgram {
+  if (player === undefined) return program;
+  const options: ChartPlayOptions = { ...program.options };
+  let changed = false;
+  if (player.judge !== undefined && options.judge === undefined) {
+    options.judge = player.judge;
+    changed = true;
+  }
+  if (player.hellJudge === true && options.hellJudge !== true) {
+    options.hellJudge = true;
+    changed = true;
+  }
+  if (player.notes !== undefined && options.notes === undefined) {
+    options.notes = player.notes;
+    changed = true;
+  }
+  return changed ? { version: CHART_PLAY_OPTION_PROGRAM_VERSION, options } : program;
+}
+
+/**
+ * The selections in `effective` that came from the player (#1243): the CRAZY gameplay options a play ran with that the
+ * chart's own `declared` options do not set, as {@link withPlayerChartPlayOptions} adds them. `effective` is the program
+ * narrowed to the play (a course stage leaves COPY out), so a selection that took no effect is not listed, and a value
+ * the play narrowed (DBLCOPY that kept only its DOUBLE) is listed as it ran.
+ */
+export function playerChartPlayOptionsOf(
+  declared: ChartPlayOptions,
+  effective: ChartPlayOptions,
+): PlayerChartPlayOptions {
+  const player: PlayerChartPlayOptions = {};
+  if (effective.judge !== undefined && declared.judge === undefined) player.judge = effective.judge;
+  if (effective.hellJudge === true && declared.hellJudge !== true) player.hellJudge = true;
+  if (effective.notes !== undefined && declared.notes === undefined) player.notes = effective.notes;
+  return player;
 }
 
 /** True when `program` forces anything. */

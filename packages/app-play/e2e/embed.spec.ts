@@ -4,7 +4,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { unzipSync, zipSync } from 'fflate';
 import { createHash } from 'node:crypto';
 import { lr2CourseList } from '../../../scripts/course-checklist/fixtures.ts';
-import { SMOKE } from './support.ts';
+import { smokeGroup } from './support.ts';
 
 /** Where the specs serve the zipped fixture folders on the embed's own origin. */
 const TRACK_ROUTE = '/__e2e/track/';
@@ -48,7 +48,7 @@ async function expectInside(outer: Locator, inner: Locator): Promise<void> {
 
 test(
   'a single chart waits behind a play button, plays in AUTO with seekable controls, and offers a replay',
-  SMOKE,
+  smokeGroup(1),
   async ({ page }, info) => {
     await openEmbed(page, ['songs/fixA']);
     const play = page.getByRole('button', { name: 'Play', exact: true });

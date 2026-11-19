@@ -8,7 +8,7 @@ import {
   createChartFingerprintDocument,
   createPlayFingerprintDocument,
 } from '@be-music/chart-model';
-import { parseBMS } from '@be-music/chart-parser';
+import { parseBMS } from '@be-music/chart-parser/core';
 import type { BeMusicReplay, ReplayInputEvent, ReplayNote } from '@be-music/player-engine/replay';
 import type { Env } from '../env.ts';
 

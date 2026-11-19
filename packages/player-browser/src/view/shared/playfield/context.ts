@@ -6,7 +6,7 @@ import type { BGAOpacityTimelines } from '@be-music/chart-model';
  * bombs). A play view passes itself.
  */
 
-import type { BGACameraFeed } from '../../../media/bga-camera.ts';
+import type { BGAFeed } from '../../../media/bga-camera.ts';
 import type { ResolvedChart, TimingResolver, ChartPlayVariant } from '@be-music/chart-model';
 import type { BeMusicJSON } from '@be-music/chart-source';
 import type { ScrollDistanceMapperLike, TimedLandmineNote, TimedPlayableNote } from '@be-music/player-engine/display';
@@ -63,6 +63,8 @@ export interface JudgeSideTiming {
 }
 
 export interface PlayfieldRuntime {
+  /** A seek (or a sought earlier course stage) made the play practice. */
+  readonly practice?: boolean;
   /** Where the play skin is moved and how far it is scaled (LR2's 1 / 2 + the arrows); where it is drawn without one. */
   readonly skinAdjust?: { readonly x: number; readonly y: number; readonly scale: number };
   readonly chart: LibraryChart | undefined;
@@ -74,6 +76,11 @@ export interface PlayfieldRuntime {
   readonly battleSourceVariant?: ChartPlayVariant;
   readonly laneX: Map<string, PlayfieldLaneRect>;
   readonly notes: RuntimeNote[];
+  /**
+   * The notes the lanes draw: `notes`, and past a seamless PRACTICE loop's end the next round's (the engine's
+   * `renderNotes`), which nobody judges.
+   */
+  readonly drawNotes: RuntimeNote[];
   readonly mineNotes: RuntimeMineNote[];
   readonly invisibleNotes: TimedPlayableNote[];
   readonly maxLongNoteBeatSpan: number;
@@ -148,7 +155,9 @@ export interface PlayfieldRuntime {
   readonly ghostSide?: '2P';
   readonly hasBGA: boolean;
   /** The camera shown in the BGA frame in place of the chart's BGA (`PlayScene.setBGACamera`), when one is. */
-  readonly bgaCamera?: BGACameraFeed | undefined;
+  readonly bgaCamera?: BGAFeed | undefined;
+  /** An LRX chart's composited BGA (`media/lrx-bga-compositor.ts`), shown when no camera is. */
+  readonly lrxBGA?: BGAFeed | undefined;
   readonly bgaTimeline: {
     base: BGACue[];
     layer: BGACue[];

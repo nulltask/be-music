@@ -1,3 +1,4 @@
+import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
 /**
  * Media preparation for a play on the built-in and LR2 play screens (`PlaySession`): the play's AudioContext,
  * audio bus and analyser, the decoded (and, for keep pitch, stretched) samples, the NONSTOP stage mixer and the
@@ -7,13 +8,16 @@
  * The functions read and write the play's state through {@link PlayMediaContext}; the play session passes itself.
  */
 
-import type { TimedSampleTrigger } from '@be-music/chart-model';
+import { resolveLRXBGAProgram, type TimedSampleTrigger, type TimingResolver } from '@be-music/chart-model';
 import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
 import { resolveJudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { TimedPlayableNote } from '@be-music/player-engine/display';
 import type { Texture } from 'pixi.js';
-import { loadPlaySamples } from '../../chart/play-audio.ts';
+import { loadPlaySamples, type PlaySampleWindow } from '../../chart/play-audio.ts';
+import type { PreparedPlaybackChartData } from '@be-music/player-engine';
 import { loadPlayBGA, releaseVideo } from '../../chart/play-bga.ts';
+import { LRX_POOR_SECONDS, LRXBGACompositor } from '../../media/lrx-bga-compositor.ts';
+import type { PlayerUIFramePayload } from '@be-music/player-engine/signals';
 import type { LibraryChart } from '@be-music/player-scene-model';
 import type { BrowserAssetSource } from '../../collection/types.ts';
 import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
@@ -31,7 +35,7 @@ import { createNonstopStageMixer, type NonstopStageMixer } from '../../runtime/n
 import { createPlayAudioGraph } from '../../runtime/play-audio-graph.ts';
 import { chartToElapsedSeconds, resolveSamplePlaybackRate, stretchSlicePlayback } from '../../runtime/play-tempo.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
-import type { BGACue } from '../../chart/bga-timeline.ts';
+import { clipBGACuesToWindow, type BGACue } from '../../chart/bga-timeline.ts';
 import type { PlayDisposeOptions, PlaySessionOptions } from './play-options.ts';
 import { resolveGameplayAudioTailCleanupDelayMs } from './result-delay.ts';
 
@@ -53,11 +57,16 @@ export interface PlayMediaContext {
       | 'judgeTimingAutoAdjust'
       | 'replay'
       | 'guideSounds'
+      | 'practiceRange'
     >
   >;
   readonly chart: LibraryChart | undefined;
   readonly source: BrowserAssetSource | undefined;
   readonly resolvedChart: BeMusicJSON | undefined;
+  /** The chart the engine plays (`prepareChart`), prepared before the samples decode. */
+  readonly preparedChart:
+    | Pick<PreparedPlaybackChartData, 'resolvedChart' | 'practicePlayStartSeconds' | 'totalSeconds'>
+    | undefined;
   readonly disposed: boolean;
   readonly tempo: number;
   readonly playbackTempo?: number;
@@ -73,9 +82,7 @@ export interface PlayMediaContext {
   nonstopMixer: NonstopStageMixer | undefined;
   readonly decodedSamples: Map<string, AudioBuffer>;
   readonly wavCmdVolumeMultipliers: Map<string, number>;
-  bmsonSlicePlayback:
-    | Map<BeMusicEvent, { offsetSeconds: number; durationSeconds?: number; sliceId: string }>
-    | undefined;
+  bmsonSlicePlayback: Map<BeMusicEvent, WebAudioSessionSlicePlayback> | undefined;
   readonly hasBGA: boolean;
   readonly bgaTimeline: { base: BGACue[]; layer: BGACue[]; layer2?: BGACue[]; poor: BGACue[] };
   readonly poorBGAFallbackKey: string | undefined;
@@ -83,6 +90,12 @@ export interface PlayMediaContext {
   readonly bgaLayerTextures: Map<string, Texture>;
   readonly bgaVideos: Map<string, { video: HTMLVideoElement; objectURL: string; dispose?: () => void }>;
   readonly bgaSubRegionOrigins: Map<string, { x: number; y: number }>;
+  readonly timingResolver: TimingResolver | undefined;
+  readonly engineFrame: Readonly<PlayerUIFramePayload> | undefined;
+  readonly lastPoorAt: number;
+  playClock(): number;
+  /** Set once the BGA images are loaded, for an LRX chart whose BGA only the compositor can draw. */
+  lrxBGA: LRXBGACompositor | undefined;
   /** Uploads `textures` to the GPU now (Pixi's `PrepareSystem`), so the first frame that draws them does not stall. */
   preparePixiUpload(textures: Iterable<Texture | undefined>): Promise<void>;
 }
@@ -173,6 +186,7 @@ export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
       tempoPitchMode: pitchMode,
       tempoStretchAlgorithm: ctx.options.tempoStretchAlgorithm ?? 'signalsmith',
       ...(ctx.options.nonstop !== undefined ? { nonstop: ctx.options.nonstop } : {}),
+      ...practiceSampleWindow(ctx),
       isCancelled: () => ctx.disposed,
       ...(ctx.options.peakGain === true ? { peakGain: true } : {}),
       // The chart played last keeps its decodes in the audio service, so a quick retry skips decoding them.
@@ -212,6 +226,41 @@ export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
   }
 }
 
+/**
+ * The part of the chart a PRACTICE play of picked bars sounds ({@link LoadPlaySamplesOptions.window}): from where its
+ * first round starts to its end, rest bars and long notes kept from before included; `undefined` for any other play,
+ * which decodes every sample.
+ */
+function practiceSampleWindow(ctx: PlayMediaContext): { window: PlaySampleWindow } | undefined {
+  const prepared = ctx.preparedChart;
+  const range = ctx.options.practiceRange;
+  if (ctx.options.replay !== undefined || range?.endMs === undefined || prepared === undefined) return undefined;
+  if (prepared.practicePlayStartSeconds === undefined) return undefined;
+  return {
+    window: {
+      startSeconds: prepared.practicePlayStartSeconds,
+      endSeconds: prepared.totalSeconds,
+      triggers: prepared.resolvedChart.sampleTriggers,
+    },
+  };
+}
+
+/**
+ * The BGA cues a play loads the images of: for a PRACTICE play of picked bars, those its window shows
+ * ({@link clipBGACuesToWindow}), else every cue.
+ */
+function practiceBGATimeline(ctx: PlayMediaContext): PlayMediaContext['bgaTimeline'] {
+  const window = practiceSampleWindow(ctx)?.window;
+  if (window === undefined) return ctx.bgaTimeline;
+  const { base, layer, layer2, poor } = ctx.bgaTimeline;
+  return {
+    base: clipBGACuesToWindow(base, window),
+    layer: clipBGACuesToWindow(layer, window),
+    ...(layer2 !== undefined ? { layer2: clipBGACuesToWindow(layer2, window) } : {}),
+    poor: clipBGACuesToWindow(poor, window),
+  };
+}
+
 /** Every sample's playback rate: the play tempo when it moves the pitch, 1 when the samples were stretched to it. */
 export function samplePlaybackRate(ctx: Pick<PlayMediaContext, 'options' | 'tempo' | 'playbackTempo'>): number {
   return resolveSamplePlaybackRate(ctx.options.tempoPitchMode ?? 'pitch', ctx.playbackTempo ?? ctx.tempo);
@@ -238,7 +287,7 @@ export async function prepareBGA(ctx: PlayMediaContext): Promise<void> {
     bmsonBGACues: ctx.options.nonstop?.bmsonBGA,
     source,
     chartPath: chartEntry.chartPath,
-    timeline: ctx.bgaTimeline,
+    timeline: practiceBGATimeline(ctx),
     poorFallbackKey: ctx.poorBGAFallbackKey,
     into: {
       textures: ctx.bgaTextures,
@@ -254,6 +303,20 @@ export async function prepareBGA(ctx: PlayMediaContext): Promise<void> {
     isCancelled: () => ctx.disposed,
   });
   if (ctx.disposed) return;
+  // An LRX chart that moves, crops or chains its BGA, or uses layer 203 / 204, is drawn as plugout draws it.
+  const program =
+    ctx.timingResolver !== undefined ? resolveLRXBGAProgram(chart, ctx.timingResolver.beatToSeconds) : undefined;
+  if (program !== undefined) {
+    ctx.lrxBGA?.dispose();
+    ctx.lrxBGA = new LRXBGACompositor(
+      program,
+      { textures: ctx.bgaTextures, layerTextures: ctx.bgaLayerTextures, videos: ctx.bgaVideos },
+      {
+        seconds: () => ctx.engineFrame?.currentSeconds ?? 0,
+        showsPoor: () => ctx.lastPoorAt > 0 && ctx.playClock() - ctx.lastPoorAt < LRX_POOR_SECONDS * 1000,
+      },
+    );
+  }
   // Eager-upload every freshly loaded BGA texture (and any sub-region aliases registered above) so the first BGA
   // cue mid-chart doesn't stall on its own first sample. Mirrors the skin path in `prepare()`. This is fire-and-
   // forget from the prepareBGA callsite — `bgaReadyPromise` already gates chart start, and adding the upload to

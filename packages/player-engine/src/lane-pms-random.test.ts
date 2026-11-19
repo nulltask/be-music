@@ -215,3 +215,16 @@ test('picks the same permutation as a direct Heap search over chord supersets', 
     );
   }
 });
+
+test('keeps the outer chart’s choices when the random callback also arranges a chart', () => {
+  const first = [0, 3, 6].map((lane) => ({ channel: lanes[lane]!, timeMs: 0 }));
+  const second = [0, 1, 2, 4].map((lane) => ({ channel: lanes[lane]!, timeMs: 0 }));
+  const draw = 0.73;
+  const expected = randomizePMSPlayableLanes(first, lanes, () => draw);
+  expect(
+    randomizePMSPlayableLanes(first, lanes, () => {
+      randomizePMSPlayableLanes(second, lanes, () => 0.25);
+      return draw;
+    }),
+  ).toEqual(expected);
+});

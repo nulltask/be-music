@@ -1,9 +1,9 @@
-import { type Container, type DestroyOptions, Graphics, GraphicsContext, type Text } from 'pixi.js';
+import { CanvasTextMetrics, type Container, type DestroyOptions, Graphics, GraphicsContext, type Text } from 'pixi.js';
 
 /**
- * Long-text fitting for built-in skin text: a string wider than its `maxWidth` is squeezed horizontally, but never
- * below {@link MIN_TEXT_SQUEEZE}. Past that it stays at the minimum squeeze, is clipped to a box exactly `maxWidth`
- * wide, and scrolls through the box like a marquee (see {@link resolveMarqueeOffset}).
+ * Long-text fitting for built-in skin text: a string wider than its `maxWidth` is squeezed horizontally, down to
+ * {@link MIN_TEXT_SQUEEZE}. The remaining overflow scrolls through a clip box unless extra squeezing is enabled
+ * and would avoid a short scroll (see {@link fitTextToWidth}).
  */
 
 /** The narrowest horizontal scale a fitted text is squeezed to before it scrolls instead. */
@@ -235,6 +235,8 @@ export interface FitTextOptions {
   scale?: number;
   /** `false` clips an overflowing text at its start without scrolling (e.g. an unfocused list row). */
   scroll?: boolean;
+  /** Squeezes further when at most the final two characters would scroll. */
+  squeezeShortOverflow?: boolean;
 }
 
 /**
@@ -246,10 +248,17 @@ export function fitTextToWidth(node: Text, parent: Container, options: FitTextOp
   const width = node.width;
   const squeeze = resolveTextSqueeze(width, options.maxWidth);
   const overflow = (width * squeeze - options.maxWidth) * scale;
+  const fits = !(overflow > 0.5);
   // A rotated text cannot be clipped by an axis-aligned box; it keeps the plain squeeze.
-  if (!(overflow > 0.5) || node.rotation !== 0) {
+  if (
+    fits ||
+    node.rotation !== 0 ||
+    (options.squeezeShortOverflow &&
+      options.scroll !== false &&
+      overflow <= trailingTwoCharacterWidth(node) * squeeze * scale)
+  ) {
     stopMarquee(node);
-    node.scale.set((overflow > 0.5 ? options.maxWidth / width : squeeze) * scale, scale);
+    node.scale.set((fits ? squeeze : options.maxWidth / width) * scale, scale);
     return;
   }
   node.scale.set(squeeze * scale, scale);
@@ -268,4 +277,10 @@ export function fitTextToWidth(node: Text, parent: Container, options: FitTextOp
     `${Math.round(options.maxWidth)}|${node.text}`,
     options.scroll,
   );
+}
+
+/** Measures the last two visible characters together, including any spacing or kerning between them. */
+function trailingTwoCharacterWidth(node: Text): number {
+  const suffix = CanvasTextMetrics.graphemeSegmenter(node.text).slice(-2).join('');
+  return CanvasTextMetrics.measureText(suffix, node.style).maxLineWidth;
 }

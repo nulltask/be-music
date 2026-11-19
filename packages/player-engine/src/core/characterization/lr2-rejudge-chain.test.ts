@@ -45,20 +45,23 @@ test('LR2 chains multiple BADs, then stops after the first PGREAT', async () => 
   expect(play.simulated!.lr2!.judge).toMatchObject({ pgreat: 1, bad: 2, poor: 1 });
 });
 
-test.each(['lr2', 'beatoraja', '____'] as const)('%s never chains through a long-note head', async (judgeRuleset) => {
-  const chart = createEmptyJSON('bms');
-  chart.metadata.bpm = 240;
-  chart.metadata.rank = 2;
-  chart.bms.lnObjs = ['AA'];
-  chart.events = [
-    { measure: 1, channel: '11', position: [0, 1000], value: '01' },
-    { measure: 1, channel: '11', position: [100, 1000], value: '01' },
-    { measure: 1, channel: '11', position: [400, 1000], value: 'AA' },
-    { measure: 1, channel: '11', position: [450, 1000], value: '01' },
-  ];
-  const play = await observePlay({ driver: 'manual', chart, options: { judgeRuleset }, script: tap(1150, '11') });
-  const { ruleset: _native, ...native } = play.replay!.results!.native!;
-  const { ruleset: _simulated, ...simulated } = play.simulated![judgeRuleset]!;
-  expect(native).toEqual(simulated);
-  if (judgeRuleset === 'lr2') expect(native.judge).toMatchObject({ pgreat: 0, bad: 1, poor: 2 });
-});
+test.each(['lr2', 'beatoraja', '____', 'plugout'] as const)(
+  '%s never chains through a long-note head',
+  async (judgeRuleset) => {
+    const chart = createEmptyJSON('bms');
+    chart.metadata.bpm = 240;
+    chart.metadata.rank = 2;
+    chart.bms.lnObjs = ['AA'];
+    chart.events = [
+      { measure: 1, channel: '11', position: [0, 1000], value: '01' },
+      { measure: 1, channel: '11', position: [100, 1000], value: '01' },
+      { measure: 1, channel: '11', position: [400, 1000], value: 'AA' },
+      { measure: 1, channel: '11', position: [450, 1000], value: '01' },
+    ];
+    const play = await observePlay({ driver: 'manual', chart, options: { judgeRuleset }, script: tap(1150, '11') });
+    const { ruleset: _native, ...native } = play.replay!.results!.native!;
+    const { ruleset: _simulated, ...simulated } = play.simulated![judgeRuleset]!;
+    expect(native).toEqual(simulated);
+    if (judgeRuleset === 'lr2') expect(native.judge).toMatchObject({ pgreat: 0, bad: 1, poor: 2 });
+  },
+);

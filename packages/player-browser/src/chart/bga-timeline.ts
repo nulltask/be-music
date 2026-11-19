@@ -67,6 +67,19 @@ export function collectBGATextureLoadKeys(
   return { base, layer };
 }
 
+/**
+ * The cues of `cues` (sorted by time) a play of `[startSeconds, endSeconds]` shows: the one in force at its start and
+ * those in it. A PRACTICE play of picked bars loads only their images (`prepareBGA`).
+ */
+export function clipBGACuesToWindow(
+  cues: readonly BGACue[],
+  window: { readonly startSeconds: number; readonly endSeconds: number },
+): BGACue[] {
+  let first = 0;
+  for (let index = 0; index < cues.length; index += 1) if (cues[index]!.seconds <= window.startSeconds) first = index;
+  return cues.slice(first).filter((cue, index) => index === 0 || cue.seconds <= window.endSeconds);
+}
+
 export function pickActiveBGAKey(cues: ReadonlyArray<BGACue>, seconds: number): string | undefined {
   return pickActiveBGACue(cues, seconds)?.bmpKey;
 }

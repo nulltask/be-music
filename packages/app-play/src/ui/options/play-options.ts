@@ -1,5 +1,4 @@
 import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
-import { resolveGaugeTypes } from '@be-music/player-engine/ruleset';
 // The Options dialog's Play options folder, split into pages, the Replay / ghost folder on its last page, the View
 // folder and the Select folder. They are built with the dialog as `this` (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
@@ -25,7 +24,13 @@ import { storeReplayView } from '../../replay-view-settings.ts';
 import type { OptionsDialog } from './index.ts';
 import { buildLR2ManiaRows } from './lr2-mania.ts';
 import { PLAY_OPTION_PAGES, VIEW_OPTION_PAGES } from './folders.ts';
-import { bottomShiftableGaugeItems, laneOptionItems, practiceGaugeItems } from './play-option-items.ts';
+import {
+  bottomShiftableGaugeItems,
+  crazyNotesItems,
+  gaugeChoices,
+  laneOptionItems,
+  practiceGaugeItems,
+} from './play-option-items.ts';
 /**
  * How the player plays: auto play, hi-speed, gauge, lane options and assists.
  *
@@ -53,6 +58,7 @@ export function buildPlayOptionsFolder(
       LR2: 'lr2',
       beatoraja: 'beatoraja',
       '????': '____',
+      plugout: 'plugout',
     }).on('change', () => {
       this.refreshRulesetChoices();
       this.deps.refreshSelectRecords();
@@ -78,13 +84,7 @@ export function buildPlayOptionsFolder(
       this.setPlayOptions({ autoPlay: value });
     }),
   );
-  this.gaugeController = selectBinding(
-    judge,
-    this.guiState,
-    'gauge',
-    'Gauge',
-    resolveGaugeTypes(this.guiState.judgeRuleset),
-  );
+  this.gaugeController = selectBinding(judge, this.guiState, 'gauge', 'Gauge', gaugeChoices(this.guiState));
   trackPlayOption(
     this.gaugeController.on('change', ({ value }) => {
       this.setPlayOptions({ gauge1P: value });
@@ -126,6 +126,14 @@ export function buildPlayOptionsFolder(
       })
       .on('change', ({ value }) => this.setPlayOptions({ hRandomThresholdBPM: value })),
   );
+  for (const side of ['1P', '2P'] as const) {
+    const key = `lr2RandomScratch${side}` as const;
+    trackPlayOption(
+      lanes
+        .addBinding(this.guiState, key, { label: `Include scratch ${side} (LR2)` })
+        .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
+    );
+  }
   for (const side of ['1P', '2P'] as const) {
     const key = `randomFixedLane${side}` as const;
     trackPlayOption(
@@ -252,12 +260,13 @@ export function buildPlayOptionsFolder(
       .addBinding(this.guiState, 'scrollRate', { label: 'Scroll rate', min: 0, max: 1, step: 0.01 })
       .on('change', ({ value }) => this.setPlayOptions({ scrollRate: value })),
   );
-  this.mineModifierController = selectBinding(notes, this.guiState, 'mineModifier', 'Mines (beatoraja)', {
+  // beatoraja's mine modifiers. nanasigroove's ADDMINE is its own option below and replaces them while it is on.
+  this.mineModifierController = selectBinding(notes, this.guiState, 'mineModifier', 'Mines', {
     OFF: 'OFF',
-    REMOVE: 'REMOVE',
-    'ADD RANDOM': 'ADD_RANDOM',
-    'ADD NEAR': 'ADD_NEAR',
-    'ADD ALL': 'ADD_BLANK',
+    'REMOVE (beatoraja)': 'REMOVE',
+    'ADD RANDOM (beatoraja)': 'ADD_RANDOM',
+    'ADD NEAR (beatoraja)': 'ADD_NEAR',
+    'ADD ALL (beatoraja)': 'ADD_BLANK',
   });
   trackPlayOption(
     this.mineModifierController.on('change', ({ value }) => this.setPlayOptions({ mineModifier: value })),
@@ -312,13 +321,7 @@ export function buildPlayOptionsFolder(
     }),
   );
   // Two-player play (LR2 BATTLE): the 2P player's gauge, and That-Which-Must-Not-Be-Named's M-RAN per player.
-  this.gauge2PController = selectBinding(
-    lanes,
-    this.guiState,
-    'gauge2P',
-    'Gauge 2P',
-    resolveGaugeTypes(this.guiState.judgeRuleset),
-  );
+  this.gauge2PController = selectBinding(lanes, this.guiState, 'gauge2P', 'Gauge 2P', gaugeChoices(this.guiState));
   trackPlayOption(this.gauge2PController.on('change', ({ value }) => this.setPlayOptions({ gauge2P: value })));
   this.mRanControllers = (['mRan1P', 'mRan2P'] as const).map((key) =>
     trackPlayOption(
@@ -399,7 +402,7 @@ export function buildPlayOptionsFolder(
   ];
   const addPracticeNumbers = (
     entries: readonly (readonly [
-      'practiceStartGauge' | 'practiceJudgeRank' | 'practiceTotal',
+      'practiceStartGauge' | 'practiceJudgeRank' | 'practiceTotal' | 'practiceRestBefore' | 'practiceRestAfter',
       string,
       number,
       number,
@@ -420,17 +423,39 @@ export function buildPlayOptionsFolder(
     ['practiceStartGauge', 'GAUGE VALUE', 1, 120, 1],
     ['practiceJudgeRank', 'JUDGERANK (0 = chart)', 0, 400, 1],
     ['practiceTotal', 'TOTAL (0 = chart)', 0, 5000, 1],
+    ['practiceRestBefore', 'REST BEFORE (bars)', 0, 8, 1],
+    ['practiceRestAfter', 'REST AFTER (bars)', 0, 8, 1],
   ]);
-  // The judge ruleset's own gauges; refreshRulesetChoices relists them when the ruleset changes.
+  // A long note held into the bars from before them is kept and played from its head (a Be-Music extension).
+  this.practiceControllers.push(
+    trackPlayOption(
+      practice
+        .addBinding(this.guiState, 'practiceCarriedLongNotes', { label: 'Keep LNs held into the bars' })
+        .on('change', ({ value }) => this.setPlayOptions({ practiceCarriedLongNotes: value })),
+    ),
+  );
+  // The judge ruleset's own gauges, then the other sources' (ADR 0019); refreshRulesetChoices relists them when the
+  // ruleset changes.
   const practiceGauge = selectBinding(
     practice,
     this.guiState,
     'practiceGauge',
     'GAUGE TYPE',
-    practiceGaugeItems(this.guiState.judgeRuleset).map((item) => item.value),
+    Object.fromEntries(
+      practiceGaugeItems(this.guiState.judgeRuleset, this.guiState.practiceGauge).map((item) => [
+        item.text,
+        item.value,
+      ]),
+    ),
   );
   this.practiceGaugeController = practiceGauge;
-  trackPlayOption(practiceGauge.on('change', ({ value }) => this.setPlayOptions({ practiceGauge: value })));
+  trackPlayOption(
+    practiceGauge.on('change', ({ value }) => {
+      this.setPlayOptions({ practiceGauge: value });
+      // GAUGE CATEGORY follows a beatoraja gauge.
+      this.refreshRulesetChoices();
+    }),
+  );
   const practiceCategory = selectBinding(practice, this.guiState, 'practiceGaugeCategory', 'GAUGE CATEGORY', {
     'Play mode': 'MODE',
     FIVEKEYS: 'FIVEKEYS',
@@ -464,6 +489,33 @@ export function buildPlayOptionsFolder(
       })
       .on('change', ({ value }) => this.setPlayOptions({ longNoteRate: value })),
   );
+  // nanasigroove's CRAZY gameplay options (#1177, #1184, #1185), which no LR2 or beatoraja option matches, kept apart
+  // in their own folder at the end of the Modifiers page. A chart's own `774:CRAZY_*` / `774:NOTES_*` wins within each
+  // family.
+  const nanasi = notes.addFolder({ title: 'nanasigroove' });
+  trackPlayOption(
+    selectBinding(nanasi, this.guiState, 'crazyJudge', 'GOOD2BAD / GREAT2BAD', {
+      OFF: 'OFF',
+      GOOD2BAD: 'GOOD2BAD',
+      GREAT2BAD: 'GREAT2BAD',
+    }).on('change', ({ value }) => this.setPlayOptions({ crazyJudge: value })),
+  );
+  trackPlayOption(
+    nanasi
+      .addBinding(this.guiState, 'crazyHellJudge', { label: 'HELLJUDGE' })
+      .on('change', ({ value }) => this.setPlayOptions({ crazyHellJudge: value })),
+  );
+  trackPlayOption(
+    nanasi.addBinding(this.guiState, 'crazyAddMine', { label: 'ADDMINE' }).on('change', ({ value }) => {
+      this.setPlayOptions({ crazyAddMine: value });
+      this.refreshRulesetChoices();
+    }),
+  );
+  // A course bar dims COPY and DBLCOPY (`refreshCourseBarChoices`).
+  this.crazyNotesController = nanasi
+    .addBinding(this.guiState, 'crazyNotes', { label: 'NOTES', options: crazyNotesItems(false) })
+    .on('change', ({ value }) => this.setPlayOptions({ crazyNotes: value }));
+  trackPlayOption(this.crazyNotesController);
   // The built-in and LR2 select screens' sort and filters (an LR2 skin's buttons change them too); the list keeps
   // the bar under the cursor. A play does not read them, so they stay enabled during one.
   selectBinding(select, this.guiState, 'sort', 'Sort', [...SORT_CYCLE]).on('change', ({ value }) => {
@@ -480,6 +532,12 @@ export function buildPlayOptionsFolder(
   );
   this.hsFixController = selectBinding(hiSpeed, this.guiState, 'hsFix', 'HS-FIX', PLAY_OPTION_CHOICES.hsFix!);
   trackPlayOption(this.hsFixController.on('change', ({ value }) => this.setPlayOptions({ hsFix: value })));
+  // beatoraja's WINDOW HOLD: a play takes START as held until its last note (#1131). Read as the play starts.
+  trackPlayOption(
+    hiSpeed.addBinding(this.guiState, 'windowHold', { label: 'WINDOW HOLD (beatoraja)' }).on('change', ({ value }) => {
+      this.setPlayOptions({ windowHold: value });
+    }),
+  );
   trackPlayOption(
     selectBinding(covers, this.guiState, 'displayAreaInfo', 'Display area info', {
       OFF: 'OFF',
@@ -507,6 +565,24 @@ export function buildPlayOptionsFolder(
   covers
     .addBinding(this.guiState, 'shutter', { label: 'Cover height', min: 0, max: 1, step: 0.01 })
     .on('change', ({ value }) => setCovers({ shutter: value }));
+  // BGA, its frame size and the score graph: LR2's select buttons 72, 73 and 70, offered here for every skin.
+  trackPlayOption(
+    selectBinding(effects, this.guiState, 'bga', 'BGA', { OFF: 'OFF', ON: 'ON', 'AUTOPLAY ONLY': 'AUTOPLAY_ONLY' }).on(
+      'change',
+      ({ value }) => this.setPlayOptions({ bga: value }),
+    ),
+  );
+  trackPlayOption(
+    selectBinding(effects, this.guiState, 'bgaSize', 'BGA size', { NORMAL: 'NORMAL', EXTEND: 'EXTEND' }).on(
+      'change',
+      ({ value }) => this.setPlayOptions({ bgaSize: value }),
+    ),
+  );
+  trackPlayOption(
+    effects
+      .addBinding(this.guiState, 'scoreGraph', { label: 'Score graph' })
+      .on('change', ({ value }) => this.setPlayOptions({ scoreGraph: value })),
+  );
   trackPlayOption(
     effects
       .addBinding(this.guiState, 'bpmGuide', { label: 'BPM GUIDE (beatoraja)' })

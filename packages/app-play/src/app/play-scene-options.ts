@@ -28,6 +28,7 @@ export type PlaySceneGUIState = Pick<
   | 'actionKeys'
   | 'builtInControlScheme'
   | 'replayView'
+  | 'replayDeviceNames'
   | 'tempoEnabled'
   | 'tempoPercent'
   | 'tempoPitchMode'
@@ -102,6 +103,8 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
   const picked = {
     random1P: guiState.random1P,
     random2P: guiState.random2P,
+    lr2RandomScratch1P: playOptions.lr2RandomScratch1P,
+    lr2RandomScratch2P: playOptions.lr2RandomScratch2P,
     dpFlip: guiState.dpFlip,
     gauge: guiState.gauge,
     hiddenSudden1P: playOptions.hiddenSudden1P,
@@ -154,9 +157,15 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     randomSeed2P: playOptions.randomSeed2P,
     randomFixedLane1P: playOptions.randomFixedLane1P,
     randomFixedLane2P: playOptions.randomFixedLane2P,
+    lr2RandomScratch1P: lanes.lr2RandomScratch1P,
+    lr2RandomScratch2P: lanes.lr2RandomScratch2P,
     judgeAlgorithm: replay?.play.judgeAlgorithm ?? playOptions.judgeAlgorithm,
     longNoteModifier: playOptions.longNoteModifier,
     mineModifier: playOptions.mineModifier,
+    crazyJudge: playOptions.crazyJudge,
+    crazyHellJudge: playOptions.crazyHellJudge,
+    crazyAddMine: playOptions.crazyAddMine,
+    crazyNotes: playOptions.crazyNotes,
     scrollModifier: playOptions.scrollModifier,
     scrollSection: playOptions.scrollSection,
     scrollRate: playOptions.scrollRate,
@@ -212,6 +221,8 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
       ? { chartSHA256: input.chartHashes.sha256, chartMD5: input.chartHashes.md5 }
       : {}),
     replayRecorder: input.replayRecorder,
+    // The controllers' own names go in the replay only when the player opted in (latched at song start).
+    ...(guiState.replayDeviceNames ? { replayDeviceNames: true } : {}),
     // What the replay shows of the recorded view (the Options dialog's "Replay / ghost" toggles, latched at song start).
     replayView: { ...guiState.replayView },
     audioVolumes: { key: guiState.keyVolume / 100, bgm: guiState.bgmVolume / 100 },

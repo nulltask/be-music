@@ -2,11 +2,14 @@ import { isSoftLanding } from './scroll-modifier.ts';
 import { BmsonBGAController } from './bmson-bga.ts';
 import { resolveChartGaugeType } from '../ruleset/chart-gauge.ts';
 import { resolveChartJudgeOption } from '../ruleset/chart-judge.ts';
+import { countRulesetNotesOf } from '../ruleset/facts.ts';
+import type { TimedPlayableNote } from '../playable-notes.ts';
 import { ChartTextController } from './chart-text.ts';
 import { selectPlaybackChartSide, type SecondPlayer } from './two-player.ts';
 import { resolveEffectiveBattleMode } from './battle-mode.ts';
-import { chartNotesCopies, resolveEffectiveChartPlayOptions } from './chart-notes-options.ts';
+import { chartNotesCopies } from './chart-notes-options.ts';
 import { arrangeChartPlayLanes } from './chart-play-lanes.ts';
+import { resolveChartAddMineModifier, resolveChartPlayProgram } from './chart-play-options.ts';
 import { applySevenToNine } from './seven-to-nine.ts';
 import { clampExtraNoteDepth } from './extra-note-modifier.ts';
 import { buildAutoKeyBoundBGAInputs, KeyBoundBGAController } from './key-bound-bga.ts';
@@ -20,6 +23,7 @@ import {
   compileChartGaugeOptions,
   compileChartOptions,
   compileChartPlayOptions,
+  isLegacyChartPlayOptionProgram,
   resolveChartOptionsAt,
   type ChartOptionProgram,
   isPlayLaneSoundChannel,
@@ -69,6 +73,7 @@ import {
   createNoTUIPlaybackStateLogger,
   emitPlayerLog,
   resolveOutputWriter,
+  writePlayableSampleTriggerEventLog,
   writeRealtimeTriggeredEventLog,
   writeRealtimeVolumeEventLog,
   type NoTUIPlaybackEventTracer,
@@ -82,6 +87,7 @@ import type {
   PlayerUIRuntime,
 } from './engine-types.ts';
 import { createRealtimeAudioCursor, type RealtimeAudioCursor } from './play-audio-cursor.ts';
+import { createChainSoundQueue, type ChainSoundQueue } from './chain-audio.ts';
 import type { JudgeStrategy } from './play-strategy.ts';
 import { resolvePracticePlayWindow } from './practice.ts';
 
@@ -117,6 +123,8 @@ export interface PlaySession {
   readonly leadInMs: number;
   /** The chart second the play starts at (`PlayerOptions.startAtSeconds`, its first seek): 0 unless asked for later. */
   readonly startAtSeconds: number;
+  /** Where a looping PRACTICE play goes back to (`restartPractice`): its start, unless the first round led in earlier. */
+  readonly practiceLoopStartSeconds: number;
   readonly audioOffsetMs: number;
   readonly beatAtSeconds: (seconds: number) => number;
   readonly idBase: 36 | 62;
@@ -151,10 +159,17 @@ export interface PlaySession {
   readonly applyJudgeEffect: JudgeCoreEffectSink;
   /** Ends a judging pass of a manual play: LR2's automatic judge timing steps here (`JudgeEffectHandler`). */
   readonly settleJudgeTiming: () => void;
+  /**
+   * Queues a realtime sound due at chart second `seconds` to the audio session: at its due time on the output clock when
+   * the session schedules ahead (`AudioSession.scheduleEventAt`), otherwise at once (`triggerEvent`).
+   */
+  readonly queueAudioEvent: (event: BeMusicEvent, seconds: number) => void;
   /** The chart's volume changes (`#97` / `#98`), queued against the audio write head. */
   readonly volumeChanges: RealtimeAudioCursor<TimedChartSound>;
   /** The chart's background sounds, queued against the audio write head. */
   readonly backgroundAudio: RealtimeAudioCursor<TimedChartSound>;
+  /** LRX chain notes a press queued (`chain-audio.ts`), fired against the play clock. */
+  readonly chainSounds: ChainSoundQueue;
   /** What the play clock runs on: the audio session's output clock, or the engine scheduler's. */
   readonly clockSource: PlaybackClockSource;
   /** The play clock, from the moment the chart starts (after the lead-in). */
@@ -204,23 +219,28 @@ export async function createPlaySession(
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const replay = options.replayInputs !== undefined;
   let resolvedChart = options.preparedChart?.resolvedChart ?? resolveEngineChart(resolvedJSON, options);
-  // The chart's gameplay program (#844, #932): the host's (a replay's recorded one), or compiled here and narrowed to what
-  // takes effect in this play (`resolveEffectiveChartPlayOptions`).
+  // A host providing the effective program also supplies its player options through recordReplay.
   const chartPlay =
     options.chartPlayOptionProgram !== undefined
-      ? { program: structuredClone(options.chartPlayOptionProgram), diagnostics: [] }
-      : resolveEffectiveChartPlayOptions(
+      ? { program: structuredClone(options.chartPlayOptionProgram), diagnostics: [], playerOptions: undefined }
+      : resolveChartPlayProgram(
           compileChartPlayOptions(buildChartOptionTimeline(resolvedChart.source, resolvedChart.timing)),
-          { playVariant: resolvedChart.playVariant, course: options.course !== undefined },
+          options.playerChartPlayOptions,
+          {
+            playVariant: resolvedChart.playVariant,
+            course: options.course !== undefined,
+          },
         );
   const chartPlayOptions = chartPlay.program;
+  const playerChartPlayOptions = chartPlay.playerOptions;
   const chartBaseSpeed = chartPlayOptions.options.baseSpeed ?? 1;
   const speed = playerSpeed * chartBaseSpeed;
   const tempoClock = createTempoClock(speed);
   // Without a host-prepared chart (the terminal) the engine applies the chart's ADDMINE and arrangement itself, in place
   // of the player's options, as the browser host does (#932). A replay's recorded notes already hold them.
   const preparesChartPlayOptions = options.preparedChart === undefined && !replay;
-  if (preparesChartPlayOptions && chartPlayOptions.options.addMine === true) options.mineModifier = 'ADD_RANDOM';
+  if (preparesChartPlayOptions && chartPlayOptions.options.addMine === true)
+    options.mineModifier = resolveChartAddMineModifier(chartPlayOptions);
   // Dynamic `#EXRANKxx` changes are a chart fact, recorded whatever the ruleset: LR2 applies them, while beatoraja and
   // That-Which-Must-Not-Be-Named keep their initial windows (their `windowsAt` ignores the timeline). A log played under one ruleset can then
   // be re-simulated under LR2 with the windows LR2 would have used.
@@ -265,6 +285,7 @@ export async function createPlaySession(
         scrollRate: options.scrollRate,
         scrollModifierTimeline: options.scrollModifierTimeline,
         chartNotes: chartPlayOptions.options.notes,
+        chartNotesLegacy: isLegacyChartPlayOptionProgram(chartPlayOptions),
       },
       realtimeAudioEndSeconds,
       Math.random,
@@ -285,11 +306,21 @@ export async function createPlaySession(
         resolvePracticePlayWindow(resolvedChart, options.practice, {
           startMs: Math.max(0, Math.trunc(options.practice.startMs)),
           endMs: Math.max(0, Math.trunc(options.practice.startMs)) + 1000,
-        }).startSeconds)
+        }).firstStartSeconds)
       : 0);
   const startAtSeconds =
     Number.isFinite(requestedStartAtSeconds) && requestedStartAtSeconds > 0 ? requestedStartAtSeconds : 0;
+  const practiceLoopStartSeconds =
+    options.startAtSeconds === undefined && playbackChart.practiceLoopStartSeconds !== undefined
+      ? Math.max(0, playbackChart.practiceLoopStartSeconds)
+      : startAtSeconds;
   backgroundTriggers = collectRealtimeAudioTriggers(resolvedChart, (channel) => !isPlayLaneSoundChannel(channel));
+  // An LRX chain note tied to a note sounds after the press that sounds that note (`chainSounds`), not at its own time.
+  // AUTO play sounds every note at its time, which puts each chain note at its own time: it stays background audio.
+  if (mode !== 'auto') {
+    const chained = new Set(resolvedChart.notes.flatMap((note) => note.chainSounds?.map((sound) => sound.event) ?? []));
+    if (chained.size > 0) backgroundTriggers = backgroundTriggers.filter((trigger) => !chained.has(trigger.event));
+  }
   const battleRequested = options.battleMode ?? playbackChart.battleMode ?? 'OFF';
   // A chart that copies itself onto the 2P side replaced the player's battle conversion (#932).
   const expectedBattle = chartNotesCopies(playbackChart.chartNotes)
@@ -382,15 +413,27 @@ export async function createPlaySession(
   }
   // Two players judge one side each: each side's notes make its own judgment count and TOTAL.
   const twoPlayer = playbackChart.battleMode === 'TWO-PLAYER' || playbackChart.battleMode === 'COUPLE';
+  const factsChart = twoPlayer ? selectPlaybackChartSide(playbackChart, 1) : playbackChart;
+  // The notes AUTO SCRATCH plays, for a ruleset that leaves them out of the count (plugout).
+  const autoScratchChannels = autoScratch
+    ? resolveAutoScratchChannels(
+        options,
+        playbackChart.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
+      )
+    : undefined;
   const ruleset = resolveRuleset(
-    rulesetChartFactsFromChart(
-      resolvedJSON,
-      twoPlayer ? selectPlaybackChartSide(playbackChart, 1) : playbackChart,
-      judgeRankChanges,
-      options.stageRanks,
-    ),
+    rulesetChartFactsFromChart(resolvedJSON, factsChart, judgeRankChanges, options.stageRanks),
     options.judgeRuleset ?? 'lr2',
     {
+      ...(autoScratchChannels !== undefined && autoScratchChannels.size > 0
+        ? {
+            autoScratchNotes: countRulesetNotesOf(
+              factsChart.scorableNotes.filter((note) => autoScratchChannels.has(note.channel)),
+              resolvedChart.lnMode,
+            ),
+          }
+        : {}),
+      ...uncountedNotesOption(factsChart.scorableNotes, autoScratchChannels, resolvedChart.lnMode),
       ...(options.judgeAlgorithm !== undefined ? { judgeAlgorithm: options.judgeAlgorithm } : {}),
       bmsonTotalMode: options.bmsonTotalMode,
       ...(options.customJudge !== undefined ? { customJudge: options.customJudge } : {}),
@@ -418,12 +461,26 @@ export async function createPlaySession(
     },
   );
   reportResolvedRuleset(options, ruleset);
-  const endOnFailure = resolveGaugeEndOnFailure(options.gaugeAutoShift, options.endOnFailure);
+  const endOnFailure = resolveGaugeEndOnFailure(
+    options.gaugeAutoShift,
+    options.endOnFailure,
+    options.course === undefined ? ruleset.gaugeSource : undefined,
+  );
 
   const courseCarry = options.course !== undefined ? courseStageCarryCombo(options.course) : undefined;
   const { score, summary, resetScore: resetPrimaryScore } = createPlayerScore(ruleset, courseCarry);
   const secondPlayer = twoPlayer
-    ? createSecondPlayer(resolvedJSON, playbackChart, judgeRankChanges, options, selectedGauge, chartGauge, chartJudge)
+    ? createSecondPlayer(
+        resolvedJSON,
+        playbackChart,
+        judgeRankChanges,
+        options,
+        selectedGauge,
+        chartGauge,
+        chartJudge,
+        autoScratchChannels,
+        resolvedChart.lnMode,
+      )
     : undefined;
   if (secondPlayer !== undefined) summary.secondPlayer = secondPlayer.summary;
   const resetScore = (): void => {
@@ -434,16 +491,19 @@ export async function createPlaySession(
   const replayRecorder =
     options.onReplayRecorded && options.practice === undefined
       ? (() => {
-          const { chartSHA256, chartMD5, recorder, sourceChart, ...hostPlaySettings } = options.recordReplay ?? {};
+          const { chartSHA256, chartMD5, recorder, sourceChart, includeDeviceNames, ...hostPlaySettings } =
+            options.recordReplay ?? {};
           return createReplayRecorder({
             json: resolvedJSON,
             chartOptions,
             chartPlayOptions,
-            moneyScore: ruleset.moneyScore,
+            // The native result carries the score whenever the ruleset has one of its own (LR2's, plugout's).
+            moneyScore: ruleset.moneyScore || ruleset.plugoutScore === true,
             chart: playbackChart,
             chartSHA256,
             chartMD5,
             recorder,
+            ...(includeDeviceNames === true ? { includeDeviceNames: true } : {}),
             laneModeExtension: options.laneModeExtension,
             // The chart the engine was handed is the source when it resolved the control flow itself.
             sourceChart: sourceChart ?? json,
@@ -469,6 +529,7 @@ export async function createPlaySession(
               judgeRuleset: options.judgeRuleset,
               ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
               ...(options.course !== undefined ? { course: options.course } : {}),
+              ...(playerChartPlayOptions !== undefined ? { playerChartPlayOptions } : {}),
               ...hostPlaySettings,
               ...(options.scrollModifier !== undefined
                 ? {
@@ -572,9 +633,10 @@ export async function createPlaySession(
   const finalOptionCue = chartOptions.cues
     .filter((cue) => cue.timeUs <= (resolvedChart.reversal?.seconds ?? Infinity) * 1_000_000)
     .at(-1);
-  let textPlaybackEndSeconds =
-    options.practice === undefined && finalOptionCue ? finalOptionCue.timeUs / 1_000_000 + 1 : 0;
-  for (const stage of options.practice === undefined ? (options.chartTextStages ?? []) : []) {
+  // An LRX chart ends where plugout ends it, option text or not.
+  const textExtendsEnd = options.practice === undefined && playbackChart.fixedEnd !== true;
+  let textPlaybackEndSeconds = textExtendsEnd && finalOptionCue ? finalOptionCue.timeUs / 1_000_000 + 1 : 0;
+  for (const stage of textExtendsEnd ? (options.chartTextStages ?? []) : []) {
     const last = stage.timeline.cues.filter((cue) => cue.seconds <= (stage.freezeSeconds ?? Infinity)).at(-1);
     if (last)
       textPlaybackEndSeconds = Math.max(
@@ -608,6 +670,7 @@ export async function createPlaySession(
       stateSignals,
       uiSignals,
       totalSeconds: Math.max(playbackChart.totalSeconds, textPlaybackEndSeconds),
+      fixedEnd: playbackChart.fixedEnd === true,
       audioMode: mode,
     });
 
@@ -742,7 +805,13 @@ export async function createPlaySession(
       };
     },
   });
+  const chainSounds = createChainSoundQueue((event, seconds) => {
+    if (!uiEnabled)
+      writePlayableSampleTriggerEventLog(writeOutput, event, seconds, wavResources, 'chain-note', '01', idBase);
+    audioSession?.triggerEvent?.(event);
+  });
   const applyJudgeEffect = createJudgeEffectHandler({
+    chainSounds,
     ...(chartText ? { onChartTextInput: (input) => chartText.addInput(input) } : {}),
     ...(bmsonBGA ? { onBmsonBGAInput: (input) => bmsonBGA.addInput(input) } : {}),
     ...(keyBoundBGA && !replay
@@ -783,17 +852,27 @@ export async function createPlaySession(
 
   // Realtime audio goes only to a session that takes it; without one nothing is queued (or traced).
   const queuesAudio = audioSession?.triggerEvent !== undefined;
+  // The engine queues these as its write head reaches them; a session that schedules ahead gets each one's due time on
+  // its output clock, so it sounds when due rather than on the tick that reached it.
+  const queueAudioEvent = (event: BeMusicEvent, seconds: number): void => {
+    const clock = session?.clock;
+    if (clock !== undefined && audioSession?.scheduleEventAt !== undefined) {
+      audioSession.scheduleEventAt(event, clock.sourceMsAt(tempoClock.clockMsAt(seconds)) / 1000);
+      return;
+    }
+    audioSession?.triggerEvent?.(event);
+  };
   const volumeChanges = createRealtimeAudioCursor(queuesAudio ? volumeEvents : [], (change) => {
     if (!uiEnabled) {
       writeRealtimeVolumeEventLog(writeOutput, change.seconds, change.event);
     }
-    audioSession!.triggerEvent!(change.event);
+    queueAudioEvent(change.event, change.seconds);
   });
   const backgroundAudio = createRealtimeAudioCursor(queuesAudio ? backgroundTriggers : [], (trigger) => {
     if (!uiEnabled) {
       writeRealtimeTriggeredEventLog(writeOutput, trigger, wavResources[trigger.sampleKey], 'realtime');
     }
-    audioSession!.triggerEvent!(trigger.event);
+    queueAudioEvent(trigger.event, trigger.seconds);
   });
 
   session = {
@@ -814,6 +893,7 @@ export async function createPlaySession(
     tempoClock,
     leadInMs,
     startAtSeconds,
+    practiceLoopStartSeconds,
     audioOffsetMs,
     beatAtSeconds,
     idBase,
@@ -840,8 +920,10 @@ export async function createPlaySession(
     chartOptions,
     applyJudgeEffect,
     settleJudgeTiming: () => applyJudgeEffect.settleJudgeTiming(),
+    queueAudioEvent,
     volumeChanges,
     backgroundAudio,
+    chainSounds,
     clockSource,
     clock: undefined,
     seekGeneration: 0,
@@ -861,6 +943,7 @@ function createPlayerScore(
     ...initialSummary,
     scoreTracker: createScoreTracker({
       moneyScore: ruleset.moneyScore,
+      plugoutScore: ruleset.plugoutScore === true,
       ...(courseCarry !== undefined ? { course: courseCarry } : {}),
     }),
   };
@@ -899,12 +982,18 @@ function createSecondPlayer(
   selectedGauge: string | undefined,
   chartGauge: string | undefined,
   chartJudge: ReturnType<typeof resolveChartJudgeOption>,
+  autoScratchChannels: ReadonlySet<string> | undefined,
+  chartLNMode: ResolvedChart['lnMode'],
 ): SecondPlayer {
   const gauge = chartGauge ?? options.gauge2P ?? selectedGauge;
+  const side = selectPlaybackChartSide(playbackChart, 2);
+  const autoScratchNotes = side.scorableNotes.filter((note) => autoScratchChannels?.has(note.channel) === true);
   const ruleset = resolveRuleset(
-    rulesetChartFactsFromChart(resolvedJSON, selectPlaybackChartSide(playbackChart, 2), judgeRankChanges),
+    rulesetChartFactsFromChart(resolvedJSON, side, judgeRankChanges),
     options.judgeRuleset ?? 'lr2',
     {
+      ...(autoScratchNotes.length > 0 ? { autoScratchNotes: countRulesetNotesOf(autoScratchNotes, chartLNMode) } : {}),
+      ...uncountedNotesOption(side.scorableNotes, autoScratchChannels, chartLNMode),
       bmsonTotalMode: options.bmsonTotalMode,
       ...(gauge !== undefined ? { selectedGauge: gauge } : {}),
       // Gauge auto-shift is the play's, so the second player's gauge shifts as the first's does (and as a replay of
@@ -921,7 +1010,11 @@ function createSecondPlayer(
     score,
     summary,
     resetScore,
-    endOnFailure: resolveGaugeEndOnFailure(options.gaugeAutoShift, options.endOnFailure),
+    endOnFailure: resolveGaugeEndOnFailure(
+      options.gaugeAutoShift,
+      options.endOnFailure,
+      options.course === undefined ? ruleset.gaugeSource : undefined,
+    ),
     ...(gauge !== undefined ? { gauge } : {}),
   };
 }
@@ -941,4 +1034,19 @@ function assertPracticeOptions(options: Readonly<PlayerOptions>): void {
     options.lr2ExtraMode === true
   )
     throw new RangeError('PRACTICE applies no chart modifier.');
+}
+
+/**
+ * The judged notes a play leaves out of plugout's note count (LRX chain notes that start their lane), as a ruleset
+ * option; none, or only those AUTO SCRATCH does not already leave out.
+ */
+function uncountedNotesOption(
+  notes: readonly TimedPlayableNote[],
+  autoScratchChannels: ReadonlySet<string> | undefined,
+  chartLNMode: ResolvedChart['lnMode'],
+): { uncountedNotes?: ReturnType<typeof countRulesetNotesOf> } {
+  const uncounted = notes.filter(
+    (note) => note.event.lrx?.chain === true && autoScratchChannels?.has(note.channel) !== true,
+  );
+  return uncounted.length > 0 ? { uncountedNotes: countRulesetNotesOf(uncounted, chartLNMode) } : {};
 }

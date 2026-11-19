@@ -10,6 +10,7 @@ import {
   writeOptionSettings,
 } from './option-settings.ts';
 import { defaultCompressorTunings } from './compressor-tuning.ts';
+import { BEMUSE_SERVER_URLS_STORAGE_KEY, DEFAULT_BEMUSE_SERVER_URLS } from './bemuse-server.ts';
 import { createPlayerGUIState, VOLUME_STORAGE_KEY } from './services/settings.ts';
 import type { PlayerGUIState } from './types.ts';
 
@@ -28,6 +29,22 @@ function memory(): Storage {
 }
 
 describe('parseOptionSettingsDocument', () => {
+  test('ignores an invalid Bemuse server list and preserves an explicitly empty one', () => {
+    const parse = (bemuseServerURLs: unknown[]) =>
+      parseOptionSettingsDocument(JSON.stringify({ version: 0, updatedAt: 10, settings: { bemuseServerURLs } }))
+        ?.settings.bemuseServerURLs;
+    expect(parse(['bad-url'])).toBeUndefined();
+    expect(parse([])).toEqual([]);
+  });
+
+  test('uses the default Bemuse servers when migrating an invalid saved list', () => {
+    const storage = memory();
+    storage.setItem(BEMUSE_SERVER_URLS_STORAGE_KEY, '{');
+    expect(optionSettingsFromLegacy(storage, 10).settings.bemuseServerURLs).toEqual(DEFAULT_BEMUSE_SERVER_URLS);
+    storage.setItem(BEMUSE_SERVER_URLS_STORAGE_KEY, '[]');
+    expect(optionSettingsFromLegacy(storage, 10).settings.bemuseServerURLs).toEqual([]);
+  });
+
   test('keeps a known setting and drops an unknown one', () => {
     const document = parseOptionSettingsDocument(
       JSON.stringify({
@@ -77,6 +94,28 @@ describe('writeOptionSettings', () => {
   });
 });
 
+describe('source-qualified gauge (ADR 0019, #1171)', () => {
+  test('saves and restores a qualified gauge, and drops one its source does not define', () => {
+    const document = parseOptionSettingsDocument(
+      JSON.stringify({
+        version: 0,
+        updatedAt: 1,
+        settings: { gauge: 'lr2:HARD', gauge2P: 'beatoraja:EX-HARD' },
+      }),
+    );
+    expect(document?.settings).toMatchObject({ gauge: 'lr2:HARD', gauge2P: 'beatoraja:EX-HARD' });
+    const state = { gauge: 'GROOVE', gauge2P: 'GROOVE' } as PlayerGUIState;
+    overlayOptionSettings(state, document!.settings);
+    expect(state).toMatchObject({ gauge: 'lr2:HARD', gauge2P: 'beatoraja:EX-HARD' });
+
+    const refused = parseOptionSettingsDocument(
+      JSON.stringify({ version: 0, updatedAt: 1, settings: { gauge: 'lr2:EX-HARD', gauge2P: '____:DEATH' } }),
+    );
+    expect(refused?.settings.gauge).toBeUndefined();
+    expect(refused?.settings.gauge2P).toBeUndefined();
+  });
+});
+
 describe('overlayOptionSettings', () => {
   test('replaces only the fields the document has', () => {
     const state = { gauge: 'GROOVE', autoPlay: false, peakGain: false } as PlayerGUIState;
@@ -119,6 +158,8 @@ describe('captureOptionSettings', () => {
       ghost: 'LEADERBOARD_TOP',
       ghostMode: 'LANE_OVERLAY',
       autoSaveReplay: true,
+      replayDeviceNames: true,
+      bemuseReplayGain: false,
       courseAutoAdvance: true,
       nonstopPlacement: 'lr2',
       submitToLeaderboard: true,
@@ -131,11 +172,14 @@ describe('captureOptionSettings', () => {
       randomSeed2P: '-1',
       randomFixedLane1P: 0,
       randomFixedLane2P: 0,
+      lr2RandomScratch1P: false,
+      lr2RandomScratch2P: false,
       random2P: 'MIRROR',
       dpFlip: true,
       bpmGuide: true,
       bpmChangeWarning: true,
       guideSE: true,
+      windowHold: true,
       judgeCounts: false,
       judgeDetailSplit: true,
       judgeDetail: 'MS',
@@ -197,6 +241,9 @@ describe('captureOptionSettings', () => {
       practiceStartGauge: 20,
       practiceJudgeRank: 0,
       practiceTotal: 0,
+      practiceRestBefore: 1,
+      practiceRestAfter: 1,
+      practiceCarriedLongNotes: true,
       customJudgeKeyPerfectGreat: 400,
       customJudgeKeyGreat: 400,
       customJudgeKeyGood: 100,
@@ -207,6 +254,10 @@ describe('captureOptionSettings', () => {
       lr2ExtraMode: false,
       lr2ExtraLevel: 0,
       mineModifier: 'OFF',
+      crazyJudge: 'OFF',
+      crazyHellJudge: false,
+      crazyAddMine: false,
+      crazyNotes: 'OFF',
       scrollModifier: 'REMOVE',
       scrollSection: 8,
       scrollRate: 0.25,
@@ -237,11 +288,16 @@ describe('captureOptionSettings', () => {
       hiSpeed: 2.5,
       hsFix: 'STARTBPM',
       displayAreaInfo: 'ON',
+      bga: 'AUTOPLAY_ONLY',
+      bgaSize: 'NORMAL',
+      scoreGraph: false,
       hiddenSudden1P: 'SUDDEN',
       hiddenSudden2P: 'HID+SUD',
       laneCover: true,
       shutter: 0.4,
       builtInSkin: 'plain',
+      confirmDroppedSkin: false,
+      skipDroppedSkin: true,
       skinEffects: 'off',
       renderResolution: 1,
       playLayout: 'touch',
@@ -251,6 +307,8 @@ describe('captureOptionSettings', () => {
       compressorTuning: defaultCompressorTunings(),
       skinSettings: { test: { glow: false, offset: 5, theme: 'light' } },
       courseTableURLs: ['https://example.com/courses.json'],
+      removedDefaultCourseTableURLs: ['https://stellabms.xyz/st/table.html'],
+      bemuseServerURLs: ['https://example.com/server/index.json'],
       replaySlotAutoSave1: 'always',
       replaySlotAutoSave2: 'never',
       replaySlotAutoSave3: 'score-update',
@@ -271,7 +329,14 @@ describe('captureOptionSettings', () => {
       if (key in restored) expect(restored[key as keyof PlayerGUIState], key).toEqual(expected[key]);
     }
     const legacy = optionSettingsFromLegacy(storage, 43).settings;
-    for (const key of ['workerCount', 'compressorTuning', 'skinSettings', 'courseTableURLs'] as const) {
+    for (const key of [
+      'workerCount',
+      'compressorTuning',
+      'skinSettings',
+      'courseTableURLs',
+      'removedDefaultCourseTableURLs',
+      'bemuseServerURLs',
+    ] as const) {
       expect(legacy[key], key).toEqual(expected[key]);
     }
   });
@@ -301,8 +366,14 @@ test('persists and validates the H-RANDOM source configuration', () => {
   ).toMatchObject({ random1P: 'H-RANDOM', hRandomThresholdBPM: 300 });
 });
 
-test('persists per-side LR2 CONVERGE targets', () => {
-  const settings = { random1P: 'lr2:CONVERGE', randomFixedLane1P: 3, randomFixedLane2P: 7 };
+test('persists per-side LR2 CONVERGE targets and scratch inclusion', () => {
+  const settings = {
+    random1P: 'lr2:CONVERGE',
+    randomFixedLane1P: 3,
+    randomFixedLane2P: 7,
+    lr2RandomScratch1P: true,
+    lr2RandomScratch2P: false,
+  };
   expect(parseOptionSettingsDocument(JSON.stringify({ version: 0, updatedAt: 1, settings }))?.settings).toMatchObject(
     settings,
   );
@@ -516,6 +587,9 @@ test('LR2 EXTRA selection and source minimum level survive settings round trips'
     practiceStartGauge: 20,
     practiceJudgeRank: 0,
     practiceTotal: 0,
+    practiceRestBefore: 1,
+    practiceRestAfter: 1,
+    practiceCarriedLongNotes: true,
     customJudgeKeyPerfectGreat: 400,
     customJudgeKeyGreat: 400,
     customJudgeKeyGood: 100,

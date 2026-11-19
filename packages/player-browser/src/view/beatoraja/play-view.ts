@@ -1,5 +1,5 @@
 import { ChartTextOverlay } from '../shared/chart-text.ts';
-import type { BGACameraFeed } from '../../media/bga-camera.ts';
+import type { BGAFeed } from '../../media/bga-camera.ts';
 import type { BGAOpacityTimelines } from '@be-music/chart-model';
 import { collectBPMGuideEvents } from '../../chart/bpm-guide.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
@@ -154,10 +154,14 @@ export interface BeatorajaPlayRuntime {
     | undefined;
   readonly chartPlayVariant: ChartPlayVariant;
   /** The camera the BGA frame shows in place of the chart's BGA (`PlayScene.setBGACamera`). */
-  readonly bgaCamera?: BGACameraFeed | undefined;
+  readonly bgaCamera?: BGAFeed | undefined;
+  /** An LRX chart's composited BGA, shown when no camera is. */
+  readonly lrxBGA?: BGAFeed | undefined;
   /** The play's Visual CONSTANT switch and the course's NO_SPEED lock, which decide whether `#SPEED` scrolls. */
   readonly options?: { readonly visualConstant?: boolean; readonly hiSpeedLocked?: boolean };
   readonly notes: readonly PlayerUIFrameNote[];
+  /** The notes the lanes draw before the engine's first frame: `notes`, and a seamless PRACTICE loop's next round. */
+  readonly drawNotes: readonly PlayerUIFrameNote[];
   readonly mineNotes: readonly PlayerUIFrameNote[];
   readonly invisibleNotes: readonly PlayerUIFrameNote[];
   /** The engine's latest frame; `undefined` before its first. */
@@ -550,7 +554,7 @@ export class BeatorajaPlayView implements PlayView {
       engineFrame ??
       (this.loaded
         ? {
-            notes: play.notes,
+            notes: play.drawNotes,
             landmineNotes: play.mineNotes,
             invisibleNotes: play.invisibleNotes,
             currentSeconds: 0,
@@ -562,7 +566,7 @@ export class BeatorajaPlayView implements PlayView {
       paused,
       started: !play.isIntroPlaying(),
       showInvisibleNotes: this.showInvisibleNotes,
-      ...(play.bgaCamera !== undefined ? { camera: play.bgaCamera } : {}),
+      ...((play.bgaCamera ?? play.lrxBGA) !== undefined ? { camera: (play.bgaCamera ?? play.lrxBGA)! } : {}),
       bpmGuide: frame.playOptions.bpmGuide,
       judgeTimingMs: frame.playOptions.judgeTimingMs,
       hiddenNoteChannels: resolveHiddenNoteChannels(frame.playOptions.autoScratchNotes, play.autoScratchChannels),

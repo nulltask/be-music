@@ -1,5 +1,18 @@
 # @be-music/player-ui
 
+## 0.10.0
+
+### Minor Changes
+
+- fda931e: `<be-music-chart-score>` takes a `tempo`: its BPM readouts are multiplied by it and its STOPs divided, as a play at that tempo runs them.
+- 398e668: `<be-music-readme-dialog>` takes `tabs` (the names of the texts to choose from) and `selectedTab`: with two or more tabs it shows a tab row above the text, sends `readme-tab` with the tab chosen, and keeps its height across tabs so the row stays put.
+
+### Patch Changes
+
+- 94b5e2d: The play settings view shows a source-qualified gauge as the Options dialog names it (`HARD (LR2)`) instead of the raw `lr2:HARD`, and the play options select shows a selected gauge that is off the skin's cycle instead of the first choice.
+- 0eba217: The gameplay cabinet's stage band read `FREE PLAY` in a practice play. It now reads `PRACTICE PLAY` for a single chart that is a PRACTICE run or that a seek made practice.
+- Updated dependencies: `@be-music/chart-model@0.12.0`, `@be-music/player-skin-sdk@0.13.0`
+
 ## 0.9.0
 
 ### Minor Changes

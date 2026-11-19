@@ -5,8 +5,8 @@
  * {@link simulateReplay} stays the plain simulator: it judges whatever it is given. These wrappers decide first whether
  * the replay can be judged under the target at all, and never synthesize inputs the played run did not record.
  */
-import { resolveGaugeTypes, type GaugeType } from '../ruleset/gauge-type.ts';
-import { isCourseStageFailed } from '../ruleset/course.ts';
+import { resolveGaugeTypes, splitGaugePick, type GaugePick, type GaugeType } from '../ruleset/gauge-type.ts';
+import { courseGoesOnAfterGivingUp, isCourseStageFailed } from '../ruleset/course.ts';
 import type { RulesetId } from '../ruleset/index.ts';
 import { simulateCourseReplay, type BeMusicCourseReplay, type ReplayCourseResult } from './course.ts';
 import type { BeMusicReplay, ReplayRulesetResult } from './format.ts';
@@ -16,7 +16,8 @@ import { simulateReplay, type SimulateReplayOptions } from './simulate.ts';
  * Why a replay is not simulated under a ruleset:
  *
  * - `gauge` — the replay's bare gauge is not one the ruleset defines (`P-ATTACK` under beatoraja, `EX-HARD` under LR2,
- *   `DEATH` under AC outside a course). It is never mapped to a lookalike.
+ *   `DEATH` under AC outside a course). It is never mapped to a lookalike. A qualified gauge (`lr2:P-ATTACK`) is its
+ *   source's under every ruleset, so it is never a reason (#1171).
  * - `custom-judge` — CUSTOM JUDGE stays beatoraja's (#933): it has no reading under another ruleset.
  *
  * Gauge auto-shift is carried under every ruleset, along the target's own gauge ladder (`resolveGaugeShiftLadder`), so
@@ -51,10 +52,20 @@ function playedRuleset(replay: BeMusicReplay): RulesetId {
 
 /**
  * Whether `ruleset` defines the bare gauge pick `gauge`. A course stage plays the pick on the ruleset's course gauges,
- * which take every pick but the attack gauges outside LR2 and EX-HARD or ASSIST EASY under LR2 (`resolveCourseGaugeId`).
+ * which take every pick but the attack gauges outside LR2, EX-HARD or ASSIST EASY under LR2, ASSIST EASY under plugout,
+ * and plugout's EX picks anywhere else (`resolveCourseGaugeId`).
  */
-function definesGauge(ruleset: RulesetId, gauge: GaugeType, courseStage: boolean): boolean {
-  if (!courseStage) return resolveGaugeTypes(ruleset).includes(gauge);
+function definesGauge(ruleset: RulesetId, pick: GaugePick, courseStage: boolean): boolean {
+  // A bare pick on the ruleset's menu, the common case, needs no split.
+  if (!courseStage && resolveGaugeTypes(ruleset).includes(pick as GaugeType)) return true;
+  // A qualified gauge keeps its source's reading under every ruleset (carried, ADR 0019).
+  if (pick.includes(':') && splitGaugePick(pick)?.source !== undefined) return true;
+  if (!courseStage) return false;
+  // Anything else, a bare pick or no pick at all, reads as it is.
+  const gauge = pick as GaugeType;
+  // plugout's course gauges take every pick of its own but ASSIST EASY; its EX picks exist nowhere else.
+  if (ruleset === 'plugout') return gauge !== 'ASSIST-EASY' && gauge !== 'P-ATTACK' && gauge !== 'G-ATTACK';
+  if (gauge === 'EX-GROOVE' || gauge === 'EX-EASY' || gauge === 'EX-DEATH') return false;
   return ruleset === 'lr2'
     ? gauge !== 'EX-HARD' && gauge !== 'ASSIST-EASY'
     : gauge !== 'P-ATTACK' && gauge !== 'G-ATTACK';
@@ -70,9 +81,9 @@ export function findReplayNotSimulatedReason(
   player: 1 | 2 = 1,
 ): ReplayNotSimulatedReason | undefined {
   const gauge = player === 2 ? (replay.play.gauge2P ?? replay.play.gauge) : replay.play.gauge;
-  // The played ruleset ran this gauge live, whatever its menu offers.
-  if (ruleset !== playedRuleset(replay) && !definesGauge(ruleset, gauge, replay.play.course !== undefined))
-    return 'gauge';
+  // Under the played ruleset too: the engine refuses a bare gauge its ruleset lacks, so only a replay recorded before
+  // that (a bare DEATH under That-Which-Must-Not-Be-Named, once played as EX-HARD) fails here, and it is reported.
+  if (!definesGauge(ruleset, gauge, replay.play.course !== undefined)) return 'gauge';
   if (ruleset === 'beatoraja') return undefined;
   if (replay.play.customJudge !== undefined) return 'custom-judge';
   return undefined;
@@ -97,10 +108,17 @@ function stopReplayAt(replay: BeMusicReplay, stoppedAtUs: number): BeMusicReplay
  */
 function findFailureStop(replay: BeMusicReplay, options: Omit<SimulateReplayOptions, 'ruleset'>): number | undefined {
   if (replay.play.endOnFailure !== true || replay.play.aborted === true) return undefined;
+  const ruleset = playedRuleset(replay);
+  const gaugeKey = options.player === 2 && replay.play.gauge2P !== undefined ? 'gauge2P' : 'gauge';
+  const gauge = replay.play[gaugeKey];
+  // Older ____ replays used EX-HARD for a bare DEATH pick. Reconstruct their stop on that curve.
+  if (ruleset === '____' && replay.play.course === undefined && (gauge === 'DEATH' || gauge === 'DEATH-CORRECTED')) {
+    replay = { ...replay, play: { ...replay.play, [gaugeKey]: 'EX-HARD' } };
+  }
   let stoppedAtUs: number | undefined;
   simulateReplay(replay, {
     ...options,
-    ruleset: playedRuleset(replay),
+    ruleset,
     onJudgment: undefined,
     onFailure: (atUs) => (stoppedAtUs = atUs),
   });
@@ -109,7 +127,7 @@ function findFailureStop(replay: BeMusicReplay, options: Omit<SimulateReplayOpti
 
 /**
  * Re-judges `replay` under `options.ruleset` by ADR 0019's declared rules. Under the played ruleset the replay is
- * simulated as recorded. Under another ruleset:
+ * simulated as recorded, unless it carries a bare gauge the engine now refuses there. Under another ruleset:
  *
  * - a gauge or option the ruleset cannot read makes it `not-simulated` (see {@link ReplayNotSimulatedReason});
  * - a run that stopped where its survival gauge emptied is judged only up to that point, and is `truncated` when this
@@ -147,7 +165,8 @@ function endedOnFailedStage(result: ReplayCourseResult): boolean {
  * Re-judges a course replay under `options.ruleset` by ADR 0019's rules, as {@link rejudgeReplay} does for one play:
  * a stage log the ruleset cannot read makes the run `not-simulated`. A run that the played ruleset ended at a failed
  * stage (its last played stage cut where its gauge emptied, or followed by unreached stages) is `truncated` under a
- * ruleset whose gauge would have carried on, since the stages and notes after that point were never played.
+ * ruleset whose gauge would have carried on, since the stages and notes after that point were never played. So is a
+ * run that ended on a stage given up, under a ruleset whose course gauge goes on past one (`courseGoesOnAfterGivingUp`).
  */
 export function rejudgeCourseReplay(
   courseLog: BeMusicCourseReplay,
@@ -169,6 +188,17 @@ export function rejudgeCourseReplay(
   const stoppedAtUs = findFailureStop(lastLog, options);
   if (stoppedAtUs === undefined) {
     const result = simulateCourseReplay(courseLog, options);
+    if (courseLog.nonstop === undefined && lastLog.play.aborted === true) {
+      // The played run ended on a stage given up. Where this ruleset's course gauge goes on past it (LR2's), the stages
+      // after it were never played, so the result stops short of the run this ruleset would have had.
+      const givenUp = result.stages.at(-1);
+      const goesOn =
+        stageLogs.length < courseLog.stages.length &&
+        result.stages.length === stageLogs.length &&
+        givenUp !== undefined &&
+        courseGoesOnAfterGivingUp(givenUp.ruleset, givenUp);
+      return goesOn ? { status: 'truncated', result } : { status: 'simulated', result };
+    }
     const unreached =
       courseLog.nonstop === undefined && stageLogs.length < courseLog.stages.length && lastLog.play.aborted !== true;
     if (!unreached || endedOnFailedStage(result)) return { status: 'simulated', result };

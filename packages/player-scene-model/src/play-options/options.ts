@@ -1,6 +1,16 @@
 import type { BattleMode, LR2ExtraLevel } from '@be-music/player-engine/lanes';
 import type { MineModifier, LongNoteModifier, ScrollModifier } from '@be-music/player-engine/lanes';
-import type { GaugeType, GaugeAutoShift, QualifiedOptionValue } from '@be-music/player-engine/ruleset';
+
+/** The player's nanasigroove GOOD2BAD / GREAT2BAD choice. */
+export type CrazyJudgeOption = 'OFF' | 'GOOD2BAD' | 'GREAT2BAD';
+/** nanasigroove's NOTES conversion a player can pick (#1184). */
+export type CrazyNotesOption = 'OFF' | 'DOUBLE' | 'COPY' | 'DBLCOPY';
+/**
+ * The mine options the player picks under Mines: beatoraja's. nanasigroove's ADDMINE is a separate option
+ * (`PlayOptions.crazyAddMine`), which plays as the engine's `NANASI_ADD` mine option.
+ */
+export type PlayerMineModifier = Exclude<MineModifier, 'NANASI_ADD'>;
+import type { GaugePick, GaugeAutoShift, QualifiedOptionValue } from '@be-music/player-engine/ruleset';
 import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { BrowseSort, DifficultyFilter, KeysFilter } from '../browse/list-options.ts';
 
@@ -42,6 +52,11 @@ export interface PlayOptions {
   bpmChangeWarning: boolean;
   /** beatoraja's GUIDE SE: the sound set's sound for each judgment plays at the judgment. Read as the play starts. */
   guideSE: boolean;
+  /**
+   * beatoraja's WINDOW HOLD: from the start of a play until its last note, the play takes START as held, so the START +
+   * key controls (hi-speed, the lane cover) run on every key press (`ControlInputProcessor`, #1131).
+   */
+  windowHold: boolean;
   /** Whether the built-in skins show the judgment counts during a play. */
   judgeCounts: boolean;
   /** Whether the judge detail shows the keys' and the scratch's timing apart. */
@@ -220,16 +235,26 @@ export interface PlayOptions {
    * PRACTICE (beatoraja's `PracticeProperty`, under every judge ruleset): play only the bars picked on the chart's score
    * when the chart is started (`resolvePracticeSelection`'s range) and play them again when they end. The range belongs
    * to that start, not to the options. `practiceGauge` is one of the judge ruleset's own
-   * gauges (`resolvePracticeGaugeTypes`). A 0 judgerank or TOTAL keeps the chart's; both are read on the judge ruleset's
+   * gauges (`resolvePracticeGaugeTypes`), or another source's qualified with it (`beatoraja:ASSIST-EASY`), which keeps
+   * that source's gauge under every judge ruleset (ADR 0019). A 0 judgerank or TOTAL keeps the chart's; both are read on the judge ruleset's
    * own tables and do nothing under That-Which-Must-Not-Be-Named. `MODE` keeps the play mode's gauge category, which
    * only beatoraja has.
    */
   practice: boolean;
-  practiceGauge: PracticeGaugeType;
+  practiceGauge: PracticeGaugePick;
   practiceGaugeCategory: PracticeGaugeCategory;
   practiceStartGauge: number;
   practiceJudgeRank: number;
   practiceTotal: number;
+  /** How many bars of rest a PRACTICE play gives before its range (0 starts at the range). */
+  practiceRestBefore: number;
+  /** How many bars of rest a PRACTICE play gives after its range (0 ends at the range). */
+  practiceRestAfter: number;
+  /**
+   * A PRACTICE play keeps a long note held into its range from before it, played from its head (`PlayPractice.carriedLongNotes`,
+   * a Be-Music extension); off drops it, as beatoraja's `PracticeModifier` does.
+   */
+  practiceCarriedLongNotes: boolean;
   customJudgeKeyPerfectGreat: number;
   customJudgeKeyGreat: number;
   customJudgeKeyGood: number;
@@ -239,7 +264,21 @@ export interface PlayOptions {
   customJudgeLongNoteMargin: number;
   lr2ExtraMode: boolean;
   lr2ExtraLevel: LR2ExtraLevel;
-  mineModifier: MineModifier;
+  mineModifier: PlayerMineModifier;
+  /**
+   * nanasigroove's GOOD2BAD / GREAT2BAD (#1177): a GOOD, or a GREAT and a GOOD, moves the gauge as a BAD does. A chart's
+   * own `774:CRAZY_GOOD2BAD` / `GREAT2BAD` wins.
+   */
+  crazyJudge: CrazyJudgeOption;
+  /** nanasigroove's HELLJUDGE (#1185): every judgment's window narrowed by its own ratio. A chart's own wins. */
+  crazyHellJudge: boolean;
+  /**
+   * nanasigroove's ADDMINE (#1185): mines scattered along every lane, nanasigroove's placement and damage. While it is on
+   * it replaces the beatoraja mine option (`mineModifier`), as a chart's own `774:CRAZY_ADDMINE` does.
+   */
+  crazyAddMine: boolean;
+  /** nanasigroove's NOTES DOUBLE / COPY / DBLCOPY (#1184). A chart's own wins. */
+  crazyNotes: CrazyNotesOption;
   /** beatoraja timeline BPM/STOP/SCROLL removal or generated SCROLL, independent of visual CONSTANT. */
   scrollModifier: ScrollModifier;
   /** beatoraja ADD: change every 1..1024 section lines (default 4), with width 0..1 (default 0.5). */
@@ -299,6 +338,8 @@ export interface PlayOptions {
    */
   randomFixedLane1P: number;
   randomFixedLane2P: number;
+  lr2RandomScratch1P: boolean;
+  lr2RandomScratch2P: boolean;
   /** 2P side note arrangement (channels 21..25 + 28 + 29). */
   random2P: RandomMode;
   /**
@@ -308,10 +349,14 @@ export interface PlayOptions {
    * - `HARD` — survival gauge (start 100 %, fail at 0 %)
    * - `DEATH` — instant-death (start 100 %, any miss = 0)
    * - `EASY` — gentler GROOVE (clear 60 %)
+   *
+   * A bare gauge is the judge ruleset's own gauge of that name. A pick qualified with its source (`lr2:HARD`,
+   * `beatoraja:EX-HARD`) keeps that source's gauge under every judge ruleset (ADR 0019, #1171); a skin's button labels it
+   * by its gauge type and steps on from it (`cyclePlayOptionValue`).
    */
-  gauge1P: GaugeType;
-  /** 2P gauge variant (`#SRC_BUTTON,type=41`). */
-  gauge2P: GaugeType;
+  gauge1P: GaugePick;
+  /** 2P gauge variant (`#SRC_BUTTON,type=41`), bare or qualified like `gauge1P`. */
+  gauge2P: GaugePick;
 }
 
 /** Allowed values for {@link PlayOptions.hsFix}. */
@@ -323,6 +368,8 @@ export type HiddenSuddenMode = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
 /**
  * Lane-option values; resolveRandomModes supplies the choices. A source-qualified S-RANDOM or CONVERGE runs its source's
  * algorithm under every ruleset, and a bare one the judge ruleset's own (ADR 0019). RANDOM is one option for every source.
+ * `RANDOM+` is nanasigroove's, which only a chart's `774:RANDOM_RANDOM+` selects (#1244): it is never offered to the
+ * player and never stands for an LR2 or beatoraja option.
  */
 export type RandomMode =
   | QualifiedOptionValue<'S-RANDOM' | 'CONVERGE'>
@@ -336,6 +383,7 @@ export type RandomMode =
   | 'ALL-SCR'
   | 'RANDOM-EX'
   | 'S-RANDOM-EX'
+  | 'RANDOM+'
   | 'RANDOM_PLAYABLE'
   | 'S_RANDOM_PLAYABLE'
   | 'CONVERGE'
@@ -346,8 +394,11 @@ export type RandomMode =
   | 'SYNCHRONIZE-RANDOM'
   | 'SYMMETRY-RANDOM';
 
-/** Allowed values for {@link PlayOptions.practiceGauge}: PRACTICE's GAUGE TYPE of any judge ruleset. */
+/** PRACTICE's GAUGE TYPE of any judge ruleset. */
 export type PracticeGaugeType = import('@be-music/player-engine/ruleset').PracticeGaugeType;
+
+/** Allowed values for {@link PlayOptions.practiceGauge}: a bare PRACTICE gauge type, or one qualified with its source. */
+export type PracticeGaugePick = import('@be-music/player-engine/ruleset').PracticeGaugePick;
 
 /** Allowed values for {@link PlayOptions.practiceGaugeCategory}: `MODE` or a beatoraja GAUGE CATEGORY. */
 export type PracticeGaugeCategory = 'MODE' | import('@be-music/player-engine/ruleset').BeatorajaGaugeCategory;

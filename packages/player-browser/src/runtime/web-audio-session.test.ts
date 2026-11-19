@@ -7,6 +7,7 @@ import {
   createWebAudioSession,
   decodedSampleKey,
   LIVE_TEMPO_RAMP_SECONDS,
+  WEB_AUDIO_SCHEDULE_AHEAD_SECONDS,
 } from './web-audio-session.ts';
 import { SAMPLE_SLICE_FADE_SECONDS } from '@be-music/shared-utils/core';
 
@@ -375,7 +376,7 @@ describe('createWebAudioSession', () => {
     expect(kept.trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(0, 2);
   });
 
-  test('with crossfades on, fades in as it starts and crossfades a seek instead of stopping at once', () => {
+  test('with crossfades on, crossfades a seek: partway voices fade in, on-time ones play whole, queued ones never', () => {
     vi.useFakeTimers();
     const { audioContext, audioBus, trackedBufferSources, createdGains, keyMixer, bgmMixer } = createMocks();
     const session = createWebAudioSession({
@@ -390,24 +391,41 @@ describe('createWebAudioSession', () => {
       seekCrossfadeSeconds: 0.5,
     });
     session.start();
-    // The start opens a key and a BGM gain on their mixers, fading in from silence.
-    const [firstKey, firstBGM] = createdGains;
+    // The start opens on-time key and BGM gains at full volume, and partway ones fading in from silence.
+    const [firstKey, firstBGM, firstPartwayKey, firstPartwayBGM] = createdGains;
     expect(vi.mocked(firstKey!.connect)).toHaveBeenCalledWith(keyMixer);
     expect(vi.mocked(firstBGM!.connect)).toHaveBeenCalledWith(bgmMixer);
-    expect(firstBGM!.gain.value).toBe(0);
-    expect(vi.mocked(firstBGM!.gain.linearRampToValueAtTime)).toHaveBeenCalledWith(1, 0.5);
+    expect(vi.mocked(firstPartwayKey!.connect)).toHaveBeenCalledWith(keyMixer);
+    expect(vi.mocked(firstPartwayBGM!.connect)).toHaveBeenCalledWith(bgmMixer);
+    expect(firstBGM!.gain.value).toBe(1);
+    expect(vi.mocked(firstBGM!.gain.linearRampToValueAtTime)).not.toHaveBeenCalled();
+    expect(firstPartwayBGM!.gain.value).toBe(0);
+    expect(vi.mocked(firstPartwayBGM!.gain.linearRampToValueAtTime)).toHaveBeenCalledWith(1, 0.5);
     session.triggerEvent?.(mkEvent('11', '01'));
     session.triggerEvent?.(mkEvent('01', '03'));
-    expect(trackedBufferSources.map((source) => source.connectedTo)).toEqual([firstKey, firstBGM]);
+    // A BGM cue queued ahead of the audio clock.
+    session.scheduleEvent?.(mkEvent('01', '03'), 0.2);
+    expect(trackedBufferSources.map((source) => source.connectedTo)).toEqual([firstKey, firstBGM, firstBGM]);
 
     session.seek?.(12);
-    // The old position fades out and its voices stop once it is silent; the new one fades in on gains of its own.
-    expect(vi.mocked(firstBGM!.gain.linearRampToValueAtTime)).toHaveBeenLastCalledWith(0, 0.5);
-    for (const source of trackedBufferSources) expect(vi.mocked(source.node.stop)).toHaveBeenCalledWith(0.5);
-    const [nextKey, nextBGM] = createdGains.slice(2);
-    expect(vi.mocked(nextBGM!.gain.linearRampToValueAtTime)).toHaveBeenCalledWith(1, 0.5);
+    // The old position fades out and the voices that started stop once it is silent; the queued one stops at once.
+    for (const gain of [firstKey, firstBGM, firstPartwayKey, firstPartwayBGM])
+      expect(vi.mocked(gain!.gain.linearRampToValueAtTime)).toHaveBeenLastCalledWith(0, 0.5);
+    expect(vi.mocked(trackedBufferSources[0]!.node.stop)).toHaveBeenCalledWith(0.5);
+    expect(vi.mocked(trackedBufferSources[2]!.node.stop)).toHaveBeenLastCalledWith();
+    const [nextKey, nextBGM, , nextPartwayBGM] = createdGains.slice(4);
+    // The new position's on-time voices play at full volume at once; the ones it starts partway fade in.
     session.triggerEvent?.(mkEvent('01', '03'));
-    expect(trackedBufferSources[2]!.connectedTo).toBe(nextBGM);
+    session.triggerEventAt?.(mkEvent('01', '03'), 0.25);
+    expect(trackedBufferSources[3]!.connectedTo).toBe(nextBGM);
+    // A voice started partway goes through a gain of its own (its fade-in at the sample's cut) first.
+    const partwayVoice = trackedBufferSources[4]!.connectedTo;
+    expect(
+      partwayVoice === nextPartwayBGM ||
+        (vi.mocked(partwayVoice!.connect).mock.calls[0]?.[0] as unknown) === nextPartwayBGM,
+    ).toBe(true);
+    expect(nextBGM!.gain.value).toBe(1);
+    expect(vi.mocked(nextPartwayBGM!.gain.linearRampToValueAtTime)).toHaveBeenCalledWith(1, 0.5);
     expect(nextKey).toBeDefined();
     // The old gains go once the fade is over.
     vi.advanceTimersByTime(600);
@@ -591,6 +609,56 @@ describe('createWebAudioSession', () => {
     expect(trackedBufferSources[2]!.node.start).toHaveBeenCalledWith(1);
   });
 
+  test('plays an LRX note at its own rate, gain and balance, and ramps its attack and release', () => {
+    const { audioContext, audioBus, trackedBufferSources, createdGains } = createMocks();
+    const connectable = () => ({ connect: vi.fn(), disconnect: vi.fn() });
+    Object.assign(audioContext, {
+      createChannelSplitter: vi.fn(connectable),
+      createChannelMerger: vi.fn(connectable),
+    });
+    const chart = makeChartWithSamples();
+    chart.sourceFormat = 'lrx';
+    const shaped = mkEvent('01', '03');
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart,
+      decodedSamples: new Map([['bgm.wav', makeMockAudioBuffer(1)]]),
+      wavCmdVolumeMultipliers: new Map(),
+      bmsonSlicePlayback: new Map([
+        [
+          shaped,
+          {
+            offsetSeconds: 0,
+            durationSeconds: 0.5,
+            gain: 0.5,
+            pan: 0.5,
+            rate: 0.5,
+            attackSeconds: 0.1,
+            releaseSeconds: 0.2,
+          },
+        ],
+      ]),
+    });
+    (audioContext as { currentTime: number }).currentTime = 1;
+    session.triggerEvent?.(shaped);
+
+    const source = trackedBufferSources[0]!.node;
+    expect(source.playbackRate.value).toBe(0.5);
+    // The sample window rings on past its length for the release.
+    expect(source.start).toHaveBeenCalledWith(1, 0, 0.7);
+    // Its balance (the left channel at half), then the note gain, on gain nodes of their own.
+    const [leftGain, rightGain, voiceGain] = createdGains;
+    expect([leftGain!.gain.value, rightGain!.gain.value]).toEqual([0.5, 1]);
+    const ramps = voiceGain!.gain as unknown as Record<string, ReturnType<typeof vi.fn>>;
+    // Attack 0.1 s and release 0.2 s of the sample last 0.2 s and 0.4 s at half rate; the release starts after 1 s.
+    expect(ramps.setValueAtTime.mock.calls[0]).toEqual([0, 1]);
+    expect(ramps.linearRampToValueAtTime.mock.calls).toEqual([
+      [0.5, 1.2],
+      [0, 2.4],
+    ]);
+  });
+
   test('stops the previous BMS source when the same #WAV slot is retriggered', () => {
     const { audioContext, audioBus, trackedBufferSources } = createMocks();
     const session = createWebAudioSession({
@@ -626,6 +694,74 @@ describe('createWebAudioSession', () => {
 
     expect(trackedBufferSources).toHaveLength(2);
     expect(firstSource.stop).toHaveBeenCalledWith(2);
+  });
+
+  test('reports its write head ahead of the output clock and starts a scheduled sound at its due time', () => {
+    const { audioContext, audioBus, trackedBufferSources, bgmMixer } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([['bgm.wav', makeMockAudioBuffer(5)]]),
+      wavCmdVolumeMultipliers: new Map(),
+      getChartStartContextTime: () => 1,
+    });
+    (audioContext as { currentTime: number }).currentTime = 1.25;
+    const clock = session.getClockState!();
+    expect(clock.outputSeconds).toBeCloseTo(0.25, 9);
+    expect(clock.scheduledSeconds - clock.outputSeconds).toBeCloseTo(WEB_AUDIO_SCHEDULE_AHEAD_SECONDS, 9);
+
+    // Due at 0.28 s of the chart's output clock: context time 1.28, not when it was queued.
+    session.scheduleEventAt(mkEvent('01', '03'), 0.28);
+    expect(trackedBufferSources[0]!.connectedTo).toBe(bgmMixer);
+    expect(trackedBufferSources[0]!.node.start).toHaveBeenCalledWith(1.28);
+    // One already due plays at once.
+    session.scheduleEventAt(mkEvent('01', '03', { measure: 1 }), 0.2);
+    expect(trackedBufferSources[1]!.node.start).toHaveBeenCalledWith(1.25);
+  });
+
+  test('a volume change scheduled ahead applies to the voices that start from its time', () => {
+    const { audioContext, audioBus, createdGains } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([['bgm.wav', makeMockAudioBuffer(5)]]),
+      wavCmdVolumeMultipliers: new Map(),
+    });
+    session.scheduleEventAt(mkEvent('97', '80'), 0.04);
+    // Starts before the change: the old level, so no per-voice gain.
+    session.triggerEvent?.(mkEvent('01', '03'));
+    expect(createdGains).toHaveLength(0);
+    // Starts after it: the new level.
+    session.scheduleEventAt(mkEvent('01', '03', { measure: 1 }), 0.045);
+    expect(createdGains).toHaveLength(1);
+    expect((createdGains[0]!.gain as unknown as { value: number }).value).toBeCloseTo(0x80 / 0xff, 6);
+    // Once the clock passes it, a voice started at once takes it too.
+    (audioContext as { currentTime: number }).currentTime = 0.05;
+    session.triggerEvent?.(mkEvent('01', '03', { measure: 2 }));
+    expect(createdGains).toHaveLength(2);
+  });
+
+  test('a voice queued ahead cuts a same-slot voice started before it, and stays the one a later voice cuts', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([['kick.wav', makeMockAudioBuffer(5)]]),
+      wavCmdVolumeMultipliers: new Map(),
+    });
+    session.scheduleEventAt(mkEvent('01', '01'), 0.04);
+    const queued = trackedBufferSources[0]!.node;
+    // A press of the slot now: it sounds until the queued voice starts, which it must not cancel.
+    session.triggerEvent?.(mkEvent('11', '01'));
+    const pressed = trackedBufferSources[1]!.node;
+    expect(queued.stop).not.toHaveBeenCalled();
+    expect(pressed.stop).toHaveBeenCalledWith(0.04);
+    (audioContext as { currentTime: number }).currentTime = 0.1;
+    session.triggerEvent?.(mkEvent('12', '01'));
+    expect(queued.stop).toHaveBeenCalledWith(0.1);
   });
 
   test('stopChannel halts the most recent BufferSource on that channel', () => {

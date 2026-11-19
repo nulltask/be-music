@@ -1,8 +1,3 @@
-// The replay slots' IndexedDB backend: a database of their own (`be-music-replays`), apart from the player's `be-music`
-// one, with each slot's record in `replaySlots` and its compressed replay in `replaySlotData`, written together in one
-// transaction. The stored shape is versioned by its storage revision (`replay-slot-revision.ts`), kept in `meta`; the
-// first use on a page brings the stored slots to this build's revision.
-
 import { planReplaySlotRevision } from './replay-slot-revision.ts';
 import type { ReplaySlotBackend } from './replay-slots.ts';
 
@@ -10,9 +5,9 @@ import type { ReplaySlotBackend } from './replay-slots.ts';
 export const REPLAY_SLOT_DB_NAME = 'be-music-replays';
 /** Bumped when a store is added; the shape of what the stores hold is the storage revision's. */
 const REPLAY_SLOT_DB_VERSION = 2;
-/** One small record per slot: what it holds, its size and score. */
+/** Replay metadata and the slots selecting each replay. */
 const REPLAY_SLOTS_STORE = 'replaySlots';
-/** The gzip-compressed replay of each slot, by the same key as its record. */
+/** The gzip-compressed replay of each history entry, by its record key. */
 const REPLAY_SLOT_DATA_STORE = 'replaySlotData';
 /** The storage revision, under {@link REVISION_KEY}. */
 const META_STORE = 'meta';
@@ -59,28 +54,29 @@ function complete(transaction: IDBTransaction): Promise<void> {
 
 /** Brings the stored slots to this build's storage revision, in one transaction. */
 async function upgradeStoredSlots(db: IDBDatabase): Promise<void> {
-  const read = db.transaction([REPLAY_SLOTS_STORE, REPLAY_SLOT_DATA_STORE, META_STORE], 'readonly');
-  const [keys, values, dataKeys, revision] = await Promise.all([
-    request(read.objectStore(REPLAY_SLOTS_STORE).getAllKeys()),
-    request(read.objectStore(REPLAY_SLOTS_STORE).getAll()),
-    request(read.objectStore(REPLAY_SLOT_DATA_STORE).getAllKeys()),
-    request(read.objectStore(META_STORE).get(REVISION_KEY)),
+  const transaction = db.transaction([REPLAY_SLOTS_STORE, REPLAY_SLOT_DATA_STORE, META_STORE], 'readwrite');
+  const done = complete(transaction);
+  const requests = Promise.all([
+    request(transaction.objectStore(REPLAY_SLOTS_STORE).getAllKeys()),
+    request(transaction.objectStore(REPLAY_SLOTS_STORE).getAll()),
+    request(transaction.objectStore(REPLAY_SLOT_DATA_STORE).getAllKeys()),
+    request(transaction.objectStore(META_STORE).get(REVISION_KEY)),
   ]);
+  void done.catch(() => undefined);
+  const [keys, values, dataKeys, revision] = await requests;
   const plan = planReplaySlotRevision({
     storedRevision: typeof revision === 'number' ? revision : undefined,
     // Slot keys are strings; a key of any other type is not one this player wrote, and is left alone.
     records: keys.flatMap((key, index) => (typeof key === 'string' ? [{ key, value: values[index] }] : [])),
     dataKeys: dataKeys.filter((key): key is string => typeof key === 'string'),
   });
-  if (plan.remove.length === 0 && plan.put.length === 0 && plan.revision === undefined) return;
-  const write = db.transaction([REPLAY_SLOTS_STORE, REPLAY_SLOT_DATA_STORE, META_STORE], 'readwrite');
   for (const key of plan.remove) {
-    write.objectStore(REPLAY_SLOTS_STORE).delete(key);
-    write.objectStore(REPLAY_SLOT_DATA_STORE).delete(key);
+    transaction.objectStore(REPLAY_SLOTS_STORE).delete(key);
+    transaction.objectStore(REPLAY_SLOT_DATA_STORE).delete(key);
   }
-  for (const record of plan.put) write.objectStore(REPLAY_SLOTS_STORE).put(record, record.key);
-  if (plan.revision !== undefined) write.objectStore(META_STORE).put(plan.revision, REVISION_KEY);
-  await complete(write);
+  for (const record of plan.put) transaction.objectStore(REPLAY_SLOTS_STORE).put(record, record.key);
+  if (plan.revision !== undefined) transaction.objectStore(META_STORE).put(plan.revision, REVISION_KEY);
+  await done;
 }
 
 /** The replay slots kept in their IndexedDB database, at the storage revision this build writes. */
@@ -97,6 +93,9 @@ export function createIndexedDBReplaySlotBackend(): ReplaySlotBackend {
       return action(db);
     });
   return {
+    ...(typeof navigator.locks?.request === 'function'
+      ? { exclusive: <T>(action: () => Promise<T>) => navigator.locks.request(REPLAY_SLOT_DB_NAME, action) }
+      : {}),
     listRecords: () =>
       withDatabase((db) =>
         request(db.transaction(REPLAY_SLOTS_STORE, 'readonly').objectStore(REPLAY_SLOTS_STORE).getAll()),
@@ -108,11 +107,12 @@ export function createIndexedDBReplaySlotBackend(): ReplaySlotBackend {
         );
         return value instanceof Blob ? value : undefined;
       }),
-    write: (entry, remove) =>
+    write: (entry, remove, update = []) =>
       withDatabase((db) => {
         const transaction = db.transaction([REPLAY_SLOTS_STORE, REPLAY_SLOT_DATA_STORE], 'readwrite');
         const records = transaction.objectStore(REPLAY_SLOTS_STORE);
         const data = transaction.objectStore(REPLAY_SLOT_DATA_STORE);
+        for (const record of update) records.put(record, record.key);
         for (const key of remove) {
           records.delete(key);
           data.delete(key);

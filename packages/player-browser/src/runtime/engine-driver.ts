@@ -9,6 +9,7 @@ import {
   type PlayerOptions,
   type PlayerSummary,
 } from '@be-music/player-engine';
+import { IIDX_GAMEPAD_SCRATCH } from './arcade-gamepad.ts';
 import { logger } from '../logger.ts';
 import { type AudioBusHandle } from './audio-bus.ts';
 import { createWebAudioSession, type WebAudioSessionSlicePlayback } from './web-audio-session.ts';
@@ -142,6 +143,9 @@ export async function runEngineDriver(options: EngineDriverOptions): Promise<Eng
   const createUIRuntime = createWebUIRuntimeFactory(ui);
   const compositeOptions: PlayerOptions = {
     ...engineOptions,
+    ...(engineOptions?.recordReplay
+      ? { recordReplay: { analogScratch: IIDX_GAMEPAD_SCRATCH, ...engineOptions.recordReplay } }
+      : {}),
     auto: mode === 'auto',
     tui: false,
     createAudioSession,

@@ -2,15 +2,28 @@
 
 # @be-music/app-leaderboard
 
-The Be-Music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. The design is in
-[docs/leaderboard.md](../../docs/leaderboard.md); this README covers running and deploying it.
+This Hono app serves the Be-Music Leaderboard API on Cloudflare Workers and stores data in D1 and R2. [Service specification](../../docs/leaderboard.md)
+
+<details>
+<summary>Table of contents</summary>
+
+- [What is implemented](#what-is-implemented)
+- [Setup](#setup)
+  - [Secrets](#secrets)
+- [Database](#database)
+- [Deploy](#deploy)
+- [Pages](#pages)
+  - [Icons](#icons)
+- [Tests](#tests)
+
+</details>
 
 ## What is implemented
 
 - OIDC sign-in through the independent Accounts service, with guest accounts, passkeys and configured Discord/Google providers.
 - `POST /api/v0/scores`: submits a replay (gzip). The server checks eligibility and the play and chart fingerprint
   documents (verification layers L1–L3, and L4 for charts without `#RANDOM`), re-simulates the play under `lr2`,
-  `beatoraja` and `____`, stores the log in R2 and updates personal bests. A retried play is recognised; the same play
+  `beatoraja`, `____` and `plugout`, stores the log in R2 and updates personal bests. A retried play is recognised; the same play
   from a second account is refused.
 - `GET /api/v0/charts/:chartFingerprint/leaderboard` and `.../leaderboard/me`: rankings, with filters for assisted
   plays, anonymous players, and "played under this ruleset".
@@ -27,7 +40,7 @@ The Be-Music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. T
 
 Not implemented: L4 for new `#RANDOM` outcomes, L5 and rivals. Score share cards are generated in the browser, uploaded through `PUT /api/v0/scores/:id/card` and served by `/scores/:id/card`.
 
-A score submission, in the order the Worker checks it (`src/api/v0.ts`, `src/scores/submit.ts`); the full sequence with the client is in [docs/leaderboard.md section 5.2](../../docs/leaderboard.md#52-sequence):
+The Worker checks submissions in this order (`src/api/v0.ts` and `src/scores/submit.ts`). For the full sequence, including the client, see [docs/leaderboard.md section 5.2](../../docs/leaderboard.md#52-sequence).
 
 ```mermaid
 flowchart TD
@@ -38,7 +51,7 @@ flowchart TD
   dup -->|"yes, another account"| e409["409"]
   dup -->|no| docs{"documents match the<br/>fingerprints (L1–L4)?"}
   docs -->|no| reject["409 / 422"]
-  docs -->|yes| sim["re-simulate under<br/>lr2 · beatoraja · ____"]
+  docs -->|yes| sim["re-simulate under<br/>lr2 · beatoraja · ____ · plugout"]
   sim --> store["R2: replay<br/>D1: score, results, bests"]
   store --> r201["201: results and ranks"]
 ```

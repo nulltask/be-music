@@ -19,6 +19,7 @@ import {
   normalizeBmsonStopEvents,
 } from './bmson.ts';
 import { normalizeControlFlowCommand } from './control-flow.ts';
+import { normalizeLRXExtensions } from './lrx-extensions.ts';
 
 export function parseJSONDocument(raw: Partial<BeMusicJSON>): BeMusicJSON {
   const json = createEmptyJSON(raw.sourceFormat ?? 'json');
@@ -80,6 +81,8 @@ export function parseJSONDocument(raw: Partial<BeMusicJSON>): BeMusicJSON {
   }
   json.bms = normalizeBMSExtensions(rawBMS, json.sourceFormat === 'bmson');
   json.bmson = normalizeBmsonExtensions(rawBmson);
+  const lrx = normalizeLRXExtensions(structured.lrx);
+  if (lrx) json.lrx = lrx;
   json.preservation = normalizePreservation(structured.preservation, rawBMS, rawBmson);
   migrateBMSExtensionHeadersFromExtras(json);
   return json;
@@ -452,6 +455,10 @@ function normalizeBMSExtensions(input: unknown, allowLongKeys: boolean): BeMusic
     idBase,
     allowLongKeys,
   );
+  const exWAVOverridden = normalizeBMSExtensionStringList(raw.exWAVOverridden)
+    .map((key) => normalizeObjectKey(key, idBase))
+    .filter((key) => key in normalized.exWAV);
+  if (exWAVOverridden.length > 0) normalized.exWAVOverridden = [...new Set(exWAVOverridden)];
   normalized.exBMP = normalizeIndexedBMSExtensionMap(
     raw.exBMP ?? raw.exBmp ?? raw.ex_bmp ?? raw.exbmp,
     idBase,
@@ -706,13 +713,13 @@ function normalizeBMSObjectLineEntry(input: unknown): BMSObjectLineEntry | undef
         normalizeChannel(event.channel) === channel &&
         normalizeObjectKey(event.value) !== '00',
     )
-    .map((event) => ({
-      measure,
-      channel,
-      position: event.position,
-      value: event.value,
-      ...(event.bmson ? { bmson: event.bmson } : {}),
-    }));
+    .map((event) => {
+      // Optional fields are assigned, not spread, to keep the hidden classes of parsed events.
+      const copy: BeMusicEvent = { measure, channel, position: event.position, value: event.value };
+      if (event.bmsLineOrder !== undefined) copy.bmsLineOrder = event.bmsLineOrder;
+      if (event.bmson) copy.bmson = event.bmson;
+      return copy;
+    });
 
   const measureLength =
     typeof raw.measureLength === 'number' && Number.isFinite(raw.measureLength) && raw.measureLength > 0

@@ -66,6 +66,7 @@ export interface ExportsBenchmarkSnapshot {
     packages: PackageName[];
     includeInteractive: boolean;
     filter?: string;
+    caseKeys?: string[];
   };
   exports: Record<PackageName, string[]>;
   totals: {

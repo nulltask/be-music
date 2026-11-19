@@ -1,5 +1,20 @@
 # @be-music/chart-source
 
+## 0.9.0
+
+### Minor Changes
+
+- be797a5: `BeMusicJSON.bms` gains `exWAVOverridden`, the slots whose `#EXWAVxx` a later `#WAVxx` redefines, so the later of the two lines wins as in nanasigroove 1.552.
+- 398f2dd: `LRXExtensions.bga` lists an LRX chart's BGA notes with their transforms (`LRXBGACue`) when the BMS BGA channels cannot carry them: source and destination rectangles, colour, blend, rotation, centre, keyframe chains, or layers 203 and 204.
+- 212d164: `LRXEventExtensions.lane` names the lane of an LRX chain or hidden note that plays in the background, so a chain note can follow the note before it and a hidden note can become its lane's keysound. `LRXEventExtensions.keyVolume` marks a background sound plugout plays at the keysound volume.
+- f5490bd: Add LRX as a source format: `sourceFormat: 'lrx'`, the per-note `BeMusicEvent.lrx` values (long-note length, chain flag, volume, pan, frequency, envelope, slice, reverse, damage, recover), the chart-level `BeMusicJSON.lrx` header values, `LRX_TICKS_PER_BEAT`, and the `unsupported-lane-type` / `unsupported-channel` diagnostics. `cloneJSON` copies them.
+
+### Patch Changes
+
+- e9cb57e: Preserve the later BMS normal-note object at a shared position when resolving or round-tripping charts with source line order.
+- 4ee342f: Speed up `cloneJSON` by about three times: cloned events keep the object shapes of parsed events instead of spreading their optional fields in, so the chart editor's edits, which clone the chart, are fast again.
+- Updated dependencies: `@be-music/shared-utils@0.8.0`
+
 ## 0.8.0
 
 ### Minor Changes

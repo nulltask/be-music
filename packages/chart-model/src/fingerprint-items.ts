@@ -10,6 +10,7 @@
  */
 import {
   DEFAULT_BPM,
+  LRX_TICKS_PER_BEAT,
   normalizeChannel,
   resolveBMSBase,
   type BeMusicEvent,
@@ -24,11 +25,11 @@ import {
   isStopChannel,
   isTempoChannel,
   mapBMSLongNoteChannelToPlayable,
-  resolveBMSLongNotes,
   resolveChartPlayVariant,
   type ChartPlayVariant,
 } from './index.ts';
 import { compileChartPlayOptions, type ChartPlayOptions } from './chart-play-options.ts';
+import { isLRXLaneType, isPMSChartPath } from './play-variant.ts';
 import { resolveGenericBmsonKeyCount } from './generic-bmson.ts';
 import { resolveKeyboardModeHint, type KeyboardModeHint } from './keyboard-mode-hint.ts';
 import { collectExRankChanges, resolveJudgeRankFacts, resolveTotalFacts } from './resolved-chart.ts';
@@ -116,6 +117,8 @@ export interface HeaderItems {
   player3: boolean;
   /** The explicit bmson keyboard or generic hint, one of the lane-mode inputs. */
   modeHint: KeyboardModeHint | `generic-${number}keys` | null;
+  /** The LRX `lanetype` when it names a mode, one of the lane-mode inputs. */
+  lrxLaneType: number | null;
   /** `false` only for a bmson chart with an explicit `lines: []` (no bar lines drawn). */
   barLines: boolean;
   /**
@@ -395,7 +398,7 @@ export function computeChartItems(
   laneCache?: LaneNotesCache,
 ): ChartItems {
   const wants = (bucket: string): boolean => only === undefined || only.has(bucket);
-  const context = createItemContext(json, bucketed);
+  const context = createItemContext(json);
 
   // Lanes are independent once `#LNTYPE` is fixed for the whole chart, so the requested lanes resolve together.
   const lanes = new Map<string, NoteItem[]>(only === undefined ? [] : reuse!.lanes);
@@ -486,6 +489,7 @@ function sameLaneEvents(left: ReadonlyArray<BeMusicEvent>, right: ReadonlyArray<
       a.measure !== b.measure ||
       a.channel !== b.channel ||
       a.value !== b.value ||
+      a.bmsLineOrder !== b.bmsLineOrder ||
       a.position.length !== b.position.length ||
       a.position.some((part, at) => part !== b.position[at]) ||
       (a.bmson === undefined) !== (b.bmson === undefined) ||
@@ -508,7 +512,7 @@ function lookupLaneNotes(
   return undefined;
 }
 
-function createItemContext(json: BeMusicJSON, bucketed: Map<string, BeMusicEvent[]>): ItemContext {
+function createItemContext(json: BeMusicJSON): ItemContext {
   let bmson: BmsonGeometry | undefined;
   if (json.sourceFormat === 'bmson') {
     const resolution = Math.max(1, json.bmson.info.resolution || 240);
@@ -517,37 +521,15 @@ function createItemContext(json: BeMusicJSON, bucketed: Map<string, BeMusicEvent
       ticksPerMeasure: Math.max(1, Math.floor(resolution * 4)),
       lines: json.preservation.bmson.lines,
     };
+  } else if (json.sourceFormat === 'lrx') {
+    // An LRX long note's length is in ticks over measures that start at the chart's measure ticks, as bmson pulses are.
+    bmson = {
+      resolution: LRX_TICKS_PER_BEAT,
+      ticksPerMeasure: LRX_TICKS_PER_BEAT * 4,
+      lines: json.lrx?.barTicks ?? [],
+    };
   }
-  return { json, base: resolveBMSBase(json), lnType: resolveChartLongNoteType(json, bucketed), bmson };
-}
-
-/** `true` when `#LNTYPE` is not set, so the `5x` / `6x` objects of every lane decide it together. */
-export function usesInferredLongNoteType(json: BeMusicJSON): boolean {
-  return json.bms.lnType !== 1 && json.bms.lnType !== 2;
-}
-
-/** The chart's `#LNTYPE`: its own, else what Be-Music infers from every lane's `5x` / `6x` objects. */
-function resolveChartLongNoteType(json: BeMusicJSON, bucketed: Map<string, BeMusicEvent[]>): 1 | 2 {
-  if (!usesInferredLongNoteType(json)) {
-    return json.bms.lnType as 1 | 2;
-  }
-  if (json.sourceFormat !== 'bms') {
-    return DEFAULT_LONG_NOTE_TYPE;
-  }
-  const longNoteEvents: BeMusicEvent[] = [];
-  for (const [bucket, events] of bucketed) {
-    if (bucket.startsWith('lane:')) {
-      for (const event of events) {
-        if (mapBMSLongNoteChannelToPlayable(event.channel) !== undefined) {
-          longNoteEvents.push(event);
-        }
-      }
-    }
-  }
-  if (longNoteEvents.length === 0) {
-    return DEFAULT_LONG_NOTE_TYPE;
-  }
-  return resolveBMSLongNotes({ ...json, events: longNoteEvents }, { inferLNTypeWhenMissing: true }).lnType;
+  return { json, base: resolveBMSBase(json), lnType: json.bms.lnType === 2 ? 2 : DEFAULT_LONG_NOTE_TYPE, bmson };
 }
 
 /** `json` reduced to `events`, sharing everything else (the resolvers only read it). */
@@ -575,7 +557,7 @@ function noteContext(json: BeMusicJSON, freeZone: boolean): ResolvedNoteContext 
     // it and `canonicalizeItems` applies it (see `NoteItem.fz`).
     resolvePlayVariant: () => '9',
     freeZone,
-    inferBmsLNTypeWhenMissing: true,
+    inferBmsLNTypeWhenMissing: false,
   };
 }
 
@@ -864,6 +846,7 @@ function computeHeader(json: BeMusicJSON): HeaderItems {
       genericKeys !== undefined
         ? `generic-${genericKeys}keys`
         : (resolveKeyboardModeHint(json.bmson?.info?.modeHint) ?? null),
+    lrxLaneType: json.sourceFormat === 'lrx' && isLRXLaneType(json.lrx?.laneType) ? json.lrx.laneType : null,
     barLines: json.bmson.barlinesSuppressed !== true,
     playOptions: compileChartPlayOptions({
       initial: json.bms.options ?? (json.bms.option ? [json.bms.option] : []),
@@ -1115,36 +1098,27 @@ export function flattenItems(items: ChartItems): FlatItems {
   return { notes, mines: [...items.mines], timeline, lengths: items.lengths, header: items.header };
 }
 
-/** The chart-file extension the lane mode reads (spec 3.5); any other extension counts as none. */
+/** The chart-file extension the lane mode reads (spec 3.5, `.n2s` reads as `.pms`); any other counts as none. */
 export type LaneModeExtension = '.pms' | null;
 
 /**
  * The lane-mode extension of a chart path or bare extension: only the last path segment counts, as in
- * `resolveChartPlayVariant`.
+ * `resolveChartPlayVariant`. A Nanasi Groove 2 `.n2s` chart holds a `.pms` file and reads as `.pms`.
  */
 export function resolveLaneModeExtension(chartPath: string | undefined): LaneModeExtension {
-  if (typeof chartPath !== 'string') {
-    return null;
-  }
-  const trimmed = chartPath.trim();
-  const dot = trimmed.lastIndexOf('.');
-  const slash = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
-  if (dot < 0 || dot < slash) {
-    return null;
-  }
-  const extension = trimmed.slice(dot).toLowerCase();
-  return extension === '.pms' ? extension : null;
+  return isPMSChartPath(chartPath) ? '.pms' : null;
 }
 
 /**
- * Lane mode from the lane-mode inputs: the lanes that hold notes, the extension, `#PLAYER 3`, and the bmson keyboard
- * `mode_hint` (spec 3.5).
+ * Lane mode from the lane-mode inputs: the lanes that hold notes, the extension, `#PLAYER 3`, the bmson keyboard
+ * `mode_hint` and the LRX `lanetype` (spec 3.5).
  */
 export function resolveFingerprintLaneMode(
   notes: ReadonlyArray<NoteItem>,
   extension: LaneModeExtension,
   player3: boolean,
   modeHint: KeyboardModeHint | `generic-${number}keys` | null,
+  lrxLaneType: number | null = null,
 ): ChartPlayVariant {
   const lanes = new Set<string>();
   for (const note of notes) {
@@ -1155,6 +1129,7 @@ export function resolveFingerprintLaneMode(
     events: [...lanes].map((channel) => ({ channel })),
     bms: { player: player3 ? 3 : 1 },
     ...(modeHint !== null ? { bmson: { info: { modeHint } } } : {}),
+    ...(lrxLaneType !== null ? { lrx: { laneType: lrxLaneType } } : {}),
   });
 }
 
@@ -1232,7 +1207,13 @@ export interface CanonicalLists {
  * Canonical play lists of a fully resolved outcome: lane mode, FREE ZONE, the state-dependent drops, and sorting.
  */
 export function canonicalizeItems(items: FlatItems, extension: LaneModeExtension): CanonicalLists {
-  const laneMode = resolveFingerprintLaneMode(items.notes, extension, items.header.player3, items.header.modeHint);
+  const laneMode = resolveFingerprintLaneMode(
+    items.notes,
+    extension,
+    items.header.player3,
+    items.header.modeHint,
+    items.header.lrxLaneType,
+  );
   const freeZone = variantUsesFreeZone(laneMode) ? 'apply' : 'drop';
   const notes = [...items.notes].sort(compareNoteItems);
   const mines = [...items.mines].sort(compareMineItems);

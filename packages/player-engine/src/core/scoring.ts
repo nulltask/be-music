@@ -1,3 +1,4 @@
+import { resolvePlugoutScore } from '../ruleset/plugout.ts';
 import {
   _____EX_SCORE_PER_GREAT,
   _____EX_SCORE_PER_PGREAT,
@@ -35,6 +36,8 @@ export interface ScoreTracker {
    * its own money score.
    */
   moneyScore: boolean;
+  /** True when the active ruleset is plugout's, whose 100000-point score (`resolvePlugoutScore`) `ScoreSummary.score` reports. */
+  plugoutScore?: boolean;
   /**
    * The course-wide combo and max combo, for a course stage: carried in from the previous stage and kept alongside the
    * stage's own combo, breaking where it breaks (beatoraja `JudgeManager.coursecombo`, LR2 `now_combo_course`).
@@ -43,12 +46,13 @@ export interface ScoreTracker {
 }
 
 export function createScoreTracker(
-  options: { moneyScore?: boolean; course?: { combo: number; maxCombo: number } } = {},
+  options: { moneyScore?: boolean; plugoutScore?: boolean; course?: { combo: number; maxCombo: number } } = {},
 ): ScoreTracker {
   const tracker: ScoreTracker = {
     combo: 0,
     maxCombo: 0,
     moneyScore: options.moneyScore ?? true,
+    ...(options.plugoutScore === true ? { plugoutScore: true } : {}),
   };
   if (options.course !== undefined) {
     tracker.course = { combo: options.course.combo, maxCombo: Math.max(options.course.maxCombo, options.course.combo) };
@@ -93,7 +97,11 @@ export function applyJudgeToSummary(summary: ScoreSummary, judge: JudgmentKind, 
     breakTrackedCombo(tracker);
   }
 
-  summary.score = tracker.moneyScore ? resolveLR2MoneyScore(summary) : summary.exScore;
+  summary.score = tracker.plugoutScore
+    ? resolvePlugoutScore({ pgreat: summary.perfect, great: summary.great, good: summary.good }, summary.total)
+    : tracker.moneyScore
+      ? resolveLR2MoneyScore(summary)
+      : summary.exScore;
 }
 
 function resolveExScoreDelta(judge: JudgmentKind): number {

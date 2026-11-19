@@ -12,8 +12,26 @@ export * from './nonstop.ts';
 export * from './recorder.ts';
 export * from './rejudge.ts';
 export * from './result-lamp.ts';
-export * from './simulate.ts';
+export {
+  REPLAY_SIMULATOR_RULESETS,
+  resolveBeatorajaDefaultTotal,
+  resolveBeatorajaHardRecoverMultiplier,
+  resolveLR2DefaultTotal,
+  resolveLR2HardDamageMultiplier,
+  resolveRulesetConfig,
+  resolve____GaugeUnit,
+  simulateReplay,
+  simulateReplayRulesets,
+  type BeatorajaJudgeAlgorithm,
+  type ReplayJudgmentEvent,
+  type ReplayJudgmentKind,
+  type ReplayJudgmentObserver,
+  type ResolveRulesetOptions,
+  type RulesetId,
+  type SimulateReplayOptions,
+} from './simulate.ts';
 export * from './view.ts';
+export { resolveChartPlayProgram } from '../core/chart-play-options.ts';
 // The chart a play was played on, rebuilt without the engine's audio driver: a verifier needs it to check what a log
 // claims about its chart (a course's unreached stages, a NONSTOP run's stitched chart).
 export { resolveChartRulesetFacts, resolvePlayChart } from '../core/play-chart.ts';

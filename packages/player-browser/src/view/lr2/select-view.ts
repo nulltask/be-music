@@ -1,4 +1,4 @@
-import { LR2_GAUGE_TYPES } from '@be-music/player-engine/ruleset';
+import { LR2_GAUGE_TYPES, gaugePickType } from '@be-music/player-engine/ruleset';
 /**
  * The LR2 family's select view: an LR2 select skin's `#SRC_*` / `#DST_*` frame, its bar list (`#SRC_BAR_BODY` slots
  * around `#BAR_CENTER`, drawn by `select-bars.ts`), buttons, panels, sliders, numbers, texts and mouse cursor, over the
@@ -217,6 +217,7 @@ export class LR2SelectView implements SelectView {
     this.readme.attach(
       () => host.domRoot,
       () => this.emit?.({ type: 'readtext' }),
+      (index) => this.emit?.({ type: 'readtext-tab', index }),
     );
     this.attached = true;
   }
@@ -708,7 +709,8 @@ export class LR2SelectView implements SelectView {
       }
       case 'cycle-option':
         if (action.option === 'gauge1P' || action.option === 'gauge2P') {
-          const gauge = this.frame?.playOptions[action.option] ?? 'GROOVE';
+          // The button steps LR2's own cells: a source-qualified pick steps on from its gauge type, to a bare gauge.
+          const gauge = gaugePickType(this.frame?.playOptions[action.option] ?? 'GROOVE');
           // The corrected gauge shares the skin's HAZARD cell, so the button steps from that cell.
           emit({
             type: 'set-play-option',

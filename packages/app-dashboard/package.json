@@ -1,6 +1,6 @@
 {
   "name": "@be-music/app-dashboard",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Be-Music dashboard, account management and the OIDC identity provider for Be-Music services",
   "type": "module",
@@ -18,9 +18,9 @@
     "@be-music/service-auth-client": "workspace:*",
     "@be-music/service-web-theme": "workspace:*",
     "@be-music/shared-utils": "workspace:*",
-    "@better-auth/oauth-provider": "1.7.14",
-    "@better-auth/passkey": "1.7.14",
-    "better-auth": "1.7.14",
+    "@better-auth/oauth-provider": "1.7.21",
+    "@better-auth/passkey": "1.7.21",
+    "better-auth": "1.7.21",
     "drizzle-orm": "^0.45.4"
   },
   "devDependencies": {

@@ -130,7 +130,7 @@ type DirectorySceneState =
     };
 
 type ResultScreenExitAction = Exclude<ResultScreenAction, 'replay'>;
-const DIRECTORY_CHART_EXTENSIONS_LABEL = '.bms, .bme, .bml, .pms, .bmson';
+const DIRECTORY_CHART_EXTENSIONS_LABEL = '.bms, .bme, .bml, .pms, .bmson, .n2s, .lrs';
 let activePlayerLogger: Logger = createNoopLogger();
 
 export async function main(): Promise<void> {

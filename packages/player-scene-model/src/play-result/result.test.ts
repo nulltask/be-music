@@ -36,6 +36,23 @@ describe('playResultFromPlayState', () => {
     expect(playResultFromPlayState(state, { ...facts, judgeRuleset: 'beatoraja', run: 'stage' }).lamp).toBe('NORMAL');
   });
 
+  test('lamps a gauge of another source by that source, under the judge ruleset’s top lamp', () => {
+    // LR2's DEATH under beatoraja judging (`lr2:DEATH`) clears on NORMAL, as LR2 lamps it; beatoraja's own is EX HARD.
+    const death = (source?: string): PlayEvent => ({
+      type: 'frame',
+      frame: {
+        totalSeconds: 100,
+        summary: {
+          exScore: 7,
+          gauge: { current: 82, max: 100, cleared: true, type: 'DEATH', ...(source ? { source } : {}) },
+        },
+      },
+    });
+    const facts = { chart: chartEntry, score: { ...score, perfect: 2, great: 1, total: 4 }, seconds: 90 };
+    expect(playResultFromPlayState(played(death('lr2')), { ...facts, judgeRuleset: 'beatoraja' }).lamp).toBe('NORMAL');
+    expect(playResultFromPlayState(played(death()), { ...facts, judgeRuleset: 'beatoraja' }).lamp).toBe('EX_HARD');
+  });
+
   test('reads the score, gauge, combo and graphs, ending the graphs where the play ended', () => {
     const state = played(frame(2, 24), judge(1, 10, -3), frame(7, 82, true), judge(4, 60, 5));
     const result = playResultFromPlayState(state, { chart: chartEntry, score, seconds: 90, judgeRuleset: 'lr2' });

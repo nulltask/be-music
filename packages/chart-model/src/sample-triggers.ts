@@ -15,6 +15,7 @@ import {
 import { resolveJudgedNotes } from './resolved-notes.ts';
 import { resolveChartPlayVariant } from './play-variant.ts';
 import { resolveBmsWAVResources } from './wav-directives.ts';
+import { resolveLRXSamplePlayback } from './lrx-playback.ts';
 import {
   createTimingBuildContext,
   createTimingResolver,
@@ -32,6 +33,16 @@ export interface TimedSampleTrigger {
   sampleOffsetSeconds: number;
   sampleDurationSeconds?: number;
   sampleSliceId?: string;
+  /** This trigger's own linear gain (an LRX `vol`), on top of the slot's; 1 when absent. */
+  sampleGain?: number;
+  /** Stereo balance from −1 (left) to 1 (right) (an LRX `pan`); centre when absent. */
+  samplePan?: number;
+  /** Rate the sample plays at, on top of any other (an LRX `frq`); 1 when absent. */
+  samplePlaybackRate?: number;
+  /** Fade-in from the start of the window, in seconds of the sample (an LRX `atk`). */
+  sampleAttackSeconds?: number;
+  /** Fade-out past the end of `sampleDurationSeconds`, in seconds of the sample (an LRX `rls`). */
+  sampleReleaseSeconds?: number;
 }
 
 export interface CollectSampleTriggersOptions {
@@ -132,6 +143,7 @@ export function collectSampleTriggersWithContext(
     if (droppedEvents.has(event)) continue;
     const sampleKey = normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson');
     const playback = bmsonPlaybackMap?.get(event);
+    const lrx = json.sourceFormat === 'lrx' ? resolveLRXSamplePlayback(event.lrx) : undefined;
     const beat = beatResolver.eventToBeat(event);
     triggers.push({
       event,
@@ -140,9 +152,14 @@ export function collectSampleTriggersWithContext(
       channel: item.normalizedChannel,
       sampleKey,
       samplePath: wavResources[sampleKey],
-      sampleOffsetSeconds: playback?.offsetSeconds ?? 0,
-      sampleDurationSeconds: playback?.durationSeconds,
+      sampleOffsetSeconds: playback?.offsetSeconds ?? lrx?.offsetSeconds ?? 0,
+      sampleDurationSeconds: playback?.durationSeconds ?? lrx?.durationSeconds,
       sampleSliceId: playback?.sliceId,
+      ...(lrx?.gain !== undefined ? { sampleGain: lrx.gain } : {}),
+      ...(lrx?.pan !== undefined ? { samplePan: lrx.pan } : {}),
+      ...(lrx?.playbackRate !== undefined ? { samplePlaybackRate: lrx.playbackRate } : {}),
+      ...(lrx?.attackSeconds !== undefined ? { sampleAttackSeconds: lrx.attackSeconds } : {}),
+      ...(lrx?.releaseSeconds !== undefined ? { sampleReleaseSeconds: lrx.releaseSeconds } : {}),
     } satisfies TimedSampleTrigger);
   }
   return triggers;

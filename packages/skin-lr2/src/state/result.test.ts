@@ -415,13 +415,32 @@ describe('resolveLR2ResultState values', () => {
   });
 
   it('fills the bar graphs and sliders', () => {
-    const result = { ...makeResult({ total: 100, exScore: 50 }), maxCombo: 25 };
+    const result = { ...makeResult({ total: 100, exScore: 50 }), maxCombo: 25, playSeconds: 25, chartSeconds: 100 };
     const state = resolveLR2ResultState({ result });
-    expect(state.bargraph(2)).toBe(0.25);
-    expect(state.bargraph(6)).toBe(0.8);
-    expect(state.bargraph(7)).toBe(0.25);
-    expect(state.slider(9)).toBe(0.25);
+    expect(state.bargraph(1)).toBe(0.25);
+    expect(state.bargraph(2)).toBe(1);
+    expect(state.bargraph(10)).toBe(0.25);
+    expect(state.bargraph(6)).toBeUndefined();
+    expect(state.bargraph(25)).toBe(0.25);
+    expect(state.bargraph(13)).toBeUndefined();
+    expect(state.slider(6)).toBe(0.25);
+    expect(state.slider(9)).toBeUndefined();
     expect(state.bargraph(3)).toBeUndefined();
+  });
+
+  it('leaves the best record and the target undrawn, and draws the 2P graphs of a BATTLE play', () => {
+    const solo = resolveLR2ResultState({ result: { ...makeResult({ total: 100, exScore: 50 }), maxCombo: 25 } });
+    for (const type of [12, 13, 14, 15, 30, 37]) expect(solo.bargraph(type)).toBeUndefined();
+
+    const secondPlayer = { ...makeResult({ total: 100, exScore: 150 }), maxCombo: 80 };
+    const battle = resolveLR2ResultState({
+      result: { ...makeResult({ total: 100, exScore: 50 }), maxCombo: 25, secondPlayer },
+    });
+    expect(battle.bargraph(14)).toBe(0.75);
+    expect(battle.bargraph(37)).toBe(0.75);
+    expect(battle.bargraph(35)).toBe(0.8);
+    expect(battle.bargraph(12)).toBeUndefined();
+    expect(battle.bargraph(15)).toBeUndefined();
   });
 });
 

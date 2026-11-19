@@ -24,8 +24,15 @@ import {
   DEFAULT_CONTROL_BUTTONS,
   resolveControlButtons,
   type ControlButtonMap,
+  type ControlButton,
   type ControlSettings,
 } from './controls/control-buttons.ts';
+import {
+  createGamepadMenuInput,
+  GAMEPAD_MENU_ARROW_CODES,
+  type GamepadMenuEvent,
+  type GamepadMenuInput,
+} from '../runtime/gamepad-menu.ts';
 
 /** Where the scene listens for keys: `window` in a browser. */
 export interface SessionKeyTarget {
@@ -40,6 +47,13 @@ export interface SessionSceneOptions {
   readonly now?: () => number;
   /** The player's keys the screen reads its control buttons by (`SessionKeyEvent.buttons`); the defaults without. */
   readonly controls?: ControlSettings;
+  /**
+   * The gamepads the screen reads as its control buttons (`runtime/gamepad-menu.ts`), or `false` for none. Every scene
+   * but the play reads them by default; the play reads its pads through the engine's input runtime.
+   */
+  readonly gamepad?: GamepadMenuInput | false;
+  /** Whether a pad press is someone else's (a dialog over the stage); a modal dialog's or a text field's by default. */
+  readonly shouldSkipGamepad?: () => boolean;
 }
 
 type SceneState = 'idle' | 'attaching' | 'entered' | 'disposed';
@@ -60,6 +74,38 @@ function isEditableKeyTarget(target: EventTarget | null): boolean {
   const tag = typeof element.tagName === 'string' ? element.tagName : '';
   if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
   return tag === 'INPUT' && !['checkbox', 'radio', 'button', 'range'].includes(String(element.type));
+}
+
+/** A modal dialog or a focused text field takes the pads from the stage, as it takes the keys. */
+function defaultShouldSkipGamepad(): boolean {
+  if (typeof document === 'undefined') return false;
+  if (isEditableKeyTarget(document.activeElement)) return true;
+  try {
+    return document.querySelector('dialog:modal') !== null;
+  } catch {
+    return document.querySelector('dialog[open]') !== null;
+  }
+}
+
+/**
+ * A pad press as the key event a screen reads: a key, turntable key, START or SELECT as its control button (with a code
+ * no keyboard key has), a D-pad direction as its arrow key.
+ */
+export function gamepadSessionKeyEvent(event: GamepadMenuEvent): SessionKeyEvent {
+  const arrow = GAMEPAD_MENU_ARROW_CODES[event.button];
+  const buttons: ControlButton[] = arrow === undefined ? [`${event.side}-${event.button}` as ControlButton] : [];
+  return {
+    type: event.type,
+    buttons,
+    code: arrow ?? `Gamepad${event.side}-${event.button}`,
+    key: arrow ?? '',
+    repeat: event.repeat,
+    timeStamp: event.timeStamp,
+    shiftKey: false,
+    ctrlKey: false,
+    altKey: false,
+    metaKey: false,
+  };
 }
 
 /** The plain-data form of a DOM key event. */
@@ -93,6 +139,8 @@ export class SessionScene<Frame, Intent> implements PixiScene {
   private readonly now: () => number;
   private state: SceneState = 'idle';
   private readonly controlButtons: ControlButtonMap;
+  private readonly gamepad: GamepadMenuInput | undefined;
+  private readonly shouldSkipGamepad: () => boolean;
   /** Bumped by every `exit` / `dispose`, so an `enter` still waiting on the view's `attach` knows it was overtaken. */
   private generation = 0;
   private host: PixiSceneHost | undefined;
@@ -108,6 +156,11 @@ export class SessionScene<Frame, Intent> implements PixiScene {
     this.now = options.now ?? defaultNow;
     this.controlButtons =
       options.controls === undefined ? DEFAULT_CONTROL_BUTTONS : resolveControlButtons(options.controls);
+    this.gamepad =
+      options.gamepad === false || (options.gamepad === undefined && session.kind === 'play')
+        ? undefined
+        : (options.gamepad ?? (this.keyTarget === undefined ? undefined : createGamepadMenuInput()));
+    this.shouldSkipGamepad = options.shouldSkipGamepad ?? defaultShouldSkipGamepad;
     this.sceneIdentity = { kind: session.kind, family: view.family };
     this.stageInfo = view.getStageInfo !== undefined ? () => view.getStageInfo!() : undefined;
   }
@@ -160,6 +213,7 @@ export class SessionScene<Frame, Intent> implements PixiScene {
     this.controller.enter(this.now());
     this.keyTarget?.addEventListener('keydown', this.onKeyDown);
     this.keyTarget?.addEventListener('keyup', this.onKeyUp);
+    this.gamepad?.start(this.onGamepad);
     host.app.ticker.add(this.tick);
     this.tick();
   }
@@ -178,6 +232,7 @@ export class SessionScene<Frame, Intent> implements PixiScene {
     this.host = undefined;
     this.keyTarget?.removeEventListener('keydown', this.onKeyDown);
     this.keyTarget?.removeEventListener('keyup', this.onKeyUp);
+    this.gamepad?.stop();
     this.view.detach();
     this.controller.exit();
   }
@@ -255,6 +310,13 @@ export class SessionScene<Frame, Intent> implements PixiScene {
 
   private readonly onKeyUp = (event: KeyboardEvent): void => {
     this.handleKey('up', event);
+  };
+
+  private readonly onGamepad = (event: GamepadMenuEvent): void => {
+    if (this.state !== 'entered') return;
+    // A press over a dialog is the dialog's; its release still reaches the screen, which saw the press.
+    if (event.type === 'down' && this.shouldSkipGamepad()) return;
+    this.controller.handleKey(gamepadSessionKeyEvent(event));
   };
 
   private handleKey(type: SessionKeyEvent['type'], event: KeyboardEvent): void {

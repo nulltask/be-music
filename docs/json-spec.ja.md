@@ -128,7 +128,7 @@ classDiagram
 ```json
 {
   "format": "be-music-json/0.1.0",
-  "sourceFormat": "bms | bmson | json",
+  "sourceFormat": "bms | bmson | lrx | json",
   "metadata": {
     "title": "Example",
     "bpm": 130,
@@ -311,7 +311,7 @@ classDiagram
 - `preview`: `#PREVIEW` の値
 - `lnType`: `#LNTYPE` の値
 - `lnMode`: `#LNMODE` の値（`1` = LN、`2` = CN、`3` = HCN）。正の値だけを保持
-- `lnObjs`: 複数 `#LNOBJ` 宣言を宣言順で保持した配列 (2桁 base36)
+- `lnObjs`: `#LNOBJ` 宣言を宣言順で保持した配列。再生では選択された分岐を解決した後、最後の ID だけを終端として使う。
 - `volWAV`: `#VOLWAV` の値
 - `defExRank`: `#DEFEXRANK` の値
 - `exRank`: `#EXRANKxx` のマップ
@@ -458,6 +458,15 @@ flowchart LR
 - `chart-writer` は `position` 分母情報を使って小節内解像度を決定します
 - `parseJson` は `position` タプルを必須とし、欠損イベントはエラー扱いにします
 - beat 変換やイベント順序などの譜面意味論 helper は `@be-music/chart-model` が提供します
+
+## LRX の値
+
+LRX から読んだ譜面（[format-compat §7](./format-compat.ja.md#7-lrx)）は `sourceFormat: "lrx"` を持ち、BMS の形の欄に入らないものを次に残します。
+
+- `BeMusicEvent.lrx` は、ノーツの値のうち plugout の既定と違うものを持ちます。`length`（レーンのノーツのロングノーツの長さ。1 拍 480 の tick）、`chain`（`cn`）、`lane`（チェインノーツと隠しノーツのレーン。BMS のチャンネル）、`keyVolume`（plugout がキー音の音量で鳴らす背景音）、`volume`、`pan`、`frequency`、`attackMs`、`releaseMs`、`offsetMs`、`lengthMs`、`reverse`、`damage`（`dmg`）、`recover`（`rcv`）です。
+- `BeMusicJSON.lrx` は、BMS に対応のないヘッダの値（`laneType`、`category`、`level`、`bmsLevel`、譜面の名前と作者、表示用 BPM、`phase`、`unlock`、`songId`）、読んだ BGA ファイル（`moviePath`）、曲の終わりの tick（`endTick`）、小節が始まる tick（`barTicks`）、BMS のチャンネルに載らない BGA なら変形付きの全 BGA キュー（`bga`）を持ちます。
+
+どちらも JSON の往復と `cloneJSON` で残り、ほかの譜面にはありません。
 
 ## 不透明な bmson データ
 

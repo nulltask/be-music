@@ -6,7 +6,7 @@ import {
   type ResolvedChart,
 } from '@be-music/chart-model';
 import { type BeMusicEvent, type BeMusicJSON, cloneJSON } from '@be-music/chart-source';
-import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser';
+import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser/core';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { type LaneBinding } from './lane-layout.ts';
 import { type PlayerUISignalBus } from './ui-signal-bus.ts';
@@ -235,6 +235,8 @@ export async function initializePlaybackRuntimeResources(params: {
   stateSignals: PlayerStateSignals;
   uiSignals: PlayerUISignalBus;
   totalSeconds: number;
+  /** `totalSeconds` is the chart's own end, which a longer BGA does not extend. */
+  fixedEnd?: boolean;
   audioMode: 'auto' | 'manual';
 }): Promise<
   Awaited<ReturnType<typeof initializePlayerUIRuntime>> & {
@@ -256,6 +258,7 @@ export async function initializePlaybackRuntimeResources(params: {
       stateSignals: params.stateSignals,
       uiSignals: params.uiSignals,
       totalSeconds: params.totalSeconds,
+      fixedEnd: params.fixedEnd,
       onLoadProgress: progressReporter.reportUIProgress,
     }).then((initializedUIRuntime) => {
       progressReporter.markUIReady(initializedUIRuntime.uiEnabled);

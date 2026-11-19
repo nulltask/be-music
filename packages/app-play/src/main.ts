@@ -17,6 +17,7 @@ import { PlayerWebApp } from './app/app.ts';
 import { renderStartAccountLoading } from './leaderboard-ui.ts';
 import { wireHelpModal, applyPlayerLanguage } from './help-modal.ts';
 import { wireInstallButton } from './install-button.ts';
+import { installDialogShortcuts } from './ui/dialog-shortcuts.ts';
 import { bindPlayerHeader, mountPlayerHeader } from './player-header.ts';
 import { PLAYER_APP_TEMPLATE } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
@@ -78,6 +79,7 @@ if (header !== null) {
 }
 wireHelpModal();
 wireInstallButton();
+installDialogShortcuts();
 
 // The installable app's offline shell (`service-worker/`): production builds only, and never under the test hook.
 if (

@@ -297,6 +297,8 @@ describe('resolveStageLabel', () => {
 
   it('names a single chart, a course stage and its last', () => {
     expect(resolveStageLabel(undefined)).toBe('FREE PLAY');
+    expect(resolveStageLabel(undefined, true)).toBe('PRACTICE PLAY');
+    expect(resolveStageLabel({ kind: 'expert', title: 'Course', stages, stageIndex: 0 }, true)).toBe('1ST STAGE');
     expect(resolveStageLabel({ kind: 'expert', title: 'Course', stages, stageIndex: 0 })).toBe('1ST STAGE');
     expect(resolveStageLabel({ kind: 'grade', title: 'Dan', stages, stageIndex: 1 })).toBe('2ND STAGE');
     expect(resolveStageLabel({ kind: 'grade', title: 'Dan', stages, stageIndex: 2 })).toBe('FINAL STAGE');

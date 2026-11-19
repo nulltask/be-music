@@ -1,16 +1,24 @@
 import {
-  isPracticeGaugeType,
+  isPracticeGaugePick,
+  splitPracticeGaugePick,
   practiceReadsJudgeRankAndTotal,
   resolveDefaultPracticeGauge,
   type BeatorajaGaugeCategory,
   type RulesetId,
 } from '@be-music/player-engine/ruleset';
-import type { PlayOptions, PracticeGaugeType } from './options.ts';
+import type { PlayOptions, PracticeGaugePick } from './options.ts';
 
 /** The PRACTICE play options a play reads. */
 export type PracticePlayOptions = Pick<
   PlayOptions,
-  'practiceGauge' | 'practiceGaugeCategory' | 'practiceStartGauge' | 'practiceJudgeRank' | 'practiceTotal'
+  | 'practiceGauge'
+  | 'practiceGaugeCategory'
+  | 'practiceStartGauge'
+  | 'practiceJudgeRank'
+  | 'practiceTotal'
+  | 'practiceRestBefore'
+  | 'practiceRestAfter'
+  | 'practiceCarriedLongNotes'
 >;
 
 /**
@@ -27,7 +35,8 @@ export interface PracticeSelection {
   startMs: number;
   /** Absent plays to the chart's end. */
   endMs?: number;
-  gauge: PracticeGaugeType;
+  /** The judge ruleset's own PRACTICE gauge, or another source's qualified with it. */
+  gauge: PracticeGaugePick;
   /** beatoraja only; absent uses the play mode's. */
   gaugeCategory?: BeatorajaGaugeCategory;
   startGauge: number;
@@ -35,14 +44,26 @@ export interface PracticeSelection {
   judgeRank?: number;
   /** Absent keeps the chart's. */
   total?: number;
+  /** Bars of rest before the range. */
+  restBarsBefore: number;
+  /** Bars of rest after the range. */
+  restBarsAfter: number;
+  /** Keeps a long note held into the range from before it. */
+  carriedLongNotes: boolean;
+}
+
+/** The source whose gauge a PRACTICE pick plays on under the judge ruleset `ruleset`: its own, or the ruleset's. */
+export function practiceGaugeSource(gauge: PracticeGaugePick, ruleset: RulesetId): RulesetId {
+  return splitPracticeGaugePick(gauge)?.source ?? ruleset;
 }
 
 /**
- * `gauge` when it is one of `ruleset`'s PRACTICE gauges, else the ruleset's default (#933): a PRACTICE gauge is the judge
- * ruleset's own, so changing the ruleset restores its default gauge, as the play's gauge pick does.
+ * `gauge` when it is one of `ruleset`'s PRACTICE gauges or another source's qualified with it, else the ruleset's default
+ * (#933): a bare PRACTICE gauge is the judge ruleset's own, so changing the ruleset restores its default gauge, as the
+ * play's gauge pick does; a qualified one keeps its source (ADR 0019).
  */
-export function keepPracticeGauge(gauge: PracticeGaugeType, ruleset: RulesetId): PracticeGaugeType {
-  return isPracticeGaugeType(gauge, ruleset) ? gauge : resolveDefaultPracticeGauge(ruleset);
+export function keepPracticeGauge(gauge: PracticeGaugePick, ruleset: RulesetId): PracticeGaugePick {
+  return isPracticeGaugePick(gauge, ruleset) ? gauge : resolveDefaultPracticeGauge(ruleset);
 }
 
 /**
@@ -57,18 +78,23 @@ export function resolvePracticeSelection(
   range?: PracticeRange,
 ): PracticeSelection {
   const readsRules = practiceReadsJudgeRankAndTotal(ruleset);
+  const gauge = keepPracticeGauge(options.practiceGauge, ruleset);
   const startMs = Math.max(0, Math.trunc(range?.startMs ?? 0));
-  return {
-    startMs,
-    ...(range?.endMs !== undefined && range.endMs > startMs ? { endMs: Math.trunc(range.endMs) } : {}),
-    gauge: keepPracticeGauge(options.practiceGauge, ruleset),
-    ...(ruleset === 'beatoraja' && options.practiceGaugeCategory !== 'MODE'
-      ? { gaugeCategory: options.practiceGaugeCategory }
-      : {}),
-    startGauge: options.practiceStartGauge,
-    ...(readsRules && options.practiceJudgeRank > 0 ? { judgeRank: options.practiceJudgeRank } : {}),
-    ...(readsRules && options.practiceTotal > 0 ? { total: options.practiceTotal } : {}),
-  };
+  // Built field by field in the original key order; conditional spreads would copy an object for every optional field.
+  const selection: PracticeSelection = { startMs } as PracticeSelection;
+  if (range?.endMs !== undefined && range.endMs > startMs) selection.endMs = Math.trunc(range.endMs);
+  selection.gauge = gauge;
+  // GAUGE CATEGORY is beatoraja's: it follows a beatoraja gauge, under every judge ruleset.
+  if (practiceGaugeSource(gauge, ruleset) === 'beatoraja' && options.practiceGaugeCategory !== 'MODE') {
+    selection.gaugeCategory = options.practiceGaugeCategory;
+  }
+  selection.startGauge = options.practiceStartGauge;
+  selection.restBarsBefore = options.practiceRestBefore;
+  selection.restBarsAfter = options.practiceRestAfter;
+  selection.carriedLongNotes = options.practiceCarriedLongNotes;
+  if (readsRules && options.practiceJudgeRank > 0) selection.judgeRank = options.practiceJudgeRank;
+  if (readsRules && options.practiceTotal > 0) selection.total = options.practiceTotal;
+  return selection;
 }
 
 /** `ms` as `m:ss.s`, tenths rounded down (`83_456` → `1:23.4`). */

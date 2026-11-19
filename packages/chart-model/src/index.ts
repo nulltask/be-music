@@ -102,6 +102,7 @@ export {
   isFreeZoneChannel,
   isHeldLongNote,
   isInvisibleNoteChannel,
+  type ResolvedChainSound,
   type ResolvedNote,
   type ResolvedNoteKind,
 } from './resolved-notes.ts';
@@ -148,7 +149,12 @@ export {
   type BeatResolver,
 } from './beats.ts';
 
-export { resolveChartPlayVariant, type ChartPlayVariant, type ChartPlayVariantInput } from './play-variant.ts';
+export {
+  isPMSChartPath,
+  resolveChartPlayVariant,
+  type ChartPlayVariant,
+  type ChartPlayVariantInput,
+} from './play-variant.ts';
 
 export {
   isBmsBGMVolumeChangeChannel,
@@ -159,6 +165,7 @@ export {
   isPlayableChannel,
   isPlayLaneSoundChannel,
   isSampleTriggerChannel,
+  playsAtKeysoundVolume,
   isScrollChannel,
   isStopChannel,
   isTempoChannel,
@@ -185,6 +192,7 @@ export {
   exWAVVolumeMillibelsToLinearGain,
   parseBMSExWAV,
   parseBmsWAVCmd,
+  resolveBmsExWAVDeclarations,
   resolveBmsWAVResources,
   usesMonophonicWAVPlayback,
   volWAVToLinearGain,
@@ -250,12 +258,16 @@ export {
   compileChartPlayOptions,
   hasChartPlayOptions,
   isChartPlayOptionDeclaration,
+  isLegacyChartPlayOptionProgram,
   parseChartPlayOption,
+  playerChartPlayOptionsOf,
+  withPlayerChartPlayOptions,
   type ChartJudgeModifier,
   type ChartNotesOption,
   type ChartPlayOptionProgram,
   type ChartPlayOptions,
   type ChartRandomOption,
+  type PlayerChartPlayOptions,
 } from './chart-play-options.ts';
 export {
   CHART_OPTION_PROGRAM_VERSION,
@@ -325,3 +337,15 @@ export {
   type ChartPlayfieldVisual,
 } from './chart-option-crazy.ts';
 export { resolveChartLegacyOptionAlias } from './chart-option-legacy.ts';
+
+export {
+  easeLRXBGA,
+  LRX_BGA_HEIGHT,
+  LRX_BGA_WIDTH,
+  resolveLRXBGAProgram,
+  sampleLRXBGA,
+  type LRXBGANode,
+  type LRXBGAProgram,
+  type LRXBGASprite,
+} from './lrx-bga.ts';
+export { LRX_PLAY_END_TAIL_SECONDS, resolveLRXPlayEndSeconds } from './lrx-play-end.ts';

@@ -284,6 +284,13 @@ describe('replay format', () => {
     expect(() => parseReplay(withSources([turntable]))).toThrow(/\.direction: expected 'up' \| 'down' on a turntable/);
     expect(() => parseReplay(withSources([{ ...turntable, direction: 'left' }]))).toThrow(/\.direction:/);
     expect(() => parseReplay(withSources([{ ...key, direction: 'up' }]))).toThrow(/only a turntable source/);
+    // A device name (recorded only when the player opted in) is kept when well-formed.
+    const pad = { ...turntable, direction: 'up', deviceName: 'Controller (Vendor: 1ccf Product: 1018)' };
+    expect(parseReplay(withSources([pad])).play.inputSources).toEqual([pad]);
+    expect(() => parseReplay(withSources([{ ...pad, deviceName: '' }]))).toThrow(/\.deviceName:/);
+    expect(() => parseReplay(withSources([{ ...pad, deviceName: 'x'.repeat(129) }]))).toThrow(/\.deviceName:/);
+    expect(() => parseReplay(withSources([{ ...pad, deviceName: 'pad\n' }]))).toThrow(/\.deviceName:/);
+    expect(() => parseReplay(withSources([{ ...pad, deviceName: 1018 }]))).toThrow(/\.deviceName:/);
     // Fields that are not part of a source are not kept.
     expect(
       parseReplay(withSources([{ ...turntable, direction: 'up', gamepadId: 'Vendor 045e' }])).play.inputSources,
@@ -604,6 +611,23 @@ test('preserves the ANY KEY switch and rejects a non-boolean one', () => {
   const invalid = JSON.parse(serializeReplay(replay));
   invalid.play.anyKey = 'yes';
   expect(() => parseReplay(invalid)).toThrow(ReplayParseError);
+});
+
+test("round-trips the player's nanasigroove options, which must be part of the chart program (#1243)", () => {
+  const replay = makeReplay();
+  expect(parseReplay(serializeReplay(replay)).play.playerChartPlayOptions).toBeUndefined();
+  replay.chart.chartPlayOptions = { version: 3, options: { random: 'MIRROR', notes: 'COPY', hellJudge: true } };
+  replay.play.playerChartPlayOptions = { notes: 'COPY', hellJudge: true };
+  expect(parseReplay(serializeReplay(replay)).play.playerChartPlayOptions).toEqual({ notes: 'COPY', hellJudge: true });
+  const invalid = (mutate: (play: Record<string, unknown>) => void) => {
+    const value = JSON.parse(serializeReplay(replay));
+    mutate(value.play.playerChartPlayOptions);
+    return value;
+  };
+  // A value the player cannot choose, a key that is no player option, and a value the program does not hold.
+  expect(() => parseReplay(invalid((options) => (options.notes = 'TRIPLE')))).toThrow(ReplayParseError);
+  expect(() => parseReplay(invalid((options) => (options.random = 'MIRROR')))).toThrow(ReplayParseError);
+  expect(() => parseReplay(invalid((options) => (options.judge = 'GOOD2BAD')))).toThrow(ReplayParseError);
 });
 
 test('round-trips source long-note modifiers and rejects unknown variants', () => {
@@ -1048,4 +1072,11 @@ test('strict replay facts require normalized percentage TOTAL', () => {
   expect(() => parseReplay(serializeReplay(replay))).toThrow(/chart.total.*normalized/);
   delete replay.play.bmsonTotalMode;
   expect(() => parseReplay(serializeReplay(replay))).not.toThrow();
+});
+
+test('an LRX chart is recorded as LRX and read back', () => {
+  const replay = makeReplay();
+  replay.chart.sourceFormat = 'lrx';
+  expect(parseReplay(serializeReplay(replay)).chart.sourceFormat).toBe('lrx');
+  expect(() => parseReplay({ ...replay, chart: { ...replay.chart, sourceFormat: 'lrs' } })).toThrow(/sourceFormat/);
 });

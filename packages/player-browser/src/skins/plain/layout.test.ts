@@ -43,13 +43,14 @@ describe('resolvePortraitSelectCard', () => {
     expect(readme.y + readme.h).toBeLessThan(card.y + 96);
   });
 
-  it('puts the three fact columns side by side above the buttons', () => {
+  it('puts the three fact columns and rows above the buttons', () => {
     const { factColumns, factWidth, factRows, play } = resolvePortraitSelectCard(W);
     expect(factColumns[1] - factColumns[0]).toBeGreaterThan(factWidth);
     expect(factColumns[2] + factWidth).toBeLessThanOrEqual(W - 32);
     // A fact is a 10 px label over a 16 px value 16 px under it.
     expect(factRows[1] - factRows[0]).toBeGreaterThanOrEqual(36);
-    expect(factRows[1] + 16 + 8).toBeLessThan(play.y);
+    expect(factRows[2] - factRows[1]).toBeGreaterThanOrEqual(36);
+    expect(factRows[2] + 16 + 8).toBeLessThan(play.y);
   });
 
   it('leaves the list eleven thumb-sized rows below its search field', () => {

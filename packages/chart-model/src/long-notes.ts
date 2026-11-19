@@ -102,8 +102,11 @@ export function resolveLNOBJLongNotes(json: BeMusicJSON): LNOBJLongNoteResolutio
   }
 
   const idBase = resolveBMSBase(json);
-  const lnObjValues = resolveLNOBJValues(json, idBase);
-  if (lnObjValues.size === 0) {
+  let lastLNOBJ: string | undefined;
+  for (const value of json.bms.lnObjs ?? []) {
+    if (typeof value === 'string' && value.length > 0) lastLNOBJ = value;
+  }
+  if (lastLNOBJ === undefined) {
     return {
       startToEndBeat: new Map(),
       startToEndEvent: new Map(),
@@ -111,6 +114,7 @@ export function resolveLNOBJLongNotes(json: BeMusicJSON): LNOBJLongNoteResolutio
     };
   }
 
+  const lnObjValue = normalizeObjectKey(lastLNOBJ, idBase);
   const beatResolver = createBeatResolver(json);
   const preparedEvents = prepareNormalizedChartEvents(json.events);
   const legacyLongNoteTicks = collectLegacyLongNoteTickKeysFromPreparedEvents(preparedEvents);
@@ -119,9 +123,10 @@ export function resolveLNOBJLongNotes(json: BeMusicJSON): LNOBJLongNoteResolutio
   const startToEndEvent = new Map<BeMusicEvent, BeMusicEvent>();
   const endEvents = new Set<BeMusicEvent>();
 
+  const overwritten = collectOverwrittenBMSObjects(preparedEvents, beatResolver);
   for (const item of preparedEvents) {
     const { event, normalizedChannel } = item;
-    if (!isPlayableNormalizedChannel(normalizedChannel)) {
+    if (!isPlayableNormalizedChannel(normalizedChannel) || overwritten.has(event)) {
       continue;
     }
     const tickKey = createEventTickKey(event);
@@ -132,7 +137,7 @@ export function resolveLNOBJLongNotes(json: BeMusicJSON): LNOBJLongNoteResolutio
 
     const beat = beatResolver.eventToBeat(event);
     const normalizedValue = normalizeObjectKey(event.value, idBase);
-    if (lnObjValues.has(normalizedValue)) {
+    if (normalizedValue === lnObjValue) {
       const start = pendingStartByChannel.get(normalizedChannel);
       if (start && beat > start.beat) {
         startToEndBeat.set(start.event, beat);
@@ -151,6 +156,34 @@ export function resolveLNOBJLongNotes(json: BeMusicJSON): LNOBJLongNoteResolutio
     startToEndEvent,
     endEvents,
   };
+}
+
+/**
+ * The playable objects a later line of the same measure and channel overwrites at the same beat (the later nonzero
+ * object wins, as cmds and beatoraja read duplicate lines). `#LNOBJ` pairs only the objects that remain, the same ones
+ * the notes are chosen from (`selectBMSNormalObjects`), so an overwritten end object cannot end a note nor an
+ * overwritten start begin one. IR without line order (`bmsLineOrder`) overwrites nothing, as before line order was kept.
+ */
+function collectOverwrittenBMSObjects(
+  events: readonly NormalizedChartEvent[],
+  beatResolver: BeatResolver,
+): Set<BeMusicEvent> {
+  const overwritten = new Set<BeMusicEvent>();
+  const winners = new Map<string, BeMusicEvent>();
+  for (const { event, normalizedChannel } of events) {
+    if (event.bmsLineOrder === undefined || !isPlayableNormalizedChannel(normalizedChannel)) continue;
+    const key = `${normalizedChannel}:${beatResolver.eventToBeat(event)}`;
+    const winner = winners.get(key);
+    if (winner === undefined) {
+      winners.set(key, event);
+    } else if (event.bmsLineOrder > winner.bmsLineOrder!) {
+      overwritten.add(winner);
+      winners.set(key, event);
+    } else {
+      overwritten.add(event);
+    }
+  }
+  return overwritten;
 }
 
 function resolveBMSLongNotesType1(
@@ -182,16 +215,6 @@ function resolveBMSLongNotesType1(
   }
 
   return { notes, suppressedTriggerEvents };
-}
-
-function resolveLNOBJValues(json: BeMusicJSON, base: 36 | 62 = 36): Set<string> {
-  const values = new Set<string>();
-  for (const candidate of json.bms.lnObjs ?? []) {
-    if (typeof candidate === 'string' && candidate.length > 0) {
-      values.add(normalizeObjectKey(candidate, base));
-    }
-  }
-  return values;
 }
 
 function prepareNormalizedChartEvents(events: ReadonlyArray<BeMusicEvent>): NormalizedChartEvent[] {

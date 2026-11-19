@@ -2,7 +2,7 @@ import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import type { RulesetId } from '@be-music/player-engine/ruleset';
 // The play options the player hands to every screen and play: the full `PlayOptions`, kept here rather than read back
 // from the select screen. The Options dialog holds some of them itself (auto play, gauge, lane options, assists, sort and
-// filters, hi-speed and covers); the rest (BGA, the score graph and the 2P gauge) are only
+// filters, hi-speed, covers, BGA and the score graph); the rest (the 2P gauge) are only
 // changed on a select screen, and live here between screens, so a select screen made again (another skin system or
 // theme) starts from them.
 
@@ -19,12 +19,15 @@ export type GUIPlayOptions = Pick<
   | 'randomSeed2P'
   | 'randomFixedLane1P'
   | 'randomFixedLane2P'
+  | 'lr2RandomScratch1P'
+  | 'lr2RandomScratch2P'
   | 'random1P'
   | 'random2P'
   | 'dpFlip'
   | 'bpmGuide'
   | 'bpmChangeWarning'
   | 'guideSE'
+  | 'windowHold'
   | 'judgeCounts'
   | 'judgeDetailSplit'
   | 'judgeDetail'
@@ -70,6 +73,10 @@ export type GUIPlayOptions = Pick<
   | 'scrollRate'
   | 'scrollModifier'
   | 'mineModifier'
+  | 'crazyJudge'
+  | 'crazyHellJudge'
+  | 'crazyAddMine'
+  | 'crazyNotes'
   | 'gaugeAutoShift'
   | 'bmsonTotalMode'
   | 'bottomShiftableGauge'
@@ -90,6 +97,9 @@ export type GUIPlayOptions = Pick<
   | 'practiceStartGauge'
   | 'practiceJudgeRank'
   | 'practiceTotal'
+  | 'practiceRestBefore'
+  | 'practiceRestAfter'
+  | 'practiceCarriedLongNotes'
   | 'customJudgeKeyPerfectGreat'
   | 'customJudgeKeyGreat'
   | 'customJudgeKeyGood'
@@ -109,6 +119,9 @@ export type GUIPlayOptions = Pick<
   | 'hiSpeed'
   | 'hsFix'
   | 'displayAreaInfo'
+  | 'bga'
+  | 'bgaSize'
+  | 'scoreGraph'
   | 'hiddenSudden1P'
   | 'hiddenSudden2P'
   | 'laneCover'
@@ -126,11 +139,14 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     randomSeed2P: state.randomSeed2P,
     randomFixedLane1P: state.randomFixedLane1P,
     randomFixedLane2P: state.randomFixedLane2P,
+    lr2RandomScratch1P: state.lr2RandomScratch1P,
+    lr2RandomScratch2P: state.lr2RandomScratch2P,
     random2P: state.random2P,
     dpFlip: state.dpFlip,
     bpmGuide: state.bpmGuide,
     bpmChangeWarning: state.bpmChangeWarning,
     guideSE: state.guideSE,
+    windowHold: state.windowHold,
     judgeCounts: state.judgeCounts,
     judgeDetailSplit: state.judgeDetailSplit,
     judgeDetail: state.judgeDetail,
@@ -190,6 +206,9 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     practiceStartGauge: state.practiceStartGauge,
     practiceJudgeRank: state.practiceJudgeRank,
     practiceTotal: state.practiceTotal,
+    practiceRestBefore: state.practiceRestBefore,
+    practiceRestAfter: state.practiceRestAfter,
+    practiceCarriedLongNotes: state.practiceCarriedLongNotes,
     customJudgeKeyPerfectGreat: state.customJudgeKeyPerfectGreat,
     customJudgeKeyGreat: state.customJudgeKeyGreat,
     customJudgeKeyGood: state.customJudgeKeyGood,
@@ -202,6 +221,10 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     extraNoteDepth: state.extraNoteDepth,
     extraNoteScratch: state.extraNoteScratch,
     mineModifier: state.mineModifier,
+    crazyJudge: state.crazyJudge,
+    crazyHellJudge: state.crazyHellJudge,
+    crazyAddMine: state.crazyAddMine,
+    crazyNotes: state.crazyNotes,
     scrollModifier: state.scrollModifier,
     scrollSection: state.scrollSection,
     scrollRate: state.scrollRate,
@@ -216,6 +239,9 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
     hiSpeed: state.hiSpeed,
     hsFix: state.hsFix,
     displayAreaInfo: state.displayAreaInfo,
+    bga: state.bga,
+    bgaSize: state.bgaSize,
+    scoreGraph: state.scoreGraph,
     hiddenSudden1P: state.hiddenSudden1P,
     hiddenSudden2P: state.hiddenSudden2P,
     laneCover: state.laneCover,
@@ -230,6 +256,9 @@ export function playOptionsFromGUI(state: Readonly<GUIPlayOptions>): Partial<Pla
 export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIPlayOptions): void {
   state.hsFix = options.hsFix;
   state.displayAreaInfo = options.displayAreaInfo;
+  state.bga = options.bga;
+  state.bgaSize = options.bgaSize;
+  state.scoreGraph = options.scoreGraph;
   state.hiddenSudden1P = options.hiddenSudden1P;
   state.hiddenSudden2P = options.hiddenSudden2P;
   state.laneCover = options.laneCover;
@@ -242,11 +271,14 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.randomSeed2P = options.randomSeed2P;
   state.randomFixedLane1P = options.randomFixedLane1P;
   state.randomFixedLane2P = options.randomFixedLane2P;
+  state.lr2RandomScratch1P = options.lr2RandomScratch1P;
+  state.lr2RandomScratch2P = options.lr2RandomScratch2P;
   state.random2P = options.random2P;
   state.dpFlip = options.dpFlip;
   state.bpmGuide = options.bpmGuide;
   state.bpmChangeWarning = options.bpmChangeWarning;
   state.guideSE = options.guideSE;
+  state.windowHold = options.windowHold;
   state.judgeCounts = options.judgeCounts;
   state.judgeDetailSplit = options.judgeDetailSplit;
   state.judgeDetail = options.judgeDetail;
@@ -306,6 +338,9 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.practiceStartGauge = options.practiceStartGauge;
   state.practiceJudgeRank = options.practiceJudgeRank;
   state.practiceTotal = options.practiceTotal;
+  state.practiceRestBefore = options.practiceRestBefore;
+  state.practiceRestAfter = options.practiceRestAfter;
+  state.practiceCarriedLongNotes = options.practiceCarriedLongNotes;
   state.customJudgeKeyPerfectGreat = options.customJudgeKeyPerfectGreat;
   state.customJudgeKeyGreat = options.customJudgeKeyGreat;
   state.customJudgeKeyGood = options.customJudgeKeyGood;
@@ -318,6 +353,10 @@ export function copyPlayOptionsToGUI(options: Readonly<PlayOptions>, state: GUIP
   state.extraNoteDepth = options.extraNoteDepth;
   state.extraNoteScratch = options.extraNoteScratch;
   state.mineModifier = options.mineModifier;
+  state.crazyJudge = options.crazyJudge;
+  state.crazyHellJudge = options.crazyHellJudge;
+  state.crazyAddMine = options.crazyAddMine;
+  state.crazyNotes = options.crazyNotes;
   state.scrollModifier = options.scrollModifier;
   state.scrollSection = options.scrollSection;
   state.scrollRate = options.scrollRate;
@@ -375,7 +414,12 @@ export class PlayOptionsService {
       lr2ExtraLevel: play.lr2ExtraLevel ?? 0,
       extraNoteDepth: play.extraNoteDepth ?? 0,
       extraNoteScratch: play.extraNoteScratch ?? false,
-      mineModifier: play.mineModifier ?? play.options?.mineModifier,
+      // A play recorded with nanasigroove's ADDMINE (`NANASI_ADD`) restores it as its own option, beside the Mines choice.
+      mineModifier:
+        play.mineModifier === 'NANASI_ADD'
+          ? play.options?.mineModifier
+          : (play.mineModifier ?? play.options?.mineModifier),
+      crazyAddMine: play.mineModifier === undefined ? play.options?.crazyAddMine : play.mineModifier === 'NANASI_ADD',
       scrollModifier: play.scrollModifier ?? play.options?.scrollModifier,
       scrollSection: play.scrollSection ?? play.options?.scrollSection,
       scrollRate: play.scrollRate ?? play.options?.scrollRate,
@@ -424,6 +468,8 @@ const ARRANGEMENT_OPTIONS = [
   'randomSeed2P',
   'randomFixedLane1P',
   'randomFixedLane2P',
+  'lr2RandomScratch1P',
+  'lr2RandomScratch2P',
   'dpFlip',
   'hRandomThresholdBPM',
   'longNoteModifier',
@@ -443,6 +489,10 @@ const ARRANGEMENT_OPTIONS = [
   'extraNoteDepth',
   'extraNoteScratch',
   'mineModifier',
+  'crazyJudge',
+  'crazyHellJudge',
+  'crazyAddMine',
+  'crazyNotes',
   'scrollModifier',
   'scrollSection',
   'scrollRate',

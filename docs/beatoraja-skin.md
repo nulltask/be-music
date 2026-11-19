@@ -2,9 +2,7 @@
 
 # beatoraja skin implementation notes
 
-This document summarizes the current `@be-music/skin-beatoraja` implementation. The package parses beatoraja JSON
-and Lua skin themes into renderer-independent data structures. PixiJS rendering is the responsibility of
-`@be-music/player-browser`; CLI / TUI render paths do not load beatoraja skins.
+`@be-music/skin-beatoraja` parses beatoraja JSON and Lua skin themes into data that any renderer can use. `@be-music/player-browser` renders the skins with PixiJS. The terminal renderer skips beatoraja skins.
 
 ## Scope
 
@@ -69,7 +67,14 @@ in the entry script's directory and its sub-directories (and one level up — be
 `play_parts.lua`). Modules are cached so a `require()` call always returns the same table on subsequent invocations.
 beatoraja's `timer_util` / `event_util` helper modules are built in and can be required without shipping them.
 
-`os.clock()` reads the host-provided scene clock in seconds, so delayed Lua draw predicates (including WMII_FHD key beams and key flashes) advance with rendering. Limited `os` and `io` compatibility shims are restored after the standard libraries are removed; filesystem and process operations remain inert.
+`os.clock()` reads the host-provided scene clock in seconds, so delayed Lua draw predicates (including WMII_FHD key beams and key flashes) advance with rendering. Limited `os` and `io` stand-ins are restored after the standard libraries are removed. Process operations remain inert (`os.execute` and `os.getenv` return nil).
+
+beatoraja gives a skin real files through `io.open` [V] ([SkinLuaAccessor](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/skin/lua/SkinLuaAccessor.java#L318-L370)). Be-Music has no file system to give, so as a platform policy `io` works on files kept in memory for one Lua runtime, which is one evaluation of one skin scene ([`lua-io.ts`](../packages/skin-beatoraja/src/lua-io.ts)):
+
+- A file exists once the skin has written it, and reads back what was written. `os.remove` and `os.rename` act on the same files.
+- Opening a file the skin never wrote for reading fails as Lua specifies (`nil`, a message, error number 2), and `io.lines` on it raises an error, so a skin's existence check and its `pcall` paths see that there is no file. A handle used after `close`, or against its mode, reports the failure too.
+- Nothing is persisted and no real file is read: a history or rotation list a skin keeps starts empty on every scene. Skins that write without checking `io.open`'s result (ModernChic's result screen does) keep running.
+- `luajava` stays an empty stand-in: `bindClass` and `new` return empty tables, so a method call on them is a Lua error the skin can catch with `pcall`.
 
 The browser wires `main_state.event_index(id)` to the same image-index resolver as `image.ref`. MODE/SORT and LNMODE are zero based; HS-FIX and CLEAR use beatoraja's index ordering. `main_state.set_timer(id, start)` writes only custom animation timers 10000–19999, with starts in microseconds. `main_state.timer_off_value` stops one. Lua and numeric destination timers observe writes in the same frame. Invalid writes return false; protected engine/scene timers are unchanged. Custom timer state belongs to one skin instance.
 
@@ -241,7 +246,7 @@ sequenceDiagram
 - The generic rank ops (220-227) light every rank the EX score reaches over the chart's notes (`beatorajaGenericRankOps`),
   as beatoraja's `BooleanPropertyFactory` asks `ScoreDataProperty.qualifyRank` (`rate >= border / 27`): an AAA lights
   all eight, any score lights F, and a chart without notes lights none. `computeGenericRankOp` names the highest one.
-- The replay slots ([replay.md](./replay.md#replay-slots)): on the select screen ops 196 / 197 (slot 1 empty / holding a
+- The replay slots ([replay.md](./replay-browser.md#replay-slots)): on the select screen ops 196 / 197 (slot 1 empty / holding a
   replay), 1196 / 1197, 1199 / 1200 and 1202 / 1203 (slots 2-4) follow the bar under the cursor and 1205-1208 the slot
   picked, and the replay buttons (19, 316-318) replay their slot; on a result screen each slot lights its none, exists or
   saved op (196-198, 1196-1204) and the replay buttons save into it (`resolveBeatorajaSelectReplayOps`,
@@ -260,6 +265,14 @@ sequenceDiagram
 - A play with LR2 SILENT [automatic judge timing](./play-options.md#judge-timing-and-automatic-adjustment) draws no
   `judge[]` display, judgment words or combo digits, as the built-in and LR2 play screens draw none
   (`resolveBeatorajaJudgeDisplayOps`). beatoraja has no SILENT; LR2 hides NOWJUDGE / NOWCOMBO there (#917).
+- Blend codes 4 and 9 blend with beatoraja's factors (`Skin.java` L663-L664 [V]): code 4 multiplies the destination by
+  the source colour and code 9 writes `src × (1 − dst)`, which is not an absolute difference (0.25 at src = dst = 0.5).
+  An opaque texel's colour matches beatoraja exactly on WebGL and WebGPU. beatoraja blends straight colour into a
+  window whose alpha is never shown, while Be-Music blends premultiplied colour into a transparent canvas, so two
+  things are adapted: a transparent texel leaves the destination as it was (beatoraja blends in whatever colour it
+  stores, which premultiplied colour no longer has), a translucent one lands between the two, and both codes write
+  coverage as the normal blend does instead of beatoraja's alpha, which would punch a hole through the canvas. See
+  `skin/beatoraja/blend.ts` and its tests for the equations (#1194).
 
 ### Known gaps
 
@@ -280,7 +293,7 @@ The browser renderer uses `BeatorajaPlaySkinView` as the shared view for select,
 skins. The family views read `TEXT`, `NUM`, `OPTION`, timers, gauges and graphs from the [scene mapping](#scene-mapping) and
 provide the runtime-specific parts themselves: chart images, note layers, BGA layers, audio and the result histories.
 The select, decide, play and result screens are player-browser's beatoraja family views, made with `createSelectScene`,
-`createDecideScene`, `createPlayScene` and `createResultScene` ([player-web.md](./player-web.md#the-select-screen)): they
+`createDecideScene`, `createPlayScene` and `createResultScene` ([player-web.md](./player-web-scenes.md#the-select-screen)): they
 draw the sessions' frames through the select, decide and result resolvers, the result view reading a `PlayResult`
 directly, and read beatoraja's scene timers off each frame. The select view reads the browse position's list options for
 the MODE and SORT image sets (`BEATORAJA_KEYS_FILTERS` and `BEATORAJA_SORTS` give their order, `beatorajaKeysFilterIndex`
@@ -298,7 +311,7 @@ start in the regular and the practice mode. The LNMODE image shows the player's 
 screens and the played chart's long-note mode on the play and result screens, as beatoraja's does.
 The play view draws through `BeatorajaPlayBridge`: the play's state is the play session's `PlayState`, and the bridge
 applies the ops and timers the mapping resolves for each frame, judgment and lane action
-([player-web.md](./player-web.md#the-play-screen)).
+([player-web.md](./player-web-scenes.md#the-play-screen)).
 
 The browser gameplay path mounts every chart variant the parser discovers — `5`, `7`, `9`, `10`, `14`, `24`, and
 `24d`. The keyboard modes address their lanes through the `1000`-block timer bases upstream's `play24main.lua` uses

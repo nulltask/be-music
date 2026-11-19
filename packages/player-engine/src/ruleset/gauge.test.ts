@@ -3,6 +3,7 @@ import type { GaugeSpec } from './definitions.ts';
 import { createInitialPlayerSummary } from '../core/bootstrap.ts';
 import { resolveRuleset } from './definitions.ts';
 import { RulesetGauge } from './gauge.ts';
+import { createEmptyRulesetNoteCounts, type RulesetChartFacts } from './facts.ts';
 
 const GROOVE: GaugeSpec = {
   id: 'GROOVE',
@@ -307,5 +308,47 @@ test('LR2 HAZARD needs HP 80 at the end of a single chart; the corrected HAZARD 
   expect(full.cleared()).toBe(true);
   // Under the other rulesets the corrected HAZARD is their own DEATH.
   expect(resolveRuleset(chart, 'beatoraja', { selectedGauge: 'DEATH-CORRECTED' }).gauge.id).toBe('HAZARD');
-  expect(resolveRuleset(chart, '____', { selectedGauge: 'DEATH-CORRECTED' }).gauge.id).toBe('EX-HARD');
+  // That-Which-Must-Not-Be-Named has neither outside a course, and refuses them instead of playing EX-HARD.
+  expect(() => resolveRuleset(chart, '____', { selectedGauge: 'DEATH-CORRECTED' })).toThrow(RangeError);
+});
+
+describe('gauge precision (#1090)', () => {
+  test('a float32 gauge rounds every delta and sum as Java float does, a double one does not', () => {
+    const tenth = { ...GROOVE, values: [0.1, 0.1, 0.05, -4, -6, -2] as GaugeSpec['values'] };
+    const asFloat = new RulesetGauge({
+      ...tenth,
+      values: tenth.values.map(Math.fround) as unknown as GaugeSpec['values'],
+      float32: true,
+    });
+    const asDouble = new RulesetGauge(tenth);
+    let expected = 20;
+    for (let index = 0; index < 600; index += 1) {
+      asFloat.applyJudge(0);
+      asDouble.applyJudge(0);
+      expected = Math.fround(expected + Math.fround(0.1));
+    }
+    expect(asFloat.value).toBe(expected);
+    expect(asDouble.value).not.toBe(asFloat.value);
+    // A half-rate HCN tick multiplies in float too.
+    asFloat.applyJudge(3, 0.5);
+    expect(asFloat.value).toBe(Math.fround(expected + Math.fround(-4 * 0.5)));
+  });
+
+  test('beatoraja gauges are float32 and LR2 gauges double, with LR2 dividing the gain in float32', () => {
+    const facts: RulesetChartFacts = {
+      sourceFormat: 'bms',
+      laneMode: '7keys',
+      lnMode: 1,
+      judgeRank: { percent: 75, sourceRank: 2 },
+      notes: { ...createEmptyRulesetNoteCounts(), normal: 300 },
+      total: 250,
+    };
+    const beatoraja = resolveRuleset(facts, 'beatoraja').gauge;
+    expect(beatoraja.float32).toBe(true);
+    expect(beatoraja.values[0]).toBe(Math.fround(250 / 300));
+    const lr2 = resolveRuleset(facts, 'lr2', { selectedGauge: 'EASY' }).gauge;
+    expect(lr2.float32).toBeUndefined();
+    expect(lr2.values[0]).toBe(Math.fround(250 / 300) * 1.2);
+    expect(lr2.values[2]).toBe(Math.fround(250 / 600) * 1.2);
+  });
 });

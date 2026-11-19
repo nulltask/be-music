@@ -400,7 +400,7 @@ export const CONTROL_ACTIONS: readonly ControlActionDefinition[] = [
     id: 'play.floating-hi-speed',
     screen: 'play',
     label: 'FLOATING HI-SPEED',
-    defaults: both([code('Numpad0')]),
+    defaults: both([code('Numpad0'), code('Digit0')]),
   },
   {
     id: 'play.restore-green',

@@ -8,6 +8,7 @@ import {
   parseBeatorajaCourseFile,
   parseCourseChartFilter,
   parseLR2CourseFile,
+  parseN2XCourseFile,
   resolveCourseStages,
   type CourseChartLookup,
   type CourseDefinition,
@@ -19,6 +20,7 @@ import {
 import type { BestRecord } from '@be-music/player-engine/records';
 import { resolveBeatorajaDefaultTotal } from '@be-music/player-engine/replay';
 import { isScratchLaneForVariant } from '@be-music/player-skin-sdk';
+import { dirname, normalizePath } from '@be-music/shared-utils/core';
 import {
   resolveLibraryChartDifficultyValue,
   resolveLibraryChartPlayVariant,
@@ -48,12 +50,13 @@ function isCommandFolderPath(lowerPath: string): boolean {
 }
 
 /**
- * The course formats a host reads from dropped files: LR2's `.lr2crs`, beatoraja's `course/*.json` and beatoraja's
- * command-folder file `folder/default.json`, which holds its random courses.
+ * The course formats a host reads from dropped files: LR2's `.lr2crs`, beatoraja's `course/*.json`, beatoraja's
+ * command-folder file `folder/default.json`, which holds its random courses, and Nanasi Groove 2's `.n2x` chart lists.
+ * Every `.n2x` is taken, since only its contents tell a list from a skin or settings file.
  */
 export function isCourseFilePath(path: string): boolean {
   const lower = path.toLowerCase().replaceAll('\\', '/');
-  if (lower.endsWith('.lr2crs')) return true;
+  if (lower.endsWith('.lr2crs') || lower.endsWith('.n2x')) return true;
   // beatoraja keeps course files in a `course` folder and command folders in a `folder` folder; any other JSON (skins,
   // bmson metadata) is not a course.
   return (lower.endsWith('.json') && isUnderFolder(lower, 'course')) || isCommandFolderPath(lower);
@@ -63,7 +66,9 @@ export function isCourseFilePath(path: string): boolean {
  * Reads one dropped course file into the course groups its folder bars show. `.lr2crs` is LR2's XML course list and a
  * `course/*.json` a beatoraja course file, each one group labelled with the file's name (without extension). A
  * `folder/*.json` is beatoraja's command-folder file: one group per command folder that holds random courses, under the
- * folder's name. A file without a valid course gives no group.
+ * folder's name. An `.n2x` chart list is one course, named and labelled after the file, whose stages name their charts
+ * by path from the drop's root ({@link bindCourseStagePaths} matches them). A file without a valid course gives no
+ * group.
  */
 export function readCourseFile(path: string, bytes: Uint8Array): CourseDefinitionGroup[] {
   const normalized = path.replaceAll('\\', '/');
@@ -75,16 +80,87 @@ export function readCourseFile(path: string, bytes: Uint8Array): CourseDefinitio
     }));
   }
   const name = normalized.split('/').at(-1) ?? normalized;
+  if (name.toLowerCase().endsWith('.n2x')) {
+    const label = name.replace(/\.n2x$/iu, '');
+    const course = parseN2XCourseFile(bytes, label);
+    if (course === undefined) return [];
+    const folder = dirname(normalized);
+    const stages = course.stages.map((stage) =>
+      stage.path === undefined
+        ? stage
+        : { ...stage, path: normalizePath(folder === '' ? stage.path : `${folder}/${stage.path}`) },
+    );
+    return [{ label, courses: [{ ...course, stages }] }];
+  }
   const isLR2 = name.toLowerCase().endsWith('.lr2crs');
   const courses = isLR2 ? parseLR2CourseFile(bytes) : parseBeatorajaCourseFile(bytes);
   if (courses.length === 0) return [];
   return [{ label: name.replace(/\.(lr2crs|json)$/iu, ''), courses }];
 }
 
+/** A chart of the library with its file hashes, as {@link createChartHashLookup} and {@link bindCourseStagePaths} take. */
+export interface HashedLibraryChart {
+  chart: LibraryChart;
+  sha256?: string;
+  md5?: string;
+}
+
+/**
+ * The course groups with each stage named by path (an `.n2x` list's) bound to the chart at that path: the stage takes
+ * the chart's hashes and title, so it resolves, keys records and replays like any other stage. A path matches a chart's
+ * path ignoring case; failing that, the first chart (in library order) whose path ends with it, or that it ends with, at
+ * a folder boundary, as a list read from inside an archive sees the charts from another root. A stage with no such chart,
+ * or whose chart has no hash, keeps its path and stays missing. Courses without path stages are returned as they are.
+ */
+export function bindCourseStagePaths(
+  groups: readonly CourseDefinitionGroup[],
+  chartEntries: Iterable<HashedLibraryChart>,
+): CourseDefinitionGroup[] {
+  if (
+    !groups.some((group) => group.courses.some((course) => course.stages.some((stage) => stage.path !== undefined)))
+  ) {
+    return [...groups];
+  }
+  const entries = [...chartEntries].map((entry) => ({
+    entry,
+    path: normalizePath(entry.chart.chartPath).toLowerCase(),
+  }));
+  const byPath = new Map<string, HashedLibraryChart>();
+  for (const { entry, path } of entries) if (!byPath.has(path)) byPath.set(path, entry);
+  const find = (stagePath: string): HashedLibraryChart | undefined => {
+    const path = stagePath.toLowerCase();
+    return (
+      byPath.get(path) ??
+      entries.find((candidate) => candidate.path.endsWith(`/${path}`) || path.endsWith(`/${candidate.path}`))?.entry
+    );
+  };
+  return groups.map((group) => {
+    let changed = false;
+    const courses = group.courses.map((course) => {
+      if (!course.stages.some((stage) => stage.path !== undefined)) return course;
+      changed = true;
+      const stages = course.stages.map((stage) => {
+        if (stage.path === undefined || stage.md5 !== undefined || stage.sha256 !== undefined) return stage;
+        const found = find(stage.path);
+        const md5 = found?.md5?.toLowerCase();
+        const sha256 = found?.sha256?.toLowerCase();
+        if (found === undefined || (md5 === undefined && sha256 === undefined)) return stage;
+        return {
+          ...(md5 !== undefined ? { md5 } : {}),
+          ...(sha256 !== undefined ? { sha256 } : {}),
+          title: found.chart.title,
+          ...(found.chart.artist !== undefined && found.chart.artist !== '' ? { artist: found.chart.artist } : {}),
+          path: stage.path,
+        };
+      });
+      return { ...course, stages };
+    });
+    return changed ? { ...group, courses } : group;
+  });
+}
+
 /** A song lookup by chart-file hash, for {@link resolveCourseFolders}. */
-export function createChartHashLookup(
-  chartEntries: Iterable<{ chart: LibraryChart; sha256?: string; md5?: string }>,
-): CourseChartLookup<LibraryChart> {
+export function createChartHashLookup(chartEntries: Iterable<HashedLibraryChart>): CourseChartLookup<LibraryChart> {
   const bySHA256 = new Map<string, LibraryChart>();
   const byMD5 = new Map<string, LibraryChart>();
   // The first song with a hash wins, so a chart dropped twice resolves to the copy loaded first.

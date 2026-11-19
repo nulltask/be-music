@@ -1,5 +1,16 @@
 # @be-music/skin-beatoraja
 
+## 0.8.1
+
+### Patch Changes
+
+- 2bd15f3: Load beatoraja JSON skins faster by deriving the header from the parsed skin.
+  
+  Index Lua files once during theme discovery and reuse module lookups across skins in the same directory.
+- c5fc81a: A beatoraja Lua skin's `io.open` no longer returns a handle that accepts every write and reads back nothing. Files now live in memory for one skin evaluation: a file exists once the skin has written it and reads back what was written, and opening one it never wrote for reading fails as Lua specifies, so a skin's existence checks see the truth. Nothing is persisted.
+- 624db83: Animate signed number strips through their 24-cell frames.
+- Updated dependencies: `@be-music/player-engine@0.19.0`, `@be-music/player-scene-model@0.10.0`, `@be-music/skin-lr2@0.7.5`, `@be-music/shared-utils@0.8.0`
+
 ## 0.8.0
 
 ### Minor Changes

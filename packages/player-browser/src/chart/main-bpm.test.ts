@@ -14,11 +14,9 @@ describe('resolveShownChartMainBPM', () => {
     expect(resolveShownChartMainBPM(chart)).toBe(180);
   });
 
-  test('resolves long notes as the play does: a chart without #LNTYPE may read as #LNTYPE 2', () => {
-    // A run of four same-value 5x objects reads as one #LNTYPE 2 long note at 120 (as #LNTYPE 1 it would be two, and
-    // tie with the two taps at 180).
+  test('uses Type 1 when #LNTYPE is omitted, like playback', () => {
     const chart = bms(['#BPM 120', '#00051:01010101', '#00103:B4', '#00211:0101']);
-    expect(resolveShownChartMainBPM(chart)).toBe(180);
+    expect(resolveShownChartMainBPM(chart)).toBe(120);
   });
 
   test('is undefined for a chart without notes, and for one that does not resolve', () => {

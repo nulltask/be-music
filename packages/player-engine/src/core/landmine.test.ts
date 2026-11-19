@@ -46,17 +46,15 @@ describe('landmine', () => {
     expect(resolveLandmineGaugeEffect({ value: '0A', bmson: { damage: -5 } }).damage).toBe(10);
   });
 
-  test('a bmson mine without `damage` deals the default 4, not its WAV slot read as base 36', () => {
+  test('a bmson mine without `damage` deals the default 0, not its WAV slot read as base 36', () => {
     // The parser binds every `mine_channels` entry to a WAV slot numbered after the sound channels, so the event value
     // is a resource ID, not a damage encoding.
     expect(resolveLandmineGaugeEffect({ value: '0A' }, 36, 'bmson')).toEqual({
       objectValue: '0A',
-      damage: DEFAULT_LANDMINE_GAUGE_DAMAGE,
-      gaugeDelta: -DEFAULT_LANDMINE_GAUGE_DAMAGE,
+      damage: 0,
+      gaugeDelta: -0,
     });
-    expect(resolveLandmineGaugeEffect({ value: 'ZZ', bmson: { l: 0 } }, 36, 'bmson').damage).toBe(
-      DEFAULT_LANDMINE_GAUGE_DAMAGE,
-    );
+    expect(resolveLandmineGaugeEffect({ value: 'ZZ', bmson: { l: 0 } }, 36, 'bmson').damage).toBe(0);
     // An authored damage still wins, including 0.
     expect(resolveLandmineGaugeEffect({ value: '0A', bmson: { damage: 25 } }, 36, 'bmson').damage).toBe(25);
     expect(resolveLandmineGaugeEffect({ value: '0A', bmson: { damage: 0 } }, 36, 'bmson').damage).toBe(0);
@@ -85,11 +83,7 @@ describe('landmine', () => {
       expect(mine).toBeDefined();
       return resolveLandmineGaugeEffect(mine!.event, 36, json.sourceFormat).damage;
     });
-    expect(damages).toEqual([
-      DEFAULT_LANDMINE_GAUGE_DAMAGE,
-      DEFAULT_LANDMINE_GAUGE_DAMAGE,
-      DEFAULT_LANDMINE_GAUGE_DAMAGE,
-    ]);
+    expect(damages).toEqual([0, 0, 0]);
   });
 
   test('a bmson `key_channels` note is a hidden note, never a mine', () => {

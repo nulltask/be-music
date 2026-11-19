@@ -6,7 +6,7 @@ import {
   isPlayableChannel,
   sortEvents,
 } from '@be-music/chart-model';
-import { parseBMS } from '@be-music/chart-parser';
+import { parseBMS } from '@be-music/chart-parser/core';
 import {
   intToBase36,
   normalizeChannel,
@@ -260,7 +260,9 @@ function pushBMSExtensionLines(lines: string[], json: BeMusicJSON): void {
 
   pushIndexedStringLines(lines, 'EXRANK', json.bms.exRank, base);
   pushIndexedStringLines(lines, 'ARGB', json.bms.argb, base);
-  pushIndexedStringLines(lines, 'EXWAV', json.bms.exWAV, base);
+  // #WAV and #EXWAV share a slot and the later line wins (#1197): an EXWAV goes here, before the #WAV lines, only when
+  // no #WAV of its slot is written or a later #WAV redefines it; the rest follow the #WAV lines.
+  pushIndexedStringLines(lines, 'EXWAV', splitExWAVByWAVOrder(json).beforeWAV, base);
   pushIndexedStringLines(lines, 'EXBMP', json.bms.exBMP, base);
   pushIndexedStringLines(lines, 'BGA', json.bms.bga, base);
   pushIndexedNumberLines(lines, 'SCROLL', json.bms.scroll, base);
@@ -290,6 +292,7 @@ function pushBMSExtensionLines(lines: string[], json: BeMusicJSON): void {
 function pushResourceLines(lines: string[], json: BeMusicJSON): void {
   const base = resolveJSONBase(json);
   pushIndexedStringLines(lines, 'WAV', json.resources.wav, base);
+  pushIndexedStringLines(lines, 'EXWAV', splitExWAVByWAVOrder(json).afterWAV, base);
   pushIndexedStringLines(lines, 'BMP', json.resources.bmp, base);
   pushIndexedNumberLines(lines, 'BPM', json.resources.bpm, base);
   pushIndexedNumberLines(lines, 'STOP', json.resources.stop, base);
@@ -300,6 +303,21 @@ function pushResourceLines(lines: string[], json: BeMusicJSON): void {
 
 function resolveJSONBase(json: BeMusicJSON): 36 | 62 {
   return json.bms.base === 62 ? 62 : 36;
+}
+
+/** The `#EXWAVxx` declarations written before the `#WAVxx` lines and after them, so the file order keeps who wins. */
+function splitExWAVByWAVOrder(json: BeMusicJSON): {
+  beforeWAV: Record<string, string>;
+  afterWAV: Record<string, string>;
+} {
+  const beforeWAV: Record<string, string> = {};
+  const afterWAV: Record<string, string> = {};
+  for (const [key, value] of Object.entries(json.bms.exWAV)) {
+    const wav = json.resources.wav[key];
+    const exWAVWins = wav !== undefined && wav.length > 0 && json.bms.exWAVOverridden?.includes(key) !== true;
+    (exWAVWins ? afterWAV : beforeWAV)[key] = value;
+  }
+  return { beforeWAV, afterWAV };
 }
 
 function pushIndexedStringLines(
@@ -376,12 +394,17 @@ function pushEventLines(
     const { measure, channel, events } = group;
     const resolution = chooseResolution(events, maxResolution);
     const cells = Array.from({ length: resolution }, () => '00');
+    const lineOrder = new Map<number, number>();
 
     for (const event of events) {
       const { numerator, denominator } = resolveEventFraction(event);
       const scaled = Math.round((numerator * resolution) / denominator);
       const index = Math.min(resolution - 1, Math.max(0, scaled));
-      cells[index] = normalizeObjectKey(event.value, base);
+      const order = event.bmsLineOrder ?? -1;
+      if (order >= (lineOrder.get(index) ?? -1)) {
+        cells[index] = normalizeObjectKey(event.value, base);
+        if (order >= 0) lineOrder.set(index, order);
+      }
     }
 
     lines.push(`#${toMeasure(measure)}${channel}:${cells.join('')}`);
@@ -567,6 +590,7 @@ function groupEvents(events: BeMusicEvent[], base: 36 | 62 = 36): GroupedEventLi
       channel,
       position: [numerator, denominator],
       value: normalizeObjectKey(event.value, base),
+      ...(event.bmsLineOrder !== undefined ? { bmsLineOrder: event.bmsLineOrder } : {}),
     });
     groupedByChannel.set(channel, slot);
   }
@@ -662,8 +686,6 @@ function isDedicatedBMSExtensionCommand(command: string): boolean {
   return false;
 }
 
-/** Damage a mine deals when nothing gives it one — Be-Music's player default for BMS and bmson alike. */
-const DEFAULT_MINE_DAMAGE = 4;
 /** The largest damage a two-character base-36 mine value (`ZZ`) can carry. */
 const MAX_BMS_MINE_DAMAGE = 36 * 36 - 1;
 
@@ -677,7 +699,7 @@ const MAX_BMS_MINE_DAMAGE = 36 * 36 - 1;
  *   for its start. `#LNTYPE 1` is written when the chart has no `#LNTYPE`.
  * - `#LNMODE` comes from the long notes' type (`t`, else `info.ln_type`) when they all agree, else from `info.ln_type`;
  *   per-note types that disagree with it cannot be written in BMS and are lost.
- * - A mine's object value becomes its damage in base 36 (`bmson.damage`, or Be-Music's default 4 for a bmson mine
+ * - A mine's object value becomes its damage in base 36 (`bmson.damage`, or the default 0 for a bmson mine
  *   without one), rounded to an integer and clamped to `01`..`ZZ` — `00` is no object at all, so a 0 damage mine
  *   becomes `01`. The first mine's sample becomes `#WAV00`, the BMS explosion sound, when the chart has none.
  * - bmson `judge_rank` shares `#DEFEXRANK`'s unit, so it is written as `#DEFEXRANK` (when positive) instead of an
@@ -693,13 +715,21 @@ function convertChartForBMSOutput(json: BeMusicJSON, report?: ChartExportDiagnos
   const chartLNType = json.bmson.info.lnType;
   const endPositionResolver = createBMSPositionResolver(json);
   let changed = false;
+  // Mines whose damage BMS cannot hold as it is: a base-36 pair is a whole number from 1 to 1295.
+  let adjustedMines = 0;
+  let defaultedMines = 0;
+  // bmson fields BMS has no form for: `up` end keysounds and `c` sound continuations.
+  let endSounds = 0;
+  let continuations = 0;
 
   for (const event of json.events) {
     const channel = normalizeChannel(event.channel);
     if (isBmsonSource && event.bmson?.up === true && isPlayableChannel(channel)) {
+      endSounds += 1;
       changed = true;
       continue;
     }
+    if (isBmsonSource && event.bmson?.c === true) continuations += 1;
     const length = event.bmson?.l;
     if (isPlayableChannel(channel) && typeof length === 'number' && Number.isFinite(length) && length > 0) {
       const longNoteChannel = `${channel[0] === '1' ? '5' : '6'}${channel[1]}`;
@@ -715,7 +745,10 @@ function convertChartForBMSOutput(json: BeMusicJSON, report?: ChartExportDiagnos
       const hasDamage = typeof damage === 'number' && Number.isFinite(damage) && damage >= 0;
       if (hasDamage || isBmsonSource) {
         mineSample ??= json.resources.wav[normalizeObjectKey(event.value, resolveBMSBase(json))];
-        const value = Math.min(MAX_BMS_MINE_DAMAGE, Math.max(1, Math.round(hasDamage ? damage : DEFAULT_MINE_DAMAGE)));
+        // bmson's default damage for a mine without one is 0, which BMS cannot hold: it is written as the least, 1.
+        const value = Math.min(MAX_BMS_MINE_DAMAGE, Math.max(1, Math.round(hasDamage ? damage : 0)));
+        if (!hasDamage) defaultedMines += 1;
+        else if (value !== damage) adjustedMines += 1;
         events.push({ measure: event.measure, position: event.position, channel, value: intToBase36(value, 2) });
         changed = true;
         continue;
@@ -728,12 +761,40 @@ function convertChartForBMSOutput(json: BeMusicJSON, report?: ChartExportDiagnos
     return json;
   }
 
+  if (endSounds > 0)
+    report?.({
+      code: 'ln-end-sound',
+      message: `${endSounds} long-note end keysound(s) (up) are left out: BMS has no end sound, so a long note ends silently.`,
+    });
+  if (continuations > 0)
+    report?.({
+      code: 'sound-continuation',
+      message: `${continuations} note(s) continue their sound slice (c), which BMS cannot express: each plays its sample from the start.`,
+    });
+  if (adjustedMines > 0)
+    report?.({
+      code: 'mine-damage',
+      message: `${adjustedMines} mine(s) have a damage BMS cannot hold; each was rounded to a whole number from 1 to ${MAX_BMS_MINE_DAMAGE} (a damage of 0 becomes 1).`,
+    });
+  if (defaultedMines > 0)
+    report?.({
+      code: 'mine-damage',
+      message: `${defaultedMines} mine(s) have no damage, which bmson reads as 0; BMS cannot hold 0, so each was written with the least damage, 1.`,
+    });
+
   const bms = { ...json.bms };
   if (longNoteTypes.length > 0 && bms.lnType === undefined) {
     bms.lnType = 1;
   }
   if (bms.lnMode === undefined) {
     const uniformType = longNoteTypes.length > 0 && longNoteTypes.every((type) => type === longNoteTypes[0]);
+    // `#LNMODE` is one mode for the whole chart: long notes of different types all take the chart's.
+    if (longNoteTypes.length > 0 && !uniformType)
+      report?.({
+        code: 'long-note-mode',
+        message:
+          'The long notes have different types (LN, CN, HCN), which BMS cannot mark per note; every long note takes the chart-wide mode.',
+      });
     const lnMode = uniformType ? longNoteTypes[0] : chartLNType;
     if (typeof lnMode === 'number' && BMSON_LONG_NOTE_TYPES.has(lnMode)) {
       bms.lnMode = lnMode;
@@ -745,6 +806,13 @@ function convertChartForBMSOutput(json: BeMusicJSON, report?: ChartExportDiagnos
     if (bms.defExRank === undefined && typeof judgeRank === 'number' && Number.isFinite(judgeRank) && judgeRank > 0) {
       bms.defExRank = judgeRank;
     }
+    const total = json.bmson.info.total ?? json.metadata.total;
+    // bmson's default is 100 % of the player's default TOTAL, which is what a BMS chart without `#TOTAL` gets.
+    if (typeof total === 'number' && Number.isFinite(total) && total !== 100)
+      report?.({
+        code: 'total',
+        message: `bmson total ${total} is a percentage of the player's default TOTAL, which BMS #TOTAL cannot express; no #TOTAL is written and the player's default applies.`,
+      });
     delete metadata.rank;
     delete metadata.total;
   }

@@ -17,11 +17,27 @@
 - Write `bmson` in prose, `replay` for a recorded replay, and `avatar` for a user's profile image. Keep externally required identifiers and format keys unchanged. Rename persisted schema fields through explicit migrations.
 - Write the product name `Be-Music` in prose and user-facing text (service names such as `Be-Music Play` and `Be-Music Leaderboard`, and `Be-Music Skin` with a capital S). Keep lowercase `be-music` only for identifiers and machine-read values: package names, domains and URLs, file and format names, custom element and CSS names, OAuth scopes, storage keys and other persisted ids. See [the glossary](docs/glossary.md).
 
+## Writing guidelines
+
+- For English prose, apply `writing-clearly-and-concisely`.
+- For Japanese prose, apply `natural-japanese`.
+- Do not translate technical terms unnecessarily.
+- Preserve factual accuracy, nuance, and uncertainty.
+- Avoid literal translations and unnatural phrasing.
+- Follow language-specific punctuation and typography.
+- Keep code, identifiers, URLs, and API names unchanged.
+- Adapt tone to the intended audience and document type.
+
 # Reference Compatibility Rules
 
 - Match the relevant reference implementation's observable behavior. Where applicable references agree or only one defines the behavior, use that behavior as the default.
 - Where references differ, preserve each behavior in its corresponding ruleset or source-qualified option when possible. If a shared behavior needs a choice, record which reference Be-Music follows and why. See [ADR 0019](docs/adr/0019-source-qualified-option-values.md).
 - Where evidence is incomplete or a reference leaves behavior undefined, document the uncertainty. If Be-Music needs to choose a behavior, keep the choice as narrow as possible and record the reason. Use the [compatibility evidence labels](docs/format-compat.md#13-evidence-labels) to distinguish verified behavior from inference.
+- Keep selectable policies, including gauge rules and lane arrangements, available across judge rulesets. A source-qualified selection keeps its source's behavior, including dependent choices such as the gauge ladder, fallback gauge, and course carry. Use LR2 as the baseline and follow beatoraja for extensions it defines. Where a ruleset lacks a concept, explicitly adopt a coherent rule from LR2 or beatoraja and document its source and scope.
+- Use the selected ruleset for mutually exclusive judgment rules such as judgment windows. Use LR2 across rulesets for chart progression rules that determine which notes can be judged, including negative BPM and negative STOP.
+- Support nanasigroove to honor charts' `#OPTION 774:*` declarations, never at the cost of the LR2 and beatoraja compatible options: a nanasigroove reading must not change, replace, or reinterpret an existing LR2 or beatoraja option's behavior, choices, or replay meaning. Run and record a nanasigroove behavior that no LR2 or beatoraja option matches as its own option or value, and keep it apart in the Options dialog; share a value only when the behaviors are identical.
+- Preserve the external meanings of directives and skin IDs. Document Be-Music policies for platform constraints, conversions that lose information, and features that the references do not define.
+- A replay must contain the effective note layout, timing and progression facts, inputs, and selected policies needed to generate results under each supported judge ruleset. Reuse recorded chart effects and apply the target's judgment rules and the selected policy sources. Report unsupported legacy combinations explicitly and mark results as truncated when a target would have continued past the recorded end. Test live play against replay re-judging, including cross-ruleset selection and course carry where applicable. Document changes to replay and fingerprint semantics and follow the versioning rules in [ADR 0019](docs/adr/0019-source-qualified-option-values.md).
 
 # Commit Rules
 
@@ -49,7 +65,6 @@
 
 # Pull Request Rules
 
-- Open a separate pull request for each issue you implement. If one issue depends on another, use the dependency branch as the base so each pull request shows its own changes.
 - Do not prefix pull request titles with `[codex]`.
 - Use plain, descriptive pull request titles.
 - Do not end pull request descriptions with a "Generated with Claude Code" footer or a session link.
@@ -67,6 +82,12 @@
   - Keep each body paragraph on a single unwrapped line.
   - Put each list item on its own line.
   - State what changed and why, concisely; lead with the symptom when the change fixes an observable one.
+- Before releasing, tidy the unreleased changesets in a PR to `devel`, so the CHANGELOG states what changed since the last release:
+  - Find the last release with `git log origin/main -i --grep='version packages' -1`. A feature whose commit is not an ancestor of that commit is unreleased.
+  - Fold a fix of an unreleased feature into the entry that introduces the feature, and state the final behaviour there. Drop an entry that only fixes behaviour that never shipped, and reword an entry that compares with unreleased behaviour ("before", "no longer").
+  - Keep a merged entry in the file that introduced the feature: the CHANGELOG cites the commit that added the file.
+  - Remove changesets for packages no longer in the workspace; `changeset version` fails on them.
+  - Check that `pnpm run release:status` succeeds. To preview the CHANGELOG, run `pnpm run release:version`, read `packages/*/CHANGELOG.md`, and discard the output.
 - Releasing: run `pnpm run release:version` on `devel`, commit the generated `packages/*/package.json` and `CHANGELOG.md` together as `chore: version packages`, then merge the `devel -> main` PR to publish. See README "Package Releases".
 
 # Markdown Localization Rules

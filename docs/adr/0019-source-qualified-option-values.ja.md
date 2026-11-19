@@ -2,7 +2,7 @@
 
 # 0019: オプションの値に参照元を持たせ、リプレイは決めた規則で再判定する
 
-プレイオプションを判定 ruleset から切り離す作業を進めています（[#774](https://github.com/nulltask/be-music/issues/774)）。ほとんどのオプションは参照元が1つですが、いくつかの名前は参照元によって意味が違います。
+プレイオプションを判定ルールセットから独立させる作業を進めています。多くのオプションは参照元が一つですが、同じ名前でも参照元によって意味が変わるものがあります。[#774](https://github.com/nulltask/be-music/issues/774)
 
 | 名前                      | LR2                            | beatoraja                              | AC（`____`）      |
 | ------------------------- | ------------------------------ | -------------------------------------- | ----------------- |
@@ -93,8 +93,38 @@ flowchart LR
 
 LR2（OpenLR2）・beatoraja・AC / PC 版のレーンオプションを比べた結果、プレイする内容が変わらない修飾付きの値が 2 つありました。
 
-- **RANDOM は 1 つのオプションにします。** LR2・beatoraja・AC はいずれも譜面全体で鍵盤を 1 回並べ替え、皿は動かしません。どれもすべての配置が同じ確率で出ます。違うのは乱数を配置に変える手順だけで、LR2 の乱数列は Be-Music では再現できません。そこで RANDOM は修飾を付けない値にし、beatoraja の `LaneRandomShuffleModifier` と同じ手順で引き（シードから beatoraja と同じ配置になります）、そのあと LR2 の固定鍵盤（`randFix`）が 1P の元の 1 鍵を選んだ鍵盤へ移します。9 鍵では使いません。どのルールセットでも、RANDOM は LR2 と同じく Fixed key 2P を無視します。[#1093](https://github.com/nulltask/be-music/issues/1093)
+- **RANDOM は 1 つのオプションにします。** LR2・beatoraja・AC はいずれも譜面全体で鍵盤を 1 回並べ替え、スクラッチは動かしません。どれもすべての配置が同じ確率で出ます。違うのは乱数を配置に変える手順だけで、LR2 の乱数列は Be-Music では再現できません。そこで RANDOM は修飾を付けない値にし、beatoraja の `LaneRandomShuffleModifier` と同じ手順で引き（シードから beatoraja と同じ配置になります）、そのあと LR2 の固定鍵盤（`randFix`）が 1P の元の 1 鍵を選んだ鍵盤へ移します。9 鍵では使いません。どのルールセットでも、RANDOM は LR2 と同じく Fixed key 2P を無視します。[#1093](https://github.com/nulltask/be-music/issues/1093)
 - **AC の S-RANDOM は LR2 のものと同じです。** どちらもノートを 1 つずつ置き、縦連を避けません。40ms 以内の縦連を避ける beatoraja のものは別に残します。S-RANDOM の修飾は `lr2:S-RANDOM` と `beatoraja:S-RANDOM` だけになり、AC のルールでの修飾なしの S-RANDOM は `lr2:S-RANDOM` と読みます。Options ダイアログでは **S-RANDOM (LR2 / ????)** と表示します。
 - **以前の値もそのまま使えます。** `lr2:RANDOM`・`beatoraja:RANDOM`・`____:RANDOM`・`____:S-RANDOM` は `RANDOM` と `lr2:S-RANDOM` と読みます（`canonicalOptionValue`）。保存済みの設定は読み込むときに移行し、配置を記録しているリプレイは書き換えません。LR2 の RANDOM ボタンは OFF・MIRROR・RANDOM・`lr2:S-RANDOM`・SCATTER・`lr2:CONVERGE` の順に切り替え、beatoraja のボタンの RANDOM の枠は修飾なしの RANDOM です。
 
 CONVERGE と BATTLE はソースごとに定義が違うので、修飾付きのままにします。比較で見つかった残りの違いは [#1076](https://github.com/nulltask/be-music/issues/1076) と [#1077](https://github.com/nulltask/be-music/issues/1077) で扱います。
+
+## 追補：参照元つきのゲージはどのルールセットでも参照元を保つ（#1171）
+
+決定の表では、ゲージは「引き継ぐ」オプションで、修飾付きの値は参照元を保つとしていました。エンジンが実装していたのは修飾なしの読み方だけでした。ゲージの選択に参照元を付けられるようにし（`lr2:HARD`、`beatoraja:EX-HARD`、`____:ASSIST-EASY`）、どのルールセットで判定しても、その参照元のゲージを使います。
+
+```mermaid
+flowchart LR
+  pick["ゲージの選択"] --> qualified{"修飾付き?"}
+  qualified -->|"lr2:HARD"| source["LR2 のゲージ"]
+  qualified -->|"HARD"| own["判定するルールセット自身のもの"]
+  source --> play["選んだルールセットで判定"]
+  own --> play
+```
+
+- **ゲージの参照元に従うもの：** ゲージ表と TOTAL の読み方（LR2 の整数 TOTAL と既定値の曲線、beatoraja のモード別の表、AC の単位）、LR2 の GROOVE と EASY の地雷の下限 2 %、ゲージオートシフトのラダー、そのラダーで読む最低ゲージ、SURVIVAL TO GROOVE の移行先、選択に対応するコースゲージとステージ間で引き継ぐ値、コースのステージを終わらせる規則（LR2 のコースゲージは 2 % 未満、段位ゲージは 0）、そのゲージでクリアしたときのランプ。
+- **判定するルールセットに従うもの：** 判定幅、判定対象ノートの選び方、ロングノートの種類、地雷の発動と POOR の加算、HCN のティック、スコア、最上位のランプとフルコンボ系のランプ、「すべてのノートを判定したときだけコースをクリアする」という LR2 の規則。
+- **ノート数。** 参照元のゲージは、判定するルールセットが出す判定の数で増減量を決めます。すべて PGREAT のプレイは、参照元の TOTAL だけ回復します。AC の判定で LR2 のゲージを使うと、チャージノートは AC の判定どおり 2 回数えます [I]。この組み合わせを定義する参照元はなく、Be-Music が組み合わせたものです。
+- **修飾付きの選択は、その参照元のメニューにあるゲージだけを指します**（`resolveGaugeTypes`）。`lr2:EX-HARD`、`beatoraja:P-ATTACK`、`____:DEATH` は受け付けず、似たゲージにも読み替えません。判定するルールセット自身で修飾した選択は、そのルールセットの修飾なしのゲージと同じです。PRACTICE の GAUGE TYPE は、のちに修飾付きの選択を受け付けるようになりました（次の追補を参照）。
+- **リプレイ。** `play.gauge` と `play.gauge2P` は選択した値をそのまま持ちます。ゲージがほかの参照元のものである結果は、`gauge.source` にその参照元を記録します。この欄がなければ判定したルールセット自身のゲージなので、既存のリプレイと結果の意味は変わりません。修飾付きの選択は `not-simulated` の理由になりません。`lr2:P-ATTACK` は beatoraja と AC でも LR2 の P.ATTACK で再判定します。この追補より前のリーダーは修飾付きのゲージを拒否します。これは意図した失敗です（「影響」を参照）。
+- **ホスト。** ターミナル版は `--gauge` で修飾付きの選択を受け付けます。Options ダイアログは、判定するルールセット自身のゲージを修飾なしの値で並べ、続けてほかの参照元のゲージを参照元の名前つき（`HARD (LR2)`）の修飾付きの選択として、レーンオプションと同じように参照元ごとにまとめて並べます。ルールセットを切り替えても修飾付きの選択は保ち、新しいルールセットにない修飾なしの選択は GROOVE に戻します（`keepGaugePick`）。スキンのボタンは参照元のセルを保ちます。修飾付きの選択はゲージの種類で表示し、そこから修飾なしの次のゲージへ進みます。LR2 の段位認定コースが EASY と G.ATTACK を戻す処理は、ゲージの種類を見て参照元を保ちます（`beatoraja:EASY` は `beatoraja:GROOVE` でプレイします）[I]。これらの読み方は開発用リビジョン `/0` のまま出します。
+
+## 追補：PRACTICE の GAUGE TYPE はほかの参照元のゲージを受け付ける
+
+#1171 の追補では PRACTICE を判定するルールセット自身のゲージ一覧に留めたため、ゲージの規則が PRACTICE でだけ選べないまま残っていました。たとえば LR2 の判定で beatoraja の ASSIST EASY を練習できませんでした。PRACTICE の GAUGE TYPE も、プレイのゲージ選択と同じく参照元で修飾した選択（`beatoraja:ASSIST-EASY`、`lr2:G-ATTACK`、`____:ASSISTED-EASY`）を受け付けます。
+
+- **ゲージの参照元に従うもの：** その参照元の PRACTICE が作るゲージ、PRACTICE の TOTAL の読み方（LR2 はそのまま使い、beatoraja は NORMAL 以下のゲージで範囲内に残ったノーツ数で換算し、AC は読みません）、そのゲージの範囲に収めた GAUGE VALUE、beatoraja のゲージに対する GAUGE CATEGORY、ゲージオートシフトのラダー。ゲージは、修飾付きのゲージ選択と同じく、判定するルールセットが出す判定の数で数えます。
+- **判定するルールセットに従うもの：** 判定幅と PRACTICE の JUDGERANK、JUDGERANK と TOTAL をそもそも出すかどうか（AC のルールではどちらも出しません）[I]。
+- **一覧。** 修飾付きの PRACTICE の選択は、その参照元自身の PRACTICE の一覧にあるゲージだけを指します（`splitPracticeGaugePick`）。`lr2:ASSIST-EASY` は受け付けません。Options ダイアログと小節の選択画面は、判定するルールセット自身の PRACTICE のゲージを修飾なしの値で並べ、続けてほかの参照元のゲージを参照元の名前つき（`ASSIST EASY (beatoraja)`）の修飾付きの選択として並べます。ルールセットを切り替えても修飾付きの選択は保ち、新しいルールセットにない修飾なしの選択はその既定のゲージに戻します（`keepPracticeGauge`）。
+- **プレイ自身のゲージ選択は PRACTICE には使いません。** PRACTICE は GAUGE TYPE のゲージでプレイします。以前は、判定するルールセットにないゲージの選択（LR2 での `beatoraja:ASSIST-EASY`）があると、練習のプレイが RangeError で止まりました。
+- 練習のプレイは何も保存せず、再判定もしないので、リプレイと結果には影響しません。

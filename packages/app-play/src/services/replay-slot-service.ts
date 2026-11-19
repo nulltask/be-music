@@ -22,6 +22,8 @@ export interface ResultReplaySave {
   readonly score: ReplaySlotScore;
   readonly title: string;
   readonly previous: BestRecord | undefined;
+  /** A run can have history without being eligible to update the slots. */
+  readonly historyOnly?: boolean;
 }
 
 /** How a save into a slot is described on the status line. */
@@ -29,12 +31,11 @@ export function describeReplaySlotSave(slot: number, outcome: ReplaySlotSaveOutc
   const name = `replay slot ${slot + 1}`;
   if (outcome.saved) {
     const evicted = outcome.evicted.length;
-    const room =
-      evicted === 0 ? '' : ` (removed ${evicted} lower-scoring replay${evicted === 1 ? '' : 's'} to make room)`;
+    const room = evicted === 0 ? '' : ` (removed ${evicted} older replay${evicted === 1 ? '' : 's'} to make room)`;
     return `${auto ? 'Auto-saved' : 'Saved'} the replay to ${name}${room}`;
   }
   return outcome.reason === 'budget'
-    ? `Not saved to ${name}: it would score lowest of the replays kept, and they are at the size limit`
+    ? `Not saved to ${name}: the replay history is at the size limit`
     : `Not saved to ${name}: the browser's storage is full or unavailable`;
 }
 
@@ -48,6 +49,7 @@ export class ResultReplaySlots {
   private readonly store: ReplaySlotStore;
   private readonly source: ResultReplaySave | undefined;
   private readonly report: (text: string) => void;
+  private historySave: Promise<ReplaySlotSaveOutcome> | undefined;
   private readonly saved = new Set<number>();
   private readonly saving = new Set<number>();
   private readonly listeners = new Set<() => void>();
@@ -72,7 +74,7 @@ export class ResultReplaySlots {
 
   /** Whether the result can be saved into a slot. */
   public get saveable(): boolean {
-    return this.source !== undefined;
+    return this.source !== undefined && !this.source.historyOnly;
   }
 
   /** Each slot's state: saved by this result, holding a replay, or empty. */
@@ -93,34 +95,69 @@ export class ResultReplaySlots {
     return this.store.slots(this.target);
   }
 
-  /** Saves into each slot whose auto-save rule the play meets (beatoraja applies them as its result opens). */
+  /** Saves this result once, with any selections its slot rules made. */
   public async autoSave(rules: readonly ReplayAutoSaveRule[]): Promise<void> {
     const source = this.source;
-    if (source === undefined) return;
-    for (const slot of resolveReplayAutoSaveSlots(rules, source.previous, source.score)) await this.save(slot, true);
+    if (source === undefined || this.target === undefined) return;
+    const slots = source.historyOnly ? [] : resolveReplayAutoSaveSlots(rules, source.previous, source.score);
+    const outcome = await this.saveHistory(this.target, source, slots);
+    if (!outcome.saved) {
+      this.report(
+        outcome.reason === 'budget'
+          ? 'Replay history is at the size limit'
+          : 'Could not save replay history: browser storage is full or unavailable',
+      );
+      return;
+    }
+    for (const slot of slots) this.saved.add(slot);
+    if (slots.length > 0) this.notify();
+    for (const slot of slots) this.report(describeReplaySlotSave(slot, outcome, true));
+    if (slots.length === 0 && outcome.evicted.length > 0) {
+      this.report(`Saved to replay history (removed ${outcome.evicted.length} older replays to make room)`);
+    }
+  }
+
+  private saveHistory(
+    target: ReplaySlotTarget,
+    source: ResultReplaySave,
+    slots: readonly number[],
+  ): Promise<ReplaySlotSaveOutcome> {
+    this.historySave ??= this.store.save(target, slots, source.payload, source.score, source.title).then((outcome) => {
+      if (!outcome.saved) this.historySave = undefined;
+      return outcome;
+    });
+    return this.historySave;
   }
 
   /** Saves the result into `slot`, once per result; resolves `undefined` when nothing was saved. */
   public async save(slot: number, auto = false): Promise<ReplaySlotSaveOutcome | undefined> {
     const source = this.source;
     const target = this.target;
-    if (source === undefined || target === undefined) {
+    if (source === undefined || source.historyOnly || target === undefined) {
       if (!auto) this.report('This play cannot be saved to a replay slot');
       return undefined;
     }
     if (this.saved.has(slot) || this.saving.has(slot)) return undefined;
     this.saving.add(slot);
     try {
-      const outcome = await this.store.save(target, slot, source.payload, source.score, source.title);
+      const history = await this.saveHistory(target, source, [slot]);
+      if (this.saved.has(slot)) return undefined;
+      const outcome =
+        history.saved && !history.record.slots.includes(slot)
+          ? await this.store.assign(history.record.key, slot)
+          : history;
       if (outcome.saved) {
         this.saved.add(slot);
-        for (const listener of this.listeners) listener();
+        this.notify();
       }
       this.report(describeReplaySlotSave(slot, outcome, auto));
       return outcome;
     } finally {
       this.saving.delete(slot);
     }
+  }
+  private notify(): void {
+    for (const listener of this.listeners) listener();
   }
 }
 

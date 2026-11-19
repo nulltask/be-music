@@ -2,6 +2,7 @@ import {
   PLAY_MODE_LAYOUTS,
   findPlayModeLane,
   getPlayModeLayouts,
+  isPMSChartPath,
   resolveChartPlayVariant,
   type ChartPlayVariant,
   type PlayLane,
@@ -658,7 +659,7 @@ function resolvePMS9KeyLayout(existing: ReadonlySet<string>, chartExtension: str
   const bmeLayoutScore = countExistingChannels(existing, PMS_BME_ONLY_CHANNELS);
 
   if (pmsLayoutScore === 0 && bmeLayoutScore === 0) {
-    return isPMSExtension(chartExtension) ? '9-pms' : '9-bme';
+    return isPMSChartPath(chartExtension) ? '9-pms' : '9-bme';
   }
   return pmsLayoutScore >= bmeLayoutScore ? '9-pms' : '9-bme';
 }
@@ -671,10 +672,6 @@ function countExistingChannels(existing: ReadonlySet<string>, channels: readonly
     }
   }
   return count;
-}
-
-function isPMSExtension(chartExtension: string | undefined): boolean {
-  return typeof chartExtension === 'string' && chartExtension.trim().toLowerCase() === '.pms';
 }
 
 /** The That-Which-Must-Not-Be-Named FREE ZONE channels, each played on its side's scratch (`17` → `16`, `27` → `26`). */

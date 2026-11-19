@@ -1,5 +1,5 @@
 import type { BeMusicJSON } from '@be-music/chart-source';
-import { parseChart } from '@be-music/chart-parser';
+import { parseChart } from '@be-music/chart-parser/core';
 import { stitchNonstopCourse, type NonstopStitchMap } from '../../course/index.ts';
 
 /**

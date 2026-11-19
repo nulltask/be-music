@@ -99,9 +99,16 @@ describe('planCourseReplayPlayback', () => {
     expect(beatoraja.map((stage) => stage.end)).toEqual(['next', 'failed']);
   });
 
-  test('stops at a stage given up', () => {
-    const plan = planCourseReplayPlayback(courseLog([played({}), played({}, { aborted: true }), played({})]));
+  test('stops at a stage given up that the run did not go on after', () => {
+    const plan = planCourseReplayPlayback(
+      courseLog([played({}), played({}, { aborted: true }), unplayed({ md5: 'x' })]),
+    );
     expect(plan.map((stage) => stage.end)).toEqual(['next', 'given-up']);
+  });
+
+  test("plays on past a stage given up that the run went on after, as LR2's course gauges go on", () => {
+    const plan = planCourseReplayPlayback(courseLog([played({}), played({}, { aborted: true }), played({})]));
+    expect(plan.map((stage) => stage.end)).toEqual(['next', 'next', 'cleared']);
   });
 
   test('a run that stopped before its last stage ends failed, even without a recorded result', () => {

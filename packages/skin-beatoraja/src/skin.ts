@@ -6,7 +6,7 @@
 
 import { dirname, normalizePath } from '@be-music/shared-utils/core';
 import { asLoadedBytes, findCaseInsensitivePath, type BeatorajaSkinFileEntry } from './file-lookup.ts';
-import { parseBeatorajaSkinJSON, parseBeatorajaSkinJSONHeader } from './json.ts';
+import { headerFromBeatorajaSkinJSON, parseBeatorajaSkinJSON } from './json.ts';
 import { evaluateBeatorajaLuaSkin, type BeatorajaLuaModuleSource, type BeatorajaLuaRuntimeContext } from './lua.ts';
 import { normalizeBeatorajaSkinCustomOffsets } from './types.ts';
 import type { BeatorajaSkin, BeatorajaSkinConfig, BeatorajaSkinHeader } from './types.ts';
@@ -85,7 +85,8 @@ export function loadBeatorajaSkin(options: LoadBeatorajaSkinOptions): LoadBeator
   if (format === 'json') {
     try {
       const skin = parseBeatorajaSkinJSON(entryBytes);
-      const header = parseBeatorajaSkinJSONHeader(entryBytes);
+      // Callers can mutate the skin and its header independently.
+      const header = structuredClone(headerFromBeatorajaSkinJSON(skin));
       return { ok: true, header, skin, format };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

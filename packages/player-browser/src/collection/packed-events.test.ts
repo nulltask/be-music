@@ -44,10 +44,56 @@ describe('packEvents / unpackEvents', () => {
     const strings = new PackedEventStrings();
     const packed = packEvents(EVENTS, strings)!;
     expect(packed.length).toBe(3);
-    expect(packed.numerators).toBeInstanceOf(Int32Array);
+    // Small values take a byte each.
+    for (const column of [packed.measures, packed.numerators, packed.denominators]) {
+      expect(column).toBeInstanceOf(Int8Array);
+    }
+    for (const column of [packed.channels, packed.values]) expect(column).toBeInstanceOf(Uint8Array);
     const events = unpackEvents(packed, strings);
     expect(events).toEqual(EVENTS);
     expect(Object.keys(events[0]!)).toEqual(['measure', 'channel', 'position', 'value']);
+  });
+
+  test('widens a column only as far as its values need', () => {
+    const strings = new PackedEventStrings();
+    for (let id = 0; id < 300; id += 1) strings.idOf(`filler-${id}`);
+    const events: BeMusicEvent[] = [
+      { measure: -1, channel: '01', position: [0, 192], value: 'filler-0' },
+      { measure: 999, channel: '11', position: [-40000, 7], value: '01' },
+      { measure: 127, channel: '11', position: [70000, 0x7fffffff], value: 'filler-299' },
+    ];
+    const packed = packEvents(events, strings)!;
+    expect(packed.measures).toBeInstanceOf(Int16Array);
+    expect(packed.numerators).toBeInstanceOf(Int32Array);
+    expect(packed.denominators).toBeInstanceOf(Int32Array);
+    expect(packed.channels).toBeInstanceOf(Uint16Array);
+    expect(packed.values).toBeInstanceOf(Uint16Array);
+    expect(unpackEvents(packed, strings)).toEqual(events);
+
+    const many = new PackedEventStrings();
+    for (let id = 0; id < 70000; id += 1) many.idOf(`filler-${id}`);
+    const wide = packEvents([{ measure: 0, channel: 'new', position: [128, 32768], value: 'filler-1' }], many)!;
+    expect(wide.channels).toBeInstanceOf(Uint32Array);
+    expect(wide.values).toBeInstanceOf(Uint8Array);
+    expect(wide.numerators).toBeInstanceOf(Int16Array);
+    expect(wide.denominators).toBeInstanceOf(Int32Array);
+    expect(unpackEvents(wide, many)).toEqual([
+      { measure: 0, channel: 'new', position: [128, 32768], value: 'filler-1' },
+    ]);
+  });
+
+  test.each([
+    [-128, Int8Array],
+    [-129, Int16Array],
+    [-32768, Int16Array],
+    [-32769, Int32Array],
+  ])('uses the smallest signed column for %i', (value, Column) => {
+    const strings = new PackedEventStrings();
+    const events: BeMusicEvent[] = [{ measure: value, channel: '11', position: [value, 1], value: '01' }];
+    const packed = packEvents(events, strings)!;
+    expect(packed.measures).toBeInstanceOf(Column);
+    expect(packed.numerators).toBeInstanceOf(Column);
+    expect(unpackEvents(packed, strings)).toEqual(events);
   });
 
   test('stores non-integer positions as doubles', () => {
@@ -67,6 +113,19 @@ describe('packEvents / unpackEvents', () => {
     const unpacked = unpackEvents(packEvents(events, strings)!, strings);
     expect(unpacked).toEqual(events);
     expect(unpacked[1]!.bmson).toBe(events[1]!.bmson);
+  });
+
+  test('keeps LRX extensions by index', () => {
+    const strings = new PackedEventStrings();
+    const events: BeMusicEvent[] = [
+      { measure: 0, channel: '11', position: [0, 1], value: '01', lrx: { length: 480, volume: 64 } },
+      { measure: 0, channel: '01', position: [1, 2], value: '02' },
+    ];
+    const packed = packEvents(events, strings)!;
+    expect(packed.lrx?.size).toBe(1);
+    const unpacked = unpackEvents(packed, strings);
+    expect(unpacked).toEqual(events);
+    expect(unpacked[0]!.lrx).toBe(events[0]!.lrx);
   });
 
   test('refuses events with fields it does not model', () => {

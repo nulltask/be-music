@@ -2,12 +2,40 @@
 
 # Replay (play history) specification
 
-This document describes the Be-Music replay ("replay") — the play-history file recorded during gameplay — and
-the tools that re-derive LR2 / beatoraja / That-Which-Must-Not-Be-Named results from it.
+A Be-Music replay stores the chart as played, the player’s inputs and the settings in effect. The replay simulator uses those facts to reproduce the result or re-judge the play under another ruleset.
+
+<details>
+<summary>Table of contents</summary>
+
+- [Related pages](#related-pages)
+- [Design principle: an input replay, not a result log](#design-principle-an-input-replay-not-a-result-log)
+  - [Input sources](#input-sources)
+- [Recording](#recording)
+  - [Input without key releases](#input-without-key-releases)
+- [Compat rulesets](#compat-rulesets)
+- [Re-deriving LR2 / beatoraja / That-Which-Must-Not-Be-Named results](#re-deriving-lr2--beatoraja--that-which-must-not-be-named-results)
+  - [Re-judging under another ruleset](#re-judging-under-another-ruleset)
+  - [Fidelity notes](#fidelity-notes)
+- [Course replays](#course-replays)
+  - [Playing a course replay back](#playing-a-course-replay-back)
+- [CLI](#cli)
+- [Versioning](#versioning)
+- [Effective chart display options](#effective-chart-display-options)
+- [Optional bmson zero-total policy](#optional-bmson-zero-total-policy)
+
+</details>
+
+## Related pages
+
+- [Browser replay playback, history, and ghosts](./replay-browser.md)
+  - <a name="replay-playback"></a>[Replay playback](./replay-browser.md#replay-playback)
+  - <a name="replay-slots"></a>[Replay slots](./replay-browser.md#replay-slots)
+  - <a name="ghost"></a>[Ghost](./replay-browser.md#ghost)
+  - <a name="what-the-player-saw"></a>[What the player saw](./replay-browser.md#what-the-player-saw)
 
 ## Design principle: an input replay, not a result log
 
-A replay is deliberately **not** a list of judgments. Its canonical payload is:
+The replay format records the information needed to compute judgments again. Its canonical payload has three parts.
 
 1. **`chart`** — the resolved chart that actually scrolled past the player: post-`#RANDOM` control flow, post
    lane-shuffle (RANDOM / MIRROR / S-RANDOM), post DP-flip. Long notes are stored as single objects with a
@@ -42,7 +70,7 @@ A replay is deliberately **not** a list of judgments. Its canonical payload is:
    kitty keyboard protocol): the instant it took the key as let go. `inferred` is diagnostic only; replays and
    simulators read such an `up` like any other. A scratch press may carry `spin: 'cw' | 'ccw'`, the way it turned the
    turntable, for display (a replay's turntable animation); judging reads `source` (see
-   [`player-spec.md`](./player-spec.md#input-sources)). Inputs are never converted into judgments, never assigned
+   [`player-spec.md`](./player-judgment.md#input-sources)). Inputs are never converted into judgments, never assigned
    to a note id, and phantom presses (the ones that fire LR2 empty POORs) are kept. The sort key is always
    `(timeUs, seq)` — `seq` disambiguates same-microsecond events.
 3. **`play`** — the settings that affect scoring: mode (manual / auto), auto scratch, the selected gauge, the
@@ -104,8 +132,14 @@ directions of a turntable share one model (#605, [ADR 0040](./adr/0040-replay-in
   `direction` (`up` or `down`). A turntable is always two sources, whether the device reports an axis or two buttons.
 - `device` is a coarse class only: `keyboard`, `controller` or `touch`. `label` is a normalised name (lowercase
   printable ASCII without whitespace, at most 32 characters): a keyboard key's first token (`'shift-left'`, `'z'`), a
-  touch zone's lane key, or a controller's `b1` / `tt`. A replay never records device-identifying data: no
-  `Gamepad.id`, vendor or product id, or serial.
+  touch zone's lane key, or a controller's `b1` / `tt`. Labels never carry device-identifying data.
+- `deviceName` (optional) is the device's own name as the host reported it: a browser's `Gamepad.id`, which often
+  names the vendor and product ids. It is recorded only when the player opts in (the web player's "Record device names
+  in replays", `ReplayRecordingOptions.includeDeviceNames`; off by default), and then goes wherever the replay goes,
+  Leaderboard submissions included. Keyboards and touch report none. It is not part of the source's identity and
+  judging never reads it, so the same play records the same `inputs` with or without it. A source keeps the name it
+  was first seen with: another controller in the same slot later in the play is the same source. The recorder removes
+  control characters, trims it and cuts it to 128 characters. No serial is ever recorded.
 - Each physical key bound to a lane is its own source: a scratch lane's Shift, Ctrl and Space are three. Each lane's
   touch zone is one.
 - `play.analogScratch` (optional) names the versioned algorithm, and its parameters, by which the host turned an analog
@@ -113,12 +147,12 @@ directions of a turntable share one model (#605, [ADR 0040](./adr/0040-replay-in
   axis samples, and the simulators never re-run the algorithm.
 
 `parseReplay` rejects a table with duplicate ids, an unknown `kind` or `device`, a label that is not a normalised name,
-a turntable source without a `direction` (or another source with one), and any input whose `source` the table does not
-hold. A log without `play.inputSources`, or whose inputs carry no `source` (the `tokens` of logs recorded before input
+a turntable source without a `direction` (or another source with one), a `deviceName` that is empty, longer than 128
+characters, has control characters or surrounding spaces, and any input whose `source` the table does not hold. A log without `play.inputSources`, or whose inputs carry no `source` (the `tokens` of logs recorded before input
 sources), is rejected rather than guessed: the format is still at revision 0 and older logs need not be read. Turning
 a source into channels stays the host's job, and `channels` stays authoritative for lane selection.
 
-**Effective play options.** Besides the selected snapshot (`play.options`, see [What the player saw](#what-the-player-saw)), `play` carries the typed fields that decide judging and the chart, each omitted while its option is off: `judgeAlgorithm` and `customJudge` (beatoraja's judgment algorithm and CUSTOM JUDGE rates); `gaugeAutoShift` and `bottomShiftableGauge`; `autoScratch1P` / `autoScratch2P`; `anyKey` (ANY KEY, whose `inputs` keep each key's own lane and are routed again on replay); the chart modifiers with what they changed — `longNoteModifier`, `longNoteRate` and `longNoteModifierChangeCount`, `mineModifier` and `mineModifierChangeCount`, `scrollModifier`, `scrollSection`, `scrollRate`, `scrollModifierTimeline` and `scrollModifierChanged`, `extraNoteDepth`, `extraNoteScratch` and `extraNoteChangeCount`, LR2 EXTRA MODE's `lr2ExtraMode`, `lr2ExtraLevel`, `lr2ExtraEffectiveLevel`, `lr2ExtraConvertedObjectCount` and `lr2ExtraTempo`, and 7 TO 9's `sevenToNinePattern`, `sevenToNineType`, `sevenToNineThresholdBPM` and `sevenToNineApplied`; and the battle and conversion modes — `battleMode`, the chart's own `battleSourceVariant`, `battleTempo`, `battleAssist1P` / `battleAssist2P`, `battleChangedObjectCount`, `battleDroppedObjectCount` and LR2 D-BATTLE's `dBattleScratch`. `chart.notes` is the chart after every one of them, so a replay or a simulation never rolls them again: a generated long-note head carries `generatedLongNote: true`, a generated mine `silent: true` with its resolved `damage`, and a moved note its `sourceChannel`. `chart.headerBPM` and `chart.bpmRange` keep the header BPM and the BPM extrema the options that classify a chart by its tempo read.
+**Effective play options.** Besides the selected snapshot (`play.options`, see [What the player saw](./replay-browser.md#what-the-player-saw)), `play` carries the typed fields that decide judging and the chart, each omitted while its option is off: `judgeAlgorithm` and `customJudge` (beatoraja's judgment algorithm and CUSTOM JUDGE rates); `gaugeAutoShift` and `bottomShiftableGauge`; `autoScratch1P` / `autoScratch2P`; `anyKey` (ANY KEY, whose `inputs` keep each key's own lane and are routed again on replay); the chart modifiers with what they changed — `longNoteModifier`, `longNoteRate` and `longNoteModifierChangeCount`, `mineModifier` and `mineModifierChangeCount`, `scrollModifier`, `scrollSection`, `scrollRate`, `scrollModifierTimeline` and `scrollModifierChanged`, `extraNoteDepth`, `extraNoteScratch` and `extraNoteChangeCount`, LR2 EXTRA MODE's `lr2ExtraMode`, `lr2ExtraLevel`, `lr2ExtraEffectiveLevel`, `lr2ExtraConvertedObjectCount` and `lr2ExtraTempo`, and 7 TO 9's `sevenToNinePattern`, `sevenToNineType`, `sevenToNineThresholdBPM` and `sevenToNineApplied`; and the battle and conversion modes — `battleMode`, the chart's own `battleSourceVariant`, `battleTempo`, `battleAssist1P` / `battleAssist2P`, `battleChangedObjectCount`, `battleDroppedObjectCount` and LR2 D-BATTLE's `dBattleScratch`. `chart.notes` is the chart after every one of them, so a replay or a simulation never rolls them again: a generated long-note head carries `generatedLongNote: true`, a generated mine `silent: true` with its resolved `damage`, and a moved note its `sourceChannel`. `chart.headerBPM` and `chart.bpmRange` keep the header BPM and the BPM extrema the options that classify a chart by its tempo read.
 
 **Two players.** A two-player play (`play.battleMode: "COUPLE"` or `"TWO-PLAYER"`: LR2 BATTLE, or That-Which-Must-Not-Be-Named two-player play) records both players' presses in one `inputs` stream, each on its own side's channels (`1x` / `2x`). `results.native` is the 1P player's result and `results.secondPlayer` the 2P player's, of the same shape; `play.gauge2P` is the 2P player's gauge. Re-simulating the log judges each side on its own, as the live play did.
 
@@ -134,7 +168,7 @@ Recording is engine-owned so every host (browser LR2 / beatoraja scenes, and any
 implementation. `PlayerOptions.onReplayRecorded` enables it: the engine snapshots its prepared chart, records
 every judged press (`lane-input`) and release (`kitty-state` release) with `pressedAt`-corrected chart-relative
 timestamps — for input without releases, the releases it inferred ([Input without key releases](#input-without-key-releases)) — counts empty POORs for the native cache, and hands the assembled `BeMusicReplay` to the callback right
-before `autoPlay` / `manualPlay` resolves — including the ESC (aborted) exit. `PlayerOptions.recordReplay` carries
+before `autoPlay` / `manualPlay` resolves — including the ESC (aborted) exit. An ESC once every note is judged is not an abort: the host lets go of `holdAfterChart` early, and the play ends complete as soon as nothing is left to judge. `PlayerOptions.recordReplay` carries
 the host-declared settings the engine cannot know (selected gauge, lane-shuffle labels, DP flip, freeform
 `native` extras, and the source chart the fingerprints are computed from). The `#RANDOM` / `#SWITCH` draws come from
 `PlayerOptions.randomDraws`, which the engine needs anyway.
@@ -158,13 +192,11 @@ In the browser player:
 - Every play screen (`createPlayScene`) hands the recorded log to `on.finish(result, replay)`, and
   `waitForReplay()` waits for the log of a play that was left.
 - The player auto-downloads the log as `<title>-<timestamp>.bmplay.json` when the result scene mounts, controlled by
-  the **Auto-save play history** checkbox in the Options dialog's **Library & records** folder (OFF by default). Replay options are latched at chart start
+  the **Auto-save replays** checkbox in the Options dialog's **Library & records** folder (OFF by default). Replay options are latched at chart start
   and cannot change mid-play — the controls are disabled while a chart is playing, and the values in effect when
   the chart started govern that play.
-- The Options dialog's **Play options** folder covers the recorded play settings: auto play, gauge, Random 1P/2P, DP
-  flip, and auto scratch; the judge windows (LR2 / beatoraja / That-Which-Must-Not-Be-Named) are in its **Developer** folder. Where the LR2
-  select screen's PLAY OPTION panel has a counterpart, the two surfaces two-way sync. Its **Replay / ghost** subfolder picks what a
-  replay reproduces of the recorded view ([What the player saw](#what-the-player-saw)).
+
+The [Options dialog](./player-web.md#options-dialog) controls the play settings. [What the player saw](./replay-browser.md#what-the-player-saw) defines the view a replay can reproduce.
 
 ### Input without key releases
 
@@ -203,8 +235,8 @@ releases, and the live play, its replay and the simulators agree.
 
 ## Compat rulesets
 
-**The player has no judge logic of its own.** Every live play runs under one of three compat rulesets —
-`'lr2'` (the default), `'beatoraja'`, or `'____'` — selected with `PlayerOptions.judgeRuleset`, and the ruleset
+**The player has no judge logic of its own.** Every live play runs under one of four compat rulesets —
+`'lr2'` (the default), `'beatoraja'`, `'____'`, or `'plugout'` ([ADR 0044](./adr/0044-plugout-ruleset.md)) — selected with `PlayerOptions.judgeRuleset`, and the ruleset
 owns the whole decision surface:
 
 - judge windows, signed and per context (key vs scratch, note vs long-note end), including LR2's `#EXRANKxx`
@@ -227,211 +259,6 @@ and That-Which-Must-Not-Be-Named has no HAZARD so `DEATH` folds onto `EX-HARD`).
 
 `bms-player` exposes both as `--ruleset <lr2|beatoraja|____>` and `--gauge <GROOVE|EASY|HARD|DEATH>`.
 
-## Replay playback
-
-Dropping a `*.bmplay.json` file onto the browser player starts replay playback when the matching chart is loaded
-(dropping the chart folder together with the log works too — the charts load first). Matching prefers the chart-file
-hash (`chart.sha256` — stable across sessions and file moves), then the recorded `play.native.chartPath`, then a
-title + artist fallback for older logs. When no loaded chart matches, the select screen comes back and a dialog names the
-chart to load.
-
-Replay re-drives the recorded input stream deterministically inside the shared engine
-(`PlayerOptions.replayInputs`): every event fires at its exact chart-relative microsecond timestamp, live lane
-input is ignored (ESC / pause / hi-speed keep working), and no new replay is recorded for the run. Because the
-log stores the resolved note arrangement, the chart prepare re-applies the recorded channels onto the freshly
-loaded chart (`applyReplayArrangement`) instead of re-rolling RANDOM / MIRROR — so shuffled plays replay exactly.
-New MIRROR/RANDOM plays use the complete key set of the resolved mode, including empty lanes; scratch/wheel lanes stay fixed. Previously recorded subset arrangements still replay their stored channels and are never reinterpreted under the corrected shuffle.
-
-The chart's `#RANDOM` / `#SWITCH` lines are resolved with the log's `play.randomDraws`, so a replay plays the
-recorded branches: the browser's play session (`session/play/play-chart.ts`) resolves with them itself (`resolvePlayChart(chart,
-{ randomDraws })`), and a host that lets the engine resolve the source chart passes them as
-`PlayerOptions.randomDraws` next to `replayInputs`. Draws that were not drawn for the loaded chart, and a log without
-them whose new draw rolls differently from the recorded run, cannot be re-aligned: the replay fails with a status
-message instead of playing a mismatched chart. A replay plays on the gameplay family's own play screen, whichever
-skin family recorded the log.
-
-A replay of an ESC-aborted log stops where the play was aborted, as the re-simulations do: the host passes
-`play.abortedAtUs` as `PlayerOptions.replayAbortedAtUs`, and the engine judges up to that chart time and ends the replay
-there as an ESC, with the live play's result. A replay of an AUTO-played log passes its (empty) inputs as
-`replayInputs` too, so it is a replay as well: it follows `replayTempoChanges`, and neither kind of replay records the
-tempo it is re-driven at.
-
-Browser replays can seek through `PlayScene.seek(seconds)` or ← / → (five seconds). The same engine re-drives recorded inputs from the start, restoring judgments, gauge, combo, held long notes, the recorded tempo and the view at the target. A paused replay stays paused, and a replay aborted early cannot seek past its recorded end. Replay / ghost options still decide whether recorded tempo and view settings override the viewer's. Seeking produces no new replay. A course-stage or NONSTOP seek makes the entire course practice under [ADR 0016](./adr/0016-seek-play-loop-command.md); later stages do not record replays, and the course cannot export a replay.
-
-Manual seeking requires `PlaySceneOptions.allowSeek: 'practice'`. The first seek discards the replay recorder. Notes with heads before the target, including their long-note tails, are consumed without scoring; score, combo and gauge reset to their play-start values. A paused play stays paused. The result carries `practice: true` and cannot be saved as a best record, submitted to the Leaderboard or auto-saved as a replay. The player enables manual seeking for single charts and course stages. Course progression uses live stage outcomes independently of replay recording.
-
-A [PRACTICE](./play-options.md#practice) play records no replay either: the engine builds no log while `PlayerOptions.practice` is set, so it is never saved, auto-saved or sent. Its range still reaches the engine as chart times, `practice.startMs` and `practice.endMs` in milliseconds: the bars picked on the chart's score, from the first bar's line to the line closing the last (`chartScoreRangeTimes` in `@be-music/player-ui`), or the whole chart with no bars picked. Replays recorded before are unchanged: none of them holds a PRACTICE range.
-
-## Replay slots
-
-The browser player keeps up to four replays per chart and four per course in the browser, as beatoraja keeps four
-replay files per chart and per course (`PlayDataAccessor`). A result screen saves its play into a slot; the select
-screen replays one. A replay played from a slot plays as a dropped one does: no record is kept and nothing is ranked.
-
-```mermaid
-flowchart LR
-  result[Result screen] -->|"keys 1-4 · replay buttons · card · auto-save rules"| store[(IndexedDB)]
-  store -->|"slot states"| select[Select screen]
-  select -->|"V · replay buttons · card"| replay[Replay]
-```
-
-- **What a slot holds.** A chart's slots are keyed by its chart fingerprint (`chart.chartFingerprint`; `sha256:<file
-  hash>` for a chart that cannot be fingerprinted), a course's by its course fingerprint
-  (`computeCourseReplayFingerprint`; a NONSTOP course's includes its connections and placement). A slot holds the
-  replay as its `.bmplay.json` / `.bmcourse.json` text, gzip-compressed, in the `replaySlotData` store of the
-  `be-music-replays` IndexedDB database (apart from the player's `be-music` one), next to a small record in `replaySlots` (the title, the EX score and rate, the lamp, the size and
-  when it was saved), so the screens list the slots without reading a replay. Saving into a slot replaces what it held.
-- **Storage revision.** What `be-music-replays` holds is versioned by a storage revision, kept in its `meta` store and
-  separate from the IndexedDB version. The first use on a page brings the stored slots to the build's revision. It is
-  0 for now: revision 0 may change its shape without a migration, and a stored slot that no longer reads as a slot
-  record is cleared with its replay. From revision 1 on, each bump comes with a migration step from the revision before
-  it, and stored slots are migrated step by step; a slot a step drops, or one from a newer revision that does not read,
-  is cleared. A replay without its record is cleared either way.
-- **What can be saved.** As beatoraja's `MusicResult` / `CourseResult` save only a PLAY whose score may be kept: a live
-  play (not AUTO, not a replay, not practice) whose best record counts, or a course run (EXPERT, GRADE or NONSTOP) that
-  keeps a course record. A course stage's own result saves nothing: the course is saved as one run. A result that
-  cannot be saved still shows which slots hold a replay.
-- **Saving by hand.** Keys 1-4 on the result screen (beatoraja's `ControlKeys.NUM1`-`NUM4`), a beatoraja result skin's
-  replay buttons (19, 316-318) or the replay-slot card save into slot 1-4, once input is open and before the screen
-  starts to leave. Each slot takes one save per result (beatoraja's `ReplayStatus.SAVED`).
-- **Auto-save rules.** Options → Library & records → **Replay slots** gives each slot a rule, applied as the result
-  opens against the best record as it was before the play (beatoraja's `ReplayAutoSaveConstraint`): never, a better (or
-  equal) EX score, fewer (or as few) BP, a better (or equal) max combo, a better (or equal) clear lamp, any of these
-  better, or always. A first play counts as an update of each kind, as beatoraja reads an empty score. beatoraja ships
-  every slot as never; Be-Music saves by default so every slot keeps something by itself: slot 1 on a better EX score,
-  slot 2 on a better clear lamp, slot 3 on fewer BP and slot 4 always (the latest play). The "Auto-save play history"
-  download is separate and unchanged.
-- **Size limit.** Every slot shares a budget of 500 MB of compressed replays. A save past it removes the replays with
-  the lowest EX rate (EX score over its maximum) first, the older save first on a tie; a replay that would itself be the
-  lowest left over the budget is not saved, and the status line says so. A write the browser refuses (its quota,
-  blocked storage) leaves every slot as it was and says so too.
-- **Replaying.** On a beatoraja select skin the cursor picks the first slot holding a replay of the bar (beatoraja's
-  `RESET_REPLAY`); 4 or the 6th lane key (F) step to the next one (`NEXT_REPLAY`), the 7th lane key (V) replays it
-  (`REPLAY`, which plays the bar normally when no slot holds a replay), and the skin's replay buttons replay their own
-  slot. On the other families the replay-slot card lists the bar's replays with Replay, Download and Delete.
-- **Sounds.** Neither LR2 nor beatoraja plays a sound for saving a replay, so a save plays none. A beatoraja theme's
-  `resultclose` / `course_close` sound plays as a result starts to fade out ([player-web.md](./player-web.md#the-result-screen)).
-
-## Ghost
-
-A ghost is a recorded play shown beside the live one. The browser player builds several kinds side by side so they can
-be compared before one is chosen ([#418](https://github.com/nulltask/be-music/issues/418),
-[#934](https://github.com/nulltask/be-music/issues/934)). Each is a **source** (which replay it plays) and a
-**presentation** (how it shows), picked apart.
-
-```mermaid
-flowchart LR
-  subgraph sources[Sources]
-    best[(Own best)]
-    slot[(Replay slot)]
-    top[(Leaderboard top)]
-    file[(Replay file)]
-  end
-  sources --> timeline["Judgment timeline<br/>(re-simulated)"]
-  timeline --> field[Second playfield]
-  timeline --> pace[Pacemaker]
-  pace --> overlay[Lane overlay]
-  field --> builtin[Built-in view]
-  overlay --> builtin
-  pace --> skins[Every view]
-```
-
-- **Options.** Options → Play options → **Replay / ghost**:
-  - **Ghost** picks the source: OFF (default), OWN BEST, REPLAY SLOT 1-4, LEADERBOARD TOP or REPLAY FILE.
-  - **Ghost mode** picks the presentation: SECOND PLAYFIELD (default), PACEMAKER, or PACEMAKER + LANES.
-  - **Ghost status** says whether the bar under the cursor would show the pick, or why not: the mode needs the built-in
-    skins, the chart has no room for a second playfield, or the source keeps no replay of the chart.
-  - **Ghost replay file…** picks a `*.bmplay.json` for REPLAY FILE. It is held for the visit and is the ghost of the
-    chart it was recorded on only.
-
-  All are latched at song start and disabled during a play; Ghost and Ghost mode are also disabled on a course bar. A
-  replay, a course stage and a NONSTOP run show no ghost.
-
-- **Sources.**
-  - OWN BEST is the chart's replay slot with the highest EX score (the latest save among equals), which the default rule
-    of slot 1 keeps up to date.
-  - REPLAY SLOT n is that slot of the chart.
-  - LEADERBOARD TOP is the replay of the first run on the chart's Leaderboard ranking under the ruleset the play is
-    judged by (unassisted plays): `GET /api/v0/charts/:chartFingerprint/leaderboard?limit=1`, then
-    `GET /api/v0/scores/:id/replay`. A chart that is not on the Leaderboard, or a replay that cannot be read, plays
-    without a ghost.
-  - REPLAY FILE is the picked file, when it was recorded on the chart.
-
-  The play reads the source while it loads; the chart waits for it as it waits for the BGA.
-
-- **Timeline.** The replay is re-simulated under its own ruleset with the replay simulator
-  (`resolveReplayJudgmentTimeline` in `@be-music/player-engine/replay`), which lists every judgment in the order it
-  scores them, with its lane, its note, the time and the running combo, EX score and gauge. Nothing reads the clock or
-  draws a random number, so the same replay always gives the same ghost.
-- **Second playfield** (SECOND PLAYFIELD, built-in skins only). A single-play chart lays the live field and the ghost's
-  out as independent players around a central BGA (`twoPlayer: true`). Lane ordering uses 14 KEY for 7 KEY charts and 10 KEY for 5 KEY charts, with the ghost on the 2P lanes; ordinary double-play charts keep their shared field. The
-  ghost's notes are the replay's own (its lane options), and each goes at the second the simulation settled it. They
-  scroll with the live play's hi-speed, so a ghost note and the live note it matches reach their judgment lines
-  together. Its key beams and bombs follow its recorded presses and judgments, its judgment plate shows on the 2P side,
-  and its score, combo and gauge show as the second player's HUD. A seek back rewinds it; a jump ahead catches it up
-  without replaying the effects on the way. Only 5 / 7 KEY single-play charts without a battle mode have room for it.
-- **Pacemaker** (PACEMAKER, every family, any chart). The ghost has no field of its own. It stands where the replay
-  stood when it had judged as many notes as the live play has (empty POORs take none), as LR2 and beatoraja pace a
-  ghost, so it holds whatever hi-speed, covers or timing the live player uses. It is the play's target:
-  - the built-in skins' score graph shows it as the pacemaker bar, named after the source (MY GHOST, SLOT n, TOP, FILE),
-    and the TARGET difference counts against it;
-  - LR2 skins read it as numbers 151 (target EX now) and 153 (EX minus it) and bar graphs 14 / 15 (target now and over
-    the chart);
-  - beatoraja skins read numbers 121-123 (the target's EX score over the chart and its rate).
-- **Lane overlay** (PACEMAKER + LANES, built-in skins only, any chart). The pacemaker, with the replay's recorded key
-  presses drawn over the player's own lanes as hollow violet beams and its judgments as short bars in the judgment's
-  colour just above the judgment line. They are outlines and bars, never filled lanes, so the player's own beams, bombs
-  and notes stay readable. The replay's lanes are its own: a ghost recorded under another RANDOM presses other lanes
-  than the live notes ask for.
-- **What it never does.** The ghost plays no sound and takes no input (a touch on its lanes goes nowhere). The live
-  play's judging, best record, replay recording, replay slots and Leaderboard submission do not see it: the engine is
-  handed only the live notes.
-- **Open points.** The ghost is re-simulated under the replay's recorded ruleset, not the viewer's. The second playfield
-  ignores the recorded hi-speed and covers and shows no hold state for long notes. In touch mode the second playfield
-  uses the combined 10 / 14 KEY lane model; on stages with `twoPlayerSideInset`, its independent banks remain separated around the BGA. The pacemaker and the lane overlay keep the live layout.
-
-## What the player saw
-
-`play.view` and `play.viewChanges` record the view, apart from what was judged, in units every scene shares:
-
-| field          | unit                                                                                                                                                                                                                   |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hiSpeed`      | The scroll multiplier the scene drew with, on its own scale, HS-FIX folded in.                                                                                                                                         |
-| `hiSpeedScale` | The scale `hiSpeed` is on: `be-music` (built-in and LR2 scenes, `PIXELS_PER_BEAT × hiSpeed` design pixels per beat) or `beatoraja` (a lane is four beats at 1). Absent means the viewer's own.                         |
-| `hsFix`        | The HS-FIX mode the scene scrolled under (`OFF`, `MAXBPM`, …), on every scene.                                                                                                                                         |
-| `visibleMs`    | How long a note stays visible below SUDDEN+, in whole ms (the white number; × 0.6 is the green number), at the chart's main BPM (below) and without `#SCROLL` / `#SPEED`.                                              |
-| `covers`       | Per play side with lanes, fractions (0 to 1) of the lane height: `sudden` from the top, `hidden` just above the judgement line, `lift` how far the judgement line is raised. The built-in and LR2 scenes draw no LIFT. |
-
-The beatoraja scene's HIDDEN cover is a ratio of the lane above the lift, so it records `ratio × (1 − lift)`.
-
-**`visibleMs` and LIFT.** Every scene records `visibleMs` as beatoraja's white number, which leaves LIFT out. LR2 has no LIFT, so beatoraja decides it. beatoraja's [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L321-L330) scrolls a note across the lane above the lifted judgement line at a speed scaled to that lane (`rxhs = (hu - hl) * hispeed * speed`, `hl` raised by the lift), so LIFT shortens the lane but not the time a note takes to cross it. The white number it shows is `region * (1 - lanecover)` with `region = 240000 / nbpm / hispeed / speed / nscroll`, and no lift term (`currentduration`, lines 321-330). Its fixed hi-speed modes solve the same formula for the hi-speed (`resetHispeed`, [lines 206-210](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L206-L210)). The scene model computes it once: `resolveWhiteNumber` for a lane of a given length in beats at hi-speed 1 (four on the beatoraja scene, the lane laid out over `PIXELS_PER_BEAT` on the built-in and LR2 scenes), and `resolveHiSpeedForWhiteNumber` back. The built-in and LR2 scenes draw no LIFT, so their white number is the time a note shows.
-
-**The main BPM.** `visibleMs` is taken at the chart's main BPM, the BPM the most judged notes sit at (`resolveChartMainBPM` in `@be-music/chart-model`). It is beatoraja's: [`LaneRenderer.init`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/play/LaneRenderer.java#L130-L152) adds up [`TimeLine.getTotalNotes()`](https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/TimeLine.java#L139-L156) (taps, long-note heads, and CN / HCN tails; no mines or invisible notes) per timeline BPM, keeps the BPM with the most and pegs HS-FIX `MAINBPM` to it, and the white and green numbers at the main BPM read the same value ([`IntegerPropertyFactory`](https://github.com/exch-bms2/beatoraja/blob/c2ed5db1a46145ed10790c3872f717e95b59db9d/src/bms/player/beatoraja/skin/property/IntegerPropertyFactory.java#L541-L560), lines 541-560). LR2 defines no main BPM to follow (its skin numbers give only the highest, lowest and current BPM), so beatoraja decides it. Every family's play screen takes the one main BPM that HS-FIX `AVERAGE` pegs the hi-speed to, so the BPM a log's `visibleMs` is taken at no longer depends on the family that played it. Ties go to the BPM reached first, where beatoraja follows its hash-map order; a chart without notes takes its start BPM.
-
-**Older logs.** Before this rule the built-in and LR2 screens took the BPM held longest, and the beatoraja screen counted mines and every long-note end as well. On a chart where these disagree (BPM gimmicks, or a long stretch at another BPM with few notes), an older log's `visibleMs` differs from what a play records now, so replaying it on another hi-speed scale may scroll at a slightly different hi-speed. A replay on the scale it was recorded on draws the recorded `hiSpeed` and is unaffected, and so is the judging.
-
-Scenes record the view at a fixed precision (`roundReplayView`): `hiSpeed` on a 1/1000 grid, `visibleMs` in whole ms and each cover part to 4 decimals, so float noise (`0.09999999999999999` for a cover of 0.1) neither lands in the log nor counts as a change.
-
-**Selected play options.** `play.options` records the complete selected source-option snapshot, with effective start restrictions applied (for example an AUTO start or a course that disables RANDOM). `play.optionChanges` holds `{ timeUs, values }` patches in chart microseconds; multiple edits at one timestamp keep their order. Primitive source values and unknown source-specific names round-trip without coercion. `resolveReplayOptionsAt` reconstructs the snapshot at the playhead, including after backward seeks. Browser replays restore the recorded options, and live hi-speed edits are recorded alongside the effective `viewChanges`. Dynamic view changes are retained on every changed frame. An option snapshot is not an instruction to execute arbitrary names: typed chart/engine fields and the view/tempo timelines remain authoritative for playback. Score acceptance, updates and ranking policy are separate Leaderboard concerns. The automatic judge timing's `judgeTimingAutoAdjust` is a mode (`"OFF"`, `"BEATORAJA"`, `"LR2-ON"`, `"LR2-SILENT"`); replays recorded before the modes hold a boolean, which readers take as `"BEATORAJA"` (`true`) or `"OFF"` (`resolveJudgeTimingAutoAdjust`), and its automatic steps sit in `play.optionChanges` as `judgeTimingMs` (see [Play options](play-options.md#judge-timing-and-automatic-adjustment)).
-
-**Control buttons.** `play.controlInputs` lists the presses and releases of the control buttons that are not lanes, START and SELECT, as `{ seq, timeUs, action: 'down' | 'up', button, code }` on the chart clock of `inputs`: `button` is the logical button as the host names it (`'1P-start'`, `'2P-select'`) and `code` the physical key (`KeyboardEvent.code`). It is diagnostic only: what a button did is recorded where it lands (`viewChanges`, the play's end), and simulators don't read it. A replay played back records none.
-
-**Recording.** Every play screen (built-in, LR2, beatoraja) passes the view at the start as `recordReplay.view` and samples the view every frame. `createReplayViewCoalescer` turns the samples into changes: only the fields that changed (`diffReplayView`, the full cover of a side whose cover changed), on every rendered frame where a value changed (`minIntervalMs: 0`), so rapid edits remain reproducible. The scene sends each change as a `{ kind: 'view', change }` input command, and the engine stamps it with the chart time it drains the command at. On the built-in and LR2 scenes the hi-speed changes during a play (the arrow keys, a host's `setHiSpeed`); the covers are fixed per play, and the first change carries `visibleMs` once the lanes are laid out. On the beatoraja scene the hi-speed, lane cover, lift and HIDDEN cover all change (the arrow keys, PageUp / PageDown, the wheel, Home / End, H / J / K where no lane of the chart takes them, and the skin's cover buttons 330-332), from the play options' covers at the start.
-
-**Replay.** A replay shows the recorded view along the playhead: `resolveReplayViewAt` at the playhead's chart time, then `resolveReplayView` against the viewer's own settings with the viewer's `ReplayPlaybackOptions` (`tempo`, `hiSpeed`, `covers` for SUDDEN+ / HIDDEN+, `lift`; all on by default). What a toggle leaves off stays the viewer's own. The hi-speed follows `resolveReplayHiSpeed`:
-
-```mermaid
-flowchart TD
-  toggle{hiSpeed on?} -->|no| own[Viewer's own]
-  toggle -->|yes| scale{Same scale?}
-  scale -->|yes| recorded[Recorded hiSpeed]
-  scale -->|no| visible{visibleMs recorded?}
-  visible -->|yes| match[Hi-speed showing visibleMs]
-  visible -->|no| recorded
-```
-
-On the same scale (or a log without `hiSpeedScale`) the replay draws the recorded hi-speed as it was drawn, HS-FIX included, and does not apply the viewer's HS-FIX on top. Across scales a hi-speed number means another speed, so the replay works out the hi-speed that shows the recorded visible time with its own lane and the SUDDEN+ it shows (`resolveHiSpeedForWhiteNumber`, over the built-in and LR2 lanes laid out or the beatoraja lane of four beats). Replays run on every family's play screen. The beatoraja one draws the LIFT, so it shows the recorded one (with HIDDEN+ set over the lane above it, so the cover draws the recorded fraction of the lane); the built-in and LR2 screens draw none, so the `lift` toggle has nothing to show there; the `tempo` toggle governs the recorded tempo (`play.tempo`, `play.tempoChanges`). A [ghost](#ghost) does not read the recorded view: its field scrolls with the live play's hi-speed.
-
 ## Re-deriving LR2 / beatoraja / That-Which-Must-Not-Be-Named results
 
 `simulateReplay(replay, { ruleset })` (from `@be-music/player-engine/replay`) replays the input stream through one
@@ -447,6 +274,7 @@ long-note semantics, empty-POOR behavior, and gauge tables — the constants are
 | note selection          | Lowest + multi-BAD chain                          | Combo (default; duration / lowest / score selectable)       | Lowest                                                                 |
 | long notes              | all LN (deferred single judgment)                 | per-note LN / CN / HCN                                      | all CN (HCN gauge when mode 3)                                         |
 | empty POOR window       | early-only 1000 ms                                | late 150 / early 500 ms (7K)                                | unmeasured — beatoraja window used                                     |
+| CN release window       | —                                                 | per-mode long-note end table                                | only PGREAT inside ±200 ms, BAD to +220 / −280 ms (bounds provisional) |
 | empty POOR breaks combo | no                                                | 5K / PMS only                                               | no                                                                     |
 | money score             | `(4·PG + 2·GR + GD) × 50000 / notes`              | —                                                           | — (abolished in BISTROVER)                                             |
 | gauges                  | lr2oraja LR2 tables (death 2 %, guts < 32 % ×0.6) | beatoraja native tables                                     | https://iidx.org tables (a-value recovery, ≤ 30 % half damage on HARD) |
@@ -475,12 +303,17 @@ flowchart TD
 - **not-simulated**, with a reason (`findReplayNotSimulatedReason`): `gauge` when the bare gauge is not one the target
   defines (`P-ATTACK` under beatoraja, `EX-HARD` or `ASSIST-EASY` under LR2, `DEATH` under ???? outside a course); it is
   never mapped to a lookalike. `custom-judge` when the replay used CUSTOM JUDGE, which stays beatoraja's. Gauge
-  auto-shift is no reason: it is carried, along the target's own gauge ladder ([Play options](./play-options.md#gauge-auto-shift)).
-  The played ruleset always simulates its own gauge.
+  auto-shift is no reason: it is carried, along the target's own gauge ladder ([Play options](./play-options-modifiers.md#gauge-auto-shift)).
+  Older replays that recorded a bare `DEATH` as EX-HARD under That-Which-Must-Not-Be-Named report `gauge` under the
+  played ruleset too. When another ruleset can read the gauge, the simulator uses the old EX-HARD curve to find where
+  the recording stopped on failure. Each target uses a source-qualified gauge (`play.gauge: "lr2:P-ATTACK"`) with its
+  own ladder and course gauges, and reports the source in `gauge.source` ([ADR 0019](./adr/0019-source-qualified-option-values.md)).
 - **truncated**: the play ended where its survival gauge emptied (`play.endOnFailure`), and the target's gauge would have
   survived that point. The run is judged only up to it (`stoppedAtUs`, where the played ruleset's gauge emptied): no input
   is synthesized and no later note is missed. A course is truncated the same way when its played run stopped at a failed
-  stage the target's gauge survives. A truncated result is not ranked.
+  stage the target's gauge survives, and when it stopped at a stage given up that the target's course gauge goes on past
+  (LR2's, [Courses — Ending on failure](./course.md#ending-on-failure)). A course re-simulated under a target whose gauge
+  ends the run there stops at that stage. A truncated result is not ranked.
 - **simulated**: everything else, including a target whose gauge empties by the same point.
 
 `SimulateReplayOptions.onFailure` hears the chart time of the judgment that first empties a survival gauge. Tracked in [#933](https://github.com/nulltask/be-music/issues/933).
@@ -491,7 +324,8 @@ flowchart TD
   missed-POOR threshold for LN heads, the lr2oraja behavior is used. The DEATH gauge follows LR2 itself (no recovery,
   an empty POOR costs nothing), not lr2oraja's beatoraja-derived `HAZARD_LR2` table.
 - That-Which-Must-Not-Be-Named internals are not public. The judge windows, gauge tables, and DJ LEVEL boundaries are current community
-  consensus; the empty-POOR window and CN release windows are unmeasured and use beatoraja's values as stand-ins,
+  consensus [C]; the empty-POOR window and CN release windows are unmeasured and provisional: they borrow beatoraja's
+  miss window and SEVENKEYS long-note end windows, which are evidence of beatoraja [V], not of this game ([#1189](https://github.com/nulltask/be-music/issues/1189)),
   and the HCN gauge tick uses a fixed 200 ms interval instead of That-Which-Must-Not-Be-Named's measured 16th-note interval. Expect
   close — not bit-exact — reproduction.
 - beatoraja uses separate FIVEKEYS, SEVENKEYS, PMS and KEYBOARD gauge tables and mode-specific default TOTAL. Engine frames carry raw gauge bounds, including PMS maximum 120; replay `gauge.final` and result gauges are percentages of that maximum. PMS's one-empty-POOR-per-note rule remains unmodeled.
@@ -545,7 +379,7 @@ So `extractCourseStage` still gives a single-chart log that replays on its own; 
 
 `checkCourseReplayEligibility` checks a NONSTOP run on its stitched play: it must pass the single-play check (auto play is refused; an ESC abort is a failed run), carry `play.course.kind: 'nonstop'`, and its `nonstop.stages` must cover every stage of the course. Every stage must still name its chart. The result carries the stitched play's fingerprints as `nonstop`, and `stages` is empty: the stages were not played on their own, so a verifier rebuilds them from their charts (`prepareNonstopCourse` with the recorded draws, the course's constraints and the recorded connections, placement and stitching rules, then `resolveNonstopRun`; see [Courses and dan certification](./course.md#nonstop-courses) and [Leaderboard design](./leaderboard.md#61-course-rankings)).
 
-Mixed bmson NONSTOP replays also accept `table: "bmson"` (raw `judge_rank`) and `table: "bms-exrank"` (raw `#DEFEXRANK`) in `chart.judgeRank.stageRanks`, with an initial entry at time zero. LR2 and beatoraja apply these stage windows. NONSTOP replays from stitching rule version 4 also carry `table: "bms-exrank-change"`, a stage's own `#EXRANKxx` change (channel `A0`, `#DEFEXRANK` units), which only LR2 applies, as for a chart alone. Optional `chart.totalUnit` selects `absolute` or `percent` for TOTAL; ordinary replays continue to derive the unit from `sourceFormat`.
+Mixed bmson NONSTOP replays also accept `table: "bmson"` (raw `judge_rank`) and `table: "bms-exrank"` (raw `#DEFEXRANK`) in `chart.judgeRank.stageRanks`, with an initial entry at time zero. LR2 and beatoraja apply these stage windows. NONSTOP replays from stitching rule version 4 also carry `table: "bms-exrank-change"`, a stage's own `#EXRANKxx` change (channel `A0`, `#DEFEXRANK` units), which only LR2 applies, as for a chart alone. Optional `chart.totalUnit` selects `absolute` or `percent` for TOTAL; ordinary replays continue to derive the unit from `sourceFormat`. `chart.sourceFormat` is `bms`, `bmson` or `lrx`; an LRX chart reads its rank and TOTAL as a BMS chart does. A note marked `uncounted: true` is an LRX chain note that starts its lane: every ruleset judges it, and only `plugout` leaves it out of the note count, as plugout does.
 
 ### Playing a course replay back
 
@@ -567,11 +401,11 @@ flowchart TD
 
 - **Every stage chart must be loaded.** Each stage is matched against the library by the chart it names (`listCourseReplayStageCharts`, `matchesCourseReplayStageChart`): SHA-256 when it names one, else MD5, else the chart fingerprint. A stage reached or not counts the same, as LR2's `coursePlayable` and beatoraja's `MusicSelector` (433-437) refuse a course replay with a stage chart missing. When one is missing, a dialog lists them and nothing starts.
 - **The stages play in order**, each from its own replay with the state it carried in (`play.course.carryIn`), through the live course flow: the course's decide screen, then each stage's result, then the course result. LR2 skips a stage result only for AUTO (`Main.cpp` M1280-M1310, M1376-M1379), not for a replay, and beatoraja shows each stage's `MusicResult` (179-212) before its `CourseResult`. An AUTO-played stage's result is skipped as a live AUTO run skips it.
-- **The run stops where the recorded run stopped** (`planCourseReplayPlayback`): after the first stage given up (`play.aborted`, which goes straight on to the course result as the live run did) or failed (its recorded gauge, by `isCourseStageFailed`), else after the last stage played. The course result is the recorded one (`results.native`).
+- **The run stops where the recorded run stopped** (`planCourseReplayPlayback`): after the first stage given up (`play.aborted`) that the recorded run ended at, or failed (its recorded gauge, by `isCourseStageFailed`), else after the last stage played. A stage given up shows its result as FAILED, or none, as the live run did ([course.md](course.md#ending-on-failure)). The course result is the recorded one (`results.native`).
 - **A NONSTOP run plays as one chart**, as LR2 replays a NONSTOP course (`LR2f.cpp` L18116-L18117, `Main.cpp` M806): the course is stitched again as recorded (`nonstop.placement`, `nonstop.stitch` and each stage's `randomDraws`) and `nonstop.replay` plays on it.
 - **Nothing is kept.** A course replay updates no stage or course best, lamp, trophy or play count, saves no replay and submits nothing to the Leaderboard, as LR2's course-result save returns early for a replay (`LR2f.cpp` L9599). beatoraja's `CourseResult.updateScoreDatabase` writes with no mode guard, so a course replay there bumps play and clear counts; Be-Music does not follow it.
 - **The results say they are a replay.** A replay's play and every result it leads to (each stage's, the course's or the NONSTOP run's) carry `PlayResult.fromReplay`, and the LR2 skin lights REPLAY PLAYING (op 84) instead of REPLAY OFF (op 82) on the play and result screens, as LR2 keeps op 84 on for the whole replay (`LR2f.cpp` L4740-L4741).
-- ESC during the playback stops it and goes back to the select screen, as ESC stops a dropped replay; F5 or R on a NONSTOP replay plays it again.
+- ESC during the playback stops it and goes back to the select screen, as ESC stops a dropped replay; F5 or R on a NONSTOP replay plays it again. Once every note of the stage (of the stitched chart, on a NONSTOP replay) is judged, ESC finishes the stage instead, as it does in a live play: the run goes on to its next stage or its result.
 
 ## CLI
 
@@ -610,15 +444,16 @@ Only the current revision of each ruleset is implemented. A log whose cached `re
 (the ids are kept as written), and re-simulating or replaying it applies the current rules; there is no compatibility path that
 replays the old ones, so its numbers can change. The cache is never authoritative, so such entries are simply stale.
 
-| Revision                         | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lr2/0`, `beatoraja/0`, `____/0` | Development revision (see above). Since `/1`, mines follow the ruleset's rule: LR2beta3 now uses strict ahead-only GREAT on key-down, held crossing and one POOR/BP per mine; the provisional `____` model keeps symmetric PGREAT and held-window entry; under `beatoraja` only a key down as the mine crosses detonates it (engine). Negative-BPM charts follow LR2's reverse scroll: inputs past the reversal are judged on the mirrored clock, mines there stay frozen, and a run left with notes unjudged is FAILED. Under `lr2` the DEATH gauge follows LR2: no recovery, and an empty POOR costs nothing. |
+- **`lr2/0`, `beatoraja/0`, `____/0`** Development revision (see above). Since `/1`, mines follow the ruleset's rule: LR2beta3 now uses strict ahead-only GREAT on key-down, held crossing and one POOR/BP per mine; `____`, which has no mines, imports LR2's policy on its own GREAT window (it replaced a provisional symmetric-PGREAT, gauge-only model, whose results are not kept); under `beatoraja` only a key down as the mine crosses detonates it (engine). Negative-BPM charts follow LR2's reverse scroll: inputs past the reversal are judged on the mirrored clock, mines there stay frozen, and a run left with notes unjudged is FAILED. Under `lr2` the DEATH gauge follows LR2: no recovery, and an empty POOR costs nothing. Under `lr2`, a BMS chart's `#DEFEXRANK` (`chart.judgeRank.sourceExRank`) and `#EXRANKxx` scale the `#RANK 2` windows instead of being interpolated between LR2's ranks; `chart.judgeRank.percent` is no longer what those charts are judged by.
+- **`plugout/0`** First revision: plugout4 -ARCADE EDITION-'s windows, charge long notes, gauges, course gauges, score and lamps ([ADR 0044](./adr/0044-plugout-ruleset.md)).
 
 ## Effective chart display options
 
 Optional `chart.chartOptions` records the effective display program accepted during the original play. Version 1 has `{ version: 1, initial: { hiSpeed? }, cues: [{ timeUs, state: { hiSpeed? } }] }`. Each cue is a complete authored state, and an empty state releases compulsory speed to the saved user view. Times are nondecreasing nonnegative safe integer microseconds. HI-SPEED must be finite and within 0.25–100; unknown profile versions or state fields are rejected. Version 2 adds the optional state fields `hidden`, `changeHS`, `crazySize` and `crazyWave`, each one of the IDs listed in [ADR 0032](./adr/0032-chart-authored-visual-families.md) (for example `{ hidden: 'SUDDEN', changeHS: 'ACCEL' }`). A version-1 program carrying any of them is rejected, so an older recording never activates a family implemented later. Version 3 adds `hidden: 'M-SUDDEN'`, the `crazyWave` values `YWAVE`, `YWAVE2`, `XYWAVE`, `XYWAVE2`, `3DWAVE` and `3DWAVE2`, and the fields `crazyColor`, `crazySpin`, `crazyClone`, `crazyLine`, `crazyJudge`, `crazyDark` and `crazyReverse` ([ADR 0036](./adr/0036-chart-authored-skin-level-options.md)); a version-2 program carrying any of them is rejected the same way. New recordings write version 3. The height of the SUDDEN+ cover the player moves under M-SUDDEN is recorded in `play.view` like any cover change.
 
 Optional `chart.chartPlayOptions` records the chart-authored gameplay options the play ran with: `{ version: 1, options: { random?, judge?, hellJudge?, addMine?, notes? } }`, with `random` one of `MIRROR`, `RANDOM`, `RANDOM+`, `ALL`, `ALL+`, `judge` `GOOD2BAD` or `GREAT2BAD`, and `notes` `DOUBLE`, `COPY` or `DBLCOPY`. It holds only what took effect: a course stage leaves out a NOTES COPY, so its program has no `notes` (or `DOUBLE` for a DBLCOPY). A copied chart's `chart.laneMode` is its double-play mode, and playback converts the notes again with the recorded `notes` ([ADR 0035](./adr/0035-chart-authored-notes-options.md)). The arranged and mined notes are already in `chart.notes`; simulations apply the recorded judge modifiers and never recompile the source, so a replay without the field keeps its original judgments. Unknown versions, fields or values are rejected. See [ADR 0033](./adr/0033-chart-authored-gameplay-options.md).
+
+Optional `play.playerChartPlayOptions` names which of those options the player chose rather than the chart's `#OPTION`: `{ judge?, hellJudge?, notes? }`, with `judge` `GOOD2BAD` or `GREAT2BAD`, `hellJudge` `true` and `notes` `DOUBLE`, `COPY` or `DBLCOPY`. Each must equal the value in `chart.chartPlayOptions`. A player's COPY or DBLCOPY there makes the play `no-save` ([play-options.md](./play-options.md), [#1243](https://github.com/nulltask/be-music/issues/1243)).
 
 Hosts pass this program as `PlayerOptions.chartOptionProgram` when replaying. Browser replay supplies an empty program for older records without this field, preserving their original behavior. Source declarations are not recompiled into an existing effective profile. `play.options`, `play.view` and their changes retain the underlying user speed, while the chart profile reproduces the compulsory display override. This avoids writing authored values into saved user preferences and restores the exact user view when the override clears. Simulations ignore these visual operations; score, input replay, fingerprints and eligibility are unchanged. See [ADR 0026](./adr/0026-chart-authored-display-options.md). NONSTOP records the stitched effective program; a cut-out stage log retains only its ownership window, rebased by its stage offset without applying FIT a second time. It seeds the played start and clears at a finite stage end. The trimmed unplayed prefix has no invented authored state.
 

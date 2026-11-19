@@ -16,7 +16,7 @@ export function resolveShownChartMainBPM(chart: BeMusicJSON, chartPath?: string)
   let mainBPM: number | undefined;
   try {
     mainBPM = resolveChartMainBPM(
-      resolveChart(chart, { inferBmsLNTypeWhenMissing: true, ...(chartPath !== undefined ? { chartPath } : {}) }),
+      resolveChart(chart, { inferBmsLNTypeWhenMissing: false, ...(chartPath !== undefined ? { chartPath } : {}) }),
     );
   } catch {
     mainBPM = undefined;

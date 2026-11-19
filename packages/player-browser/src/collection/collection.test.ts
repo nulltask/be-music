@@ -14,6 +14,10 @@ import { parseChart } from '@be-music/chart-parser';
 import { preparePlaybackChart } from '@be-music/player-engine';
 import { DeferredDroppedFile } from './dropped-file.ts';
 import type { BrowserAssetEntry, BrowserAssetSource, LoadProgress } from './types.ts';
+import type { ParseChartTaskResult } from '../compute/tasks.ts';
+import type { ParsedChartCache } from './parsed-chart-cache.ts';
+import { computeSHA256Hex, seededChartFileHashes } from './chart-hash.ts';
+import { md5HexOfBytes } from './md5.ts';
 
 /**
  * The drag-drop loader fires `LoadProgress` events as it walks the `reading` and `parsing` phases so the host UI can
@@ -77,6 +81,160 @@ describe('loadChartCollectionFromFiles with deferred drop handles', () => {
     expect(collection.errors).toEqual([]);
     expect(collection.charts.map((chartEntry) => chartEntry.title)).toEqual(charts.map((_, index) => `Song ${index}`));
     expect(opened).not.toContain('Pack/S00/kick.wav');
+  });
+});
+
+describe('loadChartCollectionFromFiles with the chart keys a host kept', () => {
+  /** A cache in memory that notes how it is read, and a folder's files that note which are opened. */
+  function fixture() {
+    const entries = new Map<string, ParseChartTaskResult>();
+    const lookups: string[][] = [];
+    const cache: ParsedChartCache = {
+      get: async (key) => entries.get(key),
+      getMany: async (keys) => {
+        lookups.push([...keys]);
+        return keys.map((key) => entries.get(key));
+      },
+      set: async (key, value) => {
+        entries.set(key, structuredClone(value));
+      },
+    };
+    const opened: string[] = [];
+    const file = (path: string, contents: string) =>
+      new DeferredDroppedFile(
+        {
+          name: path.split('/').at(-1)!,
+          file: (resolve) => {
+            opened.push(path);
+            resolve(new File([contents], path.split('/').at(-1)!));
+          },
+        },
+        path,
+      );
+    const chart = (title: string) => MINIMAL_BMS.replace('Test', title);
+    const files = () => [
+      file('Pack/a.bms', chart('Alpha')),
+      file('Pack/b.bms', chart('Beta')),
+      file('Pack/kick.wav', ''),
+    ];
+    return { cache, entries, lookups, opened, files };
+  }
+
+  test('reports the key of every chart file it reads', async () => {
+    const { cache, entries, files } = fixture();
+    const learned = new Map<string, string>();
+    const collection = await loadChartCollectionFromFiles(files(), {
+      parsedChartCache: cache,
+      chartKeys: { known: () => undefined, learned: (path, key) => learned.set(path, key) },
+    });
+    expect(collection.charts.map((chartEntry) => chartEntry.title)).toEqual(['Alpha', 'Beta']);
+    expect([...learned.keys()]).toEqual(['Pack/a.bms', 'Pack/b.bms']);
+    expect([...learned.values()].sort()).toEqual([...entries.keys()].sort());
+  });
+
+  test('lists a chart whose key the host kept from the cache, in one lookup, without opening its file', async () => {
+    const { cache, lookups, opened, files } = fixture();
+    const keys = new Map<string, string>();
+    const book = {
+      known: (path: string) => keys.get(path),
+      learned: (path: string, key: string) => keys.set(path, key),
+    };
+    const first = await loadChartCollectionFromFiles(files(), { parsedChartCache: cache, chartKeys: book });
+    expect(opened.sort()).toEqual(['Pack/a.bms', 'Pack/b.bms']);
+    opened.length = 0;
+    const second = await loadChartCollectionFromFiles(files(), { parsedChartCache: cache, chartKeys: book });
+    expect(opened).toEqual([]);
+    expect(lookups).toEqual([[keys.get('Pack/a.bms'), keys.get('Pack/b.bms')]]);
+    expect(second.errors).toEqual([]);
+    expect(second.charts.map((chartEntry) => [chartEntry.id, chartEntry.title, chartEntry.totalNotes])).toEqual(
+      first.charts.map((chartEntry) => [chartEntry.id, chartEntry.title, chartEntry.totalNotes]),
+    );
+    // The chart keeps its notes: they unpack from the cached columns.
+    expect(second.charts[0]!.chart.events.length).toBe(first.charts[0]!.chart.events.length);
+  });
+
+  test('reports cache misses without opening their chart files during cache-only loading', async () => {
+    const { cache, entries, opened, files } = fixture();
+    const keys = new Map<string, string>();
+    const chartKeys = {
+      known: (path: string) => keys.get(path),
+      learned: (path: string, key: string) => keys.set(path, key),
+    };
+    await loadChartCollectionFromFiles(files(), { parsedChartCache: cache, chartKeys });
+    entries.delete(keys.get('Pack/a.bms')!);
+    opened.length = 0;
+    const miss = vi.fn();
+    const cached = await loadChartCollectionFromFiles(files(), {
+      parsedChartCache: cache,
+      chartKeys,
+      onChartCacheMiss: miss,
+    });
+    expect(miss).toHaveBeenCalledExactlyOnceWith('Pack/a.bms');
+    expect(opened).toEqual([]);
+    expect(cached.charts.map(({ title }) => title)).toEqual(['Beta']);
+  });
+
+  test('reads a chart the cache no longer has, and keeps the path order', async () => {
+    const { cache, entries, opened, files } = fixture();
+    const keys = new Map<string, string>();
+    const book = {
+      known: (path: string) => keys.get(path),
+      learned: (path: string, key: string) => keys.set(path, key),
+    };
+    await loadChartCollectionFromFiles(files(), { parsedChartCache: cache, chartKeys: book });
+    entries.delete(keys.get('Pack/a.bms')!);
+    opened.length = 0;
+    const collection = await loadChartCollectionFromFiles(files(), { parsedChartCache: cache, chartKeys: book });
+    expect(opened).toEqual(['Pack/a.bms']);
+    expect(collection.charts.map((chartEntry) => chartEntry.title)).toEqual(['Alpha', 'Beta']);
+    expect(entries.has(keys.get('Pack/a.bms')!)).toBe(true);
+  });
+
+  test('lists the same charts from the parses it kept as from the files', async () => {
+    const { cache, entries, files } = fixture();
+    const first = await loadChartCollectionFromFiles(files(), { parsedChartCache: cache });
+    expect(entries.size).toBe(2);
+    const second = await loadChartCollectionFromFiles(files(), { parsedChartCache: cache });
+    const read = (collection: typeof first) =>
+      collection.charts.map((chartEntry) => [chartEntry.title, chartEntry.totalNotes, chartEntry.chart.events.length]);
+    expect(read(second)).toEqual(read(first));
+    expect(second.charts[0]!.chart.resources).toEqual(first.charts[0]!.chart.resources);
+  });
+
+  test("keeps each chart's file hashes with it, read from the file or come back with the cached parse", async () => {
+    const { cache, opened, files } = fixture();
+    const keys = new Map<string, string>();
+    const book = {
+      known: (path: string) => keys.get(path),
+      learned: (path: string, key: string) => keys.set(path, key),
+    };
+    const expected = {
+      sha256: await computeSHA256Hex(new TextEncoder().encode(MINIMAL_BMS.replace('Test', 'Alpha'))),
+      md5: md5HexOfBytes(new TextEncoder().encode(MINIMAL_BMS.replace('Test', 'Alpha'))),
+    };
+    const first = await loadChartCollectionFromFiles(files(), { parsedChartCache: cache, chartKeys: book });
+    expect(seededChartFileHashes(first.charts[0]!.chart)).toEqual(expected);
+    opened.length = 0;
+    const second = await loadChartCollectionFromFiles(files(), { parsedChartCache: cache, chartKeys: book });
+    expect(opened).toEqual([]);
+    expect(seededChartFileHashes(second.charts[0]!.chart)).toEqual(expected);
+    // Without a cache no file is hashed, and no hash is kept.
+    const plain = await loadChartCollectionFromFiles(files());
+    expect(seededChartFileHashes(plain.charts[0]!.chart)).toBeUndefined();
+  });
+
+  test('takes no key without a cache, nor for a chart in an archive', async () => {
+    const { cache, opened, files } = fixture();
+    const known = vi.fn(() => 'stale');
+    await loadChartCollectionFromFiles(files(), { chartKeys: { known, learned: () => {} } });
+    expect(known).not.toHaveBeenCalled();
+    expect(opened.sort()).toEqual(['Pack/a.bms', 'Pack/b.bms']);
+    const collection = await loadChartCollectionFromFiles([makeZipFile('Pack.zip', { 'Song/main.bms': MINIMAL_BMS })], {
+      parsedChartCache: cache,
+      chartKeys: { known, learned: () => {} },
+    });
+    expect(known).not.toHaveBeenCalled();
+    expect(collection.charts.map((chartEntry) => chartEntry.title)).toEqual(['Test']);
   });
 });
 
@@ -216,6 +374,42 @@ describe('loadChartCollectionFromFiles progress events', () => {
 });
 
 describe('BrowserChartCollectionStore', () => {
+  test('keeps the previous collection when a background read is cancelled', async () => {
+    const store = new BrowserChartCollectionStore();
+    const original = await store.appendFromFiles([makeFile('Pack/a.bms', MINIMAL_BMS)]);
+    const controller = new AbortController();
+    const file = new DeferredDroppedFile(
+      {
+        name: 'b.bms',
+        file: (resolve) => {
+          controller.abort();
+          resolve(new File([MINIMAL_BMS], 'b.bms'));
+        },
+      },
+      'Pack/b.bms',
+    );
+    await expect(
+      store.appendFromFiles([file], { replaceSourceIds: [original.sources[0]!.id], signal: controller.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(store.collection).toBe(original);
+  });
+
+  test('replaces one source without changing its chart IDs or touching other sources', async () => {
+    const store = new BrowserChartCollectionStore();
+    const initial = await store.appendFromFiles([makeFile('Pack/a.bms', MINIMAL_BMS)]);
+    const original = initial.charts[0]!;
+    const separate = await store.appendFromFiles([makeFile('Else/a.bms', MINIMAL_BMS)]);
+    const result = await store.appendFromFiles(
+      [makeFile('Pack/a.bms', MINIMAL_BMS.replace('Test', 'Updated')), makeFile('Pack/b.bms', MINIMAL_BMS)],
+      { replaceSourceIds: [original.sourceId] },
+    );
+    expect(result.charts).toHaveLength(3);
+    expect(result.charts.find(({ id }) => id === original.id)?.title).toBe('Updated');
+    expect(result.charts.find(({ id }) => id === separate.charts[1]?.id)).toBe(separate.charts[1]);
+    const removed = await store.appendFromFiles([], { replaceSourceIds: [original.sourceId] });
+    expect(removed.charts).toEqual([separate.charts[1]]);
+  });
+
   test('appendFromFiles accumulates drops with collision-safe source and song ids', async () => {
     const store = new BrowserChartCollectionStore();
 
@@ -293,8 +487,8 @@ describe('resolveChartImageAsset', () => {
     expect(entry).toBe(PNG_BYTES);
   });
 
-  test('prefers a `.webp` over every other image format', () => {
-    // A pack re-encoded to WebP to save space may still carry the original PNG / BMP next to it; the WebP wins.
+  test('returns the image the chart names, even with same-stem files of other formats beside it', () => {
+    // A same-stem file is not guaranteed to be the same picture: the named file wins, as LR2 looks it up.
     const WEBP_BYTES = new Uint8Array([0x52, 0x49, 0x46, 0x46]);
     const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
     const BMP_BYTES = new Uint8Array([0x42, 0x4d]);
@@ -303,8 +497,34 @@ describe('resolveChartImageAsset', () => {
       'Song/_logo.png': PNG_BYTES,
       'Song/_logo.bmp': BMP_BYTES,
     });
+    expect(resolveChartImageAsset(source, 'Song/main.bms', '_logo.bmp')).toBe(BMP_BYTES);
+    expect(resolveChartImageAsset(source, 'Song/main.bms', '_logo.png')).toBe(PNG_BYTES);
+    expect(resolveChartImageAsset(source, 'Song/main.bms', '_LOGO.PNG')).toBe(PNG_BYTES);
+    expect(resolveChartBGAAsset(source, 'Song/main.bms', '_logo.bmp')).toMatchObject({ path: '_logo.bmp' });
+  });
+
+  test('a missing named image falls back to `.webp` first, then the other formats', () => {
+    // A pack re-encoded to WebP to save space resolves through the fallback; the order is Be-Music's own.
+    const WEBP_BYTES = new Uint8Array([0x52, 0x49, 0x46, 0x46]);
+    const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const JPG_BYTES = new Uint8Array([0xff, 0xd8]);
+    const source = makeAssetSource({ 'Song/_logo.webp': WEBP_BYTES, 'Song/_logo.png': PNG_BYTES });
     expect(resolveChartImageAsset(source, 'Song/main.bms', '_logo.bmp')).toBe(WEBP_BYTES);
-    expect(resolveChartImageAsset(source, 'Song/main.bms', '_logo.png')).toBe(WEBP_BYTES);
+    expect(resolveChartBGAAsset(source, 'Song/main.bms', '_logo.bmp')).toMatchObject({ path: '_logo.webp' });
+    const withoutWebP = makeAssetSource({ 'Song/_logo.jpg': JPG_BYTES, 'Song/_logo.png': PNG_BYTES });
+    expect(resolveChartImageAsset(withoutWebP, 'Song/main.bms', '_logo.bmp')).toBe(PNG_BYTES);
+    expect(resolveChartImageAsset(withoutWebP, 'Song/main.bms', '_logo.gif')).toBe(PNG_BYTES);
+  });
+
+  test('the chart folder is searched under every extension before the parent folder', () => {
+    const PARENT_BMP = new Uint8Array([0x42, 0x4d]);
+    const CHILD_PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const source = makeAssetSource({ 'Song/_logo.bmp': PARENT_BMP, 'Song/sabun/_logo.png': CHILD_PNG });
+    expect(resolveChartImageAsset(source, 'Song/sabun/main.bms', '_logo.bmp')).toBe(CHILD_PNG);
+    expect(
+      resolveChartImageAsset(makeAssetSource({ 'Song/_logo.bmp': PARENT_BMP }), 'Song/sabun/main.bms', '_logo.bmp'),
+    ).toBe(PARENT_BMP);
+    expect(resolveChartImageAsset(source, 'Song/sabun/main.bms', '_missing.bmp')).toBeUndefined();
   });
 
   test('falls back past a missing `.webp` to the other formats', () => {
@@ -329,24 +549,19 @@ describe('resolveChartImageAsset', () => {
     expect(entry).toBe(MPG_BYTES);
   });
 
-  test('returns undefined for a `.mpg` reference when only a same-basename `.png` exists', () => {
-    // Corollary of the regression test above — the resolver must refuse to silently substitute the PNG. The caller can
-    // then fall back to whatever video-only logic it wants (skip the BGA, log a warning, etc.); pretending the asset
-    // was found would just kick the surprise downstream.
+  test('falls back to a PNG for a missing video', () => {
     const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
     const source = makeAssetSource({ 'Song/_scualee.png': PNG_BYTES });
     const entry = resolveChartImageAsset(source, 'Song/main.bms', '_scualee.mpg');
-    expect(entry).toBeUndefined();
+    expect(entry).toBe(PNG_BYTES);
   });
 
-  test('handles every supported video extension consistently (no image fallback)', () => {
-    // Locks in the contract for all extensions matched by the BGA loader's `isVideoExtension` regex — adding one there
-    // without updating `imageFallbackPaths` would silently re-introduce the PNG fallback bug for the new extension.
+  test('handles every supported video extension with a still fallback', () => {
     const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
     const VIDEO_EXTENSIONS = ['mpg', 'mpeg', 'mp4', 'm4v', 'avi', 'mov', 'wmv', 'webm', 'mkv'];
     for (const ext of VIDEO_EXTENSIONS) {
       const source = makeAssetSource({ 'Song/clip.png': PNG_BYTES });
-      expect(resolveChartImageAsset(source, 'Song/main.bms', `clip.${ext}`)).toBeUndefined();
+      expect(resolveChartImageAsset(source, 'Song/main.bms', `clip.${ext}`)).toBe(PNG_BYTES);
     }
   });
 });
@@ -383,9 +598,11 @@ describe('resolveChartBGAAsset', () => {
     });
   });
 
-  test('still never answers a video with an image', () => {
+  test('uses a still only after exhausting videos, including in the parent', () => {
     const source = makeAssetSource({ 'Song/m.png': new Uint8Array([0x89]) });
-    expect(resolveChartBGAAsset(source, 'Song/main.bms', 'm.mpg')).toBeUndefined();
+    expect(resolveChartBGAAsset(source, 'Song/main.bms', 'm.mpg')?.path).toBe('m.png');
+    const parentVideo = makeAssetSource({ 'Song/sub/m.png': new Uint8Array([1]), 'Song/m.mp4': new Uint8Array([2]) });
+    expect(resolveChartBGAAsset(parentVideo, 'Song/sub/main.bms', 'm.mpg')?.key).toBe('Song/m.mp4');
   });
 });
 
@@ -413,9 +630,8 @@ describe('parent-folder retry (LR2)', () => {
   });
 
   test("every extension in the chart's own folder comes before the parent", () => {
-    // The web player prefers .ogg over .wav, but a .wav beside the chart still beats an .ogg in the parent.
-    const source = makeAssetSource({ 'Pack/Song/sub/kick.wav': WAV, 'Pack/Song/kick.ogg': OGG });
-    expect(resolveChartAudioAsset(source, 'Pack/Song/sub/hard.bms', 'kick.wav')).toBe(WAV);
+    const source = makeAssetSource({ 'Pack/Song/sub/kick.ogg': OGG, 'Pack/Song/kick.wav': WAV });
+    expect(resolveChartAudioAsset(source, 'Pack/Song/sub/hard.bms', 'kick.wav')).toBe(OGG);
   });
 
   test('goes up one folder only', () => {
@@ -490,20 +706,24 @@ describe('resolveChartAudioAsset', () => {
     expect(entry).toBe(WAV_BYTES);
   });
 
-  test('respects the codec-priority order (opus → ogg → mp3 → wav → m4a) when multiple are present', () => {
-    const OPUS_BYTES = new Uint8Array([1]);
-    const OGG_BYTES = new Uint8Array([2]);
-    const MP3_BYTES = new Uint8Array([3]);
-    const WAV_BYTES = new Uint8Array([4]);
-    const source = makeAssetSource({
-      'Song/snare.opus': OPUS_BYTES,
-      'Song/snare.ogg': OGG_BYTES,
-      'Song/snare.mp3': MP3_BYTES,
-      'Song/snare.wav': WAV_BYTES,
-    });
-    // Even though the chart authored `.wav`, the codec walk prefers `.opus` first since it ships the smallest payload
-    // for browsers that support it.
-    expect(resolveChartAudioAsset(source, 'Song/main.bms', 'snare.wav')).toBe(OPUS_BYTES);
+  test.each([
+    ['snare.WAV', ['wav', 'opus', 'ogg', 'mp3', 'm4a']],
+    ['snare.ogg', ['ogg', 'opus', 'mp3', 'wav', 'm4a']],
+    ['snare.opus', ['opus', 'ogg', 'mp3', 'wav', 'm4a']],
+  ])('tries %s first and each alternate extension once', (authored, extensions) => {
+    const files = ['opus', 'ogg', 'mp3', 'wav', 'm4a'].map(
+      (ext, index) => [`Song/snare.${ext}`, new Uint8Array([index])] as const,
+    );
+    const source = makeAssetSource(Object.fromEntries(files));
+    const expected = extensions.map((ext) => `Song/snare.${ext}`);
+    expect(resolveChartAudioAssetCandidates(source, 'Song/main.bms', authored).map(({ key }) => key)).toEqual(expected);
+    const excludedEntries = new Set<BrowserAssetEntry>();
+    for (const key of expected) {
+      const entry = source.files.get(key)!;
+      expect(resolveChartAudioAsset(source, 'Song/main.bms', authored, { excludedEntries })).toBe(entry);
+      excludedEntries.add(entry);
+    }
+    expect(resolveChartAudioAsset(source, 'Song/main.bms', authored, { excludedEntries })).toBeUndefined();
   });
 
   test('honors the BMS #PATH_WAV prefix when supplied by the caller', () => {

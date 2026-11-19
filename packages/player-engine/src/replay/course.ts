@@ -1,9 +1,16 @@
-import type { GaugeType } from '../ruleset/gauge-type.ts';
+import { gaugePickType, splitGaugePick, type GaugePick } from '../ruleset/gauge-type.ts';
 import { resolve____RankLabel } from '../ruleset/score.ts';
 import type { RulesetChartFacts } from '../ruleset/facts.ts';
 import { resolveRuleset, type RulesetId } from '../ruleset/index.ts';
-import { CLEAR_LAMPS, resolveCourseClearLamp, resolveMissCount, type ClearLamp } from '../ruleset/clear-lamp.ts';
 import {
+  CLEAR_LAMPS,
+  resolveCourseClearLamp,
+  resolveMissCount,
+  type ClearLamp,
+  type CourseClearLampFacts,
+} from '../ruleset/clear-lamp.ts';
+import {
+  courseGoesOnAfterGivingUp,
   isCourseStageFailed,
   resolveCourseGauge,
   resolveCourseGaugeId,
@@ -112,7 +119,8 @@ export interface ReplayCourseResult {
 
   djLevel: string;
   /** The gauge the course ended on. */
-  gauge: { type: string; final: number; cleared: boolean };
+  /** The last stage's gauge; `source` as in a play's result, when it is another source's than the ruleset's own. */
+  gauge: { type: string; source?: RulesetId; final: number; cleared: boolean };
   /** The number of stages the run reached. */
   stagesPlayed: number;
   lamp: CourseClearLamp;
@@ -130,23 +138,27 @@ export interface ReplayCourseResult {
 export function resolveCourseLamp(
   ruleset: string,
   result: Pick<ReplayCourseResult, 'judge' | 'noteCount' | 'maxCombo' | 'gauge' | 'fullCombo'>,
-  pick: GaugeType,
+  pick: GaugePick,
 ): CourseClearLamp {
   const id = ruleset.split('/')[0]!;
   const fullCombo = result.fullCombo !== false && result.noteCount > 0 && result.maxCombo >= result.noteCount;
+  // The HP rule is the course gauge's own: LR2's course gauges keep it under another ruleset's judging (#1171).
+  const lr2Gauge = (result.gauge.source ?? id) === 'lr2';
   // CheckCourseClear: HP >= 2 may advance; at course end, HP == 2 clears only through the full-combo branch.
   const cleared =
-    result.gauge.cleared && (id !== 'lr2' || (result.gauge.final >= 2 && (fullCombo || result.gauge.final > 2)));
-  return resolveCourseClearLamp({
+    result.gauge.cleared && (!lr2Gauge || (result.gauge.final >= 2 && (fullCombo || result.gauge.final > 2)));
+  const facts: CourseClearLampFacts = {
     ruleset: id,
     cleared,
     gauge: result.gauge.type,
-    gaugeType: pick,
+    gaugeType: gaugePickType(pick),
     noteCount: result.noteCount,
     maxCombo: result.maxCombo,
-    ...(result.fullCombo !== undefined ? { fullCombo: result.fullCombo } : {}),
     judge: result.judge,
-  }) as CourseClearLamp;
+  };
+  if (result.gauge.source !== undefined) facts.gaugeSource = result.gauge.source;
+  if (result.fullCombo !== undefined) facts.fullCombo = result.fullCombo;
+  return resolveCourseClearLamp(facts) as CourseClearLamp;
 }
 
 /** The gauge a course stage starts on (see {@link resolveCourseStageStartGauge}). */
@@ -169,11 +181,14 @@ export interface CourseStageStartGauge {
 export function resolveCourseStageStartGauge(
   rulesetId: RulesetId,
   course: ReplayCourseStage,
-  selectedGauge: string,
+  selectedGauge: GaugePick,
 ): CourseStageStartGauge {
-  const gaugeId = resolveCourseGaugeId(rulesetId, course.kind, selectedGauge);
+  // A qualified pick starts on its own source's course gauge (#1171). A bare pick, the common case, needs no split.
+  const parts = selectedGauge.includes(':') ? splitGaugePick(selectedGauge) : undefined;
+  const source = parts?.source ?? rulesetId;
+  const gaugeId = resolveCourseGaugeId(source, course.kind, parts?.type ?? selectedGauge);
   // The lane mode and the HARD damage multiplier only pick the judging values, which this leaves out.
-  const spec = resolveCourseGauge(rulesetId, gaugeId, courseStageRulesetOptions(course), '7', 1);
+  const spec = resolveCourseGauge(source, gaugeId, courseStageRulesetOptions(course), '7', 1);
   return { type: spec.id, initial: spec.initial, max: spec.max, border: spec.border, survival: spec.survival };
 }
 
@@ -206,7 +221,7 @@ export function aggregateCourseResult(
   course: ReplayCourseInfo,
   stageResults: readonly ReplayRulesetResult[],
   stageNoteCounts: readonly number[],
-  pick: GaugeType,
+  pick: GaugePick,
 ): ReplayCourseResult {
   const judge: ReplayJudgmentCounts = { pgreat: 0, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0 };
   let fast = 0;
@@ -231,14 +246,18 @@ export function aggregateCourseResult(
   const noteCount = stageNoteCounts.reduce((sum, count) => sum + count, 0);
   const last = stageResults.at(-1);
   const reachedAll = stageResults.length === stageNoteCounts.length;
-  const gauge = {
+  const gauge: ReplayCourseResult['gauge'] = {
     type: last?.gauge.type ?? '',
+    ...(last?.gauge.source !== undefined ? { source: last.gauge.source } : {}),
     final: last?.gauge.final ?? 0,
     cleared:
       reachedAll &&
       last !== undefined &&
       last.gauge.cleared &&
-      (ruleset.split('/')[0] !== 'lr2' || judged === noteCount),
+      (ruleset.split('/')[0] !== 'lr2' || judged === noteCount) &&
+      // LR2's course gauges go on past a stage given up (`courseGoesOnAfterGivingUp`), which leaves the course FAILED
+      // under any judge ruleset; a stage that did not clear is only ever that one, since a failed stage ends the run.
+      ((last.gauge.source ?? ruleset.split('/')[0]) !== 'lr2' || stageResults.every((stage) => stage.gauge.cleared)),
   };
   const partial = {
     judge,
@@ -279,8 +298,8 @@ export function aggregateCourseResult(
 }
 
 /**
- * A stage the player gave up (ESC, `play.aborted`) did not clear, whatever its gauge stood at: a course given up is
- * recorded as a failed run, as LR2 does.
+ * A stage the player gave up (ESC, `play.aborted`) did not clear, whatever its gauge stood at, and the course it is in
+ * is a failed run, as LR2 records it.
  */
 function givenUpResult(stageLog: BeMusicReplay, result: ReplayRulesetResult): ReplayRulesetResult {
   return stageLog.play.aborted === true && result.gauge.cleared
@@ -288,8 +307,12 @@ function givenUpResult(stageLog: BeMusicReplay, result: ReplayRulesetResult): Re
     : result;
 }
 
-/** The gauge a stage hands on: a stage that ended with its survival gauge empty ends the course. */
-function stageFailed(result: ReplayRulesetResult): boolean {
+/**
+ * Whether the run ends after a stage: one that ended with its survival gauge empty ends the course, and so does one the
+ * player gave up unless the course gauge's rule goes on (`courseGoesOnAfterGivingUp`).
+ */
+function stageEndsRun(result: ReplayRulesetResult, givenUp: boolean): boolean {
+  if (givenUp) return !courseGoesOnAfterGivingUp(result.ruleset, result);
   return isCourseStageFailed(result.ruleset, result.gauge);
 }
 
@@ -303,7 +326,8 @@ function stageNoteCount(entry: ReplayCourseStageEntry, rulesetId: RulesetId): nu
 /**
  * Re-simulates a whole course under one ruleset. Each stage after the first starts from the state the SIMULATED
  * previous stage left (its gauge value and course combo replace the recorded carry-in), so the result never trusts the
- * recording; the course stops at the first stage whose gauge emptied, as the live run did.
+ * recording; the course stops at the first stage whose gauge emptied, or that was given up where this ruleset's course
+ * gauge does not go on, as the live run did.
  */
 export function simulateCourseReplay(
   courseLog: BeMusicCourseReplay,
@@ -316,10 +340,11 @@ export function simulateCourseReplay(
     return nonstopCourseResult(courseLog, simulateReplay(courseLog.nonstop.replay, options), stageResults);
   }
   const stageResults: ReplayRulesetResult[] = [];
-  let pick: GaugeType = 'GROOVE';
+  let pick: GaugePick = 'GROOVE';
   let previous: ReplayRulesetResult | undefined;
+  let previousGivenUp = false;
   for (const entry of courseLog.stages) {
-    if (!entry.played || (previous !== undefined && stageFailed(previous))) break;
+    if (!entry.played || (previous !== undefined && stageEndsRun(previous, previousGivenUp))) break;
     // Only the stage's course carry-in changes, and `simulateReplay` never writes to the log it reads: copy the path
     // down to `play.course` and share the rest (the inputs and chart are most of a log).
     pick = entry.replay.play.gauge;
@@ -335,6 +360,7 @@ export function simulateCourseReplay(
     }
     const stageLog: BeMusicReplay = { ...entry.replay, play: { ...entry.replay.play, course } };
     previous = givenUpResult(stageLog, simulateReplay(stageLog, options));
+    previousGivenUp = stageLog.play.aborted === true;
     stageResults.push(previous);
   }
   const stageNoteCounts = courseLog.stages.map((entry, index) =>
@@ -361,8 +387,9 @@ function nonstopCourseResult(
   const { judge, noteCount } = run;
   const judged = judge.pgreat + judge.great + judge.good + judge.bad + judge.poor - (run.minePoor ?? 0);
   // A NONSTOP play given up with ESC is a failed run.
-  const gauge = {
+  const gauge: ReplayCourseResult['gauge'] = {
     type: run.gauge.type,
+    ...(run.gauge.source !== undefined ? { source: run.gauge.source } : {}),
     final: run.gauge.final,
     cleared:
       run.gauge.cleared &&
@@ -521,8 +548,8 @@ function parseJudgeRankFacts(judgeRank: Record<string, unknown>, path: string): 
 
 function parseFacts(value: unknown, path: string): RulesetChartFacts {
   const facts = expectRecord(value, path);
-  if (facts.sourceFormat !== 'bms' && facts.sourceFormat !== 'bmson') {
-    throw new ReplayParseError(`${path}.sourceFormat: expected 'bms' | 'bmson'`);
+  if (facts.sourceFormat !== 'bms' && facts.sourceFormat !== 'bmson' && facts.sourceFormat !== 'lrx') {
+    throw new ReplayParseError(`${path}.sourceFormat: expected 'bms' | 'bmson' | 'lrx'`);
   }
   const lnMode = facts.lnMode;
   if (lnMode !== 1 && lnMode !== 2 && lnMode !== 3) {
@@ -718,7 +745,12 @@ function parseCourseResults(results: Record<string, unknown>): Record<string, Re
       maxCombo: base!.maxCombo,
       ...(base!.minePoor !== undefined ? { minePoor: base!.minePoor } : {}),
       djLevel: expectString(record.djLevel, `${path}.djLevel`),
-      gauge: { type: base!.gauge.type, final: base!.gauge.final, cleared: base!.gauge.cleared },
+      gauge: {
+        type: base!.gauge.type,
+        ...(base!.gauge.source !== undefined ? { source: base!.gauge.source } : {}),
+        final: base!.gauge.final,
+        cleared: base!.gauge.cleared,
+      },
       stagesPlayed: expectFiniteNumber(record.stagesPlayed, `${path}.stagesPlayed`),
       lamp: lamp as CourseClearLamp,
       stages: Object.values(parseResults(stageMap, `${path}.stages`)),

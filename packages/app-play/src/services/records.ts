@@ -5,6 +5,7 @@
 import {
   computeChartFileHashes,
   resolveChartSource,
+  seededChartFileHashes,
   type BrowserChartCollection,
   type ChartFileHashes,
 } from '@be-music/player-browser/collection';
@@ -74,6 +75,9 @@ export class RecordsService {
    * the whole library on a dropped log stays cheap.
    */
   public async resolveChartHashes(chartEntry: LibraryChart): Promise<ChartFileHashes | undefined> {
+    // The hashes the load kept with the chart, when it hashed the file or took its parse from the cache.
+    const seeded = seededChartFileHashes(chartEntry.chart);
+    if (seeded !== undefined) return seeded;
     const cached = this.chartHashCache.get(chartEntry.id);
     if (cached !== undefined) {
       return cached ?? undefined;
@@ -107,22 +111,22 @@ export class RecordsService {
     if (this.chartBestRecords.size === 0) {
       return undefined;
     }
-    if (!this.chartHashCache.has(chartEntry.id)) {
+    if (seededChartFileHashes(chartEntry.chart) === undefined && !this.chartHashCache.has(chartEntry.id)) {
       void this.resolveChartHashes(chartEntry);
     }
     return this.peekChartBestRecord(chartEntry);
   }
 
   /**
-   * A chart's best record as far as its hash is known already, without hashing it: by its hash once the chart has been
-   * hashed (by {@link lookupChartBestRecord} or {@link resolveChartHashes}), by its path before. For readers that must start
-   * nothing, such as the test hook.
+   * A chart's best record as far as its hash is known already, without hashing it: by its hash once it is known (kept
+   * with the chart by its load, or hashed by {@link lookupChartBestRecord} or {@link resolveChartHashes}), by its path
+   * before. For readers that must start nothing, such as the test hook.
    */
   public peekChartBestRecord(chartEntry: LibraryChart): BeMusicChartBestRecord | undefined {
     if (this.chartBestRecords.size === 0) {
       return undefined;
     }
-    const hashes = this.chartHashCache.get(chartEntry.id);
+    const hashes = seededChartFileHashes(chartEntry.chart) ?? this.chartHashCache.get(chartEntry.id);
     return this.chartBestRecords.get(
       rulesetRecordKey(this.judgeRuleset(), chartBestRecordKey(chartEntry, hashes?.sha256)),
     );

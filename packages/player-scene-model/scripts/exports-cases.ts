@@ -324,10 +324,23 @@ export function registerSceneModelExportsCases(define: DefineBenchmarkCase): voi
       sceneModelAPI.resolvePlayOptionValue('hiSpeed', 99);
     },
   });
+  define('player-scene-model.keepGaugePick', {
+    run: () => {
+      sceneModelAPI.keepGaugePick('lr2:HARD', 'beatoraja');
+      sceneModelAPI.keepGaugePick('P-ATTACK', 'beatoraja');
+    },
+  });
   define('player-scene-model.keepPracticeGauge', {
     run: () => {
       sceneModelAPI.keepPracticeGauge('HAZARD', 'beatoraja');
       sceneModelAPI.keepPracticeGauge('HAZARD', 'lr2');
+      sceneModelAPI.keepPracticeGauge('beatoraja:ASSIST-EASY', 'lr2');
+    },
+  });
+  define('player-scene-model.practiceGaugeSource', {
+    run: () => {
+      sceneModelAPI.practiceGaugeSource('beatoraja:ASSIST-EASY', 'lr2');
+      sceneModelAPI.practiceGaugeSource('GROOVE', 'lr2');
     },
   });
   define('player-scene-model.resolvePracticeSelection', {

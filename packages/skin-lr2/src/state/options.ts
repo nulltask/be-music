@@ -1,5 +1,11 @@
 import { isSPToDPBattleMode } from '@be-music/player-engine/lanes';
-import { LR2_GAUGE_TYPES, optionValueName, type GaugeType } from '@be-music/player-engine/ruleset';
+import {
+  LR2_GAUGE_TYPES,
+  gaugePickType,
+  optionValueName,
+  type GaugePick,
+  type GaugeType,
+} from '@be-music/player-engine/ruleset';
 import {
   BGA_CYCLE,
   BGA_SIZE_CYCLE,
@@ -98,13 +104,25 @@ export function resolveLR2BattleOps(options: Partial<Pick<PlayOptions, 'keysFilt
   return ops;
 }
 
-/** Whether a gauge is one of LR2's red (survival) gauges: HARD and DEATH (corrected or not). */
-export function isLR2RedGauge(gauge: GaugeType): boolean {
+/**
+ * Whether a gauge is one of LR2's red (survival) gauges: HARD and DEATH (corrected or not). A source-qualified pick
+ * (`beatoraja:HARD`) reads as its gauge type.
+ */
+export function isLR2RedGauge(pick: GaugePick): boolean {
+  // A bare pick is its own gauge type; only a source-qualified one needs splitting.
+  return isRedGaugeType(pick) || (pick.includes(':') && isRedGaugeType(gaugePickType(pick)));
+}
+
+function isRedGaugeType(gauge: string): boolean {
   return gauge === 'HARD' || gauge === 'DEATH' || gauge === 'DEATH-CORRECTED' || gauge === 'EX-HARD';
 }
 
-/** The LR2 gauge cell a pick draws on: beatoraja's and AC's extra gauges and the corrected HAZARD on their nearest. */
-function lr2GaugeCell(gauge: GaugeType): GaugeType {
+/**
+ * The LR2 gauge cell a pick draws on: beatoraja's and AC's extra gauges and the corrected HAZARD on their nearest, and a
+ * source-qualified pick on its gauge type's (ADR 0019).
+ */
+function lr2GaugeCell(pick: GaugePick): GaugeType {
+  const gauge = gaugePickType(pick);
   return gauge === 'EX-HARD'
     ? 'HARD'
     : gauge === 'ASSIST-EASY'
@@ -188,10 +206,11 @@ export function resolveLR2OptionText(
       return optionValueName(options.random1P);
     case LR2_TEXT.OPTION_RANDOM_2P:
       return optionValueName(options.random2P);
+    // A source-qualified gauge reads as its gauge type (`beatoraja:EX-HARD` as EX-HARD, ADR 0019).
     case LR2_TEXT.OPTION_GAUGE_1P:
-      return options.gauge1P;
+      return gaugePickType(options.gauge1P);
     case LR2_TEXT.OPTION_GAUGE_2P:
-      return options.gauge2P;
+      return gaugePickType(options.gauge2P);
     case LR2_TEXT.OPTION_ASSIST_1P:
       return options.autoScratch1P ? 'AUTOSCRATCH' : 'OFF';
     case LR2_TEXT.OPTION_ASSIST_2P:

@@ -266,11 +266,15 @@ describe('composeBeatorajaValueCells (audit A-3 — upstream-faithful 24-cell ze
       }
     });
 
-    it('24-cell signed dual-strip ignores frameIndex (single-frame layout)', () => {
-      // Dual-strip's row layout is positive-half / negative-half (different x-cell semantics),
-      // not animation frames; frame selection is intentionally pinned to 0.
-      const cells = composeBeatorajaValueCells(dualStrip({ divy: 2, h: 48 }), 12, 1);
-      for (const cell of cells) expect(cell.y).toBe(0); // element.y = 0 for dualStrip().
+    it('animates signed frames across columns and rows', () => {
+      const strip = dualStrip({ divx: 48, divy: 2, w: 480, h: 48, cycle: 80 });
+      expect(valueFrameAt(strip, 20)).toBe(1);
+      expect(valueFrameAt(strip, 40)).toBe(2);
+      const first = composeBeatorajaValueCells(strip, -12, 0);
+      const second = composeBeatorajaValueCells(strip, -12, 1);
+      const third = composeBeatorajaValueCells(strip, -12, 2);
+      expect(second.map(({ x }) => x)).toEqual(first.map(({ x }) => x + 240));
+      expect(third.map(({ y }) => y)).toEqual(first.map(({ y }) => y + 24));
     });
   });
 

@@ -194,6 +194,7 @@ export function countScoredNotes(
       events: chart.events,
       bms: chart.bms,
       bmson: chart.bmson,
+      lrx: chart.lrx,
     });
   const context = createTimingBuildContext(chart);
   const { notes } = resolveJudgedNoteEntries({
@@ -273,6 +274,7 @@ class LazyResolvedChart implements ResolvedChart {
         events: this.source.events,
         bms: this.source.bms,
         bmson: this.source.bmson,
+        lrx: this.source.lrx,
       });
     return this.playVariantCache;
   }

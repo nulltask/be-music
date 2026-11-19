@@ -1,5 +1,12 @@
 # @be-music/player-node-audio
 
+## 0.2.9
+
+### Patch Changes
+
+- e5dce2a: Play each LRX note with its own volume, balance, rate, sample window and fade-in / fade-out in the terminal player. LRX background sounds that plugout mixes with the keysounds (chain notes, hidden notes and most background columns) play at the keysound volume.
+- Updated dependencies: `@be-music/player-engine@0.19.0`, `@be-music/chart-model@0.12.0`, `@be-music/chart-source@0.9.0`, `@be-music/chart-audio-renderer@0.5.4`, `@be-music/shared-utils@0.8.0`
+
 ## 0.2.8
 
 ### Patch Changes

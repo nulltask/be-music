@@ -1,4 +1,4 @@
-import type { GaugeType, RulesetId } from '@be-music/player-engine/ruleset';
+import { gaugePickType, type GaugePick, type RulesetId } from '@be-music/player-engine/ruleset';
 import type { PlayerGaugeSummary } from '@be-music/player-engine/signals';
 import { resolveCourseStageStartGauge, type ReplayCourseStage } from '@be-music/player-engine/replay';
 
@@ -11,11 +11,13 @@ import { resolveCourseStageStartGauge, type ReplayCourseStage } from '@be-music/
  * previous stage (100 on the first), so the stage neither shows `GROOVE 20 %` nor graphs it before the engine runs.
  */
 export function createPlaceholderGaugeState(
-  type: GaugeType = 'GROOVE',
+  pick: GaugePick = 'GROOVE',
   course?: { stage: ReplayCourseStage; ruleset: RulesetId },
 ): PlayerGaugeSummary {
+  // A qualified pick (`lr2:HARD`) starts as its gauge type does; a course stage starts on its source's course gauge.
+  const type = gaugePickType(pick);
   if (course !== undefined) {
-    const start = resolveCourseStageStartGauge(course.ruleset, course.stage, type);
+    const start = resolveCourseStageStartGauge(course.ruleset, course.stage, pick);
     return {
       current: start.initial,
       max: start.max,

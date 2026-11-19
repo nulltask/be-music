@@ -2,7 +2,7 @@
 
 # @be-music/player-engine
 
-The shared rules and playback engine of Be-Music: one play loop (manual, auto, replay), judgment, scoring, gauges and clear lamps, best records, course runs and NONSTOP, the replay format, and the runtime contracts hosts plug into. The terminal player, the browser player and the Leaderboard all use it.
+The terminal player, browser player, and Leaderboard share this engine. It uses one play loop for manual, auto, and replay modes. The package defines judgment, scoring, gauges, clear lamps, best records, course runs, NONSTOP, the replay format, and the runtime interfaces for hosts.
 
 See the [Player implementation specification](../../docs/player-spec.md), the [Architecture](../../docs/architecture.md#the-engine-judge-core-and-one-play-loop), the [Replay specification](../../docs/replay.md) and [Courses and dan certification](../../docs/course.md).
 

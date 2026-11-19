@@ -20,6 +20,7 @@ import { emitPlayerLog, writeRuntimeEventLog } from './engine-trace.ts';
 import type { PlayerInterruptReason } from './engine-types.ts';
 import type { PlayControls } from './play-controls.ts';
 import { applySeek, clampSeekSeconds, isPracticeLoopDue, restartPractice } from './play-seek.ts';
+import { isSeamlessPracticeLoop } from './practice.ts';
 import type { PlaySession } from './play-session.ts';
 import type { PlayJudge, PlayTick } from './play-strategy.ts';
 
@@ -128,11 +129,16 @@ async function playChart(
   const endsWithChart = session.audioSession === undefined && hold === undefined;
   // A looping PRACTICE play (`PlayPractice.loop`) never reaches its horizon: it goes back to its start before it.
   const loopsPractice = options.practice?.loop === true && judge.seek !== undefined;
+  // A loop of picked bars is seamless: back at the play's end, the time past it carried over.
+  const seamlessPractice = loopsPractice && isSeamlessPracticeLoop(options.practice);
   // A replay of an ESC-aborted log stops where the play was aborted, as the replay simulators do.
   const replayStopSeconds =
     session.replay && options.replayAbortedAtUs !== undefined ? options.replayAbortedAtUs / 1_000_000 : undefined;
   let settled = false;
   const pastHorizon = (): boolean => {
+    // A host that lets go of its hold before the horizon (ESC once every note is judged) ends the play as soon as
+    // nothing is left to judge, the way the chart's end does.
+    if (hold?.signal.aborted === true && judge.isSettled()) return true;
     if (clock.nowMs() < horizonMs()) return false;
     if (hold === undefined || hold.signal.aborted) return true;
     if (!settled) {
@@ -181,6 +187,9 @@ async function playChart(
     // Queue audio against the write head, then judge and render against what is actually audible.
     session.volumeChanges.triggerUntil(tick.scheduledSec);
     session.backgroundAudio.triggerUntil(tick.scheduledSec);
+    // A chain note waits on the clock its press was judged on, so it sounds as long after the press's keysound as it
+    // follows its note in the chart.
+    session.chainSounds.triggerUntil(tick.nowSec);
     judge.judge(tick);
     publishUIFrame(tick.nowSec, beatAtSeconds(tick.nowSec));
     lastFrameSeconds = tick.nowSec;
@@ -194,9 +203,11 @@ async function playChart(
         settled: judge.isSettled(),
         closed: judge.isClosed(),
         pastHorizon: clock.nowMs() >= horizonMs(),
+        seamless: seamlessPractice,
       })
     ) {
-      const restarted = restartPractice(session, judge, tick.nowMs);
+      const overshoot = seamlessPractice && !judge.isClosed() ? tick.nowSec - totalSeconds : 0;
+      const restarted = restartPractice(session, judge, tick.nowMs, overshoot);
       if (restarted !== undefined) lastFrameSeconds = restarted;
       await waitPreciseOrInput(TUI_FRAME_INTERVAL_MS, wakeUp);
       continue;

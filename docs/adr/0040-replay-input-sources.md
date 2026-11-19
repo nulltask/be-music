@@ -20,7 +20,7 @@ The judge core, a replay and the replay simulator must reach the same judgments 
 
 Model 3. Every `ReplayInputEvent` carries a required `source` integer into `play.inputSources`; `tokens` is dropped, and `spin` stays for display only. `parseReplay` checks unique ids, references that resolve and a `direction` on exactly the turntable sources, and rejects a log without sources rather than guessing one. `play.analogScratch` optionally names the algorithm a host used to turn an analog axis into presses; the log keeps the resulting events, never axis samples.
 
-Each physical key bound to a lane is its own source (`keyboardInputSource`, named by its first token); each lane's touch zone is one; a controller passes its sources on the input commands. There is no Gamepad API input yet: the `source` field of the `lane-input` and `kitty-state` commands is the boundary a controller host plugs into.
+Each physical key bound to a lane is its own source (`keyboardInputSource`, named by its first token); each lane's touch zone is one; a controller passes its sources on the input commands. The web host reads standard-mapped Gamepads through this boundary using the CS DualShock assignment: D-pad to key 1, L1 / Square / R1 / Cross / Triangle / Circle to keys 2–7, and L2 / R2 as the two turntable directions. It records generic button and turntable labels only.
 
 The judge core and the simulator remember the head's source on a scratch hold. A press from another source ends a BSS under every ruleset that plays one (beatoraja's CN / HCN and every That-Which-Must-Not-Be-Named long note). Under beatoraja only (`RulesetConfig.scratchHoldsBySource`), a release of the head's source that would judge POOR ends a BSS there, and a scratch LN is let go only by its head's source. LR2 is unchanged.
 
@@ -29,3 +29,21 @@ The judge core and the simulator remember the head's source on a scratch hold. A
 ## Consequences
 
 Replays recorded before this change no longer parse, and the Leaderboard refuses them with `invalid-replay`; replays already stored there can no longer be re-read (the played-file backfill gives them no length). Scores change where beatoraja's rules now apply: a BSS let go far before its tail is a POOR, and a scratch LN survives another key's release. Lane holds and ANY KEY routes are keyed by source, so the live engine and its replays key them the same way. A controller host only has to name its sources; a lane bound to a single controller button plays the lenient rule, which a future binding table could make strict. A coarse `device` class can later split keyboard and controller rankings without collecting more data.
+
+## Amendment: the lenient rule is a Be-Music input policy (#1181)
+
+The single-source rule above is not a reference behavior and is not presented as one. beatoraja ends a BSS on another key's press and has a separate POOR path for the release [V] ([press](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/JudgeManager.java#L351-L370), [release](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/JudgeManager.java#L494-L511)); it defines nothing for a lane that only one source can press.
+
+- **Classification.** It is a capability adaptation: a policy for an input device that cannot perform the strict rule, chosen by the source's kind and device. It is not an assist option, sets no assist flag, and does not lower a lamp. It relaxes judging all the same, which is the trade-off this ADR accepted.
+- **What a replay holds.** Each input names its source, and `play.inputSources` records each source's kind and device. The rule is decided from those alone, so every ruleset that plays a BSS re-judges the same inputs to the same result, under any target ruleset. No separate policy field is needed while the rule is a function of the recorded source.
+- **Known limit.** Whether a source has a counterpart is inferred from its kind, not read from the bindings: a controller button is always treated as single-source, even when the player bound two buttons to the lane. Recording the actual counterpart capability would need a new replay field and a replay version change, and is not done here.
+- **Records.** A play that used the lenient rule is saved and ranked as any other. Whether a ranking separates input devices is a Leaderboard decision; the recorded `device` class is what it would use.
+
+## Amendment: device names on the player's opt-in (2026-11-17)
+
+The owner decided that a player may choose to record their controllers' own names in a replay, off by default. The decision above that a replay records no device-identifying data stays the default; this amends it only for a player who opts in.
+
+- **What is recorded.** An input source may carry `deviceName`: the name the host reported for the device, in the web player a pad's `Gamepad.id`, which often names its vendor and product ids. Keyboards and touch report none. The recorder keeps it only under `ReplayRecordingOptions.includeDeviceNames` (the web player's "Record device names in replays"), removes control characters, trims it and cuts it to 128 characters. No serial is recorded.
+- **Why opt-in.** Judging needs only whether two inputs share a source, never which device they came from. A device name is diagnostic: it can tell which controller a play used. It can also identify the player's hardware, and a replay leaves the player's hands (saved files, replay slots, Leaderboard submissions), so only the player turns it on.
+- **Judging is unchanged.** `deviceName` is not part of `inputSourceKey`, and no judge rule reads it. A play records the same `inputs` with or without it, and every ruleset re-judges a replay to the same result whether the name is present or not. A source keeps the name it was first registered with, so swapping a controller in the same slot mid-play does not split one source in two.
+- **Format.** It is an optional field, so the replay stays at revision 0; `parseReplay` validates it when present.

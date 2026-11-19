@@ -24,7 +24,7 @@ const unpackedEvents = new Map<BeMusicJSON, BeMusicEvent[]>();
  *   array on demand. The most recently read charts keep their rebuilt array (see {@link UNPACKED_EVENTS_CACHE_SIZE}),
  *   so repeated reads within a frame return the same array. Assigning `events` replaces the accessor with a plain
  *   value.
- * - `metadata`, `resources`, `bms` and `bmson` are deep-copied so their strings stop referencing the chart's decoded
+ * - `metadata`, `resources`, `bms`, `bmson` and `lrx` are deep-copied so their strings stop referencing the chart's decoded
  *   source text; otherwise a header such as `#TITLE` keeps the whole source text alive for as long as the song stays
  *   in the collection.
  *
@@ -36,6 +36,7 @@ export function compactCollectionChart(chart: BeMusicJSON, strings: PackedEventS
   chart.resources = structuredClone(chart.resources);
   chart.bms = structuredClone(chart.bms);
   chart.bmson = structuredClone(chart.bmson);
+  if (chart.lrx !== undefined) chart.lrx = structuredClone(chart.lrx);
   const packed = packEvents(chart.events, strings);
   if (packed !== undefined) {
     defineLazyEvents(chart, packed, strings);
@@ -77,4 +78,67 @@ export function restorePackedCollectionChart(
   const strings = new PackedEventStrings();
   for (const value of values) strings.idOf(value);
   defineLazyEvents(chart, packed, strings);
+}
+
+/**
+ * The fields of a chart a listing does not read, as JSON text: its resources, measures, format sections and
+ * preservation. See {@link deferChartFields}.
+ */
+export interface DeferredChartFields {
+  /** The fields' names, in the chart's own order. */
+  readonly keys: readonly string[];
+  /** The fields, as one JSON object. */
+  readonly json: string;
+}
+
+/**
+ * Splits a chart into its listing fields and the remaining fields as JSON text. Text crosses the worker and the
+ * parsed-chart cache without copying a tree of objects. {@link restoreDeferredChartFields} restores the deferred
+ * fields on first read.
+ */
+export function deferChartFields(chart: BeMusicJSON): { chart: BeMusicJSON; deferred: DeferredChartFields } {
+  const { format, sourceFormat, metadata, events, ...fields } = chart;
+  const record: Record<string, unknown> = fields;
+  const keys = Object.keys(fields);
+  for (let index = keys.length - 1; index >= 0; index -= 1) {
+    if (record[keys[index]!] === undefined) keys.splice(index, 1);
+  }
+  return {
+    chart: { format, sourceFormat, metadata, events } as BeMusicJSON,
+    deferred: { keys, json: JSON.stringify(fields) },
+  };
+}
+
+/**
+ * Puts the fields {@link deferChartFields} took out back on `chart`, as accessors that parse the text the first time
+ * any of them is read; from then on they are plain values. Assigning one replaces it.
+ */
+export function restoreDeferredChartFields(chart: BeMusicJSON, deferred: DeferredChartFields | undefined): void {
+  if (deferred === undefined) return;
+  const record = chart as unknown as Record<string, unknown>;
+  let json: string | undefined = deferred.json;
+  const pending = new Set(deferred.keys);
+  const settle = (): void => {
+    if (json === undefined) return;
+    const fields = JSON.parse(json) as Record<string, unknown>;
+    json = undefined;
+    for (const key of pending) {
+      Object.defineProperty(record, key, { configurable: true, enumerable: true, writable: true, value: fields[key] });
+    }
+    pending.clear();
+  };
+  for (const key of deferred.keys) {
+    Object.defineProperty(record, key, {
+      configurable: true,
+      enumerable: true,
+      get(): unknown {
+        settle();
+        return record[key];
+      },
+      set(value: unknown) {
+        pending.delete(key);
+        Object.defineProperty(record, key, { configurable: true, enumerable: true, writable: true, value });
+      },
+    });
+  }
 }

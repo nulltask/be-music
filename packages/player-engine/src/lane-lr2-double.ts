@@ -4,6 +4,8 @@ import { drawLaneRandomIndex } from './lane-random-source.ts';
 export interface LR2DoubleRandomOptions {
   scratch: string;
   flipped?: boolean;
+  includeScratch?: boolean;
+  avoidFarKeys?: boolean;
   /** Non-lane objects present in the reference's sort input. */
   objects?: readonly LR2SortObject[];
 }
@@ -65,12 +67,21 @@ function laneOp(channel: string, flipped: boolean): number {
 export function randomizeLR2DoubleNotes(
   notes: readonly SRandomNote[],
   lanes: readonly string[],
-  options: LR2DoubleRandomOptions & { random: () => number; target?: string },
+  options: LR2DoubleRandomOptions & { random: () => number; target?: string; scatter?: boolean },
 ): string[] {
   const channels = notes.map(({ channel }) => channel);
-  const { scratch, target, random, flipped = false } = options;
+  const {
+    scratch,
+    target,
+    random,
+    flipped = false,
+    includeScratch = false,
+    avoidFarKeys = true,
+    scatter = false,
+  } = options;
   const right = scratch === '26';
-  const domain = new Set(lanes);
+  const destinations = includeScratch ? [scratch, ...lanes] : lanes;
+  const domain = new Set(destinations);
   const far = right ? lanes.slice(0, 4) : lanes.slice(3);
   const objects: Array<LR2SortObject & { index?: number }> = [...(options.objects ?? [])];
   notes.forEach((note, index) => {
@@ -84,6 +95,7 @@ export function randomizeLR2DoubleNotes(
   sortLR2Objects(objects, (a, b) => Math.trunc(a.timeMs - b.timeMs));
 
   const marked = new Set<string>();
+  const rowDestinations = new Set<string>();
   const occupied = new Map<string, { start: number; end: number }>();
   let lastReset = Number.NEGATIVE_INFINITY;
   for (const { index, timeMs } of objects) {
@@ -96,6 +108,12 @@ export function randomizeLR2DoubleNotes(
     const originalSide = (note.sourceChannel ?? channel)[0];
     if ((originalSide === scratch[0]) !== flipped && lastReset < timeMs) {
       marked.clear();
+      if (scatter) {
+        for (const lane of rowDestinations) {
+          marked.add(lane);
+          if (occupied.get(lane)!.end < timeMs) rowDestinations.delete(lane);
+        }
+      }
       lastReset = timeMs;
     }
     if (channel !== scratch && !domain.has(channel)) continue;
@@ -104,22 +122,23 @@ export function randomizeLR2DoubleNotes(
       return prior === undefined || (prior.start !== timeMs && prior.end < timeMs);
     };
     let destination = channel;
-    if (channel !== scratch) {
-      const allMarked = lanes.every((lane) => marked.has(lane));
+    if (domain.has(channel)) {
+      const allMarked = destinations.every((lane) => marked.has(lane));
       const accepted = (lane: string) => canPlace(lane) && (allMarked || !marked.has(lane));
-      if (!(target !== undefined && accepted(target)) && !lanes.some(accepted))
-        throw new RangeError('LR2 14 KEY lane randomization has no acceptable destination.');
+      if (!(target !== undefined && accepted(target)) && !destinations.some(accepted))
+        throw new RangeError('LR2 lane randomization has no acceptable destination.');
       // The reference draws before overriding the first candidate with the CONVERGE target.
       for (let attempt = 0; ; attempt++) {
-        const draw = lanes[drawLaneRandomIndex(lanes.length, random)]!;
+        const draw = destinations[drawLaneRandomIndex(destinations.length, random)]!;
         destination = attempt === 0 && target !== undefined ? target : draw;
         if (accepted(destination)) break;
-        if (attempt === 1023) throw new RangeError('LR2 14 KEY lane randomization exceeded its retry limit.');
+        if (attempt === 1023) throw new RangeError('LR2 lane randomization exceeded its retry limit.');
       }
       marked.add(destination);
       channels[index] = destination;
     }
-    if (destination === scratch) for (const lane of far) marked.add(lane);
+    if (scatter) rowDestinations.add(destination);
+    if (avoidFarKeys && destination === scratch) for (const lane of far) marked.add(lane);
     occupied.set(destination, { start: timeMs, end: note.endTimeMs ?? timeMs });
   }
 

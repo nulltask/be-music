@@ -92,6 +92,7 @@ describe('loadBeatorajaSkin (JSON)', () => {
           w: 1280,
           h: 720,
           offset: [{ name: 'Judgment Detail', id: 40, x: true, y: true, w: 0, h: 0, r: 1, a: true }],
+          property: [{ name: 'Lane Cover', item: [{ name: 'On', op: 911 }] }],
           source: [{ id: 0, path: 'system.png' }],
           image: [{ id: 0, src: 0, x: 0, y: 0, w: 8, h: 8 }],
         }),
@@ -107,6 +108,9 @@ describe('loadBeatorajaSkin (JSON)', () => {
       { name: 'Judgment Detail', id: 40, x: true, y: true, w: false, h: false, r: true, a: true },
     ]);
     expect(result.skin?.name).toBe('demo');
+    expect(result.header.property).toEqual(result.skin?.property);
+    expect(result.header.property?.[0]?.item).not.toBe(result.skin?.property?.[0]?.item);
+    expect(result.header).not.toHaveProperty('source');
   });
 
   it('errors when the entry file is missing', () => {

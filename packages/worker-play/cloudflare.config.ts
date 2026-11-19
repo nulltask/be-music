@@ -19,6 +19,9 @@ export default defineConfig(({ mode }) => {
       compatibilityFlags: ['global_fetch_strictly_public'],
       entrypoint: './src/index.ts',
       domains: [preview ? 'play.preview.be-music.app' : 'play.be-music.app'],
+      // The preview is reached only on its custom domain, behind Cloudflare Access; `workers.dev` and version preview
+      // URLs would bypass it (docs/services.md section 2).
+      ...(preview ? { workersDev: false, previewUrls: false } : {}),
       observability: { enabled: true },
       // Static Assets host the built SPA; `single-page-application` returns index.html for any unmatched path.
       // All requests pass through the Worker for automatic Accounts SSO. The FFmpeg and URL proxy routes ensure
@@ -40,6 +43,9 @@ export default defineConfig(({ mode }) => {
         FFMPEG_CORE: bindings.r2({ name: `play${suffix}` }),
         // The Leaderboard API of the same environment; authenticated calls use an access token.
         LEADERBOARD: bindings.worker({ worker: `leaderboard${suffix}` }),
+        // Accounts (in the Dashboard Worker, ADR 0039). Sign-in reaches the issuer through it, not the public
+        // network, so it works while the preview hosts are behind Cloudflare Access.
+        ACCOUNTS: bindings.worker({ worker: `dashboard${suffix}` }),
       },
     },
   };

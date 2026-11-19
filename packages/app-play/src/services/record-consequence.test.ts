@@ -27,12 +27,18 @@ describe('plannedPlayOf', () => {
       extraNotes: true,
       sevenToNine: true,
     });
+    // nanasigroove's ADDMINE plays in place of the Mines choice.
+    expect(plannedPlayOf(state({ mineModifier: 'REMOVE', crazyAddMine: true })).mineModifier).toBe('NANASI_ADD');
+    // The player's NOTES joins the plan, whose COPY keeps no record on a chart it copies (#1243).
+    expect(plannedPlayOf(state({})).playerChartPlayOptions).toBeUndefined();
+    expect(plannedPlayOf(state({ crazyNotes: 'COPY' })).playerChartPlayOptions).toEqual({ notes: 'COPY' });
+    expect(plannedPlayOf(state({ mineModifier: 'REMOVE' })).mineModifier).toBe('REMOVE');
   });
 });
 
 describe('describeRecordConsequence', () => {
   test('the default options keep the whole record under every ruleset', () => {
-    for (const judgeRuleset of ['lr2', 'beatoraja', '____'] as const)
+    for (const judgeRuleset of ['lr2', 'beatoraja', '____', 'plugout'] as const)
       expect(describeRecordConsequence(state({ judgeRuleset }))).toBe(
         'Record: score, lamp and play count are saved · Leaderboard: main board',
       );
@@ -62,6 +68,14 @@ describe('describeRecordConsequence', () => {
     expect(describeRecordConsequence(state({ autoPlay: true }))).toBe(
       'AUTO PLAY: no record, and nothing is sent to the Leaderboard',
     );
+  });
+
+  test("the player's NOTES COPY keeps no record on a chart it copies (#1243)", () => {
+    expect(describeRecordConsequence(state({ crazyNotes: 'COPY' }))).toBe(
+      'Record: score, lamp and play count are saved · Leaderboard: main board — on a chart NOTES COPY changes: ' +
+        'Not saved (NOTES COPY): no record · Leaderboard: stored, not ranked',
+    );
+    expect(describeRecordConsequence(state({ crazyNotes: 'DOUBLE' }))).toBe(describeRecordConsequence(state()));
   });
 
   test('a chart-dependent option is worded as conditional after what holds on any chart', () => {

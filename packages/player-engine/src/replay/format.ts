@@ -1,4 +1,4 @@
-import type { ChartOptionProgram, ChartPlayOptionProgram } from '@be-music/chart-model';
+import type { ChartOptionProgram, ChartPlayOptionProgram, PlayerChartPlayOptions } from '@be-music/chart-model';
 import { parseChartOptionProgram, parseChartPlayOptionProgram } from './chart-options.ts';
 import {
   clampCustomJudgeRate,
@@ -22,13 +22,13 @@ import type { LongNoteMode, RandomDraw } from '@be-music/chart-model';
 import { isScratchSpin, type ScratchSpin } from '../core/scratch-spin.ts';
 import {
   GAUGE_TYPES,
-  isGaugeType,
-  type GaugeType,
+  isGaugePick,
+  type GaugePick,
   type GaugeAutoShift,
   type GaugeShiftBottom,
 } from '../ruleset/gauge-type.ts';
 import type { CourseGaugeSet, CourseJudgeConstraint, RulesetCourseKind } from '../ruleset/course.ts';
-import type { RulesetId } from '../ruleset/definitions.ts';
+import { isRulesetId, RULESET_IDS, type RulesetId } from '../ruleset/definitions.ts';
 import {
   parseReplayTempoChanges,
   parseReplayViewChanges,
@@ -104,6 +104,11 @@ export interface ReplayNote {
   damage?: number;
   /** Generated mines carry no explosion sample. Valid only for mine notes. */
   silent?: boolean;
+  /**
+   * A note plugout judges but leaves out of its note count: an LRX chain note at the start of its lane. Only the
+   * `plugout` ruleset reads it.
+   */
+  uncounted?: true;
 }
 
 export type ReplayInputAction = 'down' | 'up';
@@ -163,7 +168,8 @@ export interface ReplayControlInputEvent {
 export interface ReplayJudgeRank {
   /**
    * Initial judgerank on the internal LR2 percent axis (VERY HARD = 25 / HARD = 50 / NORMAL = 75 / EASY = 100),
-   * resolved through `resolveJudgeRankPercent` at record time.
+   * resolved through `resolveJudgeRankPercent` at record time. LR2 judges a BMS chart with a positive
+   * {@link sourceExRank} (`#DEFEXRANK`) by that value instead, scaling the `#RANK 2` windows (#1190).
    */
   percent: number;
   /** Raw `#RANK` (`metadata.rank`) when the chart specified one. */
@@ -220,7 +226,8 @@ export interface ReplayChart {
    * the player played. Lane options (MIRROR / RANDOM / FLIP) are part of neither fingerprint; they live in `play`.
    */
   playFingerprint?: string;
-  sourceFormat: 'bms' | 'bmson';
+  /** The chart's source format. An LRX chart reads its rank and TOTAL as a BMS chart does. */
+  sourceFormat: 'bms' | 'bmson' | 'lrx';
   /** Explicit TOTAL units for mixed-format NONSTOP charts; otherwise derived from sourceFormat. */
   totalUnit?: 'absolute' | 'percent';
   /** Engine lane display mode (`'7keys'` / `'14keys'` / ... — `resolveLaneDisplayMode` output). */
@@ -246,7 +253,8 @@ export interface ReplayChart {
 export interface ReplayPlay {
   /**
    * The physical inputs the play used (#605), numbered by `id`; every input event names one (`ReplayInputEvent.source`).
-   * Coarse device classes and normalised labels only — never a device id, vendor or product id, or serial.
+   * Coarse device classes and normalised labels, plus a source's `deviceName` (a browser's `Gamepad.id`) only when the
+   * player opted in to recording it (`ReplayRecordingOptions.includeDeviceNames`, off by default). Never a serial.
    */
   inputSources: ReplayInputSource[];
   /** How the host turned an analog turntable axis into presses and releases, when one was played. */
@@ -307,16 +315,26 @@ export interface ReplayPlay {
    * `inputs` keep the keys' own lanes, and replays and simulators route them again. Absent = off.
    */
   anyKey?: boolean;
-  /** Gauge the player selected for the session (declared by the host; LR2-family gauge id). */
-  gauge: GaugeType;
+  /**
+   * Gauge the player selected for the session (declared by the host; LR2-family gauge id). A bare value is the played
+   * ruleset's own gauge, read under a re-judging ruleset as that ruleset's own. A qualified one (`lr2:HARD`) keeps its
+   * source's gauge, auto-shift ladder and course gauges under every ruleset (ADR 0019, #1171).
+   */
+  gauge: GaugePick;
   /** The 2P player's gauge of a two-player play (`battleMode: 'TWO-PLAYER'`); `results.secondPlayer` is its result. */
-  gauge2P?: GaugeType;
+  gauge2P?: GaugePick;
   /**
    * Lane-arrangement option per side, when the host applied one (`'OFF'` / `'MIRROR'` / `'RANDOM'` / `'lr2:S-RANDOM'` /
    * ...). A bare colliding name (`'S-RANDOM'`, `'CONVERGE'`) is the played ruleset's own (ADR 0019). Older replays may hold
    * `'lr2:RANDOM'` and the like, which read as `'RANDOM'` (`canonicalOptionValue`).
    */
   randomLane?: { p1?: string; p2?: string };
+  /**
+   * The nanasigroove CRAZY gameplay options the player chose that the play ran with (#1243): those of
+   * `chart.chartPlayOptions` the chart's own `#OPTION` does not set (`playerChartPlayOptionsOf`). Absent when the player
+   * added none. A player's NOTES COPY / DBLCOPY keeps no record (`classifyReplayAssists`).
+   */
+  playerChartPlayOptions?: PlayerChartPlayOptions;
   dpFlip?: boolean;
   /** Debug BAD-window override (`PlayerOptions.judgeWindowMs`) — simulations of such plays are non-standard. */
   judgeWindowOverrideMs?: number;
@@ -406,8 +424,13 @@ export interface ReplayJudgmentCounts {
 export interface ReplayGaugeResult {
   /** Raw values for every parallel gauge; course stages carry these into the next stage. */
   values?: Record<string, number>;
-  /** Ruleset-scoped gauge id (`'GROOVE'`, `'HARD'`, `'NORMAL'`, `'EX-HARD'`, ...). */
+  /** Gauge id in its source's line-up (`'GROOVE'`, `'HARD'`, `'NORMAL'`, `'EX-HARD'`, ...). */
   type: string;
+  /**
+   * The source whose gauge {@link type} names, when the play ran another source's gauge than the judging ruleset's own
+   * (`play.gauge: 'lr2:HARD'` under beatoraja judging, #1171). Absent: the judging ruleset's own.
+   */
+  source?: RulesetId;
   /** Final gauge value in percent. */
   final: number;
   cleared: boolean;
@@ -527,6 +550,10 @@ export function parseReplay(source: unknown): BeMusicReplay {
   const chart = parseChart(expectRecord(root.chart, 'chart'));
   const inputs = parseInputs(root.inputs);
   const play = parsePlay(expectRecord(root.play, 'play'));
+  // The player's selections are part of the program the play ran with.
+  for (const [key, value] of Object.entries(play.playerChartPlayOptions ?? {}))
+    if (chart.chartPlayOptions?.options[key as keyof PlayerChartPlayOptions] !== value)
+      throw new ReplayParseError(`play.playerChartPlayOptions.${key}: not in chart.chartPlayOptions`);
   const sourceIds = new Set(play.inputSources.map((source) => source.id));
   inputs.forEach((input, index) => {
     if (!sourceIds.has(input.source)) {
@@ -560,8 +587,8 @@ function parseChart(chart: Record<string, unknown>): ReplayChart {
   const sourceFormat = chart.sourceFormat;
   if (chart.totalUnit !== undefined && chart.totalUnit !== 'absolute' && chart.totalUnit !== 'percent')
     throw new ReplayParseError('chart.totalUnit: expected absolute or percent');
-  if (sourceFormat !== 'bms' && sourceFormat !== 'bmson') {
-    throw new ReplayParseError(`chart.sourceFormat: expected 'bms' | 'bmson'`);
+  if (sourceFormat !== 'bms' && sourceFormat !== 'bmson' && sourceFormat !== 'lrx') {
+    throw new ReplayParseError(`chart.sourceFormat: expected 'bms' | 'bmson' | 'lrx'`);
   }
   const judgeRankRaw = expectRecord(chart.judgeRank, 'chart.judgeRank');
   const judgeRank: ReplayJudgeRank = {
@@ -725,6 +752,11 @@ function parseNote(value: unknown, index: number): ReplayNote {
       );
     note.generatedLongNote = true;
   }
+  if (record.uncounted !== undefined) {
+    if (record.uncounted !== true || (type !== 'normal' && type !== 'long'))
+      throw new ReplayParseError(`chart.notes[${index}].uncounted: expected true on a judged note`);
+    note.uncounted = true;
+  }
   if (record.silent !== undefined) {
     if (type !== 'mine' || typeof record.silent !== 'boolean')
       throw new ReplayParseError(`chart.notes[${index}].silent: expected a mine boolean`);
@@ -802,14 +834,29 @@ function parseControlInputs(value: unknown): ReplayControlInputEvent[] {
   });
 }
 
+/** The player's nanasigroove selections: GOOD2BAD / GREAT2BAD, HELLJUDGE and a NOTES conversion, as a player chooses them. */
+function parsePlayerChartPlayOptions(raw: unknown): PlayerChartPlayOptions {
+  const options = expectRecord(raw, 'play.playerChartPlayOptions');
+  const parsed: PlayerChartPlayOptions = {};
+  for (const [key, value] of Object.entries(options)) {
+    if (key === 'judge' && (value === 'GOOD2BAD' || value === 'GREAT2BAD')) parsed.judge = value;
+    else if (key === 'hellJudge' && value === true) parsed.hellJudge = true;
+    else if (key === 'notes' && (value === 'DOUBLE' || value === 'COPY' || value === 'DBLCOPY')) parsed.notes = value;
+    else throw new ReplayParseError(`play.playerChartPlayOptions.${key}: unsupported value`);
+  }
+  return parsed;
+}
+
 function parsePlay(play: Record<string, unknown>): ReplayPlay {
   const mode = play.mode;
   if (mode !== 'manual' && mode !== 'auto') {
     throw new ReplayParseError(`play.mode: expected 'manual' | 'auto'`);
   }
   const gauge = play.gauge;
-  if (!isGaugeType(gauge)) {
-    throw new ReplayParseError(`play.gauge: expected one of ${GAUGE_TYPES.join(' | ')}`);
+  if (!isGaugePick(gauge)) {
+    throw new ReplayParseError(
+      `play.gauge: expected one of ${GAUGE_TYPES.join(' | ')}, optionally qualified with its source (lr2:HARD)`,
+    );
   }
   if (play.inputSources === undefined) {
     throw new ReplayParseError('play.inputSources: required (replays recorded before input sources are not read)');
@@ -831,15 +878,17 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
   }
   if (play.dpFlip !== undefined) parsed.dpFlip = play.dpFlip === true;
   if (play.gauge2P !== undefined) {
-    if (!isGaugeType(play.gauge2P))
-      throw new ReplayParseError(`play.gauge2P: expected one of ${GAUGE_TYPES.join(' | ')}`);
+    if (!isGaugePick(play.gauge2P))
+      throw new ReplayParseError(
+        `play.gauge2P: expected one of ${GAUGE_TYPES.join(' | ')}, optionally qualified with its source (lr2:HARD)`,
+      );
     parsed.gauge2P = play.gauge2P;
   }
   const judgeWindowOverrideMs = optionalFiniteNumber(play.judgeWindowOverrideMs, 'play.judgeWindowOverrideMs');
   if (judgeWindowOverrideMs !== undefined) parsed.judgeWindowOverrideMs = judgeWindowOverrideMs;
   if (play.judgeRuleset !== undefined) {
-    if (play.judgeRuleset !== 'lr2' && play.judgeRuleset !== 'beatoraja' && play.judgeRuleset !== '____') {
-      throw new ReplayParseError(`play.judgeRuleset: expected 'lr2' | 'beatoraja' | '____'`);
+    if (!isRulesetId(play.judgeRuleset)) {
+      throw new ReplayParseError(`play.judgeRuleset: expected ${RULESET_IDS.map((id) => `'${id}'`).join(' | ')}`);
     }
     parsed.judgeRuleset = play.judgeRuleset;
   }
@@ -962,9 +1011,13 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
       throw new ReplayParseError('play.scrollModifierChanged: expected boolean');
     parsed.scrollModifierChanged = play.scrollModifierChanged;
   }
+  if (play.playerChartPlayOptions !== undefined)
+    parsed.playerChartPlayOptions = parsePlayerChartPlayOptions(play.playerChartPlayOptions);
   if (play.mineModifier !== undefined) {
-    if (!['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK'].includes(play.mineModifier as string))
-      throw new ReplayParseError('play.mineModifier: expected OFF, REMOVE, ADD_RANDOM, ADD_NEAR or ADD_BLANK');
+    if (!['OFF', 'REMOVE', 'ADD_RANDOM', 'ADD_NEAR', 'ADD_BLANK', 'NANASI_ADD'].includes(play.mineModifier as string))
+      throw new ReplayParseError(
+        'play.mineModifier: expected OFF, REMOVE, ADD_RANDOM, ADD_NEAR, ADD_BLANK or NANASI_ADD',
+      );
     parsed.mineModifier = play.mineModifier as MineModifier;
   }
   if (play.mineModifierChangeCount !== undefined)

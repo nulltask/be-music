@@ -44,7 +44,7 @@ function computeChartStats(chart: BeMusicJSON, fallbackBPM: number | undefined):
   let rankChanges = false;
   try {
     // The song list sees the chart before any `#RANDOM` draw: only its unconditional content counts.
-    const resolved = resolveChart(chart, { inferBmsLNTypeWhenMissing: true });
+    const resolved = resolveChart(chart, { inferBmsLNTypeWhenMissing: false });
     for (const note of resolved.notes) {
       lengthSeconds = Math.max(lengthSeconds, note.endSeconds ?? note.seconds);
       // A FREE ZONE note's fixed tail is not a long note.
@@ -141,5 +141,5 @@ export function resolveChartRowFacts(chartEntry: Pick<LibraryChart, 'chart' | 'b
 
 /** `'7K KEYS'`-style mode label for a song's play variant. */
 export function formatPlayVariantLabel(chartEntry: Pick<LibraryChart, 'chartPath' | 'chart'>): string {
-  return `${resolveChartPlayVariant({ chartPath: chartEntry.chartPath, events: chartEntry.chart.events, bms: chartEntry.chart.bms, bmson: chartEntry.chart.bmson })} KEYS`;
+  return `${resolveChartPlayVariant({ chartPath: chartEntry.chartPath, events: chartEntry.chart.events, bms: chartEntry.chart.bms, bmson: chartEntry.chart.bmson, lrx: chartEntry.chart.lrx })} KEYS`;
 }

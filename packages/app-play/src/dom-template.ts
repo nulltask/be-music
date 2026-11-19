@@ -4,6 +4,7 @@ import { PLAYER_HELP_TEMPLATE } from './ui/help-template.ts';
 import { OPTIONS_HELP_TEMPLATE } from './ui/options/help-template.ts';
 import { PLAYER_BUILD_INFO } from './ui/shell-build-info.ts';
 import { html } from 'lit';
+import { dialogShortcutAria, dialogShortcutHint } from './ui/dialog-shortcuts.ts';
 import { publicBetaNoticeTemplate, serviceFooterTemplate } from '@be-music/service-web-theme/client';
 
 /** Local play uses production siblings, matching `leaderboardLink`. A preview host stays on preview. */
@@ -113,7 +114,10 @@ export const PLAYER_APP_TEMPLATE = html`
               <span>${localized('dropBeatorajaSkin')}</span>
             </div>
             <div class="start-load-actions">
-              <button class="btn" @click=${() => document.querySelector<HTMLInputElement>('#songs')?.click()}>
+              <button
+                class="btn"
+                @click=${() => document.querySelector('#songs')?.dispatchEvent(new Event('open-folder'))}
+              >
                 ${localized('openFolder')}
               </button>
               <button
@@ -124,6 +128,7 @@ export const PLAYER_APP_TEMPLATE = html`
                 ${localized('openZIP')}
               </button>
             </div>
+            <div data-remembered-folder-actions></div>
             <!--
             Leaderboard: whether this browser's plays are sent, and the
             account they go to. Rendered by \`LeaderboardPanel\`
@@ -262,8 +267,15 @@ export const PLAYER_APP_TEMPLATE = html`
           <h2 class="drop-title" id="skin-drop-title"></h2>
           <p class="text-muted-foreground text-sm" data-skin-drop-hint></p>
           <footer>
-            <button type="button" class="btn" data-variant="outline" data-skin-drop-cancel>
-              ${localized('cancel')}
+            <button
+              type="button"
+              class="btn"
+              data-variant="outline"
+              data-skin-drop-cancel
+              data-dialog-shortcut="cancel"
+              aria-keyshortcuts=${dialogShortcutAria('cancel')}
+            >
+              ${localized('cancel')}${dialogShortcutHint('cancel')}
             </button>
           </footer>
         </div>
@@ -279,12 +291,42 @@ export const PLAYER_APP_TEMPLATE = html`
             <h2 id="skin-switch-title">${localized('skinSwitchTitle')}</h2>
             <p id="skin-switch-hint">${localized('skinSwitchHint')}</p>
           </header>
+          <label class="skin-switch-preference">
+            <input class="input" type="checkbox" data-skin-switch-do-not-ask />
+            <span>${localized('skinSwitchDoNotAsk')}</span>
+          </label>
           <footer>
-            <button type="submit" value="" class="btn" data-variant="outline" autofocus>${localized('cancel')}</button>
+            <button
+              type="submit"
+              value=""
+              class="btn"
+              data-variant="outline"
+              autofocus
+              data-dialog-shortcut="cancel"
+              aria-keyshortcuts=${dialogShortcutAria('cancel')}
+            >
+              ${localized('cancel')}${dialogShortcutHint('cancel')}
+            </button>
             <span class="account-dialog-buttons">
-              <button type="submit" value="lr2" class="btn" data-skin-family="lr2">${localized('useLr2')}</button>
-              <button type="submit" value="beatoraja" class="btn" data-skin-family="beatoraja">
-                ${localized('useBeatoraja')}
+              <button
+                type="submit"
+                value="lr2"
+                class="btn"
+                data-skin-family="lr2"
+                data-dialog-shortcut="l"
+                aria-keyshortcuts=${dialogShortcutAria('l')}
+              >
+                ${localized('useLr2')}${dialogShortcutHint('l')}
+              </button>
+              <button
+                type="submit"
+                value="beatoraja"
+                class="btn"
+                data-skin-family="beatoraja"
+                data-dialog-shortcut="b"
+                aria-keyshortcuts=${dialogShortcutAria('b')}
+              >
+                ${localized('useBeatoraja')}${dialogShortcutHint('b')}
               </button>
             </span>
           </footer>
@@ -314,6 +356,18 @@ export const PLAYER_APP_TEMPLATE = html`
         aria-describedby="random-mix-save-dialog-hint"
       ></dialog>
       <!--
+      A course with stages missing from the collection, decided on the select
+      screen: it lists the stages with the download pages their difficulty
+      table names. Lit renders into the empty dialog
+      (\`showMissingCourseStages\`, ui/course-missing.ts).
+    -->
+      <dialog
+        class="dialog account-dialog"
+        id="course-missing"
+        aria-labelledby="course-missing-title"
+        aria-describedby="course-missing-hint"
+      ></dialog>
+      <!--
       A dropped replay (\`*.bmplay.json\`) whose chart is not loaded, or a course
       replay (\`*.bmcourse.json\`) whose stage charts are not all loaded: it lists
       the missing charts and the replay does not start. Filled by
@@ -332,7 +386,15 @@ export const PLAYER_APP_TEMPLATE = html`
           </header>
           <ul class="replay-missing-list" data-replay-missing-list></ul>
           <footer>
-            <button type="submit" class="btn" autofocus>${localized('ok')}</button>
+            <button
+              type="submit"
+              class="btn"
+              autofocus
+              data-dialog-shortcut="primary"
+              aria-keyshortcuts=${dialogShortcutAria('primary')}
+            >
+              ${localized('ok')}${dialogShortcutHint('primary')}
+            </button>
           </footer>
         </form>
       </dialog>
@@ -352,10 +414,26 @@ export const PLAYER_APP_TEMPLATE = html`
             <p id="exit-menu-hint">${localized('exitMenuHint')}</p>
           </header>
           <footer>
-            <button type="submit" class="btn" data-variant="outline" value="cancel">
-              ${localized('exitMenuCancel')}
+            <button
+              type="submit"
+              class="btn"
+              data-variant="outline"
+              value="cancel"
+              data-dialog-shortcut="cancel"
+              aria-keyshortcuts=${dialogShortcutAria('cancel')}
+            >
+              ${localized('exitMenuCancel')}${dialogShortcutHint('cancel')}
             </button>
-            <button type="submit" class="btn" value="leave" autofocus>${localized('exitMenuLeave')}</button>
+            <button
+              type="submit"
+              class="btn"
+              value="leave"
+              autofocus
+              data-dialog-shortcut="primary"
+              aria-keyshortcuts=${dialogShortcutAria('primary')}
+            >
+              ${localized('exitMenuLeave')}${dialogShortcutHint('primary')}
+            </button>
           </footer>
         </form>
       </dialog>
@@ -378,7 +456,15 @@ export const PLAYER_APP_TEMPLATE = html`
           </header>
           <ul class="replay-missing-list" data-play-option-mismatch-list></ul>
           <footer>
-            <button type="submit" class="btn" autofocus>${localized('ok')}</button>
+            <button
+              type="submit"
+              class="btn"
+              autofocus
+              data-dialog-shortcut="primary"
+              aria-keyshortcuts=${dialogShortcutAria('primary')}
+            >
+              ${localized('ok')}${dialogShortcutHint('primary')}
+            </button>
           </footer>
         </form>
       </dialog>
@@ -479,7 +565,15 @@ export const PLAYER_APP_TEMPLATE = html`
             </ol>
           </section>
           <footer>
-            <button type="button" class="btn" data-install-close>${localized('close')}</button>
+            <button
+              type="button"
+              class="btn"
+              data-install-close
+              data-dialog-shortcut="cancel"
+              aria-keyshortcuts=${dialogShortcutAria('cancel')}
+            >
+              ${localized('close')}${dialogShortcutHint('cancel')}
+            </button>
           </footer>
         </div>
       </dialog>
@@ -507,7 +601,20 @@ export const PLAYER_APP_TEMPLATE = html`
         <div>
           <header>
             <h2 id="options-modal-title">${localized('options')}</h2>
+            <!-- Finds an option by its name, place, choices or help. \`ui/options/search.ts\`. -->
+            <input
+              class="input options-search"
+              id="options-search"
+              type="search"
+              placeholder=${localized('optionsSearch')}
+              aria-label=${localized('optionsSearch')}
+              aria-controls="options-search-results"
+              autocomplete="off"
+              spellcheck="false"
+            />
           </header>
+          <div id="options-search-results" class="options-search-results" hidden></div>
+          <div data-remembered-folder-actions></div>
           <section id="options-modal-body" class="options-body"></section>
           <button type="button" id="options-modal-close" aria-label=${localized('close')}>
             <svg

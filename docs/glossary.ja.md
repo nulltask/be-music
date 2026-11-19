@@ -2,8 +2,7 @@
 
 # 用語集
 
-この文書は、`be-music` の仕様書と実装で使う用語を定義します。
-一般的な BMS/bmson 用語にできるだけ沿いつつ、**このリポジトリでどう扱うか**を優先します。
+`be-music` の仕様書と実装に出てくる用語をまとめます。BMS・bmson の一般的な用法を踏まえ、意味が異なる場合はリポジトリでの使い方を示します。
 
 ## 用語運用ルール
 
@@ -77,7 +76,7 @@
 - **チャージノート (CN) / ヘルチャージノート (HCN)**: 終点も判定するロングノートです（ルールセットが演奏する `#LNMODE 2` / `3`）。HCN は押していない間ゲージが減ります。判定ラインを通過している間、HCN は **gaining**（レーンのキーが押されている、または終点を GOOD 以上で離した）か **draining**（レーンが離されている。押せば再び増える）のどちらかです。コード: `hell-charge` UI コマンド、ロングノートの状態 `'draining'`。狭義の **LN**（`#LNMODE 1`）は始点だけを判定します。
 - **バックスピンスクラッチ (back-spin scratch / BSS)**: スクラッチレーン上のチャージノート（CN / HCN）です。終点は離しではなく、始点を取った押下と別の**入力ソース**からの押下で判定します。ロングノートの終点を判定するルールセット（beatoraja の CN / HCN と、名前を言ってはいけないあのゲームのすべてのロングノート）にだけあり、LR2 では LN として演奏します。コード: `isBackSpinScratch`、`backSpinScratch`。
 - **スクラッチの回転方向 (scratch spin)**: スクラッチ押下がターンテーブルを回した向きで、`'cw'` か `'ccw'` です（`ScratchSpin`、リプレイの `spin`）。表示用です。回転を報告するコントローラーは実際に回した向きを送り、キーボードは **odd-even**（スクラッチレーンのキーを交互に 2 方向として扱う）を使います。
-- **入力ソース (input source)**: レーンの押下や離鍵が来た物理的な入力です。キーボードのひとつのキー、コントローラーのひとつのボタン、タッチの領域、ターンテーブルのひとつの回転方向のいずれかです。リプレイは `play.inputSources` に並べ、どの入力も `source` でひとつを指します。ソースは大まかな `device` の種別と正規化した `label` を持ち、デバイスを識別するデータは持ちません。コード: `InputSource`、`inputSourceKey`。
+- **入力ソース (input source)**: レーンの押下や離鍵が来た物理的な入力です。キーボードのひとつのキー、コントローラーのひとつのボタン、タッチの領域、ターンテーブルのひとつの回転方向のいずれかです。リプレイは `play.inputSources` に並べ、どの入力も `source` でひとつを指します。ソースは大まかな `device` の種別と正規化した `label` を持ちます。コントローラー自身の名前（`deviceName`）は、プレイヤーが記録を選んだときだけ持ちます。コード: `InputSource`、`inputSourceKey`。
 - **地雷 (mine)**: 押すとダメージを受けるノートです。LR2 に合わせ、レーンを押したまま判定線を通過するか、`PGREAT` 窓内で押すと爆発します。爆発は譜面値ベースの gauge damage を与えるだけで、判定にはなりません。
 - **判定（judgment）**: `PERFECT`・`GREAT`・`GOOD`・`BAD`・`POOR` など、ノートに対する評価です。結果は judgment、判定する動作は judge と呼びます。種類は `JudgmentKind`、時刻付きの結果は `JudgmentTiming` です。エンジンの動作名やフォーマットのフィールドである `judge`・`judgeRuleset` は役割を区別して扱います。
 - **FAST / SLOW**: 判定タイミングの早押し/遅押しの補助表示です。現行実装では `GREAT` と `GOOD` のみ集計します。
@@ -108,7 +107,7 @@
 
 - **IR (`@be-music/chart-source`)**: BMS/bmson/JSON chart を共通表現として扱う内部中間表現です。外部交換フォーマットではありません。
 - **pure IR**: `@be-music/chart-source` が譜面意味論を持たず、正規化済みデータ構造と preservation data の保持に徹する設計方針です。
-- **sourceFormat**: その IR がもともと `bms`、`bmson`、`json` のどれから来たかを示す属性です。
+- **sourceFormat**: その IR がもともと `bms`、`bmson`、`lrx`、`json` のどれから来たかを示す属性です。
 - **round-trip**: `parse -> IR -> stringify` の往復で、元の譜面構造をできるだけ再現することです。
 - **preservation**: round-trip のために source-level 情報を保持する補助レイヤーです。正規化済みの `events` / `measures` とは分けて管理します。
 - **sourceLines**: BMS の header、object、control-flow 行を宣言順で保持する preservation 情報です。
@@ -155,7 +154,7 @@
 - **structured log**: TUI 出力とは分離して書き出す NDJSON 実行ログです。通常は `~/.be-music/logs/player.ndjson` に出力します。
 - **video BGA streaming**: gameplay 開始前には動画 BGA の最初の frame だけを確保し、残りを gameplay 開始後に段階的に decode する方針です。
 - **リプレイ（replay）**: 1 回のプレイを決定的に再現するための記録（`*.bmplay.json`）です。解決済み譜面・入力イベント・プレイ設定を持ち、プレイ結果の集計や、複数のプレイからなるプレイ履歴とは区別します。`bms-replay` は LR2、beatoraja、名前を言ってはいけないあのゲームのルールセットでこれを再シミュレーションします。
-- **ゴースト（ghost）**: 記録されたプレイを今のプレイの横に見せるもので、そのリプレイから導き直します。描くだけで、今のプレイの判定、記録、リプレイはゴーストを見ません。ゴーストの **ソース（source）** はどのリプレイを再生するか（自己ベスト、リプレイスロット、Leaderboard のラン、リプレイファイル）、**見せ方（presentation）** はどう見せるか（2 つ目のプレイフィールド、ペースメーカー、記録された入力を自分のレーンに重ねるペースメーカー）を決めます。[replay.ja.md](./replay.ja.md#ゴースト) を参照してください。
+- **ゴースト（ghost）**: 記録されたプレイを今のプレイの横に見せるもので、そのリプレイから導き直します。描くだけで、今のプレイの判定、記録、リプレイはゴーストを見ません。ゴーストの **ソース（source）** はどのリプレイを再生するか（自己ベスト、リプレイスロット、Leaderboard のラン、リプレイファイル）、**見せ方（presentation）** はどう見せるか（2 つ目のプレイフィールド、ペースメーカー、記録された入力を自分のレーンに重ねるペースメーカー）を決めます。[replay.ja.md](./replay-browser.ja.md#ゴースト) を参照してください。
 - **PlayerSummary**: 再生終了後の集計結果です。判定数、FAST/SLOW、EX-SCORE、SCORE、gauge、clear state などを含みます。
 
 ## コース・記録・表示
@@ -166,7 +165,7 @@
 - **投げ（give up）**: コースの実行を ESC で抜けること。投げた実行は落ちた実行です。
 - **結合したプレイ（stitched play）**: NONSTOP のコースを遊ぶ 1 本の譜面。ステージをつなぎ方と配置に従って結合して作ります。
 - **IR フラグ（IR flag）**: コースの実行をランキングに入れるかどうか。LR2 の `ir` 列（ここでの IR は LR2 のインターネットランキングで、譜面の IR ではありません）、beatoraja の `release` にあたり、コードでは `release` と呼びます。プレイヤーが作ったコースは未登録で始まり、登録は一方向で、登録したコースは読み取り専用になります。
-- **判定ルールセット（judge ruleset）**: プレイを判定し順位付けする基準のゲーム。判定幅・ゲージ・ランプが決まります。`lr2`・`beatoraja`・`____`。
+- **判定ルールセット（judge ruleset）**: プレイを判定し順位付けする基準のゲーム。判定幅・ゲージ・ランプが決まります。`lr2`・`beatoraja`・`____`・`plugout`。
 - **ゲージの種類（gauge type）**: プレイヤーが選ぶゲージ。LR2 の名前で `GROOVE`・`HARD`・`DEATH`・`EASY`（`GaugeType`）。判定ルールセットはそれぞれ自分のゲージで遊ばせ、そのゲージはゲージ ID（`NORMAL`・`HAZARD`・`CLASS` など）で呼びます。
 - **クリアランプ（clear lamp）**: プレイで得たクリアの区分（FAILED〜MAX、`ClearLamp`）。保存する番号は追加専用で、順序ではありません（ASSIST EASY と EASY の間の LIGHT ASSIST EASY は 10）。判定ルールセットごとに付く範囲が違います。どのプレイも 1 つの規則で決めます（`@be-music/player-engine/ruleset` の `resolveClearLamp`、`resolveCourseClearLamp`）。
 - **アシスト区分（assist class）**: プレイがどれだけアシストを受けたかを、各オプションの参照元の規則で表したもの。`none`・`light`・`assist`・`no-save`（`@be-music/player-engine/records` の `AssistClass`、`classifyReplayAssists`）。その結果どうなるかは判定ルールセットが決めます（`resolveRecordPolicy`）。

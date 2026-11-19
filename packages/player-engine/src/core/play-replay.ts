@@ -31,6 +31,7 @@ function createReplayJudge(session: PlaySession): PlayJudge {
       const rebuilt = createSeekRebuildSink(session.summary);
       // Rebuild silently, retaining keysounds not cut by a later stop on their lane.
       const sounds = new Map<string, Array<Extract<JudgeCoreEffect, { kind: 'sound' }>>>();
+      const chains: Array<Extract<JudgeCoreEffect, { kind: 'chain-sounds' }>> = [];
       advanceJudgeCoreReplay(judgeCore, replay, seconds, (effect) => {
         rebuilt.emit(effect);
         if (effect.kind === 'sound') {
@@ -38,10 +39,19 @@ function createReplayJudge(session: PlaySession): PlayJudge {
           lane.push(effect);
           sounds.set(effect.channel, lane);
         } else if (effect.kind === 'stop-sound') sounds.delete(effect.channel);
+        else if (effect.kind === 'chain-sounds') chains.push(effect);
       });
       for (const lane of sounds.values()) {
         for (const sound of lane)
           session.audioSession?.triggerEventAt?.(sound.event, Math.max(0, seconds - sound.seconds));
+      }
+      // The LRX chain notes those presses queued: the ones already due start partway, the rest wait for their moment.
+      for (const chain of chains) {
+        for (const sound of chain.sounds) {
+          const due = chain.seconds + sound.delaySeconds;
+          if (due < seconds) session.audioSession?.triggerEventAt?.(sound.event, seconds - due);
+          else session.chainSounds.schedule(seconds, [{ event: sound.event, delaySeconds: due - seconds }]);
+        }
       }
       return {
         judgments: rebuilt.judgments,

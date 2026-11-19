@@ -67,6 +67,60 @@ describe('ruleset judge windows', () => {
   });
 });
 
+describe('That-Which-Must-Not-Be-Named provisional windows (#1189)', () => {
+  const ac = resolveRuleset(facts({ judgeRank: { percent: 75, sourceRank: 2 } }), '____').windows;
+  // beatoraja's SEVENKEYS tables at judgerank 100, where no window is scaled: the donor of the borrowed values.
+  const donor = resolveRuleset(
+    facts({ sourceFormat: 'bmson', judgeRank: { percent: 75, sourceExRank: 100 } }),
+    'beatoraja',
+  ).windows;
+
+  test('the ordinary-note windows are the game’s own, not the donor’s', () => {
+    expect(ac.note.judges).toEqual([
+      [-16667, 16667],
+      [-33333, 33333],
+      [-116667, 116667],
+      [-250000, 250000],
+    ]);
+    expect(ac.note.judges).not.toEqual(donor.note.judges);
+    expect(ac.scratch).toBe(ac.note);
+  });
+
+  test('the empty-POOR window is borrowed from beatoraja’s miss window', () => {
+    expect(ac.note.ms).toEqual([-150000, 500000]);
+    expect(ac.note.ms).toEqual(donor.note.ms);
+  });
+
+  test('a CN release has only PGREAT inside the GOOD window, whose bounds and the BAD window are the donor’s', () => {
+    expect(ac.longNoteEnd.judges).toEqual([
+      [-200000, 200000],
+      [-200000, 200000],
+      [-200000, 200000],
+      [-280000, 220000],
+    ]);
+    // The GOOD and BAD bounds are borrowed from beatoraja's long-note end windows; its PGREAT and GREAT are not used.
+    expect(ac.longNoteEnd.judges[2]).toEqual(donor.longNoteEnd.judges[2]);
+    expect(ac.longNoteEnd.judges[3]).toEqual(donor.longNoteEnd.judges[3]);
+    expect(ac.longScratchEnd).toBe(ac.longNoteEnd);
+  });
+
+  test.each([
+    [120_000, 0],
+    [120_001, 0],
+    [-120_000, 0],
+    [160_001, 0],
+    [200_000, 0],
+    [-200_000, 0],
+    [200_001, 3],
+    [220_000, 3],
+    [220_001, RULESET_JUDGE_NONE],
+    [-280_000, 3],
+    [-280_001, RULESET_JUDGE_NONE],
+  ] as const)('a CN release %i µs from the tail judges %i', (dmUs, judge) => {
+    expect(classifyRulesetJudge(dmUs, ac.longNoteEnd)).toBe(judge);
+  });
+});
+
 describe('beatoraja scaled BAD limits', () => {
   test.each([
     ['5K', [-187500, 187500], [-200000, 200000], [-312500, 312500], [-325000, 325000]],

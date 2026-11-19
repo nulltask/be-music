@@ -2,19 +2,24 @@
 
 # 仕様書
 
-このディレクトリは、`be-music` リポジトリで使う仕様を Markdown でまとめたものです。
+`be-music` の譜面形式、プレイヤー、スキン、サービスの仕様です。
 
 - [アーキテクチャ: 譜面のレイヤー、エンジン、パッケージのレイヤー](architecture.ja.md)
 - [設計判断の記録](adr/README.ja.md)
 - [BMS 実装仕様](bms-spec.ja.md)
 - [bmson 実装仕様](bmson-spec.ja.md)
+- [LRX 実装仕様](./lrx-spec.ja.md)
+- [n2s 実装仕様](./n2s-spec.ja.md)
+- [n2x 実装仕様](./n2x-spec.ja.md)
 - [BMS / bmson 互換性ノート（de jure と de facto）](format-compat.ja.md)
+- [Be-Music 特有の解釈と挙動](be-music-behaviour.ja.md)
 - [Bemuse 実装仕様](bemuse-spec.ja.md)
 - [Player 実装仕様](player-spec.ja.md)
 - [Terminal player 実装メモ](player-tui.ja.md)
 - [Browser player 実装メモ](player-web.ja.md)
 - [シーンモデル（`@be-music/player-scene-model`）](scene-model.ja.md)
 - [リプレイ（プレイ履歴）仕様](replay.ja.md)
+- [プレイオプション](./play-options.ja.md)
 - [コースと段位認定](course.ja.md)
 - [ブラウザー検証](player-web.ja.md#ブラウザー検証)
 - [Be-Music Fingerprint 仕様](fingerprint-spec.ja.md)
@@ -24,7 +29,6 @@
 - [beatoraja skin 実装メモ](beatoraja-skin.ja.md)
 - [Be-Music Skin の作り方](be-music-skin.ja.md)
 - [BMS/bmson 中間表現 (`@be-music/chart-source`) 実装仕様](json-spec.ja.md)
-- [パッケージの命名と責務](./packages.ja.md)
 - [共有ユーティリティ](./shared-utils.ja.md)
 - [再利用可能な Player UI・React / Vue 連携](../packages/player-ui/README.ja.md)
 - [用語集](glossary.ja.md)

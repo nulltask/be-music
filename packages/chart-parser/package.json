@@ -1,6 +1,6 @@
 {
   "name": "@be-music/chart-parser",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "description": "Parsers for BMS, bmson, and Be-Music JSON chart sources",
   "license": "MIT",
   "bin": {
@@ -17,6 +17,11 @@
       "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./core": {
+      "source": "./src/core/index.ts",
+      "types": "./dist/core.d.ts",
+      "default": "./dist/core.js"
     }
   },
   "scripts": {
@@ -29,6 +34,7 @@
   "dependencies": {
     "@be-music/chart-model": "workspace:*",
     "@be-music/chart-source": "workspace:*",
-    "@be-music/shared-utils": "workspace:*"
+    "@be-music/shared-utils": "workspace:*",
+    "fflate": "^0.8.3"
   }
 }

@@ -3,23 +3,67 @@ import {
   compileChartPlayOptions,
   hasChartPlayOptions,
   isChartPlayOptionDeclaration,
+  isLegacyChartPlayOptionProgram,
   parseChartPlayOption,
+  playerChartPlayOptionsOf,
+  withPlayerChartPlayOptions,
 } from './chart-play-options.ts';
 
 test.each([
-  ['774:RANDOM_MIRROR', { random: 'MIRROR' }],
-  ['774:RANDOM_RANDOM+', { random: 'RANDOM+' }],
-  ['774:RANDOM_ALL', { random: 'ALL' }],
-  ['774:RANDOM_ALL+', { random: 'ALL+' }],
-  ['774:CRAZY_GOOD2BAD', { judge: 'GOOD2BAD' }],
-  ['774:CRAZY_GREAT2BAD', { judge: 'GREAT2BAD' }],
-  ['774:CRAZY_HELLJUDGE', { hellJudge: true }],
-  ['774:CRAZY_ADDMINE', { addMine: true }],
-  ['774:NOTES_DOUBLE', { notes: 'DOUBLE' }],
-  ['774:NOTES_COPY', { notes: 'COPY' }],
-  ['774:NOTES_DBLCOPY', { notes: 'DBLCOPY' }],
-])('compiles %s', (declaration, options) => {
-  expect(compileChartPlayOptions({ initial: [declaration] })).toEqual({ version: 1, options });
+  ['774:RANDOM_MIRROR', { random: 'MIRROR' }, 1],
+  ['774:RANDOM_RANDOM+', { random: 'RANDOM+' }, 1],
+  ['774:RANDOM_ALL', { random: 'ALL' }, 1],
+  ['774:RANDOM_ALL+', { random: 'ALL+' }, 1],
+  ['774:CRAZY_GOOD2BAD', { judge: 'GOOD2BAD' }, 3],
+  ['774:CRAZY_GREAT2BAD', { judge: 'GREAT2BAD' }, 3],
+  ['774:CRAZY_HELLJUDGE', { hellJudge: true }, 3],
+  ['774:CRAZY_ADDMINE', { addMine: true }, 3],
+  ['774:NOTES_DOUBLE', { notes: 'DOUBLE' }, 3],
+  ['774:NOTES_COPY', { notes: 'COPY' }, 3],
+  ['774:NOTES_DBLCOPY', { notes: 'DBLCOPY' }, 3],
+  ['774:CRA-RHS2', { baseSpeed: 1.5 }, 2],
+])('compiles %s (version %#)', (declaration, options, version) => {
+  // A CRAZY gameplay option or a NOTES conversion takes nanasigroove's readings, version 3.
+  expect(compileChartPlayOptions({ initial: [declaration] })).toEqual({ version, options });
+});
+
+test('a CRAZY gameplay option with a base speed is version 3, which keeps the base speed', () => {
+  expect(compileChartPlayOptions({ initial: ['774:CRA-RHS1', '774:CRAZY_HELLJUDGE'] })).toEqual({
+    version: 3,
+    options: { baseSpeed: 1.2, hellJudge: true },
+  });
+});
+
+test('only a program before version 3 is legacy', () => {
+  expect(isLegacyChartPlayOptionProgram({ version: 1, options: {} })).toBe(true);
+  expect(isLegacyChartPlayOptionProgram({ version: 2, options: { baseSpeed: 2 } })).toBe(true);
+  expect(isLegacyChartPlayOptionProgram({ version: 3, options: { hellJudge: true } })).toBe(false);
+});
+
+test("the player's judgment options join where the chart sets none, the chart winning within a family", () => {
+  const empty = { version: 1 as const, options: { random: 'MIRROR' as const } };
+  expect(withPlayerChartPlayOptions(empty, undefined)).toBe(empty);
+  expect(withPlayerChartPlayOptions(empty, {})).toBe(empty);
+  expect(withPlayerChartPlayOptions(empty, { judge: 'GOOD2BAD', hellJudge: true })).toEqual({
+    version: 3,
+    options: { random: 'MIRROR', judge: 'GOOD2BAD', hellJudge: true },
+  });
+  const chart = { version: 3 as const, options: { judge: 'GREAT2BAD' as const } };
+  expect(withPlayerChartPlayOptions(chart, { judge: 'GOOD2BAD' })).toBe(chart);
+  expect(withPlayerChartPlayOptions(chart, { hellJudge: true })).toEqual({
+    version: 3,
+    options: { judge: 'GREAT2BAD', hellJudge: true },
+  });
+});
+
+test("the player's NOTES conversion joins where the chart sets none", () => {
+  const plain = { version: 1 as const, options: {} };
+  expect(withPlayerChartPlayOptions(plain, { notes: 'DBLCOPY' })).toEqual({
+    version: 3,
+    options: { notes: 'DBLCOPY' },
+  });
+  const chart = { version: 3 as const, options: { notes: 'DOUBLE' as const } };
+  expect(withPlayerChartPlayOptions(chart, { notes: 'COPY' })).toBe(chart);
 });
 
 test('later declarations win within a family, OFF clears it, and other families stay', () => {
@@ -72,4 +116,23 @@ test('hasChartPlayOptions', () => {
   expect(hasChartPlayOptions(undefined)).toBe(false);
   expect(hasChartPlayOptions({ version: 1, options: {} })).toBe(false);
   expect(hasChartPlayOptions({ version: 1, options: { hellJudge: true } })).toBe(true);
+});
+
+test('the selections a play ran with that the chart does not set came from the player (#1243)', () => {
+  expect(playerChartPlayOptionsOf({}, {})).toEqual({});
+  expect(
+    playerChartPlayOptionsOf({ random: 'MIRROR' }, { random: 'MIRROR', judge: 'GOOD2BAD', notes: 'COPY' }),
+  ).toEqual({
+    judge: 'GOOD2BAD',
+    notes: 'COPY',
+  });
+  // The chart's own choice wins within a family, so it is the chart's, also where the play narrowed it.
+  expect(
+    playerChartPlayOptionsOf({ judge: 'GREAT2BAD', notes: 'DBLCOPY' }, { judge: 'GREAT2BAD', notes: 'DOUBLE' }),
+  ).toEqual({});
+  expect(playerChartPlayOptionsOf({ judge: 'GREAT2BAD' }, { judge: 'GREAT2BAD', hellJudge: true })).toEqual({
+    hellJudge: true,
+  });
+  // A player's COPY a course stage left out took no effect.
+  expect(playerChartPlayOptionsOf({}, { notes: 'DOUBLE' })).toEqual({ notes: 'DOUBLE' });
 });

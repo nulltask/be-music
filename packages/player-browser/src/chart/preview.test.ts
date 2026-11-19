@@ -16,6 +16,8 @@ import {
   resolveChartPreviewLevel,
   resolveChartPreviewPath,
   resolveChartWindowCarryOver,
+  resolveWindowStretchSegment,
+  windowSampleNeeds,
   resolvePreviewFallbackFade,
   selectChartWindowCarryOvers,
   selectChartWindowTriggers,
@@ -27,6 +29,17 @@ const collectionMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../collection/collection.ts', () => collectionMocks);
+
+const stretchMocks = vi.hoisted(() => ({
+  // A stretched sample is `rate` times shorter, marked so a test can tell it from the decoded one.
+  stretchAudioBuffers: vi.fn(async (_context: unknown, buffers: readonly AudioBuffer[], rate: number) =>
+    buffers.map(
+      (buffer) => ({ ...buffer, duration: buffer.duration / rate, stretched: true }) as unknown as AudioBuffer,
+    ),
+  ),
+}));
+
+vi.mock('../runtime/time-stretch.ts', () => stretchMocks);
 
 /**
  * Pure helpers plus a tiny fake-AudioContext harness for the chart-preview engine. The real asset lookup wiring is
@@ -51,6 +64,7 @@ function makeBmsonChart(previewMusic: string | undefined): BeMusicJSON {
 
 interface FakeBufferSource {
   buffer: AudioBuffer | null;
+  playbackRate: { value: number };
   onended: (() => void) | null;
   connect: ReturnType<typeof vi.fn>;
   disconnect: ReturnType<typeof vi.fn>;
@@ -80,6 +94,7 @@ function makePreviewAudioMocks(): { audioContext: AudioContext; output: AudioNod
     createBufferSource: vi.fn(() => {
       const source: FakeBufferSource = {
         buffer: null,
+        playbackRate: { value: 1 },
         onended: null,
         connect: vi.fn(),
         disconnect: vi.fn(),
@@ -421,6 +436,104 @@ describe('ChartPreviewEngine.playWindow', () => {
     expect(sources[1]!.start).toHaveBeenCalledWith(1.02, 0);
   });
 
+  test('sounds the window at the play tempo, the pitch following: the samples sped up as LR2 plays them', async () => {
+    const chart = barChart();
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0 });
+
+    engine.playWindow(makePreviewTarget(chart), { startSeconds: 2, endSeconds: 4, tempo: 2 });
+
+    await vi.waitFor(() => expect(sources).toHaveLength(2));
+    // Twice as fast: the keysound half a second in, the 2 s bar over in 1 s.
+    expect(sources.map((source) => source.start.mock.calls[0]?.[0])).toEqual([0.02, 0.52]);
+    expect(sources.map((source) => source.playbackRate.value)).toEqual([2, 2]);
+    for (const source of sources)
+      expect(source.stop).toHaveBeenCalledWith(1.02 + CHART_PREVIEW_WINDOW_FADE_OUT_SECONDS);
+    expect(stretchMocks.stretchAudioBuffers).not.toHaveBeenCalled();
+  });
+
+  test('sounds the window at the play tempo with the pitch kept: the samples stretched, once per tempo', async () => {
+    const chart = barChart();
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0 });
+    const target = makePreviewTarget(chart);
+    const window = { startSeconds: 2, endSeconds: 4, tempo: 0.5, keepPitch: true, stretchAlgorithm: 'wsola' } as const;
+
+    engine.playWindow(target, window);
+    await vi.waitFor(() => expect(sources).toHaveLength(2));
+    // Half as fast: the keysound two seconds in, at the samples' own rate, on the stretched buffers.
+    expect(sources.map((source) => source.start.mock.calls[0]?.[0])).toEqual([0.02, 2.02]);
+    expect(sources.map((source) => source.playbackRate.value)).toEqual([1, 1]);
+    expect(sources.every((source) => (source.buffer as unknown as { stretched?: boolean }).stretched)).toBe(true);
+    // Both samples went to the stretcher in one batch, and the second window reuses them.
+    expect(stretchMocks.stretchAudioBuffers).toHaveBeenCalledTimes(1);
+    expect(stretchMocks.stretchAudioBuffers.mock.calls[0]![1]).toHaveLength(2);
+    engine.playWindow(target, window);
+    await vi.waitFor(() => expect(sources).toHaveLength(4));
+    expect(stretchMocks.stretchAudioBuffers).toHaveBeenCalledTimes(1);
+  });
+
+  test('with the pitch kept, stretches no sample that has finished before the window', async () => {
+    // Bar 2 [4, 6): the keysound at 3 s (a 1 s sample) has ended by 4 s; only the BGM hit on the bar line sounds.
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    stretchMocks.stretchAudioBuffers.mockClear();
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0 });
+    engine.playWindow(makePreviewTarget(barChart()), {
+      startSeconds: 4,
+      endSeconds: 6,
+      tempo: 0.5,
+      keepPitch: true,
+      stretchAlgorithm: 'wsola',
+    });
+    await vi.waitFor(() => expect(sources).toHaveLength(1));
+    // The bar's own batch holds the BGM hit alone; the background stretches the rest of the chart afterwards.
+    expect(stretchMocks.stretchAudioBuffers.mock.calls[0]![1]).toHaveLength(1);
+  });
+
+  test('with the pitch kept, stretches only the part of a long sample the window sounds', async () => {
+    // A 60 s song file started on bar 0's line: the window over bar 1 sounds its 2nd to 4th second.
+    const chart = createEmptyJSON('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = Array.from({ length: 4 }, (_, index) => ({ index, length: 1 }));
+    chart.events = [{ measure: 0, channel: '01', position: [0, 1], value: 'AA' }];
+    chart.resources.wav = { AA: 'song.wav' };
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    const song = {
+      ...makeMockAudioBuffer(60),
+      length: 60 * 44_100,
+      getChannelData: vi.fn(() => new Float32Array(60 * 44_100)),
+    } as unknown as AudioBuffer;
+    vi.mocked(audioContext.decodeAudioData).mockResolvedValue(song);
+    const createBuffer = vi.fn(
+      (channels: number, length: number, sampleRate: number) =>
+        ({
+          duration: length / sampleRate,
+          length,
+          numberOfChannels: channels,
+          sampleRate,
+          copyToChannel: vi.fn(),
+        }) as unknown as AudioBuffer,
+    );
+    Object.assign(audioContext, { createBuffer });
+    stretchMocks.stretchAudioBuffers.mockClear();
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0 });
+
+    engine.playWindow(makePreviewTarget(chart), {
+      startSeconds: 2,
+      endSeconds: 4,
+      tempo: 0.5,
+      keepPitch: true,
+      stretchAlgorithm: 'wsola',
+    });
+    await vi.waitFor(() => expect(sources).toHaveLength(1));
+    // The part from 1.7 s to 4.4 s (the window, its fade and the pad) is stretched, not the whole minute.
+    const [, [part]] = stretchMocks.stretchAudioBuffers.mock.calls[0]! as unknown as [unknown, AudioBuffer[]];
+    expect(part!.duration).toBeCloseTo(2.7, 3);
+    expect(createBuffer.mock.calls[0]![1]).toBeLessThan(2.71 * 44_100);
+    // It starts 0.3 s into the stretched part, which plays half as fast: 0.6 s in.
+    expect(sources[0]!.start.mock.calls[0]?.[1]).toBeCloseTo(0.6, 3);
+  });
+
   test('stops with a focus on nothing, even though no chart was focused', async () => {
     const chart = barChart();
     const { audioContext, output, sources } = makePreviewAudioMocks();
@@ -495,6 +608,59 @@ describe('selectChartWindowCarryOvers', () => {
     expect(selectChartWindowCarryOvers(triggers, { startSeconds: 2 }, false).map((t) => t.seconds)).toEqual([
       0, 1, 1.5,
     ]);
+  });
+});
+
+describe('windowSampleNeeds', () => {
+  const window = { startSeconds: 10, endSeconds: 12 };
+  const tail = CHART_PREVIEW_WINDOW_FADE_OUT_SECONDS;
+
+  test('sounds a trigger in the window from its offset to the window’s end and fade, at the play tempo', () => {
+    expect(windowSampleNeeds([{ seconds: 11, sampleOffsetSeconds: 0 }], window, 1, 60)).toEqual([
+      { startSeconds: 0, endSeconds: 1 + tail },
+    ]);
+    // At half the tempo the fade covers half as much of the sample.
+    expect(windowSampleNeeds([{ seconds: 11, sampleOffsetSeconds: 0 }], window, 0.5, 60)[0]!.endSeconds).toBeCloseTo(
+      1 + tail / 2,
+    );
+  });
+
+  test('sounds one carried into the window from where it has got to, within its slice', () => {
+    // A whole song file started at 0: the window sounds its 10th to 12th second.
+    expect(windowSampleNeeds([{ seconds: 0, sampleOffsetSeconds: 0 }], window, 1, 120)).toEqual([
+      { startSeconds: 10, endSeconds: 12 + tail },
+    ]);
+    // A bmson slice from 30 s, 11 s long: it ends before the window does.
+    expect(
+      windowSampleNeeds([{ seconds: 1, sampleOffsetSeconds: 30, sampleDurationSeconds: 11 }], window, 1, 120),
+    ).toEqual([{ startSeconds: 39, endSeconds: 41 }]);
+  });
+});
+
+describe('resolveWindowStretchSegment', () => {
+  test('stretches only the part of a long sample the window sounds, padded and snapped to tenths', () => {
+    expect(
+      resolveWindowStretchSegment(
+        [
+          { startSeconds: 10.03, endSeconds: 12.1 },
+          { startSeconds: 10.5, endSeconds: 11 },
+        ],
+        120,
+      ),
+    ).toEqual({ startSeconds: 9.7, endSeconds: 12.4 });
+    // Never past the sample's ends.
+    expect(resolveWindowStretchSegment([{ startSeconds: 0, endSeconds: 2 }], 60)).toEqual({
+      startSeconds: 0,
+      endSeconds: 2.3,
+    });
+  });
+
+  test('stretches the whole of a short sample, or of one the window sounds most of', () => {
+    // Nothing to sound past the sample's end.
+    expect(resolveWindowStretchSegment([{ startSeconds: 70, endSeconds: 70 }], 60)).toBeUndefined();
+    expect(resolveWindowStretchSegment([{ startSeconds: 0, endSeconds: 0.5 }], 3)).toBeUndefined();
+    expect(resolveWindowStretchSegment([{ startSeconds: 0, endSeconds: 9 }], 10)).toBeUndefined();
+    expect(resolveWindowStretchSegment([], 60)).toBeUndefined();
   });
 });
 

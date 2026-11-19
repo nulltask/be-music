@@ -3,7 +3,9 @@ import type { Container } from 'pixi.js';
 import type { SceneFamily } from '../host/family-kit.ts';
 import type { PixiSceneHost } from '../host/scene-host.ts';
 import type { FamilyView, IntentSink } from '../view/types.ts';
+import type { GamepadMenuEvent, GamepadMenuInput } from '../runtime/gamepad-menu.ts';
 import {
+  gamepadSessionKeyEvent,
   SessionScene,
   toSessionKeyEvent,
   type SceneSession,
@@ -362,5 +364,88 @@ describe('toSessionKeyEvent', () => {
         resolveControlButtons({ laneKeys: { beat: { '11': ['a'] } } }),
       ).buttons,
     ).toEqual(['1P-key1']);
+  });
+});
+
+/** A gamepad source the test presses buttons on. */
+function createFakeGamepad(): GamepadMenuInput & { press: (event: GamepadMenuEvent) => void; started: boolean } {
+  let listener: ((event: GamepadMenuEvent) => void) | undefined;
+  const pad = {
+    started: false,
+    start: (next: (event: GamepadMenuEvent) => void) => {
+      listener = next;
+      pad.started = true;
+    },
+    stop: () => {
+      listener = undefined;
+      pad.started = false;
+    },
+    press: (event: GamepadMenuEvent) => listener?.(event),
+  };
+  return pad;
+}
+
+describe('SessionScene gamepad', () => {
+  const press = (button: GamepadMenuEvent['button'], type: 'down' | 'up' = 'down'): GamepadMenuEvent => ({
+    type,
+    side: '1P',
+    button,
+    repeat: false,
+    timeStamp: 7,
+  });
+
+  it('reads the pads while on the stage, as control buttons', async () => {
+    const session = createFakeSession();
+    const gamepad = createFakeGamepad();
+    let skip = false;
+    const scene = new SessionScene(session, createFakeView().view, {
+      keyTarget: createKeyTarget(),
+      gamepad,
+      shouldSkipGamepad: () => skip,
+    });
+    await scene.enter(createFakeHost().host);
+    expect(gamepad.started).toBe(true);
+    gamepad.press(press('scratch-ccw'));
+    expect(session.handleKey).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'down', code: 'Gamepad1P-scratch-ccw', buttons: ['1P-scratch-ccw'] }),
+    );
+    // A press over a dialog is the dialog's; the release of a press the screen saw still reaches it.
+    skip = true;
+    session.handleKey.mockClear();
+    gamepad.press(press('start'));
+    expect(session.handleKey).not.toHaveBeenCalled();
+    gamepad.press(press('scratch-ccw', 'up'));
+    expect(session.handleKey).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'up' }));
+    scene.exit();
+    expect(gamepad.started).toBe(false);
+  });
+
+  it('leaves the pads of a play to the engine', async () => {
+    const session = { ...createFakeSession(), kind: 'play' as const };
+    const scene = new SessionScene(session, createFakeView().view, { keyTarget: createKeyTarget() });
+    await scene.enter(createFakeHost().host);
+    expect((scene as unknown as { gamepad: unknown }).gamepad).toBeUndefined();
+  });
+});
+
+describe('gamepadSessionKeyEvent', () => {
+  it('reads a key, the turntable, START and SELECT as control buttons and the D-pad as the arrows', () => {
+    const event = { type: 'down', side: '2P', button: 'key3', repeat: false, timeStamp: 3 } as const;
+    expect(gamepadSessionKeyEvent(event)).toEqual({
+      type: 'down',
+      buttons: ['2P-key3'],
+      code: 'Gamepad2P-key3',
+      key: '',
+      repeat: false,
+      timeStamp: 3,
+      shiftKey: false,
+      ctrlKey: false,
+      altKey: false,
+      metaKey: false,
+    });
+    expect(gamepadSessionKeyEvent({ ...event, button: 'select' }).buttons).toEqual(['2P-select']);
+    expect(gamepadSessionKeyEvent({ ...event, button: 'down', repeat: true })).toEqual(
+      expect.objectContaining({ code: 'ArrowDown', key: 'ArrowDown', buttons: [], repeat: true }),
+    );
   });
 });

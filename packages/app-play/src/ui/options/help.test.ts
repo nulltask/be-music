@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { optionHelpLabels, optionHelpSection, placeOptionHelpTip } from './help.ts';
+import { optionHelpLabels, optionHelpSection, placeOptionHelpTip, resolveOptionHelpChoices } from './help.ts';
 
 describe('optionHelpLabels', () => {
   test('names the control its own text names', () => {
@@ -60,5 +60,36 @@ describe('placeOptionHelpTip', () => {
       left: 8,
       arrowX: 12,
     });
+  });
+});
+
+describe('resolveOptionHelpChoices', () => {
+  const choices = [
+    ['OFF', 'Shows none.'],
+    [['SLOT 1', 'SLOT 2'], 'A replay slot.', 'SLOT 1 – 2'],
+    [['HARD', 'EX-HARD'], 'A survival gauge.'],
+    ['DEATH', 'Fails on one miss.'],
+  ] as const;
+
+  test('lists the choices the list offers, in its order, and marks the one picked', () => {
+    expect(resolveOptionHelpChoices(choices, ['DEATH', 'OFF'], 'OFF')).toEqual([
+      { label: 'DEATH', help: 'Fails on one miss.', current: false },
+      { label: 'OFF', help: 'Shows none.', current: true },
+    ]);
+  });
+
+  test('shows a group once, under its label or the names of those offered', () => {
+    expect(resolveOptionHelpChoices(choices, ['OFF', 'SLOT 1', 'SLOT 2', 'HARD'], 'SLOT 2')).toEqual([
+      { label: 'OFF', help: 'Shows none.', current: false },
+      { label: 'SLOT 1 – 2', help: 'A replay slot.', current: true },
+      { label: 'HARD', help: 'A survival gauge.', current: false },
+    ]);
+    expect(resolveOptionHelpChoices(choices, ['EX-HARD', 'HARD']).map((line) => line.label)).toEqual([
+      'HARD / EX-HARD',
+    ]);
+  });
+
+  test('lists nothing for a list none of whose options it knows', () => {
+    expect(resolveOptionHelpChoices(choices, ['1', '2'], '1')).toEqual([]);
   });
 });

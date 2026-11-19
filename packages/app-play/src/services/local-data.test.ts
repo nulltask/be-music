@@ -80,10 +80,17 @@ describe('local data viewer', () => {
   });
 
   test("names the player's databases and stores, and lists them first", () => {
-    expect(describeDatabase('be-music-replays')).toBe('Replay slots');
-    expect(describeDatabase('be-music-replays', 'replaySlotData')).toBe('Each slot’s replay, gzip-compressed');
+    expect(describeDatabase('be-music-replays')).toBe('Replay history and slots');
+    expect(describeDatabase('be-music-replays', 'replaySlotData')).toBe('Replay files, gzip-compressed');
     expect(describeDatabase('be-music-charts', 'parsedCharts')).toBe(
       'Each chart’s parse result, by the SHA-256 of its file',
+    );
+    expect(describeDatabase('be-music-folders', 'folders')).toBe('The remembered folders');
+    expect(describeDatabase('be-music-folder-snapshots')).toBe(
+      'What each remembered folder held when it was last loaded, so its charts are listed at once',
+    );
+    expect(describeDatabase('be-music-folder-snapshots', 'snapshots')).toBe(
+      'Each folder’s file listing, and the size, modification time and parse key of its chart files',
     );
     expect(describeDatabase('elsewhere')).toBeUndefined();
     expect(

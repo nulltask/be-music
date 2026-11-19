@@ -1,4 +1,9 @@
-import { hasChartPlayOptions, type ChartOptionProgram, type ChartPlayOptionProgram } from '@be-music/chart-model';
+import {
+  hasChartPlayOptions,
+  type ChartOptionProgram,
+  type ChartPlayOptionProgram,
+  type PlayerChartPlayOptions,
+} from '@be-music/chart-model';
 import type { BeatorajaCustomJudge } from '../ruleset/custom-judge.ts';
 import type { EffectiveBattleMode } from '../core/battle-mode.ts';
 import type { ChartPlayVariant } from '@be-music/chart-model';
@@ -25,14 +30,14 @@ import {
   resolveChart,
   type RandomDraws,
 } from '@be-music/chart-model';
-import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser';
+import { resolveBMSControlFlowWithDraws } from '@be-music/chart-parser/core';
 import { resolveBMSBase, type BeMusicJSON } from '@be-music/chart-source';
 import type { PlayerSummary } from '../core/engine.ts';
 import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
 import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
 import { resolve____RankLabel } from '../ruleset/score.ts';
-import type { GaugeType, GaugeAutoShift, GaugeShiftBottom } from '../ruleset/gauge-type.ts';
+import type { GaugePick, GaugeAutoShift, GaugeShiftBottom } from '../ruleset/gauge-type.ts';
 import type { RulesetId } from '../ruleset/definitions.ts';
 import packageJSON from '../../package.json' with { type: 'json' };
 import {
@@ -113,8 +118,10 @@ export interface ReplayRecorderPlaySettings {
   /** ANY KEY routed the play's presses (`PlayerOptions.anyKey`). */
   anyKey?: boolean;
   /** The gauge the engine ran (`PlayerOptions.gauge`, else `recordReplay.gauge`); `GROOVE` when neither is set. */
-  gauge?: GaugeType;
+  gauge?: GaugePick;
   randomLane?: { p1?: string; p2?: string };
+  /** The player's CRAZY selections the play ran with (`ReplayPlay.playerChartPlayOptions`); recorded when not empty. */
+  playerChartPlayOptions?: PlayerChartPlayOptions;
   dpFlip?: boolean;
   judgeWindowOverrideMs?: number;
   /** Judgment-window ruleset the engine ran (`PlayerOptions.judgeRuleset`). Absent = `'lr2'`. */
@@ -148,12 +155,14 @@ export interface ReplayRecorderPlaySettings {
  */
 export type ReplayRecordingOptions = Pick<
   ReplayRecorderPlaySettings,
-  'gauge' | 'randomLane' | 'dpFlip' | 'view' | 'native' | 'options' | 'analogScratch'
+  'gauge' | 'randomLane' | 'playerChartPlayOptions' | 'dpFlip' | 'view' | 'native' | 'options' | 'analogScratch'
 > & {
   chartSHA256?: string;
   chartMD5?: string;
   sourceChart?: BeMusicJSON;
   recorder?: Omit<ReplayRecorderInfo, 'engine'>;
+  /** Record each input source's device name (`ReplayRecorderOptions.includeDeviceNames`). Off by default. */
+  includeDeviceNames?: boolean;
 };
 
 export interface ReplayRecorderOptions {
@@ -182,6 +191,12 @@ export interface ReplayRecorderOptions {
   moneyScore?: boolean;
   /** Host application that records the play. `engine` is always overwritten with this package's version. */
   recorder?: Omit<ReplayRecorderInfo, 'engine'>;
+  /**
+   * Record each input source's device name (`InputSource.deviceName`, a browser's `Gamepad.id`) in
+   * `play.inputSources`. Off by default, and only the player turns it on: a device name can identify the player's
+   * hardware, and judging never reads it.
+   */
+  includeDeviceNames?: boolean;
   /** Dynamic `#EXRANKxx` changes the engine collected (chart order). */
   dynamicJudgeRankChanges?: ReadonlyArray<{ seconds: number; exRankValue: number }>;
   /** A stitched NONSTOP chart's later stages taking over the judge rank (`PlayerPlaySettings.stageRanks`). */
@@ -203,7 +218,7 @@ export interface ReplayRecorderFinalizeInput {
   /** Chart seconds the judge had settled through when the play was aborted. */
   abortedAtSeconds?: number;
   /** The 2P player of a two-player play: its summary, max combo and gauge (recorded as `results.secondPlayer`). */
-  secondPlayer?: { summary: PlayerSummary; maxCombo: number; gauge: GaugeType };
+  secondPlayer?: { summary: PlayerSummary; maxCombo: number; gauge: GaugePick };
 }
 
 export interface ReplayRecorder {
@@ -245,7 +260,7 @@ export const UNKNOWN_INPUT_SOURCE: InputSource = { kind: 'button', device: 'cont
 export function createReplayRecorder(options: ReplayRecorderOptions): ReplayRecorder {
   const chart = buildReplayChart(options);
   const inputs: ReplayInputEvent[] = [];
-  const inputSources = createInputSourceTable();
+  const inputSources = createInputSourceTable({ deviceNames: options.includeDeviceNames === true });
   let discarded = false;
   let seq = 0;
   let emptyPoorCount = 0;
@@ -341,6 +356,11 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       };
       if (secondPlayer !== undefined) play.gauge2P = secondPlayer.gauge;
       if (options.play.randomLane !== undefined) play.randomLane = options.play.randomLane;
+      if (
+        options.play.playerChartPlayOptions !== undefined &&
+        Object.keys(options.play.playerChartPlayOptions).length > 0
+      )
+        play.playerChartPlayOptions = { ...options.play.playerChartPlayOptions };
       if (options.play.dpFlip !== undefined) play.dpFlip = options.play.dpFlip;
       if (options.play.judgeWindowOverrideMs !== undefined) {
         play.judgeWindowOverrideMs = options.play.judgeWindowOverrideMs;
@@ -479,6 +499,7 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
         if (note.generatedLongNote) entry.generatedLongNote = true;
       }
     }
+    if (note.event.lrx?.chain === true && !isFreeZone) entry.uncounted = true;
     notes.push(entry);
   }
   for (const mine of chart.landmineNotes) {
@@ -525,7 +546,7 @@ function buildReplayChart(options: ReplayRecorderOptions): ReplayChart {
   }
 
   const result: ReplayChart = {
-    sourceFormat: json.sourceFormat === 'bmson' ? 'bmson' : 'bms',
+    sourceFormat: json.sourceFormat === 'bmson' || json.sourceFormat === 'lrx' ? json.sourceFormat : 'bms',
     laneMode: chart.laneDisplayMode,
     lnMode: chartLNMode,
     judgeRank,
@@ -637,7 +658,7 @@ function buildNativeResult(
   summary: PlayerSummary,
   maxCombo: number | undefined,
   emptyPoorCount: number,
-  declaredGauge: GaugeType,
+  declaredGauge: GaugePick,
   moneyScore: boolean,
 ): ReplayRulesetResult {
   // Reported the way the simulators report a ruleset result: the judgment count as `noteCount`, the DJ LEVEL, a money
@@ -660,6 +681,7 @@ function buildNativeResult(
     djLevel: resolve____RankLabel(summary.exScore, summary.total),
     gauge: {
       type: summary.gauge?.type ?? declaredGauge,
+      ...(summary.gauge?.source !== undefined ? { source: summary.gauge.source } : {}),
       ...(summary.gauge?.values ? { values: { ...summary.gauge.values } } : {}),
       final:
         summary.gauge?.max === 100

@@ -4,8 +4,11 @@
  * turntable share this one model, so beatoraja's scratch rules — a scratch hold remembers the source that started it
  * (`sckey` in `JudgeManager`) — apply to every device alike.
  *
- * A source names a coarse device class and a normalised label only. It never carries anything that identifies the
- * device itself: no `Gamepad.id`, no vendor or product id, no serial.
+ * A source names a coarse device class and a normalised label. The one exception is {@link InputSource.deviceName}: the
+ * device's own name, which a host may attach and a replay records only when the player opts in
+ * (`ReplayRecordingOptions.includeDeviceNames`). It is never part of a source's identity ({@link inputSourceKey}) and
+ * never read by judging. Nothing else that identifies the device is ever carried: no vendor or product id field, no
+ * serial.
  */
 
 /** `key` and `button` are digital inputs; `turntable` is one rotation direction of a turntable. */
@@ -22,6 +25,12 @@ export interface InputSource {
   label: string;
   /** Present on a `turntable` source only, and required there. */
   direction?: TurntableDirection;
+  /**
+   * The device's own name as the host reports it (a browser's `Gamepad.id`, which often names the vendor and product
+   * ids). Diagnostic only: not part of {@link inputSourceKey}, never read by judging, and recorded in a replay only when
+   * the player opts in (`ReplayRecordingOptions.includeDeviceNames`). Keyboards and touch report none.
+   */
+  deviceName?: string;
 }
 
 const INPUT_SOURCE_KINDS: ReadonlySet<unknown> = new Set(['key', 'button', 'turntable']);
@@ -29,6 +38,13 @@ const INPUT_SOURCE_DEVICES: ReadonlySet<unknown> = new Set(['keyboard', 'control
 const TURNTABLE_DIRECTIONS: ReadonlySet<unknown> = new Set(['up', 'down']);
 /** Printable ASCII without spaces, 1 to 32 characters. */
 const INPUT_SOURCE_LABEL = /^[\x21-\x7e]{1,32}$/;
+/** The longest device name a replay keeps (UTF-16 code units). */
+export const INPUT_SOURCE_DEVICE_NAME_MAX_LENGTH = 128;
+// C0 / C1 control characters, which a device name never keeps.
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f-\u009f]/;
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/g;
 
 export function isInputSourceKind(value: unknown): value is InputSourceKind {
   return INPUT_SOURCE_KINDS.has(value);
@@ -45,6 +61,27 @@ export function isTurntableDirection(value: unknown): value is TurntableDirectio
 /** True for a normalised label: printable ASCII without whitespace or uppercase letters, at most 32 characters. */
 export function isInputSourceLabel(value: unknown): value is string {
   return typeof value === 'string' && INPUT_SOURCE_LABEL.test(value) && value === value.toLowerCase();
+}
+
+/** True for a device name a replay keeps: 1 to 128 characters, no control characters, no leading or trailing spaces. */
+export function isInputSourceDeviceName(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= INPUT_SOURCE_DEVICE_NAME_MAX_LENGTH &&
+    value === value.trim() &&
+    !CONTROL_CHARACTER.test(value)
+  );
+}
+
+/**
+ * The device name a replay records for `name`: control characters removed, trimmed and cut to
+ * {@link INPUT_SOURCE_DEVICE_NAME_MAX_LENGTH}; `undefined` when nothing is left.
+ */
+export function normalizeInputSourceDeviceName(name: string | undefined): string | undefined {
+  if (name === undefined) return undefined;
+  const normalized = name.replace(CONTROL_CHARACTERS, '').trim().slice(0, INPUT_SOURCE_DEVICE_NAME_MAX_LENGTH).trim();
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 /**
@@ -108,7 +145,11 @@ export interface IdentifiedInputSource extends InputSource {
   id: number;
 }
 
-/** The sources a play used, numbered in the order they first appeared (a replay's `play.inputSources`). */
+/**
+ * The sources a play used, numbered in the order they first appeared (a replay's `play.inputSources`). A source keeps
+ * the device name it was first registered with (when the table keeps names), since the name is not part of its
+ * identity: swapping one controller for another in the same slot mid-play does not make a new source.
+ */
 export interface InputSourceTable {
   /** The id of `source`, registering it if it is new. */
   idOf(source: InputSource): number;
@@ -117,9 +158,18 @@ export interface InputSourceTable {
   clear(): void;
 }
 
-export function createInputSourceTable(): InputSourceTable {
+export interface InputSourceTableOptions {
+  /**
+   * Keep each source's {@link InputSource.deviceName} (normalised by {@link normalizeInputSourceDeviceName}). Off by
+   * default: the table then never holds a device name.
+   */
+  deviceNames?: boolean;
+}
+
+export function createInputSourceTable(options: InputSourceTableOptions = {}): InputSourceTable {
   const ids = new Map<string, number>();
   const sources: IdentifiedInputSource[] = [];
+  const keepDeviceNames = options.deviceNames === true;
   return {
     idOf: (source) => {
       const key = inputSourceKey(source);
@@ -127,13 +177,13 @@ export function createInputSourceTable(): InputSourceTable {
       if (known !== undefined) return known;
       const id = sources.length;
       ids.set(key, id);
-      sources.push({
-        id,
-        kind: source.kind,
-        device: source.device,
-        label: source.label,
-        ...(source.direction !== undefined ? { direction: source.direction } : {}),
-      });
+      const entry: IdentifiedInputSource = { id, kind: source.kind, device: source.device, label: source.label };
+      if (source.direction !== undefined) entry.direction = source.direction;
+      if (keepDeviceNames) {
+        const deviceName = normalizeInputSourceDeviceName(source.deviceName);
+        if (deviceName !== undefined) entry.deviceName = deviceName;
+      }
+      sources.push(entry);
       return id;
     },
     list: () => sources.map((source) => ({ ...source })),

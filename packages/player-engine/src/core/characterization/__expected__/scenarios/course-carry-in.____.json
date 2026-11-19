@@ -17,7 +17,7 @@
       "combo": 3,
       "maxCombo": 3,
       "gauge": {
-        "current": 65.67,
+        "current": 65.670013,
         "max": 100,
         "clearThreshold": 0,
         "initial": 76.5,
@@ -113,7 +113,7 @@
           "noteCount": 11,
           "maxCombo": 3,
           "djLevel": "B",
-          "gauge": {"type":"EXCLASS","final":65.67,"cleared":true},
+          "gauge": {"type":"EXCLASS","final":65.670013,"cleared":true},
           "course": {"combo":3,"maxCombo":30}
         }
       }
@@ -141,7 +141,7 @@
         "noteCount": 11,
         "maxCombo": 6,
         "djLevel": "B",
-        "gauge": {"type":"EXCLASS","final":68.7,"cleared":true},
+        "gauge": {"type":"EXCLASS","final":68.700012,"cleared":true},
         "course": {"combo":4,"maxCombo":30}
       },
       "____": {
@@ -153,8 +153,21 @@
         "noteCount": 11,
         "maxCombo": 3,
         "djLevel": "B",
-        "gauge": {"type":"EXCLASS","final":65.67,"cleared":true},
+        "gauge": {"type":"EXCLASS","final":65.670013,"cleared":true},
         "course": {"combo":3,"maxCombo":30}
+      },
+      "plugout": {
+        "ruleset": "plugout/0",
+        "judge": {"pgreat":6,"great":2,"good":1,"bad":1,"poor":1,"emptyPoor":1},
+        "fast": 1,
+        "slow": 2,
+        "exScore": 14,
+        "noteCount": 11,
+        "maxCombo": 4,
+        "djLevel": "B",
+        "gauge": {"type":"GRADE-HARD","final":59.5,"cleared":true},
+        "course": {"combo":4,"maxCombo":30},
+        "score": 65907
       }
     },
     "audio": [
@@ -180,18 +193,18 @@
     ],
     "judges": [
       "0.000 READY combo=0 gauge=76.5",
-      "500.000 PERFECT combo=1 ch=11 delta=0 gauge=76.65",
-      "780.000 GREAT combo=2 ch=12 delta=30 gauge=76.77",
-      "940.000 GOOD combo=3 ch=13 delta=-60 gauge=76.8",
-      "1370.000 BAD combo=0 ch=16 delta=120 gauge=73.8",
-      "1500.000 PERFECT combo=1 ch=14 delta=0 gauge=73.95",
-      "1500.000 PERFECT combo=2 ch=15 delta=0 gauge=74.1",
-      "2000.000 PERFECT combo=3 ch=19 delta=0 gauge=74.25",
-      "2016.667 POOR combo=0 ch=18 delta=266.666667 gauge=68.25",
-      "2150.000 POOR combo=0 gauge=65.25",
-      "2500.000 PERFECT combo=1 ch=11 delta=0 gauge=65.4",
-      "3000.000 PERFECT combo=2 ch=12 delta=0 gauge=65.55",
-      "3525.000 GREAT combo=3 ch=11 delta=25 gauge=65.67"
+      "500.000 PERFECT combo=1 ch=11 delta=0 gauge=76.650002",
+      "780.000 GREAT combo=2 ch=12 delta=30 gauge=76.770004",
+      "940.000 GOOD combo=3 ch=13 delta=-60 gauge=76.800003",
+      "1370.000 BAD combo=0 ch=16 delta=120 gauge=73.800003",
+      "1500.000 PERFECT combo=1 ch=14 delta=0 gauge=73.950005",
+      "1500.000 PERFECT combo=2 ch=15 delta=0 gauge=74.100006",
+      "2000.000 PERFECT combo=3 ch=19 delta=0 gauge=74.250008",
+      "2016.667 POOR combo=0 ch=18 delta=266.666667 gauge=68.250008",
+      "2150.000 POOR combo=0 gauge=65.250008",
+      "2500.000 PERFECT combo=1 ch=11 delta=0 gauge=65.400009",
+      "3000.000 PERFECT combo=2 ch=12 delta=0 gauge=65.550011",
+      "3525.000 GREAT combo=3 ch=11 delta=25 gauge=65.670013"
     ],
     "ui": [
       "500.000 flash-lane 11",
@@ -320,7 +333,7 @@
       "combo": 3,
       "maxCombo": 3,
       "gauge": {
-        "current": 65.67,
+        "current": 65.670013,
         "max": 100,
         "clearThreshold": 0,
         "initial": 76.5,
@@ -381,18 +394,18 @@
     ],
     "judges": [
       "0.000 READY combo=0 gauge=76.5",
-      "500.000 PERFECT combo=1 ch=11 delta=0 gauge=76.65",
-      "783.333 GREAT combo=2 ch=12 delta=30 gauge=76.77",
-      "950.000 GOOD combo=3 ch=13 delta=-60 gauge=76.8",
-      "1383.333 BAD combo=0 ch=16 delta=120 gauge=73.8",
-      "1500.000 PERFECT combo=1 ch=14 delta=0 gauge=73.95",
-      "1500.000 PERFECT combo=2 ch=15 delta=0 gauge=74.1",
-      "2000.000 PERFECT combo=3 ch=19 delta=0 gauge=74.25",
-      "2016.667 POOR combo=0 ch=18 delta=250.001 gauge=68.25",
-      "2150.000 POOR combo=0 gauge=65.25",
-      "2500.000 PERFECT combo=1 ch=11 delta=0 gauge=65.4",
-      "3000.000 PERFECT combo=2 ch=12 delta=0 gauge=65.55",
-      "3533.333 GREAT combo=3 ch=11 delta=25 gauge=65.67"
+      "500.000 PERFECT combo=1 ch=11 delta=0 gauge=76.650002",
+      "783.333 GREAT combo=2 ch=12 delta=30 gauge=76.770004",
+      "950.000 GOOD combo=3 ch=13 delta=-60 gauge=76.800003",
+      "1383.333 BAD combo=0 ch=16 delta=120 gauge=73.800003",
+      "1500.000 PERFECT combo=1 ch=14 delta=0 gauge=73.950005",
+      "1500.000 PERFECT combo=2 ch=15 delta=0 gauge=74.100006",
+      "2000.000 PERFECT combo=3 ch=19 delta=0 gauge=74.250008",
+      "2016.667 POOR combo=0 ch=18 delta=250.001 gauge=68.250008",
+      "2150.000 POOR combo=0 gauge=65.250008",
+      "2500.000 PERFECT combo=1 ch=11 delta=0 gauge=65.400009",
+      "3000.000 PERFECT combo=2 ch=12 delta=0 gauge=65.550011",
+      "3533.333 GREAT combo=3 ch=11 delta=25 gauge=65.670013"
     ],
     "ui": [
       "500.000 press-lane 11",
@@ -502,7 +515,7 @@
       "combo": 11,
       "maxCombo": 11,
       "gauge": {
-        "current": 78.15,
+        "current": 78.150017,
         "max": 100,
         "clearThreshold": 0,
         "initial": 76.5,
@@ -539,7 +552,7 @@
           "noteCount": 11,
           "maxCombo": 11,
           "djLevel": "AAA",
-          "gauge": {"type":"EXCLASS","final":78.15,"cleared":true},
+          "gauge": {"type":"EXCLASS","final":78.150017,"cleared":true},
           "course": {"combo":18,"maxCombo":30}
         }
       }
@@ -567,7 +580,7 @@
         "noteCount": 11,
         "maxCombo": 11,
         "djLevel": "AAA",
-        "gauge": {"type":"EXCLASS","final":78.15,"cleared":true},
+        "gauge": {"type":"EXCLASS","final":78.150017,"cleared":true},
         "course": {"combo":18,"maxCombo":30}
       },
       "____": {
@@ -579,8 +592,21 @@
         "noteCount": 11,
         "maxCombo": 11,
         "djLevel": "AAA",
-        "gauge": {"type":"EXCLASS","final":78.15,"cleared":true},
+        "gauge": {"type":"EXCLASS","final":78.150017,"cleared":true},
         "course": {"combo":18,"maxCombo":30}
+      },
+      "plugout": {
+        "ruleset": "plugout/0",
+        "judge": {"pgreat":11,"great":0,"good":0,"bad":0,"poor":0,"emptyPoor":0},
+        "fast": 0,
+        "slow": 0,
+        "exScore": 22,
+        "noteCount": 11,
+        "maxCombo": 11,
+        "djLevel": "AAA",
+        "gauge": {"type":"GRADE-HARD","final":76.5,"cleared":true},
+        "course": {"combo":18,"maxCombo":30},
+        "score": 100000
       }
     },
     "audio": [
@@ -605,17 +631,17 @@
     ],
     "judges": [
       "0.000 READY combo=0 gauge=76.5",
-      "500.000 PERFECT combo=1 ch=11 gauge=76.65",
-      "750.000 PERFECT combo=2 ch=12 gauge=76.8",
-      "1000.000 PERFECT combo=3 ch=13 gauge=76.95",
-      "1250.000 PERFECT combo=4 ch=16 gauge=77.1",
-      "1500.000 PERFECT combo=5 ch=14 gauge=77.25",
-      "1500.000 PERFECT combo=6 ch=15 gauge=77.4",
-      "1750.000 PERFECT combo=7 ch=18 gauge=77.55",
-      "2000.000 PERFECT combo=8 ch=19 gauge=77.7",
-      "2500.000 PERFECT combo=9 ch=11 gauge=77.85",
-      "3000.000 PERFECT combo=10 ch=12 gauge=78",
-      "3500.000 PERFECT combo=11 ch=11 gauge=78.15"
+      "500.000 PERFECT combo=1 ch=11 gauge=76.650002",
+      "750.000 PERFECT combo=2 ch=12 gauge=76.800003",
+      "1000.000 PERFECT combo=3 ch=13 gauge=76.950005",
+      "1250.000 PERFECT combo=4 ch=16 gauge=77.100006",
+      "1500.000 PERFECT combo=5 ch=14 gauge=77.250008",
+      "1500.000 PERFECT combo=6 ch=15 gauge=77.400009",
+      "1750.000 PERFECT combo=7 ch=18 gauge=77.550011",
+      "2000.000 PERFECT combo=8 ch=19 gauge=77.700012",
+      "2500.000 PERFECT combo=9 ch=11 gauge=77.850014",
+      "3000.000 PERFECT combo=10 ch=12 gauge=78.000015",
+      "3500.000 PERFECT combo=11 ch=11 gauge=78.150017"
     ],
     "ui": [
       "500.000 flash-lane 11",

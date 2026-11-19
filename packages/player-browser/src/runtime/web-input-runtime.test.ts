@@ -1,6 +1,8 @@
-import { describe, expect, test } from 'vite-plus/test';
+import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import { createPlayerInputSignalBus } from '../../../player-engine/src/core/input-signal-bus.ts';
-import { createWebInputRuntime, keyboardEventToTokens } from './web-input-runtime.ts';
+import { CS_GAMEPAD_BUTTON_CHANNELS, createWebInputRuntime, keyboardEventToTokens } from './web-input-runtime.ts';
+
+afterEach(() => vi.unstubAllGlobals());
 
 /**
  * Minimal stand-in for the {@link KeyboardEvent} surface the runtime touches. `repeat` defaults to `false` because
@@ -58,6 +60,156 @@ function makeMockTarget(): {
 }
 
 describe('createWebInputRuntime', () => {
+  test('uses the CS DualShock button layout', () => {
+    expect(CS_GAMEPAD_BUTTON_CHANNELS).toEqual({
+      0: '5', // Cross
+      1: '9', // Circle
+      2: '3', // Square
+      3: '8', // Triangle
+      4: '2', // L1
+      5: '4', // R1
+      6: '6', // L2
+      7: '6', // R2
+      12: '1', // D-pad up
+    });
+  });
+
+  test('maps a standard gamepad button to its CS lane and reports controller source metadata', () => {
+    const buttons = Array.from({ length: 17 }, () => ({ pressed: false, value: 0 }));
+    buttons[2] = { pressed: true, value: 1 }; // Square → second white key.
+    vi.stubGlobal('navigator', {
+      getGamepads: () => [{ index: 0, mapping: 'standard', buttons }],
+    });
+    const inputSignals = createPlayerInputSignalBus();
+    const { target } = makeMockTarget();
+    const runtime = createWebInputRuntime({
+      inputSignals,
+      inputTokenToChannels: new Map([['s', ['13']]]),
+      target,
+    });
+    runtime.start();
+    runtime.stop();
+    expect(inputSignals.drainCommands()).toEqual([
+      {
+        kind: 'lane-input',
+        tokens: ['s'],
+        source: { kind: 'button', device: 'controller', label: 'p1-b2' },
+        code: 'gamepad-button-2',
+        pressedAt: expect.any(Number),
+      },
+      {
+        kind: 'kitty-state',
+        pressTokens: ['s'],
+        repeatTokens: [],
+        releaseTokens: [],
+        source: { kind: 'button', device: 'controller', label: 'p1-b2' },
+        code: 'gamepad-button-2',
+        pressedAt: expect.any(Number),
+      },
+      {
+        kind: 'kitty-state',
+        pressTokens: [],
+        repeatTokens: [],
+        releaseTokens: ['s'],
+        source: { kind: 'button', device: 'controller', label: 'p1-b2' },
+        code: 'gamepad-button-2',
+        pressedAt: expect.any(Number),
+      },
+    ]);
+  });
+
+  test('maps L2 and R2 to opposite scratch directions', () => {
+    const buttons = Array.from({ length: 17 }, () => ({ pressed: false, value: 0 }));
+    buttons[6] = { pressed: true, value: 1 };
+    vi.stubGlobal('navigator', {
+      getGamepads: () => [{ index: 0, mapping: 'standard', buttons }],
+    });
+    const inputSignals = createPlayerInputSignalBus();
+    const { target } = makeMockTarget();
+    const runtime = createWebInputRuntime({
+      inputSignals,
+      inputTokenToChannels: new Map([['shift-left', ['16']]]),
+      target,
+    });
+    runtime.start();
+    runtime.stop();
+    expect(inputSignals.drainCommands()[0]).toMatchObject({
+      kind: 'lane-input',
+      tokens: ['shift-left'],
+      source: { kind: 'turntable', device: 'controller', label: 'p1-tt', direction: 'up' },
+      spin: 'cw',
+      code: 'gamepad-button-6',
+    });
+  });
+
+  test('uses sequential lane buttons for a USB INFINITAS-compatible controller', () => {
+    const buttons = Array.from({ length: 16 }, (_, index) => ({
+      pressed: index === 6,
+      value: index === 6 ? 1 : 0,
+    }));
+    vi.stubGlobal('navigator', {
+      getGamepads: () => [{ id: '1ccf-8048-Controller', index: 0, mapping: '', buttons, axes: [0, 0] }],
+    });
+    const inputSignals = createPlayerInputSignalBus();
+    const runtime = createWebInputRuntime({
+      inputSignals,
+      inputTokenToChannels: new Map([
+        ['v', ['19']],
+        ['shift-left', ['16']],
+      ]),
+      target: makeMockTarget().target,
+    });
+    runtime.start();
+    runtime.stop();
+    expect(inputSignals.drainCommands()).toMatchObject([
+      { kind: 'lane-input', tokens: ['v'], source: { device: 'controller', label: 'p1-b6' } },
+      { kind: 'kitty-state', pressTokens: ['v'] },
+      { kind: 'kitty-state', releaseTokens: ['v'] },
+    ]);
+  });
+
+  test('handles a raw Gamepad event before polling and ignores stale or duplicate snapshots', () => {
+    vi.useFakeTimers();
+    const window = new EventTarget();
+    vi.stubGlobal('window', window);
+    const makePad = (timestamp: number, pressed: boolean) => ({
+      id: 'Standard Gamepad',
+      index: 0,
+      mapping: 'standard',
+      timestamp,
+      buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: i === 2 && pressed, value: 0 })),
+    });
+    let pad = makePad(1, false);
+    vi.stubGlobal('navigator', { getGamepads: () => [pad] });
+    const inputSignals = createPlayerInputSignalBus();
+    const runtime = createWebInputRuntime({
+      inputSignals,
+      inputTokenToChannels: new Map([['s', ['13']]]),
+      target: makeMockTarget().target,
+    });
+    const rawInput = (gamepad: ReturnType<typeof makePad>): void => {
+      window.dispatchEvent(Object.assign(new Event('gamepadrawinputchanged'), { gamepad }));
+    };
+    try {
+      runtime.start();
+      const pressed = makePad(2, true);
+      rawInput(pressed);
+      expect(inputSignals.drainCommands().map(({ kind }) => kind)).toEqual(['lane-input', 'kitty-state']);
+      vi.advanceTimersByTime(4);
+      pad = pressed;
+      vi.advanceTimersByTime(4);
+      expect(inputSignals.drainCommands()).toEqual([]);
+      rawInput(makePad(3, false));
+      expect(inputSignals.drainCommands()).toMatchObject([{ kind: 'kitty-state', releaseTokens: ['s'] }]);
+      runtime.stop();
+      rawInput(makePad(4, true));
+      expect(inputSignals.drainCommands()).toEqual([]);
+    } finally {
+      runtime.stop();
+      vi.useRealTimers();
+    }
+  });
+
   test('start attaches keydown / keyup listeners and stop detaches them', () => {
     const inputSignals = createPlayerInputSignalBus();
     const { target, attachedTypes } = makeMockTarget();

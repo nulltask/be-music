@@ -8,9 +8,34 @@ import {
   type BeMusicJSON,
 } from '@be-music/chart-source';
 
-/** Something a format conversion could not carry over; the output still loads, without that part. */
+/**
+ * Something a format conversion could not carry over exactly; the output still loads, without that part or with it
+ * changed (#1198). A caller that must not convert with such a loss can throw from the handler.
+ *
+ * - Judging changes: `mine-damage` (the gauge a mine drains), `total` (the gauge's TOTAL), `long-note-mode` (how a long
+ *   note is judged), `stp` (BMS `#STP` stops, which move every later note), `exrank` (BMS `#EXRANKxx` changes,
+ *   which the LR2 ruleset judges by), `bpm` (BMS negative or undefined `#BPMxx`, LR2's reverse scroll) and `stop` (BMS
+ *   STOPs without a positive `#STOPxx`, which move every later note 1/192 of a measure earlier).
+ * - Presentation changes: `speed` (BMS `SPEED` scroll changes), `sound-continuation` (bmson `c`, a note that continues
+ *   its sound slice), `ln-end-sound` (beatoraja's `up`, a long note's end keysound) and the `bga-*` codes.
+ */
 export interface ChartExportDiagnostic {
-  code: 'bga-layer2' | 'bga-extended' | 'bga-layer-black-key' | 'bga-poor-mode' | 'bga-sequence';
+  code:
+    | 'bga-layer2'
+    | 'bga-extended'
+    | 'bga-layer-black-key'
+    | 'bga-poor-mode'
+    | 'bga-sequence'
+    | 'mine-damage'
+    | 'total'
+    | 'long-note-mode'
+    | 'stp'
+    | 'exrank'
+    | 'bpm'
+    | 'stop'
+    | 'speed'
+    | 'sound-continuation'
+    | 'ln-end-sound';
   message: string;
 }
 
