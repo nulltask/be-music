@@ -130,7 +130,8 @@ describe('buildGhostField', () => {
 describe('SidePlayfieldGhost', () => {
   function makeGhost(ruleset: GhostTimeline['ruleset'] = 'lr2') {
     const side = resolveGhostSide(SEVEN_KEY, '7')!;
-    const live = { notes: [liveNote(1), liveNote(2), liveNote(3)], mineNotes: [], timingResolver: undefined };
+    const notes = [liveNote(1), liveNote(2), liveNote(3)];
+    const live = { notes, drawNotes: notes, mineNotes: [], timingResolver: undefined, maxLongNoteBeatSpan: 0 };
     const field = buildGhostField(timeline(), live);
     const effects = target();
     return { ghost: new SidePlayfieldGhost(timeline({ ruleset }), side, field, effects), field, effects, live };
@@ -193,6 +194,7 @@ describe('SidePlayfieldGhost', () => {
     expect(presented.ghostSide).toBe('2P');
     expect(presented.laneChannels).toHaveLength(16);
     expect(presented.notes.map((note) => note.channel)).toEqual(['11', '21', '11', '23', '11', '22']);
+    expect(presented.drawNotes).toBe(presented.notes);
     expect(presented.laneX).toBe(laneX);
     // Methods run on the live play itself.
     expect(presented.currentSeconds()).toBe(42);
@@ -200,9 +202,44 @@ describe('SidePlayfieldGhost', () => {
     ghost.update(2.21, 0);
     const later = ghost.present(play);
     expect(later).toBe(presented);
+    expect(later.drawNotes.find((note) => note.channel === '21')?.judged).toBe(true);
     expect(later.secondPlayer?.score).toMatchObject({ perfect: 1, poor: 1, exScore: 2, score: 66666 });
     expect(later.secondPlayer?.playState).toMatchObject({ combo: 0, maxCombo: 1, gauge: 16, gaugeType: 'GROOVE' });
     // The live play's own arrays are untouched.
     expect(play.notes).toHaveLength(3);
+  });
+
+  test('keeps the next practice loop and the 2P notes in the draw list', () => {
+    const { ghost, live } = makeGhost();
+    const preview = liveNote(4);
+    const drawNotes = [...live.notes, preview];
+    const play = { ...live, drawNotes } as unknown as PlayfieldRuntime;
+    const presented = ghost.present(play);
+
+    expect(presented.drawNotes.map((note) => [note.channel, note.beat])).toEqual([
+      ['11', 2],
+      ['21', 2],
+      ['11', 4],
+      ['23', 4],
+      ['11', 6],
+      ['22', 6],
+      ['11', 8],
+    ]);
+    expect(presented.notes).not.toContain(preview);
+    expect(play.drawNotes).toBe(drawNotes);
+    const rendered = presented.drawNotes;
+    expect(ghost.present(play).drawNotes).toBe(rendered);
+  });
+
+  test('includes a 2P long note in the lookback span used by the note renderer', () => {
+    const side = resolveGhostSide(SEVEN_KEY, '7')!;
+    const live = { notes: [liveNote(1)], drawNotes: [liveNote(1)], mineNotes: [], maxLongNoteBeatSpan: 2 };
+    const replay = timeline({ notes: [{ channel: '11', seconds: 1, endSeconds: 4 }] });
+    const field = buildGhostField(replay, { ...live, timingResolver: { beatToSeconds: (beat) => beat / 2 } });
+    const ghost = new SidePlayfieldGhost(replay, side, field, target());
+    const presented = ghost.present(live as unknown as PlayfieldRuntime);
+
+    expect(presented.maxLongNoteBeatSpan).toBe(6);
+    expect(live.maxLongNoteBeatSpan).toBe(2);
   });
 });
