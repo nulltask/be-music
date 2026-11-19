@@ -25,6 +25,7 @@ const en = {
     changeSavedFolder: (name: string) => `Change ${name}`,
     removeSavedFolder: (name: string) => `Remove ${name}`,
     reconnectFolder: (name: string) => `Reconnect ${name}`,
+    pickFolderAgain: (name: string) => `Pick ${name} again`,
     rememberedFolderError: 'Could not open or remember the folder.',
     bemuseServers: 'Bemuse music servers',
     bemuseServersHint:
@@ -463,6 +464,7 @@ const ja: typeof en = {
     changeSavedFolder: (name: string) => `${name} を変更`,
     removeSavedFolder: (name: string) => `${name} の登録を削除`,
     reconnectFolder: (name: string) => `${name} に再接続`,
+    pickFolderAgain: (name: string) => `${name} を選び直す`,
     rememberedFolderError: 'フォルダを開くか、保存することができませんでした。',
     bemuseServers: 'Bemuse 音楽サーバー',
     bemuseServersHint:
