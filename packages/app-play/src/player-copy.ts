@@ -18,6 +18,7 @@ const en = {
     savedFolders: 'Folders to load',
     savedFoldersHint:
       'Changes apply the next time you open the player. Removing a folder only removes its registration.',
+    sessionFolders: 'Folders loaded for this visit',
     changeFolder: 'Change',
     removeFolder: 'Remove',
     addFolder: 'Add folder',
@@ -455,6 +456,7 @@ const ja: typeof en = {
     openFolder: 'フォルダを開く',
     savedFolders: '読み込み対象フォルダ',
     savedFoldersHint: '変更はプレイヤーの次回起動時に反映されます。削除しても元のフォルダは残ります。',
+    sessionFolders: '今回読み込んだフォルダ',
     changeFolder: '変更',
     removeFolder: '削除',
     addFolder: 'フォルダを追加',

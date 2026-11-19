@@ -61,6 +61,7 @@ export class DropTarget {
   private readonly options: DropTargetOptions;
   private folderBusy = false;
   private savedFolders: RememberedFolder[] = [];
+  private readonly droppedFolderNames = new Set<string>();
   private folderWrites = Promise.resolve();
   private savedFoldersReady: Promise<void> | undefined;
   private reconnectFolders: RememberedFolder[] = [];
@@ -103,7 +104,7 @@ export class DropTarget {
       for (const folder of [...this.reconnectFolders]) {
         try {
           if ((await folder.queryPermission({ mode: 'read' })) === 'granted') {
-            await this.loadFolder(folder);
+            await this.loadFolder(folder, true);
             this.reconnectFolders = this.reconnectFolders.filter((pending) => pending !== folder);
           }
         } catch (error) {
@@ -136,52 +137,62 @@ export class DropTarget {
 
   private renderFolderManager(): void {
     const root = document.querySelector<HTMLElement>('[data-remembered-folder-manager]');
-    if (!root || !globalThis.indexedDB) return;
-    const canPick = 'showDirectoryPicker' in window;
-    if (!canPick && this.savedFolders.length === 0) return;
-    render(
-      html`
-        <section aria-labelledby="load-folders-heading">
-          <h3 id="load-folders-heading">${localized('savedFolders')}</h3>
-          <p>${localized('savedFoldersHint')}</p>
-          <ul class="remembered-folder-list">
-            ${this.savedFolders.map(
-              (folder) => html`
-                <li>
-                  <span>${folder.name}</span>
-                  <button
-                    type="button"
-                    class="btn"
-                    ?disabled=${!canPick}
-                    aria-label=${localized(() => playerText().shell.changeSavedFolder(folder.name))}
-                    @click=${() => void this.editSavedFolder(folder, true)}
-                  >
-                    ${localized('changeFolder')}
-                  </button>
-                  <button
-                    type="button"
-                    class="btn"
-                    aria-label=${localized(() => playerText().shell.removeSavedFolder(folder.name))}
-                    @click=${() => void this.editSavedFolder(folder, false)}
-                  >
-                    ${localized('removeFolder')}
-                  </button>
-                </li>
-              `,
-            )}
-          </ul>
-          <button
-            type="button"
-            class="btn"
-            ?disabled=${!canPick}
-            @click=${() => void this.editSavedFolder(undefined, true)}
-          >
-            ${localized('addFolder')}
-          </button>
-        </section>
-      `,
-      root,
-    );
+    if (!root) return;
+    const canPick = globalThis.indexedDB !== undefined && 'showDirectoryPicker' in window;
+    const savedNames = new Set(this.savedFolders.map(({ name }) => name));
+    const sessionNames = [...this.droppedFolderNames].filter((name) => !savedNames.has(name));
+    const savedFolders = html`
+      <section aria-labelledby="load-folders-heading">
+        <h3 id="load-folders-heading">${localized('savedFolders')}</h3>
+        <p>${localized('savedFoldersHint')}</p>
+        <ul class="remembered-folder-list">
+          ${this.savedFolders.map(
+            (folder) => html`
+              <li>
+                <span>${folder.name}</span>
+                <button
+                  type="button"
+                  class="btn"
+                  ?disabled=${!canPick}
+                  aria-label=${localized(() => playerText().shell.changeSavedFolder(folder.name))}
+                  @click=${() => void this.editSavedFolder(folder, true)}
+                >
+                  ${localized('changeFolder')}
+                </button>
+                <button
+                  type="button"
+                  class="btn"
+                  aria-label=${localized(() => playerText().shell.removeSavedFolder(folder.name))}
+                  @click=${() => void this.editSavedFolder(folder, false)}
+                >
+                  ${localized('removeFolder')}
+                </button>
+              </li>
+            `,
+          )}
+        </ul>
+        <button
+          type="button"
+          class="btn"
+          ?disabled=${!canPick}
+          @click=${() => void this.editSavedFolder(undefined, true)}
+        >
+          ${localized('addFolder')}
+        </button>
+      </section>
+    `;
+    const sessionFolders =
+      sessionNames.length > 0
+        ? html`
+            <section aria-labelledby="session-folders-heading">
+              <h3 id="session-folders-heading">${localized('sessionFolders')}</h3>
+              <ul class="remembered-folder-list">
+                ${sessionNames.map((name) => html`<li><span>${name}</span></li>`)}
+              </ul>
+            </section>
+          `
+        : null;
+    render(html`${canPick || this.savedFolders.length > 0 ? savedFolders : null}${sessionFolders}`, root);
   }
 
   private async editSavedFolder(previous: RememberedFolder | undefined, pick: boolean): Promise<void> {
@@ -213,6 +224,7 @@ export class DropTarget {
       .then((folders) => {
         this.savedFolders = folders;
         this.reconnectFolders = [...folders];
+        this.renderFolderManager();
       })
       .catch((error: unknown) => {
         this.savedFoldersReady = undefined;
@@ -270,19 +282,22 @@ export class DropTarget {
    * Lists a folder's charts: from its snapshot when it has one, which touches no file, and otherwise by walking it. A
    * folder listed from its snapshot is then walked in the background ({@link verifyFolder}).
    */
-  private async loadFolder(folder: RememberedFolder): Promise<void> {
+  private async loadFolder(folder: RememberedFolder, startup = false): Promise<void> {
     const loaded = this.sessionOf(folder);
-    showLoadingOverlay(this.elements);
+    if (!startup) showLoadingOverlay(this.elements);
     let leftSelect = false;
     let restored = false;
     try {
-      leftSelect = await this.leaveSelect();
+      if (!startup) leftSelect = await this.leaveSelect();
       let files = await loaded.restore();
       restored = files !== undefined;
-      files ??= await loaded.read((fileCount) =>
-        applyLoadProgress(this.elements, { phase: 'enumerating', current: fileCount, total: -1 }),
+      files ??= await loaded.read(
+        startup
+          ? undefined
+          : (fileCount) => applyLoadProgress(this.elements, { phase: 'enumerating', current: fileCount, total: -1 }),
       );
       await this.processIncomingFiles(files, {
+        startup,
         readFiles: () => loaded.read(),
         chartKeys: loaded,
         onLoaded: () => {
@@ -290,7 +305,7 @@ export class DropTarget {
         },
       });
     } finally {
-      hideLoadingOverlay(this.elements);
+      if (!startup) hideLoadingOverlay(this.elements);
       if (leftSelect) await this.options.resumeSelect();
       this.recordLoad();
     }
@@ -445,11 +460,19 @@ export class DropTarget {
       const files =
         entries.length > 0 ? await readDropEntries(entries, progress) : await readDroppedFiles(dataTransfer, progress);
       const handles = await folders;
-      let showLibraryRoot = false;
-      if (globalThis.indexedDB && (handles.length > 0 || entries.some((entry) => entry.isDirectory))) {
+      const folderNames = new Set(handles.map((folder) => folder.name));
+      for (const entry of entries) if (entry.isDirectory) folderNames.add(entry.name);
+      if (entries.length === 0) {
+        for (const file of files) {
+          const path = file.webkitRelativePath || '';
+          const separator = path.indexOf('/');
+          if (separator > 0) folderNames.add(path.slice(0, separator));
+        }
+      }
+      const isFolderDrop = folderNames.size > 0;
+      if (isFolderDrop && globalThis.indexedDB) {
         try {
           await this.readSavedFolders();
-          showLibraryRoot = this.savedFolders.length > 0;
         } catch (error) {
           this.reportFolderError(error);
         }
@@ -461,7 +484,7 @@ export class DropTarget {
       const sessions = names.size === handles.length ? handles.map((handle) => this.sessionOf(handle)) : [];
       await this.processIncomingFiles(files, {
         ...(entries.length > 0 ? { entries } : {}),
-        showLibraryRoot,
+        showLibraryRoot: isFolderDrop && (this.savedFolders.length > 0 || this.droppedFolderNames.size > 0),
         ...(sessions.length > 0
           ? {
               chartKeys: {
@@ -472,7 +495,8 @@ export class DropTarget {
             }
           : {}),
       });
-      if (handles.length > 0) {
+      for (const name of folderNames) this.droppedFolderNames.add(name);
+      if (handles.length > 0 && globalThis.indexedDB) {
         try {
           await this.rememberLoadedFolders(handles);
           for (const session of sessions) {
@@ -482,6 +506,7 @@ export class DropTarget {
           this.reportFolderError(error);
         }
       }
+      if (isFolderDrop) this.renderFolderManager();
     } finally {
       // Always tear the overlay down — even when one of the sub-loaders threw or `splitDroppedChartAndThemeFiles`
       // produced an empty bucket. Otherwise a failed drop would leave the UI permanently masked.

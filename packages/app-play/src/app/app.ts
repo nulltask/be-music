@@ -775,13 +775,8 @@ export class PlayerWebApp {
     // The replay slots load once; the select screen draws them again whenever they change.
     void this.replaySlots.store.load();
     this.replaySlots.store.subscribe(() => this.selectView?.refreshRecords());
-    // The first scene shown mounts the Pixi host (`mountStage`), which starts now, while the remembered folders are
-    // listed: the first select screen then opens on their charts. Keep its promise so URL auto-load (below) drives its
-    // own `showSelect` only once the first select screen is up.
-    void this.mountStage().catch(() => undefined);
-    const initialSelectReady = this.dropTarget
-      .restoreFolder()
-      .then(() => (this.router.current ? undefined : this.showSelect()));
+    const initialSelectReady = this.showSelect();
+    void initialSelectReady.then(() => this.dropTarget.restoreFolder());
     // A page put away (closed, or into the back/forward cache) keeps no decoded samples for a retry.
     window.addEventListener('pagehide', () => this.audio.chartSamples.release());
 
@@ -837,8 +832,7 @@ export class PlayerWebApp {
       }
     });
 
-    // `?music=<url.zip>` / `?skin=<url.zip>` auto-load, then the difficulty tables imported in an earlier visit, once the
-    // first select screen is up.
+    // Restore the remote library once the select screen is up. Local folders load independently.
     void this.library.autoLoad(window.location.href, initialSelectReady);
   }
 
