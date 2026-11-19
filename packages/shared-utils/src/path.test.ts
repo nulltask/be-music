@@ -30,6 +30,24 @@ describe('path utilities', () => {
     ).resolves.toBe(existingPath);
   });
 
+  test('fallback batches preserve priority and stop consuming candidates after a match', async () => {
+    const baseDir = await createTempFixtureDir('batched');
+    const first = join(baseDir, 'first.wav');
+    await writeFile(first, '');
+    await writeFile(join(baseDir, 'later.wav'), '');
+
+    function* candidates(): Iterable<string> {
+      yield 'missing.wav';
+      yield 'first.wav';
+      yield 'later.wav';
+      throw new Error('The first batch already contained a match.');
+    }
+
+    await expect(resolveFirstExistingPath(baseDir, candidates(), undefined, { fallbackConcurrency: 2 })).resolves.toBe(
+      first,
+    );
+  });
+
   test('resolveFirstExistingPath rejects absolute candidates per the bmson spec malicious-path guard', async () => {
     // bmson 1.0.0 spec MUST: "Absolute path: C:\\password.txt or /etc/passwd" must be refused. Even when the absolute
     // path sits under baseDir, the malicious-path predicate rejects it pre-resolve so chart-authored absolute
