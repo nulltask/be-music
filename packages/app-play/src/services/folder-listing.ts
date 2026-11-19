@@ -53,7 +53,9 @@ const compareText = (left: string, right: string): number => (left < right ? -1 
 export async function listFolder(
   root: FolderDirectoryLike,
   onProgress?: (fileCount: number) => void,
+  signal?: AbortSignal,
 ): Promise<FolderListing> {
+  signal?.throwIfAborted();
   const directories: Array<{ path: string; names: string[] }> = [];
   const charts: FolderChartStat[] = [];
   let fileCount = 0;
@@ -65,7 +67,9 @@ export async function listFolder(
   ): Promise<void> => {
     const names: string[] = [];
     const chartFiles: FolderFileLike[] = [];
+    signal?.throwIfAborted();
     for await (const handle of directory.values()) {
+      signal?.throwIfAborted();
       // A listing is one name per line.
       if (handle.name.includes('\n')) continue;
       if (handle.kind === 'directory') {
@@ -85,6 +89,7 @@ export async function listFolder(
     await Promise.all(
       chartFiles.map(async (handle) => {
         try {
+          signal?.throwIfAborted();
           const file = await handle.getFile();
           charts.push({ path: `${path}/${handle.name}`, size: file.size, lastModified: file.lastModified });
         } catch {
@@ -120,6 +125,7 @@ export async function listFolder(
     };
     pump();
   });
+  signal?.throwIfAborted();
   directories.sort((left, right) => compareText(left.path, right.path));
   charts.sort((left, right) => compareText(left.path, right.path));
   const lines: string[] = [];
@@ -243,23 +249,31 @@ export function listFolderInWorker(
   createWorker: () => Worker,
   folder: FolderDirectoryLike,
   onProgress?: (fileCount: number) => void,
+  signal?: AbortSignal,
 ): Promise<FolderListing> {
+  if (signal?.aborted) return Promise.reject(signal.reason);
   let worker: Worker;
   try {
     worker = createWorker();
   } catch {
-    return listFolder(folder, onProgress);
+    return listFolder(folder, onProgress, signal);
   }
   return new Promise<FolderListing>((resolve, reject) => {
     let finished = false;
     const stop = () => {
       finished = true;
       worker.terminate();
+      signal?.removeEventListener('abort', abort);
     };
+    const abort = () => {
+      stop();
+      reject(signal?.reason);
+    };
+    signal?.addEventListener('abort', abort, { once: true });
     const listOnPage = () => {
       if (finished) return;
       stop();
-      resolve(listFolder(folder, onProgress));
+      resolve(listFolder(folder, onProgress, signal));
     };
     worker.onmessage = (event: MessageEvent<FolderListingWorkerMessage>) => {
       if (finished) return;

@@ -246,6 +246,15 @@ describe('listFolderInWorker', () => {
     await expect(listFolderInWorker(() => worker as unknown as Worker, folder)).resolves.toEqual(here);
     expect(worker.terminate).toHaveBeenCalledTimes(1);
   });
+  test('terminates the worker if playback interrupts the folder walk', async () => {
+    const worker = fakeWorker([]);
+    const controller = new AbortController();
+    const walking = listFolderInWorker(() => worker as unknown as Worker, folder, undefined, controller.signal);
+    controller.abort();
+    await expect(walking).rejects.toMatchObject({ name: 'AbortError' });
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+  });
+
   test.each(['send', 'receive'] as const)(
     'walks on the page when the worker cannot %s a message',
     async (transferError) => {

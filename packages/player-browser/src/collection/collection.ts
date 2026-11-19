@@ -59,6 +59,10 @@ export interface LoadProgressOptions {
    * never for an LRX chart, whose key also depends on the files beside it.
    */
   chartKeys?: ChartCacheKeyBook;
+  /** Skip opening chart files whose parsed results are missing during a cache-only library restore. */
+  onChartCacheMiss?: (path: string) => void;
+  /** Cancels background collection reads before publishing a new library. */
+  signal?: AbortSignal;
 }
 
 export class BrowserChartCollectionStore {
@@ -94,31 +98,52 @@ export class BrowserChartCollectionStore {
    */
   public async appendFromFiles(
     files: Iterable<BrowserDroppedFile>,
-    options: LoadProgressOptions = {},
+    options: LoadProgressOptions & { replaceSourceIds?: readonly string[] } = {},
   ): Promise<BrowserChartCollection> {
     const incoming = await loadChartCollectionFromFiles(files, options);
-    if (incoming.sources.length === 0 && incoming.charts.length === 0 && incoming.errors.length === 0) {
+    options.signal?.throwIfAborted();
+    const replaced = new Set(options.replaceSourceIds);
+    if (
+      incoming.sources.length === 0 &&
+      incoming.charts.length === 0 &&
+      incoming.errors.length === 0 &&
+      !replaced.size
+    ) {
       return this.collection;
     }
     this.dropSeq += 1;
     const prefix = `drop${this.dropSeq}-`;
+    const sourceIds = new Map(
+      incoming.sources.map(({ id }, index) => [id, options.replaceSourceIds?.[index] ?? prefix + id]),
+    );
+    const remapId = (id: string) => sourceIds.get(id) ?? prefix + id;
     const remappedSources: BrowserAssetSource[] = incoming.sources.map((source) => ({
       ...source,
-      id: prefix + source.id,
+      id: remapId(source.id),
     }));
     const remappedCharts: LibraryChart[] = incoming.charts.map((chart) => ({
       ...chart,
-      sourceId: prefix + chart.sourceId,
-      id: prefix + chart.id,
+      sourceId: remapId(chart.sourceId),
+      id: `${remapId(chart.sourceId)}:${chart.chartPath}`,
     }));
     const remappedErrors = incoming.errors.map((error) => ({
       ...error,
-      sourceId: prefix + error.sourceId,
+      sourceId: remapId(error.sourceId),
     }));
+    const current = this.collection;
     this.collection = {
-      sources: [...this.collection.sources, ...remappedSources],
-      charts: [...this.collection.charts, ...remappedCharts],
-      errors: [...this.collection.errors, ...remappedErrors],
+      sources: [
+        ...(replaced.size > 0 ? current.sources.filter(({ id }) => !replaced.has(id)) : current.sources),
+        ...remappedSources,
+      ],
+      charts: [
+        ...(replaced.size > 0 ? current.charts.filter(({ sourceId }) => !replaced.has(sourceId)) : current.charts),
+        ...remappedCharts,
+      ],
+      errors: [
+        ...(replaced.size > 0 ? current.errors.filter(({ sourceId }) => !replaced.has(sourceId)) : current.errors),
+        ...remappedErrors,
+      ],
     };
     return this.collection;
   }
@@ -176,15 +201,17 @@ export async function readDropEntries(
   entries: readonly FileSystemEntry[],
   options: LoadProgressOptions = {},
 ): Promise<BrowserDroppedFile[]> {
+  const { signal } = options;
+  signal?.throwIfAborted();
   const listed: ListedDropEntry[] = [];
   // Total is unknown while we're still walking the FileSystem tree (the FileSystemEntry API doesn't expose a
   // directory's file count up-front), so we report `total: -1` and let the host UI show an indeterminate
   // "Collecting…" indicator.
   options.onProgress?.({ phase: 'enumerating', current: 0, total: -1 });
   for (const entry of entries) {
-    await listDropEntries(entry, '', listed, options.onProgress);
+    await listDropEntries(entry, '', listed, options.onProgress, signal);
   }
-  const files = await openListedDropEntries(listed);
+  const files = await openListedDropEntries(listed, signal);
   options.onProgress?.({ phase: 'enumerating', current: files.length, total: files.length });
   return files;
 }
@@ -225,7 +252,9 @@ async function listDropEntries(
   prefix: string,
   listed: ListedDropEntry[],
   onProgress?: LoadProgressCallback,
+  signal?: AbortSignal,
 ): Promise<void> {
+  signal?.throwIfAborted();
   if (entry.isFile) {
     const path = `${prefix}${entry.name}`;
     listed.push({ entry: entry as FileSystemFileEntry, path });
@@ -240,17 +269,20 @@ async function listDropEntries(
     const reader = (entry as FileSystemDirectoryEntry).createReader();
     const nextPrefix = `${prefix}${entry.name}/`;
     while (true) {
+      signal?.throwIfAborted();
       let batch: FileSystemEntry[];
       try {
         batch = await new Promise<FileSystemEntry[]>((resolve, reject) => {
           reader.readEntries(resolve, reject);
         });
       } catch (error) {
+        signal?.throwIfAborted();
         // A directory readEntries failure aborts iteration on THIS directory — the parent walk continues with what we
         // already collected. Logged because this is unusual (file-system errors are uncommon in dropped folders).
         log.warn(`skipped (readEntries failed): ${nextPrefix}`, error);
         return;
       }
+      signal?.throwIfAborted();
       if (batch.length === 0) {
         return;
       }
@@ -259,13 +291,19 @@ async function listDropEntries(
       // Chrome's FileSystem API has an internal in-flight cap that, when exceeded, silently rejects later calls —
       // observable on the user side as a partial / interrupted load. Bounding the walk here keeps disk I/O saturated
       // without tripping that cap. Children are wrapped in `.catch` so one bad sub-tree doesn't reject the whole pool.
-      await runWithConcurrency(batch, ENTRY_WALK_CONCURRENCY, async (child) => {
-        try {
-          await listDropEntries(child, nextPrefix, listed, onProgress);
-        } catch (error) {
-          log.warn(`skipped (child walk failed): ${nextPrefix}${child.name}`, error);
-        }
-      });
+      await runWithConcurrency(
+        batch,
+        ENTRY_WALK_CONCURRENCY,
+        async (child) => {
+          try {
+            await listDropEntries(child, nextPrefix, listed, onProgress, signal);
+          } catch (error) {
+            signal?.throwIfAborted();
+            log.warn(`skipped (child walk failed): ${nextPrefix}${child.name}`, error);
+          }
+        },
+        signal === undefined ? {} : { signal },
+      );
     }
   }
 }
@@ -275,7 +313,11 @@ async function listDropEntries(
  * {@link DeferredDroppedFile} handles. On a large BMS pack the song audio / BGA make up nearly every file, so this
  * skips almost all of the per-file `file()` round trips that used to dominate the drop.
  */
-async function openListedDropEntries(listed: readonly ListedDropEntry[]): Promise<BrowserDroppedFile[]> {
+async function openListedDropEntries(
+  listed: readonly ListedDropEntry[],
+  signal?: AbortSignal,
+): Promise<BrowserDroppedFile[]> {
+  signal?.throwIfAborted();
   const isEager = createEagerDropPathPredicate(listed.map((item) => normalizePath(item.path)));
   const files: Array<BrowserDroppedFile | undefined> = listed.map((item) =>
     isEager(normalizePath(item.path)) ? undefined : new DeferredDroppedFile(item.entry, item.path),
@@ -284,20 +326,28 @@ async function openListedDropEntries(listed: readonly ListedDropEntry[]): Promis
   for (let index = 0; index < files.length; index += 1) {
     if (files[index] === undefined) eagerIndices.push(index);
   }
-  await runWithConcurrency(eagerIndices, ENTRY_WALK_CONCURRENCY, async (index) => {
-    const { entry, path } = listed[index]!;
-    try {
-      const file = await new Promise<File>((resolve, reject) => {
-        entry.file(resolve, reject);
-      });
-      files[index] = withRelativePath(file, path);
-    } catch (error) {
-      // A single file failing to materialize (permission denied, stale entry, network drive disconnect, …) shouldn't
-      // kill the entire drop. Log and skip — the resulting collection simply omits that file, matching what real LR2
-      // does when an asset is missing.
-      log.warn(`skipped (entry.file failed): ${path}`, error);
-    }
-  });
+  await runWithConcurrency(
+    eagerIndices,
+    ENTRY_WALK_CONCURRENCY,
+    async (index) => {
+      const { entry, path } = listed[index]!;
+      try {
+        const file = await new Promise<File>((resolve, reject) => {
+          entry.file(resolve, reject);
+        });
+        signal?.throwIfAborted();
+        files[index] = withRelativePath(file, path);
+      } catch (error) {
+        signal?.throwIfAborted();
+        // A single file failing to materialize (permission denied, stale entry, network drive disconnect, …) shouldn't
+        // kill the entire drop. Log and skip — the resulting collection simply omits that file, matching what real LR2
+        // does when an asset is missing.
+        log.warn(`skipped (entry.file failed): ${path}`, error);
+      }
+    },
+    signal === undefined ? {} : { signal },
+  );
+  signal?.throwIfAborted();
   return files.filter((file): file is BrowserDroppedFile => file !== undefined);
 }
 
@@ -374,7 +424,8 @@ export async function loadChartCollectionFromFiles(
   files: Iterable<BrowserDroppedFile>,
   options: LoadProgressOptions = {},
 ): Promise<BrowserChartCollection> {
-  const onProgress = options.onProgress;
+  const { onProgress, signal } = options;
+  signal?.throwIfAborted();
   const sources: BrowserAssetSource[] = [];
   const looseFiles = new Map<string, BrowserAssetEntry>();
   const looseLabels = new Set<string>();
@@ -441,6 +492,7 @@ export async function loadChartCollectionFromFiles(
   });
   sources.push(...zipSources.filter((source): source is BrowserAssetSource => source !== undefined));
   errors.push(...zipErrors.flat());
+  signal?.throwIfAborted();
   // Final 100 % emit for the read phase — the throttled wrapper may have suppressed the last one.
   onProgress?.({ phase: 'reading', current: fileList.length, total: fileList.length });
 
@@ -529,11 +581,13 @@ export async function loadChartCollectionFromFiles(
     else known.push({ index, key });
   }
   for (let start = 0; start < known.length; start += KNOWN_CHART_BATCH) {
+    signal?.throwIfAborted();
     const batch = known.slice(start, start + KNOWN_CHART_BATCH);
     const cached = await readParsedCharts(
       options.parsedChartCache,
       batch.map(({ key }) => key),
     );
+    signal?.throwIfAborted();
     for (const [offset, { index, key }] of batch.entries()) {
       const result = cached[offset];
       if (result === undefined) {
@@ -547,27 +601,45 @@ export async function loadChartCollectionFromFiles(
   unread.sort((left, right) => left - right);
   // More charts in flight than there are workers: a chart spends most of its time waiting on its file, its hash and
   // the cache, and the pool queues the parses it has no worker for, so files are read while charts are parsed.
-  await runWithConcurrency(unread, PARSE_READ_CONCURRENCY, async (index) => {
-    const { source, path } = items[index]!;
-    try {
-      const chartKeys = chartKeysOf(items[index]!);
-      let key: string | undefined;
-      const result = await parseChartFile(source, path, options.parsedChartCache, (hashed) => {
-        key = hashed;
-        chartKeys?.learned(path, hashed);
-      });
-      listChart(index, result, key);
-    } catch (error) {
-      parseErrors[index] = {
-        sourceId: source.id,
-        path,
-        message: error instanceof Error ? error.message : 'failed to parse chart',
-      };
-    }
-    reportParsed(path);
-    // Keep cooperative progress yielding for hosts using the local fallback; workers already run outside the UI thread.
-    if (parsedSoFar % PARSE_YIELD_INTERVAL === 0) await yieldToTask();
-  });
+  if (options.onChartCacheMiss !== undefined) {
+    for (const index of unread) options.onChartCacheMiss(items[index]!.path);
+    unread.length = 0;
+  }
+  await runWithConcurrency(
+    unread,
+    signal === undefined ? PARSE_READ_CONCURRENCY : 1,
+    async (index) => {
+      const { source, path } = items[index]!;
+      try {
+        const chartKeys = chartKeysOf(items[index]!);
+        let key: string | undefined;
+        const result = await parseChartFile(
+          source,
+          path,
+          options.parsedChartCache,
+          (hashed) => {
+            key = hashed;
+            chartKeys?.learned(path, hashed);
+          },
+          signal,
+        );
+        signal?.throwIfAborted();
+        listChart(index, result, key);
+      } catch (error) {
+        signal?.throwIfAborted();
+        parseErrors[index] = {
+          sourceId: source.id,
+          path,
+          message: error instanceof Error ? error.message : 'failed to parse chart',
+        };
+      }
+      reportParsed(path);
+      // Keep cooperative progress yielding for hosts using the local fallback; workers already run outside the UI thread.
+      if (parsedSoFar % PARSE_YIELD_INTERVAL === 0) await yieldToTask();
+    },
+    signal === undefined ? {} : { signal },
+  );
+  signal?.throwIfAborted();
   charts.push(...loadedCharts.filter((chart): chart is LibraryChart => chart !== undefined));
   errors.push(...parseErrors.filter((error): error is BrowserChartCollection['errors'][number] => error !== undefined));
   if (chartCount > 0) {
@@ -583,13 +655,15 @@ async function parseChartFile(
   path: string,
   cache: ParsedChartCache | undefined,
   onKey: (key: string) => void,
+  signal?: AbortSignal,
 ): Promise<ParseChartTaskResult> {
   const chartBytes = await loadAssetBytes(source.files.get(path));
+  signal?.throwIfAborted();
   if (!chartBytes) {
     throw new Error(`chart bytes missing for ${path}`);
   }
   const siblings = hasChartSiblings(path) ? await loadChartSiblings(source.files, path, chartBytes) : undefined;
-  return parseChartThroughCache({ path, bytes: chartBytes, ...(siblings ? { siblings } : {}) }, cache, onKey);
+  return parseChartThroughCache({ path, bytes: chartBytes, ...(siblings ? { siblings } : {}) }, cache, onKey, signal);
 }
 
 export function describeChartCollection(collection: BrowserChartCollection): string {

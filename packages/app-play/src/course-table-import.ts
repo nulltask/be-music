@@ -174,6 +174,8 @@ export async function fetchCourseTableText(url: string, init?: RequestInit): Pro
 export function createCachedCourseTableFetchText(options: {
   store: RemoteCacheStore | undefined;
   refreshedSince?: number;
+  cacheOnly?: boolean;
+  signal?: AbortSignal;
   now?: () => number;
   fetchText?: (url: string, init?: RequestInit) => Promise<string>;
   onRead?: (url: string, source: RemoteCacheSource) => void;
@@ -181,9 +183,21 @@ export function createCachedCourseTableFetchText(options: {
   const fetchText = options.fetchText ?? fetchCourseTableText;
   const now = options.now ?? Date.now;
   return async (url) => {
+    const { signal } = options;
+    signal?.throwIfAborted();
+    if (options.cacheOnly) {
+      const kept = await options.store?.get(`table:${url}`);
+      if (kept === undefined) throw new Error('Difficulty table is not cached');
+      return new TextDecoder().decode(kept.bytes);
+    }
     const read = await readThroughRemoteCache(
       `table:${url}`,
-      async () => new TextEncoder().encode(await fetchText(url, { cache: 'no-cache' })),
+      async () => {
+        signal?.throwIfAborted();
+        return new TextEncoder().encode(
+          await fetchText(url, { cache: 'no-cache', ...(signal === undefined ? {} : { signal }) }),
+        );
+      },
       options.store,
       {
         maxAgeMs: COURSE_TABLE_MAX_AGE_MS,
@@ -191,6 +205,7 @@ export function createCachedCourseTableFetchText(options: {
       },
       now(),
     );
+    signal?.throwIfAborted();
     options.onRead?.(url, read.source);
     return new TextDecoder().decode(read.bytes);
   };

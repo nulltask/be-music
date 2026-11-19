@@ -124,6 +124,7 @@ export class PlayerWebApp {
   private readonly router = new SceneRouter<PlayerScene, PlayScene, SelectScene>({
     host: {
       setScene: async (scene, role) => {
+        if (role === 'decide' || role === 'play') this.library.pauseBackgroundRefresh();
         await this.mountStage();
         this.chartDiagnostics.show();
         await this.sceneHost.setScene(scene);
@@ -418,15 +419,17 @@ export class PlayerWebApp {
     this.dropTarget = new DropTarget({
       elements,
       leaveSelect: () => this.leaveSelect(),
-      processIncomingFiles: (files, origin) => this.library.processIncomingFiles(files, origin),
+      processIncomingFiles: (files, origin, signal) => this.library.processIncomingFiles(files, origin, signal),
+      runBackgroundRefresh: (work) => this.library.runBackgroundRefresh(work),
       refreshCharts: () => this.library.refreshCharts(),
       folders: {
         // A remembered folder is walked off the page's thread.
-        list: (folder, onProgress) =>
+        list: (folder, onProgress, signal) =>
           listFolderInWorker(
             () => new Worker(new URL('../folder-listing-worker.ts', import.meta.url), { type: 'module' }),
             folder,
             onProgress,
+            signal,
           ),
         snapshots: createIndexedDBFolderSnapshotStore(),
       },
@@ -775,8 +778,22 @@ export class PlayerWebApp {
     // The replay slots load once; the select screen draws them again whenever they change.
     void this.replaySlots.store.load();
     this.replaySlots.store.subscribe(() => this.selectView?.refreshRecords());
-    const initialSelectReady = this.showSelect();
-    void initialSelectReady.then(() => this.dropTarget.restoreFolder());
+    // Prepare the renderer and the saved index together. The first selection does not wait for disk walks or fetches.
+    void this.mountStage().catch(() => undefined);
+    let startRefresh!: () => void;
+    const refreshAfter = new Promise<void>((resolve) => {
+      startRefresh = resolve;
+    });
+    const initialSelectReady = Promise.allSettled([
+      this.library.restoreStartupCache(),
+      this.dropTarget.restoreFolder(refreshAfter),
+    ]).then(async () => {
+      await this.library
+        .finishStartupCache()
+        .catch((error: unknown) => console.warn('Library cache setup failed', error));
+      await this.showSelect();
+      startRefresh();
+    });
     // A page put away (closed, or into the back/forward cache) keeps no decoded samples for a retry.
     window.addEventListener('pagehide', () => this.audio.chartSamples.release());
 
@@ -963,6 +980,7 @@ export class PlayerWebApp {
    * at select). The Options dialog disables its skin controls with them (`OptionsDialog.lockForPlay`).
    */
   private lockReplayOptionsForPlay(liveTempo = false, chartEntry?: LibraryChart): void {
+    this.library.pauseBackgroundRefresh();
     this.replayAutoSave.latch(this.guiState.autoSaveReplay);
     this.leaderboard.lockForPlay(chartEntry);
     this.optionsDialog.lockForPlay(liveTempo);

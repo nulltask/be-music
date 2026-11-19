@@ -82,8 +82,46 @@ for (const mode of ['remembered', 'session-only', 'worker-transfer-fails'] as co
           };
         });
       }
-      await page.reload();
-      await player.waitFor((state) => state.scene.kind === 'select', 'the select screen after reload');
+      if (mode === 'remembered') {
+        await page.waitForFunction(async () => {
+          const name = 'be-music-folder-snapshots';
+          if (!(await indexedDB.databases()).some((database) => database.name === name)) return false;
+          const database = await new Promise<IDBDatabase>((resolve, reject) => {
+            const open = indexedDB.open(name);
+            open.onsuccess = () => resolve(open.result);
+            open.onerror = () => reject(open.error);
+          });
+          try {
+            return await new Promise<boolean>((resolve, reject) => {
+              const count = database.transaction('snapshots', 'readonly').objectStore('snapshots').count();
+              count.onsuccess = () => resolve(count.result === 2);
+              count.onerror = () => reject(count.error);
+            });
+          } finally {
+            database.close();
+          }
+        });
+      }
+      let releaseWalk: () => void = () => {};
+      if (mode === 'remembered') {
+        const walk = new Promise<void>((resolve) => {
+          releaseWalk = resolve;
+        });
+        await page.route('**/assets/folder-listing-worker-*.js', async (route) => {
+          await walk;
+          await route.continue();
+        });
+      }
+      try {
+        await page.reload();
+        const first = await player.waitFor(
+          (state) => state.scene.kind === 'select',
+          'the first select screen after reload',
+        );
+        if (mode === 'remembered') expect(first.library.charts).toBe(2);
+      } finally {
+        releaseWalk();
+      }
       await page.locator('[data-service-header="settings"]').click();
       await dialog.getByRole('tab', { name: 'Library', exact: true }).click();
       await expect(folders.getByText('First pack', { exact: true })).toBeVisible();

@@ -153,6 +153,27 @@ describe('loadChartCollectionFromFiles with the chart keys a host kept', () => {
     expect(second.charts[0]!.chart.events.length).toBe(first.charts[0]!.chart.events.length);
   });
 
+  test('reports cache misses without opening their chart files during cache-only loading', async () => {
+    const { cache, entries, opened, files } = fixture();
+    const keys = new Map<string, string>();
+    const chartKeys = {
+      known: (path: string) => keys.get(path),
+      learned: (path: string, key: string) => keys.set(path, key),
+    };
+    await loadChartCollectionFromFiles(files(), { parsedChartCache: cache, chartKeys });
+    entries.delete(keys.get('Pack/a.bms')!);
+    opened.length = 0;
+    const miss = vi.fn();
+    const cached = await loadChartCollectionFromFiles(files(), {
+      parsedChartCache: cache,
+      chartKeys,
+      onChartCacheMiss: miss,
+    });
+    expect(miss).toHaveBeenCalledExactlyOnceWith('Pack/a.bms');
+    expect(opened).toEqual([]);
+    expect(cached.charts.map(({ title }) => title)).toEqual(['Beta']);
+  });
+
   test('reads a chart the cache no longer has, and keeps the path order', async () => {
     const { cache, entries, opened, files } = fixture();
     const keys = new Map<string, string>();
@@ -353,6 +374,42 @@ describe('loadChartCollectionFromFiles progress events', () => {
 });
 
 describe('BrowserChartCollectionStore', () => {
+  test('keeps the previous collection when a background read is cancelled', async () => {
+    const store = new BrowserChartCollectionStore();
+    const original = await store.appendFromFiles([makeFile('Pack/a.bms', MINIMAL_BMS)]);
+    const controller = new AbortController();
+    const file = new DeferredDroppedFile(
+      {
+        name: 'b.bms',
+        file: (resolve) => {
+          controller.abort();
+          resolve(new File([MINIMAL_BMS], 'b.bms'));
+        },
+      },
+      'Pack/b.bms',
+    );
+    await expect(
+      store.appendFromFiles([file], { replaceSourceIds: [original.sources[0]!.id], signal: controller.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(store.collection).toBe(original);
+  });
+
+  test('replaces one source without changing its chart IDs or touching other sources', async () => {
+    const store = new BrowserChartCollectionStore();
+    const initial = await store.appendFromFiles([makeFile('Pack/a.bms', MINIMAL_BMS)]);
+    const original = initial.charts[0]!;
+    const separate = await store.appendFromFiles([makeFile('Else/a.bms', MINIMAL_BMS)]);
+    const result = await store.appendFromFiles(
+      [makeFile('Pack/a.bms', MINIMAL_BMS.replace('Test', 'Updated')), makeFile('Pack/b.bms', MINIMAL_BMS)],
+      { replaceSourceIds: [original.sourceId] },
+    );
+    expect(result.charts).toHaveLength(3);
+    expect(result.charts.find(({ id }) => id === original.id)?.title).toBe('Updated');
+    expect(result.charts.find(({ id }) => id === separate.charts[1]?.id)).toBe(separate.charts[1]);
+    const removed = await store.appendFromFiles([], { replaceSourceIds: [original.sourceId] });
+    expect(removed.charts).toEqual([separate.charts[1]]);
+  });
+
   test('appendFromFiles accumulates drops with collision-safe source and song ids', async () => {
     const store = new BrowserChartCollectionStore();
 

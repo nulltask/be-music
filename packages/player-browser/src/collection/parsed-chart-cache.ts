@@ -100,7 +100,9 @@ export async function parseChartThroughCache(
   input: ParseChartTaskInput,
   cache: ParsedChartCache | undefined,
   onKey?: (key: string) => void,
+  signal?: AbortSignal,
 ): Promise<ParseChartTaskResult> {
+  signal?.throwIfAborted();
   let key: string | undefined;
   if (cache !== undefined) {
     try {
@@ -114,12 +116,15 @@ export async function parseChartThroughCache(
       key = hashed;
       onKey?.(hashed);
       const cached = await cache.get(key);
+      signal?.throwIfAborted();
       if (isParseChartTaskResult(cached)) return cached;
     } catch {
       // Unhashable or unreadable: parse it.
     }
   }
+  signal?.throwIfAborted();
   const result = await runBrowserTask('parse-chart', input, () => parseChartTask(input));
+  signal?.throwIfAborted();
   if (cache !== undefined && key !== undefined) {
     try {
       await cache.set(key, result);

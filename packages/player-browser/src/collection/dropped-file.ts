@@ -58,22 +58,33 @@ export type BrowserDroppedFile = File | DeferredDroppedFile;
  */
 export async function materializeDroppedFiles(
   files: readonly BrowserDroppedFile[],
-  options: { concurrency?: number; onError?: (file: DeferredDroppedFile, error: unknown) => void } = {},
+  options: {
+    concurrency?: number;
+    signal?: AbortSignal;
+    onError?: (file: DeferredDroppedFile, error: unknown) => void;
+  } = {},
 ): Promise<File[]> {
   const opened: Array<File | undefined> = Array.from({ length: files.length });
   const indices = files.map((_, index) => index);
-  await runWithConcurrency(indices, options.concurrency ?? 16, async (index) => {
-    const file = files[index]!;
-    if (!(file instanceof DeferredDroppedFile)) {
-      opened[index] = file;
-      return;
-    }
-    try {
-      opened[index] = withRelativePath(await file.getFile(), file.webkitRelativePath);
-    } catch (error) {
-      options.onError?.(file, error);
-    }
-  });
+  await runWithConcurrency(
+    indices,
+    options.concurrency ?? 16,
+    async (index) => {
+      const file = files[index]!;
+      if (!(file instanceof DeferredDroppedFile)) {
+        opened[index] = file;
+        return;
+      }
+      try {
+        opened[index] = withRelativePath(await file.getFile(), file.webkitRelativePath);
+      } catch (error) {
+        options.signal?.throwIfAborted();
+        options.onError?.(file, error);
+      }
+    },
+    options.signal === undefined ? {} : { signal: options.signal },
+  );
+  options.signal?.throwIfAborted();
   return opened.filter((file): file is File => file !== undefined);
 }
 

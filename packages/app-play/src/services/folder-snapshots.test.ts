@@ -53,7 +53,7 @@ describe('RememberedFolderSession', () => {
     expect(await loaded.restore()).toBeUndefined();
     const progress = vi.fn();
     expect(paths(await loaded.read(progress))).toEqual(['Pack/a.bms', 'Pack/b.bms']);
-    expect(list).toHaveBeenCalledWith(folder, progress);
+    expect(list).toHaveBeenCalledWith(folder, progress, undefined);
     expect(loaded.known('Pack/a.bms')).toBeUndefined();
     loaded.learned('Pack/a.bms', 'key-a');
     await loaded.save();
