@@ -1,5 +1,26 @@
 import { expect, test } from './support.ts';
 
+test('starts the default Bemuse library when the saved server list is malformed', async ({ player }) => {
+  const { page } = player;
+  const official = 'https://music4.bemuse.ninja/server/';
+  await page.route('**/api/player-settings', (route) => route.fulfill({ status: 204 }));
+  await page.route('**/__url-load-proxy?**', (route) => route.fulfill({ status: 404 }));
+  await page.route(/^https:\/\/(?:flicknote\.bemuse\.ninja|yuinore\.net)\//, (route) =>
+    route.fulfill({ headers: { 'access-control-allow-origin': '*' }, status: 404 }),
+  );
+  await page.route(`${official}**`, (route) => {
+    const headers = { 'access-control-allow-origin': '*' };
+    return route.request().url() === `${official}index.json`
+      ? route.fulfill({
+          headers,
+          json: { songs: [{ path: 'song', bemusepack_url: null, charts: [{ file: 'chart.bms' }] }] },
+        })
+      : route.fulfill({ headers, body: '#TITLE Restored chart\n#BPM 120\n#WAV01 key.wav\n#00111:01\n' });
+  });
+  await player.open({ 'be-music.bemuse-server-urls': '{' });
+  await expect.poll(async () => (await player.state()).library.charts, { timeout: 5_000 }).toBe(1);
+});
+
 for (const slowSource of ['Bemuse server', 'saved folder', 'difficulty table'] as const) {
   test(`restores the other library sources while a ${slowSource} is still loading`, async ({ player: { page } }) => {
     const server = 'https://startup-bemuse.example';

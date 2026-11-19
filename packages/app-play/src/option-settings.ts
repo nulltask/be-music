@@ -22,7 +22,11 @@ import {
   REMOVED_DEFAULT_COURSE_TABLE_URLS_STORAGE_KEY,
   parseStoredCourseTableURLs,
 } from './course-table-import.ts';
-import { BEMUSE_SERVER_URLS_STORAGE_KEY, parseStoredBemuseServerURLs } from './bemuse-server.ts';
+import {
+  BEMUSE_SERVER_URLS_STORAGE_KEY,
+  parseStoredBemuseServerURLs,
+  readStoredBemuseServerURLs,
+} from './bemuse-server.ts';
 import { parseCompressorTunings, type CompressorTuning } from './compressor-tuning.ts';
 import { parseStoredHiSpeed, HI_SPEED_STORAGE_KEY } from './hi-speed-storage.ts';
 import { parseStoredPlayTempoSettings, PLAY_TEMPO_STORAGE_KEY, type PlayTempoSettings } from './play-tempo-settings.ts';
@@ -576,7 +580,8 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
     );
   }
   if (Array.isArray(raw.bemuseServerURLs)) {
-    settings.bemuseServerURLs = parseStoredBemuseServerURLs(JSON.stringify(raw.bemuseServerURLs));
+    const urls = parseStoredBemuseServerURLs(JSON.stringify(raw.bemuseServerURLs));
+    if (urls.length > 0 || raw.bemuseServerURLs.length === 0) settings.bemuseServerURLs = urls;
   }
   return settings;
 }
@@ -651,7 +656,7 @@ export function optionSettingsFromLegacy(
     );
   }
   if (storage?.getItem(BEMUSE_SERVER_URLS_STORAGE_KEY) != null) {
-    settings.bemuseServerURLs = parseStoredBemuseServerURLs(storage.getItem(BEMUSE_SERVER_URLS_STORAGE_KEY));
+    settings.bemuseServerURLs = readStoredBemuseServerURLs(storage);
   }
   return { version: DOCUMENT_VERSION, updatedAt, settings };
 }
