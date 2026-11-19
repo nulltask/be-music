@@ -21,4 +21,4 @@ export * from './maker.ts';
 export * from './long-note.ts';
 export * from './stage-rules.ts';
 export * from './run.ts';
-export { isCourseStageFailed } from '../ruleset/course.ts';
+export { courseGoesOnAfterGivingUp, givenUpCourseStageShowsResult, isCourseStageFailed } from '../ruleset/course.ts';

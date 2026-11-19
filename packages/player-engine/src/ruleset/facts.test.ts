@@ -341,6 +341,18 @@ test('keeps EX-HARD source tables distinct from HAZARD and rejects a new LR2 EX-
   expect(() => resolveRuleset(chart, 'lr2', { selectedGauge: 'EX-HARD' })).toThrow(/no EX-HARD/);
 });
 
+test('refuses a bare DEATH under That-Which-Must-Not-Be-Named outside a course, as LR2 refuses EX-HARD', () => {
+  const chart = facts();
+  for (const selectedGauge of ['DEATH', 'DEATH-CORRECTED'] as const) {
+    expect(() => resolveRuleset(chart, '____', { selectedGauge })).toThrow(new RegExp(`no ${selectedGauge} gauge`));
+  }
+  // Another source's DEATH keeps its source's gauge, and a course stage plays DEATH on the course gauges.
+  expect(resolveRuleset(chart, '____', { selectedGauge: 'lr2:DEATH' }).gauge.id).toBe('DEATH');
+  expect(resolveRuleset(chart, '____', { selectedGauge: 'DEATH', course: { kind: 'grade' } }).gauge.id).toBe(
+    'EXHARDCLASS',
+  );
+});
+
 test('uses each source ASSIST EASY border and damage without changing input assists', () => {
   const beatoraja = resolveRuleset(facts(), 'beatoraja', { selectedGauge: 'ASSIST-EASY' }).gauge;
   const ac = resolveRuleset(facts(), '____', { selectedGauge: 'ASSIST-EASY' }).gauge;

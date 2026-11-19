@@ -640,7 +640,7 @@ describe('CourseRoute: a course replay', () => {
     expect(h.deps.leaderboard.maybeSubmitCourse).not.toHaveBeenCalled();
   });
 
-  test('a stage the recorded run gave up ends the run as given up', async () => {
+  test('a stage the recorded run gave up and ended on ends the playback there, as given up', async () => {
     const h = harness();
     const log = gradeReplay([stageLog(70), stageLog(50, { aborted: true })]);
     await h.route.startCourseReplay(grade(['a', 'b', 'c']), log);
@@ -649,8 +649,10 @@ describe('CourseRoute: a course replay', () => {
     h.route.continueCourse();
     await vi.waitFor(() => expect(h.deps.playChart).toHaveBeenCalledTimes(2));
     recordCourseStage(h.courses.active!, PLAYED_BACK);
-    expect(h.courses.active!.run.finished).toBe(true);
-    await h.route.showCourseResult();
+    // The recorded run has no third stage, so the playback goes to the course result, whatever LR2's gauge would do.
+    expect(h.route.continueCourse()).toBe(true);
+    await vi.waitFor(() => expect(h.deps.showResult).toHaveBeenCalled());
+    expect(h.deps.playChart).toHaveBeenCalledTimes(2);
     expect(h.deps.showResult.mock.calls[0]![0]).toMatchObject({ cleared: false, lamp: 'FAILED', fromReplay: true });
   });
 

@@ -34,6 +34,7 @@ import {
 import {
   courseGoesOnAfter,
   courseReplayStageGivenUp,
+  givenUpStageShowsResult,
   playAgainOverrides,
   recordCourseStage,
   resolveGameplayExit,
@@ -443,8 +444,9 @@ export class PlayRoute {
       // A tempo change during the play (the tempo slider in pitch mode, or a replay following its log).
       onTempoChange: (changed: number) => this.followLiveTempo(changed),
       onExit: () => {
-        // ESC gives a running course up: the run is kept as a failed one (as LR2 records it), with the stage given up
-        // recorded once the engine hands its replay over.
+        // ESC gives a running course's stage up, recorded once the engine hands its replay over. The course gauge's
+        // rule decides what follows (`courseGoesOnAfterGivingUp`): LR2's goes on to the next stage while the gauge holds,
+        // the other sources end the run as a failed one and show the course result.
         const view = this.gameplayView;
         const active = courseStage !== undefined ? this.activeCourse : undefined;
         // ESC stops a course replay where it is, as it stops a dropped replay: back to the select screen, no result.
@@ -457,9 +459,37 @@ export class PlayRoute {
         if (exit === 'give-up-course') {
           void (async () => {
             const replay = await view?.waitForReplay();
+            const progress = view?.progress();
+            // LR2 shows the stage given up as FAILED before its run goes on or ends (`givenUpStageShowsResult`), as a
+            // failed stage's result shows: unless stage results are skipped, or an AUTO run goes on past it.
+            if (
+              progress !== undefined &&
+              givenUpStageShowsResult(replay, progress) &&
+              !skipsCourseStageResult({
+                skipStageResults: this.guiState.courseAutoAdvance,
+                autoPlay,
+                courseGoesOn: active!.run.goesOnAfterGivingUp(replay, progress.stageOutcome),
+              })
+            ) {
+              const data: PlayResult = {
+                ...progress,
+                ...(replay !== undefined ? { replay } : {}),
+                cleared: false,
+                lamp: 'FAILED',
+              };
+              if (kit.family === 'beatoraja') {
+                const resolved = view?.resolved;
+                if (resolved !== undefined)
+                  this.results.lastBeatorajaChart = { resolved, chartPath: chartEntry.chartPath };
+                void this.results.showBeatorajaPlayResult(data, true);
+              } else {
+                void this.results.showResult(data);
+              }
+              return;
+            }
             this.testHook?.recordReplay(replay);
-            this.courses.giveUp(active!, replay, view?.progress());
-            await this.courseRoute.showCourseResult();
+            this.courses.giveUp(active!, replay, progress);
+            this.courseRoute.continueCourse();
           })();
           return;
         }
@@ -505,7 +535,13 @@ export class PlayRoute {
         this.selectRoute.endAutoPlaylist();
         void this.showSelect();
       },
-      onChartFinished: (result: PlayResult) => {
+      onChartFinished: (finished: PlayResult) => {
+        // A course replay's stage that its run gave up shows FAILED, as the stage given up live did.
+        const result: PlayResult =
+          courseStage !== undefined &&
+          this.activeCourse?.replay?.stages[this.activeCourse.run.stagesPlayed]?.replay.play.aborted === true
+            ? { ...finished, cleared: false, lamp: 'FAILED' }
+            : finished;
         if (practicing) {
           // The play loops its range in place until ESC (#949), so it only finishes when its judge cannot go back to
           // the start; it is then made again, as the range would play again from beatoraja's practice setup.
@@ -525,7 +561,7 @@ export class PlayRoute {
         if (
           courseStage !== undefined &&
           this.activeCourse !== undefined &&
-          (courseReplayStageGivenUp(this.activeCourse) ||
+          (courseReplayStageGivenUp(this.activeCourse, result) ||
             skipsCourseStageResult({
               skipStageResults: this.guiState.courseAutoAdvance,
               autoPlay,

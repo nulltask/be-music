@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { simulateReplay, type RulesetId } from '@be-music/player-engine/replay';
+import { resolveGaugeTypes, type GaugeType } from '@be-music/player-engine/ruleset';
 import {
   buildFuzzChart,
   buildFuzzInputs,
@@ -23,6 +24,15 @@ const RULESETS: readonly RulesetId[] = ['lr2', 'beatoraja', '____'];
 // `BE_MUSIC_FUZZ_SEEDS=1000 pnpm exec vp test run test/regression/engine-simulator-fuzz.test.ts`.
 const SEEDS_PER_MODE = Number(process.env.BE_MUSIC_FUZZ_SEEDS ?? 40);
 
+/**
+ * The gauge a case plays under `ruleset`: the one it drew, or EX-HARD for That-Which-Must-Not-Be-Named's missing DEATH,
+ * which the engine refuses rather than playing EX-HARD in its place. The draw itself is shared, so every ruleset's cases
+ * stay the same.
+ */
+function fuzzGauge(gauge: GaugeType, ruleset: RulesetId): GaugeType {
+  return resolveGaugeTypes(ruleset).includes(gauge) ? gauge : 'EX-HARD';
+}
+
 describe('engine / simulator differential fuzz', () => {
   test.each(MODES)('%s keys', { timeout: 3_600_000 }, async (mode) => {
     const mismatches: string[] = [];
@@ -37,10 +47,11 @@ describe('engine / simulator differential fuzz', () => {
       const replays = await Promise.all(
         RULESETS.map(async (ruleset) => ({
           ruleset,
-          replay: await replayFuzzCase(chart, inputs, { ruleset, gauge, autoScratch }),
+          gauge: fuzzGauge(gauge, ruleset),
+          replay: await replayFuzzCase(chart, inputs, { ruleset, gauge: fuzzGauge(gauge, ruleset), autoScratch }),
         })),
       );
-      for (const { ruleset, replay } of replays) {
+      for (const { ruleset, gauge, replay } of replays) {
         const fields = findEngineSimulatorMismatches(replay, simulateReplay(replay.replay, { ruleset }));
         if (fields.length > 0) {
           mismatches.push(

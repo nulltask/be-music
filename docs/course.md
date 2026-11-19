@@ -386,7 +386,30 @@ lr2oraja and LR2oraja Endless Dream play courses on beatoraja's `GAUGE_LR2` clas
 
 A survival gauge that empties ends the play there (`PlayerOptions.endOnFailure`, default `true`), so a course stage ends the moment its gauge empties, and the course is failed. The judgment that emptied the gauge is the last one counted.
 
-A stage given up with ESC also ends the course as a failed run. This departs from LR2 on purpose: `LR2body.exe` shows the given-up stage's result as FAILED and, when the gauge is still at 2 % or more and stages remain, goes on to the next stage (the course lamp is FAILED in the end, since a stage was left unplayed); with no GOOD or better judged it returns to the select screen without saving. Be-Music treats ESC as giving up the course. An ESC once every note of the stage is judged does not give it up: the stage finishes, as beatoraja's `BMSPlayer.stopPlay` finishes it, and the course goes on (a NONSTOP run only finishes this way after the last note of its last stage).
+A stage given up with ESC does not clear, and what follows is the course gauge's own rule, as the stage failure rule is (`courseGoesOnAfterGivingUp`; a gauge of another source keeps its source's rule, #1171). LR2 and beatoraja differ here:
+
+| Course gauge                                                                             | After a stage given up                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LR2                                                                                      | Goes on to the next stage, starting from the gauge the stage was given up at, while the gauge is at 2 % or more and the stage judged a GOOD or better (`LR2body.exe`). The course lamp is FAILED in the end, since a stage was left unplayed. Otherwise the run ends there. |
+| beatoraja's class gauges (and That-Which-Must-Not-Be-Named's courses, which run on them) | Ends the run as a failed one: `BMSPlayer.stopPlay` fails the stage and fills its gauge log with 0 to the chart's end, and `MusicResult` ends a course whose gauge stands at 0 or less [V].                                                                                  |
+| plugout                                                                                  | Ends the run as a failed one. plugout leaves nothing to follow; this is Be-Music's choice.                                                                                                                                                                                  |
+
+An endless run (RANDOM MIX drawn one stage at a time) always ends on a stage given up, since ESC is how its player stops it. Under an LR2 gauge, a stage given up that judged a GOOD or better shows its result as FAILED first, as `LR2body.exe` does, whether the run goes on or ends there (`givenUpCourseStageShowsResult`); **Skip stage results** skips it, as it skips any stage result. Under any other gauge, and for a stage with no GOOD or better, no stage result shows: the next stage, or the course result, follows at once. Showing none under beatoraja's gauges is Be-Music's narrower choice, since only LR2's screen flow has been checked. Where LR2 returns to the select screen without saving (a stage with no GOOD or better judged), Be-Music ends the run and keeps it as a failed one, as it keeps every play it does not leave to AUTO or a replay.
+
+```mermaid
+flowchart TD
+  esc(["ESC on a course stage"]) --> source{"course gauge's source"}
+  source -- "LR2" --> judged{"GOOD or better judged"}
+  source -- "class gauges, plugout" --> fail["course result: FAILED"]
+  judged -- "yes" --> stage["stage result: FAILED"]
+  judged -- "no" --> fail
+  stage --> holds{"gauge at 2 % or more,\na stage left"}
+  holds -- "yes" --> next["next stage, from the gauge left"]
+  holds -- "no" --> fail
+  next --> lamp["course lamp FAILED at the end"]
+```
+
+Pressing ESC after every note has been judged finishes the stage and continues the course, as in beatoraja’s `BMSPlayer.stopPlay`. For NONSTOP, this applies after the last note of the last stage.
 
 A course stage cannot be ranked as a single-chart play: `checkReplayEligibility` marks it `unranked` as `course-stage`, and the Leaderboard stores such a play without ranking it.
 
@@ -399,12 +422,13 @@ stateDiagram-v2
     [*] --> Stage: nextStage
     Stage --> Stage: recordStage (goes on)
     Stage --> Over: recordStage (gauge empty or last stage)
-    Stage --> Over: giveUp (ESC)
+    Stage --> Stage: giveUp (goes on)
+    Stage --> Over: giveUp (ends run)
     Over --> [*]: buildReplay
 ```
 
 - `nextStage` plans the next stage: its chart with the course's long-note constraint applied, `PlayerOptions.course` with the carry-in, and whether the hi-speed is locked. `playSettings` gives the settings it plays with in place of the player's picks (`resolveCourseStagePlaySettings`: the lane options the course allows, then an LR2 GRADE course's resets).
-- `recordStage` records a stage's replay and says whether the run goes on (`goesOnAfter` asks first); `giveUp` records a stage given up with ESC and ends the run as a failed one.
+- `recordStage` records a stage's replay and says whether the run goes on (`goesOnAfter` asks first); `giveUp` records a stage given up with ESC as failed and returns whether the run goes on (`goesOnAfterGivingUp` asks first).
 - `playSeconds` adds up the stages' play time, a stage given up up to where it was left (`resolveGivenUpPlaySeconds`). `stageExtras` keeps what the host kept of each stage, such as its result graphs.
 - `buildReplay` writes the course replay: the stages played, then every stage never reached with its chart facts, its file hashes and its chart fingerprint.
 

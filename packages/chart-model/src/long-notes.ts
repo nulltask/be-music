@@ -123,9 +123,10 @@ export function resolveLNOBJLongNotes(json: BeMusicJSON): LNOBJLongNoteResolutio
   const startToEndEvent = new Map<BeMusicEvent, BeMusicEvent>();
   const endEvents = new Set<BeMusicEvent>();
 
+  const overwritten = collectOverwrittenBMSObjects(preparedEvents, beatResolver);
   for (const item of preparedEvents) {
     const { event, normalizedChannel } = item;
-    if (!isPlayableNormalizedChannel(normalizedChannel)) {
+    if (!isPlayableNormalizedChannel(normalizedChannel) || overwritten.has(event)) {
       continue;
     }
     const tickKey = createEventTickKey(event);
@@ -155,6 +156,34 @@ export function resolveLNOBJLongNotes(json: BeMusicJSON): LNOBJLongNoteResolutio
     startToEndEvent,
     endEvents,
   };
+}
+
+/**
+ * The playable objects a later line of the same measure and channel overwrites at the same beat (the later nonzero
+ * object wins, as cmds and beatoraja read duplicate lines). `#LNOBJ` pairs only the objects that remain, the same ones
+ * the notes are chosen from (`selectBMSNormalObjects`), so an overwritten end object cannot end a note nor an
+ * overwritten start begin one. IR without line order (`bmsLineOrder`) overwrites nothing, as before line order was kept.
+ */
+function collectOverwrittenBMSObjects(
+  events: readonly NormalizedChartEvent[],
+  beatResolver: BeatResolver,
+): Set<BeMusicEvent> {
+  const overwritten = new Set<BeMusicEvent>();
+  const winners = new Map<string, BeMusicEvent>();
+  for (const { event, normalizedChannel } of events) {
+    if (event.bmsLineOrder === undefined || !isPlayableNormalizedChannel(normalizedChannel)) continue;
+    const key = `${normalizedChannel}:${beatResolver.eventToBeat(event)}`;
+    const winner = winners.get(key);
+    if (winner === undefined) {
+      winners.set(key, event);
+    } else if (event.bmsLineOrder > winner.bmsLineOrder!) {
+      overwritten.add(winner);
+      winners.set(key, event);
+    } else {
+      overwritten.add(event);
+    }
+  }
+  return overwritten;
 }
 
 function resolveBMSLongNotesType1(

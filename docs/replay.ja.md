@@ -308,14 +308,18 @@ flowchart TD
   `gauge` です（beatoraja での `P-ATTACK`、LR2 での `EX-HARD` と `ASSIST-EASY`、コース以外の ???? での
   `DEATH`）。似たゲージには読み替えません。CUSTOM JUDGE を使ったリプレイは、CUSTOM JUDGE が
   beatoraja だけのものなので `custom-judge` です。ゲージオートシフトは理由にならず、対象のゲージの並びで持ち越します
-  （[プレイオプション](./play-options-modifiers.ja.md#ゲージオートシフト)）。プレイしたルールセットは
-  常に自分のゲージで判定します。参照元つきのゲージ（`play.gauge: "lr2:P-ATTACK"`）も理由になりません。
-  どのルールセットでも、その参照元のゲージ・ラダー・コースゲージで再判定し、結果の `gauge.source` に参照元を
-  記録します（[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)）。
+  （[プレイオプション](./play-options-modifiers.ja.md#ゲージオートシフト)）。
+  名前を言ってはいけないあのゲームで、参照元のない `DEATH` を EX-HARD として記録した旧リプレイは、
+  プレイ時のルールセットでも `gauge` になります。別のルールセットで再判定できる場合は、当時の
+  EX-HARD の増減からゲージが尽きた時刻を求めます。参照元つきのゲージ（`play.gauge: "lr2:P-ATTACK"`）
+  は、その参照元のゲージ、ラダー、コースゲージで再判定し、結果の `gauge.source` に参照元を記録します
+  （[ADR 0019](./adr/0019-source-qualified-option-values.ja.md)）。
 - **truncated**: サバイバルゲージが空になった所でプレイが終わり（`play.endOnFailure`）、対象のゲージならそこを
   生き残る場合です。判定はその時点（`stoppedAtUs`、プレイしたルールセットのゲージが空になった時刻）までで、
   入力を補ったり、その後のノートを見逃しにしたりしません。コースも、プレイしたルールセットで失敗した
-  ステージで止まり、対象のゲージならそこを生き残る場合に同じく truncated になります。truncated の結果は
+  ステージで止まり、対象のゲージならそこを生き残る場合と、投げたステージで止まり、対象のコースゲージならそこから
+  先へ進む場合（LR2 のもの。[コース — ゲージが尽きたら終わる](./course.ja.md#ゲージが尽きたら終わる)）に同じく truncated に
+  なります。投げたステージでランを終えるゲージで再模擬したコースは、そのステージで止まります。truncated の結果は
   順位が付きません。
 - **simulated**: それ以外です。同じ時点までに対象のゲージも空になる場合を含みます。
 
@@ -405,7 +409,7 @@ flowchart TD
 
 - **全ステージの譜面が必要です。** 各ステージは、そのステージが示す譜面でライブラリと照合します（`listCourseReplayStageCharts`、`matchesCourseReplayStageChart`）。SHA-256 があればそれ、なければ MD5、それもなければ譜面フィンガープリントです。到達したステージもしなかったステージも同じ扱いで、LR2 の `coursePlayable` と beatoraja の `MusicSelector`（433-437）も、ステージの譜面が欠けたコースのリプレイは始めません。欠けていればダイアログで一覧を示し、何も始めません。
 - **ステージは順に再生します。** 各ステージを、持ち込んだ状態（`play.course.carryIn`）とともにそれぞれのリプレイから、通常のコースの流れで再生します。コースの決定画面、各ステージのリザルト、最後にコースのリザルトです。LR2 がステージのリザルトを飛ばすのは AUTO のときだけでリプレイでは飛ばさず（`Main.cpp` M1280-M1310、M1376-M1379）、beatoraja も `CourseResult` の前に各ステージの `MusicResult`（179-212）を出します。AUTO で遊んだステージのリザルトは、通常の AUTO のプレイと同じく飛ばします。
-- **記録されたプレイが止まったところで止まります**（`planCourseReplayPlayback`）。最初に投げ出した（`play.aborted`、通常のプレイと同じくそのままコースのリザルトへ進みます）か落ちた（記録されたゲージで `isCourseStageFailed` が判定）ステージのあと、なければ最後に遊んだステージのあとです。コースのリザルトは記録されたもの（`results.native`）です。
+- **記録されたプレイが止まったところで止まります**（`planCourseReplayPlayback`）。記録されたプレイがそこで終わった最初の投げ出したステージ（`play.aborted`）か、落ちた（記録されたゲージで `isCourseStageFailed` が判定）ステージのあと、なければ最後に遊んだステージのあとです。投げ出したステージは、通常のプレイと同じく、結果を FAILED として表示するか、表示しません（[course.ja.md](course.ja.md#ゲージが尽きたら終わる)）。コースのリザルトは記録されたもの（`results.native`）です。
 - **NONSTOP のプレイは 1 譜面として再生します。** LR2 が NONSTOP のコースを再生するのと同じです（`LR2f.cpp` L18116-L18117、`Main.cpp` M806）。記録どおりに（`nonstop.placement`、`nonstop.stitch`、各ステージの `randomDraws`）コースをつなぎ直し、`nonstop.replay` を再生します。
 - **何も残しません。** コースのリプレイは、ステージやコースのベスト、ランプ、トロフィー、プレイ回数を更新せず、リプレイを保存せず、Leaderboard にも送りません。LR2 もリプレイのときはコースリザルトの保存から早く戻ります（`LR2f.cpp` L9599）。beatoraja の `CourseResult.updateScoreDatabase` はモードを確かめずに書くので、コースのリプレイでもプレイ回数やクリア回数が増えますが、Be-Music はこれに倣いません。
 - **リザルトはリプレイであることを示します。** リプレイのプレイと、そこから続くすべてのリザルト（各ステージ、コース、NONSTOP）は `PlayResult.fromReplay` を持ち、LR2 スキンはプレイ画面とリザルト画面で REPLAY OFF（op 82）の代わりに REPLAY PLAYING（op 84）を点けます。LR2 も op 84 をリプレイの間ずっと点けたままにします（`LR2f.cpp` L4740-L4741）。

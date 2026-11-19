@@ -10,6 +10,7 @@ import {
   courseFromReplay,
   courseGoesOnAfter,
   courseReplayStageGivenUp,
+  givenUpStageShowsResult,
   describeCourseReplayStage,
   matchCourseReplayCharts,
   recordCourseStage,
@@ -410,17 +411,75 @@ describe('course replays as course runs', () => {
     expect(active.run.buildReplay().stages.map((stage) => stage.played)).toEqual([true, true, false]);
   });
 
-  test('a stage the recorded run gave up ends the run there, as given up', () => {
+  test('a stage the recorded run gave up ends the playback there when the run ended there, as given up', () => {
     const log = replayLog([
       { played: true, replay: stageReplay('aa', 80, true) },
       { played: false, md5: 'bb', facts: {} as never },
     ]);
     const active = startCourseRun(courseFromReplay(log, [chartEntry('a'), chartEntry('b')]), log);
-    expect(courseReplayStageGivenUp(active)).toBe(true);
+    // Under LR2's gauge the stage judged a GOOD or better, so its result shows as FAILED, as it did live.
+    expect(courseReplayStageGivenUp(active)).toBe(false);
     recordCourseStage(active, { gaugeHistory: [], scoreHistory: [] } as never);
-    expect(active.run.finished).toBe(true);
+    // The recorded run has no next stage, so the playback has none either, whatever the gauge's rule would do now.
+    expect(nextCourseStagePlay(active)).toBeUndefined();
     expect(courseReplayStageGivenUp(active)).toBe(false);
     expect(courseReplayStageGivenUp(undefined)).toBe(false);
+  });
+
+  test('a stage the recorded run gave up and went on after plays back as going on, as LR2 goes on', () => {
+    const next = stageReplay('bb', 60);
+    const log = replayLog([
+      { played: true, replay: stageReplay('aa', 80, true) },
+      { played: true, replay: next },
+    ]);
+    const active = startCourseRun(courseFromReplay(log, [chartEntry('a'), chartEntry('b')]), log);
+    expect(courseReplayStageGivenUp(active)).toBe(false);
+    recordCourseStage(active, { gaugeHistory: [], scoreHistory: [] } as never);
+    expect(nextCourseStagePlay(active)).toMatchObject({ index: 1, replay: next });
+  });
+
+  test('a stage the recorded run gave up shows no stage result under a gauge that shows none', () => {
+    const givenUp = stageReplay('aa', 80, true);
+    const beatoraja = {
+      ...givenUp,
+      play: { ...givenUp.play, judgeRuleset: 'beatoraja' },
+      results: { native: { ...givenUp.results!.native!, ruleset: 'beatoraja' } },
+    } as BeMusicReplay;
+    const log = replayLog([
+      { played: true, replay: beatoraja },
+      { played: false, md5: 'bb', facts: {} as never },
+    ]);
+    const active = startCourseRun(courseFromReplay(log, [chartEntry('a'), chartEntry('b')]), log);
+    expect(courseReplayStageGivenUp(active)).toBe(true);
+    expect(courseReplayStageGivenUp(undefined)).toBe(false);
+  });
+
+  test('givenUpStageShowsResult reads the stage replay, else its live outcome, by the course gauge rule', () => {
+    const givenUp = stageReplay('aa', 80, true);
+    expect(givenUpStageShowsResult(givenUp, undefined)).toBe(true);
+    const noGood = { ...RESULT, judge: { ...RESULT.judge, pgreat: 0, great: 0, good: 0 } };
+    expect(givenUpStageShowsResult(undefined, { stageOutcome: noGood } as never)).toBe(false);
+    expect(givenUpStageShowsResult(undefined, { stageOutcome: RESULT } as never)).toBe(true);
+    expect(givenUpStageShowsResult(undefined, { stageOutcome: { ...RESULT, ruleset: 'beatoraja' } } as never)).toBe(
+      false,
+    );
+    expect(givenUpStageShowsResult(undefined, undefined)).toBe(false);
+  });
+
+  test('a live stage given up whose result shows is recorded as given up', () => {
+    const course = courseFromReplay(
+      replayLog([
+        { played: true, replay: stageReplay('aa') },
+        { played: true, replay: stageReplay('bb') },
+      ]),
+      [chartEntry('a'), chartEntry('b')],
+    );
+    const active = startCourseRun(course);
+    recordCourseStage(active, { gaugeHistory: [], scoreHistory: [], replay: stageReplay('aa', 80, true) } as never);
+    // LR2 goes on past a stage given up with the gauge held, and the stage does not clear.
+    expect(nextCourseStagePlay(active)).toMatchObject({ index: 1 });
+    expect(active.run.buildReplay().stages[0]).toMatchObject({ played: true });
+    expect(active.run.buildReplay().results?.native?.lamp).toBe('FAILED');
   });
 
   test('matchCourseReplayCharts finds each stage by its hashes, and leaves a stage with no loaded chart missing', async () => {

@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
   applyCourseJudgeConstraint,
+  courseGoesOnAfterGivingUp,
+  givenUpCourseStageShowsResult,
   isCourseStageFailed,
   resolveCourseGauge,
   resolveCourseGaugeId,
@@ -219,4 +221,18 @@ test('course advancement follows the LR2 two-percent boundary and other sources 
   expect(isCourseStageFailed('lr2', { final: 100, failedMidPlay: true })).toBe(true);
   expect(isCourseStageFailed('beatoraja', { final: 1 })).toBe(false);
   expect(isCourseStageFailed('beatoraja/0', { final: 0 })).toBe(true);
+});
+
+test('a stage given up shows its result under an LR2 gauge that judged a GOOD or better, whether or not the run goes on', () => {
+  const judged = { pgreat: 0, great: 0, good: 1 };
+  const none = { pgreat: 0, great: 0, good: 0 };
+  expect(givenUpCourseStageShowsResult('lr2', { gauge: {}, judge: judged })).toBe(true);
+  // The gauge below 2 % ends the run, and the stage result still shows first.
+  expect(courseGoesOnAfterGivingUp('lr2', { gauge: { final: 1 }, judge: judged })).toBe(false);
+  expect(givenUpCourseStageShowsResult('lr2', { gauge: {}, judge: judged })).toBe(true);
+  expect(givenUpCourseStageShowsResult('lr2', { gauge: {}, judge: none })).toBe(false);
+  expect(givenUpCourseStageShowsResult('beatoraja', { gauge: {}, judge: judged })).toBe(false);
+  // A qualified gauge follows its source under another ruleset (#1171).
+  expect(givenUpCourseStageShowsResult('beatoraja', { gauge: { source: 'lr2' }, judge: judged })).toBe(true);
+  expect(givenUpCourseStageShowsResult('lr2', { gauge: { source: 'beatoraja' }, judge: judged })).toBe(false);
 });

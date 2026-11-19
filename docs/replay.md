@@ -304,13 +304,16 @@ flowchart TD
   defines (`P-ATTACK` under beatoraja, `EX-HARD` or `ASSIST-EASY` under LR2, `DEATH` under ???? outside a course); it is
   never mapped to a lookalike. `custom-judge` when the replay used CUSTOM JUDGE, which stays beatoraja's. Gauge
   auto-shift is no reason: it is carried, along the target's own gauge ladder ([Play options](./play-options-modifiers.md#gauge-auto-shift)).
-  The played ruleset always simulates its own gauge. A source-qualified gauge (`play.gauge: "lr2:P-ATTACK"`) is no
-  reason either: every ruleset re-judges it on that source's gauge, ladder and course gauges, and the result names the
-  source in `gauge.source` ([ADR 0019](./adr/0019-source-qualified-option-values.md)).
+  Older replays that recorded a bare `DEATH` as EX-HARD under That-Which-Must-Not-Be-Named report `gauge` under the
+  played ruleset too. When another ruleset can read the gauge, the simulator uses the old EX-HARD curve to find where
+  the recording stopped on failure. Each target uses a source-qualified gauge (`play.gauge: "lr2:P-ATTACK"`) with its
+  own ladder and course gauges, and reports the source in `gauge.source` ([ADR 0019](./adr/0019-source-qualified-option-values.md)).
 - **truncated**: the play ended where its survival gauge emptied (`play.endOnFailure`), and the target's gauge would have
   survived that point. The run is judged only up to it (`stoppedAtUs`, where the played ruleset's gauge emptied): no input
   is synthesized and no later note is missed. A course is truncated the same way when its played run stopped at a failed
-  stage the target's gauge survives. A truncated result is not ranked.
+  stage the target's gauge survives, and when it stopped at a stage given up that the target's course gauge goes on past
+  (LR2's, [Courses — Ending on failure](./course.md#ending-on-failure)). A course re-simulated under a target whose gauge
+  ends the run there stops at that stage. A truncated result is not ranked.
 - **simulated**: everything else, including a target whose gauge empties by the same point.
 
 `SimulateReplayOptions.onFailure` hears the chart time of the judgment that first empties a survival gauge. Tracked in [#933](https://github.com/nulltask/be-music/issues/933).
@@ -398,7 +401,7 @@ flowchart TD
 
 - **Every stage chart must be loaded.** Each stage is matched against the library by the chart it names (`listCourseReplayStageCharts`, `matchesCourseReplayStageChart`): SHA-256 when it names one, else MD5, else the chart fingerprint. A stage reached or not counts the same, as LR2's `coursePlayable` and beatoraja's `MusicSelector` (433-437) refuse a course replay with a stage chart missing. When one is missing, a dialog lists them and nothing starts.
 - **The stages play in order**, each from its own replay with the state it carried in (`play.course.carryIn`), through the live course flow: the course's decide screen, then each stage's result, then the course result. LR2 skips a stage result only for AUTO (`Main.cpp` M1280-M1310, M1376-M1379), not for a replay, and beatoraja shows each stage's `MusicResult` (179-212) before its `CourseResult`. An AUTO-played stage's result is skipped as a live AUTO run skips it.
-- **The run stops where the recorded run stopped** (`planCourseReplayPlayback`): after the first stage given up (`play.aborted`, which goes straight on to the course result as the live run did) or failed (its recorded gauge, by `isCourseStageFailed`), else after the last stage played. The course result is the recorded one (`results.native`).
+- **The run stops where the recorded run stopped** (`planCourseReplayPlayback`): after the first stage given up (`play.aborted`) that the recorded run ended at, or failed (its recorded gauge, by `isCourseStageFailed`), else after the last stage played. A stage given up shows its result as FAILED, or none, as the live run did ([course.md](course.md#ending-on-failure)). The course result is the recorded one (`results.native`).
 - **A NONSTOP run plays as one chart**, as LR2 replays a NONSTOP course (`LR2f.cpp` L18116-L18117, `Main.cpp` M806): the course is stitched again as recorded (`nonstop.placement`, `nonstop.stitch` and each stage's `randomDraws`) and `nonstop.replay` plays on it.
 - **Nothing is kept.** A course replay updates no stage or course best, lamp, trophy or play count, saves no replay and submits nothing to the Leaderboard, as LR2's course-result save returns early for a replay (`LR2f.cpp` L9599). beatoraja's `CourseResult.updateScoreDatabase` writes with no mode guard, so a course replay there bumps play and clear counts; Be-Music does not follow it.
 - **The results say they are a replay.** A replay's play and every result it leads to (each stage's, the course's or the NONSTOP run's) carry `PlayResult.fromReplay`, and the LR2 skin lights REPLAY PLAYING (op 84) instead of REPLAY OFF (op 82) on the play and result screens, as LR2 keeps op 84 on for the whole replay (`LR2f.cpp` L4740-L4741).

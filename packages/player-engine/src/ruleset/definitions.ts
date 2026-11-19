@@ -1166,6 +1166,16 @@ function resolveRulesetTables(
   if (gaugeSource === 'lr2' && (selectedGauge === 'EX-HARD' || selectedGauge === 'ASSIST-EASY')) {
     throw new RangeError(`LR2 beta3 has no ${selectedGauge} gauge.`);
   }
+  // That-Which-Must-Not-Be-Named's menu has no DEATH. A bare one is refused, as every other gauge a ruleset lacks is,
+  // rather than played as EX-HARD: re-judging never maps a bare gauge to a lookalike, and the Options dialog returns it
+  // to GROOVE (`keepGaugePick`). A course stage plays it on the course gauges, which take it (`resolveCourseGaugeId`).
+  if (
+    gaugeSource === '____' &&
+    course === undefined &&
+    (selectedGauge === 'DEATH' || selectedGauge === 'DEATH-CORRECTED')
+  ) {
+    throw new RangeError(`That-Which-Must-Not-Be-Named has no ${selectedGauge} gauge outside a course.`);
+  }
   if (gaugeSource === 'plugout' && selectedGauge === 'ASSIST-EASY') {
     throw new RangeError('plugout has no ASSIST-EASY gauge.');
   }

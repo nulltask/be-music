@@ -67,12 +67,14 @@ export class CourseRunService {
   }
 
   /**
-   * ESC gave `active` up: the stage given up is recorded, with its replay once the engine has handed it over, and the
-   * run is the running one again, so that its course result shows it as a failed run.
+   * ESC gave `active`'s stage up: the stage is recorded, with its replay once the engine has handed it over, and the
+   * run is the running one again. Returns whether it goes on to its next stage (LR2's course gauges, while the gauge
+   * holds); otherwise its course result shows it as a failed run.
    */
-  public giveUp(active: ActiveCourse, replay: BeMusicReplay | undefined, result?: PlayResult): void {
-    active.run.giveUp(replay, result);
+  public giveUp(active: ActiveCourse, replay: BeMusicReplay | undefined, result?: PlayResult): 'next' | 'finished' {
+    const outcome = active.run.giveUp(replay, result);
     this.activeCourse = active;
+    return outcome;
   }
 
   /** The course result takes the run, which ends there; `undefined` when none is running. */

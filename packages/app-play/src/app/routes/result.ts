@@ -269,8 +269,10 @@ export class ResultRoute {
     const active = this.activeCourse;
     if (courseStage && active !== undefined) {
       recordCourseStage(active, data);
+      // A stage given up keeps no stage record here, as when it shows no result.
       if (
         !data.practice &&
+        data.replay?.play.aborted !== true &&
         (data.replay === undefined || !isBmsonRecoveryDisabled(data.replay.chart, data.replay.play.bmsonTotalMode))
       )
         this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data), data.replay);
@@ -441,8 +443,10 @@ export class ResultRoute {
     const presentation = resolveResultPresentation(run);
     if (courseStage) {
       recordCourseStage(this.activeCourse!, data);
+      // A stage given up keeps no stage record here, as when it shows no result.
       if (
         !data.practice &&
+        data.replay?.play.aborted !== true &&
         (data.replay === undefined || !isBmsonRecoveryDisabled(data.replay.chart, data.replay.play.bmsonTotalMode))
       )
         this.records.recordActiveCourseStage(courseStageRecordPlayFromResult(data), data.replay);

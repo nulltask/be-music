@@ -315,8 +315,8 @@ POOR カウンタに `poor` と `emptyPoor` の合計を表示するかは提示
 ### 基本方針
 
 - ゲージは `PlayerOptions.gauge` で選び、LR2 の名前（`GROOVE` / `EASY` / `HARD` / `DEATH`）で指定します。
-  各ルールセットが自分のラインナップへ対応付けます（`GROOVE` は beatoraja の `NORMAL`、`DEATH` は `HAZARD`。
-  名前を言ってはいけないあのゲームに HAZARD 相当は無いため `DEATH` は `EX-HARD` に丸められます）。
+  beatoraja では `GROOVE` を `NORMAL`、`DEATH` を `HAZARD` として扱います。
+  名前を言ってはいけないあのゲームでは、コースの `DEATH` に `EXHARDCLASS` を使います。コース外では参照元の指定がない `DEATH` を選べません。
 - カーブはルールセットが所有します: 判定ごとの増減、TOTAL スケーリング、guts 緩和、死亡ボーダー、
   クリア判定（回復系は閾値、サバイバル系は「一度も 0 にならなかったか」）。
 - 選択したゲージは実際にプレイを支配します。色だけの飾りではありません — HARD は本当に削れ、

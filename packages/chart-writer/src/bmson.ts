@@ -89,6 +89,11 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
   // BMS objects bmson has no field for, counted for `onDiagnostic`.
   let speedObjects = 0;
   let exRankObjects = 0;
+  // BMS BPM and STOP objects the player plays as LR2 does but bmson cannot hold (`collectTempoChanges`,
+  // `collectStopChanges`): a negative or undefined `#BPMxx`, and a STOP without a positive `#STOPxx`.
+  let reversingBPMObjects = 0;
+  let unsetStopObjects = 0;
+  const playsBMSTimingRules = json.sourceFormat === 'bms';
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
     const isSampleChannel = isSampleTriggerChannel(channel);
@@ -195,6 +200,9 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
       const bpm = json.resources.bpm[normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson')];
       if (typeof bpm === 'number' && bpm > 0) {
         bpmEvents.push({ ...collectBmsonExtraFields(event.bmson?.extraFields, 'bpm'), y, bpm });
+      } else if (playsBMSTimingRules && (bpm === undefined || (Number.isFinite(bpm) && bpm < 0))) {
+        // A zero `#BPMxx` is ignored in play as well, so only these change the chart.
+        reversingBPMObjects += 1;
       }
       continue;
     }
@@ -207,6 +215,8 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
           y,
           duration: Math.round((stopUnits * resolution) / 48),
         });
+      } else if (playsBMSTimingRules) {
+        unsetStopObjects += 1;
       }
       continue;
     }
@@ -250,7 +260,11 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
   if (bga) {
     bmson.bga = bga;
   }
-  reportBMSOnlyDirectives(json, speedObjects, exRankObjects, options.onDiagnostic);
+  reportBMSOnlyDirectives(
+    json,
+    { speedObjects, exRankObjects, reversingBPMObjects, unsetStopObjects },
+    options.onDiagnostic,
+  );
 
   return `${JSON.stringify(bmson, null, indent)}\n`;
 }
@@ -593,16 +607,17 @@ function resolveBmsonTotalForOutput(json: BeMusicJSON): number | undefined {
 }
 
 /**
- * Reports the BMS directives bmson has no field for, which the output leaves out: `#STP` stops and `#EXRANKxx`
- * changes (both change judging), and `SPEED` changes (the scroll).
+ * Reports the BMS directives bmson has no field for, which the output leaves out: `#STP` stops, `#EXRANKxx` changes,
+ * negative or undefined `#BPMxx` (LR2's reverse scroll) and STOPs without a positive `#STOPxx` (all four change
+ * judging), and `SPEED` changes (the scroll).
  */
 function reportBMSOnlyDirectives(
   json: BeMusicJSON,
-  speedObjects: number,
-  exRankObjects: number,
+  counts: { speedObjects: number; exRankObjects: number; reversingBPMObjects: number; unsetStopObjects: number },
   report: ChartExportDiagnosticHandler | undefined,
 ): void {
   if (report === undefined) return;
+  const { speedObjects, exRankObjects, reversingBPMObjects, unsetStopObjects } = counts;
   const stops = (json.bms.stp ?? []).filter((stp) => typeof stp === 'string' && stp.length > 0).length;
   if (stops > 0)
     report({
@@ -613,6 +628,16 @@ function reportBMSOnlyDirectives(
     report({
       code: 'exrank',
       message: `${exRankObjects} #EXRANK change(s) (channel A0) are left out: bmson has no field for them, so the judgment rank stays at judge_rank.`,
+    });
+  if (reversingBPMObjects > 0)
+    report({
+      code: 'bpm',
+      message: `${reversingBPMObjects} BPM change(s) to a negative or undefined #BPM (channel 08) are left out: bmson has no reverse scroll, so the chart keeps its previous BPM and never reverses.`,
+    });
+  if (unsetStopObjects > 0)
+    report({
+      code: 'stop',
+      message: `${unsetStopObjects} STOP(s) without a positive #STOP (channel 09) are left out: bmson has no negative stop, so the notes after each stay where they are instead of coming 1/192 of a measure earlier.`,
     });
   if (speedObjects > 0)
     report({
