@@ -5,10 +5,10 @@
  * A host keeps one {@link BeatorajaSceneKitCaches} and calls {@link loadBeatorajaSceneKit} each time it makes a
  * beatoraja scene:
  *
- * 1. The skin is loaded twice. The first pass, without options, gives its header (`property[]`, `filepath[]`,
- *    `offset[]`), whose defaults seed the player's options for the entry ({@link resolveBeatorajaSkinConfig}). The
- *    second pass runs a Lua skin's `main()` with those options, so its `source[]` and `destination[]` are built for
- *    them. Options the host already holds (an options panel's change) load it once.
+ * 1. JSON skins return their header and full definition in one load. A Lua skin first returns its header
+ *    (`property[]`, `filepath[]`, `offset[]`), whose defaults seed the player's options for the entry
+ *    ({@link resolveBeatorajaSkinConfig}). It then runs `main()` with those options to build its `source[]` and
+ *    `destination[]`. Options supplied by the host skip the header pass.
  * 2. The skin's `source[]` is resolved against the theme's files (`bundleBeatorajaSources`) and decoded to textures.
  * 3. Its `font[]` is registered.
  *
@@ -146,8 +146,8 @@ export interface LoadBeatorajaSceneKitOptions {
   readonly entryPath: string;
   readonly caches: BeatorajaSceneKitCaches;
   /**
-   * The options to load the skin with, loading it once. Without them it is loaded twice, the first time for the header
-   * whose defaults seed the kept options ({@link resolveBeatorajaSkinConfig}).
+   * The options to load the skin with. A Lua skin needs a header pass when these are omitted to seed the kept
+   * options ({@link resolveBeatorajaSkinConfig}).
    */
   readonly skinConfig?: BeatorajaSkinConfig;
   /**
@@ -183,6 +183,7 @@ export async function loadBeatorajaSceneKit(
 ): Promise<LoadBeatorajaSceneKitResult> {
   const { files, entryPath, caches } = options;
   let header: BeatorajaSkinHeader | undefined;
+  let load: ReturnType<typeof loadBeatorajaSkin> | undefined;
   let skinConfig = options.skinConfig;
   if (skinConfig === undefined) {
     // The header pass picks up the skin's `property[]` schema; the second pass re-runs `main()` with the option picks so
@@ -191,12 +192,14 @@ export async function loadBeatorajaSceneKit(
     if (!headerLoad.ok) return { ok: false, stage: 'header', message: headerLoad.error.message };
     header = headerLoad.header;
     skinConfig = resolveBeatorajaSkinConfig(caches, entryPath, header, files);
+    if (headerLoad.format === 'json') load = headerLoad;
   }
-  const load = loadBeatorajaSkin({
+  const runtimeContext = options.runtimeContext?.(skinConfig);
+  load ??= loadBeatorajaSkin({
     entryPath,
     files,
     skinConfig,
-    ...(options.runtimeContext !== undefined ? { runtimeContext: options.runtimeContext(skinConfig) } : {}),
+    ...(runtimeContext === undefined ? {} : { runtimeContext }),
   });
   if (!load.ok || !load.skin) {
     return { ok: false, stage: 'skin', message: load.ok ? 'skin payload missing' : load.error.message };
