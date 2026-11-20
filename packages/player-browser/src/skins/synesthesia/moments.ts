@@ -21,14 +21,20 @@ import {
   resolveMilestoneArea,
   type BeMusicGameplayLayout,
   type BeMusicGameplayRuntime,
+  type BeMusicSkinSettingValues,
+  type BeMusicSkinToggleSetting,
   STAGE_WIDTH as DESIGN_WIDTH,
   stageProgress,
 } from '@be-music/player-skin-sdk';
 import { addHUDNumber, type ChildPool } from '../pixi-kit/index.ts';
 import { addSynesthesiaHUDText as addHUDText } from './figures.ts';
 
-/** Stand-in for a layout without a BGA (a page-wide keyboard field): milestones then play in their area. */
-const NO_MONITOR: BeMusicRect = { x: 0, y: 0, w: 0, h: 0 };
+export const COMBO_MILESTONE_SETTING = {
+  kind: 'toggle',
+  id: 'comboMilestones',
+  label: '100-combo milestones',
+  default: false,
+} satisfies BeMusicSkinToggleSetting;
 
 const MILESTONE_MS = 1300;
 const CLEAR_MS = 1100;
@@ -54,6 +60,7 @@ export function drawSynesthesiaMoments(
   hue: number,
   pool: ChildPool,
   layout: BeMusicGameplayLayout,
+  settings?: BeMusicSkinSettingValues,
 ): void {
   const nowMs = runtime.nowMs ?? 0;
   const moments = trackMoments(chromeLayer, {
@@ -87,16 +94,15 @@ export function drawSynesthesiaMoments(
     drawCountIn(graphics, layer, runtime.chartMs, countIn, hue, pool);
   }
   const milestone = momentProgress(moments.milestone?.atMs, nowMs, MILESTONE_MS);
-  if (milestone !== undefined && moments.milestone) {
+  if (settings?.[COMBO_MILESTONE_SETTING.id] === true && milestone !== undefined && moments.milestone) {
     drawMilestone(
       graphics,
       layer,
       moments.milestone.value,
       milestone,
       resolveMilestoneArea(layout.playfield.right, 346, layout.stage.width),
-      layout.bga ?? NO_MONITOR,
+      layout.bga,
       resolveMilestoneSpot(layout),
-      portrait,
       pool,
     );
   }
@@ -181,23 +187,16 @@ function drawMilestone(
   value: number,
   t: number,
   area: MilestoneArea,
-  bga: BeMusicRect,
+  bga: BeMusicRect | undefined,
   spot: { x: number; y: number; w: number } | undefined,
-  portrait: boolean,
   pool: ChildPool,
 ): void {
   // Each hundred takes the next accent light in turn: gold, electric blue, magenta.
   const color = MILESTONE_COLORS[Math.max(0, Math.floor(value / 100) - 1) % MILESTONE_COLORS.length]!;
-  // The count plays centred on the monitor (beside the lanes, or above them on a portrait stage, whatever the milestone
-  // area — it is below the lanes there), BGA or not. Without a
-  // monitor it plays compact in `spot` (see resolveMilestoneSpot), or else in the band below the lanes (double play) —
-  // never over the notes.
-  const onMonitor = bga.w > 0 && (area.mode !== 'below' || portrait);
-  const compact = !onMonitor;
-  const cx = onMonitor ? bga.x + bga.w / 2 : spot ? spot.x : area.x + area.w / 2;
-  const cy = onMonitor ? bga.y + bga.h / 2 - 10 : spot ? spot.y : area.y + area.h / 2 - 10;
-  // A spot narrower than the compact lock-on shrinks the whole cut-in to fit it.
-  const fit = !onMonitor && spot ? Math.min(1, spot.w / 120) : 1;
+  const compact = bga === undefined;
+  const cx = bga ? bga.x + bga.w / 2 : (spot?.x ?? area.x + area.w / 2);
+  const cy = bga ? bga.y + bga.h / 2 : (spot?.y ?? area.y + area.h / 2 - 10);
+  const fit = bga ? Math.min(1, bga.w / 304, bga.h / 176) : spot ? Math.min(1, spot.w / 120) : 1;
   const alpha = Math.min(1, t / 0.12) * (1 - Math.max(0, (t - 0.7) / 0.3));
   const count = addHUDNumber(
     layer,
@@ -209,7 +208,8 @@ function drawMilestone(
       fill: SYN_WHITE,
       fontFamily: SYN_DISPLAY_FONT,
       letterSpacing: 4 * fit,
-      maxWidth: compact ? 120 * fit - 8 : undefined,
+      maxWidth: (compact ? 112 : 184) * fit,
+      stroke: { color: 0x000000, width: Math.max(2, 6 * fit), join: 'round' },
       anchorX: 0.5,
       anchorY: 0.5,
       dropShadow: { color, alpha: 1, blur: 18, distance: 0 },
@@ -221,7 +221,7 @@ function drawMilestone(
   const snap = easeOutCubic(Math.min(1, t / 0.2));
   const lockW = (compact ? 120 : 190) * fit * (1.6 - 0.6 * snap);
   const lockH = (compact ? 74 : 110) * fit * (1.6 - 0.6 * snap);
-  drawReticle(graphics, cx - lockW / 2, cy + (compact ? 14 : 22) * fit - lockH / 2, lockW, lockH, color, 0.9 * alpha, {
+  drawReticle(graphics, cx - lockW / 2, cy + (compact ? 14 * fit : 0) - lockH / 2, lockW, lockH, color, 0.9 * alpha, {
     arm: 14,
     width: 2,
   });
@@ -229,9 +229,10 @@ function drawMilestone(
     layer,
     'COMBO',
     cx,
-    cy + (compact ? 28 : 44) * fit,
+    cy + (compact ? 28 : 38) * fit,
     {
-      size: Math.max(9, Math.round(11 * fit)),
+      size: Math.max(6, Math.round(11 * fit)),
+      stroke: { color: 0x000000, width: Math.max(2, 3 * fit), join: 'round' },
       fill: SYN_WHITE,
       fontFamily: SYN_DISPLAY_FONT,
       letterSpacing: 10 * fit,

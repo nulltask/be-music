@@ -14,6 +14,7 @@ import { BE_MUSIC_SKIN_API_VERSION, cabinetStage, tallStage, type BeMusicSkin } 
 import { definePixiSkin } from '../pixi-kit/index.ts';
 import { JUDGMENT_PARTICLES_SETTING } from './burst-budget.ts';
 import { FROSTED_GLASS_SETTING } from './glass.ts';
+import { COMBO_MILESTONE_SETTING } from './moments.ts';
 
 /**
  * Synesthesia — a skin after synaesthetic sound-and-light rhythm games: deep space,
@@ -33,7 +34,7 @@ export const synesthesiaSkin: BeMusicSkin = definePixiSkin({
   fontLoads: ['400 16px "Orbitron"', '500 16px "Orbitron"', '300 12px "M PLUS 1p"', '500 12px "M PLUS 1p"'],
   stage: cabinetStage,
   portraitStage: tallStage,
-  settings: [FROSTED_GLASS_SETTING, JUDGMENT_PARTICLES_SETTING],
+  settings: [FROSTED_GLASS_SETTING, JUDGMENT_PARTICLES_SETTING, COMBO_MILESTONE_SETTING],
   gameplay: {
     renderChrome: renderSynesthesiaChrome,
     renderLanes: renderSynesthesiaLanes,
