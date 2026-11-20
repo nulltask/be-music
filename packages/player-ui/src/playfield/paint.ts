@@ -375,7 +375,8 @@ export function paintJudgmentDisplay(
       ctx.font = 'bold 10px sans-serif';
       ctx.fillStyle = detail.color;
       const spread = details.length > 1 ? (index - (details.length - 1) / 2) * JUDGE_DETAIL_SPREAD : 0;
-      ctx.fillText(detail.text, word.x + spread, (word.y ?? y) - (word.mode ? 40 : 24));
+      // Tabular figures: the milliseconds keep their place as they change from hit to hit.
+      paintTabular(ctx, detail.text, word.x + spread, (word.y ?? y) - (word.mode ? 40 : 24));
     });
     ctx.font = JUDGMENT_FONT;
     ctx.fillStyle = word.color;

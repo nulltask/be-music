@@ -1,4 +1,4 @@
-import type { BeMusicSongInfoLayer, BeMusicSongInfoText } from '@be-music/player-skin-sdk';
+import { layoutTabularRun, type BeMusicSongInfoLayer, type BeMusicSongInfoText } from '@be-music/player-skin-sdk';
 /** Plain's palette, type, and a few small drawing helpers shared by its three screens. */
 
 export const INK = '#111114';
@@ -171,4 +171,43 @@ export function drawSongInfoLayers(
     draw(info);
   }
   ctx.globalAlpha = base;
+}
+
+/**
+ * {@link text} with tabular figures: every digit in a cell as wide as the widest digit, so a changing number (a judge
+ * detail's milliseconds) keeps its place. Canvas 2D has no `font-variant-numeric`, so the cells are laid out by hand.
+ */
+export function tabularText(
+  ctx: CanvasRenderingContext2D,
+  value: string,
+  x: number,
+  y: number,
+  options: Omit<TextOptions, 'maxWidth' | 'nowMs'>,
+): void {
+  const wanted = font(options.size, options.weight);
+  if (CURRENT_FONTS.get(ctx) !== wanted) {
+    ctx.font = wanted;
+    CURRENT_FONTS.set(ctx, wanted);
+  }
+  ctx.fillStyle = options.color ?? TEXT;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const run = layoutTabularRun(value, (char) => measureTabularChar(ctx, wanted, char));
+  const align = options.align ?? 'left';
+  const left = align === 'center' ? x - run.width / 2 : align === 'right' || align === 'end' ? x - run.width : x;
+  for (const glyph of run.glyphs) if (glyph.char !== ' ') ctx.fillText(glyph.char, left + glyph.x + glyph.w / 2, y);
+}
+
+/** Each font's measured character advances, for {@link tabularText}: a judge detail redraws every frame. */
+const TABULAR_WIDTHS = new Map<string, Map<string, number>>();
+
+function measureTabularChar(ctx: CanvasRenderingContext2D, font: string, char: string): number {
+  let widths = TABULAR_WIDTHS.get(font);
+  if (!widths) TABULAR_WIDTHS.set(font, (widths = new Map()));
+  let width = widths.get(char);
+  if (width === undefined) {
+    width = ctx.measureText(char).width;
+    widths.set(char, width);
+  }
+  return width;
 }
