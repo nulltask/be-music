@@ -113,6 +113,8 @@ export interface VideoTranscodeOptions {
    * rejects the requested codec parameters, or when any step of the WebCodecs pipeline throws.
    */
   useWebCodecs?: boolean;
+  /** Estimated conversion progress until the video is ready to play. */
+  onProgress?: (fraction: number) => void;
 }
 
 /**
@@ -235,7 +237,10 @@ async function tryLoadStreamedVideoTexture(
     path,
     video,
     objectURL,
-    () => Promise.race([waitForVideoMetadata(video, STREAM_FIRST_FRAME_TIMEOUT_MS), stream.failure]),
+    async () => {
+      await Promise.race([waitForVideoMetadata(video, STREAM_FIRST_FRAME_TIMEOUT_MS), stream.failure]);
+      options?.onProgress?.(0.5);
+    },
     STREAM_FIRST_FRAME_TIMEOUT_MS,
   );
 }
@@ -366,7 +371,16 @@ async function transcodeVideoToBrowserCodecLocked(
       '+faststart',
       outputName,
     );
-    const exitCode = await ffmpeg.exec(ffmpegArgs);
+    const report = ({ progress }: { progress: number }): void => {
+      if (Number.isFinite(progress)) options?.onProgress?.(Math.max(0, Math.min(0.95, 0.95 * progress)));
+    };
+    if (options?.onProgress) ffmpeg.on('progress', report);
+    let exitCode: number;
+    try {
+      exitCode = await ffmpeg.exec(ffmpegArgs);
+    } finally {
+      if (options?.onProgress) ffmpeg.off('progress', report);
+    }
     if (exitCode !== 0) {
       log.warn(`ffmpeg exited with code ${exitCode} for ${path}`);
       return undefined;
@@ -640,6 +654,7 @@ async function transcodeViaWebCodecsLocked(
         frameIndex++;
       }
       chunkCount++;
+      options.onProgress?.(Math.min(0.95, (0.95 * frameIndex) / (frameRate * durationSec)));
     }
     await encoder.flush();
     encoder.close();
@@ -856,6 +871,8 @@ interface FFmpegInstance {
    */
   on(event: 'log', listener: (event: { type: string; message: string }) => void): void;
   off(event: 'log', listener: (event: { type: string; message: string }) => void): void;
+  on(event: 'progress', listener: (event: { progress: number; time: number }) => void): void;
+  off(event: 'progress', listener: (event: { progress: number; time: number }) => void): void;
 }
 
 function stripVideoExtension(path: string): string {

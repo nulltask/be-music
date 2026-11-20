@@ -140,6 +140,8 @@ export interface LoadPlayBGAOptions {
   tempo: number;
   /** True once the play was abandoned: what is still loading is dropped and freed. */
   isCancelled?: () => boolean;
+  /** Fraction of BGA resource loading completed, excluding GPU uploads. */
+  onProgress?: (fraction: number) => void;
 }
 
 /**
@@ -149,13 +151,18 @@ export interface LoadPlayBGAOptions {
  * fails to decode is skipped so the rest of the chart still renders.
  */
 export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
-  await loadBGAResourceSet(options);
-  if (options.isCancelled?.()) return;
   const definitions = new Map(
     (options.keyBoundBGACues ?? buildKeyBoundBGATimeline(options.chart, createTimingResolver(options.chart))).map(
       (cue) => [cue.definitionId, cue.definition],
     ),
   );
+  const setCount = 1 + definitions.size;
+  let completedSets = 0;
+  const reportSetProgress =
+    options.onProgress && ((fraction: number) => options.onProgress?.((completedSets + fraction) / setCount));
+  await loadBGAResourceSet({ ...options, onProgress: reportSetProgress });
+  if (options.isCancelled?.()) return;
+  completedSets++;
   for (const [id, definition] of definitions) {
     const into: PlayBGAResources = {
       textures: new Map(),
@@ -167,6 +174,7 @@ export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
       {
         ...options,
         poorFallbackKey: undefined,
+        onProgress: reportSetProgress,
         into,
         timeline: { base: [], poor: [], layer: definition.frames.map((bmpKey) => ({ seconds: 0, bmpKey })) },
       },
@@ -178,6 +186,7 @@ export async function loadPlayBGA(options: LoadPlayBGAOptions): Promise<void> {
       options.into.subRegionOrigins.set(keyBoundBGAResourceKey(id, key), origin);
     for (const [key, video] of into.videos) options.into.videos.set(keyBoundBGAResourceKey(id, key), video);
     if (options.isCancelled?.()) return;
+    completedSets++;
   }
 }
 
@@ -212,7 +221,7 @@ async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: B
     ...[...sequenceKeys.poor].map((bmpKey) => ({ seconds: 0, bmpKey })),
     ...(options.poorFallbackKey ? [{ seconds: 0, bmpKey: options.poorFallbackKey }] : []),
   ]);
-  await runWithConcurrency([...paths], BGA_DECODE_CONCURRENCY, async ([key, path]) => {
+  const loadResource = async ([key, path]: [string, string], report: (fraction: number) => void): Promise<void> => {
     if (isCancelled()) return;
     const resolved = resolveChartBGAAsset(source, chartPath, path);
     try {
@@ -227,12 +236,16 @@ async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: B
         if ((base.has(key) || firstLayer.has(key)) && secondLayer.has(key))
           videoKeys.push(String.fromCharCode(0) + 'layer2:' + key);
         if (poor.has(key) && baseOnly.has(key)) videoKeys.push(String.fromCharCode(0) + 'poor:' + key);
-        for (const videoKey of videoKeys) {
+        for (const [index, videoKey] of videoKeys.entries()) {
+          const transcode = aliasSources.has(key) ? { ...options.transcode, maxLongEdgePx: 0 } : options.transcode;
           const handle = await loadVideoTexture(
             resolved?.path ?? path,
             file,
-            aliasSources.has(key) ? { ...options.transcode, maxLongEdgePx: 0 } : options.transcode,
+            options.onProgress
+              ? { ...transcode, onProgress: (fraction) => report((index + fraction) / videoKeys.length) }
+              : transcode,
           );
+          report((index + 1) / videoKeys.length);
           if (!handle) continue;
           if (isCancelled()) {
             releaseVideo({ video: handle.video, objectURL: handle.objectURL });
@@ -294,8 +307,23 @@ async function loadBGAResourceSet(options: LoadPlayBGAOptions, swBGAColorKey?: B
     } catch (error) {
       log.debug('bga decode skipped', { key, path, error });
     }
+  };
+  let processed = 0;
+  await runWithConcurrency([...paths], BGA_DECODE_CONCURRENCY, async (resource) => {
+    let resourceProgress = 0;
+    const report = (fraction: number): void => {
+      if (isCancelled() || fraction <= resourceProgress) return;
+      processed += fraction - resourceProgress;
+      resourceProgress = fraction;
+      options.onProgress?.(Math.min(1, processed / paths.size));
+    };
+    await loadResource(resource, report);
+    report(1);
   });
-  if (!isCancelled()) registerSubRegionBGATextures(chart, into);
+  if (!isCancelled()) {
+    registerSubRegionBGATextures(chart, into);
+    if (paths.size === 0) options.onProgress?.(1);
+  }
 }
 
 /**

@@ -58,8 +58,6 @@ export interface PlaySceneFacts {
 export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
   public readonly kind = 'play' as const;
   public readonly play: PlaySession;
-  /** How far the play has loaded, 0..1, while it loads (`PlayScene.prepare`). */
-  public loadProgress: number | undefined;
   /** How the play's audio ends when the scene is disposed. */
   public disposeOptions: PlayDisposeOptions = {};
   private readonly facts: PlaySceneFacts;
@@ -289,7 +287,7 @@ export class PlaySceneSession implements SceneSession<PlayFrame, PlayIntent> {
       state: play.playState,
       ...(playfield.secondPlayer !== undefined ? { state2P: playfield.secondPlayer.playState } : {}),
       stage,
-      ...(stage === 'loading' && this.loadProgress !== undefined ? { progress: this.loadProgress } : {}),
+      ...(stage === 'loading' ? { progress: this.play.loadProgress } : {}),
       seconds,
       chartText: play.engineFrame?.chartText,
       seekable: canSeekPlay(play),

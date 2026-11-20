@@ -108,7 +108,7 @@ export interface PlayChromeContext {
   >;
   readonly audioFrame: AudioFeatures | undefined;
   /** The frame being drawn, for what it carries beside the play: the best record, the course and the player. */
-  readonly playFrame?: Pick<PlayFrame, 'scoreTargets' | 'course' | 'playerName' | 'playOptions'>;
+  readonly playFrame?: Pick<PlayFrame, 'scoreTargets' | 'course' | 'playerName' | 'playOptions' | 'progress'>;
 }
 
 type SongInfoRuntime = Pick<
@@ -279,6 +279,7 @@ export function resolveSkinlessGameplayChromeRuntime(ctx: PlayChromeContext): Sk
     // While assets load the count-in waits: the skin shows NOW LOADING instead.
     chartMs: ctx.play.assetsLoading ? undefined : ctx.play.resolveChartMs(),
     loading: ctx.play.assetsLoading,
+    loadingProgress: ctx.playFrame?.progress,
     judgeAtMs: ctx.play.lastJudgeAt,
     impulseAtMs: ctx.play.lastImpulseAt,
     impulseKind: ctx.play.lastImpulseKind,

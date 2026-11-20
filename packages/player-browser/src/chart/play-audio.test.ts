@@ -218,6 +218,7 @@ describe('loadPlaySamples', () => {
       new Map([['kick.wav', 1.5]]),
       'wsola',
       expect.any(Function),
+      undefined,
     );
   });
 

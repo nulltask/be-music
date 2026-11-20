@@ -182,6 +182,7 @@ export class PlaySession extends PlaySessionState {
     this.source = source;
     // Hidden until {@link start} fires, so a play shown before it begins draws nothing of it yet.
     this.shown = false;
+    this.loadProgress = 0;
     this.assetsLoading = true;
     try {
       prepareChart(this, chartEntry);
@@ -199,7 +200,18 @@ export class PlaySession extends PlaySessionState {
     await this.theme.prepareView?.();
     if (this.disposed) return;
     // The graph opens now, so the play has its AudioContext when load returns (a recording starts on it).
-    const samplesDecoded = openPlayAudio(this) ? decodePlayAudio(this) : Promise.resolve();
+    this.loadProgress = 0.1;
+    const samplesDecoded = openPlayAudio(this)
+      ? decodePlayAudio(
+          this,
+          (fraction) => {
+            this.loadProgress = 0.1 + 0.4 * fraction;
+          },
+          (fraction) => {
+            this.loadProgress = 0.5 + 0.19 * fraction;
+          },
+        )
+      : Promise.resolve();
     if (this.entered) {
       // Nothing covers this play's load: its intro runs while the samples decode, and START holds the chart until they
       // are in, so the wait is the longer of the two instead of both.
@@ -215,6 +227,7 @@ export class PlaySession extends PlaySessionState {
       this.assetsReadyPromise = this.loadAfterSamples();
     }
     void this.assetsReadyPromise.then(() => {
+      this.loadProgress = 1;
       this.assetsLoading = false;
     });
   }
@@ -225,7 +238,10 @@ export class PlaySession extends PlaySessionState {
     this.samplesDecoded = true;
     // Build the engine while BGA and the skin intro are still loading; START opens its chart gate.
     launchSharedEngine(this);
-    this.bgaReadyPromise = prepareBGA(this).catch((error) => {
+    this.loadProgress = 0.7;
+    this.bgaReadyPromise = prepareBGA(this, (fraction) => {
+      this.loadProgress = 0.7 + 0.25 * fraction;
+    }).catch((error) => {
       log.warn('BGA preload failed; continuing without it', error);
     });
     // The ghost's replay is read and simulated while the BGA loads; the chart waits for both.

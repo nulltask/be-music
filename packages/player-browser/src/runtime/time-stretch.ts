@@ -105,6 +105,7 @@ export async function stretchAudioBuffers(
   buffers: readonly AudioBuffer[],
   rate: number,
   algorithm: TimeStretchAlgorithm,
+  onProgress?: (fraction: number) => void,
 ): Promise<AudioBuffer[]> {
   const samples = buffers.map((buffer) =>
     Array.from({ length: buffer.numberOfChannels }, (_, index) => buffer.getChannelData(index)),
@@ -120,15 +121,25 @@ export async function stretchAudioBuffers(
       const channelCount = Math.min(2, Math.max(...samples.map((channels) => channels.length)));
       const batch = packStretchBatch(samples, layout, channelCount);
       const { signalsmithStretchChannels } = await import('./time-stretch-signalsmith.ts');
-      stretched = unpackStretchBatch(await signalsmithStretchChannels(batch, sampleRate, rate), layout, samples, rate);
+      stretched = unpackStretchBatch(
+        await signalsmithStretchChannels(batch, sampleRate, rate, onProgress),
+        layout,
+        samples,
+        rate,
+      );
     } catch (error) {
       log.warn('Signalsmith Stretch unavailable; stretching with WSOLA', error);
     }
   }
+  let completedSamples = 0;
   stretched ??= await Promise.all(
-    samples.map((channels) =>
-      runBrowserTask('stretch', { channels, sampleRate, rate }, () => timeStretchChannels(channels, sampleRate, rate)),
-    ),
+    samples.map(async (channels) => {
+      const result = await runBrowserTask('stretch', { channels, sampleRate, rate }, () =>
+        timeStretchChannels(channels, sampleRate, rate),
+      );
+      onProgress?.(++completedSamples / samples.length);
+      return result;
+    }),
   );
   return stretched.map((channels) => {
     const buffer = context.createBuffer(channels.length, channels[0]!.length, sampleRate);
