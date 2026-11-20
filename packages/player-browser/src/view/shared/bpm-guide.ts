@@ -1,4 +1,5 @@
 import { findFirstIndexAtOrAfter } from '@be-music/shared-utils/core';
+import type { Text } from 'pixi.js';
 import type { ChildPool } from '../../skins/pixi-kit/pools.ts';
 import type { BeMusicGuideLabelStyle } from '@be-music/player-skin-sdk';
 import {
@@ -52,18 +53,75 @@ export function placeBPMGuideLabel(
   };
 }
 
-/**
- * The baseline of a label `height` tall that would sit at `y`, moved up above the label drawn before it on the same
- * lanes (`below`: its baseline and top) when the two would overlap. Labels are drawn nearest the judgement line first.
- */
-export function stackBPMGuideLabel(
-  y: number,
-  height: number,
-  below: { readonly y: number; readonly top: number } | undefined,
-): number {
-  if (below === undefined || y <= below.top || y - height >= below.y) return y;
-  return below.top - 1;
+/** How far the leader's slant runs sideways for each pixel it rises. */
+const LEADER_SLOPE = 0.45;
+/** The shortest tick from the leader to a label, and the gap between a tick and its label. */
+const LEADER_TICK = 6;
+const LEADER_GAP = 3;
+/** The space between two stacked labels. */
+const ROW_GAP = 2;
+
+/** One label of a callout: its drawn size. */
+export interface BPMGuideCalloutLabel {
+  readonly width: number;
+  readonly height: number;
 }
+
+/**
+ * Where the labels of changes that fall on one line sit (`lineY`, labels right-aligned at `rightX`). One label sits just
+ * above its line. Two or more stack in a callout: right-aligned rows, the shortest at the top and the longest nearest
+ * the line, and a leader that rises from the line in a slant up to the top row, with a tick across to each label.
+ * `rows[i]` is the baseline of `labels[i]`.
+ */
+export function layoutBPMGuideCallout(
+  lineY: number,
+  rightX: number,
+  labels: readonly BPMGuideCalloutLabel[],
+): {
+  rows: number[];
+  leader?: {
+    from: readonly [number, number];
+    to: readonly [number, number];
+    ticks: { x1: number; x2: number; y: number }[];
+  };
+} {
+  if (labels.length <= 1) return { rows: labels.map(() => lineY - LABEL_LIFT) };
+  // The longest label nearest the line; equal widths keep their order (the earlier change lower).
+  const order = labels.map((_, index) => index).sort((a, b) => labels[b]!.width - labels[a]!.width || a - b);
+  const rowHeight = Math.max(...labels.map((label) => label.height)) + ROW_GAP;
+  // The bottom row clears the line by half a row, so the leader has a slant to run before its first tick.
+  const bottom = lineY - LABEL_LIFT - Math.round(rowHeight / 2);
+  const rows: number[] = new Array<number>(labels.length);
+  const mids: number[] = new Array<number>(labels.length);
+  order.forEach((index, rank) => {
+    rows[index] = bottom - rank * rowHeight;
+    mids[index] = Math.round(rows[index] - labels[index]!.height / 2) + 0.5;
+  });
+  const topMid = mids[order[order.length - 1]!]!;
+  // The slant's x at the top row: far enough left that every tick is at least LEADER_TICK long.
+  const topX = Math.min(
+    ...order.map(
+      (index) => rightX - labels[index]!.width - LEADER_GAP - LEADER_TICK + LEADER_SLOPE * (mids[index]! - topMid),
+    ),
+  );
+  const slantX = (y: number): number => topX - LEADER_SLOPE * (y - topMid);
+  return {
+    rows,
+    leader: {
+      from: [slantX(lineY), lineY],
+      to: [topX, topMid],
+      ticks: order.map((index) => ({
+        x1: slantX(mids[index]!),
+        x2: rightX - labels[index]!.width - LEADER_GAP,
+        y: mids[index]!,
+      })),
+    },
+  };
+}
+
+/** The leader's colour, neutral whatever the labels' colours. */
+const LEADER_COLOR = 0xd8d8d8;
+const LEADER_ALPHA = 0.7;
 
 /** Labels share the note walk's window and scroll distance, including STOPs and negative scroll. */
 export function renderBPMGuide(input: {
@@ -89,9 +147,8 @@ export function renderBPMGuide(input: {
     (input.window.rules === 'lr2' ? input.window.reachedBeat : input.window.currentBeat) -
     1 / Math.max(Number.EPSILON, input.pixelsPerBeat);
   const first = findFirstIndexAtOrAfter(input.events, threshold, (event) => event.beat);
-  // The top of the last label drawn on each lane group: a label that would overlap it (two changes on one beat, or
-  // close ones) stacks above it instead.
-  const lastTops = new Map<string, { y: number; top: number }>();
+  // Each lane group's labels, nearest the judgement line first, laid out once all are known.
+  const pending = new Map<string, PendingLabel[]>();
   for (let index = first; index < input.events.length; index += 1) {
     const event = input.events[index]!;
     if (!kinds[event.kind]) continue;
@@ -134,11 +191,45 @@ export function renderBPMGuide(input: {
       text.scale.set(1);
       const place = placeBPMGuideLabel(lane, Math.round(y), text.width);
       text.scale.set(place.scale);
-      const height = text.height;
-      const below = lastTops.get(key);
-      const labelY = stackBPMGuideLabel(place.y, height, below);
-      lastTops.set(key, { y: labelY, top: labelY - height });
-      text.position.set(place.x, labelY);
+      let group = pending.get(key);
+      if (group === undefined) pending.set(key, (group = []));
+      group.push({ text, lineY: Math.round(y), rightX: place.x, alpha });
     }
+  }
+  for (const labels of pending.values()) placeLabels(input.pool, labels);
+}
+
+interface PendingLabel {
+  readonly text: Text;
+  readonly lineY: number;
+  readonly rightX: number;
+  readonly alpha: number;
+}
+
+/**
+ * Places a lane group's labels: those whose lines fall within a label's height of each other share a callout
+ * ({@link layoutBPMGuideCallout}), anchored on the line nearest the judgement line; a label alone sits above its line.
+ */
+function placeLabels(pool: ChildPool, labels: readonly PendingLabel[]): void {
+  let start = 0;
+  while (start < labels.length) {
+    const anchor = labels[start]!;
+    let end = start + 1;
+    while (end < labels.length && Math.abs(labels[end]!.lineY - anchor.lineY) < anchor.text.height + ROW_GAP) end += 1;
+    const group = labels.slice(start, end);
+    const layout = layoutBPMGuideCallout(
+      anchor.lineY,
+      anchor.rightX,
+      group.map((label) => ({ width: label.text.width, height: label.text.height })),
+    );
+    group.forEach((label, index) => label.text.position.set(anchor.rightX, layout.rows[index]!));
+    if (layout.leader !== undefined) {
+      const alpha = LEADER_ALPHA * Math.max(...group.map((label) => label.alpha));
+      const leader = pool.acquireGraphics();
+      leader.moveTo(...layout.leader.from).lineTo(...layout.leader.to);
+      for (const tick of layout.leader.ticks) leader.moveTo(tick.x1, tick.y).lineTo(tick.x2, tick.y);
+      leader.stroke({ color: LEADER_COLOR, width: 1, alpha });
+    }
+    start = end;
   }
 }
