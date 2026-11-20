@@ -66,12 +66,11 @@ export interface JudgeCoreConfig {
   idBase: 36 | 62;
   sourceFormat: BeMusicSourceFormat;
   /**
-   * Chart second of the LR2 negative-BPM reversal (`ResolvedChart.reversal`), when the chart has one. LR2's event pump
-   * freezes there: nothing at or past it is missed, auto-played or detonated, and presses and releases past it are
-   * judged on the mirrored clock `t' = 2R - now` (OpenLR2 `LR2f.cpp:12624,12931`). Chart data, not a clock — the
-   * judgments stay a pure function of the inputs' chart times. See docs/bms-spec.md "Negative BPM".
+   * Authored time of the negative BPM that freezes chart events, autoplay, mines and miss sweeps.
    */
   reversalSeconds?: number;
+  /** Observed activation tick used to mirror input times. A legacy replay mirrors at the authored time. */
+  reversalAnchor?: { readonly seconds: number };
   /**
    * The play ends the moment a survival gauge empties (`PlayerOptions.endOnFailure`): from the judgment that emptied
    * it on, nothing is scored (see `isJudgingClosed`).

@@ -1,4 +1,4 @@
-import { findLastIndexAtOrBefore } from '@be-music/shared-utils/core';
+import { findFirstIndexAtOrAfter, findLastIndexAtOrBefore } from '@be-music/shared-utils/core';
 import {
   normalizeChannel,
   normalizeObjectKey,
@@ -61,11 +61,14 @@ export function createBPMTimeline(json: BeMusicJSON, resolver: TimingResolver): 
 
   for (const point of resolver.tempoPoints) {
     const seconds = resolver.beatToSeconds(point.beat);
-    if (!Number.isFinite(seconds) || !Number.isFinite(point.bpm) || point.bpm <= 0) {
+    if (!Number.isFinite(seconds) || !Number.isFinite(point.bpm) || point.bpm === 0) {
       continue;
     }
     // The readout value: a negative `#BPMxx` shows as |trunc(BPM)| the way LR2's NOWBPM does.
-    const bpm = point.displayBPM ?? point.bpm;
+    const bpm =
+      seconds === resolver.reversal?.seconds
+        ? (resolver.reversalDisplayBPM ?? point.displayBPM ?? point.bpm)
+        : (point.displayBPM ?? point.bpm);
     if (Math.abs(seconds - previousSeconds) < 1e-6 && Math.abs(bpm - previousBPM) < 1e-6) {
       continue;
     }
@@ -179,6 +182,43 @@ export function createBeatAtSecondsResolver(json: BeMusicJSON): (seconds: number
 
 export function createBeatAtSecondsResolverFromTimingResolver(resolver: TimingResolver): (seconds: number) => number {
   const stopWindows = createStopBeatWindows(resolver);
+  if (resolver.nonMonotonicEndBeat !== undefined) {
+    // LR2body 0x4ad7e0 scans the table in chart order for the first closed interval
+    // containing the clock. Its fallback is the last converted position (bar 999).
+    const endBeat = resolver.nonMonotonicEndBeat;
+    const stops = new Map(stopWindows.map((window) => [window.beat, window]));
+    const beats = [...new Set([0, ...resolver.tempoPoints.map((point) => point.beat), ...stops.keys(), endBeat])].sort(
+      (a, b) => a - b,
+    );
+    const points = beats.flatMap((beat) => {
+      const seconds = resolver.beatToSeconds(beat);
+      const stop = stops.get(beat);
+      return stop
+        ? [
+            { beat, seconds },
+            { beat, seconds: stop.endSeconds },
+          ]
+        : [{ beat, seconds }];
+    });
+    // Only a segment extending past every preceding timestamp can be the first match.
+    // Index those segments once, so long charts and seeks both resolve in logarithmic time.
+    const segments: Array<{ from: (typeof points)[number]; to: (typeof points)[number] }> = [];
+    let latest = points[0]!.seconds;
+    for (let index = 1; index < points.length; index++) {
+      const to = points[index]!;
+      if (to.seconds > latest) {
+        segments.push({ from: points[index - 1]!, to });
+        latest = to.seconds;
+      }
+    }
+    return (seconds) => {
+      if (!Number.isFinite(seconds) || seconds <= 0) return 0;
+      const segment = segments[findFirstIndexAtOrAfter(segments, seconds, (entry) => entry.to.seconds)];
+      if (!segment) return endBeat;
+      const { from, to } = segment;
+      return from.beat + ((to.beat - from.beat) * (seconds - from.seconds)) / (to.seconds - from.seconds);
+    };
+  }
   let lastSeconds = Number.NEGATIVE_INFINITY;
   let stopCursor = 0;
   let endedStopSeconds = 0;
@@ -190,15 +230,13 @@ export function createBeatAtSecondsResolverFromTimingResolver(resolver: TimingRe
     const safeSeconds = Math.max(0, seconds);
 
     // Playback time usually increases monotonically; keep a cursor to avoid re-scanning stop windows every frame.
-    if (safeSeconds + 1e-9 < lastSeconds) {
+    if (safeSeconds < lastSeconds) {
       stopCursor = 0;
       endedStopSeconds = 0;
     }
     lastSeconds = safeSeconds;
 
-    // A window ends at its `endSeconds`; one of negative length (LR2's negative `#STOPxx`) ends at its start instead,
-    // where the chart position jumps ahead by the time it takes back.
-    while (stopCursor < stopWindows.length && safeSeconds >= windowCloseSeconds(stopWindows[stopCursor]!)) {
+    while (stopCursor < stopWindows.length && safeSeconds >= stopWindows[stopCursor]!.endSeconds) {
       endedStopSeconds += stopWindows[stopCursor]!.durationSeconds;
       stopCursor += 1;
     }
@@ -210,10 +248,6 @@ export function createBeatAtSecondsResolverFromTimingResolver(resolver: TimingRe
     const adjustedSeconds = Math.max(0, safeSeconds - endedStopSeconds);
     return secondsToBeatWithoutStops(resolver.tempoPoints, adjustedSeconds);
   };
-}
-
-function windowCloseSeconds(window: StopBeatWindow): number {
-  return Math.max(window.startSeconds, window.endSeconds);
 }
 
 export function createStopBeatWindows(resolver: TimingResolver): StopBeatWindow[] {

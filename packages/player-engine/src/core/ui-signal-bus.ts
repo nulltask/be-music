@@ -1,5 +1,5 @@
 import type { ScratchSpin } from './scratch-spin.ts';
-import type { ChartOptionState } from '@be-music/chart-model';
+import type { ChartOptionState, TempoReversalPoint } from '@be-music/chart-model';
 import type { BmsonBGAFrame } from './bmson-bga.ts';
 import { signal } from 'alien-signals';
 import type { KeyBoundBGAFrame } from './key-bound-bga.ts';
@@ -135,6 +135,8 @@ export interface PlayerUIFramePayload {
   displayBeat?: number;
   /** Chart time of the LR2 negative-BPM reversal, when the chart has one — BGA compositors freeze there. */
   reversalSeconds?: number;
+  /** Actual update around which the game mirrors its judge clock and display position. */
+  reversalActivation?: Readonly<TempoReversalPoint>;
   totalSeconds: number;
   summary: PlayerUIFrameSummary;
   /** The 2P player's summary of a two-player play (LR2 BATTLE); `summary` is the 1P player's. */
@@ -254,6 +256,7 @@ export function createPlayerUISignalBus(initialFrame: PlayerUIFramePayload): Pla
     frameState.currentSeconds = frame.currentSeconds;
     frameState.displayBeat = frame.displayBeat;
     frameState.reversalSeconds = frame.reversalSeconds;
+    frameState.reversalActivation = frame.reversalActivation;
     frameState.totalSeconds = frame.totalSeconds;
     frameState.summary = frame.summary;
     frameState.summary2P = frame.summary2P;

@@ -176,7 +176,9 @@ describe('player', () => {
         },
         stopChannel: () => undefined,
       }),
-      createInputRuntime: createScheduledInputRuntime([]),
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 2100, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
     });
 
     // Only the pre-reversal BGM sounded; the 3 s BGM sits behind the frozen pump.

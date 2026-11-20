@@ -28,6 +28,7 @@ import {
   type ChartOptionProgram,
   isPlayLaneSoundChannel,
   type ResolvedChart,
+  type TempoReversalPoint,
 } from '@be-music/chart-model';
 import { throwIfAborted } from '@be-music/shared-utils/core';
 import { type BeMusicEvent, type BeMusicJSON, resolveBMSBase } from '@be-music/chart-source';
@@ -106,6 +107,7 @@ export interface PlaySession {
   /** The chart after control flow, as the engine plays it. */
   readonly resolvedJSON: BeMusicJSON;
   readonly resolvedChart: ResolvedChart;
+  readonly reversalAnchor?: TempoReversalPoint;
   readonly playbackChart: PreparedPlaybackChartData;
   readonly randomPatternSummary: string | undefined;
   readonly ruleset: RulesetConfig;
@@ -368,6 +370,19 @@ export async function createPlaySession(
   if ((playbackChart.extraNoteDepth ?? 0) !== extraDepth || (playbackChart.extraNoteScratch ?? false) !== extraScratch)
     throw new RangeError('The shared prepared chart must include the selected EXTRA note options.');
   const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolvedChart.timing);
+  const reversal = resolvedChart.reversal;
+  const activationSeconds = replay
+    ? options.replayReversalActivationUs === undefined
+      ? reversal?.seconds
+      : options.replayReversalActivationUs / 1e6
+    : undefined;
+  const reversalAnchor =
+    reversal === undefined
+      ? undefined
+      : {
+          seconds: activationSeconds ?? Infinity,
+          beat: activationSeconds === undefined ? reversal.beat : beatAtSeconds(activationSeconds),
+        };
   if ((options.scrollModifier ?? 'OFF') !== (playbackChart.scrollModifierApplied ?? 'OFF'))
     throw new RangeError('The shared prepared chart must include the selected scroll modifier.');
   if (
@@ -792,6 +807,7 @@ export async function createPlaySession(
       };
     },
     reversal: resolvedChart.reversal,
+    reversalAnchor,
     resolveClock: (seconds) => {
       const clock = session?.clock;
       return {
@@ -928,6 +944,7 @@ export async function createPlaySession(
     clock: undefined,
     seekGeneration: 0,
     resetScore,
+    reversalAnchor,
     ...(secondPlayer !== undefined ? { secondPlayer } : {}),
   };
   return session;

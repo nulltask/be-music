@@ -133,7 +133,7 @@ export function pushHeaderLine(
       }
       return;
     case 'BPM':
-      if (Number.isFinite(numericValue) && numericValue > 0) {
+      if (Number.isFinite(numericValue) && numericValue !== 0) {
         json.metadata.bpm = numericValue;
       }
       return;
@@ -338,7 +338,8 @@ function applyIndexedStringValue(values: Record<string, string>, key: string, va
  * a positive one made earlier: `#STOP01 96` then `#STOP01 -5` keeps 96.
  */
 function applyStopValue(values: Record<string, number>, key: string, value: string): void {
-  const numericValue = Number.parseFloat(value);
+  // LR2 reads a decimal integer (atol) before deciding whether to replace the slot.
+  const numericValue = Math.max(-0x80000000, Math.min(0x7fffffff, Number.parseInt(value, 10) || 0));
   if (!Number.isFinite(numericValue) || (numericValue <= 0 && (values[key] ?? 0) > 0)) {
     return;
   }

@@ -167,8 +167,8 @@ flowchart LR
 - HS-FIX の `AVERAGE` は、BPM × N + STOP のギミックで偏る時間平均ではなく、beatoraja の `MAINBPM` と同じメイン BPM（最も多くのノートが置かれた BPM）に合わせる。同数のときは先に現れる BPM を選ぶ（beatoraja はハッシュマップの順序）（[ブラウザプレイヤー — HS-FIX](./player-web.ja.md#hs-fix)）。
 - 小節線は beatoraja と同じく最後の小節まで各小節の頭に引き、その後には足さない。bmson の `lines` はそのまま引く（[§3.3](./format-compat-bmson.ja.md#33-lines-と-resolution-と-y)）。
 - `#BPM` のない譜面は BM98 の 130 で遊ぶ。LR2 はスクロールせず、beatoraja は譜面を読まない（[§2.8](./format-compat-bms.ja.md#28-bpm)）。
-- 負の `#BPMxx` はどのルールセットでも LR2 の逆スクロール・ギミックとして再生する。タイミングは絶対値、反転は `trunc(BPM) < 0` のときだけ起動し、スクロールは譜面位置空間で鏡映し、押下は鏡映クロックで判定して見逃し判定は行わず、反転ティックの BGM と BGA は発火し、ノートを未判定のまま残したプレイは FAILED で終わる。未定義の `#BPMxx` スロットは LR2 の `-1` 番兵と同じく 1 BPM で反転し、鏡映は譜面の先頭を越えて戻り続ける。LR2 と違い、曲は ESC 待ちで止まらず事前計算した末尾で終わり、反転は次のフレームではなくイベントの譜面時刻で起動する（[§2.8](./format-compat-bms.ja.md#28-bpm)、[BMS 仕様](./bms-spec.ja.md)「負の BPM」）。
-- 0 の BPM と、0 または負の `#BPM` ヘッダは無視する（ヘッダは 130 になる）。`#STOPxx` が 0・負・未定義の STOP は LR2 と同じく、その後のものを `1/192` 小節早める。同じ位置に BMS の `#STOP` が複数あれば最後のものが勝ち（LR2、beatoraja と同じ）、bmson の停止と `#STP` の行は加算する。STOP と同じ位置のノートは停止の前に叩く。STOP の長さは正確な値を保つ（beatoraja は停止ごとに整数マイクロ秒へ切り捨てるため、停止が数千ある譜面ではノートの時刻が数 ms 早くずれる）（[§2.8](./format-compat-bms.ja.md#28-bpm)、[§2.9](./format-compat-bms.ja.md#29-stop-と-stp)）。
+- 負の `#BPMxx` はどのルールセットでも LR2 の逆スクロール・ギミックとして再生する。タイミングは絶対値、反転は `trunc(BPM) < 0` のときだけ起動し、スクロールは譜面位置空間で鏡映し、押下は鏡映クロックで判定して見逃し判定は行わず、反転ティックの BGM と BGA は発火し、ノートを未判定のまま残したプレイは FAILED で終わる。未定義の `#BPMxx` スロットは LR2 の `-1` 番兵と同じく 1 BPM で反転し、鏡映は譜面の先頭を越えて戻り続ける。イベントを最初に超えた更新で反転し、離脱操作を待つ（[§2.8](./format-compat-bms.ja.md#28-bpm)、[BMS 仕様](./bms-spec.ja.md)「負の BPM」）。
+- 負の初期 BPM は符号付きで積算する。初期 BPM が 0 の場合は 130 を使う。`#STOPxx` が 0・負・未定義の STOP は LR2 と同じく、その後のものを `1/192` 小節早める。同じ位置に BMS の `#STOP` が複数あれば最後のものが勝ち（LR2、beatoraja と同じ）、bmson の停止と `#STP` の行は加算する。STOP と同じ位置のノートは停止の前に叩く。STOP の長さは正確な値を保つ（beatoraja は停止ごとに整数マイクロ秒へ切り捨てるため、停止が数千ある譜面ではノートの時刻が数 ms 早くずれる）（[§2.8](./format-compat-bms.ja.md#28-bpm)、[§2.9](./format-compat-bms.ja.md#29-stop-と-stp)）。
 - 描画は判定 ruleset に含まれない。ruleset やスキンにかかわらず、すべての譜面を LR2 の規則で描く。過ぎたオブジェクトは判定ライン上に留まり、ノートは判定済みで拍を過ぎたときに消え（打っていないノートは ruleset の見逃し判定までライン上で待ち、早く打ったノートはスクロールを続ける）、LN の始点はライン上に留まり、見逃した・離した LN は薄く描き、STOP の下の小節線はライン上に留まる（[§2.18](./format-compat-bms.ja.md#218-ノートの描画)、[ブラウザプレイヤー — ノートの表示範囲](./player-web.ja.md#ノートの表示範囲)）。
 - LR2 が扱えない SCROLL / SPEED を含む譜面だけを beatoraja の `LaneRenderer` の規則で描く。判定ラインの位置からレーンをたどり、最初に上端を越えた位置より先は描かず、ノート・地雷・小節線は判定の有無にかかわらず時刻になったら消える（[§2.10](./format-compat-bms.ja.md#210-scroll-と-speed)）。
 - SPEED は Bemuse の間隔モデルに従う。ただし最初のキーフレームより前は、最初の値を保つ Bemuse ではなく beatoraja と同じく 1.0 から変化させる（[§2.10](./format-compat-bms.ja.md#210-scroll-と-speed)）。
@@ -185,7 +185,7 @@ flowchart LR
 Be-Music が de facto の実装と理由を記録しないまま食い違っている点と、根拠が不十分な点です。
 
 1. **地雷と不可視ノートによるレーンモード**：beatoraja は 5K / 7K / 10K / 14K の判定にこれらも数え、Be-Music は数えない（[§2.4](./format-compat-bms.ja.md#24-レーンモードとチャンネル配置)）。beatoraja の規則は確かめたが、LR2 の規則は確かめられていない。OpenLR2 の再現コードには、キーモードを記録する曲の走査処理がない。beatoraja に合わせると、2P 側に不可視のキー音しかない SP 譜面（`test/fixtures/invisible-notes.bms`）が 2P 側の空いた DP 譜面になり、作者の意図と違う。LR2 の規則が分かるまで未解決とする。
-2. **LR2 の根拠の不足**：負の STOP（OpenLR2 に従っており、LR2body.exe ではまだ確認していない）、0 の BPM、重複したオブジェクト行、`#TOTAL ≤ 0`、地雷の正確な爆発窓は、コミュニティの報告か再現コードに頼っており、情報源どうしも一部食い違う。ソースコードだけでは決められず、LR2 そのもので確かめる必要がある（負の `#BPMxx` は OpenLR2 に加えて LR2body.exe でも確認済み。[§2.8](./format-compat-bms.ja.md#28-bpm) 参照）。
+2. **LR2 の根拠の不足**：0 の BPM、重複したオブジェクト行、`#TOTAL ≤ 0`、地雷の正確な爆発窓は、コミュニティの報告か再現コードに頼っており、情報源どうしも一部食い違う。ソースコードだけでは決められず、LR2 そのもので確かめる必要がある（負の `#BPMxx` は OpenLR2 に加えて LR2body.exe でも確認済み。[§2.8](./format-compat-bms.ja.md#28-bpm) 参照）。
 
 ## 7. LRX
 

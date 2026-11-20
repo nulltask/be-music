@@ -100,7 +100,7 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
   }
   // Past an LR2 negative-BPM reversal the scroll runs back: object times are compared with the mirrored judge clock,
   // and what the playhead passed before the reversal stays passed.
-  const reversal = ctx.play.timingResolver?.reversal;
+  const reversal = ctx.play.engineFrame ? ctx.play.engineFrame.reversalActivation : ctx.play.timingResolver?.reversal;
   const drawClock = resolveReversedDrawClock(reversal, displaySeconds, currentBeat);
   const drawWindow = resolveNoteDrawWindow({
     rules: resolveNoteDrawRules(ctx.play.scrollMapper !== undefined && ctx.play.playState.view.hsFix !== 'CONSTANT'),

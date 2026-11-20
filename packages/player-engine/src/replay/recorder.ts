@@ -217,6 +217,8 @@ export interface ReplayRecorderFinalizeInput {
   aborted?: boolean;
   /** Chart seconds the judge had settled through when the play was aborted. */
   abortedAtSeconds?: number;
+  exitedReversal?: boolean;
+  reversalActivationSeconds?: number;
   /** The 2P player of a two-player play: its summary, max combo and gauge (recorded as `results.secondPlayer`). */
   secondPlayer?: { summary: PlayerSummary; maxCombo: number; gauge: GaugePick };
 }
@@ -346,7 +348,15 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       currentTempo = tempo;
       tempoChanges.push({ timeUs: secondsToMicroseconds(timeSeconds), tempo });
     },
-    finalize: ({ summary, maxCombo, aborted, abortedAtSeconds, secondPlayer }): BeMusicReplay => {
+    finalize: ({
+      summary,
+      maxCombo,
+      aborted,
+      abortedAtSeconds,
+      exitedReversal,
+      reversalActivationSeconds,
+      secondPlayer,
+    }): BeMusicReplay => {
       if (discarded) throw new Error('Cannot finalize a discarded practice replay');
       const play: ReplayPlay = {
         inputSources: inputSources.list(),
@@ -369,8 +379,16 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       if (options.play.randomDraws !== undefined && options.play.randomDraws.length > 0) {
         play.randomDraws = options.play.randomDraws.map((draw) => ({ ...draw }));
       }
+      if (
+        reversalActivationSeconds !== undefined &&
+        Number.isFinite(reversalActivationSeconds) &&
+        chart.reversalTimeUs !== undefined
+      ) {
+        chart.reversalActivationUs = secondsToMicroseconds(reversalActivationSeconds);
+      }
       if (aborted === true) {
         play.aborted = true;
+        if (exitedReversal) play.exitedReversal = true;
         if (abortedAtSeconds !== undefined) play.abortedAtUs = secondsToMicroseconds(abortedAtSeconds);
       }
       if (options.play.bmsonTotalMode !== undefined) play.bmsonTotalMode = options.play.bmsonTotalMode;

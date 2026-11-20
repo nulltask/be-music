@@ -30,13 +30,22 @@ export function finishPlay(
     summary.fullCombo = summary.total > 0 && session.score.scoreTracker.combo === summary.total;
   }
   const aborted = interruptedReason === 'escape';
+  const reversal = session.reversalAnchor;
+  const stoppedAt = judge.settledThroughSeconds();
+  const exitedReversal =
+    aborted &&
+    reversal !== undefined &&
+    Math.round(stoppedAt * 1e6) >= Math.round(reversal.seconds * 1e6) &&
+    (!session.replay || options.replayExitedReversal === true);
+  if (exitedReversal) judge.finish();
   const reason = aborted ? 'escape' : endedOnFailure ? 'failed' : 'complete';
+  const endSeconds = exitedReversal ? stoppedAt : totalSeconds;
   if (!session.uiEnabled) {
     writeRuntimeEventLog(writeOutput, 'playback-end', [
-      ['time', formatSeconds(totalSeconds)],
+      ['time', formatSeconds(endSeconds)],
       ['reason', reason],
     ]);
-    session.stateLogger.logResult(totalSeconds, { reason, summary });
+    session.stateLogger.logResult(endSeconds, { reason, summary });
   }
   // A play that sought is practice: its replay was discarded at the first seek.
   if (replayRecorder && session.seekGeneration === 0) {
@@ -44,6 +53,10 @@ export function finishPlay(
       replayRecorder.finalize({
         summary,
         maxCombo: session.score.scoreTracker.maxCombo,
+        reversalActivationSeconds:
+          session.replay && options.replayReversalActivationUs === undefined
+            ? undefined
+            : session.reversalAnchor?.seconds,
         ...(session.secondPlayer !== undefined
           ? {
               secondPlayer: {
@@ -61,7 +74,8 @@ export function finishPlay(
               aborted: true,
               // Where the judge had settled through, so a re-simulation stops there and a course counts the stage's
               // time up to it.
-              abortedAtSeconds: judge.settledThroughSeconds(),
+              abortedAtSeconds: stoppedAt,
+              exitedReversal,
             }
           : {}),
       }),

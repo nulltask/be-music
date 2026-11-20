@@ -134,8 +134,13 @@ async function playChart(
   // A replay of an ESC-aborted log stops where the play was aborted, as the replay simulators do.
   const replayStopSeconds =
     session.replay && options.replayAbortedAtUs !== undefined ? options.replayAbortedAtUs / 1_000_000 : undefined;
+  const reversedStage = session.resolvedChart.reversal !== undefined;
+  // Live LR2 playback never reaches its end event after the event pump freezes. A recorded
+  // play has its own end: legacy completed recordings still finish at their original horizon.
+  const waitsForExit = reversedStage && (!session.replay || replayStopSeconds !== undefined) && !options.practice;
   let settled = false;
   const pastHorizon = (): boolean => {
+    if (waitsForExit) return hold?.signal.aborted === true && judge.isSettled();
     // A host that lets go of its hold before the horizon (ESC once every note is judged) ends the play as soon as
     // nothing is left to judge, the way the chart's end does.
     if (hold?.signal.aborted === true && judge.isSettled()) return true;
@@ -162,6 +167,7 @@ async function playChart(
       controls.seekReplayTempoChanges(clampSeekSeconds(session, seekSeconds), nowMs);
       const sought = applySeek(session, judge, seekSeconds, nowMs);
       if (sought !== undefined) {
+        if (!session.replay && session.reversalAnchor) session.reversalAnchor.seconds = Infinity;
         lastFrameSeconds = sought;
         // A play sought back out of its hold after the chart settles again; the host's outro is its to cancel.
         if (sought < totalSeconds) settled = false;
@@ -182,6 +188,17 @@ async function playChart(
     const tick: PlayTick = stopping
       ? { nowMs, nowSec: replayStopSeconds, scheduledSec: replayStopSeconds }
       : { nowMs, nowSec, scheduledSec: tempoClock.chartSecondsAt(clock.scheduledMs()) };
+    const anchor = session.reversalAnchor;
+    if (
+      !session.replay &&
+      anchor &&
+      tick.nowSec > session.resolvedChart.reversal!.seconds &&
+      !Number.isFinite(anchor.seconds)
+    ) {
+      // The pump fires on the first tick strictly past the event. Store its observed clock in replay precision.
+      anchor.seconds = Math.round(tick.nowSec * 1e6) / 1e6;
+      anchor.beat = beatAtSeconds(anchor.seconds);
+    }
     judge.beforeAudio?.(tick);
     tracer.flushUntil(tick.nowSec);
     // Queue audio against the write head, then judge and render against what is actually audible.
@@ -223,13 +240,18 @@ async function playChart(
       return false;
     }
     const safeNowSeconds = Math.max(0, judge.judgedThroughSeconds(tick)) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
-    if (endsWithChart && judge.isSettled() && safeNowSeconds >= totalSeconds) {
+    if (!waitsForExit && endsWithChart && judge.isSettled() && safeNowSeconds >= totalSeconds) {
       break;
     }
     // Race the 60 Hz tick against the next input arrival.
     await waitPreciseOrInput(TUI_FRAME_INTERVAL_MS, wakeUp);
   }
 
+  if (waitsForExit && !failed && hold?.signal.aborted) {
+    // The browser releases its hold when the player leaves a stage with every note judged.
+    controls.interrupt('escape', judge.settledThroughSeconds());
+    return false;
+  }
   judge.beforeFinish?.();
   tracer.flushUntil(totalSeconds);
   judge.finish();

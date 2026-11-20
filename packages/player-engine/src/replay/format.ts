@@ -247,6 +247,8 @@ export interface ReplayChart {
    * so re-simulations must apply the same cutoff. Absent when the chart has no negative `#BPMxx`.
    */
   reversalTimeUs?: number;
+  /** Observed play tick at which the negative BPM fired. Older recordings mirror at reversalTimeUs. */
+  reversalActivationUs?: number;
   notes: ReplayNote[];
 }
 
@@ -354,6 +356,8 @@ export interface ReplayPlay {
    * nothing from it on. Re-simulations stop there instead of missing the rest of the chart. Absent on older logs.
    */
   abortedAtUs?: number;
+  /** ESC ended a frozen LR2 stage and applied its outstanding-note gauge rule. */
+  exitedReversal?: boolean;
   /**
    * True when the play ended the moment its survival gauge emptied (`PlayerOptions.endOnFailure`): nothing after the
    * judgment that emptied it counts. Absent on older logs, which kept judging to the end.
@@ -642,6 +646,7 @@ function parseChart(chart: Record<string, unknown>): ReplayChart {
     lnMode,
     judgeRank,
     noteCount: expectFiniteNumber(chart.noteCount, 'chart.noteCount'),
+    reversalActivationUs: optionalFiniteNumber(chart.reversalActivationUs, 'chart.reversalActivationUs'),
     reversalTimeUs: optionalFiniteNumber(chart.reversalTimeUs, 'chart.reversalTimeUs'),
     notes,
   };
@@ -657,6 +662,7 @@ function parseChart(chart: Record<string, unknown>): ReplayChart {
     'chartFingerprint',
     'playFingerprint',
     'total',
+    'reversalActivationUs',
     'reversalTimeUs',
   ] as const) {
     if (parsed[key] === undefined) delete parsed[key];
@@ -896,6 +902,7 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     parsed.randomDraws = parseRandomDraws(play.randomDraws, 'play.randomDraws');
   }
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
+  if (play.exitedReversal === true) parsed.exitedReversal = true;
   if (play.abortedAtUs !== undefined) parsed.abortedAtUs = expectFiniteNumber(play.abortedAtUs, 'play.abortedAtUs');
   if (play.endOnFailure !== undefined) parsed.endOnFailure = play.endOnFailure === true;
   if (play.bmsonTotalMode !== undefined) {

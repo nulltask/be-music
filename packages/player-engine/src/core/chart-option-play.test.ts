@@ -2,7 +2,7 @@ import { checkReplayEligibility } from '../replay/eligibility.ts';
 import { expect, test } from 'vite-plus/test';
 import { parseBMS } from '@be-music/chart-parser';
 import { parseReplay, serializeReplay } from '../replay/format.ts';
-import { observePlay, tap } from './characterization/harness.ts';
+import { command, observePlay, tap } from './characterization/harness.ts';
 
 const chart = () =>
   parseBMS(`#BPM 120
@@ -154,6 +154,7 @@ test('negative-BPM reversal freezes effective display operations at the same cha
   await observePlay({
     driver: 'auto',
     chart: source,
+    script: [command(8000, { kind: 'interrupt', reason: 'escape' })],
     onFrame: (frame) => {
       if (frame.currentSeconds > 2.5 && frame.chartOptions?.hiSpeed !== undefined)
         values.push(frame.chartOptions.hiSpeed);

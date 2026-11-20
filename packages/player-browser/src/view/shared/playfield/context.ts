@@ -172,7 +172,7 @@ export interface PlayfieldRuntime {
   readonly lastPoorAt: number;
   readonly engineFrame?: Pick<
     PlayerUIFramePayload,
-    'keyBoundBGA' | 'bmsonBGA' | 'currentSeconds' | 'chartOptions' | 'summary'
+    'keyBoundBGA' | 'bmsonBGA' | 'reversalActivation' | 'currentSeconds' | 'chartOptions' | 'summary'
   >;
   readonly bgaTextures: Map<string, Texture>;
   readonly bgaLayerTextures: Map<string, Texture>;

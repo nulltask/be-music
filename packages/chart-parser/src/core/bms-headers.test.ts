@@ -36,7 +36,10 @@ describe('pushHeaderLine', () => {
     pushHeaderLine(json, 'STOP02', 'STOP02', '48', 36);
     pushHeaderLine(json, 'STOP03', 'STOP03', '-5', 36);
     pushHeaderLine(json, 'STOP03', 'STOP03', '0', 36);
-    expect(json.resources.stop).toEqual({ '01': 96, '02': 48, '03': 0 });
+    pushHeaderLine(json, 'STOP01', 'STOP01', '0.5', 36);
+    pushHeaderLine(json, 'STOP04', 'STOP04', '47.9', 36);
+    pushHeaderLine(json, 'STOP05', 'STOP05', '4294967295', 36);
+    expect(json.resources.stop).toEqual({ '01': 96, '02': 48, '03': 0, '04': 47, '05': 2147483647 });
   });
 
   test('keeps a base-62 object key in its authored case', () => {

@@ -419,10 +419,13 @@ function applyFingerprintHeader(
         json.resources.bpm[key] = numeric;
         touched.add('tl:bpm');
         return;
-      case 'STOP':
-        json.resources.stop[key] = numeric;
+      case 'STOP': {
+        const units = Math.max(-0x80000000, Math.min(0x7fffffff, Number.parseInt(value, 10) || 0));
+        if (units <= 0 && (json.resources.stop[key] ?? 0) > 0) return;
+        json.resources.stop[key] = units;
         touched.add('tl:stop');
         return;
+      }
       case 'SCROLL':
         json.bms.scroll[key] = numeric;
         touched.add('tl:scroll');
@@ -436,7 +439,7 @@ function applyFingerprintHeader(
 
   switch (command) {
     case 'BPM':
-      if (Number.isFinite(numeric) && numeric > 0) {
+      if (Number.isFinite(numeric) && numeric !== 0) {
         json.metadata.bpm = numeric;
         touched.add(HEADER_BUCKET);
       }

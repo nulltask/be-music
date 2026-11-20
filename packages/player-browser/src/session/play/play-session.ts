@@ -713,9 +713,9 @@ export class PlaySession extends PlaySessionState {
     const resolver = this.timingResolver;
     if (!resolver) return undefined;
     // `displayBPMAtBeat`: a negative `#BPMxx` reads as |trunc(BPM)|, LR2's int NOWBPM.
-    return resolver.displayBPMAtBeat(
-      this.currentBeat(Math.min(seconds, resolver.reversal?.seconds ?? Number.POSITIVE_INFINITY)),
-    );
+    if (resolver.reversal && seconds >= resolver.reversal.seconds && resolver.reversalDisplayBPM !== undefined)
+      return resolver.reversalDisplayBPM;
+    return resolver.displayBPMAtBeat(this.forwardBeat(seconds));
   }
 
   /**
@@ -738,7 +738,7 @@ export class PlaySession extends PlaySessionState {
     // post-reversal |BPM| and pauses through post-reversal STOPs. Every display consumer — renderNotes, measure
     // lines, beatPhase — funnels through this method, so mirroring here covers them all; the forward beat underneath
     // keeps `beatAtSeconds`'s monotonic stop-window cursor intact.
-    const reversal = this.timingResolver?.reversal;
+    const reversal = this.engineFrame ? this.engineFrame.reversalActivation : this.timingResolver?.reversal;
     const forward = this.forwardBeat(seconds);
     // CONSTANT mirrors LR2's converted 150-BPM position, then maps back to a beat for every view.
     if (

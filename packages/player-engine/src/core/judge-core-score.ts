@@ -28,8 +28,11 @@ import {
  * a long note spanning the reversal BADs on release. t' never passes R, so nothing past it is ever reached. Pure in
  * the true chart time, so replays reproduce it.
  */
-export function toJudgeClock(config: Pick<JudgeCoreConfig, 'reversalSeconds'>, seconds: number): number {
-  const reversal = config.reversalSeconds;
+export function toJudgeClock(
+  config: Pick<JudgeCoreConfig, 'reversalSeconds' | 'reversalAnchor'>,
+  seconds: number,
+): number {
+  const reversal = config.reversalAnchor?.seconds ?? config.reversalSeconds;
   return reversal !== undefined && seconds > reversal ? 2 * reversal - seconds : seconds;
 }
 

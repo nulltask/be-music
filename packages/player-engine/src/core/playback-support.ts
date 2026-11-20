@@ -84,6 +84,7 @@ export function createUIFramePublisher(params: {
    * runs at the post-reversal |BPM| and a post-reversal STOP pauses it.
    */
   reversal?: TempoReversalPoint;
+  reversalAnchor?: TempoReversalPoint;
   /** The seek generation and the clock a frame at `seconds` holds at (`PlayerUIFramePayload.generation` / `clock`). */
   resolveClock?: (seconds: number) => Pick<PlayerUIFramePayload, 'generation' | 'clock'>;
   resolveHCNLanes?: (seconds: number) => PlayerUIFramePayload['hcnLanes'];
@@ -118,16 +119,16 @@ export function createUIFramePublisher(params: {
       return;
     }
     const debugState = resolveDebugActiveAudioState(seconds);
+    const anchor = params.reversalAnchor ?? reversal;
     const displayBeat =
-      reversal !== undefined && seconds > reversal.seconds
-        ? mirrorBeatAtTempoReversal(reversal, seconds, beat)
-        : undefined;
+      anchor !== undefined && seconds > anchor.seconds ? mirrorBeatAtTempoReversal(anchor, seconds, beat) : undefined;
     uiSignals.publishFrame({
       currentBeat: beat,
       ...(resolveChartOptions ? { chartOptions: resolveChartOptions(seconds) } : {}),
       currentSeconds: seconds,
       displayBeat,
       reversalSeconds: reversal?.seconds,
+      reversalActivation: Number.isFinite(anchor?.seconds) ? anchor : undefined,
       totalSeconds,
       summary,
       ...(summary2P !== undefined ? { summary2P } : {}),

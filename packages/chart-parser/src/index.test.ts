@@ -236,6 +236,12 @@ describe('parser', () => {
     expect(resolvedWhenBranchIsInactive.metadata.bpm).toBe(130);
   });
 
+  test('BMS: a negative STOP after a RANDOM block preserves the selected slot', () => {
+    const chart = parseChart('#RANDOM 2\n#IF 1\n#STOP01 48.9\n#ENDIF\n#ENDRANDOM\n#STOP01 -12');
+    expect(resolveBMSControlFlow(chart, { random: () => 0 }).resources.stop['01']).toBe(48);
+    expect(resolveBMSControlFlow(chart, { random: () => 0.99 }).resources.stop['01']).toBeLessThanOrEqual(0);
+  });
+
   test('BMS: applies headers in file order across a taken branch, as LR2 and beatoraja do', () => {
     const source = [
       '#WAV01 top-before.wav',
