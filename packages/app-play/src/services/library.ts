@@ -1180,5 +1180,9 @@ export class LibraryService {
   private applyChartSettings(): void {
     applyChartLevelEdits(this.collection.charts, readChartLevelEdits(globalThis.localStorage));
     this.bemuseSongs.apply(this.collection.charts);
+    const bemuseSourceIds = new Set(this.chartLoads.flatMap((load) => (load.bemuseURL ? load.sourceIds : [])));
+    for (const chart of this.collection.charts) {
+      if (bemuseSourceIds.has(chart.sourceId)) chart.bemuseServer = true;
+    }
   }
 }

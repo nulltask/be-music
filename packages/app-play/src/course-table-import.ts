@@ -219,7 +219,7 @@ export async function importCourseTable(
   const table = await fetchTableHeaderCourses(url, fetchText);
   if (table.courses.length === 0) throw new Error(`${table.label} lists no course`);
   return {
-    group: { label: table.label, courses: table.courses },
+    group: { label: table.label, kind: 'difficulty-table', courses: table.courses },
     headerURL: table.headerURL,
     ...(table.dataURL !== undefined ? { dataURL: table.dataURL } : {}),
   };
@@ -261,5 +261,5 @@ export function readTableHeaderFile(text: string, fallbackLabel: string): Course
       : typeof symbol === 'string' && symbol.trim().length > 0
         ? symbol.trim()
         : fallbackLabel;
-  return { label, courses };
+  return { label, kind: 'difficulty-table', courses };
 }

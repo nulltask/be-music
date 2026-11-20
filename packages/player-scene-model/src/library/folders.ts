@@ -24,7 +24,11 @@ export function groupChartsByFolder(charts: readonly LibraryChart[]): LibraryFol
     buckets.set(label, bucket);
   }
   return [...buckets.entries()]
-    .map(([label, entries]): LibraryFolder => ({ label, charts: entries }))
+    .map(([label, entries]): LibraryFolder => ({
+      label,
+      charts: entries,
+      ...(entries.every((chart) => chart.bemuseServer) ? { kind: 'bemuse-server' } : {}),
+    }))
     .sort((left, right) => JAPANESE_COLLATOR.compare(left.label, right.label));
 }
 
