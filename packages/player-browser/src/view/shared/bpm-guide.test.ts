@@ -77,6 +77,25 @@ function fakePool(): { pool: ChildPool; labels: FakeLabel[]; lines: number[]; st
   return { pool, labels, lines, strokes };
 }
 
+/** A font whose `1` is 6 wide, other digits 10, and other characters 8; every line 12 tall. */
+const measure = (text: string): { width: number; height: number } => ({
+  width: text.split('').reduce((sum, char) => sum + (char === '1' ? 6 : /\d/u.test(char) ? 10 : 8), 0),
+  height: 12,
+});
+
+/** The drawn glyphs grouped back into labels: the text without spaces, its right edge and baseline. */
+function labelsOf(glyphs: readonly FakeLabel[]): { text: string; right: number; y: number; glyphs: FakeLabel[] }[] {
+  const byLabel = new Map<string, FakeLabel[]>();
+  for (const glyph of glyphs) {
+    const key = (glyph as unknown as { label: string }).label;
+    byLabel.set(key, [...(byLabel.get(key) ?? []), glyph]);
+  }
+  return [...byLabel.values()].map((group) => {
+    const sorted = [...group].sort((a, b) => a.x! - b.x!);
+    return { text: sorted.map((glyph) => glyph.text).join(''), right: 0, y: sorted[0]!.y!, glyphs: sorted };
+  });
+}
+
 const window = resolveNoteDrawWindow({ rules: 'lr2', currentBeat: 2, nowSeconds: 1, laneBeats: 10, overscanBeats: 0 });
 
 test('places future guides at note positions, right-aligned above their line, and removes passed markers', () => {
@@ -93,14 +112,16 @@ test('places future guides at note positions, right-aligned above their line, an
     distance: (beat: number) => beat - 2,
     pixelsPerBeat: 100,
     lanes: [{ x: 50, w: 400, top: 0, bottom: 700 }],
+    measure,
   };
   renderBPMGuide(input);
-  expect(labels).toHaveLength(1);
-  expect(labels[0]).toMatchObject({
-    text: 'BPM 240',
-    x: 446,
-    y: 498,
-    anchor: { x: 1, y: 1 },
+  const [label, ...rest] = labelsOf(labels);
+  expect(rest).toHaveLength(0);
+  expect(label).toMatchObject({ text: 'BPM240', y: 498 });
+  // Right-aligned at 446: the last glyph's cell (a 0, 10 wide) is centred 5 to its left.
+  expect(label!.glyphs.at(-1)!.x).toBe(441);
+  expect(label!.glyphs[0]).toMatchObject({
+    anchor: { x: 0.5, y: 1 },
     style: { fill: 0x00c000, fontFamily: 'monospace' },
   });
   labels.length = 0;
@@ -126,10 +147,17 @@ test('shows only the kinds asked for, in the skin look, with lines for the kinds
     distance: (beat: number) => beat - 2,
     pixelsPerBeat: 100,
     lanes: [{ x: 0, w: 300, top: 0, bottom: 700 }],
+    measure,
   });
-  expect(labels.map((label) => label.text)).toEqual(['STOP 100ms', 'SCROLL 0.5']);
-  expect(labels[0]!.style).toMatchObject({ fontFamily: 'Orbitron', fontWeight: '500', fontSize: 11, fill: 0xc0c000 });
-  expect(labels[1]!.style).toMatchObject({ fill: 0x3fb4ff });
+  const drawn = labelsOf(labels);
+  expect(drawn.map((label) => label.text)).toEqual(['STOP100ms', 'SCROLL0.5']);
+  expect(drawn[0]!.glyphs[0]!.style).toMatchObject({
+    fontFamily: 'Orbitron',
+    fontWeight: '500',
+    fontSize: 11,
+    fill: 0xc0c000,
+  });
+  expect(drawn[1]!.glyphs[0]!.style).toMatchObject({ fill: 0x3fb4ff });
   // Only the SCROLL label gets a line.
   expect(lines).toEqual([500]);
 });
@@ -183,11 +211,33 @@ test('draws changes on one beat as a callout', () => {
     distance: (beat: number) => beat - 2,
     pixelsPerBeat: 100,
     lanes: [{ x: 0, w: 300, top: 0, bottom: 700 }],
+    measure,
   });
   // SCROLL 0.5 is longer: the bottom row; BPM 240 above it.
-  expect(labels.map((label) => [label.text, label.y])).toEqual([
-    ['BPM 240', 477],
-    ['SCROLL 0.5', 491],
+  expect(labelsOf(labels).map((label) => [label.text, label.y])).toEqual([
+    ['BPM240', 477],
+    ['SCROLL0.5', 491],
   ]);
   expect(strokes).toHaveLength(1);
+});
+
+test('draws digits in cells as wide as the widest digit', () => {
+  const { pool, labels } = fakePool();
+  const draw = (text: string): number[] => {
+    labels.length = 0;
+    renderBPMGuide({
+      enabled: true,
+      drawLines: false,
+      pool,
+      events: [{ kind: 'bpm', beat: 4, seconds: 2, text }],
+      window,
+      distance: (beat: number) => beat - 2,
+      pixelsPerBeat: 100,
+      lanes: [{ x: 0, w: 300, top: 0, bottom: 700 }],
+      measure,
+    });
+    return labelsOf(labels)[0]!.glyphs.map((glyph) => glyph.x!);
+  };
+  // A 1 takes a 0's cell, so BPM 111 and BPM 100 put every glyph in the same place.
+  expect(draw('BPM 111')).toEqual(draw('BPM 100'));
 });

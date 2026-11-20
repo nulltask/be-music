@@ -1,5 +1,6 @@
 import { findFirstIndexAtOrAfter } from '@be-music/shared-utils/core';
-import type { Text } from 'pixi.js';
+import { CanvasTextMetrics, TextStyle, type Text } from 'pixi.js';
+import { layoutTabularRun } from '@be-music/player-skin-sdk';
 import type { ChildPool } from '../../skins/pixi-kit/pools.ts';
 import type { BeMusicGuideLabelStyle } from '@be-music/player-skin-sdk';
 import {
@@ -139,10 +140,13 @@ export function renderBPMGuide(input: {
   /** The skin's label look; beatoraja's monospace and colours without one. */
   style?: BeMusicGuideLabelStyle;
   alphaAt?: (eventSeconds: number) => number;
+  /** Measures a character in a CSS font (`measureGuideText` by default; tests pass their own). */
+  measure?: GuideTextMeasure;
 }): void {
   if (!input.enabled) return;
   const kinds = input.kinds ?? DEFAULT_BPM_GUIDE_KINDS;
   const style = input.style;
+  const measure = input.measure ?? measureGuideText;
   const threshold =
     (input.window.rules === 'lr2' ? input.window.reachedBeat : input.window.currentBeat) -
     1 / Math.max(Number.EPSILON, input.pixelsPerBeat);
@@ -179,28 +183,84 @@ export function renderBPMGuide(input: {
           ? true
           : input.drawLines !== false && input.drawLines.has(event.kind);
       if (drawLine) input.pool.acquireGraphics().rect(lane.x, Math.round(y), lane.w, 1).fill({ color, alpha });
-      const text = input.pool.acquireText(event.text);
-      text.label = `bpm-guide:${event.kind}:${event.beat}`;
-      text.text = event.text;
-      text.alpha = alpha;
-      text.style.fontFamily = style?.fontFamily ?? 'monospace';
-      text.style.fontWeight = style?.fontWeight ?? 'normal';
-      text.style.fontSize = resolveBPMGuideFontSize(lane.w, style);
-      text.style.fill = color;
-      text.anchor.set(1, 1);
-      text.scale.set(1);
-      const place = placeBPMGuideLabel(lane, Math.round(y), text.width);
-      text.scale.set(place.scale);
+      const fontFamily = style?.fontFamily ?? 'monospace';
+      const fontWeight = style?.fontWeight ?? 'normal';
+      const fontSize = resolveBPMGuideFontSize(lane.w, style);
+      const font = { fontFamily, fontWeight, fontSize };
+      // Tabular figures: each digit in a cell as wide as the widest digit, so a number keeps its place.
+      const run = layoutTabularRun(event.text, (char) => measure(char, font).width);
+      const height = measure(event.text, font).height;
+      const place = placeBPMGuideLabel(lane, Math.round(y), run.width);
+      const glyphs: { text: Text; x: number }[] = [];
+      for (const glyph of run.glyphs) {
+        if (glyph.char === ' ') continue;
+        const text = input.pool.acquireText(glyph.char);
+        text.label = `bpm-guide:${event.kind}:${event.beat}`;
+        text.text = glyph.char;
+        text.alpha = alpha;
+        text.style.fontFamily = fontFamily;
+        text.style.fontWeight = fontWeight;
+        text.style.fontSize = fontSize;
+        text.style.fill = color;
+        text.anchor.set(0.5, 1);
+        text.scale.set(place.scale);
+        glyphs.push({ text, x: (glyph.x + glyph.w / 2 - run.width) * place.scale });
+      }
       let group = pending.get(key);
       if (group === undefined) pending.set(key, (group = []));
-      group.push({ text, lineY: Math.round(y), rightX: place.x, alpha });
+      group.push({
+        glyphs,
+        width: run.width * place.scale,
+        height: height * place.scale,
+        lineY: Math.round(y),
+        rightX: place.x,
+        alpha,
+      });
     }
   }
   for (const labels of pending.values()) placeLabels(input.pool, labels);
 }
 
+/** A CSS font a guide label is drawn in. */
+export interface GuideFont {
+  readonly fontFamily: string;
+  readonly fontWeight: string;
+  readonly fontSize: number;
+}
+
+/** The advance and line height of `text` in `font`. */
+export type GuideTextMeasure = (text: string, font: GuideFont) => { width: number; height: number };
+
+const GUIDE_STYLES = new Map<string, TextStyle>();
+const GUIDE_MEASURES = new Map<string, { width: number; height: number }>();
+
+/** {@link GuideTextMeasure} through Pixi's text metrics, cached by font and text. */
+export function measureGuideText(text: string, font: GuideFont): { width: number; height: number } {
+  const fontKey = `${font.fontWeight} ${font.fontSize}px ${font.fontFamily}`;
+  const key = `${fontKey}\u0000${text}`;
+  let measured = GUIDE_MEASURES.get(key);
+  if (measured === undefined) {
+    let style = GUIDE_STYLES.get(fontKey);
+    if (style === undefined) {
+      style = new TextStyle({
+        fontFamily: font.fontFamily,
+        fontWeight: font.fontWeight as TextStyle['fontWeight'],
+        fontSize: font.fontSize,
+      });
+      GUIDE_STYLES.set(fontKey, style);
+    }
+    const metrics = CanvasTextMetrics.measureText(text, style);
+    measured = { width: metrics.width, height: metrics.height };
+    GUIDE_MEASURES.set(key, measured);
+  }
+  return measured;
+}
+
 interface PendingLabel {
-  readonly text: Text;
+  /** The label's glyphs, each with its centre's offset from the label's right edge. */
+  readonly glyphs: readonly { readonly text: Text; readonly x: number }[];
+  readonly width: number;
+  readonly height: number;
   readonly lineY: number;
   readonly rightX: number;
   readonly alpha: number;
@@ -215,14 +275,16 @@ function placeLabels(pool: ChildPool, labels: readonly PendingLabel[]): void {
   while (start < labels.length) {
     const anchor = labels[start]!;
     let end = start + 1;
-    while (end < labels.length && Math.abs(labels[end]!.lineY - anchor.lineY) < anchor.text.height + ROW_GAP) end += 1;
+    while (end < labels.length && Math.abs(labels[end]!.lineY - anchor.lineY) < anchor.height + ROW_GAP) end += 1;
     const group = labels.slice(start, end);
     const layout = layoutBPMGuideCallout(
       anchor.lineY,
       anchor.rightX,
-      group.map((label) => ({ width: label.text.width, height: label.text.height })),
+      group.map((label) => ({ width: label.width, height: label.height })),
     );
-    group.forEach((label, index) => label.text.position.set(anchor.rightX, layout.rows[index]!));
+    group.forEach((label, index) => {
+      for (const glyph of label.glyphs) glyph.text.position.set(anchor.rightX + glyph.x, layout.rows[index]!);
+    });
     if (layout.leader !== undefined) {
       const alpha = LEADER_ALPHA * Math.max(...group.map((label) => label.alpha));
       const leader = pool.acquireGraphics();
