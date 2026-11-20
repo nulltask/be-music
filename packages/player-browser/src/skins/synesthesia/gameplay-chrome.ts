@@ -431,6 +431,7 @@ export function renderSynesthesiaChrome({
     hue,
     overlayLayerPool,
     layout,
+    settings,
   );
 }
 
