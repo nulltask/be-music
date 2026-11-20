@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vite-plus/test';
 import {
   DEFAULT_RECORDING_FORMAT,
+  RECORDING_QUALITIES,
+  describeRecordingQuality,
+  resolveRecordingBitrates,
   RECORDING_FORMATS,
   describeRecordingFormat,
   recorderMIMECandidates,
@@ -53,5 +56,38 @@ describe('recording formats', () => {
     expect(recordingFileExtension('video/MP4')).toBe('mp4');
     expect(recordingFileExtension('video/webm;codecs=vp9')).toBe('webm');
     expect(recordingFileExtension('')).toBe('webm');
+  });
+});
+
+describe('resolveRecordingBitrates', () => {
+  it('keeps Standard at the recorder’s long-standing bitrates for a 1280×720 canvas at 60 fps', () => {
+    expect(resolveRecordingBitrates('standard', { width: 1280, height: 720, fps: 60 })).toEqual({
+      videoBitsPerSecond: 5_529_600,
+      audioBitsPerSecond: 192_000,
+    });
+  });
+
+  it('grows with the quality and the canvas size', () => {
+    const frame = { width: 1920, height: 1080, fps: 60 };
+    const video = RECORDING_QUALITIES.map((quality) => resolveRecordingBitrates(quality, frame).videoBitsPerSecond);
+    const audio = RECORDING_QUALITIES.map((quality) => resolveRecordingBitrates(quality, frame).audioBitsPerSecond);
+    expect(video).toEqual([...video].sort((a, b) => a - b));
+    expect(new Set(video).size).toBe(4);
+    expect(audio).toEqual([128_000, 192_000, 256_000, 320_000]);
+    expect(resolveRecordingBitrates('high', frame).videoBitsPerSecond).toBeGreaterThan(
+      resolveRecordingBitrates('high', { width: 1280, height: 720, fps: 60 }).videoBitsPerSecond,
+    );
+  });
+
+  it('keeps the video bitrate between 1 and 80 Mbps', () => {
+    expect(resolveRecordingBitrates('low', { width: 320, height: 240, fps: 30 }).videoBitsPerSecond).toBe(1_000_000);
+    expect(resolveRecordingBitrates('very-high', { width: 3840, height: 2160, fps: 60 }).videoBitsPerSecond).toBe(
+      80_000_000,
+    );
+    expect(resolveRecordingBitrates('standard', { width: 0, height: 0, fps: 60 }).videoBitsPerSecond).toBe(1_000_000);
+  });
+
+  it('names each quality', () => {
+    expect(RECORDING_QUALITIES.map(describeRecordingQuality)).toEqual(['Low', 'Standard', 'High', 'Very high']);
   });
 });

@@ -307,6 +307,7 @@ describe('captureOptionSettings', () => {
       playLayout: 'touch',
       renderer: 'webgpu',
       recordingFormat: 'mp4/avc',
+      recordingQuality: 'very-high',
       workerCount: 3,
       compressorTuning: defaultCompressorTunings(),
       skinSettings: { test: { glow: false, offset: 5, theme: 'light' } },

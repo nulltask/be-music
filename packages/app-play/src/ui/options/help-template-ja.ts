@@ -715,6 +715,11 @@ export const OPTIONS_HELP_JA = html`
         <dd>次のプレイを動画として録画してダウンロードします。BGA の枠に映したカメラの映像も記録されます。</dd>
         <dt>Video format</dt>
         <dd>動画のコンテナとコーデック。既定は MP4 · H.264 で、MP4 / WebM と H.265・AV1・VP9・VP8 から選べます。</dd>
+        <dt>Video quality</dt>
+        <dd>
+          録画のビットレート。低・標準
+          (既定)・高・最高から選びます。映像のビットレートは画面の大きさに合わせて変わります。録画を始めるときに反映するので、録画中は変えられません。
+        </dd>
         <dt>📸 Screenshot</dt>
         <dd>画面を PNG で保存します。</dd>
       </dl>

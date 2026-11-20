@@ -335,6 +335,7 @@ export class PlayerWebApp {
       activeGameplay: () => this.gameplayView?.recording,
       settings: this.guiState,
       setStatus: (text) => this.status.set(text),
+      setRecordingSettingsLocked: (locked) => this.optionsDialog.setRecordingSettingsLocked(locked),
     });
     // Every sound plays through the master volume; start from the remembered level and mute state.
     setMasterVolume(this.guiState.muted ? 0 : this.guiState.masterVolume / 100);

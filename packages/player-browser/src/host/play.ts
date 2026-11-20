@@ -24,7 +24,7 @@ import {
 import type { Texture } from 'pixi.js';
 import type { BrowserAssetSource } from '../collection/types.ts';
 import type { GameplayRecorderResult } from '../recording/gameplay-recorder.ts';
-import type { RecordingFormat } from '../recording/recording-format.ts';
+import type { RecordingFormat, RecordingQuality } from '../recording/recording-format.ts';
 import type { AudioBusChannel, CompressorParams, CompressorStage, TunableCompressor } from '../runtime/audio-bus.ts';
 import type { AudioOwner, AudioService } from '../runtime/audio-service.ts';
 import type { PlayDisposeOptions, PlaySessionOptions, SkinAdjust } from '../session/play/play-options.ts';
@@ -148,7 +148,8 @@ export interface PlaySceneOptions extends SessionSceneOptions {
 
 /** A play's recording of its canvas and mix, as the host's recorder drives it. */
 export interface PlaySceneRecording {
-  startRecording(options?: { format?: RecordingFormat }): void;
+  /** Starts recording the play in `format` (MP4 · H.264 by default) at `quality` (`standard` by default). */
+  startRecording(options?: { format?: RecordingFormat; quality?: RecordingQuality }): void;
   stopRecording(): Promise<GameplayRecorderResult | undefined>;
   isRecording(): boolean;
 }

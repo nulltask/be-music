@@ -45,6 +45,8 @@ function deps(gameplay: GameplayRecorder | undefined, armed: boolean): Recording
     },
     getRecordingFilenameBase: () => 'play',
     getRecordingFormat: () => ({ container: 'mp4', videoCodec: 'avc' }),
+    getRecordingQuality: () => 'high',
+    setRecordingSettingsLocked: (locked: boolean) => statuses.push(locked ? 'locked' : 'unlocked'),
     setStatus: (text) => statuses.push(text),
   } as RecordingDeps & { statuses: string[] };
 }
@@ -56,8 +58,13 @@ describe('startArmedRecording', () => {
     startArmedRecording(recordingDeps);
     startArmedRecording(recordingDeps);
     expect(view.started).toBe(1);
+    expect(view.startRecording).toHaveBeenCalledWith({
+      format: { container: 'mp4', videoCodec: 'avc' },
+      quality: 'high',
+    });
     expect(recordingDeps.getAutoRecordArmed()).toBe(false);
-    expect(recordingDeps.statuses).toEqual(['Recording…']);
+    // The Video format and Video quality lock while the recording runs.
+    expect(recordingDeps.statuses).toEqual(['locked', 'Recording…']);
   });
 
   test('does nothing unless armed', () => {

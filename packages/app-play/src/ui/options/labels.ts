@@ -275,6 +275,11 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   Resize: '縮小',
   '● Record gameplay video': '● プレイ動画を録画',
   'Video format': '動画の形式',
+  'Video quality': '動画の画質',
+  Low: '低',
+  Standard: '標準',
+  High: '高',
+  'Very high': '最高',
   '📸 Screenshot': '📸 スクリーンショット',
   // Leaderboard
   'Submit to Leaderboard': 'Leaderboard に送信',
