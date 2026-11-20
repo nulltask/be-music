@@ -265,22 +265,72 @@ export function paintNotes(ctx: BeMusicPlayfieldPaintContext, data: BeMusicNotes
   ctx.globalAlpha = 1;
 }
 
+/** The lane covers' fill, their faint stripes and the line along the edge the notes come from. */
+const COVER_FILL = '#0b0f17';
+const COVER_STRIPE = '#88b9ff';
+const COVER_STRIPE_ALPHA = 0.08;
+const COVER_EDGE = '#3a4d6b';
+/** The distance between two stripes and a stripe's width, along a horizontal edge. */
+const COVER_STRIPE_SPACING = 12;
+const COVER_STRIPE_WIDTH = 4;
+
+/**
+ * Each side's SUDDEN+, HIDDEN+ and LIFT covers, opaque, with rising diagonal stripes that move with the cover's inner
+ * edge (the one facing the notes) and a line along that edge.
+ */
 export function paintLaneCovers(ctx: BeMusicPlayfieldPaintContext, { areas }: BeMusicLaneCoversData): void {
-  ctx.fillStyle = '#000000';
-  ctx.globalAlpha = 0.92;
   for (const area of areas) {
     const width = area.right - area.left;
     const height = area.bottom - area.top;
-    if (area.sudden > 0) ctx.fillRect(area.left, area.top, width, height * area.sudden);
+    const lift = area.lift ?? 0;
+    if (area.sudden > 0) paintCover(ctx, area.left, area.top, width, height * area.sudden, 'bottom');
     if (area.hidden > 0)
-      ctx.fillRect(area.left, area.bottom - height * ((area.lift ?? 0) + area.hidden), width, height * area.hidden);
-    if ((area.lift ?? 0) > 0) {
-      ctx.globalAlpha = 1;
-      ctx.fillRect(area.left, area.bottom - height * area.lift!, width, height * area.lift!);
-      ctx.globalAlpha = 0.92;
-    }
+      paintCover(ctx, area.left, area.bottom - height * (lift + area.hidden), width, height * area.hidden, 'top');
+    if (lift > 0) paintCover(ctx, area.left, area.bottom - height * lift, width, height * lift, 'top');
   }
+}
+
+function paintCover(
+  ctx: BeMusicPlayfieldPaintContext,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  inner: 'top' | 'bottom',
+): void {
+  if (!(w > 0) || !(h > 0)) return;
   ctx.globalAlpha = 1;
+  ctx.fillStyle = COVER_FILL;
+  ctx.fillRect(x, y, w, h);
+  const anchorY = inner === 'top' ? y : y + h;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.globalAlpha = COVER_STRIPE_ALPHA;
+  ctx.fillStyle = COVER_STRIPE;
+  ctx.beginPath();
+  // A point's place across the stripes is `u = (px - x) + (py - anchorY)`; a stripe holds u in [k·spacing, +width).
+  const top = y - anchorY;
+  const bottom = y + h - anchorY;
+  for (
+    let k = Math.floor((top - COVER_STRIPE_WIDTH) / COVER_STRIPE_SPACING) + 1;
+    k * COVER_STRIPE_SPACING < w + bottom;
+    k++
+  ) {
+    const from = k * COVER_STRIPE_SPACING;
+    const to = from + COVER_STRIPE_WIDTH;
+    ctx.moveTo(x + from - top, y);
+    ctx.lineTo(x + to - top, y);
+    ctx.lineTo(x + to - bottom, y + h);
+    ctx.lineTo(x + from - bottom, y + h);
+    ctx.closePath();
+  }
+  ctx.fill();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = COVER_EDGE;
+  ctx.fillRect(x, inner === 'top' ? y : y + h - 1, w, 1);
 }
 
 export function paintJudgeLine(ctx: BeMusicPlayfieldPaintContext, { runs, y }: BeMusicJudgeLineData): void {
