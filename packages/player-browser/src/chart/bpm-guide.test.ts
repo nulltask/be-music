@@ -16,9 +16,9 @@ test('shows actual BPM changes and STOP milliseconds, omitting unchanged BPM dec
   ];
   const events = collectBPMGuideEvents(resolveChart(chart).timing);
   expect(events.map(({ beat, text }) => ({ beat, text }))).toEqual([
-    { beat: 4, text: 'BPM240' },
+    { beat: 4, text: 'BPM 240' },
     { beat: 8, text: 'STOP 1000ms' },
-    { beat: 12, text: 'BPM180' },
+    { beat: 12, text: 'BPM 180' },
   ]);
   expect(collectBPMGuideEvents(resolveChart(createEmptyJSON('bms')).timing)).toEqual([]);
 });

@@ -403,7 +403,7 @@ Tracked in [#1131](https://github.com/nulltask/be-music/issues/1131).
 
 ## BPM GUIDE
 
-Turn on **BPM GUIDE (beatoraja)** in the Options dialog; it is off by default. Upcoming tempo changes then appear on the lanes as beatoraja 0.8.9's `LaneRenderer` draws them: a green `BPM<n>` label at each actual BPM change, skipping declarations that repeat the current BPM, and a yellow `STOP <n>ms` label at each positive STOP, both truncated to integers. Labels follow the notes' scroll, including STOPs and negative scroll, and leave once they pass the judge line.
+Turn on **BPM GUIDE (beatoraja)** in the Options dialog; it is off by default. Upcoming tempo changes then appear on the lanes as beatoraja 0.8.9's `LaneRenderer` draws them: a green `BPM <n>` label at each actual BPM change (beatoraja writes `BPM<n>`; Be-Music puts a space before every label's number, as in `STOP <n>ms`, `SCROLL <x>` and `SPEED <x>`), skipping declarations that repeat the current BPM, and a yellow `STOP <n>ms` label at each positive STOP, both truncated to integers. Labels follow the notes' scroll, including STOPs and negative scroll, and leave once they pass the judge line.
 
 The built-in and LR2 playfields draw a line and a label per play side. A beatoraja skin draws its own BPM and STOP marker images, which now appear only while the option is on, with the labels added above them. Replays store `play.options.bpmGuide` with the chart's header BPM (`chart.headerBPM`) and resolved BPM range (`chart.bpmRange`), the facts beatoraja's light-assist rule uses: it applies only to a chart whose BPM changes. Its record policy is in [Assist and record policy](#assist-and-record-policy).
 

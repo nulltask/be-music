@@ -86,8 +86,8 @@ test('places future guides at note positions, right-aligned above their line, an
     drawLines: false,
     pool,
     events: [
-      { kind: 'bpm' as const, beat: 0, seconds: 0, text: 'BPM120' },
-      { kind: 'bpm' as const, beat: 4, seconds: 2, text: 'BPM240' },
+      { kind: 'bpm' as const, beat: 0, seconds: 0, text: 'BPM 120' },
+      { kind: 'bpm' as const, beat: 4, seconds: 2, text: 'BPM 240' },
     ],
     window,
     distance: (beat: number) => beat - 2,
@@ -97,7 +97,7 @@ test('places future guides at note positions, right-aligned above their line, an
   renderBPMGuide(input);
   expect(labels).toHaveLength(1);
   expect(labels[0]).toMatchObject({
-    text: 'BPM240',
+    text: 'BPM 240',
     x: 446,
     y: 498,
     anchor: { x: 1, y: 1 },
@@ -114,7 +114,7 @@ test('shows only the kinds asked for, in the skin look, with lines for the kinds
     enabled: true,
     pool,
     events: [
-      { kind: 'bpm', beat: 3, seconds: 1.5, text: 'BPM240' },
+      { kind: 'bpm', beat: 3, seconds: 1.5, text: 'BPM 240' },
       { kind: 'stop', beat: 3.5, seconds: 1.75, text: 'STOP 100ms' },
       { kind: 'scroll', beat: 4, seconds: 2, text: 'SCROLL 0.5' },
       { kind: 'speed', beat: 5, seconds: 2.5, text: 'SPEED 2' },
@@ -175,7 +175,7 @@ test('draws changes on one beat as a callout', () => {
     drawLines: false,
     pool,
     events: [
-      { kind: 'bpm', beat: 4, seconds: 2, text: 'BPM240' },
+      { kind: 'bpm', beat: 4, seconds: 2, text: 'BPM 240' },
       { kind: 'scroll', beat: 4, seconds: 2, text: 'SCROLL 0.5' },
     ],
     kinds: { bpm: true, stop: true, scroll: true, speed: true },
@@ -184,9 +184,9 @@ test('draws changes on one beat as a callout', () => {
     pixelsPerBeat: 100,
     lanes: [{ x: 0, w: 300, top: 0, bottom: 700 }],
   });
-  // SCROLL 0.5 is longer: the bottom row; BPM240 above it.
+  // SCROLL 0.5 is longer: the bottom row; BPM 240 above it.
   expect(labels.map((label) => [label.text, label.y])).toEqual([
-    ['BPM240', 477],
+    ['BPM 240', 477],
     ['SCROLL 0.5', 491],
   ]);
   expect(strokes).toHaveLength(1);

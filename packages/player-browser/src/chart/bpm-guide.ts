@@ -23,7 +23,7 @@ export const DEFAULT_BPM_GUIDE_KINDS: BPMGuideKinds = { bpm: true, stop: true, s
 
 /**
  * The guide labels of a chart, in beat order. BPM changes and positive STOPs as beatoraja 0.8.9's `LaneRenderer` labels
- * them (`BPM<n>`, `STOP <n>ms`, integers), and Be-Music's `#SCROLL` / `#SPEED` changes (`SCROLL <x>`, `SPEED <x>`, up to
+ * them (`BPM <n>`, `STOP <n>ms`, integers; beatoraja writes `BPM<n>`, Be-Music spaces every label's number alike), and Be-Music's `#SCROLL` / `#SPEED` changes (`SCROLL <x>`, `SPEED <x>`, up to
  * two decimals), each where the value actually changes from the one before (starting from 1).
  */
 export function collectBPMGuideEvents(
@@ -39,7 +39,7 @@ export function collectBPMGuideEvents(
         beat: point.beat,
         seconds: timing.beatToSeconds(point.beat),
         kind: 'bpm',
-        text: `BPM${Math.trunc(point.bpm)}`,
+        text: `BPM ${Math.trunc(point.bpm)}`,
       });
     }
     previousBPM = point.bpm;

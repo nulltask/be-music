@@ -91,8 +91,8 @@ export function layoutBPMGuideCallout(
   const rowHeight = Math.max(...labels.map((label) => label.height)) + ROW_GAP;
   // The bottom row clears the line by half a row, so the leader has a slant to run before its first tick.
   const bottom = lineY - LABEL_LIFT - Math.round(rowHeight / 2);
-  const rows: number[] = new Array<number>(labels.length);
-  const mids: number[] = new Array<number>(labels.length);
+  const rows: number[] = Array.from<number>({ length: labels.length });
+  const mids: number[] = Array.from<number>({ length: labels.length });
   order.forEach((index, rank) => {
     rows[index] = bottom - rank * rowHeight;
     mids[index] = Math.round(rows[index] - labels[index]!.height / 2) + 0.5;
