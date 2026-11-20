@@ -217,6 +217,7 @@ export interface ReplayRecorderFinalizeInput {
   aborted?: boolean;
   /** Chart seconds the judge had settled through when the play was aborted. */
   abortedAtSeconds?: number;
+  completedAtReversal?: boolean;
   exitedReversal?: boolean;
   reversalActivationSeconds?: number;
   /** The 2P player of a two-player play: its summary, max combo and gauge (recorded as `results.secondPlayer`). */
@@ -353,6 +354,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       maxCombo,
       aborted,
       abortedAtSeconds,
+      completedAtReversal,
       exitedReversal,
       reversalActivationSeconds,
       secondPlayer,
@@ -386,6 +388,7 @@ export function createReplayRecorder(options: ReplayRecorderOptions): ReplayReco
       ) {
         chart.reversalActivationUs = secondsToMicroseconds(reversalActivationSeconds);
       }
+      if (completedAtReversal) play.completedAtReversal = true;
       if (aborted === true) {
         play.aborted = true;
         if (exitedReversal) play.exitedReversal = true;

@@ -39,7 +39,7 @@ export function finishPlay(
     (!session.replay || options.replayExitedReversal === true);
   if (exitedReversal) judge.finish();
   const reason = aborted ? 'escape' : endedOnFailure ? 'failed' : 'complete';
-  const endSeconds = exitedReversal ? stoppedAt : totalSeconds;
+  const endSeconds = exitedReversal || outcome.completedAtReversal ? stoppedAt : totalSeconds;
   if (!session.uiEnabled) {
     writeRuntimeEventLog(writeOutput, 'playback-end', [
       ['time', formatSeconds(endSeconds)],
@@ -53,6 +53,7 @@ export function finishPlay(
       replayRecorder.finalize({
         summary,
         maxCombo: session.score.scoreTracker.maxCombo,
+        completedAtReversal: outcome.completedAtReversal,
         reversalActivationSeconds:
           session.replay && options.replayReversalActivationUs === undefined
             ? undefined

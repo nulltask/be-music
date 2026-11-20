@@ -1,3 +1,4 @@
+import { resolveBmsWAVResources } from '@be-music/chart-model';
 import type { BeMusicEvent, BeMusicJSON } from '@be-music/chart-source';
 import type { WebAudioStageMixer } from './nonstop-audio.ts';
 import type { PlayerInputSignalBus } from '@be-music/player-engine/signals';
@@ -12,7 +13,7 @@ import {
 import { IIDX_GAMEPAD_SCRATCH } from './arcade-gamepad.ts';
 import { logger } from '../logger.ts';
 import { type AudioBusHandle } from './audio-bus.ts';
-import { createWebAudioSession, type WebAudioSessionSlicePlayback } from './web-audio-session.ts';
+import { decodedSampleKey, createWebAudioSession, type WebAudioSessionSlicePlayback } from './web-audio-session.ts';
 import { createWebInputRuntimeFactory } from './web-input-runtime.ts';
 import { createWebUIRuntimeFactory, type WebUIRuntimeCallbacks } from './web-ui-runtime.ts';
 
@@ -142,6 +143,15 @@ export async function runEngineDriver(options: EngineDriverOptions): Promise<Eng
   });
   const createUIRuntime = createWebUIRuntimeFactory(ui);
   const compositeOptions: PlayerOptions = {
+    loadAudioSampleDurations: async (resolved) => {
+      const durations = new Map<string, number>();
+      for (const [slot, path] of Object.entries(resolveBmsWAVResources(resolved.source))) {
+        const buffer =
+          audio.decodedSamples.get(decodedSampleKey(path, slot)) ?? audio.decodedSamples.get(decodedSampleKey(path));
+        if (buffer) durations.set(slot, buffer.duration);
+      }
+      return durations;
+    },
     ...engineOptions,
     ...(engineOptions?.recordReplay
       ? { recordReplay: { analogScratch: IIDX_GAMEPAD_SCRATCH, ...engineOptions.recordReplay } }

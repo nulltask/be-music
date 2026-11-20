@@ -358,6 +358,8 @@ export interface ReplayPlay {
   abortedAtUs?: number;
   /** ESC ended a frozen LR2 stage and applied its outstanding-note gauge rule. */
   exitedReversal?: boolean;
+  /** The reversing event itself completed the stage at chart.reversalActivationUs. */
+  completedAtReversal?: boolean;
   /**
    * True when the play ended the moment its survival gauge emptied (`PlayerOptions.endOnFailure`): nothing after the
    * judgment that emptied it counts. Absent on older logs, which kept judging to the end.
@@ -902,6 +904,7 @@ function parsePlay(play: Record<string, unknown>): ReplayPlay {
     parsed.randomDraws = parseRandomDraws(play.randomDraws, 'play.randomDraws');
   }
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
+  if (play.completedAtReversal === true) parsed.completedAtReversal = true;
   if (play.exitedReversal === true) parsed.exitedReversal = true;
   if (play.abortedAtUs !== undefined) parsed.abortedAtUs = expectFiniteNumber(play.abortedAtUs, 'play.abortedAtUs');
   if (play.endOnFailure !== undefined) parsed.endOnFailure = play.endOnFailure === true;

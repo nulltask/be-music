@@ -40,6 +40,7 @@ export interface PlayOutcome {
   interruptedReason: PlayerInterruptReason | undefined;
   /** Judging closed when a survival gauge emptied (`endOnFailure`). */
   endedOnFailure: boolean;
+  completedAtReversal: boolean;
 }
 
 /** The widest reach any lane's windows have anywhere in the chart, in seconds: a mid-chart `#EXRANKxx` can widen it. */
@@ -104,17 +105,19 @@ function startChart(session: PlaySession): PlaybackClock {
   return clock;
 }
 
+type ChartEnding = 'complete' | 'failed' | 'reversal';
+
 /**
  * Plays the chart from its start to the end of the play: ticks until an interrupt, a failed gauge, the chart being
  * over and judged, or the horizon (held open past it while the host holds the play), then applies the end-of-play
- * rules. Returns whether judging closed on a failed gauge.
+ * rules. The ending determines how the result and replay are finalized.
  */
 async function playChart(
   session: PlaySession,
   judge: PlayJudge,
   controls: PlayControls,
   wakeUp: InputWakeUp,
-): Promise<boolean> {
+): Promise<ChartEnding> {
   const { options, tempoClock, totalSeconds, tracer, publishUIFrame, beatAtSeconds } = session;
   const clock = startChart(session);
   controls.chartStarted();
@@ -134,10 +137,18 @@ async function playChart(
   // A replay of an ESC-aborted log stops where the play was aborted, as the replay simulators do.
   const replayStopSeconds =
     session.replay && options.replayAbortedAtUs !== undefined ? options.replayAbortedAtUs / 1_000_000 : undefined;
+  const recordedCompletion =
+    session.replay && options.replayCompletedAtReversal && replayStopSeconds === undefined
+      ? session.reversalAnchor?.seconds
+      : undefined;
   const reversedStage = session.resolvedChart.reversal !== undefined;
-  // Live LR2 playback never reaches its end event after the event pump freezes. A recorded
+  // Once the reversing dispatch finishes, later ticks cannot advance the frozen pump. A recorded
   // play has its own end: legacy completed recordings still finish at their original horizon.
-  const waitsForExit = reversedStage && (!session.replay || replayStopSeconds !== undefined) && !options.practice;
+  const waitsForExit =
+    reversedStage &&
+    (!session.replay || replayStopSeconds !== undefined || recordedCompletion !== undefined) &&
+    !options.practice;
+  const stopAt = replayStopSeconds ?? recordedCompletion;
   let settled = false;
   const pastHorizon = (): boolean => {
     if (waitsForExit) return hold?.signal.aborted === true && judge.isSettled();
@@ -153,13 +164,13 @@ async function playChart(
     return hold.signal.aborted;
   };
 
-  let failed = false;
+  let end: ChartEnding = 'complete';
   // The chart second of the last frame the loop published: the closing frame never shows an earlier one.
   let lastFrameSeconds: number | undefined;
   while (loopsPractice || !pastHorizon()) {
     controls.consume();
     if (controls.interruptedReason !== undefined) {
-      return false;
+      return 'complete';
     }
     const nowMs = clock.nowMs();
     const seekSeconds = controls.takeSeek();
@@ -185,19 +196,24 @@ async function playChart(
     const nowSec = tempoClock.chartSecondsAt(nowMs);
     // The tick that reaches a replay's stop judges up to it and no further.
     const stopping = replayStopSeconds !== undefined && nowSec >= replayStopSeconds;
-    const tick: PlayTick = stopping
-      ? { nowMs, nowSec: replayStopSeconds, scheduledSec: replayStopSeconds }
-      : { nowMs, nowSec, scheduledSec: tempoClock.chartSecondsAt(clock.scheduledMs()) };
+    const tick: PlayTick =
+      stopAt !== undefined && nowSec >= stopAt
+        ? { nowMs, nowSec: stopAt, scheduledSec: stopAt }
+        : { nowMs, nowSec, scheduledSec: tempoClock.chartSecondsAt(clock.scheduledMs()) };
     const anchor = session.reversalAnchor;
+    let completesAtReversal = false;
+    const clockMs = Math.floor(tick.nowSec * 1000);
     if (
       !session.replay &&
       anchor &&
-      tick.nowSec > session.resolvedChart.reversal!.seconds &&
+      clockMs > session.resolvedChart.reversal!.seconds * 1000 &&
       !Number.isFinite(anchor.seconds)
     ) {
       // The pump fires on the first tick strictly past the event. Store its observed clock in replay precision.
       anchor.seconds = Math.round(tick.nowSec * 1e6) / 1e6;
       anchor.beat = beatAtSeconds(anchor.seconds);
+      // LR2 checks for exhaustion and song_runtime here, before subsequent ticks freeze the pump.
+      completesAtReversal = session.reversalEndSeconds !== undefined && clockMs > session.reversalEndSeconds * 1000;
     }
     judge.beforeAudio?.(tick);
     tracer.flushUntil(tick.nowSec);
@@ -232,12 +248,17 @@ async function playChart(
 
     // A play that ends on failure stops the moment its gauge empties.
     if (judge.isClosed()) {
-      failed = true;
+      end = 'failed';
       break;
     }
     if (stopping) {
       controls.interrupt('escape', tick.nowSec);
-      return false;
+      return 'complete';
+    }
+    if (completesAtReversal || (recordedCompletion !== undefined && tick.nowSec >= recordedCompletion)) {
+      end = 'reversal';
+      lastFrameSeconds = anchor!.seconds;
+      break;
     }
     const safeNowSeconds = Math.max(0, judge.judgedThroughSeconds(tick)) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
     if (!waitsForExit && endsWithChart && judge.isSettled() && safeNowSeconds >= totalSeconds) {
@@ -247,19 +268,19 @@ async function playChart(
     await waitPreciseOrInput(TUI_FRAME_INTERVAL_MS, wakeUp);
   }
 
-  if (waitsForExit && !failed && hold?.signal.aborted) {
+  if (waitsForExit && end === 'complete' && hold?.signal.aborted) {
     // The browser releases its hold when the player leaves a stage with every note judged.
     controls.interrupt('escape', judge.settledThroughSeconds());
-    return false;
+    return 'complete';
   }
   judge.beforeFinish?.();
-  tracer.flushUntil(totalSeconds);
+  tracer.flushUntil(end === 'reversal' ? lastFrameSeconds! : totalSeconds);
   judge.finish();
   // A closing frame shows the state `finish` left, at the time of the loop's last frame — past the chart's end, or
   // where the play failed — so the time a host is shown never steps back.
   const endSeconds = lastFrameSeconds ?? totalSeconds;
   publishUIFrame(endSeconds, beatAtSeconds(endSeconds));
-  return failed;
+  return end;
 }
 
 /** Runs a play from its lead-in to its end, then closes its runtimes. */
@@ -273,17 +294,17 @@ export async function runPlayLoop(
   // pause or an ESC lands within ~1 ms instead of at the next 60 Hz tick (the judge timestamp itself comes from
   // `pressedAt`).
   const wakeUp = createInputWakeUp(session.inputSignals);
-  let endedOnFailure = false;
+  let ending: ChartEnding = 'complete';
   try {
     // The input runtime runs from the start of the lead-in, so ESC, pause and the other commands work during it.
     session.inputRuntime?.start();
     await waitOutLeadIn(session, controls, wakeUp);
     // An ESC (or a restart) during the lead-in ends the play before its chart starts.
     if (controls.interruptedReason === undefined) {
-      endedOnFailure = await playChart(session, judge, controls, wakeUp);
+      ending = await playChart(session, judge, controls, wakeUp);
     }
   } finally {
-    if (controls.interruptedReason !== undefined || endedOnFailure) {
+    if (controls.interruptedReason !== undefined || ending === 'failed') {
       await disposeAudioSessionSafely(session.audioSession);
     } else {
       await finalizeAudioSessionSafely(session.audioSession);
@@ -293,5 +314,9 @@ export async function runPlayLoop(
     await settleMaybeAsyncWithTimeout(session.uiRuntime?.stop(), 300);
     await settleMaybeAsyncWithTimeout(session.uiRuntime?.dispose(), 300);
   }
-  return { interruptedReason: controls.interruptedReason, endedOnFailure };
+  return {
+    interruptedReason: controls.interruptedReason,
+    endedOnFailure: ending === 'failed',
+    completedAtReversal: ending === 'reversal',
+  };
 }
