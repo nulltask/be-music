@@ -722,15 +722,14 @@ export const OPTIONS_HELP_JA = html`
           か、毎回送るかを選びます。コースは常に送ります。
         </dd>
         <dt>Account</dt>
-        <dd>Leaderboard にログイン中のアカウント (読み取り専用)。</dd>
-        <dt>Keep this account</dt>
         <dd>
-          ゲストアカウントをパスキー・Google・Discord で保存します。ほかの端末からログインでき、ランキングにも載ります。
+          タブの先頭にあります。ログインしていないときはログインフォームで、パスキー・Google・Discord
+          のどれかでログインするか、新しいアカウントを登録します。ゲストアカウントでは<strong
+            >このアカウントを保存</strong
+          >
+          を表示し、パスキー・Google・Discord
+          で保存すると、ほかの端末からログインでき、ランキングにも載ります。ログイン中はアカウントとそのページへのリンク、<strong>ログアウト</strong>を表示します。
         </dd>
-        <dt>Sign in</dt>
-        <dd>Accounts から Leaderboard にログインします。</dd>
-        <dt>Sign out</dt>
-        <dd>Leaderboard からログアウトします。</dd>
       </dl>
     </section>
     <section class="help-menu-folder">

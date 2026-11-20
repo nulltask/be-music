@@ -749,16 +749,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
             play. Course runs are always sent.
           </dd>
           <dt>Account</dt>
-          <dd>Who is signed in to the Leaderboard (read-only).</dd>
-          <dt>Keep this account</dt>
           <dd>
-            Keeps a guest account with a passkey, Google or Discord, so other devices can sign in to it and rankings
-            list it.
+            At the top of the tab. Signed out, it is a sign-in form: a passkey, Google or Discord, and Sign up for a new
+            account. A guest account shows <strong>Keep this account</strong>, which keeps it with a passkey, Google or
+            Discord so other devices can sign in to it and rankings list it. Signed in, it shows the account, a link to
+            its page and <strong>Sign out</strong>.
           </dd>
-          <dt>Sign in</dt>
-          <dd>Signs in to the Leaderboard through Accounts.</dd>
-          <dt>Sign out</dt>
-          <dd>Signs out of the Leaderboard.</dd>
         </dl>
       </section>
       <section class="help-menu-folder">

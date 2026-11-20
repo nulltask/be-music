@@ -60,7 +60,7 @@
 
 デプロイ先の Worker は `/api/*` と `/leaderboard/*` を Service Binding 経由で Leaderboard の Worker に転送します。`pnpm player:web` を使う場合は、`pnpm --filter @be-music/app-leaderboard run dev` で起動したローカルの Leaderboard か、`LEADERBOARD_DEV_ORIGIN` で指定した先にプロキシします。
 
-ゲストアカウントを引き継ぐには「Keep this account」を開き、パスキーを登録するか Google または Discord を連携します。引き継いだプレイはアカウントのユーザー名で一覧に表示されます。「Sign in」から別のアカウントにログインすると、このブラウザーのゲストプレイがそのアカウントに移ります。
+ゲストアカウントを引き継ぐには Options → Leaderboard の「このアカウントを保存」を選び、パスキーを登録するか Google または Discord を連携します。引き継いだプレイはアカウントのユーザー名で一覧に表示されます。パスキー・Google・Discord で別のアカウントにログインすると、このブラウザーのゲストプレイがそのアカウントに移ります。
 
 ### BGA 動画の transcode
 

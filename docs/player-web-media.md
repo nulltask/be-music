@@ -61,7 +61,7 @@ When the result scene mounts, the browser rebuilds the fingerprint documents fro
 
 The deployed Worker forwards `/api/*` and `/leaderboard/*` to the Leaderboard Worker through a Service Binding. With `pnpm player:web`, start the local Leaderboard with `pnpm --filter @be-music/app-leaderboard run dev` or set `LEADERBOARD_DEV_ORIGIN` to choose the proxy destination.
 
-To keep a guest account, open **Keep this account** and register a passkey or link Google or Discord. The Leaderboard then lists the plays under the account’s handle. **Sign in** opens Accounts and moves the guest plays from this browser to the account you sign into.
+To keep a guest account, choose **Keep this account** in Options → Leaderboard and register a passkey or link Google or Discord. The Leaderboard then lists the plays under the account’s handle. **Sign in** opens Accounts and moves the guest plays from this browser to the account you sign into.
 
 ### BGA video transcode
 

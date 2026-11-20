@@ -7,6 +7,7 @@ import {
   describeAccountChip,
   describeLeaderboardAccount,
   describeProfileError,
+  describeLeaderboardAccountForm,
   describeStartAccount,
   saveProfile,
   shouldTurnOnSubmitting,
@@ -263,5 +264,31 @@ describe('start account placeholder', () => {
     expect(guest.actions).toEqual(['keep', 'sign-in', 'sign-out']);
     expect(guest.hint).toBe(describeStartAccount({ handle: 'g', displayName: 'G', anonymous: true, passkeys: 0 }).hint);
     expect(startAccountPlaceholder('signed-in')).toEqual({ actions: ['sign-out'], hint: undefined });
+  });
+});
+
+describe('describeLeaderboardAccountForm', () => {
+  test('is a sign-in form while signed out: a passkey first, then Google and Discord, and signing up', () => {
+    expect(describeLeaderboardAccountForm(undefined)).toMatchObject({
+      state: 'signed-out',
+      title: 'Sign in',
+      actions: ['sign-in-passkey', 'sign-in-google', 'sign-in-discord', 'sign-up'],
+    });
+  });
+
+  test('offers a guest keeping the account first, signing in to another, and signing out', () => {
+    expect(
+      describeLeaderboardAccountForm({ handle: 'guest_1', displayName: 'Guest', anonymous: true, passkeys: 0 }),
+    ).toMatchObject({
+      state: 'anonymous',
+      title: undefined,
+      actions: ['keep', 'sign-in-passkey', 'sign-in-google', 'sign-in-discord', 'sign-out'],
+    });
+  });
+
+  test('shows a kept account with signing out only', () => {
+    expect(
+      describeLeaderboardAccountForm({ handle: 'taro', displayName: 'Taro', anonymous: false, passkeys: 1 }),
+    ).toMatchObject({ state: 'signed-in', actions: ['sign-out'] });
   });
 });

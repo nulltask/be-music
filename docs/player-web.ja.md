@@ -111,7 +111,7 @@ Play はページが表示されてから Leaderboard のアカウントを読�
 
 - **ヘッダー:** アカウントの操作部は、アバターの円、ラベルの上限 12ch の名前の線（`sm` 幅以上）、シェブロンです（`accountLoading`）。アカウントが分かるまではリンクではないので、実はログインしているプレイヤーがクリックしてサインインが開くことはありません。
 - **スタート画面:** アカウントの注記は線で、注記の続きと操作ボタンは本物の文字のまま、読めない shimmer で描きます。このブラウザで前回アカウントを読んだときの形（`be-music.start-account-state`。初回や要求が失敗したときはサインアウトとみなします）を取るので、戻ってきたプレイヤーのカードは高さが変わりません。
-- **Options → Leaderboard → Account:** テキストエリアは 1 行のアカウントと同じ高さの空行を持ち、その上で線が shimmer し、アカウントが届くまで `aria-busy` です。
+- **Options → Leaderboard:** アカウントのフォームは、アカウントが届くまでアバターと 1 行の線が shimmer します。
 - **リプレイスロットのカード:** IndexedDB からスロットを読み終えるまで、リザルトの空のスロットは「Empty」の代わりに線を出します。
 
 読み込み中の各領域は `role="status"` と `aria-busy` を持つグループで、隠れたテキストが何を読み込んでいるか（「アカウントを確認しています…」）を伝えます。`prefers-reduced-motion` のときは shimmer を止め、静止した面だけを出します。
@@ -137,7 +137,7 @@ Play はページが表示されてから Leaderboard のアカウントを読�
 - **Library & records**: Reload folders（選曲画面の F8 / F2）、Music / Skin ZIP URL と Load from URLs（`?music=` / `?skin=` と同じ読み込みをその場で実行）、Auto-save replays、Clear best records、Local data…、**Replay slots** フォルダー（スロットごとの自動保存の条件。[replay.ja.md](./replay-browser.ja.md#リプレイスロット) を参照）。
 - **Select**（Library タブ）: Sort、Key filter、Difficulty filter。標準と LR2 の選曲画面の一覧を決め、LR2 スキンのソートとフィルターのボタンでも変わります。beatoraja の選曲画面は MODE と SORT の選択を自分で持ちます。プレイでは読まないので、プレイ中も変えられます。
 - **Capture**: ● Record gameplay video、Video format（既定は MP4 · H.264。MP4 / WebM と H.264 / H.265 / AV1 / VP9 / VP8 から選択）、📸 Screenshot。BGA の枠に映したカメラの映像も記録されます。
-- **Leaderboard**: Submit to Leaderboard、Submit when、Account（ログイン中の handle、または「Not signed in」。読み込み中は shimmer の線）、Keep this account、Sign in、Sign out。
+- **Leaderboard**: 先頭にアカウントをログインフォームとして置き、その下に Submit to Leaderboard と Submit when があります。ログインしていないときは、パスキー（先頭）、Google、Discord でログインでき、登録もできます。ゲストアカウントでは、名前とゲストのバッジ、**このアカウントを保存**、同じログイン方法、マイページ、ログアウトを表示します。保存したアカウントでは、アバター・表示名・ユーザー名、マイページ、ログアウトを表示します。ボタンはログインダイアログと同じ `@be-music/service-web-theme/client` の共通部品です。
 - **Advanced**（Advanced タブ）: CPU workers、Auto pause on blur、FPS（500 ms ごとに計測し、60 サンプルを保持するネイティブの履歴グラフ）、**BGA video transcode** フォルダー、Reset settings and reload（ベストレコード以外の プレイヤーの保存設定をすべて消去して再読み込み）。
 
 **View → Show invisible notes** は既定で無効です。有効にすると、beatoraja を含むすべてのスキンで不可視のキーサウンドオブジェクトを表示します。プレイ中にも切り替えられます。この確認用マーカーは、キーサウンドの再生、判定、スコアには影響しません。

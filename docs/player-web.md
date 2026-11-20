@@ -112,7 +112,7 @@ The player reads the Leaderboard account after the page is up, so the parts that
 
 - **Header:** the account control is an avatar circle, a name line at the label's 12ch cap (from the `sm` width up) and the chevron (`accountLoading`). It is not a link until the account is known, so a click cannot open sign-in for a player who turns out to be signed in.
 - **Start card:** the account note is a line, and the hint and the action buttons are drawn with their own text, shimmering and unreadable. They take the shape the card had the last time this browser read the account (`be-music.start-account-state`; a first visit, or a failed request, assumes signed out), so a returning player's card keeps its height.
-- **Options → Leaderboard → Account:** the text area holds one blank line, the height a one-line account takes, with a line shimmering over it, and is `aria-busy` until the account arrives.
+- **Options → Leaderboard:** the account form shows a shimmering avatar and line until the account arrives.
 - **Replay slots card:** before the slots have been read from IndexedDB, a result's empty slots show a line instead of "Empty".
 
 Each placeholder region is a `role="status"`, `aria-busy` group whose hidden text names what is loading ("Checking account…"). Under `prefers-reduced-motion` the shimmer stops and the placeholders stay a still surface.
@@ -138,7 +138,7 @@ The **Options** dialog opens from the header's Settings button (and, while the p
 - **Library & records**: Reload folders (the select screen's F8 / F2), Music / Skin ZIP URL with Load from URLs (the `?music=` / `?skin=` path on demand), Auto-save replays, Clear best records, Local data… and the **Replay slots** folder (each slot's auto-save rule, see [replay.md](./replay-browser.md#replay-slots)).
 - **Select** (the Library tab): Sort, Key filter, Difficulty filter. They shape the built-in and LR2 select screens' list, and an LR2 skin's sort and filter buttons change them too; the beatoraja select screen keeps its own MODE and SORT choices. A play does not read them, so they stay enabled during one.
 - **Capture**: ● Record gameplay video, Video format (MP4 · H.264 by default; MP4 or WebM with H.264 / H.265 / AV1 / VP9 / VP8), 📸 Screenshot. A camera shown in the BGA frame is recorded with it.
-- **Leaderboard**: Submit to Leaderboard, Submit when, Account (the signed-in handle, or "Not signed in"; a shimmering line while it is read), Keep this account, Sign in, and Sign out.
+- **Leaderboard**: the account as a sign-in form, then Submit to Leaderboard and Submit when. Signed out, the form signs in with a passkey (first), Google or Discord, and offers Sign up. A guest account shows its name with a guest badge, **Keep this account**, the same sign-in methods, its page and Sign out. A kept account shows its avatar, name and handle, its page and Sign out. The buttons are the shared `@be-music/service-web-theme/client` ones the sign-in dialog uses.
 - **Advanced** (the Advanced tab): CPU workers, Auto pause on blur, FPS (native history graph, sampled every 500 ms with 60 samples), the **BGA video transcode** folder, and Reset settings and reload, which clears every stored player setting except the best records.
 
 **View → Show invisible notes** is off by default. Enabling it shows hidden keysound objects in every skin family, including beatoraja; it can be toggled during play. The inspection markers do not affect keysound playback, judgment, or scoring.
