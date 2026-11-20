@@ -88,7 +88,8 @@ export function drawJudgements(
     const details = display.details ?? [];
     details.forEach((detail, index) => {
       const spread = details.length > 1 ? (index - (details.length - 1) / 2) * JUDGE_DETAIL_SPREAD : 0;
-      addHUDText(
+      // Tabular figures: the milliseconds keep their place as they change from hit to hit.
+      addHUDNumber(
         layer,
         detail.lane === undefined ? detail.text : `${JUDGE_DETAIL_LANES[detail.lane]} ${detail.text}`,
         display.x + spread,

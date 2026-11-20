@@ -35,6 +35,7 @@ import {
   css,
   drawSongInfoLayers,
   stat,
+  tabularText,
   text,
 } from './theme.ts';
 import { drawCabinetHUD } from './cabinet.ts';
@@ -317,7 +318,7 @@ function drawJudgement(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFram
     const detailY = sideY - (resolveLanePlayLabel(runtime, side.side) ? 44 : 22);
     details.forEach((detail, index) => {
       const spread = details.length > 1 ? (index - (details.length - 1) / 2) * JUDGE_DETAIL_SPREAD : 0;
-      text(
+      tabularText(
         ctx,
         detail.lane === undefined ? detail.text : `${JUDGE_DETAIL_LANES[detail.lane]} ${detail.text}`,
         x + spread,

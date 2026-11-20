@@ -396,6 +396,14 @@ export const OPTIONS_HELP_JA = html`
         <dd>プレイ中にスキンのスコアグラフを表示します。</dd>
         <dt>BPM GUIDE (beatoraja)</dt>
         <dd>これから来る BPM の変化をレーン上に表示します。</dd>
+        <dt>Guide: BPM</dt>
+        <dd>BPM GUIDE がオンの間、BPM の変化にラベルを付けます。既定はオンで、プレイ中も切り替えられます。</dd>
+        <dt>Guide: STOP</dt>
+        <dd>BPM GUIDE がオンの間、STOP に停止時間のラベルを付けます。既定はオンです。</dd>
+        <dt>Guide: SCROLL</dt>
+        <dd>BPM GUIDE がオンの間、<code>#SCROLL</code> の変化に倍率のラベルを付けます（Be-Music）。既定はオフです。</dd>
+        <dt>Guide: SPEED</dt>
+        <dd>BPM GUIDE がオンの間、<code>#SPEED</code> の変化に倍率のラベルを付けます（Be-Music）。既定はオフです。</dd>
         <dt>BPM change warning (AC)</dt>
         <dd>
           BPM が変わる 2 秒前から、レーン上の箱に
@@ -727,15 +735,14 @@ export const OPTIONS_HELP_JA = html`
           か、毎回送るかを選びます。コースは常に送ります。
         </dd>
         <dt>Account</dt>
-        <dd>Leaderboard にログイン中のアカウント (読み取り専用)。</dd>
-        <dt>Keep this account</dt>
         <dd>
-          ゲストアカウントをパスキー・Google・Discord で保存します。ほかの端末からログインでき、ランキングにも載ります。
+          タブの先頭にあります。ログインしていないときはログインフォームで、パスキー・Google・Discord
+          のどれかでログインするか、新しいアカウントを登録します。ゲストアカウントでは<strong
+            >このアカウントを保存</strong
+          >
+          を表示し、パスキー・Google・Discord
+          で保存すると、ほかの端末からログインでき、ランキングにも載ります。ログイン中はアカウントとそのページへのリンク、<strong>ログアウト</strong>を表示します。
         </dd>
-        <dt>Sign in</dt>
-        <dd>Accounts から Leaderboard にログインします。</dd>
-        <dt>Sign out</dt>
-        <dd>Leaderboard からログアウトします。</dd>
       </dl>
     </section>
     <section class="help-menu-folder">

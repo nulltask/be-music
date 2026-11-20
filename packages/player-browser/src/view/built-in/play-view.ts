@@ -85,6 +85,7 @@ export type BuiltInPlayViewOptions = Pick<
   | 'judgeTimingMs'
   | 'judgeTimingAutoAdjust'
   | 'bpmGuide'
+  | 'bpmGuideKinds'
   | 'autoPlay'
   | 'nonstop'
   | 'showInvisibleNotes'

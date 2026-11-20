@@ -6,6 +6,7 @@ import {
   type BeMusicSkin,
 } from '@be-music/player-skin-sdk';
 import { drawGameplay } from './gameplay.ts';
+import { FONT } from './theme.ts';
 import { PORTRAIT_SELECT_LAYOUT } from './layout.ts';
 import { drawResult } from './result.ts';
 import { SELECT_LAYOUT, SELECT_OUTRO_MS, drawSelect } from './select.ts';
@@ -32,7 +33,18 @@ export const plainSkin: BeMusicSkin = defineBeMusicSkin({
   // The 16:9 cabinet stage while the screen is wider than tall, the portrait one otherwise.
   stage: cabinetStage,
   portraitStage: tallStage,
-  gameplay: { draw: drawGameplay },
+  // Plain's ink with its line grey in faint stripes, and the line grey along the edge the notes come from.
+  gameplay: {
+    draw: drawGameplay,
+    laneCover: { color: 0x111114, stripeColor: 0x3a3a42, stripeAlpha: 0.5, edgeColor: 0x3a3a42 },
+    // Plain's system sans, in its note blue, highlight yellow, text white and danger red.
+    guideLabel: {
+      fontFamily: FONT,
+      fontWeight: '600',
+      fontSize: 11,
+      colors: { bpm: 0x6fdc8c, stop: 0xffd84d, scroll: 0x5b8cff, speed: 0xff4d5e },
+    },
+  },
   select: { layout: SELECT_LAYOUT, portraitLayout: PORTRAIT_SELECT_LAYOUT, outroMs: SELECT_OUTRO_MS, draw: drawSelect },
   result: { draw: drawResult },
 });

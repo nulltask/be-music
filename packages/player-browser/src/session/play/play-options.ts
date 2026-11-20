@@ -17,6 +17,7 @@ import type { GaugePick, RulesetId } from '@be-music/player-engine/ruleset';
 import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { GuideSound, ResolvedPlayChart } from '@be-music/player-engine';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
+import type { BPMGuideKinds } from '../../chart/bpm-guide.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { ControlKeyOverrides, ControlScheme } from '../controls/control-buttons.ts';
 import type { ControlActionOverrides } from '../controls/control-actions.ts';
@@ -145,6 +146,11 @@ export interface PlaySessionOptions {
   constantFadeMs?: number;
   onJudgeTimingChange?: (judgeTimingMs: number) => void;
   bpmGuide?: boolean;
+  /**
+   * Which labels BPM GUIDE shows (a viewing preference, followed live): BPM changes and STOPs, as beatoraja's guide, by
+   * default; `#SCROLL` and `#SPEED` changes are Be-Music's.
+   */
+  bpmGuideKinds?: BPMGuideKinds;
   /**
    * The automatic judge-timing adjustment of a manual play (default `'OFF'`), which moves {@link judgeTimingMs}:
    * beatoraja's calibration or LR2's ON / SILENT. LR2's SILENT also loads no keysounds, BGM or BGA and hides the judge

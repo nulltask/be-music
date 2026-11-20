@@ -17,6 +17,8 @@ import type {
   BeMusicGameplayFrame,
   BeMusicGameplayLayout,
   BeMusicGameplayRuntime,
+  BeMusicGuideLabelStyle,
+  BeMusicLaneCoverStyle,
   BeMusicLaneFrame,
   BeMusicLongNote,
   BeMusicMine,
@@ -256,6 +258,10 @@ export class BeMusicGameplayBinding {
   readonly drawsMines: boolean;
   /** Whether the skin draws the lane covers from `runtime.laneCovers`; when false the scene draws them itself. */
   readonly drawsLaneCover: boolean;
+  /** How the scene draws the BPM GUIDE labels over the skin, when the skin gives a look (`gameplay.guideLabel`). */
+  readonly guideLabelStyle: BeMusicGuideLabelStyle | undefined;
+  /** How the scene paints its lane covers for the skin, when the skin gives a look (`gameplay.laneCover`). */
+  readonly laneCoverStyle: BeMusicLaneCoverStyle | undefined;
   /** Whether the skin draws measure lines from the frame; when false the scene draws them itself. */
   readonly drawsMeasureLines: boolean;
   /** Whether the skin composites the BGA from the frame; when false the scene shows it behind the skin. */
@@ -298,6 +304,8 @@ export class BeMusicGameplayBinding {
     this.bombDurationMs = skin.gameplay.bombDurationMs ?? 300;
     this.drawsMines = skin.gameplay.drawsMines === true;
     this.drawsLaneCover = skin.gameplay.drawsLaneCover === true;
+    this.guideLabelStyle = skin.gameplay.guideLabel;
+    this.laneCoverStyle = skin.gameplay.laneCover;
     this.drawsMeasureLines = skin.gameplay.drawsMeasureLines === true;
     this.drawsBGA = skin.gameplay.drawsBGA === true;
     this.settings = resolveBeMusicSkinSettings(skin, options.settings);

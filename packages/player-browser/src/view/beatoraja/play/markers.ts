@@ -135,6 +135,8 @@ export class BeatorajaMarkerLayer {
     markers: BeatorajaMarkerBeats;
     /** Source BPM GUIDE controls both BPM-change and STOP lines. */
     bpmGuide?: boolean;
+    /** Which of BPM GUIDE's lines to show; both BPM-change and STOP lines by default. */
+    bpmGuideKinds?: { readonly bpm: boolean; readonly stop: boolean };
     /**
      * Lane distance from the playhead to a beat, in beats at scroll rate 1 — the note layer's `#SCROLL` / `#SPEED`
      * integrator, so bar lines move with the notes. Defaults to the beat difference.
@@ -166,8 +168,16 @@ export class BeatorajaMarkerLayer {
     let used = 0;
     const ranges: ReadonlyArray<{ kind: MarkerKindData[]; beats: ReadonlyArray<number>; timed?: boolean }> = [
       { kind: this.kindData.group, beats: args.markers.group },
-      { kind: this.kindData.bpm, beats: args.bpmGuide ? args.markers.bpm : [], timed: true },
-      { kind: this.kindData.stop, beats: args.bpmGuide ? args.markers.stop : [], timed: true },
+      {
+        kind: this.kindData.bpm,
+        beats: args.bpmGuide && args.bpmGuideKinds?.bpm !== false ? args.markers.bpm : [],
+        timed: true,
+      },
+      {
+        kind: this.kindData.stop,
+        beats: args.bpmGuide && args.bpmGuideKinds?.stop !== false ? args.markers.stop : [],
+        timed: true,
+      },
       { kind: this.kindData.time, beats: args.markers.time },
     ];
     for (const { kind, beats, timed } of ranges) {

@@ -162,9 +162,11 @@ By default the player draws a few things over (or behind) your canvas, so a skin
 | Flag                | You draw from        | Without it                                                              |
 | ------------------- | -------------------- | ----------------------------------------------------------------------- |
 | `drawsMines`        | `frame.mines`        | The player draws red bars with yellow caution stripes over your canvas. |
-| `drawsLaneCover`    | `runtime.laneCovers` | The player draws its SUDDEN+ / HIDDEN+ covers over your canvas.         |
+| `drawsLaneCover`    | `runtime.laneCovers` | The player draws its SUDDEN+ / HIDDEN+ / LIFT covers over your canvas.  |
 | `drawsMeasureLines` | `frame.measureLines` | The player draws its own measure lines.                                 |
 | `drawsBGA`          | `frame.bga`          | The player shows the BGA behind your canvas, in `layout.bga`.           |
+
+Without `drawsLaneCover`, the player paints opaque covers, with faint diagonal stripes that move with each cover's inner edge (the one facing the notes). Set `gameplay.laneCover` (`BeMusicLaneCoverStyle`) to match your skin: `color` fills the cover, `stripeColor` at `stripeAlpha` draws the stripes, and `edgeColor` (at `edgeAlpha`, default 1) draws a line along the inner edge. Without it the covers are black with faint grey stripes.
 
 Every flag defaults to `false`, and the frame field it unlocks stays empty (or `undefined`) until you set it, so existing skins keep their look. With `drawsBGA`, the `layer` and `layer2` images arrive with pure black already turned transparent (the BMS layer convention; draw 07 before 0A) while `base` and `poor` retain black pixels: draw them with plain alpha blending, and while `poorActive`, draw `poor` over the normal layers when `poorOverlays` is true (`#POORBGA 1`), otherwise replace them. Mode 2 supplies no POOR image. A bmson layer (its spec keeps black opaque) and a video layer arrive as authored. The images are `ImageBitmap`s or, for a video BGA, the playing `<video>` element; a `#BGA` sub-region arrives as its own cropped image (missing for the first frame or two while it is cut). The host applies A1–A4 RGB multipliers to the images and supplies plane alpha through `opacity`. Input-bound A5 SWBGA arrives as the last entry in `stacks`, above normal and POOR planes, with its transparent-color key already applied. Draw these stacks in order. Keyed video images are live canvases; whole movies fill the BGA rect while aliases keep their authored placement.
 

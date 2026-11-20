@@ -130,6 +130,27 @@ describe('reduceLaneCovers', () => {
     expect(next[0]).toBe(sides[0]);
   });
 
+  test('raises a LIFT switched off from the judgement line, not from the height it keeps', () => {
+    const off = cover({ lift: 0.1, liftOn: false });
+    expect(resolveLaneCover(off).lift).toBe(0);
+    const [raised] = reduceLaneCovers([off], { type: 'cover-adjust', part: 'lift', delta: 0.01 });
+    expect(raised).toMatchObject({ lift: 0.01, liftOn: true });
+    expect(resolveLaneCover(raised!).lift).toBe(0.01);
+    // Lowering a LIFT that shows none changes nothing; it keeps its height for the toggle.
+    const lowered = [off];
+    expect(reduceLaneCovers(lowered, { type: 'cover-adjust', part: 'lift', delta: -0.01 })).toBe(lowered);
+    // A LIFT on steps from its height as before.
+    expect(
+      reduceLaneCovers([cover({ lift: 0.1, liftOn: true })], { type: 'cover-adjust', part: 'lift', delta: 0.05 })[0],
+    ).toMatchObject({ lift: 0.15, liftOn: true });
+  });
+
+  test('raises a FLOATING LIFT switched off from the judgement line', () => {
+    const off = cover({ absolute: true, sudden: 0.3, lift: 0.1, liftOn: false });
+    const [raised] = reduceLaneCovers([off], { type: 'cover-adjust', part: 'lift', delta: 10 / 723 });
+    expect(raised).toMatchObject({ lift: 10 / 723, liftOn: true });
+  });
+
   test('changes nothing while locked or for a step that is not a number', () => {
     expect(reduceLaneCovers(sides, { type: 'cover-adjust', part: 'sudden', delta: 0.1 }, true)).toBe(sides);
     expect(reduceLaneCovers(sides, { type: 'cover-adjust', part: 'sudden', delta: Number.NaN })).toBe(sides);
