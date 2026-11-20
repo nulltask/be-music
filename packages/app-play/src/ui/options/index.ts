@@ -524,8 +524,6 @@ export class OptionsDialog {
       rows: 3,
     });
     this.statusController.element.classList.add('status-row');
-    library.addButton({ title: 'Open folder' }).on('click', () => this.guiState['openFolder']());
-    library.addButton({ title: 'Open files (ZIP / replay)' }).on('click', () => this.guiState['openFiles']());
     this.buildLibraryFolder(addSection(library, OPTION_FOLDERS.library), addFolder);
     const select = addSection(library, OPTION_FOLDERS.select);
     this.buildCourseFolder(addSection(library, OPTION_FOLDERS.course));

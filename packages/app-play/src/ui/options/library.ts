@@ -5,6 +5,7 @@ import { storeChartBestRecords } from '../../chart-best-records.ts';
 import { LocalDataPanel } from '../../local-data-panel.ts';
 import { parseURLMediaParams } from '../../url-load.ts';
 import { mountBemuseServerManager } from './bemuse-servers.ts';
+import { mountCourseTableManager } from './course-tables.ts';
 import type { ReplayAutoSaveRule } from '../../services/replay-slots.ts';
 import { OPTION_FOLDERS, type OptionFolderSpec } from './folders.ts';
 import type { OptionsDialog } from './index.ts';
@@ -32,25 +33,41 @@ export function buildLibraryFolder(
   library: OptionContainer,
   addFolder: (parent: OptionContainer, folder: OptionFolderSpec) => OptionContainer,
 ): void {
+  // Where charts come from, one tab each: folders and files on this device, Bemuse music servers, difficulty tables.
+  const sources = library.addTab({
+    pages: [{ title: 'Local folders' }, { title: 'Bemuse servers' }, { title: 'Difficulty tables' }],
+  });
+  const [local, bemuse, tables] = sources.pages;
+  if (local === undefined || bemuse === undefined || tables === undefined) return;
+  local.addButton({ title: 'Open folder' }).on('click', () => this.guiState['openFolder']());
+  local.addButton({ title: 'Open files (ZIP / replay)' }).on('click', () => this.guiState['openFiles']());
   const folderManager = document.createElement('div');
   folderManager.dataset.rememberedFolderManager = '';
-  library.addElement(folderManager);
+  local.addElement(folderManager);
+  // The select screen's F8 / F2, for a player without a keyboard: the folders, Bemuse servers and tables read again.
+  local.addButton({ title: 'Reload folders' }).on('click', () => void this.library.reloadCharts());
   const bemuseServers = document.createElement('div');
-  library.addElement(bemuseServers);
+  bemuse.addElement(bemuseServers);
   mountBemuseServerManager(bemuseServers, {
     library: this.library,
     setStatus: (text) => this.setStatus(text),
     saveSettings: () => this.scheduleSettingsSave(),
   });
-  // The select screen's F8 / F2, for a player without a keyboard: the folders, Bemuse servers and tables read again.
-  library.addButton({ title: 'Reload folders' }).on('click', () => void this.library.reloadCharts());
   // Bemuse's own volume for each server song (its `replaygain`). Read as a play starts, so it is locked while one runs.
   this.trackPlayOption(
-    library.addBinding(this.guiState, 'bemuseReplayGain', { label: 'Bemuse ReplayGain' }).on('change', ({ value }) => {
+    bemuse.addBinding(this.guiState, 'bemuseReplayGain', { label: 'Bemuse ReplayGain' }).on('change', ({ value }) => {
       this.guiState.bemuseReplayGain = value;
       this.library.refreshBemuseReplayGain();
     }),
   );
+  // The difficulty tables whose courses are listed: remembered, and imported again on load.
+  const courseTables = document.createElement('div');
+  tables.addElement(courseTables);
+  mountCourseTableManager(courseTables, {
+    library: this.library,
+    setStatus: (text) => this.setStatus(text),
+    saveSettings: () => this.scheduleSettingsSave(),
+  });
 
   const urlParams = parseURLMediaParams(window.location.href);
   const urls = {
