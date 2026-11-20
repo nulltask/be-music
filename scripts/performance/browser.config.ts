@@ -26,7 +26,8 @@ export default defineConfig({
     // `PERF_CHANNEL=chrome` measures the installed Chrome instead of Playwright's Chromium build.
     ...(process.env.PERF_CHANNEL ? { channel: process.env.PERF_CHANNEL } : {}),
     viewport: perfViewport(process.env.PERF_VIEWPORT),
-    trace: 'retain-on-failure',
+    // Playwright's DOM snapshots on every input can dominate selection CPU and allocation profiles.
+    trace: 'off',
   },
   webServer: {
     ...server,

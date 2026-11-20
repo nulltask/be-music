@@ -4,7 +4,7 @@ import {
   type BeMusicGameplayRuntime,
   type BeMusicRect,
 } from '@be-music/player-skin-sdk';
-import type { Container, Graphics } from 'pixi.js';
+import { Texture, type Container, type Graphics } from 'pixi.js';
 import { addHUDNumber, type ChildPool } from '../pixi-kit/index.ts';
 import { addSynesthesiaHUDText as addHUDText } from './figures.ts';
 import { drawFrame } from './draw.ts';
@@ -109,20 +109,26 @@ export function drawGaugeCells(graphics: Graphics, state: GaugeState, groove: Be
       .rect(groove.x, barY - 3, lit * stride, barH + 6)
       .fill({ color: cleared ? SYN_EMBER : SYN_CYAN, alpha: 0.14 });
   }
-  for (let cell = 0; cell < cells; cell += 1) {
-    const x = groove.x + cell * stride;
-    if (cell >= lit) {
-      graphics.rect(x, barY, stride - 1, barH).fill({ color: SYN_DIM, alpha: 0.18 });
-      continue;
+  // Every bead is a flat quad. Emit it directly instead of building and triangulating a separate filled path.
+  const cellWidth = stride - 1;
+  if (cellWidth !== 0 && barH !== 0) {
+    graphics.save().setFillStyle({ alpha: 0.95 });
+    for (let cell = 0; cell < cells; cell += 1) {
+      const x = groove.x + cell * stride;
+      if (cell === lit) graphics.setFillStyle({ alpha: 0.18 });
+      if (cell >= lit) {
+        graphics.texture(Texture.WHITE, SYN_DIM, x, barY, cellWidth, barH);
+      } else if (cell === lit - 1) {
+        graphics.setFillStyle({ alpha: flicker }).texture(Texture.WHITE, SYN_WHITE, x, barY, cellWidth, barH);
+      } else {
+        const color =
+          survival || cell >= clearCell
+            ? emberColor(0.4 + (0.55 * (cell - clearCell)) / Math.max(1, cells - clearCell))
+            : hsvToHex(0.58 - (cell / cells) * 0.04, 0.72, 1);
+        graphics.texture(Texture.WHITE, color, x, barY, cellWidth, barH);
+      }
     }
-    const hot = survival || cell >= clearCell;
-    // Below the clear line the cells run electric blue; past it they catch fire, ember → gold.
-    const color = hot
-      ? emberColor(0.4 + (0.55 * (cell - clearCell)) / Math.max(1, cells - clearCell))
-      : hsvToHex(0.58 - (cell / cells) * 0.04, 0.72, 1);
-    graphics
-      .rect(x, barY, stride - 1, barH)
-      .fill({ color: cell === lit - 1 ? SYN_WHITE : color, alpha: cell === lit - 1 ? flicker : 0.95 });
+    graphics.restore();
   }
   if (!survival) {
     const x = groove.x + clearCell * stride - 1;

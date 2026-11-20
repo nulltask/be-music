@@ -35,6 +35,22 @@ describe('SpectrumHistory', () => {
     expect(history.sample(1, TICK / 2)).toBeCloseTo(0.5, 6);
   });
 
+  it('samples a whole row at the same depth as individual points across the floor', () => {
+    const history = new SpectrumHistory(4, 3);
+    for (let i = 0; i < 5; i++) history.push([i / 8, 1 - i / 8, i / 16, 1], TICK);
+    const levels = new Float64Array(history.bands);
+    for (const age of [-TICK, 0, TICK / 2, 2.5 * TICK, 3 * TICK]) {
+      history.sampleRow(age, levels);
+      for (let i = 0; i < 13; i++) {
+        const band = i / 4;
+        const low = Math.floor(band);
+        const level = levels[low]!;
+        const high = levels[Math.min(low + 1, history.bands - 1)]!;
+        expect(level + (high - level) * (band - low)).toBeCloseTo(history.sample(i / 12, age), 12);
+      }
+    }
+  });
+
   it('writes one snapshot per elapsed tick and carries the remainder', () => {
     const history = new SpectrumHistory(1, 10);
     history.push([1], TICK * 0.6);

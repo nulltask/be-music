@@ -54,7 +54,6 @@ import {
   SpectrumHistory,
   floorRowStep,
   spectrumLevels,
-  spectrumRise,
   SPECTRUM_WAVE_SPEED,
 } from './spectrum-floor.ts';
 import {
@@ -641,7 +640,7 @@ function drawFloor(
     const grainAlpha = (size * size * 0.8) / (grainCount * grainSize * grainSize);
     const lz = z - camera.z;
     const worldZ = z + distance;
-    const age = z / SPECTRUM_WAVE_SPEED;
+    if (!silent) spectrum.sampleRow(z / SPECTRUM_WAVE_SPEED, FLOOR_LEVELS);
     // Near rows get more points, so they read as continuous waveforms.
     const step = floorRowStep(z, focal, FLOOR_SCREEN_GAP);
     for (let x = -1500; x <= 1500; x += step) {
@@ -653,7 +652,14 @@ function drawFloor(
       if (groundDepth <= 1e-3) continue;
       const groundX = centerX + (x1 * focal) / groundDepth;
       if (groundX < -4 || groundX > width + 4) continue;
-      const ridge = silent ? 0 : SPECTRUM_RIDGE_HEIGHT * spectrum.sample(groundX / width, age) ** 1.5;
+      let ridge = 0;
+      if (!silent) {
+        const band = Math.max(0, Math.min(1, groundX / width)) * (FLOOR_LEVELS.length - 1);
+        const low = Math.floor(band);
+        const level = FLOOR_LEVELS[low]!;
+        const high = FLOOR_LEVELS[Math.min(low + 1, FLOOR_LEVELS.length - 1)]!;
+        ridge = SPECTRUM_RIDGE_HEIGHT * (level + (high - level) * (band - low)) ** 1.5;
+      }
       const ly = groundY - ridge - floorRise(x, worldZ, seconds, FLOOR_GROUND);
       const y2 = ly * cosPitch - z1 * sinPitch;
       const depth = focal + ly * sinPitch + z1 * cosPitch;
@@ -668,21 +674,14 @@ function drawFloor(
       // The batch drops what rounds to no eighth of alpha.
       if (lit < 1 / 16) continue;
       const pointAlpha = Math.min(1, lit * grainAlpha);
-      for (let grain = 0; grain < grainCount; grain += 1) {
-        points.point(
-          px + GRAIN_OFFSETS[grain * 2]! * size,
-          py + GRAIN_OFFSETS[grain * 2 + 1]! * size,
-          grainSize,
-          color,
-          pointAlpha,
-        );
-      }
+      points.cluster(px, py, GRAIN_OFFSETS, grainCount, size, grainSize, color, pointAlpha);
     }
   }
   sharedShapeBatch.flush();
 }
 
-/** Scratch grains of a floor row. */
+/** Spectrum band levels at the depth of the current floor row. */
+const FLOOR_LEVELS = new Float64Array(AUDIO_BAND_COUNT);
 const FLOOR_GRAINS: Grains = { count: 0, size: 0, alpha: 0 };
 /** Scratch buffer for clipped floor lines (`x0, y0, x1, y1` quads), reused every frame. */
 const FLOOR_PIECES: number[] = [];

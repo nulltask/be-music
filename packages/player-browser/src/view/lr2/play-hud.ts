@@ -208,16 +208,22 @@ export function renderGrooveGaugeElement(
   }
 
   const beads = resolveGrooveGaugeBeads(percent, { survivalGauge: options.survivalGauge });
+  let previousCell = -1;
+  let cellTexture: Texture | undefined;
   for (const { unitIndex, cellOffset } of beads) {
     const cellIndex = frameIndex * 4 + cellOffset;
-    const cellX = cellIndex % divx;
-    const cellY = Math.floor(cellIndex / divx);
-    const cellTexture = createCroppedTexture(baseTexture, {
-      x: gauge.source.x + cellWidth * cellX,
-      y: gauge.source.y + cellHeight * cellY,
-      w: cellWidth,
-      h: cellHeight,
-    });
+    // Adjacent beads in a lit or unlit run all use the same crop.
+    if (cellIndex !== previousCell) {
+      previousCell = cellIndex;
+      const cellX = cellIndex % divx;
+      const cellY = Math.floor(cellIndex / divx);
+      cellTexture = createCroppedTexture(baseTexture, {
+        x: gauge.source.x + cellWidth * cellX,
+        y: gauge.source.y + cellHeight * cellY,
+        w: cellWidth,
+        h: cellHeight,
+      });
+    }
     if (!cellTexture) {
       continue;
     }

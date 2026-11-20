@@ -168,6 +168,51 @@ describe('createWebInputRuntime', () => {
     ]);
   });
 
+  test('polls only while a supported gamepad is connected', () => {
+    vi.useFakeTimers();
+    const gamepadTarget = new EventTarget();
+    vi.stubGlobal('window', gamepadTarget);
+    const getGamepads = vi.fn<() => unknown[]>().mockReturnValue([]);
+    vi.stubGlobal('navigator', { getGamepads });
+    const inputSignals = createPlayerInputSignalBus();
+    const runtime = createWebInputRuntime({
+      inputSignals,
+      inputTokenToChannels: new Map([['s', ['13']]]),
+      target: makeMockTarget().target,
+    });
+    try {
+      runtime.start();
+      vi.advanceTimersByTime(20);
+      expect(getGamepads).toHaveBeenCalledTimes(1);
+
+      getGamepads.mockReturnValue([
+        {
+          id: 'Standard Gamepad',
+          index: 0,
+          mapping: 'standard',
+          buttons: [
+            { pressed: false, value: 0 },
+            { pressed: false, value: 0 },
+            { pressed: true, value: 1 },
+          ],
+        },
+      ]);
+      gamepadTarget.dispatchEvent(new Event('gamepadconnected'));
+      vi.advanceTimersByTime(4);
+      expect(getGamepads).toHaveBeenCalledTimes(3);
+      expect(inputSignals.drainCommands().map(({ kind }) => kind)).toEqual(['lane-input', 'kitty-state']);
+
+      getGamepads.mockReturnValue([]);
+      gamepadTarget.dispatchEvent(new Event('gamepaddisconnected'));
+      vi.advanceTimersByTime(20);
+      expect(getGamepads).toHaveBeenCalledTimes(4);
+      expect(inputSignals.drainCommands()).toMatchObject([{ kind: 'kitty-state', releaseTokens: ['s'] }]);
+    } finally {
+      runtime.stop();
+      vi.useRealTimers();
+    }
+  });
+
   test('handles a raw Gamepad event before polling and ignores stale or duplicate snapshots', () => {
     vi.useFakeTimers();
     const window = new EventTarget();

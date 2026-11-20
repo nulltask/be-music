@@ -884,8 +884,11 @@ export class BeatorajaPlaySkinView {
     // (libGDX origin at canvas bottom-left) into Pixi Y-DOWN screen coords. The view owns this
     // value (`skin.h`) — callers don't need to thread it through.
     const canvasHeight = this.height;
+    // Entry renderers consume props synchronously. Keep the hidden sentinel separate from writable storage.
+    let scratch: ReturnType<typeof destinationToSpriteProps> | undefined;
     for (const entry of this.entries) {
-      const props = destinationToSpriteProps(entry.group, renderContext, canvasHeight);
+      const props = destinationToSpriteProps(entry.group, renderContext, canvasHeight, scratch);
+      if (props.visible) scratch = props;
       switch (entry.kind) {
         case 'image':
           this.images.updateImageEntry(entry, renderContext, props);
