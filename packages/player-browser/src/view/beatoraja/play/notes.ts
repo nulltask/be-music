@@ -144,6 +144,7 @@ export interface BeatorajaNoteClock {
   readonly currentSeconds: number;
   readonly currentBeat: number;
   readonly displayBeat?: number;
+  readonly reversalActivation?: TempoReversalPoint;
   /** The chart-authored display state (#843): HIDDEN, CHANGE-HS and CRAZY move, fade and size the notes. */
   readonly chartOptions?: ChartOptionState;
   /** The running combo, for the CHANGE-HS COMBO-* families. */
@@ -398,7 +399,7 @@ export class BeatorajaNoteLayer {
     const { window: drawWindow, distance } = resolveBeatorajaScrollPlacement({
       currentBeat: beatorajaDisplayScrollBeat(frame),
       nowSeconds: frame.currentSeconds,
-      reversal: this.reversal,
+      reversal: frame.reversalActivation,
       mapper: this.scrollMapper,
       laneBeats: pixelsPerBeat > 0 ? (judgementY - laneTopY) / pixelsPerBeat : 0,
       timelineBeats: this.timelineBeats,

@@ -296,7 +296,7 @@ export class BeatorajaPlayStage {
     const placement = resolveBeatorajaScrollPlacement({
       currentBeat,
       nowSeconds: noteClock.currentSeconds,
-      reversal: layout.reversal,
+      reversal: clock.reversalActivation,
       mapper: layout.scrollMapper,
       laneBeats: pixelsPerBeat > 0 ? laneHeight / pixelsPerBeat : 0,
       timelineBeats: layout.timelineBeats,

@@ -465,6 +465,9 @@ export interface PlayerPlayRecording {
    * rest of the chart. Read only in a replay ({@link replayInputs} set).
    */
   replayAbortedAtUs?: number;
+  /** A recorded ESC applied the LR2 end-of-stage gauge rule after the event pump froze. */
+  replayExitedReversal?: boolean;
+  replayReversalActivationUs?: number;
 }
 
 /**

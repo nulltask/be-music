@@ -56,10 +56,7 @@ The replay format records the information needed to compute judgments again. Its
    bakes DP FLIP into it — passes the source chart, or the chart fingerprint is omitted and the play fingerprint
    would describe the host's working copy. Either field is omitted when it cannot be computed; logs without them
    still parse.
-   `chart.reversalTimeUs` (present only for charts whose negative `#BPMxx` reverses the scroll) records the LR2
-   reverse-scroll reversal instant R: the simulator judges later inputs on the mirrored clock `2R - timeUs`, never
-   sweeps misses past R, and ends a run that leaves scorable notes unjudged with the gauge at 0, exactly as the
-   engine did (see [`bms-spec.md`](./bms-spec.md) "Negative BPM").
+   `chart.reversalTimeUs` records the event cutoff and `chart.reversalActivationUs` the update that mirrors judgment and drawing. Older replays use the event time for both. An exit after activation sets `play.exitedReversal` and drains the gauge when notes remain outstanding. Charts with negative initial BPM or fractional STOP definitions can produce different timing or fingerprints after this correction.
 2. **`inputs`** — every raw key press / release that reached a playable lane, as
    `{ seq, timeUs, action: 'down' | 'up', channels, source }`. `source` is required: it is the `id` of the physical
    input in the play's [input-source table](#input-sources) (`play.inputSources`), and it is authoritative — the judge

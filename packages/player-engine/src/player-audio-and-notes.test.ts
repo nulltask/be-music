@@ -118,7 +118,9 @@ describe('player', () => {
         },
         stopChannel: () => undefined,
       }),
-      createInputRuntime: createScheduledInputRuntime([]),
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 2100, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
     });
 
     // Pre-reversal note keysound + BGM fired; nothing behind the reversal did (including the epilogue flush).
@@ -169,7 +171,9 @@ describe('player', () => {
         },
         stopChannel: () => undefined,
       }),
-      createInputRuntime: createScheduledInputRuntime([]),
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 2100, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
     });
 
     // The 1 s note's keysound and the boundary BGM fired; the boundary note's keysound never did.

@@ -70,6 +70,7 @@ export function createPlayJudgeCore(
       // time on LR2's event pump freezes and presses are judged on the mirrored clock. The realtime audio streams are
       // already cut there (`collectRealtimeAudioTriggers` / `collectRealtimeAudioVolumeEvents`).
       reversalSeconds: session.resolvedChart.reversal?.seconds,
+      reversalAnchor: session.reversalAnchor,
       endOnFailure: session.endOnFailure,
       ...(practiceFromSeconds !== undefined ? { practiceFromSeconds } : {}),
     },

@@ -23,6 +23,17 @@ function createStopEvent(measure: number, numerator: number, denominator: number
 }
 
 describe('timeline', () => {
+  test('a signed initial BMS tempo assigns negative object times until a tempo change', () => {
+    const json = createEmptyJSON('bms');
+    json.metadata.bpm = -120;
+    expect(createTimingResolver(json).beatToSeconds(4)).toBe(-2);
+    expect(createTimingResolver(json).reversal).toBeUndefined();
+    expect(createBeatAtSecondsResolver(json)(0.01)).toBe(3996);
+    json.events = [{ measure: 1, position: [0, 1], channel: '03', value: '78' }];
+    const timing = createTimingResolver(json);
+    expect(timing.beatToSeconds(10)).toBe(1);
+    expect(createBeatAtSecondsResolver(json)(1)).toBe(10);
+  });
   test('createBeatAtSecondsResolver: keeps beat fixed while a stop window is active', () => {
     const json = createEmptyJSON('bms');
     json.metadata.bpm = 120;
@@ -58,7 +69,9 @@ describe('timeline', () => {
     // LR2 plays it as -1/192 of a measure: 2 / 192 s at 120 BPM, which is 1/48 beat.
     const beatAtSeconds = createBeatAtSecondsResolver(json);
     expect(beatAtSeconds(0.995)).toBeCloseTo(1.99, 6);
-    expect(beatAtSeconds(1)).toBeCloseTo(2 + 1 / 48, 6);
+    expect(beatAtSeconds(1)).toBe(2);
+    expect(beatAtSeconds(1.000001)).toBeCloseTo(2.000002 + 1 / 48, 9);
+    expect(beatAtSeconds(1)).toBe(2);
     expect(beatAtSeconds(1.5)).toBeCloseTo(3 + 1 / 48, 6);
     expect(beatAtSeconds(0.5)).toBeCloseTo(1, 6);
   });

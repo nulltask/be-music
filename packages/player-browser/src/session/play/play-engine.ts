@@ -830,6 +830,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             // judge ruleset, the debug judge-window override, the end-on-failure flag and the course stage are
             // restored from the log so the judging setup matches the recording.
             replayInputs: ctx.options.replay.inputs,
+            replayReversalActivationUs: ctx.options.replay.chart.reversalActivationUs,
             replayInputSources: ctx.options.replay.play.inputSources,
             // The tempo changes of the play, followed as the replay reaches them (`resolveReplayTempo`).
             ...(ctx.replayTempo !== undefined && ctx.replayTempo.changes.length > 0
@@ -837,7 +838,10 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
               : {}),
             // A play given up with ESC replays up to where it was given up, as its re-simulations do.
             ...(ctx.options.replay.play.aborted === true && ctx.options.replay.play.abortedAtUs !== undefined
-              ? { replayAbortedAtUs: ctx.options.replay.play.abortedAtUs }
+              ? {
+                  replayAbortedAtUs: ctx.options.replay.play.abortedAtUs,
+                  replayExitedReversal: ctx.options.replay.play.exitedReversal,
+                }
               : {}),
             autoScratch: ctx.options.replay.play.autoScratch,
             autoScratch1P: ctx.options.replay.play.autoScratch1P,

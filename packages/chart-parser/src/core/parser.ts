@@ -188,7 +188,9 @@ export function parseBMS(input: string): BeMusicJSON {
     // above it, taken or not.
     if (capturedHeadersByKey.size > 0 && value.length > 0) {
       const definitionKey = resolveHeaderDefinitionKey(command, commandRaw, base);
-      if (definitionKey !== undefined) {
+      // A non-positive STOP cannot replace a positive definition in a selected branch.
+      const replacesDefinition = !/^STOP[0-9A-Z]{2}$/u.test(command) || Number.parseInt(value, 10) > 0;
+      if (definitionKey !== undefined && replacesDefinition) {
         const captured = capturedHeadersByKey.get(definitionKey);
         if (captured !== undefined) {
           for (const entry of captured) entry.overriddenByLaterHeader = true;
@@ -205,7 +207,7 @@ export function parseBMS(input: string): BeMusicJSON {
     });
     if (command === 'BPM') {
       const parsedMainBPM = Number.parseFloat(value);
-      if (Number.isFinite(parsedMainBPM) && parsedMainBPM > 0) {
+      if (Number.isFinite(parsedMainBPM) && parsedMainBPM !== 0) {
         hasValidMainBPMHeader = true;
       }
     }

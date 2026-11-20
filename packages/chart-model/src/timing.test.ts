@@ -178,6 +178,20 @@ describe('LR2 negative-BPM reversal', () => {
     expect(resolver.beatToSeconds(8)).toBeCloseTo(6, 9);
   });
 
+  test('latches the first negative BPM reached in real time across a negative STOP', () => {
+    const json = createEmptyJSON('bms');
+    json.metadata.bpm = 120;
+    json.resources.bpm = { '01': -120, '02': -65 };
+    json.events = [
+      { measure: 1, position: [0, 1], channel: '08', value: '01' },
+      { measure: 1, position: [0, 1], channel: '09', value: '01' },
+      { measure: 1, position: [1, 1000], channel: '08', value: '02' },
+    ];
+    const resolver = createTimingResolver(json);
+    expect(resolver.reversal?.seconds).toBeLessThan(2);
+    expect(resolver.reversalDisplayBPM).toBe(65);
+  });
+
   test('mirrors the display beat in chart-position space past the LR2 reversal', () => {
     // LR2: `songtimer = 2 * bpmChangedBmstime - songtimer` on the FORWARD position (LR2body.exe 0x406d81) — the
     // mirror is in beats, so how fast the chart recedes is however fast the forward beat advances past the reversal.
@@ -250,19 +264,19 @@ describe('LR2 negative-BPM reversal', () => {
     expect(resolver.bpmAtBeat(10)).toBe(120);
   });
 
-  test.each([0, -150])(
-    'falls back to the 130 default for an initial #BPM of %s, without a reversal (deviation 3)',
-    (initial) => {
-      const json = createEmptyJSON('bms');
-      json.metadata.bpm = initial;
-      json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+  test.each([
+    [0, 130],
+    [-150, -150],
+  ])('resolves an initial #BPM of %s at %s without arming reversal', (initial, effective) => {
+    const json = createEmptyJSON('bms');
+    json.metadata.bpm = initial;
+    json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
 
-      const resolver = createTimingResolver(json);
-      expect(resolver.reversal).toBeUndefined();
-      expect(resolver.bpmAtBeat(0)).toBe(130);
-      expect(resolver.beatToSeconds(4)).toBeCloseTo((4 * 60) / 130, 9);
-    },
-  );
+    const resolver = createTimingResolver(json);
+    expect(resolver.reversal).toBeUndefined();
+    expect(resolver.bpmAtBeat(0)).toBe(effective);
+    expect(resolver.beatToSeconds(4)).toBeCloseTo((4 * 60) / effective, 9);
+  });
 
   test('fires only BGM, BPM and BGA on the LR2 reversal tick, and nothing behind it', () => {
     // LR2 orders same-tick events by op (`CMP_NotesByRealTimingOp`): BGM (1), BPM (3) and the BGA layers (4 / 6 / 7)

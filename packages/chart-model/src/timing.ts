@@ -92,6 +92,10 @@ export function firesBeforeTempoReversal(
 export interface TimingResolver {
   tempoPoints: TempoPoint[];
   stopPoints: StopPoint[];
+  /** Last position of an LR2 timing table whose entries can run backwards in time. */
+  nonMonotonicEndBeat?: number;
+  /** NOWBPM latched by the first reversing event in playback order. */
+  reversalDisplayBPM?: number;
   /** Set when the chart contains a negative `#BPMxx` reference — the LR2 reverse-scroll anchor. */
   reversal?: TempoReversalPoint;
   beatToSeconds: (beat: number) => number;
@@ -119,7 +123,7 @@ export function createTimingResolver(json: BeMusicJSON): TimingResolver {
 
 export function createTimingResolverWithContext(json: BeMusicJSON, context: TimingBuildContext): TimingResolver {
   const { sortedEvents, beatResolver } = context;
-  const { points: tempoPoints, reversalBeat } = createTempoPoints(json, sortedEvents, beatResolver);
+  const { points: tempoPoints, reversingChanges } = createTempoPoints(json, sortedEvents, beatResolver);
   const stopPoints = createStopPoints(json, tempoPoints, sortedEvents, beatResolver);
 
   const beatToSecondsWithoutStops = (beat: number): number => {
@@ -161,10 +165,30 @@ export function createTimingResolverWithContext(json: BeMusicJSON, context: Timi
     return base + stopPoints[index]!.cumulativeSeconds;
   };
 
+  // A negative STOP can move the next event before the preceding event in real time.
+  let reversal: TempoReversalPoint | undefined;
+  let reversalDisplayBPM: number | undefined;
+  for (const change of reversingChanges) {
+    const seconds = beatToSeconds(change.beat);
+    if (!reversal || seconds < reversal.seconds) {
+      reversal = { beat: change.beat, seconds };
+      reversalDisplayBPM = change.displayBPM;
+    }
+  }
   return {
     tempoPoints,
     stopPoints,
-    reversal: reversalBeat === undefined ? undefined : { beat: reversalBeat, seconds: beatToSeconds(reversalBeat) },
+    ...(tempoPoints[0]!.bpm < 0 || stopPoints.some((stop) => stop.seconds < 0)
+      ? {
+          nonMonotonicEndBeat: Math.max(
+            beatResolver.measureToBeat(999),
+            tempoPoints.at(-1)!.beat,
+            stopPoints.at(-1)?.beat ?? 0,
+          ),
+        }
+      : {}),
+    reversal,
+    reversalDisplayBPM,
     bpmAtBeat,
     displayBPMAtBeat,
     beatToSeconds,
@@ -175,7 +199,7 @@ export function createTimingResolverWithContext(json: BeMusicJSON, context: Timi
 interface TempoIntegration {
   points: TempoPoint[];
   /** Beat of the first negative `#BPMxx` event, if any — the LR2 reverse-scroll anchor. */
-  reversalBeat?: number;
+  reversingChanges: Array<{ beat: number; displayBPM: number }>;
 }
 
 function createTempoPoints(
@@ -183,22 +207,24 @@ function createTempoPoints(
   sortedEvents: BeMusicEvent[],
   beatResolver: BeatResolver,
 ): TempoIntegration {
-  const baseBPM = json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
+  const header = json.metadata.bpm;
+  const baseBPM =
+    header > 0 || (json.sourceFormat === 'bms' && Number.isFinite(header) && header < 0) ? header : DEFAULT_BPM;
   const points: TempoPoint[] = [{ beat: 0, bpm: baseBPM, seconds: 0 }];
-  let reversalBeat: number | undefined;
+  const reversingChanges: TempoIntegration['reversingChanges'] = [];
   for (const { event, bpm } of collectTempoChanges(json, sortedEvents)) {
     const beat = beatResolver.eventToBeat(event);
     // LR2 truncates the BPM to int before its `< 0` check (LR2body.exe 0x42b960 `__ftol`), so -1 < BPM < 0 never
     // reverses — it only crawls at |BPM|.
-    if (Math.trunc(bpm) < 0 && reversalBeat === undefined) {
-      reversalBeat = beat;
+    if (Math.trunc(bpm) < 0) {
+      reversingChanges.push({ beat, displayBPM: Math.abs(Math.trunc(bpm)) });
     }
     // LR2 integrates negative exBPM at |BPM| (LR2_bmsload.cpp:2841-2843) — the timeline never runs backwards; the
     // reversal is a presentation/judging gimmick anchored at the first negative event. Of several changes at one beat
     // the last in chart order wins.
     integrateTempoPoint(points, beat, Math.abs(bpm), bpm < 0 ? Math.abs(Math.trunc(bpm)) : undefined);
   }
-  return { points, reversalBeat };
+  return { points, reversingChanges };
 }
 
 /** A BPM change object (`03`, or `08` with `#BPMxx`) that sets a non-zero BPM. */

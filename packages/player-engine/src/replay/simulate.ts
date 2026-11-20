@@ -384,6 +384,7 @@ class ReplaySimulation {
 
   run(): ReplayRulesetResult {
     const reversalUs = this.replay.chart.reversalTimeUs;
+    const activationUs = this.replay.chart.reversalActivationUs ?? reversalUs;
     const inputs = [...this.replay.inputs].sort((left, right) => left.timeUs - right.timeUs || left.seq - right.seq);
     for (const input of inputs) {
       this.advanceTime(input.timeUs);
@@ -391,21 +392,25 @@ class ReplaySimulation {
       // t' = 2R - now (OpenLR2 `LR2f.cpp:12624,12931`), exactly as the engine does. `advanceTime` stays clamped to R,
       // so nothing past it is ever swept into a miss.
       const judged =
-        reversalUs !== undefined && input.timeUs > reversalUs
-          ? { ...input, timeUs: 2 * reversalUs - input.timeUs }
+        activationUs !== undefined && input.timeUs > activationUs
+          ? { ...input, timeUs: 2 * activationUs - input.timeUs }
           : input;
       if (input.action === 'down') {
         // The engine's mine press leg is dead past the reversal too (`processLandminePassage`).
-        this.handleDown(judged, judged === input);
+        this.handleDown(judged, reversalUs === undefined || input.timeUs <= reversalUs);
       } else {
         this.handleUp(judged);
       }
     }
-    // An ESC abort stops judging where the engine stopped: nothing left in the chart is missed, and the end-of-play
-    // rules (the reversal's HP = 0 included) never run.
+    // ESC stops at the recorded instant. Older aborted replays did not apply the reversal exit rule.
     const abortedAtUs = this.replay.play.aborted === true ? this.replay.play.abortedAtUs : undefined;
     this.advanceTime(abortedAtUs ?? Number.POSITIVE_INFINITY);
-    if (reversalUs !== undefined && abortedAtUs === undefined && !this.closed() && this.hasOutstandingNotes()) {
+    if (
+      reversalUs !== undefined &&
+      (abortedAtUs === undefined || (this.replay.play.exitedReversal === true && abortedAtUs >= reversalUs)) &&
+      !this.closed() &&
+      this.hasOutstandingNotes()
+    ) {
       // LR2 zeroes HP when a play ends with notes unjudged (OpenLR2 `LR2f.cpp:12980-12982`): a reversed run that
       // leaves notes past the reversal behind — open holds included — is always FAILED.
       this.gauge.drainToZero();
