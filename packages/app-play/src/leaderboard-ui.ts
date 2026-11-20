@@ -1,4 +1,10 @@
-import { skeletonGroupTemplate, skeletonTemplate, type BeMusicStatusElement } from '@be-music/service-web-theme/client';
+import {
+  accountIdentityTemplate,
+  authButtonTemplate,
+  skeletonGroupTemplate,
+  skeletonTemplate,
+  type BeMusicStatusElement,
+} from '@be-music/service-web-theme/client';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { paneOptions, selectBinding, setDisabled, type PaneBinding } from './pane-controls.ts';
 import { optionLabel } from './ui/options/labels.ts';
@@ -14,11 +20,10 @@ import {
   rememberStartAccountState,
   startAccountPlaceholder,
   type AccountChip,
-  describeLeaderboardAccount,
+  describeLeaderboardAccountForm,
   describeStartAccount,
   shouldTurnOnSubmitting,
   loadLeaderboardAccount,
-  signInToLeaderboard,
   signOutOfLeaderboard,
   startAccountActionLabels,
   type AccountActionResult,
@@ -27,7 +32,7 @@ import { onPlayerLangChange, playerLang, playerText } from './player-copy.ts';
 import { setPlayerHeaderAccount } from './player-header.ts';
 import { wireAccountDialogs } from './account-dialogs.ts';
 import { defaultStorage } from './player-storage.ts';
-import { leaderboardLink } from './service-links.ts';
+import { leaderboardAvatarURL, leaderboardLink } from './service-links.ts';
 import type { BeMusicCourseReplay } from '@be-music/player-engine/replay';
 import { resolveReplayRecordPolicy } from '@be-music/player-engine/records';
 import {
@@ -117,8 +122,8 @@ export function renderStartAccountLoading(root: ParentNode = document): void {
 export class LeaderboardPanel {
   private submitController: PaneBinding | undefined;
   private submitRuleController: PaneBinding | undefined;
-  private accountController: PaneBinding | undefined;
-  private readonly accountState = { status: 'Not signed in' };
+  /** The Options dialog's account form, rendered again whenever the account or the language changes. */
+  private accountForm: HTMLElement | undefined;
   /** Opens the sign-in / sign-up dialogs the start card's buttons lead to. */
   private readonly openDialog = wireAccountDialogs({
     onChanged: () => void this.refreshAccount(),
@@ -150,13 +155,17 @@ export class LeaderboardPanel {
         renderStartAccountLoading();
         return;
       }
-      this.accountState.status = describeLeaderboardAccount(this.shownAccount);
-      this.accountController?.refresh();
+      this.renderAccountForm();
       this.renderStartAccount(this.shownAccount);
     });
   }
   /** Fills the Options dialog's Leaderboard folder. */
   buildFolder(folder: OptionContainer): void {
+    // The account first, as a sign-in form: who plays are sent as, and how to sign in, keep the account or sign out.
+    this.accountForm = document.createElement('div');
+    this.accountForm.className = 'leaderboard-account-form';
+    folder.addElement(this.accountForm);
+    this.renderAccountForm();
     // Submission — OFF by default. When enabled, a finished manual play is sent to the Leaderboard API (same origin,
     // `/api/*`) as the result scene mounts; the result shows the rank in the status line.
     const settings = this.host.settings();
@@ -188,22 +197,6 @@ export class LeaderboardPanel {
       startCheckbox.checked = settings.submitToLeaderboard;
       startCheckbox.addEventListener('change', () => this.setSubmitting(startCheckbox.checked));
     }
-    this.accountController = folder.addBinding(this.accountState, 'status', {
-      label: 'Account',
-      readonly: true,
-      multiline: true,
-      rows: 2,
-      busy: () => !this.accountReady,
-    });
-    const run = (label: string, action: () => Promise<AccountActionResult>, onSuccess?: () => void) => () =>
-      this.runAccountAction(label, action, onSuccess);
-    // Signing in, or keeping the account, is choosing to take part: plays from now on are submitted.
-    const takePart = () => this.setSubmitting(true);
-    folder
-      .addButton({ title: 'Keep this account' })
-      .on('click', run('Keep this account', keepLeaderboardAccount, takePart));
-    folder.addButton({ title: 'Sign in' }).on('click', run('Sign in', signInToLeaderboard, takePart));
-    folder.addButton({ title: 'Sign out' }).on('click', run('Sign out', signOutOfLeaderboard));
     void this.refreshAccount();
   }
   /** Runs an account action, reporting it in the status line and under the start card's account row. */
@@ -321,8 +314,7 @@ export class LeaderboardPanel {
     this.shownState = state;
     // Only an answer shapes the next visit's placeholder: a failed request (offline, a reload mid-request) says nothing.
     if (reached) rememberStartAccountState(state, defaultStorage());
-    this.accountState.status = describeLeaderboardAccount(account);
-    this.accountController?.refresh();
+    this.renderAccountForm();
     this.renderStartAccount(account);
     setPlayerHeaderAccount(
       account === undefined
@@ -333,6 +325,120 @@ export class LeaderboardPanel {
             anonymous: account.anonymous,
             avatarUrl: account.avatarUrl,
           },
+    );
+  }
+  /**
+   * Fills the Options dialog's account form: a skeleton until the account is read, then the account (or a Sign in
+   * heading) and its actions. The passkey, Google, Discord and Sign up buttons carry `data-auth-action`, which the
+   * account dialogs' handler runs; keeping and signing out run here and report in the status line.
+   */
+  private renderAccountForm(): void {
+    const root = this.accountForm;
+    if (root === undefined) return;
+    if (!this.accountReady) {
+      render(
+        skeletonGroupTemplate({
+          locale: playerLang(),
+          label: playerText().shell.checkingAccount,
+          content: html`${skeletonTemplate({ shape: 'circle', width: '40px' })}${skeletonTemplate({ shape: 'line', width: '18ch' })}`,
+        }),
+        root,
+      );
+      return;
+    }
+    const account = this.shownAccount;
+    const view = describeLeaderboardAccountForm(account);
+    const copy = playerText().account;
+    const locale = playerLang();
+    const has = (action: Parameters<typeof view.actions.includes>[0]) => view.actions.includes(action);
+    const takePart = () => this.setSubmitting(true);
+    const methods = has('sign-in-passkey')
+      ? html`${authButtonTemplate({
+            action: 'sign-in',
+            method: 'passkey',
+            label: copy.signInPasskey,
+            ...(view.state === 'anonymous' ? { variant: 'outline' as const } : {}),
+          })}
+          <div class="text-muted-foreground flex items-center gap-3 text-xs" role="separator">
+            <span class="bg-border h-px flex-1"></span>${copy.or}<span class="bg-border h-px flex-1"></span>
+          </div>
+          <div class="grid gap-2 sm:grid-cols-2">
+            ${authButtonTemplate({ action: 'sign-in-google', method: 'google', variant: 'outline', label: copy.signInGoogle })}
+            ${authButtonTemplate({
+              action: 'sign-in-discord',
+              method: 'discord',
+              variant: 'outline',
+              label: copy.signInDiscord,
+            })}
+          </div>`
+      : nothing;
+    render(
+      html`<section class="grid gap-3 border-b pb-4" data-state=${view.state}>
+        ${
+          account === undefined
+            ? html`<header class="space-y-1">
+                <h3 class="text-base font-semibold">${view.title}</h3>
+                <p class="text-muted-foreground text-sm">${view.lead}</p>
+              </header>`
+            : html`<div class="flex items-center justify-between gap-3">
+                  ${accountIdentityTemplate({
+                    account: {
+                      handle: account.handle,
+                      displayName: account.displayName,
+                      anonymous: account.anonymous,
+                      ...(account.avatarUrl === undefined
+                        ? {}
+                        : { avatarURL: leaderboardAvatarURL(account.avatarUrl, location.hostname) }),
+                    },
+                    locale,
+                  })}
+                  <div class="flex shrink-0 items-center gap-2">
+                    <a
+                      class="btn shrink-0"
+                      data-size="sm"
+                      data-variant="ghost"
+                      href=${leaderboardLink(`/players/${encodeURIComponent(account.handle)}`, location.hostname)}
+                      target="_blank"
+                      rel="noopener"
+                      title=${playerText().shell.yourPage}
+                      >${copy.myPage}</a
+                    >
+                    <button
+                      class="btn"
+                      type="button"
+                      data-size="sm"
+                      data-variant="outline"
+                      @click=${() => void this.runAccountAction(copy.signOut, signOutOfLeaderboard)}
+                    >
+                      ${copy.signOut}
+                    </button>
+                  </div>
+                </div>
+                <p class="text-muted-foreground text-sm">${view.lead}</p>`
+        }
+        ${
+          has('keep')
+            ? html`<button
+                class="btn w-full"
+                type="button"
+                @click=${() => void this.runAccountAction(copy.keep, keepLeaderboardAccount, takePart)}
+              >
+                ${copy.keep}
+              </button>`
+            : nothing
+        }
+        ${methods}
+        <be-music-status class="text-destructive text-sm" data-auth-status role="status" hidden></be-music-status>
+        ${
+          has('sign-up')
+            ? html`<footer class="text-muted-foreground flex items-center gap-1 text-sm">
+                ${copy.noAccount}
+                ${authButtonTemplate({ action: 'open-sign-up', label: copy.signUp, variant: 'link', className: 'btn px-0' })}
+              </footer>`
+            : nothing
+        }
+      </section>`,
+      root,
     );
   }
   /** Opens the sign-in dialog. The header's Sign in control calls this. */
