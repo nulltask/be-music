@@ -388,7 +388,7 @@ export class PlaySession extends PlaySessionState {
 
   /**
    * Leaves the play the way Escape does: the theme's fade-out runs, then the host's `onExit` fires. Once every note is
-   * judged it finishes the play instead, and the result shows (`finishPlayOnExit`).
+   * judged or the chart has reversed, it finishes the play and shows the result (`finishPlayOnExit`).
    */
   public requestExit(): void {
     if (finishPlayOnExit(this)) return;

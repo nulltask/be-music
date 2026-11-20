@@ -404,6 +404,55 @@ test('manual seeking requires the practice option and marks the result', async (
   expect(context.play.getResultData()?.practice).toBe(true);
 });
 
+test('exiting a reversed stage with outstanding notes shows the finalized failed result', async () => {
+  vi.useFakeTimers();
+  try {
+    const play = new PlaySession({ onChartFinished: vi.fn(), onExit: vi.fn() });
+    const inputSignals = createPlayerInputSignalBus();
+    let finish!: (summary: PlayerSummary) => void;
+    const finished = new Promise<PlayerSummary>((resolve) => {
+      finish = resolve;
+    });
+    vi.mocked(runEngineDriver).mockImplementation((options) => {
+      options.onInputSignalsReady?.({ inputSignals });
+      options.ui.onFrame?.({
+        currentBeat: 8,
+        displayBeat: 0,
+        currentSeconds: 4,
+        totalSeconds: 100,
+        reversalActivation: { seconds: 2, beat: 4 },
+        notes: [],
+        judgedNoteCount: 1,
+        summary: summaryOf(1),
+      });
+      return finished;
+    });
+    Object.assign(play, {
+      chart: CHART,
+      audioContext: { currentTime: 4 },
+      audioBus: {},
+      chartDurationSeconds: 100,
+      engineStartRequested: true,
+      theme: { timing: () => ({ fadeOutMs: 100, closeMs: 0, musicEndDelayMs: 90000 }), moment: vi.fn() },
+    });
+    launchSharedEngine(play);
+    const escape = { code: 'Escape', key: 'Escape', preventDefault: vi.fn() } as unknown as KeyboardEvent;
+    handleSharedEngineExitKey(play, escape);
+    expect(escape.preventDefault).toHaveBeenCalledOnce();
+    expect(inputSignals.drainCommands()).toContainEqual({ kind: 'interrupt', reason: 'escape' });
+    expect(play.options.onChartFinished).not.toHaveBeenCalled();
+    finish({ ...summaryOf(1), gauge: { ...play.gaugeState, current: 0, cleared: false } });
+    await play.sharedEnginePromise;
+    await vi.advanceTimersByTimeAsync(100);
+    expect(play.options.onChartFinished).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ cleared: false, lamp: 'FAILED' }),
+    );
+    expect(play.options.onExit).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test('prepares the engine behind a command gate and forwards a start already requested by the skin', () => {
   const waiting = createSeekablePlay();
   expect(waiting.runs[0]!.options.engineOptions).toMatchObject({ leadInMs: 0, waitForStart: true });

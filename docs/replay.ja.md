@@ -56,7 +56,7 @@ Be-Music のリプレイには、プレイ時の譜面、入力、適用した�
    を譜面に焼き込みます）は元の譜面を渡します。渡さなければ譜面 fingerprint は省かれ、プレイ fingerprint はホストの
    作業用コピーを表してしまいます。求められなかったフィールドは省きます。これらのフィールドの無いログもそのまま
    読み込めます。
-   `chart.reversalTimeUs` はイベントの打ち切り時刻、`chart.reversalActivationUs` は判定と描画を反転する更新の時刻です。後者のない旧 replay はイベント時刻を判定の基準にします。反転後の離脱は `play.exitedReversal` に記録し、未判定ノートが残るとゲージを 0 にします。負の初期 BPM や小数の STOP を含む譜面では、修正後のタイミングやフィンガープリントが旧版と異なる場合があります。
+   `chart.reversalTimeUs` はイベントの打ち切り時刻、`chart.reversalActivationUs` は判定と描画を反転する更新の時刻です。反転した更新でステージが自動終了した場合、`play.completedAtReversal` を記録し、再生時も記録済みの発動時刻で終了します。発動時刻のない旧 replay はイベント時刻を判定の基準にします。反転後の離脱は `play.exitedReversal` に記録し、未判定ノートが残るとゲージを 0 にします。負の初期 BPM や小数の STOP を含む譜面では、修正後のタイミングやフィンガープリントが旧版と異なる場合があります。
 2. **`inputs`** — プレイアブルレーンに届いた全ての生のキー押下・解放
    （`{ seq, timeUs, action: 'down' | 'up', channels, source }`）。`source` は必須で、プレイの
    [入力ソースの表](#入力ソース)（`play.inputSources`）にある物理的な入力の `id` です。`source` が正本です。判定と

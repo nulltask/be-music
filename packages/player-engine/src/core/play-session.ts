@@ -27,11 +27,12 @@ import {
   resolveChartOptionsAt,
   type ChartOptionProgram,
   isPlayLaneSoundChannel,
+  isInvisibleNoteChannel,
   type ResolvedChart,
   type TempoReversalPoint,
 } from '@be-music/chart-model';
 import { throwIfAborted } from '@be-music/shared-utils/core';
-import { type BeMusicEvent, type BeMusicJSON, resolveBMSBase } from '@be-music/chart-source';
+import { type BeMusicEvent, type BeMusicJSON, normalizeObjectKey, resolveBMSBase } from '@be-music/chart-source';
 import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
 import { resolveHighSpeedMultiplier } from './high-speed-control.ts';
 import { createPlayerUISignalBus, type PlayerUISignalBus, type PlayerHCNLaneState } from './ui-signal-bus.ts';
@@ -95,6 +96,47 @@ import { resolvePracticePlayWindow } from './practice.ts';
 /** A chart sound the realtime audio fires at its time. */
 type TimedChartSound = { readonly event: BeMusicEvent; readonly seconds: number };
 
+/** LR2 dispatches generated measure lines through bar 999, even beyond the last authored note. */
+function isFinalReversalEvent(chart: ResolvedChart, reversal: TempoReversalPoint): boolean {
+  for (let measure = 999; measure >= 0; measure--) {
+    if (chart.timing.beatToSeconds(chart.beatResolver.measureToBeat(measure)) > reversal.seconds) return false;
+  }
+  let foundReversal = false;
+  for (const event of chart.sortedEvents) {
+    const seconds = chart.timing.eventToSeconds(event);
+    if (seconds < reversal.seconds) continue;
+    if (seconds > reversal.seconds) return false;
+    const channel = event.channel.toUpperCase();
+    if (['01', '02', '03', '04', '06', '07', '0A'].includes(channel)) continue;
+    if (channel !== '08' || foundReversal) return false;
+    const value = chart.source.resources.bpm[normalizeObjectKey(event.value, chart.idBase)] ?? -1;
+    if (Math.trunc(value) < 0) foundReversal = true;
+  }
+  return foundReversal;
+}
+
+async function reversalSongEnd(
+  chart: ResolvedChart,
+  playback: PreparedPlaybackChartData,
+  auto: boolean,
+  options: PlayerOptions,
+): Promise<number> {
+  if (isFinalReversalEvent(chart, chart.reversal!)) return -Infinity;
+  let end = 0;
+  for (const note of playback.notes) end = Math.max(end, (note.endSeconds ?? note.seconds) + 2);
+  for (const mine of playback.landmineNotes) end = Math.max(end, mine.seconds + 2);
+  const durations = auto
+    ? await options.loadAudioSampleDurations?.(chart, { baseDir: options.audioBaseDir, signal: options.signal })
+    : undefined;
+  for (const trigger of chart.sampleTriggers) {
+    if (trigger.channel === '01' || (auto && !isInvisibleNoteChannel(trigger.channel))) {
+      end = Math.max(end, trigger.seconds + (durations?.get(trigger.sampleKey) ?? 0));
+    }
+  }
+  if (auto) for (const cues of [chart.bga.base, chart.bga.layer]) end = Math.max(end, cues.at(-1)?.seconds ?? 0);
+  return end;
+}
+
 /**
  * A play session: everything a play is set up with before its loop runs — the chart resolved for play, the tempo clock,
  * the ruleset, the score, the replay recorder, the UI / input buses and runtimes, the audio session, the no-TUI
@@ -108,6 +150,8 @@ export interface PlaySession {
   readonly resolvedJSON: BeMusicJSON;
   readonly resolvedChart: ResolvedChart;
   readonly reversalAnchor?: TempoReversalPoint;
+  /** LR2 checks this deadline once, immediately after dispatching the reversing event. */
+  readonly reversalEndSeconds?: number;
   readonly playbackChart: PreparedPlaybackChartData;
   readonly randomPatternSummary: string | undefined;
   readonly ruleset: RulesetConfig;
@@ -371,6 +415,10 @@ export async function createPlaySession(
     throw new RangeError('The shared prepared chart must include the selected EXTRA note options.');
   const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolvedChart.timing);
   const reversal = resolvedChart.reversal;
+  const reversalEndSeconds =
+    reversal && !replay && !options.practice
+      ? await reversalSongEnd(resolvedChart, playbackChart, mode === 'auto', options)
+      : undefined;
   const activationSeconds = replay
     ? options.replayReversalActivationUs === undefined
       ? reversal?.seconds
@@ -942,6 +990,7 @@ export async function createPlaySession(
     chainSounds,
     clockSource,
     clock: undefined,
+    reversalEndSeconds,
     seekGeneration: 0,
     resetScore,
     reversalAnchor,

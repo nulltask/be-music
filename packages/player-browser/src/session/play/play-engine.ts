@@ -830,6 +830,7 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
             // judge ruleset, the debug judge-window override, the end-on-failure flag and the course stage are
             // restored from the log so the judging setup matches the recording.
             replayInputs: ctx.options.replay.inputs,
+            replayCompletedAtReversal: ctx.options.replay.play.completedAtReversal,
             replayReversalActivationUs: ctx.options.replay.chart.reversalActivationUs,
             replayInputSources: ctx.options.replay.play.inputSources,
             // The tempo changes of the play, followed as the replay reaches them (`resolveReplayTempo`).
@@ -901,6 +902,8 @@ export function launchSharedEngine(ctx: PlayEngineContext): void {
         return;
       }
       handleSharedEngineChartFinished(ctx, summary);
+      // A reversed stage has already reached its exit. Its remaining chart time is unreachable.
+      if (hasReachedReversal(ctx.engineFrame)) ctx.chartEndFade?.();
     })
     .catch((error: unknown) => {
       settleSeekWaiters(ctx);
@@ -1324,13 +1327,18 @@ function handleSharedEngineChartFinished(
   };
 }
 
+function hasReachedReversal(frame: Readonly<PlayerUIFramePayload> | undefined): boolean {
+  return frame?.reversalActivation !== undefined && frame.currentSeconds >= frame.reversalActivation.seconds;
+}
+
 /**
  * Takes an ESC (and the other ways out that act as it) on a play whose notes are all judged: the play finishes instead
  * of being given up, so its result shows, as beatoraja's `BMSPlayer.stopPlay` does (once the judged notes reach the
  * chart's note count it moves to `STATE_FINISHED` and starts `TIMER_FADEOUT`; a second ESC while that fade-out or the
  * failure close runs is ignored). What is left of the lead-out is skipped: the fade-out runs at once, the engine's hold
  * is let go, and the play ends complete with its replay as usual. Returns `false` when the ESC is the host's to take
- * (a play with notes still to judge, a looping PRACTICE play, or one already handed over).
+ * (a looping PRACTICE play, one already handed over, or an ordinary play with notes still to judge). After a negative
+ * BPM reversal, ESC instead ends the stage through the judge so outstanding notes count towards the final result.
  */
 export function finishPlayOnExit(ctx: PlayEngineContext): boolean {
   if (ctx.disposed || ctx.sharedEngineInterrupt !== undefined) return false;
@@ -1345,6 +1353,13 @@ export function finishPlayOnExit(ctx: PlayEngineContext): boolean {
   if (ctx.exiting || ctx.sharedEngineInputSignals === undefined) return false;
   // A looping PRACTICE play never reaches its end: ESC leaves it.
   if (!ctx.options.replay && ctx.options.practiceRange !== undefined) return false;
+  if (hasReachedReversal(ctx.engineFrame)) {
+    // ESC finalizes the reversed stage in the engine, including the gauge and replay. Its
+    // completion handler owns the transition to the result screen.
+    flushReplayView(ctx);
+    ctx.sharedEngineInputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
+    return true;
+  }
   if (!isEveryNoteJudged(ctx.engineFrame)) return false;
   handleSharedEngineChartFinished(ctx, undefined, true);
   ctx.chartEndFade?.();

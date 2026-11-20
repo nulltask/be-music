@@ -320,7 +320,7 @@ export interface PlayerPlayRuntime {
   createInputRuntime?: (context: CreatePlayerInputRuntimeContext) => PlayerInputRuntime | undefined;
   /** The host's audio backend. Omitted or returning undefined means playback without audio. */
   createAudioSession?: (context: CreateAudioSessionContext) => Promise<AudioSession | undefined>;
-  /** Optional sample-duration loader for active-audio diagnostics, including silent playback. */
+  /** Sample durations in seconds for autoplay end timing and active-audio diagnostics. */
   loadAudioSampleDurations?: (
     resolved: ResolvedChart,
     options: { baseDir?: string; signal?: AbortSignal },
@@ -467,6 +467,7 @@ export interface PlayerPlayRecording {
   replayAbortedAtUs?: number;
   /** A recorded ESC applied the LR2 end-of-stage gauge rule after the event pump froze. */
   replayExitedReversal?: boolean;
+  replayCompletedAtReversal?: boolean;
   replayReversalActivationUs?: number;
 }
 
