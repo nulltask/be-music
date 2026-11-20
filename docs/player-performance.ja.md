@@ -22,7 +22,7 @@ PERF_OUTPUT=tmp/performance/current pnpm exec playwright test -c scripts/perform
 
 `PERF_CHANNEL=chrome` で Playwright の Chromium の代わりにインストール済みの Chrome を計測し、`PERF_VIEWPORT=1920x1080` で viewport を変えます。`PERF_FRAMES_ONLY=1` は CPU とメモリ確保のプロファイラーを動かさず、その負荷なしでフレーム間隔だけを記録します。フレームレートの判断には frame-only の計測を使います。`PERF_CPU_THROTTLE` を指定すると CDP でページの CPU をその倍率だけ遅くし（例: `4` でこのマシンの 4 分の 1 の速さ）、低スペックのマシンを近似します。GPU は遅くなりません。`PERF_RENDERER=webgpu` で既定の WebGL 2 の代わりに WebGPU を計測します。`PERF_FAMILIES` に `built-in,native,lr2,beatoraja` の一部をカンマ区切りで指定できます。指定するとコレクションの計測を省きます。未指定の場合は、譜面 300 個のドロップと 50 ms 間隔で 150 項目をスクロールする計測も行います。
 
-各計測は CDP の CPU サンプル、Performance metrics、16 KiB 間隔のメモリ確保サンプル、フレーム間隔、スクリーンショットを記録します。メモリ確保のサンプルには minor / major GC で回収したオブジェクトも含み、保持ヒープではなく累積の確保量を測ります。最初のフレーム間隔はパーセンタイルの計算から除外します。ブラウザーエラーがないことも検証します。
+各計測は CDP の CPU サンプル、Performance metrics、16 KiB 間隔のメモリ確保サンプル、フレーム間隔、スクリーンショットを記録します。メモリ確保のサンプルには minor / major GC で回収したオブジェクトも含み、保持ヒープではなく累積の確保量を測ります。フレーム間隔は最初のアニメーションコールバックからプロファイラーの停止直前まで計測します。操作中にページのレンダラーのメインスレッドで発生した minor GC・major GC の回数と合計停止時間も記録します。入力のたびに計測負荷がかかるため、Playwright の DOM スナップショットは無効にしています。ブラウザーエラーがないことも検証します。
 
 出力は `.cpuprofile`、`.heapprofile`、計測ごとの JSON と PNG、フレーム間隔のパーセンタイル・16.7 ms と 33.4 ms を超えた回数・Performance metrics・エラーを含む `summary.json` です。次のビルド前に `packages/app-play/dist/assets/` のソースマップをプロファイルと一緒に保存します。比較時は出力先を分け、ブラウザー、機器、素材、設定を揃えます。プロファイルには負荷があるため、CPU サンプルや確保量の差だけで FPS 改善を判断しません。
 

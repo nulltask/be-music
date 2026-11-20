@@ -142,15 +142,7 @@ export class ShapeBatch {
       const grains = grainsFor(w, Math.min(1, alpha), SCRATCH_GRAINS);
       const cx = x + w / 2;
       const cy = y + h / 2;
-      for (let index = 0; index < grains.count; index += 1) {
-        layer.point(
-          cx + GRAIN_OFFSETS[index * 2]! * w,
-          cy + GRAIN_OFFSETS[index * 2 + 1]! * w,
-          grains.size,
-          rawColor,
-          grains.alpha,
-        );
-      }
+      layer.cluster(cx, cy, GRAIN_OFFSETS, grains.count, w, grains.size, rawColor, grains.alpha);
       return;
     }
     const key = (this.id(graphics) * 9 + eighths) * 4096 + colorIndex(rawColor);
@@ -185,24 +177,17 @@ export class ShapeBatch {
     if (eighths <= 0) return;
     if (this.points) {
       // Segments break into a trail of fine grains too, so trails, fish and sparks share the dusty texture.
-      const length = Math.hypot(x1 - x0, y1 - y0);
+      const dx = x1 - x0;
+      const dy = y1 - y0;
+      const length = Math.sqrt(dx * dx + dy * dy);
       const grains = trailGrainsFor(length, width, Math.min(1, alpha), SCRATCH_TRAIL);
       const layer = pointLayerFor(graphics);
       // Wide strokes lay their grains in parallel lanes across the width, so a fatter stroke reads wider, not brighter.
-      const nx = length > 0 ? -(y1 - y0) / length : 0;
-      const ny = length > 0 ? (x1 - x0) / length : 0;
+      const nx = length > 0 ? -dy / length : 0;
+      const ny = length > 0 ? dx / length : 0;
       for (let lane = 0; lane < grains.lanes; lane += 1) {
         const across = (lane - (grains.lanes - 1) / 2) * (width / grains.lanes);
-        for (let index = 0; index < grains.count; index += 1) {
-          const t = grains.count === 1 ? 0.5 : index / (grains.count - 1);
-          layer.point(
-            x0 + (x1 - x0) * t + nx * across,
-            y0 + (y1 - y0) * t + ny * across,
-            grains.size,
-            rawColor,
-            grains.alpha,
-          );
-        }
+        layer.trail(x0 + nx * across, y0 + ny * across, dx, dy, grains.count, grains.size, rawColor, grains.alpha);
       }
       return;
     }

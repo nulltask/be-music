@@ -151,7 +151,8 @@ export function renderSynesthesiaLanes({
   }
   if (lanes.length === 0) return;
   // Close each play side's grid on its right edge (each lane only draws its left hairline).
-  for (const run of resolveLaneRuns(lanes)) {
+  const runs = resolveLaneRuns(lanes);
+  for (const run of runs) {
     graphics.rect(run.right - 1, gridTop, 1, Math.max(1, gridBottom - gridTop)).fill({ color: 0xff7a1e, alpha: 0.25 });
   }
 
@@ -159,7 +160,7 @@ export function renderSynesthesiaLanes({
   // between the double-play banks, at that side's lanes' foot (a side's LIFT raises it). The beat rises above it
   // instead: an ember wash fading up the lanes that leaps tall and bright on each beat and settles back before the next.
   const beatAlpha = Math.min(1, (0.1 + 0.55 * pulse) * heat);
-  for (const run of resolveLaneRuns(lanes)) {
+  for (const run of runs) {
     const lineW = run.right - run.left;
     const y = lanes.reduce(
       (foot, lane) => (lane.x >= run.left && lane.x < run.right ? Math.max(foot, lane.bottom) : foot),
@@ -329,19 +330,20 @@ const BURST_FOCAL = 260;
 /** Grain size (0.4..1) from which a spark leaves a hairline trail / carries a glow sprite; the rest is fine powder. */
 const POWDER_TRAIL_SIZE = 0.85;
 const POWDER_GLINT_SIZE = 0.94;
-const PARTICLE_CACHE = new Map<number, BurstParticle[]>();
+const SPARKS = new Map<number, BurstParticle[]>();
+const SKIRTS = new Map<number, BurstParticle[]>();
 
-function cachedBurst(seed: number, count: number): BurstParticle[] {
-  let particles = PARTICLE_CACHE.get(seed);
-  if (!particles || particles.length < count) {
-    particles = burstParticles(seed, count);
-    PARTICLE_CACHE.set(seed, particles);
-    // Live bombs never exceed a few dozen; keep the cache bounded.
-    if (PARTICLE_CACHE.size > 128) {
-      const oldest = PARTICLE_CACHE.keys().next().value;
-      if (oldest !== undefined) PARTICLE_CACHE.delete(oldest);
-    }
+function cachedBurst(cache: Map<number, BurstParticle[]>, seed: number, count: number): BurstParticle[] {
+  let particles = cache.get(seed);
+  if (particles && particles.length >= count) return particles;
+  // Re-seed the oldest storage once the window of recent hits fills.
+  if (!particles && cache.size >= 32) {
+    const oldest = cache.keys().next().value!;
+    particles = cache.get(oldest);
+    cache.delete(oldest);
   }
+  particles = burstParticles(seed, count, particles);
+  cache.set(seed, particles);
   return particles;
 }
 
@@ -572,7 +574,7 @@ function renderBomb(
   // 2 + 3. Sparks: hairline trails and powder grains go through the shared batch (one fill per colour bucket instead of
   // one per grain); the few coarse grains get a glow sprite. Everything here is additive, so draw order is free and no
   // depth sort (or per-frame spark list) is needed.
-  const particles = cachedBurst(bomb.seed, Math.max(BURST_PARTICLES_MAX, grains));
+  const particles = cachedBurst(SPARKS, bomb.seed, Math.max(BURST_PARTICLES_MAX, grains));
   const count = Math.min(particles.length, grains);
   const radius = unit * 4.6 * (1 + 0.1 * tier);
   const gravity = unit * 3.2;
@@ -637,7 +639,7 @@ function renderBomb(
   }
   // 3b. Skirt: fine, dimmer powder thrown out sideways along the judgement line. It rises at most about a lane's width
   // and settles back, so the burst reads fuller while the lanes above — where the next notes fall — stay clear.
-  const skirtParticles = cachedBurst(bomb.seed ^ SKIRT_SEED, Math.max(BURST_SKIRT_MAX, skirt));
+  const skirtParticles = cachedBurst(SKIRTS, bomb.seed ^ SKIRT_SEED, Math.max(BURST_SKIRT_MAX, skirt));
   const skirtCount = Math.min(skirtParticles.length, skirt);
   for (let index = 0; index < skirtCount; index += 1) {
     const particle = skirtParticles[index]!;

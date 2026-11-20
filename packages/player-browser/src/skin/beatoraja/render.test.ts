@@ -72,6 +72,20 @@ function luaFunction(source: string): BeatorajaLuaFunctionValue {
 }
 
 describe('destinationToSpriteProps', () => {
+  it('reuses visible destination storage without overwriting it for a hidden entry', () => {
+    const group = groupOf();
+    const scratch = destinationToSpriteProps(group, ctx({ nowMs: 0 }), TEST_CANVAS_HEIGHT);
+    const later = ctx({ nowMs: 500 });
+    const expected = destinationToSpriteProps(group, later, TEST_CANVAS_HEIGHT);
+    expect(destinationToSpriteProps(group, later, TEST_CANVAS_HEIGHT, scratch)).toBe(scratch);
+    expect(scratch).toEqual(expected);
+    const hidden = destinationToSpriteProps({ ...group, op: [901] }, later, TEST_CANVAS_HEIGHT, scratch);
+    expect(hidden.visible).toBe(false);
+    expect(destinationToSpriteProps(group, later, TEST_CANVAS_HEIGHT, hidden)).toEqual(expected);
+    expect(hidden.visible).toBe(false);
+    expect(scratch.visible).toBe(true);
+  });
+
   it('returns the head keyframe at scene start, Y-flipped from libGDX Y-UP into Pixi Y-DOWN', () => {
     const props = destinationToSpriteProps(groupOf(), ctx({ nowMs: 0 }), TEST_CANVAS_HEIGHT);
     expect(props.visible).toBe(true);

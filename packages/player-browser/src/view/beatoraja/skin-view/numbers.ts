@@ -42,6 +42,7 @@ export interface FloatValueEntry {
    * changes. `-1` is the initial sentinel.
    */
   lastFrameIndex: number;
+  cells?: ReturnType<typeof composeBeatorajaFloatValueCells>;
 }
 
 export interface ValueEntry {
@@ -60,6 +61,7 @@ export interface ValueEntry {
    * `SkinSourceImageSet.getImageIndex` flow which re-evaluates per draw call.
    */
   lastFrameIndex: number;
+  cells?: ReturnType<typeof composeBeatorajaValueCells>;
 }
 
 /** Builds and updates the `value[]` and `floatvalue[]` entries of a {@link BeatorajaPlaySkinView}. */
@@ -266,13 +268,14 @@ export class BeatorajaNumberRenderer {
     // Re-compose digit-cell textures when the value OR animation frame changes. The composer
     // hands back one source-rect per digit slot (with the row's y-offset baked in); we crop a
     // sub-texture per slot and assign it to the matching sprite.
-    let cells: ReturnType<typeof composeBeatorajaValueCells> | undefined;
+    let cells = entry.cells;
     const valueChanged = value !== entry.lastValue;
     const frameChanged = frameIndex !== entry.lastFrameIndex;
-    if (valueChanged || frameChanged) {
+    if (!cells || valueChanged || frameChanged) {
       entry.lastValue = value;
       entry.lastFrameIndex = frameIndex;
       cells = composeBeatorajaValueCells(entry.value, value, frameIndex);
+      entry.cells = cells;
       for (let i = 0; i < entry.digitSprites.length; i += 1) {
         const cell = cells[i];
         if (cell === undefined || cell.hidden) continue;
@@ -282,9 +285,6 @@ export class BeatorajaNumberRenderer {
         }
       }
     }
-    // Always recompute hidden flags — visibility depends on the latest value even when textures
-    // weren't refreshed (the composer might emit `hidden: true` for slots that don't paint).
-    if (cells === undefined) cells = composeBeatorajaValueCells(entry.value, value, frameIndex);
 
     // Lay the digit row across the destination rect. Per beatoraja's convention, `dst.w` is the
     // PER-DIGIT slot width (NOT the total strip width) — the reference theme writes things like
@@ -390,13 +390,14 @@ export class BeatorajaNumberRenderer {
     // crop from. Mirrors `SkinSourceImageSet.getImageIndex(time, state)` (with `timer == null`).
     const frameIndex = floatValueFrameAt(entry.value, nowMs);
 
-    let cells: ReturnType<typeof composeBeatorajaFloatValueCells> | undefined;
+    let cells = entry.cells;
     const valueChanged = value !== entry.lastValue;
     const frameChanged = frameIndex !== entry.lastFrameIndex;
-    if (valueChanged || frameChanged) {
+    if (!cells || valueChanged || frameChanged) {
       entry.lastValue = value;
       entry.lastFrameIndex = frameIndex;
       cells = composeBeatorajaFloatValueCells(entry.value, value, frameIndex);
+      entry.cells = cells;
       for (let i = 0; i < entry.slotSprites.length; i += 1) {
         const cell = cells[i];
         if (cell === undefined || cell.hidden) continue;
@@ -406,7 +407,6 @@ export class BeatorajaNumberRenderer {
         }
       }
     }
-    if (cells === undefined) cells = composeBeatorajaFloatValueCells(entry.value, value, frameIndex);
 
     // Lay the slot row across the dst rect — same convention as `value[]`: `dst.w` is per-slot
     // width, `space` adds inter-slot gap.

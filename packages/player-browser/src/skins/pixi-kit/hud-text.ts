@@ -44,10 +44,22 @@ export function addHUDText(
   opts: HUDTextOptions = {},
   pool?: ChildPool,
 ): Text {
+  const tintable = isTintable(opts);
+  return placeHUDText(layer, text, x, y, opts, pool, resolveTextStyle(opts, tintable), tintable);
+}
+
+function placeHUDText(
+  layer: Container,
+  text: string,
+  x: number,
+  y: number,
+  opts: HUDTextOptions,
+  pool: ChildPool | undefined,
+  style: TextStyle,
+  tintable: boolean,
+): Text {
   // A plain fill (no stroke or shadow to keep their own colours) rasterizes white and takes its colour from the tint, so
   // a colour change — a flashing judgement, a combo turning gold — reuses the glyph texture instead of re-rendering it.
-  const tintable = isTintable(opts);
-  const style = resolveTextStyle(opts, tintable);
   // The pool hands back the node that showed this string last frame, so it keeps its rasterized texture.
   const node = pool?.acquireText(text, style) ?? new Text();
   // Rasterize at the final device density so text stays crisp after the viewport magnifies the design canvas.
@@ -100,21 +112,25 @@ export function addHUDNumber(
   opts: HUDTextOptions = {},
   pool?: ChildPool,
 ): Text[] {
-  const style = resolveTextStyle(opts, isTintable(opts));
+  const tintable = isTintable(opts);
+  const style = resolveTextStyle(opts, tintable);
   const run = layoutTabularRun(text, (char) => measureGlyph(char, style));
   const squeeze = opts.maxWidth !== undefined && run.width > opts.maxWidth ? opts.maxWidth / run.width : 1;
   const scale = opts.scale ?? 1;
   const left = x - run.width * squeeze * scale * (opts.anchorX ?? 0);
   const nodes: Text[] = [];
+  const glyphOptions = { ...opts, anchorX: 0.5, maxWidth: undefined, scale: undefined };
   for (const glyph of run.glyphs) {
     if (glyph.char === ' ') continue;
-    const node = addHUDText(
+    const node = placeHUDText(
       layer,
       glyph.char,
       left + (glyph.x + glyph.w / 2) * squeeze * scale,
       y,
-      { ...opts, anchorX: 0.5, maxWidth: undefined, scale: undefined },
+      glyphOptions,
       pool,
+      style,
+      tintable,
     );
     node.scale.set(squeeze * scale, scale);
     nodes.push(node);

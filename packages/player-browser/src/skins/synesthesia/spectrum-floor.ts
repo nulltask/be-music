@@ -78,6 +78,17 @@ export class SpectrumHistory {
     return newer + (elder - newer) * blend;
   }
 
+  /** Sample all bands at one depth once for a floor row, before interpolating across the screen. */
+  public sampleRow(ageSeconds: number, levels: Float64Array): void {
+    const age = Math.max(0, ageSeconds) * SPECTRUM_HISTORY_HZ;
+    const older = Math.floor(age);
+    const blend = age - older;
+    for (let band = 0; band < this.bands; band++) {
+      const recent = this.levelAt(older, band);
+      levels[band] = recent + (this.levelAt(older + 1, band) - recent) * blend;
+    }
+  }
+
   private levelAt(age: number, band: number): number {
     if (age >= this.filled) return 0;
     const slot = (this.head - age + this.capacity) % this.capacity;

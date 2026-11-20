@@ -188,6 +188,15 @@ export class PointLayer {
     this.mesh = new Mesh({ geometry: this.geometry, shader, texture });
     this.mesh.label = 'point-layer';
     this.mesh.onRender = () => this.commit();
+    // The mesh is a sibling, so trimming or destroying the pooled anchor does not destroy it as a child.
+    anchor.once('destroyed', () => {
+      if (!this.mesh.destroyed) this.mesh.destroy();
+    });
+    this.mesh.once('destroyed', () => {
+      this.geometry.destroy();
+      this.buffer.destroy();
+      shader.destroy();
+    });
   }
 
   /** Points written since the last render. */
@@ -203,24 +212,72 @@ export class PointLayer {
 
   /** Writes one square point (or one copy of the layer's texture) `size` px wide, centred on `(cx, cy)`. */
   public point(cx: number, cy: number, size: number, color: number, alpha: number): void {
-    if (!this.touched) {
-      // Once per frame, on its first point: the anchor does not move among its siblings between two points.
-      this.attach();
-      this.touched = true;
-      this.cursor = 0;
-    }
-    const at = this.cursor * POINT_STRIDE;
-    if (at >= this.data.length) this.grow();
+    const at = this.reserve(1);
     const data = this.data;
     data[at] = cx;
     data[at + 1] = cy;
     data[at + 2] = size * 0.5;
     this.words[at + 3] = packParticleColor(color, alpha);
-    this.cursor += 1;
   }
 
-  private grow(): void {
-    const data = new Float32Array(this.data.length * 2);
+  /** Append a cluster with one colour and size, expanding its XY offset pairs directly into the upload buffer. */
+  public cluster(
+    cx: number,
+    cy: number,
+    offsets: Float32Array,
+    count: number,
+    spread: number,
+    size: number,
+    color: number,
+    alpha: number,
+  ): void {
+    let at = this.reserve(count);
+    const packed = packParticleColor(color, alpha);
+    for (let i = 0; i < count; i++, at += POINT_STRIDE) {
+      this.data[at] = cx + offsets[i * 2]! * spread;
+      this.data[at + 1] = cy + offsets[i * 2 + 1]! * spread;
+      this.data[at + 2] = size * 0.5;
+      this.words[at + 3] = packed;
+    }
+  }
+
+  /** Append evenly spaced grains from one end of a segment to the other (a single grain sits in the middle). */
+  public trail(
+    x: number,
+    y: number,
+    dx: number,
+    dy: number,
+    count: number,
+    size: number,
+    color: number,
+    alpha: number,
+  ): void {
+    let at = this.reserve(count);
+    const packed = packParticleColor(color, alpha);
+    for (let i = 0; i < count; i++, at += POINT_STRIDE) {
+      const t = count === 1 ? 0.5 : i / (count - 1);
+      this.data[at] = x + dx * t;
+      this.data[at + 1] = y + dy * t;
+      this.data[at + 2] = size * 0.5;
+      this.words[at + 3] = packed;
+    }
+  }
+
+  private reserve(count: number): number {
+    if (!this.touched) {
+      this.attach();
+      this.touched = true;
+      this.cursor = 0;
+    }
+    const at = this.cursor * POINT_STRIDE;
+    this.cursor += count;
+    const required = this.cursor * POINT_STRIDE;
+    if (required > this.data.length) this.grow(required);
+    return at;
+  }
+
+  private grow(required: number): void {
+    const data = new Float32Array(Math.max(required, this.data.length * 2));
     data.set(this.data);
     this.data = data;
     this.words = new Uint32Array(data.buffer);

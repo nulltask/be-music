@@ -10,6 +10,18 @@ describe('drawGaugeCells', () => {
         rectangles.push(coordinates);
         return this;
       },
+      save() {
+        return this;
+      },
+      restore() {
+        return this;
+      },
+      texture() {
+        return this;
+      },
+      setFillStyle() {
+        return this;
+      },
       fill() {
         return this;
       },

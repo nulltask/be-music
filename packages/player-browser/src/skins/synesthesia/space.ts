@@ -208,27 +208,31 @@ export interface BurstParticle {
  * `count` burst particles on a sphere, deterministic for `seed`. Directions are biased upward (screen −y) so a hit
  * reads as sparks thrown off the judgement line rather than a symmetric puff.
  */
-export function burstParticles(seed: number, count: number): BurstParticle[] {
-  const particles: BurstParticle[] = [];
+export function burstParticles(seed: number, count: number, particles: BurstParticle[] = []): BurstParticle[] {
+  let used = 0;
   for (let index = 0; index < count; index += 1) {
     const base = seed * 97 + index * 13;
     // Uniform sphere sampling via (cos θ, φ), then squash the lower hemisphere.
     const cosTheta = 1 - 2 * hash01(base + 1);
     const sinTheta = Math.sqrt(Math.max(0, 1 - cosTheta * cosTheta));
     const phi = Math.PI * 2 * hash01(base + 2);
-    const rawY = cosTheta;
-    particles.push({
-      direction: {
-        x: sinTheta * Math.cos(phi),
-        y: rawY > 0 ? -rawY : rawY * -0.35,
-        z: sinTheta * Math.sin(phi),
-      },
-      speed: 0.35 + 0.65 * hash01(base + 3),
-      size: 0.4 + 0.6 * hash01(base + 4),
-      hueShift: (hash01(base + 5) - 0.5) * 0.16,
-      life: 0.55 + 0.45 * hash01(base + 6),
+    const particle = (particles[index] ??= {
+      direction: { x: 0, y: 0, z: 0 },
+      speed: 0,
+      size: 0,
+      hueShift: 0,
+      life: 0,
     });
+    particle.direction.x = sinTheta * Math.cos(phi);
+    particle.direction.y = cosTheta > 0 ? -cosTheta : cosTheta * -0.35;
+    particle.direction.z = sinTheta * Math.sin(phi);
+    particle.speed = 0.35 + 0.65 * hash01(base + 3);
+    particle.size = 0.4 + 0.6 * hash01(base + 4);
+    particle.hueShift = (hash01(base + 5) - 0.5) * 0.16;
+    particle.life = 0.55 + 0.45 * hash01(base + 6);
+    used++;
   }
+  particles.length = used;
   return particles;
 }
 
@@ -740,8 +744,10 @@ export function perlin2(x: number, y: number): number {
   const ab = p[p[xi]! + yi + 1]!;
   const ba = p[p[xi + 1]! + yi]!;
   const bb = p[p[xi + 1]! + yi + 1]!;
-  const x1 = perlinGrad(aa, dx, dy) + u * (perlinGrad(ba, dx - 1, dy) - perlinGrad(aa, dx, dy));
-  const x2 = perlinGrad(ab, dx, dy - 1) + u * (perlinGrad(bb, dx - 1, dy - 1) - perlinGrad(ab, dx, dy - 1));
+  const lower = perlinGrad(aa, dx, dy);
+  const x1 = lower + u * (perlinGrad(ba, dx - 1, dy) - lower);
+  const upper = perlinGrad(ab, dx, dy - 1);
+  const x2 = upper + u * (perlinGrad(bb, dx - 1, dy - 1) - upper);
   return x1 + v * (x2 - x1);
 }
 

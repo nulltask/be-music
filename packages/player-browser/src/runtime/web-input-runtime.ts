@@ -168,7 +168,7 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
     });
   };
 
-  const sampleGamepads = (pads: readonly (Gamepad | null)[], partial = false): void => {
+  const sampleGamepads = (pads: readonly (Gamepad | null)[], partial = false): boolean => {
     const seen = new Set<string>();
     const nowMs = performance.now();
     const pressedAt = performance.timeOrigin + nowMs;
@@ -282,7 +282,7 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
         }
       }
     }
-    if (partial) return;
+    if (partial) return mappedPads.length > 0;
     // A disconnected pad or a button disappearing from a changed mapping must release any held long note.
     for (const [key, previous] of gamepadButtons) {
       if (seen.has(key)) continue;
@@ -299,21 +299,30 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
       }
       gamepadButtons.delete(key);
     }
+    return mappedPads.length > 0;
   };
 
   const pollGamepads = (): void => {
+    if (!attached || typeof navigator === 'undefined' || typeof navigator.getGamepads !== 'function') return;
     let pads: Array<Gamepad | null>;
     try {
-      pads = Array.from(navigator.getGamepads());
+      pads = navigator.getGamepads();
     } catch {
       return;
     }
-    sampleGamepads(pads);
+    if (sampleGamepads(pads)) {
+      gamepadTimer ??= setInterval(pollGamepads, gamepadPollIntervalMs);
+    } else if (gamepadTimer !== undefined) {
+      clearInterval(gamepadTimer);
+      gamepadTimer = undefined;
+    }
   };
 
   const onRawGamepadInput = (event: Event): void => {
     const pad = (event as GamepadEvent).gamepad;
-    if (attached && pad) sampleGamepads([pad], true);
+    if (attached && pad && sampleGamepads([pad], true)) {
+      gamepadTimer ??= setInterval(pollGamepads, gamepadPollIntervalMs);
+    }
   };
 
   return {
@@ -325,10 +334,9 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
       attached = true;
       if (options.gamepadInput !== false) {
         for (const event of rawGamepadEvents) gamepadTarget?.addEventListener(event, onRawGamepadInput);
-        if (typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function') {
-          pollGamepads();
-          gamepadTimer = setInterval(pollGamepads, gamepadPollIntervalMs);
-        }
+        gamepadTarget?.addEventListener('gamepadconnected', pollGamepads);
+        gamepadTarget?.addEventListener('gamepaddisconnected', pollGamepads);
+        pollGamepads();
       }
       log.debug('input listeners attached');
     },
@@ -337,6 +345,8 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
       target.removeEventListener('keydown', handleKeyDown);
       target.removeEventListener('keyup', handleKeyUp);
       for (const event of rawGamepadEvents) gamepadTarget?.removeEventListener(event, onRawGamepadInput);
+      gamepadTarget?.removeEventListener('gamepadconnected', pollGamepads);
+      gamepadTarget?.removeEventListener('gamepaddisconnected', pollGamepads);
       if (gamepadTimer !== undefined) {
         clearInterval(gamepadTimer);
         gamepadTimer = undefined;

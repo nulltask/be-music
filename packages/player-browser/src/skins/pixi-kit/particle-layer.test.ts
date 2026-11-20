@@ -82,3 +82,33 @@ test('packs a tint and an alpha as Pixi does', () => {
     );
   }
 });
+
+test('writes clustered and evenly spaced grains into the same buffer across a growth', () => {
+  const { host, layer } = setupLayer();
+  layer.cluster(10, 20, new Float32Array([0, 0, 0.5, -0.5]), 2, 8, 2, 0xff0000, 0.5);
+  layer.trail(3, 4, 8, 4, 1, 2, 0xabcdef, 1);
+  layer.trail(3, 4, 8, 4, 513, 2, 0xabcdef, 1);
+  expect(layer.pointAt(2)).toEqual([14, 16, 1, packParticleColor(0xff0000, 0.5) >>> 0]);
+  expect(layer.pointAt(3)).toEqual([7, 6, 1, packParticleColor(0xabcdef, 1) >>> 0]);
+  expect(layer.pointAt(4).slice(0, 2)).toEqual([3, 4]);
+  expect(layer.pointAt(516).slice(0, 2)).toEqual([11, 8]);
+  expect(layer.count).toBe(517);
+  host.destroy({ children: true });
+});
+
+test('releases buffers when the anchor is trimmed and keeps other layers usable', () => {
+  const { host, anchor, above, mesh } = setupLayer();
+  const geometry = mesh.geometry;
+  const buffer = geometry.getBuffer('aPoint');
+  const corners = geometry.getBuffer('aPosition');
+  const destroyBuffer = vi.spyOn(buffer, 'destroy');
+  const destroyCorners = vi.spyOn(corners, 'destroy');
+  const other = pointLayerFor(above);
+  other.point(0, 0, 1, 0xffffff, 1);
+  anchor.destroy();
+  expect(mesh.destroyed).toBe(true);
+  expect(destroyBuffer).toHaveBeenCalledOnce();
+  expect(destroyCorners).not.toHaveBeenCalled();
+  expect(other.pointAt(0)).toEqual([0, 0, 0.5, 0xffffffff]);
+  host.destroy({ children: true });
+});

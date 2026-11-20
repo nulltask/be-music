@@ -66,6 +66,14 @@ describe('burstParticles', () => {
     expect(burstParticles(4, 8)).not.toEqual(burstParticles(5, 8));
   });
 
+  it('re-seeds existing particles and drops surplus particles', () => {
+    const storage = burstParticles(4, 8);
+    const first = storage[0];
+    expect(burstParticles(5, 3, storage)).toBe(storage);
+    expect(storage[0]).toBe(first);
+    expect(storage).toEqual(burstParticles(5, 3));
+  });
+
   it('keeps every attribute in range and biases sparks upward', () => {
     const particles = burstParticles(11, 200);
     for (const particle of particles) {

@@ -184,6 +184,7 @@ export function destinationToSpriteProps(
   group: BeatorajaDestinationGroup,
   context: BeatorajaRenderContext,
   canvasHeight: number,
+  out?: BeatorajaSpriteProps,
 ): BeatorajaSpriteProps {
   if (!isElementVisible(group.ifCodes, context.activeOps)) return HIDDEN_PROPS;
   if (group.draw !== undefined) {
@@ -350,26 +351,26 @@ export function destinationToSpriteProps(
       return HIDDEN_PROPS;
     }
   }
-  return {
-    visible: true,
-    x: xLeft,
-    y,
-    width,
-    height,
-    mirrorX,
-    mirrorY,
-    alpha,
-    tint: packRGBTint(keyframe.r, keyframe.g, keyframe.b),
-    // Negate the authored angle to convert libGDX (Y-UP, CCW-positive) into Pixi (Y-DOWN,
-    // CW-positive). The Y-flip of the rect's POSITION (`canvasHeight - yLibgdxBottom -
-    // height` above) is just a translation; it doesn't change the handedness of rotations
-    // applied to the sprite itself. Without this negation every authored rotation runs
-    // visually backwards — most visible on ModernChic Play's `attack.lua` 14 keyframe attack
-    // motion (was rotating the wrong way), 7K-skin scratch wheels, and Select-scene focus
-    // rings (audit 1.8).
-    angle,
-    blendMode: blendCodeToPixi(group.blend),
-  };
+  const result = out && out !== HIDDEN_PROPS ? out : { ...HIDDEN_PROPS };
+  result.visible = true;
+  result.x = xLeft;
+  result.y = y;
+  result.width = width;
+  result.height = height;
+  result.mirrorX = mirrorX;
+  result.mirrorY = mirrorY;
+  result.alpha = alpha;
+  result.tint = packRGBTint(keyframe.r, keyframe.g, keyframe.b);
+  // Negate the authored angle to convert libGDX (Y-UP, CCW-positive) into Pixi (Y-DOWN,
+  // CW-positive). The Y-flip of the rect's POSITION (`canvasHeight - yLibgdxBottom -
+  // height` above) is just a translation; it doesn't change the handedness of rotations
+  // applied to the sprite itself. Without this negation every authored rotation runs
+  // visually backwards — most visible on ModernChic Play's `attack.lua` 14 keyframe attack
+  // motion (was rotating the wrong way), 7K-skin scratch wheels, and Select-scene focus
+  // rings (audit 1.8).
+  result.angle = angle;
+  result.blendMode = blendCodeToPixi(group.blend);
+  return result;
 }
 
 function timerStartFromLuaFunction(

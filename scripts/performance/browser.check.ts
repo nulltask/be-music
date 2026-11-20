@@ -26,6 +26,7 @@ test('capture real-skin CPU and allocation profiles', async ({ player }) => {
     p99: number | undefined;
     over17: number;
     over33: number;
+    garbageCollections?: { minor: number; major: number; pauseMs: number };
     before: { metrics: Array<{ name: string; value: number }> };
     after: { metrics: Array<{ name: string; value: number }> };
   }> = [];
@@ -34,19 +35,16 @@ test('capture real-skin CPU and allocation profiles', async ({ player }) => {
   async function capture(name: string, action: () => Promise<void>) {
     await cdp.send('HeapProfiler.collectGarbage');
     const before = await cdp.send('Performance.getMetrics');
-    await player.page.evaluate(() => {
-      const g = globalThis as typeof globalThis & { __perfTimes: number[]; __perfRun: boolean };
-      g.__perfTimes = [];
-      g.__perfRun = true;
-      let last = performance.now();
-      function tick(now: number) {
-        if (!g.__perfRun) return;
-        g.__perfTimes.push(now - last);
-        last = now;
-        requestAnimationFrame(tick);
+    type TraceEvent = { pid: number; tid: number; ts: number; name: string; ph: string; dur?: number };
+    // Tracing includes other renderer threads and workers. Keep only GC pauses inside the page's own marks.
+    const events: TraceEvent[] = [];
+    function collectEvents({ value }: { value: object[] }) {
+      // CDP leaves trace event payloads untyped.
+      for (const event of value as TraceEvent[]) {
+        if (event.name === 'MinorGC' || event.name === 'MajorGC' || event.name.startsWith('be-music-perf-'))
+          events.push(event);
       }
-      requestAnimationFrame(tick);
-    });
+    }
     if (profile) {
       await cdp.send('HeapProfiler.startSampling', {
         samplingInterval: 16384,
@@ -54,19 +52,64 @@ test('capture real-skin CPU and allocation profiles', async ({ player }) => {
         includeObjectsCollectedByMinorGC: true,
       });
       await cdp.send('Profiler.start');
+      cdp.on('Tracing.dataCollected', collectEvents);
+      await cdp.send('Tracing.start', {
+        categories: 'devtools.timeline,blink.user_timing',
+        transferMode: 'ReportEvents',
+      });
     }
+    const stopFrames = await player.page.evaluateHandle(() => {
+      const frames: number[] = [];
+      let last: number | undefined;
+      let request = requestAnimationFrame(tick);
+      function tick(now: number) {
+        if (last !== undefined) frames.push(now - last);
+        last = now;
+        request = requestAnimationFrame(tick);
+      }
+      performance.mark('be-music-perf-start');
+      return () => {
+        performance.mark('be-music-perf-end');
+        cancelAnimationFrame(request);
+        return frames;
+      };
+    });
     const start = Date.now();
     await action();
     const elapsedMs = Date.now() - start;
+    const frames = await stopFrames.evaluate((stop) => stop());
+    await stopFrames.dispose();
+    if (profile) {
+      const complete = new Promise<void>((resolve) => cdp.once('Tracing.tracingComplete', () => resolve()));
+      await cdp.send('Tracing.end');
+      await complete;
+      cdp.off('Tracing.dataCollected', collectEvents);
+    }
     const cpu = profile ? await cdp.send('Profiler.stop') : undefined;
     const heap = profile ? await cdp.send('HeapProfiler.stopSampling') : undefined;
     const after = await cdp.send('Performance.getMetrics');
-    const frames = await player.page.evaluate(() => {
-      const g = globalThis as typeof globalThis & { __perfTimes: number[]; __perfRun: boolean };
-      g.__perfRun = false;
-      return g.__perfTimes as number[];
-    });
-    const sorted = frames.slice(1).sort((a, b) => a - b);
+    const garbageCollections = { minor: 0, major: 0, pauseMs: 0 };
+    if (profile) {
+      const startMark = events.find((event) => event.name === 'be-music-perf-start');
+      const endMark = events.find((event) => event.name === 'be-music-perf-end');
+      if (!startMark || !endMark) throw new Error('Missing page trace marks');
+      for (const event of events) {
+        if (
+          event.ph !== 'X' ||
+          event.pid !== startMark.pid ||
+          event.tid !== startMark.tid ||
+          event.ts < startMark.ts ||
+          event.ts >= endMark.ts
+        )
+          continue;
+        if (event.name === 'MinorGC') garbageCollections.minor++;
+        else if (event.name === 'MajorGC') garbageCollections.major++;
+        else continue;
+        garbageCollections.pauseMs += (event.dur ?? 0) / 1000;
+      }
+    }
+    expect(frames.length).toBeGreaterThan(0);
+    const sorted = frames.slice().sort((a, b) => a - b);
     const quantile = (p: number) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
     const summary = {
       name,
@@ -77,6 +120,7 @@ test('capture real-skin CPU and allocation profiles', async ({ player }) => {
       p99: quantile(0.99),
       over17: sorted.filter((v) => v > 16.7).length,
       over33: sorted.filter((v) => v > 33.4).length,
+      ...(profile ? { garbageCollections } : {}),
       before,
       after,
     };

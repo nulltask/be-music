@@ -22,7 +22,13 @@ export abstract class BeMusicPlayfieldCanvasElement<Data> extends DataElement<Da
       height: 100%;
     }
   `;
-  static override properties: PropertyDeclarations = { rect: { attribute: false } };
+  static override properties: PropertyDeclarations = {
+    rect: {
+      attribute: false,
+      hasChanged: (next: BeMusicRect | undefined, previous: BeMusicRect | undefined) =>
+        next?.x !== previous?.x || next?.y !== previous?.y || next?.w !== previous?.w || next?.h !== previous?.h,
+    },
+  };
   declare rect: BeMusicRect | undefined;
   private canvas: HTMLCanvasElement | undefined;
   private context: CanvasRenderingContext2D | null | undefined;
