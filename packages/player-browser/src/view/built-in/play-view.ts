@@ -88,7 +88,6 @@ export type BuiltInPlayViewOptions = Pick<
   | 'autoPlay'
   | 'nonstop'
   | 'showInvisibleNotes'
-  | 'judgedNoteDisplay'
   | 'layoutMode'
 > & {
   /** Where the chart's files are, for the skin's song images. */

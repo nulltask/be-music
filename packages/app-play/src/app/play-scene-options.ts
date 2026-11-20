@@ -48,7 +48,6 @@ export type PlaySceneGUIState = Pick<
   | 'bgaResizeMaxEdgePx'
   | 'bgaUseWebCodecs'
   | 'showInvisibleNotes'
-  | 'judgedNoteDisplay'
 >;
 
 export interface PlaySceneOptionsInput {
@@ -238,7 +237,6 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     bgaTranscodeMaxLongEdgePx: guiState.bgaResizeMaxEdgePx > 0 ? guiState.bgaResizeMaxEdgePx : undefined,
     bgaTranscodeUseWebCodecs: guiState.bgaUseWebCodecs,
     showInvisibleNotes: guiState.showInvisibleNotes,
-    judgedNoteDisplay: guiState.judgedNoteDisplay,
   };
   const { course, courseInfo, ...settings } = sharedOptions;
   return {

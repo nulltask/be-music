@@ -357,13 +357,6 @@ export const OPTION_HELP_CHOICES: OptionHelpChoices = {
     ],
     'Effect 1P': LANE_COVERS,
     'Effect 2P': LANE_COVERS,
-    'Judged notes': [
-      [
-        'Keep until its time (LR2)',
-        'A note hit early keeps scrolling to the judge line, as in LR2 and beatoraja (default).',
-      ],
-      ['Hide on judge', 'A note disappears the moment it is judged.'],
-    ],
     'Judge detail (built-in skins)': [
       ['OFF', 'Shows no timing above the judgment (default).'],
       ['FAST / SLOW', 'Words an early press FAST and a late one SLOW; a PGREAT shows nothing.'],

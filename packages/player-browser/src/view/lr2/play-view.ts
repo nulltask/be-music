@@ -109,7 +109,6 @@ export type LR2PlayViewOptions = Pick<
   | 'scoreGraph'
   | 'nonstop'
   | 'showInvisibleNotes'
-  | 'judgedNoteDisplay'
   | 'battleMode'
   | 'lr2ExtraMode'
   | 'gauge2P'

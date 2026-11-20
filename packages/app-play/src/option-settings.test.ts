@@ -54,7 +54,14 @@ describe('parseOptionSettingsDocument', () => {
       }),
     );
     expect(document?.settings).toMatchObject({ gauge: 'HARD', autoPlay: true, peakGain: true });
-    expect(document?.settings.judgedNoteDisplay).toBeUndefined();
+    expect((document?.settings as Record<string, unknown> | undefined)?.judgedNoteDisplay).toBeUndefined();
+  });
+
+  test('drops the removed Judged notes setting a browser saved before', () => {
+    const document = parseOptionSettingsDocument(
+      JSON.stringify({ version: 0, updatedAt: 10, settings: { judgedNoteDisplay: 'HIDE', autoPlay: true } }),
+    );
+    expect(document?.settings).toEqual({ autoPlay: true });
   });
 
   test('ignores an older or foreign version', () => {
@@ -154,7 +161,6 @@ describe('captureOptionSettings', () => {
       bgaResizeMaxEdgePx: 720,
       bgaUseWebCodecs: false,
       showInvisibleNotes: true,
-      judgedNoteDisplay: 'HIDE',
       ghost: 'LEADERBOARD_TOP',
       ghostMode: 'LANE_OVERLAY',
       autoSaveReplay: true,

@@ -206,7 +206,6 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
   const firstNoteIndex =
     cursor?.note ??
     findFirstIndexAtOrAfter(ctx.play.drawNotes, currentBeat - ctx.play.maxLongNoteBeatSpan, (note) => note.beat);
-  const hideJudgedNotes = ctx.options.judgedNoteDisplay === 'HIDE';
   // AC 34's オートスクラッチ表示: the scratch notes AUTO SCRATCH plays are not drawn; they still play and count (#1137).
   const hiddenChannels = resolveHiddenNoteChannels(ctx.playOptions?.autoScratchNotes, ctx.play.autoScratchChannels);
   // LR2's mania drawing options: each note's and mine's place, shift and size, after the chart's own options.
@@ -311,14 +310,8 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
     ) {
       continue;
     }
-    // Read the engine's `judged` flag directly off the shared `TimedPlayableNote` instance — the engine
-    // mutates it the moment it resolves the note's verdict, and because the renderer and the engine
-    // hold the same array (handed in via `engineOptions.preparedChart`), there is no parallel `hit` flag
-    // to keep in sync. `judgedNoteDisplay: 'HIDE'` drops a judged note at once; by default (as in LR2 and
-    // beatoraja) it stays until its time.
-    if (note.judged && hideJudgedNotes) {
-      continue;
-    }
+    // A judged note stays until its time, as in LR2 and beatoraja. Its `judged` flag is the engine's, read off the shared
+    // `TimedPlayableNote` (the renderer and the engine hold the same array), for mark processed notes below.
     const noteLane = applyManiaLane(applyChartLaneVisual(lane, headVisual), maniaPlacement);
     const size = maniaSize(maniaPlacement);
     // beatoraja's mark processed note: a note judged before its time is drawn dimmed until it goes (#1130).

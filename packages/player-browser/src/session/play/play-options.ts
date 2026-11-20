@@ -440,18 +440,6 @@ export interface PlaySessionOptions {
    */
   showInvisibleNotes?: boolean;
   /**
-   * Single-note visibility after judgement.
-   *
-   * - `'KEEP_SCROLLING'` (default) — a judged note stays on screen until its own time: one hit early keeps scrolling
-   *   down to the judgement line and goes when it reaches it. This is what LR2 (`DrawNotes` draws a hit note until the
-   *   playhead reaches it) and beatoraja (`LaneRenderer` draws a note while its time is ahead, judged or not) both do.
-   * - `'HIDE'` — a judged note goes the moment it is judged, which neither player does; kept as a preference for a
-   *   cleaner playfield in dense passages.
-   *
-   * Only tap notes are gated. Long notes stay until their end either way, so this option doesn't disturb them.
-   */
-  judgedNoteDisplay?: 'KEEP_SCROLLING' | 'HIDE';
-  /**
    * The chart's `#RANDOM` / `#SWITCH` branches as the decide screen drew them (`DecideScene.resolved`), so the play
    * plays the branches the screen showed. Without it the play draws its own; a replay always plays its log's.
    */

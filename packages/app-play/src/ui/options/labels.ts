@@ -223,7 +223,6 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Renderer (applies on reload)': 'レンダラー (再読み込みで反映)',
   'Auto-detect resolution': '解像度を自動で決める',
   'Play layout': 'プレイ画面のレイアウト',
-  'Judged notes': '判定後のノーツ',
   'Toggle fullscreen': '全画面の切り替え',
   // BGA camera
   'Show camera in BGA': 'BGA の枠にカメラを映す',

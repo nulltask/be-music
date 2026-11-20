@@ -75,7 +75,6 @@ export interface OptionSettings {
   bgaResizeMaxEdgePx: number;
   bgaUseWebCodecs: boolean;
   showInvisibleNotes: boolean;
-  judgedNoteDisplay: PlayerGUIState['judgedNoteDisplay'];
   ghost: PlayerGUIState['ghost'];
   ghostMode: PlayerGUIState['ghostMode'];
   autoSaveReplay: boolean;
@@ -486,7 +485,8 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'muted', booleanOf(raw.muted));
   assign(settings, 'tempoEnabled', booleanOf(raw.tempoEnabled));
   assign(settings, 'bgaUseWebCodecs', booleanOf(raw.bgaUseWebCodecs));
-  assign(settings, 'judgedNoteDisplay', oneOf(raw.judgedNoteDisplay, ['KEEP_SCROLLING', 'HIDE'] as const));
+  // `judgedNoteDisplay` (Judged notes: keep until its time, or hide on judge) was removed: a stored value is ignored
+  // and goes with the next save; a judged note always stays until its time, as in LR2 and beatoraja.
   assign(settings, 'ghost', oneOf(raw.ghost, GHOST_SOURCES));
   assign(settings, 'ghostMode', oneOf(raw.ghostMode, GHOST_MODES));
   assign(settings, 'nonstopPlacement', oneOf(raw.nonstopPlacement, ['intended', 'lr2'] as const));
@@ -687,7 +687,6 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('bgaResizeMaxEdgePx');
   assignState('bgaUseWebCodecs');
   assignState('showInvisibleNotes');
-  assignState('judgedNoteDisplay');
   assignState('ghost');
   assignState('ghostMode');
   assignState('autoSaveReplay');
@@ -866,7 +865,6 @@ export function captureOptionSettings(
     bgaResizeMaxEdgePx: state.bgaResizeMaxEdgePx,
     bgaUseWebCodecs: state.bgaUseWebCodecs,
     showInvisibleNotes: state.showInvisibleNotes,
-    judgedNoteDisplay: state.judgedNoteDisplay,
     ghost: state.ghost,
     ghostMode: state.ghostMode,
     autoSaveReplay: state.autoSaveReplay,

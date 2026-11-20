@@ -247,9 +247,6 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     // Debug overlay for invisible / keysound notes — off by default. Power users investigating chart authoring (or
     // diagnosing missing keysound triggers) flip it on; the regular gameplay surface stays clean otherwise.
     showInvisibleNotes: false,
-    // LR2's and beatoraja's own behaviour: a judged note stays until its time, so one hit early keeps scrolling down
-    // to the judgement line. The dropdown offers `'HIDE'` (gone the moment it is judged) as a preference.
-    judgedNoteDisplay: 'KEEP_SCROLLING',
     // No ghost unless the player asks for one; when they do, it shows as a second playfield unless they pick another mode.
     ghost: 'OFF',
     ghostMode: 'PLAYFIELD',

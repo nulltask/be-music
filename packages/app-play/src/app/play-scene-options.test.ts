@@ -87,7 +87,6 @@ function gui(changes: Partial<PlaySceneGUIState> = {}): PlaySceneGUIState {
     bgaResizeMaxEdgePx: 0,
     bgaUseWebCodecs: false,
     showInvisibleNotes: false,
-    judgedNoteDisplay: 'KEEP_SCROLLING',
     ...changes,
   } as PlaySceneGUIState;
 }
@@ -224,7 +223,6 @@ describe('resolvePlaySceneOptions: a single play', () => {
       bgaTranscodeMaxLongEdgePx: undefined,
       bgaTranscodeUseWebCodecs: false,
       showInvisibleNotes: false,
-      judgedNoteDisplay: 'KEEP_SCROLLING',
     });
   });
 

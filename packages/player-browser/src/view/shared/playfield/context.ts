@@ -238,7 +238,6 @@ export interface PlayfieldContext extends LaneGeometryContext {
       PlaySessionOptions,
       | 'beMusicEffects'
       | 'showInvisibleNotes'
-      | 'judgedNoteDisplay'
       | 'bpmGuide'
       | 'judgeTimingMs'
       | 'visualConstant'

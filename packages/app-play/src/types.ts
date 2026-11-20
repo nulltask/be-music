@@ -141,16 +141,6 @@ export interface PlayerGUIState extends PlayTempoSettings {
    */
   showInvisibleNotes: boolean;
   /**
-   * Single-note visibility after a judgement lands.
-   *
-   * - `'KEEP_SCROLLING'` (default) — a judged note stays until its own time, so one hit early keeps scrolling down to
-   *   the judgement line, as in LR2 and beatoraja.
-   * - `'HIDE'` — a judged note disappears the moment it is judged.
-   *
-   * Long notes are unaffected — they stay until their end.
-   */
-  judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
-  /**
    * The replay ghost shown with the play (`services/ghost.ts`): `'OFF'` (default), or the replay it plays — `'OWN_BEST'`
    * (the player's best on the chart), a replay slot, the Leaderboard's top run, or a picked replay file. Latched at song
    * start.
