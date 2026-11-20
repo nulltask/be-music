@@ -239,7 +239,6 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
       bgaResizeMaxEdgePx: 0,
       bgaUseWebCodecs: false,
       showInvisibleNotes: false,
-      judgedNoteDisplay: 'KEEP_SCROLLING',
       courseAutoAdvance: false,
       playLayout: 'auto',
     } as PlayRouteDeps['guiState'],

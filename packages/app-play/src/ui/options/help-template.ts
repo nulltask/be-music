@@ -445,8 +445,6 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>How long a note shows before the judge line under Visual CONSTANT. Changes live.</dd>
           <dt>CONSTANT fade (ms)</dt>
           <dd>How long a note takes to fade in at the edge of the range Visual CONSTANT shows. Changes live.</dd>
-          <dt>Judged notes</dt>
-          <dd>Whether a judged note keeps scrolling until its time (as in LR2) or disappears.</dd>
           <dt>Lane brightness (AC)</dt>
           <dd>How bright the lanes are, in percent. Notes, bar lines and covers keep their own. Changes live.</dd>
           <dt>Judgment display (AC)</dt>

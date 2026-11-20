@@ -338,10 +338,6 @@ export const OPTION_HELP_CHOICES_JA: OptionHelpChoices = {
     ],
     'Effect 1P': LANE_COVERS,
     'Effect 2P': LANE_COVERS,
-    'Judged notes': [
-      ['Keep until its time (LR2)', '早く叩いたノーツも判定ラインまで流れます。LR2 と beatoraja と同じです (既定)。'],
-      ['Hide on judge', 'ノーツは判定した瞬間に消えます。'],
-    ],
     'Judge detail (built-in skins)': [
       ['OFF', '判定文字の上にタイミングを表示しません (既定)。'],
       ['FAST / SLOW', '早い押下に FAST、遅い押下に SLOW と表示します。PGREAT では表示しません。'],

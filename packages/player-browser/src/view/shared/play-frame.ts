@@ -36,10 +36,7 @@ const BE_MUSIC_ENTER_FADE_MS = 400;
 /** The view's members the frame passes use: a play view's members of these names. */
 export interface PlayFrameContext extends PlayfieldContext, BGARendererContext {
   readonly options: Readonly<
-    Pick<
-      PlaySessionOptions,
-      'beMusicEffects' | 'showInvisibleNotes' | 'judgedNoteDisplay' | 'bga' | 'autoPlay' | 'nonstop'
-    >
+    Pick<PlaySessionOptions, 'beMusicEffects' | 'showInvisibleNotes' | 'bga' | 'autoPlay' | 'nonstop'>
   >;
   host: PixiSceneHost | undefined;
   readonly app: Application;

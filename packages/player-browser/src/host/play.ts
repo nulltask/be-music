@@ -215,7 +215,6 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   setAudioCompressorStageEnabled(stage: CompressorStage, enabled: boolean): void;
   setAudioCompressorParams(compressor: TunableCompressor, params: Partial<CompressorParams>): void;
   setAutoPauseOnBlur(enabled: boolean): void;
-  setJudgedNoteDisplay(mode: 'KEEP_SCROLLING' | 'HIDE'): void;
   setShowInvisibleNotes(enabled: boolean): void;
   /** Which labels BPM GUIDE shows, from the next frame (a viewing preference: no record or replay changes). */
   setBPMGuideKinds(kinds: BPMGuideKinds): void;
@@ -249,7 +248,6 @@ interface FamilyPlayView {
   /** The view draws the LIFT (the session theme's `drawsLift`). */
   readonly drawsLift?: boolean;
   uploadTextures(textures: Iterable<Texture | undefined>, isCancelled: () => boolean): Promise<void>;
-  setJudgedNoteDisplay(mode: 'KEEP_SCROLLING' | 'HIDE'): void;
   setShowInvisibleNotes(enabled: boolean): void;
   setBPMGuideKinds(kinds: BPMGuideKinds): void;
   updateKit(kit: PlaySceneKit): void;
@@ -297,8 +295,6 @@ function createPlayView(
       replayView: () => view.replayView(),
       drawsLift: true,
       uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
-      // A beatoraja skin determines how judged notes draw.
-      setJudgedNoteDisplay: () => {},
       setShowInvisibleNotes: (enabled) => view.setShowInvisibleNotes(enabled),
       setBPMGuideKinds: (kinds) => view.setBPMGuideKinds(kinds),
       updateKit: (next) => (next.family === 'beatoraja' ? view.updateKit(next) : ignoreKit(next, 'beatoraja')),
@@ -315,7 +311,6 @@ function createPlayView(
     ...(settings.autoPlay !== undefined ? { autoPlay: settings.autoPlay } : {}),
     ...(settings.nonstop !== undefined ? { nonstop: settings.nonstop } : {}),
     ...(settings.showInvisibleNotes !== undefined ? { showInvisibleNotes: settings.showInvisibleNotes } : {}),
-    ...(settings.judgedNoteDisplay !== undefined ? { judgedNoteDisplay: settings.judgedNoteDisplay } : {}),
     ...(source !== undefined ? { source } : {}),
   };
   if (kit.family === 'lr2') {
@@ -341,9 +336,6 @@ function createPlayView(
       prepareOn: (host) => view.prepareOn(host),
       prepareView: () => view.prepare(),
       uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
-      setJudgedNoteDisplay: (mode) => {
-        view.options.judgedNoteDisplay = mode;
-      },
       setShowInvisibleNotes: (enabled) => {
         view.options.showInvisibleNotes = enabled;
       },
@@ -365,9 +357,6 @@ function createPlayView(
     },
     prepareOn: (host) => view.prepareOn(host),
     uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
-    setJudgedNoteDisplay: (mode) => {
-      view.options.judgedNoteDisplay = mode;
-    },
     setShowInvisibleNotes: (enabled) => {
       view.options.showInvisibleNotes = enabled;
     },
@@ -548,10 +537,6 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
 
   public setAutoPauseOnBlur(enabled: boolean): void {
     this.play.setAutoPauseOnBlur(enabled);
-  }
-
-  public setJudgedNoteDisplay(mode: 'KEEP_SCROLLING' | 'HIDE'): void {
-    this.familySlot.current.setJudgedNoteDisplay(mode);
   }
 
   public setShowInvisibleNotes(enabled: boolean): void {

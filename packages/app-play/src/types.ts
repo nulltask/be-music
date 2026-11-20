@@ -157,7 +157,6 @@ export interface PlayerGUIState extends PlayTempoSettings {
    *
    * Long notes are unaffected — they stay until their end.
    */
-  judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
   /**
    * The replay ghost shown with the play (`services/ghost.ts`): `'OFF'` (default), or the replay it plays — `'OWN_BEST'`
    * (the player's best on the chart), a replay slot, the Leaderboard's top run, or a picked replay file. Latched at song

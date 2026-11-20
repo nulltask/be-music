@@ -254,7 +254,6 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     guideSpeed: false,
     // LR2's and beatoraja's own behaviour: a judged note stays until its time, so one hit early keeps scrolling down
     // to the judgement line. The dropdown offers `'HIDE'` (gone the moment it is judged) as a preference.
-    judgedNoteDisplay: 'KEEP_SCROLLING',
     // No ghost unless the player asks for one; when they do, it shows as a second playfield unless they pick another mode.
     ghost: 'OFF',
     ghostMode: 'PLAYFIELD',

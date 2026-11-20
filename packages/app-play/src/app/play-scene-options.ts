@@ -52,7 +52,6 @@ export type PlaySceneGUIState = Pick<
   | 'guideStop'
   | 'guideScroll'
   | 'guideSpeed'
-  | 'judgedNoteDisplay'
 >;
 
 export interface PlaySceneOptionsInput {
@@ -250,7 +249,6 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     bgaTranscodeUseWebCodecs: guiState.bgaUseWebCodecs,
     showInvisibleNotes: guiState.showInvisibleNotes,
     bpmGuideKinds: resolveBPMGuideKinds(guiState),
-    judgedNoteDisplay: guiState.judgedNoteDisplay,
   };
   const { course, courseInfo, ...settings } = sharedOptions;
   return {

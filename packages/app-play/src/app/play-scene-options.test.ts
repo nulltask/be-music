@@ -96,7 +96,6 @@ function gui(changes: Partial<PlaySceneGUIState> = {}): PlaySceneGUIState {
     guideStop: true,
     guideScroll: false,
     guideSpeed: true,
-    judgedNoteDisplay: 'KEEP_SCROLLING',
     ...changes,
   } as PlaySceneGUIState;
 }
@@ -234,7 +233,6 @@ describe('resolvePlaySceneOptions: a single play', () => {
       bgaTranscodeUseWebCodecs: false,
       showInvisibleNotes: false,
       bpmGuideKinds: { bpm: true, stop: true, scroll: false, speed: true },
-      judgedNoteDisplay: 'KEEP_SCROLLING',
     });
   });
 
