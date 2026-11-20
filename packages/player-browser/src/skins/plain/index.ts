@@ -32,7 +32,11 @@ export const plainSkin: BeMusicSkin = defineBeMusicSkin({
   // The 16:9 cabinet stage while the screen is wider than tall, the portrait one otherwise.
   stage: cabinetStage,
   portraitStage: tallStage,
-  gameplay: { draw: drawGameplay },
+  // Plain's ink with its line grey in faint stripes, and the line grey along the edge the notes come from.
+  gameplay: {
+    draw: drawGameplay,
+    laneCover: { color: 0x111114, stripeColor: 0x3a3a42, stripeAlpha: 0.5, edgeColor: 0x3a3a42 },
+  },
   select: { layout: SELECT_LAYOUT, portraitLayout: PORTRAIT_SELECT_LAYOUT, outroMs: SELECT_OUTRO_MS, draw: drawSelect },
   result: { draw: drawResult },
 });
