@@ -70,6 +70,7 @@ export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'web
     },
     gameplay: {
       bombDurationMs: gameplay.bombDurationMs,
+      ...(gameplay.guideLabel ? { guideLabel: gameplay.guideLabel } : {}),
       // Pixi skins always draw mines: their own `renderMine`, or the player's caution-striped bar.
       drawsMines: true,
       draw(surface, frame) {

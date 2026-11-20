@@ -639,6 +639,7 @@ export class PlaySession extends PlaySessionState {
     this.beatAtSeconds = undefined;
     this.scrollMapper = undefined;
     this.timingResolver = undefined;
+    this.bpmGuideEvents = [];
     this.bgaTimeline = { base: [], layer: [], poor: [] };
     this.laneChannels = [];
     this.laneX.clear();

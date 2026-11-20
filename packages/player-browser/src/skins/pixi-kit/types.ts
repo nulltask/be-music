@@ -6,6 +6,7 @@ import type {
   BeMusicEffectLevel,
   BeMusicGameplayLayout,
   BeMusicGameplayRuntime,
+  BeMusicGuideLabelStyle,
   BeMusicLaneFrame,
   BeMusicLaneKind,
   BeMusicLongNoteState,
@@ -67,6 +68,8 @@ export interface PixiGameplaySkin {
   renderBombs(context: PixiBombsContext): void;
   /** How long a hit effect lives (ms) before the player retires it. */
   readonly bombDurationMs: number;
+  /** The look of the BPM GUIDE labels the player draws over the lanes (`BeMusicGameplaySkin.guideLabel`). */
+  readonly guideLabel?: BeMusicGuideLabelStyle;
 }
 
 export interface PixiLanesContext {

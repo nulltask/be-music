@@ -750,6 +750,24 @@ export interface BeMusicGameplayFrame {
   chartImage: BeMusicChartImageLookup;
 }
 
+/** What a BPM GUIDE label marks: a BPM change, a STOP, a `#SCROLL` change or a `#SPEED` change. */
+export type BeMusicGuideLabelKind = 'bpm' | 'stop' | 'scroll' | 'speed';
+
+/**
+ * The look of the BPM GUIDE labels the player draws over the lanes ({@link BeMusicGameplaySkin.guideLabel}). Without
+ * one they take beatoraja's monospace, a size relative to the lanes, and its green and yellow (cyan and violet for
+ * `#SCROLL` and `#SPEED`). Colours are `0xRRGGBB`; a label's line takes its colour.
+ */
+export interface BeMusicGuideLabelStyle {
+  /** A CSS font family; load the font through {@link BeMusicSkin.fontLoads}. */
+  readonly fontFamily: string;
+  /** A CSS font weight, such as `'500'`. */
+  readonly fontWeight?: '100' | '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900' | 'normal' | 'bold';
+  /** In stage pixels. */
+  readonly fontSize?: number;
+  readonly colors?: Readonly<Partial<Record<BeMusicGuideLabelKind, number>>>;
+}
+
 export interface BeMusicGameplaySkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
   /** Draws one gameplay frame. Called once per frame, right before the player renders. */
   draw(surface: BeMusicSurface<K>, frame: BeMusicGameplayFrame): void;
@@ -765,6 +783,8 @@ export interface BeMusicGameplaySkin<K extends BeMusicSurfaceContextKind = BeMus
    * the player draws its own covers over the skin.
    */
   readonly drawsLaneCover?: boolean;
+  /** The look of the BPM GUIDE labels and lines the player draws over the skin's lanes. */
+  readonly guideLabel?: BeMusicGuideLabelStyle;
   /**
    * Set to `true` when the skin draws measure lines itself from `frame.measureLines`. Otherwise the player draws its
    * own lines.
