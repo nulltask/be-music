@@ -161,6 +161,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'REST AFTER (bars)': '後の休憩 (小節)',
   'Keep LNs held into the bars': '小節より前から続く LN を含める',
   'Target BPM': '目標 BPM',
+  'Change the tempo': 'テンポを変える',
   Range: '範囲',
   'Gauge and judge': 'ゲージと判定',
   'GAUGE TYPE': 'GAUGE TYPE',
