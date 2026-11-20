@@ -63,6 +63,10 @@ export interface LoadPlaySamplesOptions {
   nonstop?: NonstopStitchMap;
   /** True once the play was abandoned: the remaining decodes and stretches are skipped. */
   isCancelled?: () => boolean;
+  /** Fraction of sample paths processed, including cached and unavailable samples. */
+  onDecodeProgress?: (fraction: number) => void;
+  /** Fraction of keep-pitch time stretching completed. */
+  onStretchProgress?: (fraction: number) => void;
   /**
    * Scale every decoded sample by one gain so the loudest peak sits near −3 dBFS. Off unless the host asks: charts
    * keep the level they were authored at.
@@ -184,7 +188,7 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
   );
   if (lease !== undefined) log.debug('cached samples', { reused: lease.reused, files: firstFiles.size });
   const decodePaths = windowPaths === undefined ? wavPaths : wavPaths.filter((path) => windowPaths.has(path));
-  await runWithConcurrency(decodePaths, concurrency, async (path) => {
+  const decodePath = async (path: string): Promise<void> => {
     if (isCancelled()) return;
     const ringsFrom = windowPaths?.get(path);
     const file = firstFiles.get(path);
@@ -237,6 +241,11 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
         log.debug('decode candidate skipped', { path, error });
       }
     }
+  };
+  let processed = 0;
+  await runWithConcurrency(decodePaths, concurrency, async (path) => {
+    await decodePath(path);
+    if (!isCancelled()) options.onDecodeProgress?.(++processed / decodePaths.length);
   });
   const stretchResources: Record<string, string> = {};
   for (const [key, path] of Object.entries(wavResources)) {
@@ -252,7 +261,14 @@ export async function loadPlaySamples(options: LoadPlaySamplesOptions): Promise<
   if (options.tempoPitchMode === 'keep-pitch' && !isCancelled()) {
     const rates = resolveSampleStretchRates(stretchResources, (key) => key, options.tempo, options.nonstop);
     if (rates.size > 0) {
-      await stretchDecodedSamples(audioContext, samples, rates, options.tempoStretchAlgorithm, isCancelled);
+      await stretchDecodedSamples(
+        audioContext,
+        samples,
+        rates,
+        options.tempoStretchAlgorithm,
+        isCancelled,
+        options.onStretchProgress,
+      );
       stretched = true;
     }
   }

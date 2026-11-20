@@ -27,6 +27,7 @@ export async function signalsmithStretchChannels(
   channels: readonly Float32Array[],
   sampleRate: number,
   rate: number,
+  onProgress?: (fraction: number) => void,
 ): Promise<Float32Array<ArrayBuffer>[]> {
   const inputLength = channels[0]?.length ?? 0;
   const outputLength = Math.max(1, Math.round(inputLength / rate));
@@ -54,7 +55,15 @@ export async function signalsmithStretchChannels(
     await node.schedule({ active: true, input: 0, output: startSeconds, rate, semitones: 0 });
     await context.resume();
   });
-  const rendered = await context.startRendering();
+  const poll =
+    onProgress &&
+    setInterval(() => {
+      if (startSeconds > 0) {
+        onProgress(Math.max(0, Math.min(1, ((context.currentTime - startSeconds) * sampleRate) / outputLength)));
+      }
+    }, 100);
+  const rendered = await context.startRendering().finally(() => clearInterval(poll));
+  onProgress?.(1);
   const start = Math.round(startSeconds * sampleRate);
   return Array.from({ length: channels.length }, (_, channel) => {
     const out = new Float32Array(outputLength);

@@ -436,13 +436,9 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
       this.play.host ??= this.prepareHost;
       this.familySlot.current.prepareOn(this.prepareHost);
     }
-    const report = (progress: number): void => {
-      this.playSession.loadProgress = progress;
-      onProgress?.(progress);
-    };
-    report(0);
+    onProgress?.(0);
     await this.play.load(this.chart, this.source);
-    report(1);
+    onProgress?.(1);
   }
 
   public start(): void {

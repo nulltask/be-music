@@ -204,7 +204,7 @@ describe('PlaySceneSession', () => {
   test('reports the load progress while the play loads', () => {
     const { play, session } = createSceneSession();
     play.assetsLoading = true;
-    session.loadProgress = 0.5;
+    play.loadProgress = 0.5;
     const frame = session.frame(0);
     expect(frame.stage).toBe('loading');
     expect(frame.progress).toBe(0.5);

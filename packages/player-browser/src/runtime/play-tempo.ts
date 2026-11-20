@@ -151,11 +151,14 @@ export async function stretchDecodedSamples(
   rates: ReadonlyMap<string, number>,
   algorithm: TimeStretchAlgorithm,
   cancelled: () => boolean = () => false,
+  onProgress?: (fraction: number) => void,
 ): Promise<void> {
   const byRate = new Map<number, string[]>();
   for (const [path, rate] of rates) {
     if (samples.has(path)) byRate.set(rate, [...(byRate.get(rate) ?? []), path]);
   }
+  let completedGroups = 0;
+  let reported = 0;
   for (const [rate, paths] of byRate) {
     if (cancelled()) return;
     const stretched = await stretchAudioBuffers(
@@ -163,9 +166,17 @@ export async function stretchDecodedSamples(
       paths.map((path) => samples.get(path)!),
       rate,
       algorithm,
+      onProgress &&
+        ((fraction) => {
+          const progress = (completedGroups + fraction) / byRate.size;
+          if (!cancelled() && progress > reported) onProgress((reported = progress));
+        }),
     );
     if (cancelled()) return;
     paths.forEach((path, index) => samples.set(path, stretched[index]!));
+    completedGroups++;
+    const progress = completedGroups / byRate.size;
+    if (progress > reported) onProgress?.((reported = progress));
   }
 }
 

@@ -1,6 +1,6 @@
 import type { NonstopStitchMap } from '@be-music/player-engine/course';
 import type { BeMusicEvent } from '@be-music/chart-source';
-import { describe, expect, test } from 'vite-plus/test';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import {
   chartToElapsedSeconds,
   clampPlayTempo,
@@ -172,6 +172,7 @@ describe('stretchDecodedSamples', () => {
       ['c', fakeBuffer(4000)],
     ]);
     const untouched = samples.get('c');
+    const onProgress = vi.fn();
     await stretchDecodedSamples(
       context,
       samples,
@@ -181,7 +182,10 @@ describe('stretchDecodedSamples', () => {
         ['missing', 0.5],
       ]),
       'wsola',
+      () => false,
+      onProgress,
     );
+    expect(onProgress.mock.calls).toEqual([[0.5], [1]]);
     expect(samples.get('a')!.length).toBe(16000);
     expect(samples.get('b')!.length).toBe(2000);
     expect(samples.get('c')).toBe(untouched);

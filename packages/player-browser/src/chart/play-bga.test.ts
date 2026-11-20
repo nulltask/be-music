@@ -512,6 +512,27 @@ describe('loadPlayBGA', () => {
     expect(mocks.loadTextureFromBytes).toHaveBeenCalledWith('bga.png', expect.any(Uint8Array));
   });
 
+  test('reports conversion progress before the video is ready and ignores a fallback going backwards', async () => {
+    const onProgress = vi.fn();
+    mocks.resolveChartBGAAsset.mockReturnValue({ entry: 'bga.mpg', path: 'bga.mpg' });
+    mocks.loadVideoTexture.mockImplementationOnce(async (_path, _file, options) => {
+      options.onProgress(0.4);
+      options.onProgress(0.2);
+      expect(onProgress.mock.calls).toEqual([[0.4]]);
+      return undefined;
+    });
+    await loadPlayBGA({
+      chart: bmsChart({ '01': 'bga.mpg' }),
+      source: SOURCE,
+      chartPath: 'x.bms',
+      timeline: { base: [{ seconds: 0, bmpKey: '01' }], layer: [], poor: [] },
+      into: emptyResources(),
+      tempo: 1,
+      onProgress,
+    });
+    expect(onProgress.mock.calls).toEqual([[0.4], [1]]);
+  });
+
   test('starts a video paused at the play tempo, under the file name it was found as', async () => {
     const video = { pause: vi.fn(), playbackRate: 1, defaultPlaybackRate: 1 };
     const texture = new Texture();
