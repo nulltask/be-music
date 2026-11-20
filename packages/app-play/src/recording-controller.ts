@@ -5,6 +5,7 @@ import {
   makeWebMSeekable,
   recordingFileExtension,
   type RecordingFormat,
+  type RecordingQuality,
 } from '@be-music/player-browser/recording';
 import type { OptionButton } from './ui/options-controls.ts';
 import { setDisabled, setButtonTitle } from './pane-controls.ts';
@@ -22,7 +23,7 @@ const recordLog = logger('record');
  * acts on without branching by family.
  */
 export interface GameplayRecorder {
-  startRecording(options?: { format?: RecordingFormat }): void;
+  startRecording(options?: { format?: RecordingFormat; quality?: RecordingQuality }): void;
   stopRecording(): Promise<{ blob: Blob; mimeType: string; durationMs: number; seekable: boolean } | undefined>;
   isRecording(): boolean;
 }
@@ -44,6 +45,10 @@ export interface RecordingDeps {
   getRecordingFilenameBase(): string;
   /** The Options dialog's "Video format": the container and codec a new recording is written in. */
   getRecordingFormat(): RecordingFormat;
+  /** The Options dialog's "Video quality": the bitrates a new recording is made at. */
+  getRecordingQuality(): RecordingQuality;
+  /** Disables the Video format and Video quality controls while a recording runs: they apply when one starts. */
+  setRecordingSettingsLocked?(locked: boolean): void;
   setStatus(text: string): void;
 }
 
@@ -201,11 +206,13 @@ export async function toggleRecording(deps: RecordingDeps): Promise<void> {
       controller?.element.classList.remove('recording');
       setButtonTitle(controller, RECORD_LABEL);
       setDisabled(controller, false);
+      deps.setRecordingSettingsLocked?.(false);
     }
     return;
   }
   try {
-    gameplay.startRecording({ format: deps.getRecordingFormat() });
+    gameplay.startRecording({ format: deps.getRecordingFormat(), quality: deps.getRecordingQuality() });
+    deps.setRecordingSettingsLocked?.(true);
     controller?.element.classList.add('recording');
     setButtonTitle(controller, STOP_RECORDING_LABEL);
     deps.setStatus('Recording…');
@@ -240,7 +247,8 @@ export function startArmedRecording(deps: RecordingDeps): void {
   const controller = deps.recordController;
   controller?.element.classList.remove('arming');
   try {
-    gameplay.startRecording({ format: deps.getRecordingFormat() });
+    gameplay.startRecording({ format: deps.getRecordingFormat(), quality: deps.getRecordingQuality() });
+    deps.setRecordingSettingsLocked?.(true);
     controller?.element.classList.add('recording');
     setButtonTitle(controller, STOP_RECORDING_LABEL);
     deps.setStatus('Recording…');

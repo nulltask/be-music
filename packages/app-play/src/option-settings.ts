@@ -30,7 +30,8 @@ import {
 import { parseCompressorTunings, type CompressorTuning } from './compressor-tuning.ts';
 import { parseStoredHiSpeed, HI_SPEED_STORAGE_KEY } from './hi-speed-storage.ts';
 import { parseStoredPlayTempoSettings, PLAY_TEMPO_STORAGE_KEY, type PlayTempoSettings } from './play-tempo-settings.ts';
-import { parseRecordingFormatKey, recordingFormatKey } from './recording-format-choice.ts';
+import { parseRecordingFormatKey, parseRecordingQuality, recordingFormatKey } from './recording-format-choice.ts';
+import type { RecordingQuality } from '@be-music/player-browser/recording';
 import { parseStoredRenderResolution, RENDER_RESOLUTION_STORAGE_KEY } from './render-resolution.ts';
 import { parseStoredReplayView, REPLAY_VIEW_STORAGE_KEY } from './replay-view-settings.ts';
 import { parseStoredSkinSettings, serializeStoredSkinSettings, type StoredSkinSettingValue } from './skin-settings.ts';
@@ -227,6 +228,7 @@ export interface OptionSettings {
   playLayout: PlayLayout;
   renderer: PlayerGUIState['renderer'];
   recordingFormat: string;
+  recordingQuality: RecordingQuality;
   workerCount: number;
   compressorTuning: Record<TunableCompressor, CompressorTuning>;
   skinSettings: Record<string, Record<string, StoredSkinSettingValue>>;
@@ -560,6 +562,12 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   ) {
     settings.recordingFormat = raw.recordingFormat;
   }
+  if (
+    typeof raw.recordingQuality === 'string' &&
+    parseRecordingQuality(raw.recordingQuality) === raw.recordingQuality
+  ) {
+    settings.recordingQuality = raw.recordingQuality;
+  }
   if (typeof raw.replayView === 'object' && raw.replayView !== null) {
     settings.replayView = parseStoredReplayView(JSON.stringify(raw.replayView));
   }
@@ -840,6 +848,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('playLayout');
   assignState('renderer');
   assignState('recordingFormat');
+  assignState('recordingQuality');
 }
 
 /** The live Options dialog, plus the settings kept beside it, as one document. */
@@ -1019,6 +1028,7 @@ export function captureOptionSettings(
     playLayout: state.playLayout,
     renderer: state.renderer,
     recordingFormat: state.recordingFormat,
+    recordingQuality: state.recordingQuality,
     workerCount: extras.workerCount,
     compressorTuning: extras.compressorTuning,
     skinSettings: Object.fromEntries(extras.skinSettings),

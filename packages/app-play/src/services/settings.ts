@@ -417,6 +417,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     openFolder: inputs.actions.openFolder,
     openFiles: inputs.actions.openFiles,
     recordingFormat: readStoredRecordingFormat(storage),
+    recordingQuality: 'standard',
     record: inputs.actions.record,
     screenshot: inputs.actions.screenshot,
   };

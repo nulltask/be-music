@@ -245,6 +245,8 @@ export class OptionsDialog {
   /** Compressor tuning in slider units, restored from the last visit; seeds every gameplay mount. */
   public readonly compressorTunings: Record<TunableCompressor, CompressorTuning> = readStoredCompressorTunings();
   public recordController: OptionButton | undefined;
+  /** The Capture folder's Video format and Video quality, locked while a recording runs. */
+  public recordingSettingControllers: PaneBinding[] = [];
   /**
    * "Auto-save replays" checkbox controller. Held so the play-start path sets `disabled` for the duration
    * of a play — the replay options are latched when a song starts and cannot change mid-song — and the result /
@@ -558,6 +560,10 @@ export class OptionsDialog {
       this.refreshRecordConsequence();
     });
     this.refreshRecordConsequence();
+  }
+  /** Locks the Video format and Video quality while a recording runs: they apply when the next one starts. */
+  public setRecordingSettingsLocked(locked: boolean): void {
+    for (const controller of this.recordingSettingControllers) controller.disabled = locked;
   }
   /**
    * Writes every Options dialog setting locally immediately; remote publishing is debounced for slider changes.

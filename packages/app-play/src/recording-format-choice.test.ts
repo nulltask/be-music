@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { parseRecordingFormatKey, recordingFormatKey, recordingFormatOptions } from './recording-format-choice.ts';
+import {
+  parseRecordingFormatKey,
+  parseRecordingQuality,
+  recordingFormatKey,
+  recordingFormatOptions,
+  recordingQualityOptions,
+} from './recording-format-choice.ts';
 
 describe('recording format choice', () => {
   test('round-trips a format through its key', () => {
@@ -16,5 +22,22 @@ describe('recording format choice', () => {
     const options = recordingFormatOptions();
     expect(Object.entries(options)[0]).toEqual(['MP4 · H.264', 'mp4/avc']);
     expect(options['WebM · VP8']).toBe('webm/vp8');
+  });
+});
+
+describe('recording quality choice', () => {
+  test('reads a stored quality, Standard for a missing or unknown one', () => {
+    expect(parseRecordingQuality('very-high')).toBe('very-high');
+    expect(parseRecordingQuality(null)).toBe('standard');
+    expect(parseRecordingQuality('ultra')).toBe('standard');
+  });
+
+  test('labels the menu choices, the smallest file first', () => {
+    expect(recordingQualityOptions()).toEqual({
+      Low: 'low',
+      Standard: 'standard',
+      High: 'high',
+      'Very high': 'very-high',
+    });
   });
 });

@@ -136,7 +136,7 @@ Play はページが表示されてから Leaderboard のアカウントを読�
 - **Audio**: Mute、Master / Key sound / BGM の音量 (%)、Play in silent mode（Audio Session API があるブラウザーのみ。後述）、Peak gain (next play)、**Compressor** フォルダー（Enabled、stage ごとの切り替え、各 compressor の threshold / knee / ratio / attack / release とリセット）。Mute はマスター音量を保持したまま、プレイヤーの音声をすべて消音します。Peak gain はオンにするまでオフで、ほかの設定と一緒に記憶されます。次のプレイで、デコードした全サンプルを一つのゲインで揃え、一番大きいピークを約 −3 dBFS にします。
 - **Library & records**: Reload folders（選曲画面の F8 / F2）、Music / Skin ZIP URL と Load from URLs（`?music=` / `?skin=` と同じ読み込みをその場で実行）、Auto-save replays、Clear best records、Local data…、**Replay slots** フォルダー（スロットごとの自動保存の条件。[replay.ja.md](./replay-browser.ja.md#リプレイスロット) を参照）。
 - **Select**（Library タブ）: Sort、Key filter、Difficulty filter。標準と LR2 の選曲画面の一覧を決め、LR2 スキンのソートとフィルターのボタンでも変わります。beatoraja の選曲画面は MODE と SORT の選択を自分で持ちます。プレイでは読まないので、プレイ中も変えられます。
-- **Capture**: ● Record gameplay video、Video format（既定は MP4 · H.264。MP4 / WebM と H.264 / H.265 / AV1 / VP9 / VP8 から選択）、📸 Screenshot。BGA の枠に映したカメラの映像も記録されます。
+- **Capture**: ● Record gameplay video、Video format（既定は MP4 · H.264。MP4 / WebM と H.264 / H.265 / AV1 / VP9 / VP8 から選択）、Video quality（低・標準（既定）・高・最高。映像はキャンバスの大きさと 60 fps に対して 1 ピクセル・1 フレームあたり 0.05・0.1・0.2・0.35 ビットで、1〜80 Mbps に収め、音声は 128・192・256・320 kbps。`resolveRecordingBitrates`）、📸 Screenshot。Video format と Video quality は録画の開始時に反映し、録画中は無効になります。BGA の枠に映したカメラの映像も記録されます。
 - **Leaderboard**: Submit to Leaderboard、Submit when、Account（ログイン中の handle、または「Not signed in」。読み込み中は shimmer の線）、Keep this account、Sign in、Sign out。
 - **Advanced**（Advanced タブ）: CPU workers、Auto pause on blur、FPS（500 ms ごとに計測し、60 サンプルを保持するネイティブの履歴グラフ）、**BGA video transcode** フォルダー、Reset settings and reload（ベストレコード以外の プレイヤーの保存設定をすべて消去して再読み込み）。
 

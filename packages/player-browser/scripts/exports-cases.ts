@@ -974,6 +974,16 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreAPI.describeRecordingFormat({ container: 'mp4', videoCodec: 'hevc' });
     },
   });
+  define('player-browser.describeRecordingQuality', {
+    run: () => {
+      playerWebCoreAPI.describeRecordingQuality('very-high');
+    },
+  });
+  define('player-browser.resolveRecordingBitrates', {
+    run: () => {
+      playerWebCoreAPI.resolveRecordingBitrates('high', { width: 1920, height: 1080, fps: 60 });
+    },
+  });
   define('player-browser.recordingFileExtension', {
     run: () => {
       playerWebCoreAPI.recordingFileExtension('video/mp4;codecs=avc1,mp4a.40.2');

@@ -22,7 +22,12 @@ import type { Application, Texture } from 'pixi.js';
 import type { BrowserAssetSource } from '../../collection/types.ts';
 import { logger } from '../../logger.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
-import type { RecordingFormat } from '../../recording/recording-format.ts';
+import {
+  DEFAULT_RECORDING_QUALITY,
+  resolveRecordingBitrates,
+  type RecordingFormat,
+  type RecordingQuality,
+} from '../../recording/recording-format.ts';
 import {
   sanitizeBusVolume,
   type AudioBusChannel,
@@ -503,7 +508,7 @@ export class PlaySession extends PlaySessionState {
    * Idempotent in the sense that calling while a recording is already active is a no-op (`isRecording()` is the
    * canonical gate hosts should check).
    */
-  public startRecording(options: { format?: RecordingFormat } = {}): void {
+  public startRecording(options: { format?: RecordingFormat; quality?: RecordingQuality } = {}): void {
     if (this.recorder?.isActive()) return;
     if (!this.host || !this.audioContext || !this.audioBus) {
       throw new Error('PlaySession.startRecording: gameplay audio is not ready yet');
@@ -511,8 +516,16 @@ export class PlaySession extends PlaySessionState {
     // Recreate the recorder per session — instances are one-shot by design (chunk buffer + audio tap lifecycle), so the
     // host gets a clean blob on every start.
     const host = this.host;
+    const canvas = host.app.canvas;
+    // The quality's bitrates for the frames the recorder takes: the canvas at its own size, at the recorder's 60 fps.
+    const bitrates = resolveRecordingBitrates(options.quality ?? DEFAULT_RECORDING_QUALITY, {
+      width: canvas.width,
+      height: canvas.height,
+      fps: 60,
+    });
     this.recorder = new GameplayRecorder({
-      canvas: host.app.canvas,
+      canvas,
+      ...bitrates,
       subscribeFrame: (onFrame) => host.onAfterRender(onFrame),
       audioContext: this.audioContext,
       audioOutput: this.audioBus.outputNode,

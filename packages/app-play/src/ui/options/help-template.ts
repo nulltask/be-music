@@ -734,6 +734,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Records the next play as a video to download. A camera shown in the BGA frame is recorded too.</dd>
           <dt>Video format</dt>
           <dd>The video's container and codec: MP4 · H.264 by default, or MP4 / WebM with H.265, AV1, VP9 or VP8.</dd>
+          <dt>Video quality</dt>
+          <dd>
+            The recording's bitrate: Low, Standard (default), High or Very high. The video's rate scales with the screen
+            size. Applies when a recording starts, so it is disabled while one runs.
+          </dd>
           <dt>📸 Screenshot</dt>
           <dd>Saves the screen as a PNG.</dd>
         </dl>
