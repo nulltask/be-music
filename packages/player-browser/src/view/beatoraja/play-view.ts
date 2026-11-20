@@ -1,7 +1,7 @@
 import { ChartTextOverlay } from '../shared/chart-text.ts';
 import type { BGAFeed } from '../../media/bga-camera.ts';
 import type { BGAOpacityTimelines } from '@be-music/chart-model';
-import { collectBPMGuideEvents } from '../../chart/bpm-guide.ts';
+import { collectBPMGuideEvents, DEFAULT_BPM_GUIDE_KINDS, type BPMGuideKinds } from '../../chart/bpm-guide.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
 import {
@@ -150,6 +150,8 @@ export interface BeatorajaPlayRuntime {
     | {
         readonly timing?: import('@be-music/chart-model').TimingResolver;
         readonly reversal?: BeatorajaPlayChartLayout['reversal'];
+        readonly scroll?: readonly import('@be-music/chart-model').ScrollTimelinePoint[];
+        readonly speed?: readonly import('@be-music/chart-model').SpeedTimelinePoint[];
       }
     | undefined;
   readonly chartPlayVariant: ChartPlayVariant;
@@ -207,6 +209,8 @@ export interface BeatorajaPlayRuntime {
 export interface BeatorajaPlayViewOptions {
   /** Show hidden keysound objects as green inspection markers. Off by default. */
   readonly showInvisibleNotes?: boolean;
+  /** Which labels BPM GUIDE shows; beatoraja's BPM and STOP by default. */
+  readonly bpmGuideKinds?: BPMGuideKinds;
   /** The play is AUTO PLAY. */
   readonly autoPlay?: boolean;
   /** DP FLIP: the chart's sides swap, for the skin's per-side readouts (the notes come flipped from the session). */
@@ -253,6 +257,7 @@ export class BeatorajaPlayView implements PlayView {
   private readonly play: BeatorajaPlayRuntime;
   private readonly options: BeatorajaPlayViewOptions;
   private showInvisibleNotes: boolean;
+  private bpmGuideKinds: BPMGuideKinds;
   private readonly chartImages: BeatorajaViewChartImages;
   private prepared: PreparedChart | undefined;
   private bridge: BeatorajaPlayBridge | undefined;
@@ -275,6 +280,7 @@ export class BeatorajaPlayView implements PlayView {
     this.play = play;
     this.options = options;
     this.showInvisibleNotes = options.showInvisibleNotes === true;
+    this.bpmGuideKinds = options.bpmGuideKinds ?? DEFAULT_BPM_GUIDE_KINDS;
     this.timing = resolveBeatorajaPlayTiming(kit.kit.skin);
     this.chartImages = new BeatorajaViewChartImages(
       play.chart,
@@ -323,6 +329,11 @@ export class BeatorajaPlayView implements PlayView {
     this.showInvisibleNotes = enabled;
   }
 
+  /** Changes which labels BPM GUIDE shows, from the next frame. */
+  public setBPMGuideKinds(kinds: BPMGuideKinds): void {
+    this.bpmGuideKinds = kinds;
+  }
+
   /**
    * Gets the skin ready for the play once its chart is prepared (the session's `prepareView`): the chart as the play
    * plays it (DP FLIP applied for the skin's per-side readouts), its BPM graph, note distribution, markers and scroll,
@@ -343,7 +354,10 @@ export class BeatorajaPlayView implements PlayView {
     const scrollMapper = createBeatorajaScrollMapper(chart, { ignoreSpeed: constant.enabled });
     const laneTimelines = scrollMapper !== undefined ? createBeatorajaLaneTimelines(chart) : undefined;
     const timeMarkers = normalizeBeatorajaNote(skin.note).time.length > 0;
-    const guideEvents = play.resolvedPlayChart?.timing ? collectBPMGuideEvents(play.resolvedPlayChart.timing) : [];
+    const resolvedPlay = play.resolvedPlayChart;
+    const guideEvents = resolvedPlay?.timing
+      ? collectBPMGuideEvents(resolvedPlay.timing, resolvedPlay.scroll, resolvedPlay.speed)
+      : [];
     this.prepared = {
       chart,
       analysis: computeBeatorajaChartNoteDistribution(chart),
@@ -568,6 +582,7 @@ export class BeatorajaPlayView implements PlayView {
       showInvisibleNotes: this.showInvisibleNotes,
       ...((play.bgaCamera ?? play.lrxBGA) !== undefined ? { camera: (play.bgaCamera ?? play.lrxBGA)! } : {}),
       bpmGuide: frame.playOptions.bpmGuide,
+      bpmGuideKinds: this.bpmGuideKinds,
       judgeTimingMs: frame.playOptions.judgeTimingMs,
       hiddenNoteChannels: resolveHiddenNoteChannels(frame.playOptions.autoScratchNotes, play.autoScratchChannels),
       ...(frame.playOptions.showJudgeArea && play.judgeWindows !== undefined ? { judgeArea: play.judgeWindows } : {}),

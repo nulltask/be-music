@@ -141,6 +141,14 @@ export interface PlayerGUIState extends PlayTempoSettings {
    */
   showInvisibleNotes: boolean;
   /**
+   * Which labels BPM GUIDE shows while it is on: BPM changes, STOPs (both beatoraja's), and Be-Music's `#SCROLL` and
+   * `#SPEED` changes. Viewing preferences, live during a play; they change no record or replay.
+   */
+  guideBPM: boolean;
+  guideStop: boolean;
+  guideScroll: boolean;
+  guideSpeed: boolean;
+  /**
    * Single-note visibility after a judgement lands.
    *
    * - `'KEEP_SCROLLING'` (default) — a judged note stays until its own time, so one hit early keeps scrolling down to

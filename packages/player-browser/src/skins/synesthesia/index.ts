@@ -42,6 +42,13 @@ export const synesthesiaSkin: BeMusicSkin = definePixiSkin({
     renderLongNote: renderSynesthesiaLongNote,
     renderBombs: renderSynesthesiaBombs,
     bombDurationMs: SYNESTHESIA_BOMB_DURATION_MS,
+    // The HUD's Orbitron, in its gold and ember with the electric blue and magenta accents.
+    guideLabel: {
+      fontFamily: 'Orbitron',
+      fontWeight: '500',
+      fontSize: 11,
+      colors: { bpm: 0xffd08a, stop: 0xff7a1e, scroll: 0x3fb4ff, speed: 0xff3d9e },
+    },
     // Deep space with faint ember stripes, and an ember line along the edge the notes come from.
     laneCover: { color: 0x07040a, stripeColor: 0xff7a1e, stripeAlpha: 0.07, edgeColor: 0xff8a2a, edgeAlpha: 0.55 },
   },

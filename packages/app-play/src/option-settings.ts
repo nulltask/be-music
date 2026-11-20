@@ -75,6 +75,10 @@ export interface OptionSettings {
   bgaResizeMaxEdgePx: number;
   bgaUseWebCodecs: boolean;
   showInvisibleNotes: boolean;
+  guideBPM: boolean;
+  guideStop: boolean;
+  guideScroll: boolean;
+  guideSpeed: boolean;
   judgedNoteDisplay: PlayerGUIState['judgedNoteDisplay'];
   ghost: PlayerGUIState['ghost'];
   ghostMode: PlayerGUIState['ghostMode'];
@@ -352,6 +356,10 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'compressorBGM', booleanOf(raw.compressorBGM));
   assign(settings, 'compressorMaster', booleanOf(raw.compressorMaster));
   assign(settings, 'showInvisibleNotes', booleanOf(raw.showInvisibleNotes));
+  assign(settings, 'guideBPM', booleanOf(raw.guideBPM));
+  assign(settings, 'guideStop', booleanOf(raw.guideStop));
+  assign(settings, 'guideScroll', booleanOf(raw.guideScroll));
+  assign(settings, 'guideSpeed', booleanOf(raw.guideSpeed));
   assign(settings, 'autoSaveReplay', booleanOf(raw.autoSaveReplay));
   assign(settings, 'replayDeviceNames', booleanOf(raw.replayDeviceNames));
   assign(settings, 'bemuseReplayGain', booleanOf(raw.bemuseReplayGain));
@@ -687,6 +695,10 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('bgaResizeMaxEdgePx');
   assignState('bgaUseWebCodecs');
   assignState('showInvisibleNotes');
+  assignState('guideBPM');
+  assignState('guideStop');
+  assignState('guideScroll');
+  assignState('guideSpeed');
   assignState('judgedNoteDisplay');
   assignState('ghost');
   assignState('ghostMode');
@@ -866,6 +878,10 @@ export function captureOptionSettings(
     bgaResizeMaxEdgePx: state.bgaResizeMaxEdgePx,
     bgaUseWebCodecs: state.bgaUseWebCodecs,
     showInvisibleNotes: state.showInvisibleNotes,
+    guideBPM: state.guideBPM,
+    guideStop: state.guideStop,
+    guideScroll: state.guideScroll,
+    guideSpeed: state.guideSpeed,
     judgedNoteDisplay: state.judgedNoteDisplay,
     ghost: state.ghost,
     ghostMode: state.ghostMode,
