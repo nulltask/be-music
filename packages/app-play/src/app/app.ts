@@ -335,6 +335,7 @@ export class PlayerWebApp {
       activeGameplay: () => this.gameplayView?.recording,
       settings: this.guiState,
       setStatus: (text) => this.status.set(text),
+      setRecordingSettingsLocked: (locked) => this.optionsDialog.setRecordingSettingsLocked(locked),
     });
     // Every sound plays through the master volume; start from the remembered level and mute state.
     setMasterVolume(this.guiState.muted ? 0 : this.guiState.masterVolume / 100);
@@ -528,16 +529,15 @@ export class PlayerWebApp {
             this.optionsDialog.refreshPlayOptionControllers();
           },
           tempo: () => ({
-            percent: this.guiState.tempoEnabled ? this.guiState.tempoPercent : 0,
+            enabled: this.guiState.tempoEnabled,
+            percent: this.guiState.tempoPercent,
             pitchMode: this.guiState.tempoPitchMode,
             stretchAlgorithm: this.guiState.tempoStretchAlgorithm,
           }),
-          // As the Options dialog's Tempo page: a tempo other than 0 turns the tempo on; kept and saved.
-          setTempo: ({ percent, pitchMode }) => {
-            if (percent !== undefined) {
-              this.guiState.tempoPercent = percent;
-              this.guiState.tempoEnabled = percent !== 0;
-            }
+          // As the Options dialog's Tempo page, its Enabled switch included; kept and saved.
+          setTempo: ({ enabled, percent, pitchMode }) => {
+            if (enabled !== undefined) this.guiState.tempoEnabled = enabled;
+            if (percent !== undefined) this.guiState.tempoPercent = percent;
             if (pitchMode !== undefined) this.guiState.tempoPitchMode = pitchMode;
             storePlayTempoSettings(this.guiState);
             this.optionsDialog.refreshPlayOptionControllers();

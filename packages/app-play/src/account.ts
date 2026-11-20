@@ -214,6 +214,49 @@ export function startAccountActionLabels(): Readonly<Record<StartAccountAction, 
   };
 }
 
+/** What the Options dialog's Leaderboard account form offers. */
+export type LeaderboardAccountFormAction =
+  | 'keep'
+  | 'sign-in-passkey'
+  | 'sign-in-google'
+  | 'sign-in-discord'
+  | 'sign-up'
+  | 'sign-out';
+
+/** The Options dialog's Leaderboard account form, as a sign-in form reads. */
+export interface LeaderboardAccountFormView {
+  readonly state: AccountChip['state'];
+  /** The heading when no one is signed in; an account shows its identity instead. */
+  readonly title: string | undefined;
+  readonly lead: string;
+  /** The actions, in the order the form shows them. */
+  readonly actions: readonly LeaderboardAccountFormAction[];
+}
+
+/**
+ * The Leaderboard account form. Signed out: a sign-in form, a passkey first and Google and Discord after, with signing up
+ * below. Guest: the account, keeping it first, then signing in to another, and signing out. Signed in: the account
+ * and signing out.
+ */
+export function describeLeaderboardAccountForm(account: LeaderboardAccount | undefined): LeaderboardAccountFormView {
+  const copy = playerText().account;
+  if (account === undefined)
+    return {
+      state: 'signed-out',
+      title: copy.signIn,
+      lead: copy.signInLead,
+      actions: ['sign-in-passkey', 'sign-in-google', 'sign-in-discord', 'sign-up'],
+    };
+  if (account.anonymous)
+    return {
+      state: 'anonymous',
+      title: undefined,
+      lead: copy.anonymousLead,
+      actions: ['keep', 'sign-in-passkey', 'sign-in-google', 'sign-in-discord', 'sign-out'],
+    };
+  return { state: 'signed-in', title: undefined, lead: copy.signedInLead, actions: ['sign-out'] };
+}
+
 /**
  * The start card's account row. Signed out: sign in, or sign up. Guest: keep it with a passkey, Google or Discord, or
  * sign in to another account, which takes this browser's plays along. Signed in: the player's page and signing out.

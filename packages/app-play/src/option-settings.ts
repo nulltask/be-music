@@ -30,7 +30,8 @@ import {
 import { parseCompressorTunings, type CompressorTuning } from './compressor-tuning.ts';
 import { parseStoredHiSpeed, HI_SPEED_STORAGE_KEY } from './hi-speed-storage.ts';
 import { parseStoredPlayTempoSettings, PLAY_TEMPO_STORAGE_KEY, type PlayTempoSettings } from './play-tempo-settings.ts';
-import { parseRecordingFormatKey, recordingFormatKey } from './recording-format-choice.ts';
+import { parseRecordingFormatKey, parseRecordingQuality, recordingFormatKey } from './recording-format-choice.ts';
+import type { RecordingQuality } from '@be-music/player-browser/recording';
 import { parseStoredRenderResolution, RENDER_RESOLUTION_STORAGE_KEY } from './render-resolution.ts';
 import { parseStoredReplayView, REPLAY_VIEW_STORAGE_KEY } from './replay-view-settings.ts';
 import { parseStoredSkinSettings, serializeStoredSkinSettings, type StoredSkinSettingValue } from './skin-settings.ts';
@@ -75,6 +76,10 @@ export interface OptionSettings {
   bgaResizeMaxEdgePx: number;
   bgaUseWebCodecs: boolean;
   showInvisibleNotes: boolean;
+  guideBPM: boolean;
+  guideStop: boolean;
+  guideScroll: boolean;
+  guideSpeed: boolean;
   ghost: PlayerGUIState['ghost'];
   ghostMode: PlayerGUIState['ghostMode'];
   autoSaveReplay: boolean;
@@ -226,6 +231,7 @@ export interface OptionSettings {
   playLayout: PlayLayout;
   renderer: PlayerGUIState['renderer'];
   recordingFormat: string;
+  recordingQuality: RecordingQuality;
   workerCount: number;
   compressorTuning: Record<TunableCompressor, CompressorTuning>;
   skinSettings: Record<string, Record<string, StoredSkinSettingValue>>;
@@ -351,6 +357,10 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'compressorBGM', booleanOf(raw.compressorBGM));
   assign(settings, 'compressorMaster', booleanOf(raw.compressorMaster));
   assign(settings, 'showInvisibleNotes', booleanOf(raw.showInvisibleNotes));
+  assign(settings, 'guideBPM', booleanOf(raw.guideBPM));
+  assign(settings, 'guideStop', booleanOf(raw.guideStop));
+  assign(settings, 'guideScroll', booleanOf(raw.guideScroll));
+  assign(settings, 'guideSpeed', booleanOf(raw.guideSpeed));
   assign(settings, 'autoSaveReplay', booleanOf(raw.autoSaveReplay));
   assign(settings, 'replayDeviceNames', booleanOf(raw.replayDeviceNames));
   assign(settings, 'bemuseReplayGain', booleanOf(raw.bemuseReplayGain));
@@ -560,6 +570,12 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   ) {
     settings.recordingFormat = raw.recordingFormat;
   }
+  if (
+    typeof raw.recordingQuality === 'string' &&
+    parseRecordingQuality(raw.recordingQuality) === raw.recordingQuality
+  ) {
+    settings.recordingQuality = raw.recordingQuality;
+  }
   if (typeof raw.replayView === 'object' && raw.replayView !== null) {
     settings.replayView = parseStoredReplayView(JSON.stringify(raw.replayView));
   }
@@ -687,6 +703,10 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('bgaResizeMaxEdgePx');
   assignState('bgaUseWebCodecs');
   assignState('showInvisibleNotes');
+  assignState('guideBPM');
+  assignState('guideStop');
+  assignState('guideScroll');
+  assignState('guideSpeed');
   assignState('ghost');
   assignState('ghostMode');
   assignState('autoSaveReplay');
@@ -839,6 +859,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('playLayout');
   assignState('renderer');
   assignState('recordingFormat');
+  assignState('recordingQuality');
 }
 
 /** The live Options dialog, plus the settings kept beside it, as one document. */
@@ -865,6 +886,10 @@ export function captureOptionSettings(
     bgaResizeMaxEdgePx: state.bgaResizeMaxEdgePx,
     bgaUseWebCodecs: state.bgaUseWebCodecs,
     showInvisibleNotes: state.showInvisibleNotes,
+    guideBPM: state.guideBPM,
+    guideStop: state.guideStop,
+    guideScroll: state.guideScroll,
+    guideSpeed: state.guideSpeed,
     ghost: state.ghost,
     ghostMode: state.ghostMode,
     autoSaveReplay: state.autoSaveReplay,
@@ -1017,6 +1042,7 @@ export function captureOptionSettings(
     playLayout: state.playLayout,
     renderer: state.renderer,
     recordingFormat: state.recordingFormat,
+    recordingQuality: state.recordingQuality,
     workerCount: extras.workerCount,
     compressorTuning: extras.compressorTuning,
     skinSettings: Object.fromEntries(extras.skinSettings),

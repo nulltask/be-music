@@ -23,6 +23,7 @@ import { parseReplay } from '@be-music/player-engine/replay';
 import { storeReplayView } from '../../replay-view-settings.ts';
 import type { OptionsDialog } from './index.ts';
 import { buildLR2ManiaRows } from './lr2-mania.ts';
+import { resolveBPMGuideKinds } from '../../app/play-scene-options.ts';
 import { PLAY_OPTION_PAGES, VIEW_OPTION_PAGES } from './folders.ts';
 import {
   bottomShiftableGaugeItems,
@@ -588,6 +589,18 @@ export function buildPlayOptionsFolder(
       .addBinding(this.guiState, 'bpmGuide', { label: 'BPM GUIDE (beatoraja)' })
       .on('change', ({ value }) => this.setPlayOptions({ bpmGuide: value })),
   );
+  // Which labels BPM GUIDE shows. Viewing preferences: live during a play, and they change no record.
+  for (const [key, label] of [
+    ['guideBPM', 'Guide: BPM'],
+    ['guideStop', 'Guide: STOP'],
+    ['guideScroll', 'Guide: SCROLL'],
+    ['guideSpeed', 'Guide: SPEED'],
+  ] as const) {
+    effects.addBinding(this.guiState, key, { label }).on('change', ({ value }) => {
+      this.guiState[key] = value;
+      this.gameplayView?.setBPMGuideKinds(resolveBPMGuideKinds(this.guiState));
+    });
+  }
   trackPlayOption(
     effects
       .addBinding(this.guiState, 'bpmChangeWarning', { label: 'BPM change warning (AC)' })

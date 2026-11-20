@@ -101,6 +101,7 @@ export type LR2PlayViewOptions = Pick<
   | 'judgeTimingMs'
   | 'judgeTimingAutoAdjust'
   | 'bpmGuide'
+  | 'bpmGuideKinds'
   | 'bga'
   | 'bgaSize'
   | 'autoPlay'

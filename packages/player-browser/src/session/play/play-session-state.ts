@@ -59,6 +59,7 @@ import type {
   ChartPlayVariant,
 } from '@be-music/chart-model';
 import type { BGACue, NonstopStageBGATimeline } from '../../chart/bga-timeline.ts';
+import type { BPMGuideEvent } from '../../chart/bpm-guide.ts';
 
 import type { BeMusicJudgeWindows } from '@be-music/player-skin-sdk';
 import type { RuntimeMineNote, RuntimeNote } from '../../view/shared/playfield/context.ts';
@@ -419,6 +420,8 @@ export class PlaySessionState extends PlayPresentation {
    * made notes drift through tempo transitions.
    */
   timingResolver: TimingResolver | undefined;
+  /** The chart's BPM GUIDE labels (`collectBPMGuideEvents`), prepared with the timing. */
+  bpmGuideEvents: readonly BPMGuideEvent[] = [];
   /**
    * Per-layer BGA cue lists, sorted by chart-time seconds. Each cue's `bmpKey` is the resource key our texture cache is
    * keyed by (BMS id like "01" for BMS charts, header.name like "base.png" for bmson). `bmpKey === undefined` is the

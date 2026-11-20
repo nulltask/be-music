@@ -422,6 +422,18 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Shows the skin's score graph during a play.</dd>
           <dt>BPM GUIDE (beatoraja)</dt>
           <dd>Shows upcoming BPM changes on the lanes.</dd>
+          <dt>Guide: BPM</dt>
+          <dd>While BPM GUIDE is on, labels each BPM change. On by default; changes apply during a play.</dd>
+          <dt>Guide: STOP</dt>
+          <dd>While BPM GUIDE is on, labels each STOP with its length. On by default.</dd>
+          <dt>Guide: SCROLL</dt>
+          <dd>
+            While BPM GUIDE is on, labels each <code>#SCROLL</code> change with its rate (Be-Music). Off by default.
+          </dd>
+          <dt>Guide: SPEED</dt>
+          <dd>
+            While BPM GUIDE is on, labels each <code>#SPEED</code> change with its rate (Be-Music). Off by default.
+          </dd>
           <dt>BPM change warning (AC)</dt>
           <dd>
             Shows <code>current » next</code> BPM in a box on the lanes for 2 seconds before each BPM change: blue when
@@ -732,6 +744,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Records the next play as a video to download. A camera shown in the BGA frame is recorded too.</dd>
           <dt>Video format</dt>
           <dd>The video's container and codec: MP4 · H.264 by default, or MP4 / WebM with H.265, AV1, VP9 or VP8.</dd>
+          <dt>Video quality</dt>
+          <dd>
+            The recording's bitrate: Low, Standard (default), High or Very high. The video's rate scales with the screen
+            size. Applies when a recording starts, so it is disabled while one runs.
+          </dd>
           <dt>📸 Screenshot</dt>
           <dd>Saves the screen as a PNG.</dd>
         </dl>
@@ -747,16 +764,12 @@ export const OPTIONS_HELP_TEMPLATE = html`
             play. Course runs are always sent.
           </dd>
           <dt>Account</dt>
-          <dd>Who is signed in to the Leaderboard (read-only).</dd>
-          <dt>Keep this account</dt>
           <dd>
-            Keeps a guest account with a passkey, Google or Discord, so other devices can sign in to it and rankings
-            list it.
+            At the top of the tab. Signed out, it is a sign-in form: a passkey, Google or Discord, and Sign up for a new
+            account. A guest account shows <strong>Keep this account</strong>, which keeps it with a passkey, Google or
+            Discord so other devices can sign in to it and rankings list it. Signed in, it shows the account, a link to
+            its page and <strong>Sign out</strong>.
           </dd>
-          <dt>Sign in</dt>
-          <dd>Signs in to the Leaderboard through Accounts.</dd>
-          <dt>Sign out</dt>
-          <dd>Signs out of the Leaderboard.</dd>
         </dl>
       </section>
       <section class="help-menu-folder">

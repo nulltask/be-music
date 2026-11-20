@@ -24,7 +24,7 @@ import {
 import type { Texture } from 'pixi.js';
 import type { BrowserAssetSource } from '../collection/types.ts';
 import type { GameplayRecorderResult } from '../recording/gameplay-recorder.ts';
-import type { RecordingFormat } from '../recording/recording-format.ts';
+import type { RecordingFormat, RecordingQuality } from '../recording/recording-format.ts';
 import type { AudioBusChannel, CompressorParams, CompressorStage, TunableCompressor } from '../runtime/audio-bus.ts';
 import type { AudioOwner, AudioService } from '../runtime/audio-service.ts';
 import type { PlayDisposeOptions, PlaySessionOptions, SkinAdjust } from '../session/play/play-options.ts';
@@ -40,6 +40,7 @@ import { LR2PlayView } from '../view/lr2/play-view.ts';
 import { LR2TextureRetainer } from '../view/lr2/texture-retainer.ts';
 import type { PlayFrame, PlayIntent, PlayView, PlayfieldSkin } from '../view/types.ts';
 import type { BeatorajaKit, BuiltInKit, LR2PlayKit } from './family-kit.ts';
+import type { BPMGuideKinds } from '../chart/bpm-guide.ts';
 import { resolveLaneInputTokens } from '../session/play/play-cover-keys.ts';
 import { resolveControlScheme } from '../session/controls/control-buttons.ts';
 import { keyboardEventToTokens } from '../runtime/web-input-runtime.ts';
@@ -147,7 +148,8 @@ export interface PlaySceneOptions extends SessionSceneOptions {
 
 /** A play's recording of its canvas and mix, as the host's recorder drives it. */
 export interface PlaySceneRecording {
-  startRecording(options?: { format?: RecordingFormat }): void;
+  /** Starts recording the play in `format` (MP4 · H.264 by default) at `quality` (`standard` by default). */
+  startRecording(options?: { format?: RecordingFormat; quality?: RecordingQuality }): void;
   stopRecording(): Promise<GameplayRecorderResult | undefined>;
   isRecording(): boolean;
 }
@@ -214,6 +216,8 @@ export interface PlayScene extends SessionScene<PlayFrame, PlayIntent> {
   setAudioCompressorParams(compressor: TunableCompressor, params: Partial<CompressorParams>): void;
   setAutoPauseOnBlur(enabled: boolean): void;
   setShowInvisibleNotes(enabled: boolean): void;
+  /** Which labels BPM GUIDE shows, from the next frame (a viewing preference: no record or replay changes). */
+  setBPMGuideKinds(kinds: BPMGuideKinds): void;
   /**
    * Shows `camera.stream` in the BGA frame in place of the chart's BGA, flipped left to right when `camera.mirror` is
    * set, or the chart's BGA again with `undefined`. Takes effect from the next frame, during a play too. The scene only
@@ -245,6 +249,7 @@ interface FamilyPlayView {
   readonly drawsLift?: boolean;
   uploadTextures(textures: Iterable<Texture | undefined>, isCancelled: () => boolean): Promise<void>;
   setShowInvisibleNotes(enabled: boolean): void;
+  setBPMGuideKinds(kinds: BPMGuideKinds): void;
   updateKit(kit: PlaySceneKit): void;
 }
 
@@ -271,6 +276,7 @@ function createPlayView(
   if (kit.family === 'beatoraja') {
     const view = new BeatorajaPlayView(kit, play, {
       ...(settings.showInvisibleNotes !== undefined ? { showInvisibleNotes: settings.showInvisibleNotes } : {}),
+      ...(settings.bpmGuideKinds !== undefined ? { bpmGuideKinds: settings.bpmGuideKinds } : {}),
       ...(settings.autoPlay !== undefined ? { autoPlay: settings.autoPlay } : {}),
       ...(settings.dpFlip !== undefined ? { dpFlip: settings.dpFlip } : {}),
       ...(course?.view !== undefined ? { course: course.view } : {}),
@@ -290,6 +296,7 @@ function createPlayView(
       drawsLift: true,
       uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
       setShowInvisibleNotes: (enabled) => view.setShowInvisibleNotes(enabled),
+      setBPMGuideKinds: (kinds) => view.setBPMGuideKinds(kinds),
       updateKit: (next) => (next.family === 'beatoraja' ? view.updateKit(next) : ignoreKit(next, 'beatoraja')),
     };
   }
@@ -299,6 +306,7 @@ function createPlayView(
     ...(settings.constantFadeMs !== undefined ? { constantFadeMs: settings.constantFadeMs } : {}),
     ...(settings.judgeTimingMs !== undefined ? { judgeTimingMs: settings.judgeTimingMs } : {}),
     ...(settings.bpmGuide !== undefined ? { bpmGuide: settings.bpmGuide } : {}),
+    ...(settings.bpmGuideKinds !== undefined ? { bpmGuideKinds: settings.bpmGuideKinds } : {}),
     ...(settings.bga !== undefined ? { bga: settings.bga } : {}),
     ...(settings.autoPlay !== undefined ? { autoPlay: settings.autoPlay } : {}),
     ...(settings.nonstop !== undefined ? { nonstop: settings.nonstop } : {}),
@@ -331,6 +339,9 @@ function createPlayView(
       setShowInvisibleNotes: (enabled) => {
         view.options.showInvisibleNotes = enabled;
       },
+      setBPMGuideKinds: (kinds) => {
+        view.options.bpmGuideKinds = kinds;
+      },
       updateKit: (next) => (next.family === 'lr2' ? view.updateKit(next) : ignoreKit(next, 'lr2')),
     };
   }
@@ -348,6 +359,9 @@ function createPlayView(
     uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
     setShowInvisibleNotes: (enabled) => {
       view.options.showInvisibleNotes = enabled;
+    },
+    setBPMGuideKinds: (kinds) => {
+      view.options.bpmGuideKinds = kinds;
     },
     updateKit: (next) => (next.family === 'built-in' ? view.updateKit(next) : ignoreKit(next, 'built-in')),
   };
@@ -527,6 +541,10 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
 
   public setShowInvisibleNotes(enabled: boolean): void {
     this.familySlot.current.setShowInvisibleNotes(enabled);
+  }
+
+  public setBPMGuideKinds(kinds: BPMGuideKinds): void {
+    this.familySlot.current.setBPMGuideKinds(kinds);
   }
 
   public setBGACamera(camera: BGACamera | undefined): void {

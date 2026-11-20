@@ -133,15 +133,24 @@ describe('playfield painters', () => {
     expect(alphas).toEqual([0.2, 0.1, 0.05, 0.30000000000000004, 0.1]);
     expect(ctx.globalAlpha).toBe(0.8);
   });
-  it('paints HIDDEN above the lifted line and an opaque cover below it', () => {
+  it('paints HIDDEN above the lifted line and opaque covers with an edge facing the notes', () => {
     const ctx = recorder();
     paintLaneCovers(ctx, {
       areas: [{ left: 10, right: 50, top: 20, bottom: 420, sudden: 0.15, hidden: 0.075, lift: 0.25 }],
     });
-    expect(ctx.calls).toEqual([
-      'fillRect 10,20,40,60 #000000 0.92',
-      'fillRect 10,290,40,30 #000000 0.92',
-      'fillRect 10,320,40,100 #000000 1',
+    expect(ctx.calls.filter((call) => call.startsWith('fillRect'))).toEqual([
+      'fillRect 10,20,40,60 #0b0f17 1',
+      'fillRect 10,79,40,1 #3a4d6b 1',
+      'fillRect 10,290,40,30 #0b0f17 1',
+      'fillRect 10,290,40,1 #3a4d6b 1',
+      'fillRect 10,320,40,100 #0b0f17 1',
+      'fillRect 10,320,40,1 #3a4d6b 1',
+    ]);
+    // Each cover's stripes are clipped to it.
+    expect(ctx.calls.filter((call) => call.startsWith('rect '))).toEqual([
+      'rect 10,20,40,60',
+      'rect 10,290,40,30',
+      'rect 10,320,40,100',
     ]);
     expect(ctx.globalAlpha).toBe(1);
   });
@@ -325,7 +334,13 @@ describe('playfield painters', () => {
   it('covers the top for SUDDEN and the bottom for HIDDEN', () => {
     const ctx = recorder();
     paintLaneCovers(ctx, { areas: [{ left: 0, right: 40, top: 0, bottom: 200, sudden: 0.5, hidden: 0.25 }] });
-    expect(ctx.calls).toEqual(['fillRect 0,0,40,100 #000000 0.92', 'fillRect 0,150,40,50 #000000 0.92']);
+    expect(ctx.calls.filter((call) => call.startsWith('fillRect') && call.includes('#0b0f17'))).toEqual([
+      'fillRect 0,0,40,100 #0b0f17 1',
+      'fillRect 0,150,40,50 #0b0f17 1',
+    ]);
+    // The stripes start at each cover's inner edge: SUDDEN+'s bottom (y 100), HIDDEN+'s top (y 150).
+    expect(ctx.calls).toContain('lineTo 0,100');
+    expect(ctx.calls).toContain('moveTo 0,150');
   });
 
   it('fades and grows a bomb with its age', () => {

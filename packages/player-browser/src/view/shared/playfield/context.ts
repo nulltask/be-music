@@ -85,6 +85,8 @@ export interface PlayfieldRuntime {
   readonly invisibleNotes: TimedPlayableNote[];
   readonly maxLongNoteBeatSpan: number;
   readonly timingResolver: TimingResolver | undefined;
+  /** The chart's BPM GUIDE labels, BPM changes to `#SPEED` changes. */
+  readonly bpmGuideEvents: readonly import('../../../chart/bpm-guide.ts').BPMGuideEvent[];
   readonly scrollMapper: ScrollDistanceMapperLike | undefined;
   readonly laneTimelineBeats: Float64Array;
   readonly scrollHiSpeed: HiSpeedTransition;
@@ -229,16 +231,13 @@ export interface PlayfieldContext extends LaneGeometryContext {
   /** The frame's play options, for the options that only change what the playfield draws. */
   playOptions?: import('@be-music/player-scene-model').PlayOptions;
   readonly drawsLift?: boolean;
-  bpmGuideCache?: {
-    timing: import('@be-music/chart-model').TimingResolver;
-    events: import('../../../chart/bpm-guide.ts').BPMGuideEvent[];
-  };
   readonly options: Readonly<
     Pick<
       PlaySessionOptions,
       | 'beMusicEffects'
       | 'showInvisibleNotes'
       | 'bpmGuide'
+      | 'bpmGuideKinds'
       | 'judgeTimingMs'
       | 'visualConstant'
       | 'noteDurationMs'

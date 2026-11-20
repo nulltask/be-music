@@ -75,6 +75,7 @@ import {
   fadeChildrenFrom,
 } from '../pixi-kit/index.ts';
 import { addSynesthesiaText } from './figures.ts';
+import { drawSelectEntryArrow, drawSelectEntryIcon, drawSelectEntryMark } from './select-entry-mark.ts';
 import { drawBarLamp, drawBestRecordPanel, LampLights } from './select-record.ts';
 import {
   recordLaunchHandoff,
@@ -1110,9 +1111,13 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       row.rect(rowX, y, rowW, rowH).stroke({ color: accent, width: 1, alpha: 0.16 });
     }
     const midY = y + rowH / 2;
-    const level = browseEntryBadge(entry);
+    const level = chartEntry ? browseEntryBadge(entry) : '';
     const orbColor = chartEntry ? levelColor(Math.min(1, Number.parseFloat(level) / 12 || 0)) : SYN_MIST;
-    row.circle(rowX + PORTRAIT_ROW_LEVEL_X, midY, 12).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
+    if (entry.kind === 'chart') {
+      row.circle(rowX + PORTRAIT_ROW_LEVEL_X, midY, 12).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
+    } else {
+      drawSelectEntryIcon(row, entry, rowX + 19, midY);
+    }
     frame.layer.addChild(row);
     // The best clear lamp lights the bar's leading edge, rippling down the list.
     drawBarLamp(
@@ -1126,18 +1131,20 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       frame.nowMs,
       frame.effects === 'off',
     );
-    addSynesthesiaText(frame.layer, level, rowX + PORTRAIT_ROW_LEVEL_X, midY, {
-      size: 10,
-      fill: SYN_WHITE,
-      fontFamily: SYN_DISPLAY_FONT,
-      anchorX: 0.5,
-      anchorY: 0.5,
-      alpha,
-      maxWidth: 22,
-    });
+    if (chartEntry)
+      addSynesthesiaText(frame.layer, level, rowX + PORTRAIT_ROW_LEVEL_X, midY, {
+        size: 10,
+        fill: SYN_WHITE,
+        fontFamily: SYN_DISPLAY_FONT,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        alpha,
+        maxWidth: 22,
+      });
     const facts = chartEntry ? resolveChartRowFacts(chartEntry) : undefined;
     let factsW = 84;
-    const factsRight = rowX + rowW - 10;
+    if (entry.kind === 'folder') drawSelectEntryArrow(row, rowX + rowW - 12, midY);
+    const factsRight = rowX + rowW - (entry.kind === 'folder' ? 26 : 10);
     const factStyle = (fill: number, maxWidth: number = factsW): SkinTextOptions => ({
       size: 10,
       fill,
@@ -1164,7 +1171,14 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       const countNode = addSynesthesiaText(frame.layer, count, factsRight, midY, factStyle(SYN_MIST, ROW_COUNT_MAX_W));
       factsW = count ? Math.max(factsW, Math.min(ROW_COUNT_MAX_W, countNode.width)) : factsW;
     }
-    const textX = rowX + PORTRAIT_ROW_TITLE_X;
+    const textX = drawSelectEntryMark(
+      row,
+      frame.layer,
+      entry,
+      rowX + (chartEntry ? PORTRAIT_ROW_TITLE_X : 36),
+      midY,
+      alpha,
+    );
     const textW = Math.max(24, factsRight - factsW - 10 - textX);
     const artist = chartEntry?.artist?.trim();
     const title = addSynesthesiaText(frame.layer, browseEntryTitle(entry), textX, artist ? midY - 7 : midY, {
@@ -1230,9 +1244,14 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     }
     const record = entryBestRecord(frame, entry);
     // Level as a glowing orb on the leading edge.
-    const level = browseEntryBadge(entry);
+    const level = chartEntry ? browseEntryBadge(entry) : '';
     const orbColor = chartEntry ? levelColor(Math.min(1, Number.parseFloat(level) / 12 || 0)) : SYN_MIST;
-    row.circle(rowX + ROW_LEVEL_X, y + (rowHeight - 4) / 2, 9).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
+    const midY = y + (rowHeight - 4) / 2;
+    if (entry.kind === 'chart') {
+      row.circle(rowX + ROW_LEVEL_X, midY, 9).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
+    } else {
+      drawSelectEntryIcon(row, entry, rowX + 17, midY);
+    }
     frame.layer.addChild(row);
     // The best clear lamp lights the bar's leading edge, rippling down the list.
     drawBarLamp(
@@ -1246,21 +1265,23 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       frame.nowMs,
       frame.effects === 'off',
     );
-    const midY = y + (rowHeight - 4) / 2;
-    addSynesthesiaText(frame.layer, level, rowX + ROW_LEVEL_X, midY, {
-      size: level.length > 2 ? 7 : 9,
-      fill: SYN_WHITE,
-      fontFamily: SYN_DISPLAY_FONT,
-      anchorX: 0.5,
-      anchorY: 0.5,
-      alpha,
-      maxWidth: 16,
-    });
+    if (chartEntry)
+      addSynesthesiaText(frame.layer, level, rowX + ROW_LEVEL_X, midY, {
+        size: level.length > 2 ? 7 : 9,
+        fill: SYN_WHITE,
+        fontFamily: SYN_DISPLAY_FONT,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        alpha,
+        maxWidth: 16,
+      });
     // On the right, the facts a player checks before picking — gimmick tags, note count, length and tempo range — in
     // fixed columns so they line up down the list. Folders show their size instead.
     const facts = chartEntry ? resolveChartRowFacts(chartEntry) : undefined;
     const meta = facts ? `${facts.bpm} BPM` : (browseEntryCount(entry) ?? '');
-    const metaNode = addSynesthesiaText(frame.layer, meta, rowX + rowW - 14, midY, {
+    if (entry.kind === 'folder') drawSelectEntryArrow(row, rowX + rowW - 13, midY);
+    const factsRight = rowX + rowW - (entry.kind === 'folder' ? 27 : 14);
+    const metaNode = addSynesthesiaText(frame.layer, meta, factsRight, midY, {
       size: 9,
       fill: active ? SYN_WHITE : SYN_DIM,
       fontFamily: SYN_DISPLAY_FONT,
@@ -1272,7 +1293,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       marquee: active,
     });
     metaNode.label = `fallback-meta[idx=${entryIndex}]`;
-    let factsLeft = rowX + rowW - 14 - (facts ? ROW_BPM_W : meta ? Math.min(ROW_COUNT_MAX_W, metaNode.width) : 0) - 12;
+    let factsLeft = factsRight - (facts ? ROW_BPM_W : meta ? Math.min(ROW_COUNT_MAX_W, metaNode.width) : 0) - 12;
     if (facts) {
       const factStyle = (fill: number) => ({
         size: 9,
@@ -1323,14 +1344,15 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       }
       factsLeft -= 6;
     }
-    const title = addSynesthesiaText(frame.layer, browseEntryTitle(entry), rowX + ROW_TITLE_X, midY, {
+    const textX = drawSelectEntryMark(row, frame.layer, entry, rowX + (chartEntry ? ROW_TITLE_X : 34), midY, alpha);
+    const title = addSynesthesiaText(frame.layer, browseEntryTitle(entry), textX, midY, {
       size: 11,
       weight: active ? '500' : '300',
       fill: SYN_WHITE,
       fontFamily: SYN_TEXT_FONT,
       anchorY: 0.5,
       alpha,
-      maxWidth: Math.max(24, factsLeft - rowX - ROW_TITLE_X),
+      maxWidth: Math.max(24, factsLeft - textX),
       // Only the focused row scrolls a long title; the others clip it at its start.
       marquee: active,
       ...(active ? { dropShadow: { color: accent, distance: 0, blur: 8, alpha: 0.9 } } : {}),
@@ -1338,7 +1360,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     title.label = `fallback-title[idx=${entryIndex}]`;
     // The artist trails the title in a dimmer light while there is room for it.
     const artist = chartEntry?.artist?.trim();
-    const artistX = rowX + ROW_TITLE_X + title.width + 10;
+    const artistX = textX + title.width + 10;
     if (artist && factsLeft - artistX >= 40) {
       addSynesthesiaText(frame.layer, artist, artistX, midY, {
         size: 9,

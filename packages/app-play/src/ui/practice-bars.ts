@@ -81,19 +81,27 @@ export interface PracticeBarsDialogDeps {
   /** Sets play options as the Options dialog does: kept, saved and shown on its controls. */
   readonly setPlayOptions: (changes: Partial<PlayOptions>) => void;
   /**
-   * The play tempo as the Options dialog's Tempo page has it: the percent off the chart's own (0 when the tempo is off),
-   * how a tempo change sounds, and the stretcher keep pitch uses.
+   * The play tempo as the Options dialog's Tempo page has it: whether it is on, the percent off the chart's own, how a
+   * tempo change sounds, and the stretcher keep pitch uses.
    */
   readonly tempo: () => PracticeTempo;
   /** Sets the play tempo as the Options dialog's Tempo page does: kept, saved and shown on its controls. */
-  readonly setTempo: (changes: Partial<Pick<PracticeTempo, 'percent' | 'pitchMode'>>) => void;
+  readonly setTempo: (changes: Partial<Pick<PracticeTempo, 'enabled' | 'percent' | 'pitchMode'>>) => void;
 }
 
 /** The play tempo the picker shows and sets ({@link PracticeBarsDialogDeps.tempo}). */
 export interface PracticeTempo {
+  /** Whether the tempo changes the play (the Options dialog's Tempo → Enabled). */
+  readonly enabled: boolean;
+  /** The percent off the chart's own tempo, kept while the tempo is off. */
   readonly percent: number;
   readonly pitchMode: 'pitch' | 'keep-pitch';
   readonly stretchAlgorithm: 'wsola' | 'signalsmith';
+}
+
+/** The rate the bars sound and the play runs at: the tempo's while it is on, the chart's own (1) while it is off. */
+export function practiceTempoRate(tempo: Pick<PracticeTempo, 'enabled' | 'percent'>): number {
+  return tempo.enabled ? tempoFromPercent(tempo.percent) : 1;
 }
 
 /** A BPM for the Target BPM field: whole above 100, to a tenth below, as the score's readouts write it. */
@@ -225,7 +233,7 @@ export class PracticeBarsDialog {
   }
 
   /** Sets the play tempo, and stretches the chart's samples for it in the background, dropping the old tempo's. */
-  private changeTempo(changes: Partial<Pick<PracticeTempo, 'percent' | 'pitchMode'>>): void {
+  private changeTempo(changes: Partial<Pick<PracticeTempo, 'enabled' | 'percent' | 'pitchMode'>>): void {
     this.setTempo(changes);
     this.prepareStretch();
   }
@@ -244,7 +252,7 @@ export class PracticeBarsDialog {
     this.audio.preview.prepareWindows(
       { chart: this.chart, source: this.source },
       {
-        tempo: tempoFromPercent(tempo.percent),
+        tempo: practiceTempoRate(tempo),
         keepPitch: tempo.pitchMode === 'keep-pitch',
         stretchAlgorithm: tempo.stretchAlgorithm,
       },
@@ -298,10 +306,23 @@ export class PracticeBarsDialog {
       </label>`;
     // The BPM the bars start at, at the play tempo; a BPM entered sets the tempo that plays them closest to it.
     const baseBPM = this.layout === undefined ? undefined : practiceBaseBPM(this.layout, this.selection);
-    const playedBPM = baseBPM === undefined ? undefined : baseBPM * tempoFromPercent(tempo.percent);
+    const playedBPM = baseBPM === undefined ? undefined : baseBPM * practiceTempoRate(tempo);
     return html`<div class="practice-bars-settings">
       <fieldset class="practice-bars-group">
         <legend>${label('Tempo')}</legend>
+        <label class="practice-bars-toggle">
+          <span>${label('Change the tempo')}</span>
+          <input
+            class="input"
+            type="checkbox"
+            role="switch"
+            .checked=${tempo.enabled}
+            @change=${(event: Event) => {
+              this.changeTempo({ enabled: (event.target as HTMLInputElement).checked });
+              this.paint();
+            }}
+          />
+        </label>
         <label class="practice-bars-field">
           <span>${label('Tempo (%)')}</span>
           <input
@@ -311,6 +332,7 @@ export class PracticeBarsDialog {
             min=${TEMPO_PERCENT_MIN}
             max=${TEMPO_PERCENT_MAX}
             step="1"
+            ?disabled=${!tempo.enabled}
             .value=${String(tempo.percent)}
             @change=${(event: Event) => {
               const value = Number((event.target as HTMLInputElement).value);
@@ -327,7 +349,7 @@ export class PracticeBarsDialog {
             inputmode="decimal"
             min="1"
             step="any"
-            ?disabled=${baseBPM === undefined}
+            ?disabled=${baseBPM === undefined || !tempo.enabled}
             .value=${playedBPM === undefined ? '' : formatPracticeBPM(playedBPM)}
             @change=${(event: Event) => {
               const percent =
@@ -337,7 +359,7 @@ export class PracticeBarsDialog {
               if (percent !== undefined) this.changeTempo({ percent });
               // The field shows the BPM the tempo plays, whole percents apart, not the one typed.
               (event.target as HTMLInputElement).value =
-                baseBPM === undefined ? '' : formatPracticeBPM(baseBPM * tempoFromPercent(this.tempo().percent));
+                baseBPM === undefined ? '' : formatPracticeBPM(baseBPM * practiceTempoRate(this.tempo()));
               this.paint();
             }}
           />
@@ -346,6 +368,7 @@ export class PracticeBarsDialog {
           <span>${label('Pitch')}</span>
           <select
             class="select"
+            ?disabled=${!tempo.enabled}
             @change=${(event: Event) => {
               this.changeTempo({ pitchMode: (event.target as HTMLSelectElement).value as PracticeTempo['pitchMode'] });
               this.paint();
@@ -437,7 +460,7 @@ export class PracticeBarsDialog {
     this.previewing = range;
     // At the play tempo, as the play will sound: sped up with the pitch, or stretched at it.
     const tempo = this.tempo();
-    const rate = tempoFromPercent(tempo.percent);
+    const rate = practiceTempoRate(tempo);
     if (this.source !== undefined)
       this.audio.preview.playWindow(
         { chart: this.chart, source: this.source },
@@ -491,7 +514,7 @@ export class PracticeBarsDialog {
                 ? nothing
                 : html`<be-music-chart-score
                     .layout=${this.layout}
-                    .tempo=${tempoFromPercent(this.tempo().percent)}
+                    .tempo=${practiceTempoRate(this.tempo())}
                     .selection=${this.selection}
                     .previewing=${this.previewing}
                     @bar-selection-change=${(event: BeMusicUIEvent<'bar-selection-change'>) => this.onSelection(event)}

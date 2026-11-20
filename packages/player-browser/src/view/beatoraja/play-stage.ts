@@ -28,7 +28,8 @@ import type { ScrollDistanceMapperLike } from '@be-music/player-engine/display';
 import { Container, type Texture } from 'pixi.js';
 import { ChildPool } from '../../skins/pixi-kit/pools.ts';
 import { renderBPMGuide } from '../shared/bpm-guide.ts';
-import type { BPMGuideEvent } from '../../chart/bpm-guide.ts';
+import type { BPMGuideEvent, BPMGuideKind, BPMGuideKinds } from '../../chart/bpm-guide.ts';
+
 import type { BeatorajaSceneKit } from '../../skin/beatoraja/scene-kit.ts';
 import type { BGACue, NonstopBGAStage, NonstopStageBGATimeline } from '../../chart/bga-timeline.ts';
 import { BeatorajaPlaySkinView, type BeatorajaPlaySkinViewOptions } from './skin-view.ts';
@@ -48,6 +49,9 @@ import {
 import { resolveBeatorajaScrollPlacement } from './play/scroll-placement.ts';
 import { computeAuthoredLaneBottomYPixi } from './play/skin-metrics.ts';
 import { BeatorajaSkinStage } from './scene-frame.ts';
+
+/** The guide kinds whose lines the guide draws itself on a beatoraja skin: the ones its marker images do not cover. */
+const GUIDE_LINE_KINDS: ReadonlySet<BPMGuideKind> = new Set(['scroll', 'speed']);
 
 /** What the chart gives every skin the play is drawn with: its lanes, scroll, markers. */
 export interface BeatorajaPlayChartLayout {
@@ -237,6 +241,8 @@ export class BeatorajaPlayStage {
       started?: boolean;
       showInvisibleNotes?: boolean;
       bpmGuide?: boolean;
+      /** Which labels BPM GUIDE shows; beatoraja's BPM and STOP by default. */
+      bpmGuideKinds?: BPMGuideKinds;
       judgeTimingMs?: number;
       /** Visual CONSTANT: notes, mines, bar lines and BPM guide lines show only near their time. */
       constant?: ConstantVisibility;
@@ -315,6 +321,7 @@ export class BeatorajaPlayStage {
       pixelsPerBeat,
       markers: layout.markers,
       bpmGuide: playback.bpmGuide === true,
+      ...(playback.bpmGuideKinds !== undefined ? { bpmGuideKinds: playback.bpmGuideKinds } : {}),
       window: placement.window,
       secondsAt: layout.beatToSeconds,
       ...(alphaAt !== undefined ? { alphaAt } : {}),
@@ -379,7 +386,10 @@ export class BeatorajaPlayStage {
         pixelsPerBeat,
         lanes,
         pool: this.guidePool,
-        drawLines: false,
+        ...(playback.bpmGuideKinds !== undefined ? { kinds: playback.bpmGuideKinds } : {}),
+        // The skin's own BPM and STOP lines draw in the marker layer; `#SCROLL` and `#SPEED` have none, so they get the
+        // guide's line.
+        drawLines: GUIDE_LINE_KINDS,
         ...(alphaAt !== undefined ? { alphaAt } : {}),
       });
     }

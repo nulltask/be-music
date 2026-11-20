@@ -141,6 +141,23 @@ export interface PlayerGUIState extends PlayTempoSettings {
    */
   showInvisibleNotes: boolean;
   /**
+   * Which labels BPM GUIDE shows while it is on: BPM changes, STOPs (both beatoraja's), and Be-Music's `#SCROLL` and
+   * `#SPEED` changes. Viewing preferences, live during a play; they change no record or replay.
+   */
+  guideBPM: boolean;
+  guideStop: boolean;
+  guideScroll: boolean;
+  guideSpeed: boolean;
+  /**
+   * Single-note visibility after a judgement lands.
+   *
+   * - `'KEEP_SCROLLING'` (default) — a judged note stays until its own time, so one hit early keeps scrolling down to
+   *   the judgement line, as in LR2 and beatoraja.
+   * - `'HIDE'` — a judged note disappears the moment it is judged.
+   *
+   * Long notes are unaffected — they stay until their end.
+   */
+  /**
    * The replay ghost shown with the play (`services/ghost.ts`): `'OFF'` (default), or the replay it plays — `'OWN_BEST'`
    * (the player's best on the chart), a replay slot, the Leaderboard's top run, or a picked replay file. Latched at song
    * start.
@@ -385,6 +402,8 @@ export interface PlayerGUIState extends PlayTempoSettings {
   openFiles: () => void;
   /** "Video format": the container and codec of recordings, as `mp4/avc` / `webm/vp9` (`recording-format-choice.ts`). */
   recordingFormat: string;
+  /** "Video quality": the bitrates recordings are made at (`low`, `standard`, `high`, `very-high`). */
+  recordingQuality: import('@be-music/player-browser/recording').RecordingQuality;
   /** Triggered by clicking the GUI's record toggle. */
   record: () => void;
   /** Triggered by clicking the GUI's "Screenshot" button. Captures the Pixi stage at its native size. */

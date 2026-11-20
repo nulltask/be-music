@@ -115,6 +115,7 @@ import {
   type PlayState,
 } from '@be-music/player-scene-model';
 import { resolveLaneSides } from '../../chart/lane-sides.ts';
+import { collectBPMGuideEvents, type BPMGuideEvent } from '../../chart/bpm-guide.ts';
 import type { SecondPlayerState } from './play-state.ts';
 import { isSilentJudgeTimingPlay } from './play-media.ts';
 import { applyUndefinedLongNoteMode } from '@be-music/player-engine/course';
@@ -255,6 +256,8 @@ export interface PlayChartContext {
   slowCount: number;
   fullComboFired: boolean;
   timingResolver: TimingResolver | undefined;
+  /** The chart's BPM GUIDE labels: its BPM changes, STOPs and `#SCROLL` / `#SPEED` changes. */
+  bpmGuideEvents: readonly BPMGuideEvent[];
   nonstopBGATimelines: NonstopStageBGATimeline[] | undefined;
   bgaTimeline: { base: BGACue[]; layer: BGACue[]; layer2?: BGACue[]; poor: BGACue[]; opacity?: BGAOpacityTimelines };
   poorBGAMode: 0 | 1 | 2;
@@ -797,6 +800,7 @@ export function prepareChart(ctx: PlayChartContext, chartEntry: LibraryChart): v
   };
   const resolver = resolvedPlay.timing;
   ctx.timingResolver = resolver;
+  ctx.bpmGuideEvents = collectBPMGuideEvents(resolver, resolvedPlay.scroll, resolvedPlay.speed);
   // Build a STOP-aware seconds→beat resolver for `currentBeat`.
   ctx.beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolver);
   // Build the #SCROLL / #SPEED distance integrator. Skipped when the chart has no such events, or only ones at 1, so

@@ -48,6 +48,10 @@ export type PlaySceneGUIState = Pick<
   | 'bgaResizeMaxEdgePx'
   | 'bgaUseWebCodecs'
   | 'showInvisibleNotes'
+  | 'guideBPM'
+  | 'guideStop'
+  | 'guideScroll'
+  | 'guideSpeed'
 >;
 
 export interface PlaySceneOptionsInput {
@@ -84,6 +88,13 @@ export interface PlaySceneOptions {
   readonly settings: PlaySceneSettings;
   /** The course stage the play is: an EXPERT / GRADE stage, or a NONSTOP run as one stage. */
   readonly course?: PlaySceneCourse;
+}
+
+/** Which labels BPM GUIDE shows, from the Options dialog's BPM / STOP / SCROLL / SPEED switches. */
+export function resolveBPMGuideKinds(
+  state: Pick<PlayerGUIState, 'guideBPM' | 'guideStop' | 'guideScroll' | 'guideSpeed'>,
+): { bpm: boolean; stop: boolean; scroll: boolean; speed: boolean } {
+  return { bpm: state.guideBPM, stop: state.guideStop, scroll: state.guideScroll, speed: state.guideSpeed };
 }
 
 /**
@@ -237,6 +248,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     bgaTranscodeMaxLongEdgePx: guiState.bgaResizeMaxEdgePx > 0 ? guiState.bgaResizeMaxEdgePx : undefined,
     bgaTranscodeUseWebCodecs: guiState.bgaUseWebCodecs,
     showInvisibleNotes: guiState.showInvisibleNotes,
+    bpmGuideKinds: resolveBPMGuideKinds(guiState),
   };
   const { course, courseInfo, ...settings } = sharedOptions;
   return {
