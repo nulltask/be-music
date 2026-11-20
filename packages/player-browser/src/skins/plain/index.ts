@@ -33,8 +33,10 @@ export const plainSkin: BeMusicSkin = defineBeMusicSkin({
   // The 16:9 cabinet stage while the screen is wider than tall, the portrait one otherwise.
   stage: cabinetStage,
   portraitStage: tallStage,
+  // Plain's ink with its line grey in faint stripes, and the line grey along the edge the notes come from.
   gameplay: {
     draw: drawGameplay,
+    laneCover: { color: 0x111114, stripeColor: 0x3a3a42, stripeAlpha: 0.5, edgeColor: 0x3a3a42 },
     // Plain's system sans, in its note blue, highlight yellow, text white and danger red.
     guideLabel: {
       fontFamily: FONT,

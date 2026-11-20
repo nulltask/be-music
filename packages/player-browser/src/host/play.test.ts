@@ -616,14 +616,15 @@ describe('createPlayScene with a beatoraja kit', () => {
     fake.fire('keydown', keydown('h'));
     fake.fire('wheel', { deltaY: 1, shiftKey: true, preventDefault: vi.fn() });
     // From the play options' SUDDEN 0.3: PageDown and the Shift wheel lower SUDDEN+ by 0.01 and 0.025, End raises the
-    // LIFT from its 0.1 and switches it on, and H switches HIDDEN+ on at its kept height.
+    // LIFT that was off from the judgement line (not its kept 0.1) and switches it on, and H switches HIDDEN+ on at its
+    // kept height.
     expect(play.playState.view.covers[0]).toEqual({
       side: '1P',
       sudden: 0.335,
       suddenOn: true,
       hidden: 0.3,
       hiddenOn: true,
-      lift: 0.11,
+      lift: 0.01,
       liftOn: true,
     });
     scene.dispose();

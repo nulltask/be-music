@@ -49,6 +49,8 @@ export const synesthesiaSkin: BeMusicSkin = definePixiSkin({
       fontSize: 11,
       colors: { bpm: 0xffd08a, stop: 0xff7a1e, scroll: 0x3fb4ff, speed: 0xff3d9e },
     },
+    // Deep space with faint ember stripes, and an ember line along the edge the notes come from.
+    laneCover: { color: 0x07040a, stripeColor: 0xff7a1e, stripeAlpha: 0.07, edgeColor: 0xff8a2a, edgeAlpha: 0.55 },
   },
   select: synesthesiaSelectSkin,
   decide: synesthesiaDecideSkin,

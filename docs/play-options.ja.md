@@ -461,7 +461,7 @@ Options ダイアログ の **Visual CONSTANT (beatoraja)** をオンにしま�
 
 ## 左右別 LIFT
 
-Options ダイアログ の **LIFT 1P (beatoraja)** / **LIFT 2P (beatoraja)** で各側の LIFT を独立して切り替え、**LIFT height 1P** / **2P** で高さをレーンに対する割合で設定します。beatoraja と同様に、LIFT はオフ・高さ 0.1 から始まり、オフの間も高さを保持します。これらの操作はプレイ中も有効で、すぐに反映します。LIFT は判定線とノートの到達位置を上げます。その上のレーンを圧縮するため、ノートが上げた判定線に届くまでの時間は変わらず、白数字と緑数字も変わりません。SUDDEN+ と HIDDEN+ は LIFT より上のレーンに対する割合です。ハイスピードを固定するコースでは、すべてのカバーと LIFT を 0 から始めます。
+Options ダイアログ の **LIFT 1P (beatoraja)** / **LIFT 2P (beatoraja)** で各側の LIFT を独立して切り替え、**LIFT height 1P** / **2P** で高さをレーンに対する割合で設定します。beatoraja と同様に、LIFT はオフ・高さ 0.1 から始まり、オフの間も高さを保持します。オフの LIFT を LIFT のキー（Home / End）で上げると、表示どおり判定線の位置から上がってオンになります。オフの間に下げても何も起きません。これらの操作はプレイ中も有効で、すぐに反映します。LIFT は判定線とノートの到達位置を上げます。その上のレーンを圧縮するため、ノートが上げた判定線に届くまでの時間は変わらず、白数字と緑数字も変わりません。SUDDEN+ と HIDDEN+ は LIFT より上のレーンに対する割合です。ハイスピードを固定するコースでは、すべてのカバーと LIFT を 0 から始めます。
 
 LIFT を描くのは beatoraja スキンと内蔵の Plain・Native・Synesthesia です。LR2 スキンは描きません。LR2 beta3 には LIFT のオプションがありません。これらの内蔵スキンでは beatoraja スキンと同様に、Home / End で LIFT を下げ / 上げ、PageUp / PageDown で SUDDEN+ を動かし、H で HIDDEN+ を切り替え、J / K で HIDDEN+ を動かします。1 回の変化量はレーンの 1 %（Shift で 5 %）です。リプレイには各側の LIFT を表示設定と `play.options.lift1P` / `lift2P` / `liftOn1P` / `liftOn2P` に記録し、プレイ中の変更は `play.optionChanges` に記録します。リプレイで記録した LIFT を表示するかどうかは Replay / ghost フォルダーの **LIFT** で選びます。これは表示の調整で、入力アシストではありません。
 

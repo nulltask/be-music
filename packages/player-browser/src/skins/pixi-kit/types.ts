@@ -7,6 +7,7 @@ import type {
   BeMusicGameplayLayout,
   BeMusicGameplayRuntime,
   BeMusicGuideLabelStyle,
+  BeMusicLaneCoverStyle,
   BeMusicLaneFrame,
   BeMusicLaneKind,
   BeMusicLongNoteState,
@@ -70,6 +71,8 @@ export interface PixiGameplaySkin {
   readonly bombDurationMs: number;
   /** The look of the BPM GUIDE labels the player draws over the lanes (`BeMusicGameplaySkin.guideLabel`). */
   readonly guideLabel?: BeMusicGuideLabelStyle;
+  /** The look of the lane covers the player paints over the skin (`BeMusicGameplaySkin.laneCover`). */
+  readonly laneCover?: BeMusicLaneCoverStyle;
 }
 
 export interface PixiLanesContext {
