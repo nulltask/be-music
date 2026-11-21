@@ -154,7 +154,7 @@ pnpm run test
 
 ### テストカバレッジ
 
-[HTML カバレッジレポート](https://nulltask.github.io/be-music/) では、ファイル別のカバレッジをブラウザで確認できます。CI は `devel` のレポートを GitHub Pages に公開します。メンテナーは CI を手動で実行する際に **Publish this run's HTML coverage report to GitHub Pages** を選んで公開することもできます。
+[HTML カバレッジレポート](https://test-coverage.be-music.workers.dev/) では、ファイル別のカバレッジをブラウザで確認できます。CI は `devel` のレポートを Cloudflare の専用 Worker に公開します。メンテナーは CI を手動で実行する際に **Publish this run's HTML coverage report** を選んで公開することもできます。
 
 特定の実行結果を見るには、[GitHub Actions の CI](https://github.com/nulltask/be-music/actions/workflows/ci.yml) の **Summary** で集計を確認するか、`test-coverage` から HTML と LCOV をダウンロードしてください。しきい値を下回った場合も、アーカイブは30日間保存されます。
 

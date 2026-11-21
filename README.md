@@ -154,7 +154,7 @@ The toolchain is [Vite+](https://viteplus.dev/) (`vite-plus`), configured from t
 
 ### Test coverage
 
-Open the [HTML coverage report](https://nulltask.github.io/be-music/) to browse coverage by file. CI publishes the report from `devel` to GitHub Pages. A maintainer can also publish a report by selecting **Publish this run's HTML coverage report to GitHub Pages** when starting CI manually.
+Open the [HTML coverage report](https://test-coverage.be-music.workers.dev/) to browse coverage by file. CI publishes the report from `devel` to a dedicated Cloudflare Worker. A maintainer can also publish a report by selecting **Publish this run's HTML coverage report** when starting CI manually.
 
 For a specific run, open its **Summary** in [GitHub Actions](https://github.com/nulltask/be-music/actions/workflows/ci.yml) for the coverage totals, or download its `test-coverage` artifact for HTML and LCOV. CI keeps these artifacts for 30 days, including when coverage misses a threshold.
 
