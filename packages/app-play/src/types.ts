@@ -130,6 +130,8 @@ export interface PlayerGUIState extends PlayTempoSettings {
    * would blow the memory budget — the transcode then silently falls back to the ffmpeg encode path.
    */
   bgaUseWebCodecs: boolean;
+  /** "Quality" of the BGA video transcode: the bitrate it spends (`low`, `standard`, `high`, `very-high`). */
+  bgaTranscodeQuality: import('@be-music/player-browser/recording').RecordingQuality;
   /**
    * Debug overlay — when true, every invisible / keysound note the chart authors on channels `3x` / `4x` paints as the
    * 9-keys POP green note (or a flat green bar fallback) in its assigned playable lane during gameplay. Useful for

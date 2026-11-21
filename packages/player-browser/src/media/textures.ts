@@ -3,8 +3,14 @@ import { Texture, VideoSource } from 'pixi.js';
 import { logger } from '../logger.ts';
 // Types only: the runtime module is imported on demand in `transcodeViaWebCodecsLocked`.
 import type { BufferTarget, Mp4OutputFormat, Output } from 'mediabunny';
-import { estimateBitrate } from './bga-stream/encode-worker.ts';
-import { buildScaleFilterArg, FFMPEG_CORE_URL, FFMPEG_WASM_URL } from './bga-stream/ffmpeg-args.ts';
+import {
+  buildScaleFilterArg,
+  estimateBGATranscodeBitrate,
+  FFMPEG_CORE_URL,
+  FFMPEG_WASM_URL,
+  resolveBGATranscodeCRF,
+  type BGATranscodeQuality,
+} from './bga-stream/ffmpeg-args.ts';
 import { attachBGAVideoStream } from './bga-stream/media-source.ts';
 import { canStreamBGAVideo, openBGAVideoStream, pickInputExtension } from './bga-stream/stream.ts';
 
@@ -113,6 +119,8 @@ export interface VideoTranscodeOptions {
    * rejects the requested codec parameters, or when any step of the WebCodecs pipeline throws.
    */
   useWebCodecs?: boolean;
+  /** How much bitrate the encode spends (libx264's `-crf`, WebCodecs' bitrate), `standard` by default. */
+  quality?: BGATranscodeQuality;
   /** Estimated conversion progress until the video is ready to play. */
   onProgress?: (fraction: number) => void;
 }
@@ -227,6 +235,7 @@ async function tryLoadStreamedVideoTexture(
   const stream = openBGAVideoStream(source, path, {
     ...(maxLongEdge !== undefined ? { maxLongEdge } : {}),
     useWebCodecs: options?.useWebCodecs ?? true,
+    ...(options?.quality !== undefined ? { quality: options.quality } : {}),
   });
   const video = createBGAVideoElement();
   // Subscribes to the stream before anything is awaited, so the stream can't be cancelled under this video.
@@ -363,7 +372,7 @@ async function transcodeVideoToBrowserCodecLocked(
       '-tune',
       'fastdecode,zerolatency',
       '-crf',
-      '30',
+      String(resolveBGATranscodeCRF(options?.quality)),
       '-pix_fmt',
       'yuv420p',
       '-an',
@@ -540,7 +549,7 @@ async function transcodeViaWebCodecsLocked(
       codec: 'avc1.42E01E',
       width,
       height,
-      bitrate: estimateBitrate(width, height, frameRate),
+      bitrate: estimateBGATranscodeBitrate(width, height, frameRate, options?.quality),
       framerate: frameRate,
       hardwareAcceleration: 'prefer-hardware',
       avc: { format: 'avc' },

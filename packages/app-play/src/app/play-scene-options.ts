@@ -47,6 +47,7 @@ export type PlaySceneGUIState = Pick<
   | 'compressorMaster'
   | 'bgaResizeMaxEdgePx'
   | 'bgaUseWebCodecs'
+  | 'bgaTranscodeQuality'
   | 'showInvisibleNotes'
   | 'guideBPM'
   | 'guideStop'
@@ -247,6 +248,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     },
     bgaTranscodeMaxLongEdgePx: guiState.bgaResizeMaxEdgePx > 0 ? guiState.bgaResizeMaxEdgePx : undefined,
     bgaTranscodeUseWebCodecs: guiState.bgaUseWebCodecs,
+    bgaTranscodeQuality: guiState.bgaTranscodeQuality,
     showInvisibleNotes: guiState.showInvisibleNotes,
     bpmGuideKinds: resolveBPMGuideKinds(guiState),
   };

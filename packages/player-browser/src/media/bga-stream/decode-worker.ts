@@ -125,6 +125,7 @@ async function decode(scope: WorkerScope, message: BGADecodeStartMessage): Promi
       output: OUTPUT_DEVICE,
       mode: message.mode,
       ...(message.maxLongEdge !== undefined ? { maxLongEdge: message.maxLongEdge } : {}),
+      ...(message.quality !== undefined ? { quality: message.quality } : {}),
     });
     const exitCode = core.exec(...args);
     // A truncated or damaged file often decodes most of the way and then fails: what came out still plays.

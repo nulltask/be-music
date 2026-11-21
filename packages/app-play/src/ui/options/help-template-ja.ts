@@ -759,6 +759,11 @@ export const OPTIONS_HELP_JA = html`
           (BGA video transcode) ブラウザに WebCodecs のエンコーダーがあれば BGA
           の動画をそれで変換します。次の譜面から反映されます。
         </dd>
+        <dt>Transcode quality</dt>
+        <dd>
+          BGA 動画を変換するときの画質 (ビットレート)。低・標準 (既定)・高・最高から選びます。録画の Video quality
+          と同じ段階です。次に読み込む譜面から反映します。
+        </dd>
         <dt>Resize</dt>
         <dd>(BGA video transcode) BGA の動画を縮小するサイズ。Off なら縮小しません。次の譜面から反映されます。</dd>
         <dt>Reset settings and reload</dt>

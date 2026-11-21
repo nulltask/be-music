@@ -160,6 +160,7 @@ describe('captureOptionSettings', () => {
       compressorMaster: false,
       bgaResizeMaxEdgePx: 720,
       bgaUseWebCodecs: false,
+      bgaTranscodeQuality: 'high',
       showInvisibleNotes: true,
       guideBPM: false,
       guideStop: true,

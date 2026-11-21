@@ -1,3 +1,4 @@
+import type { BGATranscodeQuality } from './ffmpeg-args.ts';
 /**
  * Messages of the streaming BGA transcode. Two workers run it: the decode worker drives ffmpeg.wasm, whose `exec` blocks
  * its thread until the whole file is done, and the encode worker runs the WebCodecs encoder and the fMP4 muxer, whose
@@ -23,6 +24,8 @@ export interface BGADecodeStartMessage {
   inputName: string;
   mode: BGAStreamOutput;
   maxLongEdge?: number;
+  /** The libx264 encode's quality (`h264` mode). */
+  quality?: BGATranscodeQuality;
   /** `raw` mode: where the frames go (the encode worker's end of the channel). */
   framePort?: MessagePort;
   /** `raw` mode: the frames the encoder has taken, to wait on (see `flow.ts`). */
@@ -35,6 +38,8 @@ export interface BGAEncodeStartMessage {
   framePort: MessagePort;
   /** Counts each frame taken, which lets the decoder go on (see `flow.ts`). */
   flow: Int32Array<SharedArrayBuffer>;
+  /** The WebCodecs encode's quality (its bitrate). */
+  quality?: BGATranscodeQuality;
 }
 
 /** Decode worker → encode worker, over the frame port. */
