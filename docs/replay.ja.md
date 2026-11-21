@@ -193,7 +193,7 @@ ESC は中断ではありません。ホストが `holdAfterChart` を早めに�
 - どのプレイ画面（`createPlayScene`）も、記録したログを `on.finish(result, replay)` に渡します。途中で抜けたプレイのログは
   `waitForReplay()` で待ちます。
 - プレイヤーはリザルトシーンのマウント時に `<タイトル>-<タイムスタンプ>.bmplay.json` を自動ダウンロードします。
-  Options ダイアログ の **Library & records** フォルダにある **Auto-save replays** チェックボックス（デフォルト OFF）で制御します。リプレイ関連
+  Options ダイアログ の **Library & records** フォルダにある **Auto-download replays** チェックボックス（デフォルト OFF）で制御します。リプレイ関連
   オプションは曲の開始時にラッチされ、曲の途中では変更できません — プレイ中はコントロールが disabled
   になり、曲開始時点の値がそのプレイに適用されます。
 

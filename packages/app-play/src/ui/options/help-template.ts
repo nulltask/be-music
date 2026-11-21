@@ -25,21 +25,6 @@ export const OPTIONS_HELP_TEMPLATE = html`
         </li>
       </ul>
       <section class="help-menu-folder">
-        <h4 class="help-menu-folder-title">Top</h4>
-        <p class="help-menu-note">At the top of the Library tab.</p>
-        <dl class="help-menu-items">
-          <dt>Status</dt>
-          <dd>What the player is doing now (read-only).</dd>
-          <dt>Open folder</dt>
-          <dd>Picks a folder of charts and / or skins; handled like a drop.</dd>
-          <dt>Open files (ZIP / replay)</dt>
-          <dd>
-            Picks chart ZIP archives, or a replay (<code>*.bmplay.json</code>, or a course's
-            <code>*.bmcourse.json</code>) to watch.
-          </dd>
-        </dl>
-      </section>
-      <section class="help-menu-folder">
         <h4 class="help-menu-folder-title">Play options</h4>
         <p class="help-menu-note">
           Locked during a play unless noted. Options that only change the chart or the view (marked LR2, beatoraja or
@@ -584,7 +569,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
             How sharply the canvas draws, from 0.5× up to the display's pixel ratio; lower it if the frame rate drops.
             Below 1× the picture softens, for GPUs that cannot keep up even at 1×.
           </dd>
-          <dt>Auto-detect resolution</dt>
+          <dt>Use the best resolution</dt>
           <dd>Measures the frame rate at each resolution on the screen showing and keeps the highest that holds it.</dd>
           <dt>Renderer (applies on reload)</dt>
           <dd>
@@ -684,7 +669,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
             On by default. Plays each song from a Bemuse music server at the volume its server sets, as Bemuse does. Off
             plays the charts at their own volume. Locked during play.
           </dd>
-          <dt>Auto-save replays</dt>
+          <dt>Auto-download replays</dt>
           <dd>Downloads each finished play's replay.</dd>
           <dt>Record device names in replays</dt>
           <dd>
@@ -692,8 +677,6 @@ export const OPTIONS_HELP_TEMPLATE = html`
             often includes its vendor and product ids. Keyboards and touch have none. The name goes wherever the replay
             goes, Leaderboard submissions included; judging never reads it.
           </dd>
-          <dt>Clear best records</dt>
-          <dd>Deletes the best records kept in this browser (asks first).</dd>
           <dt>Local data…</dt>
           <dd>
             Shows what the player keeps in this browser: its localStorage keys, its IndexedDB databases (your courses,
