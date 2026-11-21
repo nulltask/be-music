@@ -140,10 +140,14 @@ export class OptionSearch {
     this.results.scrollTop = 0;
   }
 
-  /** The dialog's options that can be shown now: every named row that neither it nor a section around it hides. */
+  /**
+   * The dialog's options that can be shown now: every named row that neither it nor a section around it hides, and that
+   * the dialog's layout does not leave off (`options-layout.json`).
+   */
   private entries(): OptionSearchRow[] {
     const entries: OptionSearchRow[] = [];
     for (const row of this.body.querySelectorAll<HTMLElement>('.options-row[data-option-label]')) {
+      if (row.closest('[data-option-omitted]') !== null) continue;
       // A page of tabs not showing still counts; the body itself is hidden while the results show.
       const hider = row.closest('[hidden]:not([role="tabpanel"])');
       if (hider !== null && hider !== this.body) continue;

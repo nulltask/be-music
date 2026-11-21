@@ -1,23 +1,26 @@
 import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
 // The Options dialog's Course folder. It is built with the dialog as `this` (`OptionsDialog`).
-import type { OptionContainer } from '../options-controls.ts';
 import type { PlayerGUIState } from '../../types.ts';
 import type { OptionsDialog, OptionsDialogDeps } from './index.ts';
 /**
  * Courses: whether stage results show, the player's own courses and the NONSTOP placement. The difficulty tables whose
  * courses are imported are on the Library section's Difficulty tables tab.
  */
-export function buildCourseFolder(this: OptionsDialog, folder: OptionContainer): void {
+export function buildCourseFolder(this: OptionsDialog): void {
   const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);
-  folder.addBinding(this.guiState, 'courseAutoAdvance', { label: 'Skip stage results' }).on('change', ({ value }) => {
-    this.guiState.courseAutoAdvance = value;
-  });
-  folder.addButton({ title: 'My courses…' }).on('click', () => this.courseMaker.panel?.openManager());
+  this.place('courseAutoAdvance')
+    .addBinding(this.guiState, 'courseAutoAdvance', { label: 'Skip stage results' })
+    .on('change', ({ value }) => {
+      this.guiState.courseAutoAdvance = value;
+    });
+  this.place('myCourses')
+    .addButton({ title: 'My courses…' })
+    .on('click', () => this.courseMaker.panel?.openManager());
   trackPlayOption(
-    selectBinding(folder, this.guiState, 'nonstopPlacement', 'NONSTOP placement', ['intended', 'lr2']).on(
-      'change',
-      ({ value }) => applyNonstopPlacement(this.deps, value),
-    ),
+    selectBinding(this.place('nonstopPlacement'), this.guiState, 'nonstopPlacement', 'NONSTOP placement', [
+      'intended',
+      'lr2',
+    ]).on('change', ({ value }) => applyNonstopPlacement(this.deps, value)),
   );
 }
 /**

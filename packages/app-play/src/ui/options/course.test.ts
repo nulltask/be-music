@@ -1,4 +1,3 @@
-import type { OptionContainer } from '../options-controls.ts';
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { PlayerGUIState } from '../../types.ts';
 import { applyNonstopPlacement, buildCourseFolder } from './course.ts';
@@ -67,20 +66,21 @@ function buildFolder() {
   const settings = courseSettings();
   const refreshSelectRecords = vi.fn();
   const tracked: unknown[] = [];
+  const folder = new FakeFolder();
   const menu = {
     guiState: settings,
     deps: { settings, refreshSelectRecords },
     courseMaker: { panel: undefined },
     library: { importCourseTables: vi.fn() },
     setStatus: vi.fn(),
+    place: () => folder,
     trackPlayOption: (controller: unknown) => {
       tracked.push(controller);
       return controller;
     },
   };
-  const folder = new FakeFolder();
   vi.stubGlobal('document', { createElement: () => ({}) });
-  buildCourseFolder.call(menu as unknown as OptionsDialog, folder as unknown as OptionContainer);
+  buildCourseFolder.call(menu as unknown as OptionsDialog);
   return { settings, refreshSelectRecords, tracked, folder };
 }
 
