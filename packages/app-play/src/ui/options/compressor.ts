@@ -39,7 +39,7 @@ export function refreshCompressorStageVisibility(this: OptionsDialog): void {
  * `?compressor=legacy` architecture is active) with threshold, knee, ratio, attack, and release sliders and a reset.
  * Changes retune a running chart live and are remembered for the next visit.
  */
-export function buildCompressorTuningGUI(this: OptionsDialog, parent: OptionContainer): void {
+export function buildCompressorTuningGUI(this: OptionsDialog, parent: Pick<OptionContainer, 'addFolder'>): void {
   const labels: Record<TunableCompressor, string> = {
     key: 'Key compressor',
     bgm: 'BGM compressor',

@@ -1,7 +1,6 @@
 import { selectBinding, paneOptions } from '../../pane-controls.ts';
 // The Options dialog's Skin & display folder, and the controls in it that follow what is loaded: the Skin system picker,
 // the LR2 theme picker and the Be-Music Skin's settings. They are built with the dialog as `this` (`OptionsDialog`).
-import type { OptionContainer } from '../options-controls.ts';
 import { resolveBeMusicSkinSettings } from '@be-music/player-skin-sdk';
 import { hasAnyLR2Skin } from '../../family-dispatch.ts';
 import { playerFullscreenElement, toggleFullscreen } from '../../fullscreen.ts';
@@ -10,51 +9,49 @@ import { ADD_SKIN_ENABLED, BE_MUSIC_SKINS } from '../../services/built-in-skins.
 import { storePlayLayout, storeRenderer, storeSkinEffects } from '../../services/settings.ts';
 import { describeSkinSettingControllers, setStoredSkinSetting, storeSkinSettings } from '../../skin-settings.ts';
 import type { SkinFamilyOverride } from '../../types.ts';
-import { OPTION_FOLDERS, type OptionFolderSpec } from './folders.ts';
 import type { OptionsDialog } from './index.ts';
 import { AUTO_DETECT_RESOLUTION_LABEL } from './render-resolution.ts';
 /** How the skins look and lay out, the loaded themes' pickers, the Be-Music Skin's settings, and adding skins. */
-export function buildSkinFolder(
-  this: OptionsDialog,
-  skin: OptionContainer,
-  addFolder: (parent: Pick<OptionContainer, 'addFolder'>, folder: OptionFolderSpec) => OptionContainer,
-): void {
-  this.skinFolder = skin;
+export function buildSkinFolder(this: OptionsDialog): void {
   // Skin family override — picks the active rendering family (LR2 / beatoraja / default) regardless of what's
   // loaded. Unloaded families ask for a drop; rebuilding updates their availability labels in place.
   this.rebuildSkinFamilyPicker();
-  this.confirmDroppedSkinController = skin
+  this.confirmDroppedSkinController = this.place('confirmDroppedSkin')
     .addBinding(this.guiState, 'confirmDroppedSkin', {
       label: 'Confirm before using a dropped skin',
     })
     .on('change', () => {
       this.guiState.skipDroppedSkin = false;
     });
-  const tabs = skin.addTab({ pages: [{ title: 'Built-in' }, { title: 'LR2' }, { title: 'beatoraja' }] });
-  const [builtIn, lr2, beatoraja] = tabs.pages;
-  if (!builtIn || !lr2 || !beatoraja) return;
-  this.lr2SkinPage = lr2;
-  for (const [page, family, title] of [
-    [lr2, 'lr2', 'Load LR2 skin…'],
-    [beatoraja, 'beatoraja', 'Load beatoraja skin…'],
+  // One page per skin system (`skinPages`): Built-in, LR2 and beatoraja.
+  for (const [id, family, title] of [
+    ['loadLR2Skin', 'lr2', 'Load LR2 skin…'],
+    ['loadBeatorajaSkin', 'beatoraja', 'Load beatoraja skin…'],
   ] as const) {
-    this.skinControllers.push(page.addButton({ title }).on('click', () => this.deps.promptSkinDrop(family)));
+    this.skinControllers.push(
+      this.place(id)
+        .addButton({ title })
+        .on('click', () => this.deps.promptSkinDrop(family)),
+    );
   }
   // Built-in (Be-Music) skin used whenever the default family renders — i.e. no LR2 / beatoraja theme covers the
   // scene. Persisted so a reload keeps the pick.
   const skinOptions = () => Object.fromEntries(BE_MUSIC_SKINS.skins.map((skin) => [skin.label, skin.id]));
-  const skinPicker = selectBinding(builtIn, this.guiState, 'builtInSkin', 'Built-in skin', skinOptions()).on(
-    'change',
-    ({ value: id }) => {
-      this.deps.handleBuiltInSkinChange(id);
-    },
-  );
+  const skinPicker = selectBinding(
+    this.place('builtInSkin'),
+    this.guiState,
+    'builtInSkin',
+    'Built-in skin',
+    skinOptions(),
+  ).on('change', ({ value: id }) => {
+    this.deps.handleBuiltInSkinChange(id);
+  });
   // Skins added at runtime join the picker (in place: re-adding the controller would stack a second handler).
   BE_MUSIC_SKINS.subscribe(() => {
     skinPicker.options = paneOptions(skinOptions());
     skinPicker.refresh();
   });
-  const skinEffects = selectBinding(builtIn, this.guiState, 'skinEffects', 'Skin effects', {
+  const skinEffects = selectBinding(this.place('skinEffects'), this.guiState, 'skinEffects', 'Skin effects', {
     Full: 'full',
     Reduced: 'reduced',
     Off: 'off',
@@ -68,7 +65,7 @@ export function buildSkinFolder(
   // under 30 fps at 2×); applies from the next frame. `?resolution=` in the URL overrides it until a pick here.
   const resolutionSteps = renderResolutionSteps(window.devicePixelRatio || 1);
   this.resolutionPicker = selectBinding(
-    skin,
+    this.place('renderResolution'),
     this.guiState,
     'renderResolution',
     'Render resolution',
@@ -78,46 +75,52 @@ export function buildSkinFolder(
     this.sceneHost.setResolution(value);
   });
   // Measures the frame rate at each resolution on whatever screen is showing and keeps the highest that holds it.
-  this.autoDetectResolutionControl = skin
+  this.autoDetectResolutionControl = this.place('autoDetectResolution')
     .addButton({ title: AUTO_DETECT_RESOLUTION_LABEL })
     .on('click', () => void this.detectRenderResolution());
   if (resolutionSteps.length < 2) this.autoDetectResolutionControl.hidden = true;
   // WebGL 2 by default; WebGPU for the GPUs it suits. The stage picks its renderer once, so a change waits for a reload.
-  selectBinding(skin, this.guiState, 'renderer', 'Renderer (applies on reload)', {
+  selectBinding(this.place('renderer'), this.guiState, 'renderer', 'Renderer (applies on reload)', {
     'WebGL 2': 'webgl',
     WebGPU: 'webgpu',
   }).on('change', ({ value: renderer }) => storeRenderer(renderer));
   // Auto picks the touch layout on phones / tablets; applies from the next play.
-  selectBinding(skin, this.guiState, 'playLayout', 'Play layout', {
+  selectBinding(this.place('playLayout'), this.guiState, 'playLayout', 'Play layout', {
     Auto: 'auto',
     Desktop: 'standard',
     Touch: 'touch',
   }).on('change', ({ value: choice }) => storePlayLayout(choice));
   // The same toggle as double-clicking the playfield, for pointers where a double click is awkward.
-  skin
+  this.place('toggleFullscreen')
     .addButton({ title: 'Toggle fullscreen' })
     .on('click', () => void toggleFullscreen(playerFullscreenElement(document)));
   // Per-scene beatoraja skin picker, hidden until a beatoraja theme is dropped — `rebuildBeatorajaSkinPickers()`
   // re-populates it on each load. Selecting a non-default entry for a scene records it on
   // `beatorajaSkinOverridesByType`; the next mount picks it up via `pickBeatorajaSkinEntryWithOverride`.
-  this.beatorajaSkinPickerFolder = addFolder(beatoraja, OPTION_FOLDERS.beatorajaSkins);
-  this.beatorajaSkinPickerFolder.hidden = true;
+  this.beatorajaSkinPickerFolder = this.layout?.folder('beatorajaSkins');
+  if (this.beatorajaSkinPickerFolder) this.beatorajaSkinPickerFolder.hidden = true;
   // The active Be-Music Skin's own settings, built from its `settings` schema (rebuilt when the skin changes).
-  this.skinSettingsFolder = addFolder(builtIn, OPTION_FOLDERS.skinSettings);
+  this.skinSettingsFolder = this.layout?.folder('skinSettings');
   this.rebuildSkinSettingsFolder();
   // LR2 theme picker — added once a drop discovers a theme (see `rebuildLR2ThemePicker`).
   this.rebuildLR2ThemePicker();
   // Add skin: a skin module from a URL (its default export, built with the skin SDK).
-  if (!ADD_SKIN_ENABLED) return;
-  const addSkins = addFolder(builtIn, OPTION_FOLDERS.addSkin);
+  if (!ADD_SKIN_ENABLED) {
+    // Without the feature the folder would show as an empty heading.
+    const addSkin = this.layout?.folder('addSkin');
+    if (addSkin) addSkin.hidden = true;
+    return;
+  }
   const skinSource = {
     url: '',
     addFromURL: () => void this.deps.addBeMusicSkinFromURL(skinSource.url),
   };
   // Adding a skin switches to it, which makes the select screen again: the button waits for the play to end.
-  addSkins.addBinding(skinSource, 'url', { label: 'Skin module URL' });
+  this.place('addSkinURL').addBinding(skinSource, 'url', { label: 'Skin module URL' });
   this.skinControllers.push(
-    addSkins.addButton({ title: 'Add from URL' }).on('click', () => skinSource['addFromURL']()),
+    this.place('addSkinFromURL')
+      .addButton({ title: 'Add from URL' })
+      .on('click', () => skinSource['addFromURL']()),
   );
 }
 /**
@@ -129,8 +132,7 @@ export function buildSkinFolder(
  * The native list's mutable options preserve its position and previously attached change handler.
  */
 export function rebuildSkinFamilyPicker(this: OptionsDialog): void {
-  const gui = this.gui;
-  if (gui === undefined) return;
+  if (this.layout === undefined) return;
   const lr2Available = hasAnyLR2Skin(this.deps.familyDispatchState()) || this.deps.hasPendingSkin?.('lr2') === true;
   const beatorajaAvailable =
     this.deps.beatorajaTheme() !== undefined || this.deps.hasPendingSkin?.('beatoraja') === true;
@@ -154,7 +156,7 @@ export function rebuildSkinFamilyPicker(this: OptionsDialog): void {
   }
   // First-time build (called from `buildGUI` before any theme has been loaded).
   this.skinFamilyController = selectBinding(
-    this.skinFolder ?? gui,
+    this.place('skinFamilyOverride'),
     this.guiState,
     'skinFamilyOverride',
     'Skin system',
@@ -192,18 +194,19 @@ export function rebuildSkinSettingsFolder(this: OptionsDialog): void {
   const controllers = describeSkinSettingControllers(skin.settings);
   folder.hidden = controllers.length === 0;
   if (controllers.length === 0) return;
+  const rows = this.place('skinSettingRows');
   const values: Record<string, unknown> = { ...resolveBeMusicSkinSettings(skin, this.skinSettings.get(skin.id)) };
   for (const controller of controllers) {
     const added =
       controller.kind === 'dropdown'
-        ? selectBinding(folder, values, controller.id, controller.id, controller.options)
+        ? selectBinding(rows, values, controller.id, controller.id, controller.options)
         : controller.kind === 'slider'
-          ? folder.addBinding(values, controller.id, {
+          ? rows.addBinding(values, controller.id, {
               min: controller.min,
               max: controller.max,
               step: controller.step,
             })
-          : folder.addBinding(values, controller.id);
+          : rows.addBinding(values, controller.id);
     added.label = controller.name;
     added.on('change', ({ value }) => {
       if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return;
@@ -212,7 +215,7 @@ export function rebuildSkinSettingsFolder(this: OptionsDialog): void {
       this.deps.applyBeMusicSkinSettings();
     });
   }
-  folder.addButton({ title: 'Reset to defaults' }).on('click', () => {
+  rows.addButton({ title: 'Reset to defaults' }).on('click', () => {
     this.skinSettings.delete(skin.id);
     storeSkinSettings(this.skinSettings);
     this.scheduleSettingsSave();
@@ -229,8 +232,7 @@ export function rebuildSkinSettingsFolder(this: OptionsDialog): void {
  * Native mutable options keep the picker in place across theme discoveries.
  */
 export function rebuildLR2ThemePicker(this: OptionsDialog): void {
-  const folder = this.lr2SkinPage;
-  if (folder === undefined) return;
+  if (this.layout === undefined) return;
   const themes = this.deps.availableLR2Themes();
   if (themes.length === 0) {
     // No discovered theme (drop didn't carry an `LR2files/Theme/<name>/` shape, OR LR2 isn't loaded at all).
@@ -251,14 +253,17 @@ export function rebuildLR2ThemePicker(this: OptionsDialog): void {
     return;
   }
   const proxy = { lr2Theme: this.deps.activeLR2ThemeName() ?? themes[0]!.name };
-  this.lr2ThemeController = selectBinding(folder, proxy, 'lr2Theme', 'LR2 theme', options).on('change', ({ value }) => {
-    // Hosting the proxy on a literal lets us re-read the picked name without leaking a separate `guiState`
-    // field — the theme name is fully redundant with `activeLR2ThemeName`, which `mountLR2Theme` writes.
-    // No-op when the user "picks" the already-active theme — `applyLR2ThemeByName` early-returns inside
-    // `mountLR2Theme` since the same files re-mount to the same slots, but we still call through so a
-    // hypothetical future code path that observes the picker change has a single chokepoint to subscribe to.
-    void this.deps.applyLR2ThemeByName(value);
-  });
+  this.lr2ThemeController = selectBinding(this.place('lr2Theme'), proxy, 'lr2Theme', 'LR2 theme', options).on(
+    'change',
+    ({ value }) => {
+      // Hosting the proxy on a literal lets us re-read the picked name without leaking a separate `guiState`
+      // field — the theme name is fully redundant with `activeLR2ThemeName`, which `mountLR2Theme` writes.
+      // No-op when the user "picks" the already-active theme — `applyLR2ThemeByName` early-returns inside
+      // `mountLR2Theme` since the same files re-mount to the same slots, but we still call through so a
+      // hypothetical future code path that observes the picker change has a single chokepoint to subscribe to.
+      void this.deps.applyLR2ThemeByName(value);
+    },
+  );
   // A theme dropped during a play brings the picker in disabled, as the other skin controls are then.
   this.lr2ThemeController.disabled = this.playLock.skinControlsLocked;
 }

@@ -22,6 +22,7 @@ import type { OptionsDialog } from './index.ts';
 export function rebuildBeatorajaSkinPickers(this: OptionsDialog): void {
   const folder = this.beatorajaSkinPickerFolder;
   if (folder === undefined) return;
+  const pickers = this.place('beatorajaSkinPickers');
   // The scene-type set can change with a drop, so rebuild these native bindings as a group.
   for (const controller of this.beatorajaSkinPickerControllers.values()) {
     controller.dispose();
@@ -66,7 +67,7 @@ export function rebuildBeatorajaSkinPickers(this: OptionsDialog): void {
     // The proxy holds the currently-selected entryPath. Default to the discovery's best pick
     // so the dropdown reflects what would actually mount if no override is set.
     const proxy = { entryPath: scene.best?.entryPath ?? candidates[0]!.entryPath };
-    const controller = selectBinding(folder, proxy, 'entryPath', `${scene.label} (${candidates.length})`, options).on(
+    const controller = selectBinding(pickers, proxy, 'entryPath', `${scene.label} (${candidates.length})`, options).on(
       'change',
       ({ value: nextEntryPath }) => {
         if (scene.best !== undefined && nextEntryPath === scene.best.entryPath) {

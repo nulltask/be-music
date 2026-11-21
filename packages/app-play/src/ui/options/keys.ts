@@ -63,13 +63,13 @@ function overwritePrompt(scheme: ControlScheme): string {
 }
 
 /** Builds the key config into `folder`. */
-export function buildKeyConfigFolder(this: OptionsDialog, folder: OptionContainer): void {
+export function buildKeyConfigFolder(this: OptionsDialog): void {
   let repaintActionKeys: (() => void) | undefined;
   // Picking LR2's or beatoraja's controls overwrites the key config with that key map's keys (asking first when the
   // player has keys of their own it would drop); it is not a mode the keys of their own survive.
   let scheme = this.guiState.builtInControlScheme;
   const schemeController = this.trackPlayOption(
-    folder.addBinding(this.guiState, 'builtInControlScheme', {
+    this.place('builtInControlScheme').addBinding(this.guiState, 'builtInControlScheme', {
       label: 'Built-in skin controls',
       options: [
         { text: 'LR2', value: 'lr2' },
@@ -91,7 +91,7 @@ export function buildKeyConfigFolder(this: OptionsDialog, folder: OptionContaine
     repaintActionKeys?.();
   });
   const groups = Object.keys(GROUP_TITLES) as LaneKeyGroup[];
-  const pages = folder.addTab({
+  const pages = this.place('keyConfigPages').addTab({
     // The screens' keys first, then each lane group's: 5 / 7 / 10 / 14 KEY, then 9 KEY.
     pages: [{ title: SCREENS_PAGE_TITLE }, ...groups.map((group) => ({ title: GROUP_TITLES[group] }))],
   }).pages;

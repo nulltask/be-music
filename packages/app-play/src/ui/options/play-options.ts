@@ -1,7 +1,6 @@
 import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
 // The Options dialog's Play options folder, split into pages, the Replay / ghost folder on its last page, the View
 // folder and the Select folder. They are built with the dialog as `this` (`OptionsDialog`).
-import type { OptionContainer } from '../options-controls.ts';
 import {
   DIFFICULTY_FILTER_CYCLE,
   CLASSIC_HI_SPEED_STEPS,
@@ -24,7 +23,6 @@ import { storeReplayView } from '../../replay-view-settings.ts';
 import type { OptionsDialog } from './index.ts';
 import { buildLR2ManiaRows } from './lr2-mania.ts';
 import { resolveBPMGuideKinds } from '../../app/play-scene-options.ts';
-import { PLAY_OPTION_PAGES, VIEW_OPTION_PAGES } from './folders.ts';
 import {
   bottomShiftableGaugeItems,
   crazyNotesItems,
@@ -41,21 +39,15 @@ import {
  * song start and DISABLED during a play. The ones a play takes live (hi-speed, the covers and LIFT, the judge timing
  * and CONSTANT visibility) and the select screen's sort and filters, which a play does not read, stay enabled.
  *
- * The options are many, so the folder splits them into pages (`PLAY_OPTION_PAGES`). The ones that only change what the
- * lanes show go to the View folder (`viewFolder`, split into `VIEW_OPTION_PAGES`), and the select screen's sort and
- * filters to the Select folder (`select`). Returns the Practice and Replay / ghost pages, for the Tempo and Replay /
- * ghost folders.
+ * The options are many, so the folder splits them into pages. The ones that only change what the lanes show go to the
+ * View folder, split into pages of its own, and the select screen's sort and filters to the Select folder. Which page
+ * each goes on is `options-layout.json`'s; each is placed by its id (`OptionsDialog.place`).
  */
-export function buildPlayOptionsFolder(
-  this: OptionsDialog,
-  folder: OptionContainer,
-  viewFolder: OptionContainer,
-  select: OptionContainer,
-): { readonly practice: OptionContainer; readonly replay: OptionContainer } {
+export function buildPlayOptionsFolder(this: OptionsDialog): void {
   // The judge ruleset, above the pages: every judge rule (windows, note selection, empty POOR, long notes, gauge, score —
   // see docs/replay.md) and the choices of several options on the pages follow it. No skin has a counterpart.
   this.trackPlayOption(
-    selectBinding(folder, this.guiState, 'judgeRuleset', 'Judgment windows', {
+    selectBinding(this.place('judgeRuleset'), this.guiState, 'judgeRuleset', 'Judgment windows', {
       LR2: 'lr2',
       beatoraja: 'beatoraja',
       '????': '____',
@@ -66,43 +58,48 @@ export function buildPlayOptionsFolder(
     }),
   );
   // What the options picked do to a play's record, from the resolver a finished play's record goes through.
-  this.recordConsequenceController = folder.addBinding(this.recordConsequence, 'text', {
+  this.recordConsequenceController = this.place('recordConsequence').addBinding(this.recordConsequence, 'text', {
     label: 'Record kept',
     readonly: true,
   });
-  // `lanes` is the Arrangement page and `notes` the Modifiers page.
-  const [judge, lanes, notes, assist, practice, replay] = folder.addTab({
-    pages: PLAY_OPTION_PAGES.map((title) => ({ title })),
-  }).pages;
-  const viewTabs = viewFolder.addTab({ pages: VIEW_OPTION_PAGES.map((title) => ({ title })) });
-  this.viewTabs = viewTabs;
-  const [hiSpeed, covers, effects] = viewTabs.pages;
-  if (!judge || !lanes || !notes || !assist || !practice || !replay || !hiSpeed || !covers || !effects)
-    return { practice: folder, replay: folder };
   const trackPlayOption = (controller: PaneBinding): PaneBinding => this.trackPlayOption(controller);
   trackPlayOption(
-    assist.addBinding(this.guiState, 'autoPlay', { label: 'Auto play' }).on('change', ({ value }) => {
-      this.setPlayOptions({ autoPlay: value });
-    }),
+    this.place('autoPlay')
+      .addBinding(this.guiState, 'autoPlay', { label: 'Auto play' })
+      .on('change', ({ value }) => {
+        this.setPlayOptions({ autoPlay: value });
+      }),
   );
-  this.gaugeController = selectBinding(judge, this.guiState, 'gauge', 'Gauge', gaugeChoices(this.guiState));
+  this.gaugeController = selectBinding(
+    this.place('gauge'),
+    this.guiState,
+    'gauge',
+    'Gauge',
+    gaugeChoices(this.guiState),
+  );
   trackPlayOption(
     this.gaugeController.on('change', ({ value }) => {
       this.setPlayOptions({ gauge1P: value });
     }),
   );
-  this.judgeAlgorithmController = selectBinding(judge, this.guiState, 'judgeAlgorithm', 'Judge algorithm', {
-    Combo: 'combo',
-    Duration: 'duration',
-    Lowest: 'lowest',
-  });
+  this.judgeAlgorithmController = selectBinding(
+    this.place('judgeAlgorithm'),
+    this.guiState,
+    'judgeAlgorithm',
+    'Judge algorithm',
+    {
+      Combo: 'combo',
+      Duration: 'duration',
+      Lowest: 'lowest',
+    },
+  );
   trackPlayOption(
     this.judgeAlgorithmController.on('change', ({ value }) => this.setPlayOptions({ judgeAlgorithm: value })),
   );
   for (const side of ['1P', '2P'] as const) {
     const key = `random${side}` as const;
     const controller = selectBinding(
-      lanes,
+      this.place(key),
       this.guiState,
       key,
       `Random ${side}`,
@@ -118,7 +115,7 @@ export function buildPlayOptionsFolder(
     );
   }
   trackPlayOption(
-    lanes
+    this.place('hRandomThresholdBPM')
       .addBinding(this.guiState, 'hRandomThresholdBPM', {
         label: 'H-RANDOM threshold BPM (beatoraja)',
         min: 1,
@@ -130,7 +127,7 @@ export function buildPlayOptionsFolder(
   for (const side of ['1P', '2P'] as const) {
     const key = `lr2RandomScratch${side}` as const;
     trackPlayOption(
-      lanes
+      this.place(key)
         .addBinding(this.guiState, key, { label: `Include scratch ${side} (LR2)` })
         .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
     );
@@ -138,7 +135,7 @@ export function buildPlayOptionsFolder(
   for (const side of ['1P', '2P'] as const) {
     const key = `randomFixedLane${side}` as const;
     trackPlayOption(
-      lanes
+      this.place(key)
         .addBinding(this.guiState, key, {
           label: `Fixed key ${side} (LR2; 0=default)`,
           min: 0,
@@ -150,70 +147,92 @@ export function buildPlayOptionsFolder(
   }
   for (const side of ['1P', '2P'] as const) {
     const key = `randomSeed${side}` as const;
-    const controller = lanes
+    const controller = this.place(key)
       .addBinding(this.guiState, key, { label: `Seed ${side} (-1=random)` })
       .on('change', ({ value }) => this.setPlayOptions({ [key]: value }));
     this.trackPlayOption(controller);
     if (side === '1P') this.randomSeed1PController = controller;
     else this.randomSeed2PController = controller;
   }
-  this.sevenToNinePatternController = selectBinding(lanes, this.guiState, 'sevenToNinePattern', '7-to-9 (beatoraja)', {
-    OFF: 0,
-    'SC1 KEY2–8': 1,
-    'SC1 KEY3–9': 2,
-    'SC2 KEY3–9': 3,
-    'SC8 KEY1–7': 4,
-    'SC9 KEY1–7': 5,
-    'SC9 KEY2–8': 6,
-  });
+  this.sevenToNinePatternController = selectBinding(
+    this.place('sevenToNinePattern'),
+    this.guiState,
+    'sevenToNinePattern',
+    '7-to-9 (beatoraja)',
+    {
+      OFF: 0,
+      'SC1 KEY2–8': 1,
+      'SC1 KEY3–9': 2,
+      'SC2 KEY3–9': 3,
+      'SC8 KEY1–7': 4,
+      'SC9 KEY1–7': 5,
+      'SC9 KEY2–8': 6,
+    },
+  );
   trackPlayOption(
     this.sevenToNinePatternController.on('change', ({ value }) => this.setPlayOptions({ sevenToNinePattern: value })),
   );
-  this.sevenToNineTypeController = selectBinding(lanes, this.guiState, 'sevenToNineType', '7-to-9 scratch', {
-    Fixed: 0,
-    'Avoid repeated hits': 1,
-    Alternate: 2,
-  });
+  this.sevenToNineTypeController = selectBinding(
+    this.place('sevenToNineType'),
+    this.guiState,
+    'sevenToNineType',
+    '7-to-9 scratch',
+    {
+      Fixed: 0,
+      'Avoid repeated hits': 1,
+      Alternate: 2,
+    },
+  );
   trackPlayOption(
     this.sevenToNineTypeController.on('change', ({ value }) => this.setPlayOptions({ sevenToNineType: value })),
   );
-  const reuse = lanes.addButton({ title: 'Reuse previous arrangement' }).on('click', () => {
-    const changes = this.deps.reusePreviousArrangement?.();
-    if (changes) {
-      this.setPlayOptions(changes);
+  const reuse = this.place('reuseArrangement')
+    .addButton({ title: 'Reuse previous arrangement' })
+    .on('click', () => {
+      const changes = this.deps.reusePreviousArrangement?.();
+      if (changes) {
+        this.setPlayOptions(changes);
+        this.refreshPlayOptionControllers();
+        this.setStatus('Previous arrangement selected for the same chart. Live input remains enabled.');
+      } else this.setStatus('Play a chart with the current judgment rules first to retain its arrangement.');
+    });
+  const fresh = this.place('newArrangement')
+    .addButton({ title: 'New arrangement' })
+    .on('click', () => {
+      this.deps.clearArrangement?.();
+      // The menu's seeds too, which the saved settings keep.
+      this.guiState.randomSeed1P = '-1';
+      this.guiState.randomSeed2P = '-1';
+      this.setPlayOptions({ randomSeed1P: '-1', randomSeed2P: '-1' });
       this.refreshPlayOptionControllers();
-      this.setStatus('Previous arrangement selected for the same chart. Live input remains enabled.');
-    } else this.setStatus('Play a chart with the current judgment rules first to retain its arrangement.');
-  });
-  const fresh = lanes.addButton({ title: 'New arrangement' }).on('click', () => {
-    this.deps.clearArrangement?.();
-    // The menu's seeds too, which the saved settings keep.
-    this.guiState.randomSeed1P = '-1';
-    this.guiState.randomSeed2P = '-1';
-    this.setPlayOptions({ randomSeed1P: '-1', randomSeed2P: '-1' });
-    this.refreshPlayOptionControllers();
-    this.setStatus('A new arrangement will be drawn for the next play.');
-  });
+      this.setStatus('A new arrangement will be drawn for the next play.');
+    });
   // Every ruleset reuses its own previous arrangement (#774) and seeds its lane randoms (#933).
   for (const controller of [reuse, fresh]) this.trackPlayOption(controller);
   trackPlayOption(
-    selectBinding(judge, this.guiState, 'bmsonTotalMode', 'bmson TOTAL 0', {
+    selectBinding(this.place('bmsonTotalMode'), this.guiState, 'bmsonTotalMode', 'bmson TOTAL 0', {
       'Native compatibility': 'beatoraja',
       'No recovery (bmson spec)': 'spec',
     }).on('change', ({ value }) => this.setPlayOptions({ bmsonTotalMode: value })),
   );
-  this.gaugeAutoShiftController = selectBinding(judge, this.guiState, 'gaugeAutoShift', 'Gauge auto-shift', {
-    NONE: 'NONE',
-    CONTINUE: 'CONTINUE',
-    'SURVIVAL TO GROOVE': 'SURVIVAL_TO_GROOVE',
-    'BEST CLEAR': 'BEST_CLEAR',
-    'SELECT TO UNDER': 'SELECT_TO_UNDER',
-  });
+  this.gaugeAutoShiftController = selectBinding(
+    this.place('gaugeAutoShift'),
+    this.guiState,
+    'gaugeAutoShift',
+    'Gauge auto-shift',
+    {
+      NONE: 'NONE',
+      CONTINUE: 'CONTINUE',
+      'SURVIVAL TO GROOVE': 'SURVIVAL_TO_GROOVE',
+      'BEST CLEAR': 'BEST_CLEAR',
+      'SELECT TO UNDER': 'SELECT_TO_UNDER',
+    },
+  );
   trackPlayOption(
     this.gaugeAutoShiftController.on('change', ({ value }) => this.setPlayOptions({ gaugeAutoShift: value })),
   );
   this.bottomShiftableGaugeController = selectBinding(
-    judge,
+    this.place('bottomShiftableGauge'),
     this.guiState,
     'bottomShiftableGauge',
     'Lowest auto-shift gauge',
@@ -233,18 +252,24 @@ export function buildPlayOptionsFolder(
     ['lr2AddMines', 'ADD MINES (LR2)'],
   ] as const) {
     trackPlayOption(
-      notes
+      this.place(key)
         .addBinding(this.guiState, key, { label, min: 0, max: 100, step: 10 })
         .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
     );
   }
-  this.scrollModifierController = selectBinding(notes, this.guiState, 'scrollModifier', 'Scroll', {
-    OFF: 'OFF',
-    'REMOVE (beatoraja)': 'REMOVE',
-    'ADD (beatoraja)': 'ADD',
-    'SOFTLANDING LEVEL 1 (LR2)': 'SOFTLANDING-1',
-    'SOFTLANDING LEVEL 2 (LR2)': 'SOFTLANDING-2',
-  });
+  this.scrollModifierController = selectBinding(
+    this.place('scrollModifier'),
+    this.guiState,
+    'scrollModifier',
+    'Scroll',
+    {
+      OFF: 'OFF',
+      'REMOVE (beatoraja)': 'REMOVE',
+      'ADD (beatoraja)': 'ADD',
+      'SOFTLANDING LEVEL 1 (LR2)': 'SOFTLANDING-1',
+      'SOFTLANDING LEVEL 2 (LR2)': 'SOFTLANDING-2',
+    },
+  );
   trackPlayOption(
     this.scrollModifierController.on('change', ({ value }) => {
       this.setPlayOptions({ scrollModifier: value });
@@ -252,17 +277,17 @@ export function buildPlayOptionsFolder(
     }),
   );
   this.scrollSectionController = trackPlayOption(
-    notes
+    this.place('scrollSection')
       .addBinding(this.guiState, 'scrollSection', { label: 'Scroll section lines', min: 1, max: 1024, step: 1 })
       .on('change', ({ value }) => this.setPlayOptions({ scrollSection: value })),
   );
   this.scrollRateController = trackPlayOption(
-    notes
+    this.place('scrollRate')
       .addBinding(this.guiState, 'scrollRate', { label: 'Scroll rate', min: 0, max: 1, step: 0.01 })
       .on('change', ({ value }) => this.setPlayOptions({ scrollRate: value })),
   );
   // beatoraja's mine modifiers. nanasigroove's ADDMINE is its own option below and replaces them while it is on.
-  this.mineModifierController = selectBinding(notes, this.guiState, 'mineModifier', 'Mines', {
+  this.mineModifierController = selectBinding(this.place('mineModifier'), this.guiState, 'mineModifier', 'Mines', {
     OFF: 'OFF',
     'REMOVE (beatoraja)': 'REMOVE',
     'ADD RANDOM (beatoraja)': 'ADD_RANDOM',
@@ -274,44 +299,60 @@ export function buildPlayOptionsFolder(
   );
   this.refreshRulesetChoices();
   trackPlayOption(
-    lanes.addBinding(this.guiState, 'dpFlip', { label: 'DP flip' }).on('change', ({ value }) => {
-      this.setPlayOptions({ dpFlip: value });
-    }),
+    this.place('dpFlip')
+      .addBinding(this.guiState, 'dpFlip', { label: 'DP flip' })
+      .on('change', ({ value }) => {
+        this.setPlayOptions({ dpFlip: value });
+      }),
   );
   trackPlayOption(
-    assist.addBinding(this.guiState, 'autoScratch1P', { label: 'Auto scratch 1P' }).on('change', ({ value }) => {
-      this.setPlayOptions({ autoScratch1P: value });
-    }),
+    this.place('autoScratch1P')
+      .addBinding(this.guiState, 'autoScratch1P', { label: 'Auto scratch 1P' })
+      .on('change', ({ value }) => {
+        this.setPlayOptions({ autoScratch1P: value });
+      }),
   );
   trackPlayOption(
-    assist.addBinding(this.guiState, 'autoScratch2P', { label: 'Auto scratch 2P' }).on('change', ({ value }) => {
-      this.setPlayOptions({ autoScratch2P: value });
-    }),
+    this.place('autoScratch2P')
+      .addBinding(this.guiState, 'autoScratch2P', { label: 'Auto scratch 2P' })
+      .on('change', ({ value }) => {
+        this.setPlayOptions({ autoScratch2P: value });
+      }),
   );
   // beatoraja's GUIDE SE: the sound set's sound for each judgment. Read as the play starts, when the sounds are decoded.
   trackPlayOption(
-    assist.addBinding(this.guiState, 'guideSE', { label: 'GUIDE SE (beatoraja)' }).on('change', ({ value }) => {
-      this.setPlayOptions({ guideSE: value });
-    }),
+    this.place('guideSE')
+      .addBinding(this.guiState, 'guideSE', { label: 'GUIDE SE (beatoraja)' })
+      .on('change', ({ value }) => {
+        this.setPlayOptions({ guideSE: value });
+      }),
   );
   // The PC edition's ANY KEY (#751), offered with the `____` judge rules (`refreshRulesetChoices`); saves no record.
-  this.anyKeyController = trackPlayOption(assist.addBinding(this.guiState, 'anyKey', { label: 'ANY KEY (PC)' }));
-  this.longNoteModifierController = selectBinding(notes, this.guiState, 'longNoteModifier', 'Long notes', {
-    OFF: 'OFF',
-    'LEGACY NOTE (AC 34)': 'LEGACY',
-    'LN REMOVE (beatoraja)': 'REMOVE',
-    'ADD LN (beatoraja)': 'ADD_LN',
-    'ADD CN (beatoraja)': 'ADD_CN',
-    'ADD HCN (beatoraja)': 'ADD_HCN',
-    'ADD ALL (beatoraja)': 'ADD_ALL',
-  });
+  this.anyKeyController = trackPlayOption(
+    this.place('anyKey').addBinding(this.guiState, 'anyKey', { label: 'ANY KEY (PC)' }),
+  );
+  this.longNoteModifierController = selectBinding(
+    this.place('longNoteModifier'),
+    this.guiState,
+    'longNoteModifier',
+    'Long notes',
+    {
+      OFF: 'OFF',
+      'LEGACY NOTE (AC 34)': 'LEGACY',
+      'LN REMOVE (beatoraja)': 'REMOVE',
+      'ADD LN (beatoraja)': 'ADD_LN',
+      'ADD CN (beatoraja)': 'ADD_CN',
+      'ADD HCN (beatoraja)': 'ADD_HCN',
+      'ADD ALL (beatoraja)': 'ADD_ALL',
+    },
+  );
   trackPlayOption(
     this.longNoteModifierController.on('change', ({ value }) => {
       this.setPlayOptions({ longNoteModifier: value });
       this.refreshRulesetChoices();
     }),
   );
-  this.battleModeController = selectBinding(lanes, this.guiState, 'battleMode', 'Battle', {
+  this.battleModeController = selectBinding(this.place('battleMode'), this.guiState, 'battleMode', 'Battle', {
     OFF: 'OFF',
     'SP TO DP': 'SP-TO-DP',
   });
@@ -322,56 +363,78 @@ export function buildPlayOptionsFolder(
     }),
   );
   // Two-player play (LR2 BATTLE): the 2P player's gauge, and That-Which-Must-Not-Be-Named's M-RAN per player.
-  this.gauge2PController = selectBinding(lanes, this.guiState, 'gauge2P', 'Gauge 2P', gaugeChoices(this.guiState));
+  this.gauge2PController = selectBinding(
+    this.place('gauge2P'),
+    this.guiState,
+    'gauge2P',
+    'Gauge 2P',
+    gaugeChoices(this.guiState),
+  );
   trackPlayOption(this.gauge2PController.on('change', ({ value }) => this.setPlayOptions({ gauge2P: value })));
   this.mRanControllers = (['mRan1P', 'mRan2P'] as const).map((key) =>
     trackPlayOption(
-      lanes
+      this.place(key)
         .addBinding(this.guiState, key, { label: key === 'mRan1P' ? 'M-RAN 1P' : 'M-RAN 2P' })
         .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
     ),
   );
   // LR2 keeps the scratch through a hidden command at decide (`randSC`, buttons 12 + 13); the dialog has a switch instead.
   this.dBattleScratchController = trackPlayOption(
-    lanes
+    this.place('dBattleScratch')
       .addBinding(this.guiState, 'dBattleScratch', { label: 'D-BATTLE scratch (LR2)' })
       .on('change', ({ value }) => this.setPlayOptions({ dBattleScratch: value })),
   );
   this.lr2ExtraModeController = trackPlayOption(
-    notes.addBinding(this.guiState, 'lr2ExtraMode', { label: 'EXTRA MODE (LR2)' }).on('change', ({ value }) => {
-      this.setPlayOptions({ lr2ExtraMode: value });
-      this.refreshRulesetChoices();
-    }),
+    this.place('lr2ExtraMode')
+      .addBinding(this.guiState, 'lr2ExtraMode', { label: 'EXTRA MODE (LR2)' })
+      .on('change', ({ value }) => {
+        this.setPlayOptions({ lr2ExtraMode: value });
+        this.refreshRulesetChoices();
+      }),
   );
-  this.lr2ExtraLevelController = selectBinding(notes, this.guiState, 'lr2ExtraLevel', 'EXTRA minimum level (LR2)', {
-    'LEVEL 1': 0,
-    'LEVEL 2': 1,
-    'LEVEL 3': 2,
-  });
+  this.lr2ExtraLevelController = selectBinding(
+    this.place('lr2ExtraLevel'),
+    this.guiState,
+    'lr2ExtraLevel',
+    'EXTRA minimum level (LR2)',
+    {
+      'LEVEL 1': 0,
+      'LEVEL 2': 1,
+      'LEVEL 3': 2,
+    },
+  );
   trackPlayOption(
     this.lr2ExtraLevelController.on('change', ({ value }) => this.setPlayOptions({ lr2ExtraLevel: value })),
   );
-  this.longNoteModeController = selectBinding(judge, this.guiState, 'longNoteMode', 'LN MODE (beatoraja)', {
-    'LONG NOTE': 'LN',
-    'CHARGE NOTE': 'CN',
-    'HELL CHARGE NOTE': 'HCN',
-  });
+  this.longNoteModeController = selectBinding(
+    this.place('longNoteMode'),
+    this.guiState,
+    'longNoteMode',
+    'LN MODE (beatoraja)',
+    {
+      'LONG NOTE': 'LN',
+      'CHARGE NOTE': 'CN',
+      'HELL CHARGE NOTE': 'HCN',
+    },
+  );
   trackPlayOption(
     this.longNoteModeController.on('change', ({ value }) => this.setPlayOptions({ longNoteMode: value })),
   );
   // LR2's mania option GAMBOL: part of LR2's judge rules, so it is offered under them only.
   this.lr2GambolController = trackPlayOption(
-    selectBinding(judge, this.guiState, 'lr2Gambol', 'GAMBOL (LR2)', {
+    selectBinding(this.place('lr2Gambol'), this.guiState, 'lr2Gambol', 'GAMBOL (LR2)', {
       OFF: 0,
       'LEVEL 1': 1,
       'LEVEL 2': 2,
     }).on('change', ({ value }) => this.setPlayOptions({ lr2Gambol: value })),
   );
   this.customJudgeController = trackPlayOption(
-    judge.addBinding(this.guiState, 'customJudge', { label: 'CUSTOM JUDGE (beatoraja)' }).on('change', ({ value }) => {
-      this.setPlayOptions({ customJudge: value });
-      this.refreshRulesetChoices();
-    }),
+    this.place('customJudge')
+      .addBinding(this.guiState, 'customJudge', { label: 'CUSTOM JUDGE (beatoraja)' })
+      .on('change', ({ value }) => {
+        this.setPlayOptions({ customJudge: value });
+        this.refreshRulesetChoices();
+      }),
   );
   // PlayerConfig.validate: PGREAT 25..400 %, every other rate 0..400 %.
   this.customJudgeRateControllers = (
@@ -386,7 +449,7 @@ export function buildPlayOptionsFolder(
     ] as const
   ).map(([key, label, min]) =>
     trackPlayOption(
-      judge
+      this.place(key)
         .addBinding(this.guiState, key, { label, min, max: 400, step: 1 })
         .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
     ),
@@ -395,10 +458,12 @@ export function buildPlayOptionsFolder(
   // score as the chart starts (`practice-bars.ts`); a 0 JUDGERANK / TOTAL is the chart's.
   this.practiceControllers = [
     trackPlayOption(
-      practice.addBinding(this.guiState, 'practice', { label: 'PRACTICE' }).on('change', ({ value }) => {
-        this.setPlayOptions({ practice: value });
-        this.refreshRulesetChoices();
-      }),
+      this.place('practice')
+        .addBinding(this.guiState, 'practice', { label: 'PRACTICE' })
+        .on('change', ({ value }) => {
+          this.setPlayOptions({ practice: value });
+          this.refreshRulesetChoices();
+        }),
     ),
   ];
   const addPracticeNumbers = (
@@ -413,7 +478,7 @@ export function buildPlayOptionsFolder(
     for (const [key, label, min, max, step] of entries) {
       this.practiceControllers.push(
         trackPlayOption(
-          practice
+          this.place(key)
             .addBinding(this.guiState, key, { label, min, max, step })
             .on('change', ({ value }) => this.setPlayOptions({ [key]: value })),
         ),
@@ -430,7 +495,7 @@ export function buildPlayOptionsFolder(
   // A long note held into the bars from before them is kept and played from its head (a Be-Music extension).
   this.practiceControllers.push(
     trackPlayOption(
-      practice
+      this.place('practiceCarriedLongNotes')
         .addBinding(this.guiState, 'practiceCarriedLongNotes', { label: 'Keep LNs held into the bars' })
         .on('change', ({ value }) => this.setPlayOptions({ practiceCarriedLongNotes: value })),
     ),
@@ -438,7 +503,7 @@ export function buildPlayOptionsFolder(
   // The judge ruleset's own gauges, then the other sources' (ADR 0019); refreshRulesetChoices relists them when the
   // ruleset changes.
   const practiceGauge = selectBinding(
-    practice,
+    this.place('practiceGauge'),
     this.guiState,
     'practiceGauge',
     'GAUGE TYPE',
@@ -457,31 +522,37 @@ export function buildPlayOptionsFolder(
       this.refreshRulesetChoices();
     }),
   );
-  const practiceCategory = selectBinding(practice, this.guiState, 'practiceGaugeCategory', 'GAUGE CATEGORY', {
-    'Play mode': 'MODE',
-    FIVEKEYS: 'FIVEKEYS',
-    SEVENKEYS: 'SEVENKEYS',
-    PMS: 'PMS',
-    KEYBOARD: 'KEYBOARD',
-    LR2: 'LR2',
-  });
+  const practiceCategory = selectBinding(
+    this.place('practiceGaugeCategory'),
+    this.guiState,
+    'practiceGaugeCategory',
+    'GAUGE CATEGORY',
+    {
+      'Play mode': 'MODE',
+      FIVEKEYS: 'FIVEKEYS',
+      SEVENKEYS: 'SEVENKEYS',
+      PMS: 'PMS',
+      KEYBOARD: 'KEYBOARD',
+      LR2: 'LR2',
+    },
+  );
   trackPlayOption(practiceCategory.on('change', ({ value }) => this.setPlayOptions({ practiceGaugeCategory: value })));
   this.practiceGaugeCategoryController = practiceCategory;
   // JUDGERANK and TOTAL, after GAUGE VALUE.
   this.practiceJudgeRankAndTotalControllers = this.practiceControllers.slice(2, 4);
   this.practiceControllers.push(practiceGauge);
   this.extraNoteDepthController = trackPlayOption(
-    notes
+    this.place('extraNoteDepth')
       .addBinding(this.guiState, 'extraNoteDepth', { label: 'EXTRA depth (beatoraja)', min: 0, max: 100, step: 1 })
       .on('change', ({ value }) => this.setPlayOptions({ extraNoteDepth: value })),
   );
   this.extraNoteScratchController = trackPlayOption(
-    notes
+    this.place('extraNoteScratch')
       .addBinding(this.guiState, 'extraNoteScratch', { label: 'EXTRA scratch (beatoraja)' })
       .on('change', ({ value }) => this.setPlayOptions({ extraNoteScratch: value })),
   );
   this.longNoteRateController = trackPlayOption(
-    notes
+    this.place('longNoteRate')
       .addBinding(this.guiState, 'longNoteRate', {
         label: 'Long-note add rate (beatoraja)',
         min: 0,
@@ -493,54 +564,65 @@ export function buildPlayOptionsFolder(
   // nanasigroove's CRAZY gameplay options (#1177, #1184, #1185), which no LR2 or beatoraja option matches, kept apart
   // in their own folder at the end of the Modifiers page. A chart's own `774:CRAZY_*` / `774:NOTES_*` wins within each
   // family.
-  const nanasi = notes.addFolder({ title: 'nanasigroove' });
   trackPlayOption(
-    selectBinding(nanasi, this.guiState, 'crazyJudge', 'GOOD2BAD / GREAT2BAD', {
+    selectBinding(this.place('crazyJudge'), this.guiState, 'crazyJudge', 'GOOD2BAD / GREAT2BAD', {
       OFF: 'OFF',
       GOOD2BAD: 'GOOD2BAD',
       GREAT2BAD: 'GREAT2BAD',
     }).on('change', ({ value }) => this.setPlayOptions({ crazyJudge: value })),
   );
   trackPlayOption(
-    nanasi
+    this.place('crazyHellJudge')
       .addBinding(this.guiState, 'crazyHellJudge', { label: 'HELLJUDGE' })
       .on('change', ({ value }) => this.setPlayOptions({ crazyHellJudge: value })),
   );
   trackPlayOption(
-    nanasi.addBinding(this.guiState, 'crazyAddMine', { label: 'ADDMINE' }).on('change', ({ value }) => {
-      this.setPlayOptions({ crazyAddMine: value });
-      this.refreshRulesetChoices();
-    }),
+    this.place('crazyAddMine')
+      .addBinding(this.guiState, 'crazyAddMine', { label: 'ADDMINE' })
+      .on('change', ({ value }) => {
+        this.setPlayOptions({ crazyAddMine: value });
+        this.refreshRulesetChoices();
+      }),
   );
   // A course bar dims COPY and DBLCOPY (`refreshCourseBarChoices`).
-  this.crazyNotesController = nanasi
+  this.crazyNotesController = this.place('crazyNotes')
     .addBinding(this.guiState, 'crazyNotes', { label: 'NOTES', options: crazyNotesItems(false) })
     .on('change', ({ value }) => this.setPlayOptions({ crazyNotes: value }));
   trackPlayOption(this.crazyNotesController);
   // The built-in and LR2 select screens' sort and filters (an LR2 skin's buttons change them too); the list keeps
   // the bar under the cursor. A play does not read them, so they stay enabled during one.
-  selectBinding(select, this.guiState, 'sort', 'Sort', [...SORT_CYCLE]).on('change', ({ value }) => {
+  selectBinding(this.place('sort'), this.guiState, 'sort', 'Sort', [...SORT_CYCLE]).on('change', ({ value }) => {
     this.setPlayOptions({ sort: value });
   });
-  selectBinding(select, this.guiState, 'keysFilter', 'Key filter', [...KEYS_FILTER_CYCLE]).on('change', ({ value }) => {
-    this.setPlayOptions({ keysFilter: value });
-  });
-  selectBinding(select, this.guiState, 'difficultyFilter', 'Difficulty filter', [...DIFFICULTY_FILTER_CYCLE]).on(
+  selectBinding(this.place('keysFilter'), this.guiState, 'keysFilter', 'Key filter', [...KEYS_FILTER_CYCLE]).on(
     'change',
     ({ value }) => {
-      this.setPlayOptions({ difficultyFilter: value });
+      this.setPlayOptions({ keysFilter: value });
     },
   );
-  this.hsFixController = selectBinding(hiSpeed, this.guiState, 'hsFix', 'HS-FIX', PLAY_OPTION_CHOICES.hsFix!);
+  selectBinding(this.place('difficultyFilter'), this.guiState, 'difficultyFilter', 'Difficulty filter', [
+    ...DIFFICULTY_FILTER_CYCLE,
+  ]).on('change', ({ value }) => {
+    this.setPlayOptions({ difficultyFilter: value });
+  });
+  this.hsFixController = selectBinding(
+    this.place('hsFix'),
+    this.guiState,
+    'hsFix',
+    'HS-FIX',
+    PLAY_OPTION_CHOICES.hsFix!,
+  );
   trackPlayOption(this.hsFixController.on('change', ({ value }) => this.setPlayOptions({ hsFix: value })));
   // beatoraja's WINDOW HOLD: a play takes START as held until its last note (#1131). Read as the play starts.
   trackPlayOption(
-    hiSpeed.addBinding(this.guiState, 'windowHold', { label: 'WINDOW HOLD (beatoraja)' }).on('change', ({ value }) => {
-      this.setPlayOptions({ windowHold: value });
-    }),
+    this.place('windowHold')
+      .addBinding(this.guiState, 'windowHold', { label: 'WINDOW HOLD (beatoraja)' })
+      .on('change', ({ value }) => {
+        this.setPlayOptions({ windowHold: value });
+      }),
   );
   trackPlayOption(
-    selectBinding(covers, this.guiState, 'displayAreaInfo', 'Display area info', {
+    selectBinding(this.place('displayAreaInfo'), this.guiState, 'displayAreaInfo', 'Display area info', {
       OFF: 'OFF',
       ON: 'ON',
       'SUDDEN+ ONLY': 'SUDDEN_ONLY',
@@ -553,41 +635,42 @@ export function buildPlayOptionsFolder(
   const setCovers = (changes: Partial<PlayOptions>): void => this.setCoverOptions(changes);
   for (const key of ['hiddenSudden1P', 'hiddenSudden2P'] as const) {
     selectBinding(
-      covers,
+      this.place(key),
       this.guiState,
       key,
       key === 'hiddenSudden1P' ? 'Effect 1P' : 'Effect 2P',
       PLAY_OPTION_CHOICES[key]!,
     ).on('change', ({ value }) => setCovers({ [key]: value }));
   }
-  covers
+  this.place('laneCover')
     .addBinding(this.guiState, 'laneCover', { label: 'Lane cover' })
     .on('change', ({ value }) => setCovers({ laneCover: value }));
-  covers
+  this.place('shutter')
     .addBinding(this.guiState, 'shutter', { label: 'Cover height', min: 0, max: 1, step: 0.01 })
     .on('change', ({ value }) => setCovers({ shutter: value }));
   // BGA, its frame size and the score graph: LR2's select buttons 72, 73 and 70, offered here for every skin.
   trackPlayOption(
-    selectBinding(effects, this.guiState, 'bga', 'BGA', { OFF: 'OFF', ON: 'ON', 'AUTOPLAY ONLY': 'AUTOPLAY_ONLY' }).on(
-      'change',
-      ({ value }) => this.setPlayOptions({ bga: value }),
-    ),
+    selectBinding(this.place('bga'), this.guiState, 'bga', 'BGA', {
+      OFF: 'OFF',
+      ON: 'ON',
+      'AUTOPLAY ONLY': 'AUTOPLAY_ONLY',
+    }).on('change', ({ value }) => this.setPlayOptions({ bga: value })),
   );
   trackPlayOption(
-    selectBinding(effects, this.guiState, 'bgaSize', 'BGA size', { NORMAL: 'NORMAL', EXTEND: 'EXTEND' }).on(
-      'change',
-      ({ value }) => this.setPlayOptions({ bgaSize: value }),
-    ),
+    selectBinding(this.place('bgaSize'), this.guiState, 'bgaSize', 'BGA size', {
+      NORMAL: 'NORMAL',
+      EXTEND: 'EXTEND',
+    }).on('change', ({ value }) => this.setPlayOptions({ bgaSize: value })),
   );
   trackPlayOption(
-    effects
+    this.place('scoreGraph')
       .addBinding(this.guiState, 'scoreGraph', { label: 'Score graph' })
       .on('change', ({ value }) => this.setPlayOptions({ scoreGraph: value })),
   );
   // The guides on the lanes. Guide: BPM is beatoraja's BPM GUIDE, a play option (a light assist on a chart whose BPM
   // changes), read as a play starts. STOP, SCROLL and SPEED are viewing preferences: live, and they change no record.
   trackPlayOption(
-    effects
+    this.place('bpmGuide')
       .addBinding(this.guiState, 'bpmGuide', { label: 'Guide: BPM' })
       .on('change', ({ value }) => this.setPlayOptions({ bpmGuide: value })),
   );
@@ -596,27 +679,31 @@ export function buildPlayOptionsFolder(
     ['guideScroll', 'Guide: SCROLL'],
     ['guideSpeed', 'Guide: SPEED'],
   ] as const) {
-    effects.addBinding(this.guiState, key, { label }).on('change', ({ value }) => {
-      this.guiState[key] = value;
-      this.gameplayView?.setBPMGuideKinds(resolveBPMGuideKinds(this.guiState));
-    });
+    this.place(key)
+      .addBinding(this.guiState, key, { label })
+      .on('change', ({ value }) => {
+        this.guiState[key] = value;
+        this.gameplayView?.setBPMGuideKinds(resolveBPMGuideKinds(this.guiState));
+      });
   }
   trackPlayOption(
-    effects
+    this.place('bpmChangeWarning')
       .addBinding(this.guiState, 'bpmChangeWarning', { label: 'BPM change warning (AC)' })
       .on('change', ({ value }) => this.setPlayOptions({ bpmChangeWarning: value })),
   );
   for (const side of ['1P', '2P'] as const) {
     const heightKey = side === '1P' ? 'lift1P' : 'lift2P';
     const enabledKey = side === '1P' ? 'liftOn1P' : 'liftOn2P';
-    covers.addBinding(this.guiState, enabledKey, { label: `LIFT ${side} (beatoraja)` }).on('change', ({ value }) => {
-      this.setPlayOptions({ [enabledKey]: value });
-      this.gameplayView?.controller.dispatch({
-        type: 'cover',
-        command: { type: 'cover-set', covers: [{ side, liftOn: value, lift: this.guiState[heightKey] }], side },
+    this.place(enabledKey)
+      .addBinding(this.guiState, enabledKey, { label: `LIFT ${side} (beatoraja)` })
+      .on('change', ({ value }) => {
+        this.setPlayOptions({ [enabledKey]: value });
+        this.gameplayView?.controller.dispatch({
+          type: 'cover',
+          command: { type: 'cover-set', covers: [{ side, liftOn: value, lift: this.guiState[heightKey] }], side },
+        });
       });
-    });
-    covers
+    this.place(heightKey)
       .addBinding(this.guiState, heightKey, { label: `LIFT height ${side}`, min: 0, max: 1, step: 0.001 })
       .on('change', ({ value }) => {
         this.setPlayOptions({ [heightKey]: value });
@@ -627,31 +714,31 @@ export function buildPlayOptionsFolder(
       });
   }
   trackPlayOption(
-    effects
+    this.place('visualConstant')
       .addBinding(this.guiState, 'visualConstant', { label: 'Visual CONSTANT (beatoraja)' })
       .on('change', ({ value }) => this.setPlayOptions({ visualConstant: value })),
   );
-  effects
+  this.place('noteDurationMs')
     .addBinding(this.guiState, 'noteDurationMs', { label: 'Note duration (ms)', min: 1, max: 10000, step: 1 })
     .on('change', ({ value }) => {
       this.setPlayOptions({ noteDurationMs: value });
       this.gameplayView?.controller.dispatch({ type: 'constant-visibility', durationMs: value });
     });
-  effects
+  this.place('constantFadeMs')
     .addBinding(this.guiState, 'constantFadeMs', { label: 'CONSTANT fade (ms)', min: -1000, max: 1000, step: 1 })
     .on('change', ({ value }) => {
       this.setPlayOptions({ constantFadeMs: value });
       this.gameplayView?.controller.dispatch({ type: 'constant-visibility', fadeMs: value });
     });
   this.judgeTimingAutoAdjustController = trackPlayOption(
-    selectBinding(judge, this.guiState, 'judgeTimingAutoAdjust', 'Auto judge timing', {
+    selectBinding(this.place('judgeTimingAutoAdjust'), this.guiState, 'judgeTimingAutoAdjust', 'Auto judge timing', {
       OFF: 'OFF',
       beatoraja: 'BEATORAJA',
       'LR2 ON': 'LR2-ON',
       'LR2 SILENT': 'LR2-SILENT',
     }).on('change', ({ value }) => this.setPlayOptions({ judgeTimingAutoAdjust: value })),
   );
-  this.judgeTimingController = judge
+  this.judgeTimingController = this.place('judgeTimingMs')
     .addBinding(this.guiState, 'judgeTimingMs', { label: 'Judge timing (ms)', min: -500, max: 500, step: 1 })
     .on('change', ({ value }) => {
       this.setPlayOptions({ judgeTimingMs: value });
@@ -673,22 +760,24 @@ export function buildPlayOptionsFolder(
     },
   };
   this.normalHiSpeedController = trackPlayOption(
-    hiSpeed.addBinding(normal, 'enabled', { label: 'Normal HI-SPEED (AC 32 measured)' }).on('change', ({ value }) => {
-      if (value) {
-        state.classicHiSpeed = false;
-        state.hsFix = 'OFF';
-      }
-      this.setPlayOptions({
-        normalHiSpeedLevel: state.normalHiSpeedLevel,
-        ...(value ? { classicHiSpeed: false, hsFix: 'OFF' } : {}),
-      });
-      this.refreshRulesetChoices();
-      this.refreshPlayOptionControllers();
-    }),
+    this.place('normalHiSpeed')
+      .addBinding(normal, 'enabled', { label: 'Normal HI-SPEED (AC 32 measured)' })
+      .on('change', ({ value }) => {
+        if (value) {
+          state.classicHiSpeed = false;
+          state.hsFix = 'OFF';
+        }
+        this.setPlayOptions({
+          normalHiSpeedLevel: state.normalHiSpeedLevel,
+          ...(value ? { classicHiSpeed: false, hsFix: 'OFF' } : {}),
+        });
+        this.refreshRulesetChoices();
+        this.refreshPlayOptionControllers();
+      }),
   );
   this.normalHiSpeedLevelController = trackPlayOption(
     selectBinding(
-      hiSpeed,
+      this.place('normalHiSpeedLevel'),
       normal,
       'level',
       'Normal HS level',
@@ -696,12 +785,12 @@ export function buildPlayOptionsFolder(
     ).on('change', ({ value }) => this.setPlayOptions({ normalHiSpeedLevel: value })),
   );
   this.fixedDisplayAreaController = trackPlayOption(
-    hiSpeed
+    this.place('fixedDisplayArea')
       .addBinding(this.guiState, 'fixedDisplayArea', { label: 'Fixed display area (AC 34)' })
       .on('change', ({ value }) => this.setPlayOptions({ fixedDisplayArea: value })),
   );
   this.floatingHiSpeedController = trackPlayOption(
-    hiSpeed
+    this.place('floatingHiSpeed')
       .addBinding(this.guiState, 'floatingHiSpeed', { label: 'FLOATING HI-SPEED (AC 32 measured)' })
       .on('change', ({ value }) => {
         this.setPlayOptions({ floatingHiSpeed: value, ...(value ? { hsFix: 'OFF' } : {}) });
@@ -710,25 +799,27 @@ export function buildPlayOptionsFolder(
       }),
   );
   const remember = (value: number): void => this.deps.rememberHiSpeed(value, 'menu');
-  this.floatingSpeedController = hiSpeed.addBinding(
+  this.floatingSpeedController = this.place('floatingSpeed').addBinding(
     hiSpeedControl(this.guiState, () => this.guiState.floatingHiSpeed, onGrid(0.01), remember),
     'hiSpeed',
     { label: 'Floating speed', min: 0.5, max: 10, step: 0.01 },
   );
   this.classicHiSpeedController = trackPlayOption(
-    hiSpeed.addBinding(this.guiState, 'classicHiSpeed', { label: 'CLASSIC HI-SPEED' }).on('change', ({ value }) => {
-      this.setPlayOptions({ classicHiSpeed: value, ...(value ? { hsFix: 'OFF', normalHiSpeedLevel: 0 } : {}) });
-      if (value) {
-        this.guiState.hsFix = 'OFF';
-        this.guiState.normalHiSpeedLevel = 0;
-        this.deps.rememberHiSpeed(snapClassicHiSpeed(this.guiState.hiSpeed)!, 'menu');
-      }
-      this.refreshRulesetChoices();
-      this.refreshPlayOptionControllers();
-    }),
+    this.place('classicHiSpeed')
+      .addBinding(this.guiState, 'classicHiSpeed', { label: 'CLASSIC HI-SPEED' })
+      .on('change', ({ value }) => {
+        this.setPlayOptions({ classicHiSpeed: value, ...(value ? { hsFix: 'OFF', normalHiSpeedLevel: 0 } : {}) });
+        if (value) {
+          this.guiState.hsFix = 'OFF';
+          this.guiState.normalHiSpeedLevel = 0;
+          this.deps.rememberHiSpeed(snapClassicHiSpeed(this.guiState.hiSpeed)!, 'menu');
+        }
+        this.refreshRulesetChoices();
+        this.refreshPlayOptionControllers();
+      }),
   );
   this.classicSpeedController = selectBinding(
-    hiSpeed,
+    this.place('classicSpeed'),
     hiSpeedControl(
       this.guiState,
       () => this.guiState.classicHiSpeed,
@@ -743,41 +834,40 @@ export function buildPlayOptionsFolder(
   // visual only, so it stays enabled during a play and applies to it live.
   const regular = (): boolean =>
     !this.guiState.classicHiSpeed && !this.guiState.floatingHiSpeed && !(this.guiState.normalHiSpeedLevel > 0);
-  this.hiSpeedController = hiSpeed.addBinding(
+  this.hiSpeedController = this.place('hiSpeed').addBinding(
     hiSpeedControl(this.guiState, regular, onGrid(HISPEED_STEP), remember),
     'hiSpeed',
     { label: 'Hi-speed', min: HISPEED_MIN, max: HISPEED_MAX, step: HISPEED_STEP },
   );
-  buildNoteDisplayRows.call(this, effects);
-  buildLR2ManiaRows.call(this, effects);
+  buildNoteDisplayRows.call(this);
+  buildLR2ManiaRows.call(this);
   this.refreshRulesetChoices();
-  return { practice, replay };
 }
 
 /**
  * The View folder's rows about how the lanes draw: AC 34's lane brightness and judge area, mark processed notes, and
  * the chart's invisible notes. They apply to a running play live.
  */
-function buildNoteDisplayRows(this: OptionsDialog, effects: OptionContainer): void {
+function buildNoteDisplayRows(this: OptionsDialog): void {
   // AC 34's detail options. Live: the views read both at each frame.
-  effects
+  this.place('laneBrightness')
     .addBinding(this.guiState, 'laneBrightness', { label: 'Lane brightness (AC)', min: 0, max: 100, step: 10 })
     .on('change', ({ value }) => this.setPlayOptions({ laneBrightness: value }));
   // The built-in skins' judge detail and judgment counts. AC 34 lists the timing display, its keys / scratch split and
   // the realtime judgment counts; a beatoraja skin has the first and the last as its own options.
-  selectBinding(effects, this.guiState, 'judgeDetail', 'Judge detail (built-in skins)', {
+  selectBinding(this.place('judgeDetail'), this.guiState, 'judgeDetail', 'Judge detail (built-in skins)', {
     OFF: 'OFF',
     'FAST / SLOW': 'FAST_SLOW',
     '±ms': 'MS',
   }).on('change', ({ value }) => this.setPlayOptions({ judgeDetail: value }));
-  effects
+  this.place('judgeDetailSplit')
     .addBinding(this.guiState, 'judgeDetailSplit', { label: 'Judge detail: keys and scratch apart' })
     .on('change', ({ value }) => this.setPlayOptions({ judgeDetailSplit: value }));
-  effects
+  this.place('judgeCounts')
     .addBinding(this.guiState, 'judgeCounts', { label: 'Judgment counts (built-in skins)' })
     .on('change', ({ value }) => this.setPlayOptions({ judgeCounts: value }));
   // The built-in skins' judgment and combo, moved up (-) or down (+) the lanes. LR2 and beatoraja skins place their own.
-  effects
+  this.place('judgePosition')
     .addBinding(this.guiState, 'judgePosition', {
       label: 'Judgment position (built-in skins, %)',
       min: -JUDGE_POSITION_LIMIT,
@@ -785,26 +875,26 @@ function buildNoteDisplayRows(this: OptionsDialog, effects: OptionContainer): vo
       step: 5,
     })
     .on('change', ({ value }) => this.setPlayOptions({ judgePosition: value }));
-  selectBinding(effects, this.guiState, 'judgeDisplay', 'Judgment display (AC)', {
+  selectBinding(this.place('judgeDisplay'), this.guiState, 'judgeDisplay', 'Judgment display (AC)', {
     'Skin default': 'SKIN',
     OFF: 'OFF',
   }).on('change', ({ value }) => this.setPlayOptions({ judgeDisplay: value }));
   // beatoraja's judge area and mark processed note. Live: the playfield reads both at each frame.
-  effects
+  this.place('showJudgeArea')
     .addBinding(this.guiState, 'showJudgeArea', { label: 'Show judge area (beatoraja)' })
     .on('change', ({ value }) => this.setPlayOptions({ showJudgeArea: value }));
-  effects
+  this.place('markProcessedNotes')
     .addBinding(this.guiState, 'markProcessedNotes', { label: 'Mark processed notes (beatoraja)' })
     .on('change', ({ value }) => this.setPlayOptions({ markProcessedNotes: value }));
   // AC 34's オートスクラッチ表示. Live: the playfield reads the option at each frame.
-  selectBinding(effects, this.guiState, 'autoScratchNotes', 'Auto scratch notes (AC)', {
+  selectBinding(this.place('autoScratchNotes'), this.guiState, 'autoScratchNotes', 'Auto scratch notes (AC)', {
     Show: 'SHOW',
     Hide: 'HIDE',
   }).on('change', ({ value }) => this.setPlayOptions({ autoScratchNotes: value }));
   // Chart-authoring overlay — paints invisible / keysound notes (BMS channels `3x` / `4x`) as thin green bars in their
   // playable lane. Live: the gameplay view always extracts the invisible notes and preloads the green sprite, so the
   // flag flips the per-frame render branch on the very next paint.
-  effects
+  this.place('showInvisibleNotes')
     .addBinding(this.guiState, 'showInvisibleNotes', { label: 'Show invisible notes' })
     .on('change', ({ value }) => {
       this.guiState.showInvisibleNotes = value;
@@ -816,30 +906,32 @@ function buildNoteDisplayRows(this: OptionsDialog, effects: OptionContainer): vo
  * SUDDEN+ / HIDDEN+ and LIFT), the rest staying the player's own; and the ghost shown beside a play. Read when a play
  * starts, so disabled during one.
  */
-export function buildReplayViewFolder(this: OptionsDialog, folder: OptionContainer): void {
+export function buildReplayViewFolder(this: OptionsDialog): void {
   const remember = () => storeReplayView(this.guiState.replayView);
-  const labels = { tempo: 'Tempo', hiSpeed: 'Hi-speed', covers: 'SUDDEN+ / HIDDEN+', lift: 'LIFT' } as const;
-  for (const key of ['tempo', 'hiSpeed', 'covers', 'lift'] as const) {
-    this.trackPlayOption(
-      folder.addBinding(this.guiState.replayView, key, { label: labels[key] }).on('change', remember),
-    );
+  for (const [key, id, label] of [
+    ['tempo', 'replayViewTempo', 'Tempo'],
+    ['hiSpeed', 'replayViewHiSpeed', 'Hi-speed'],
+    ['covers', 'replayViewCovers', 'SUDDEN+ / HIDDEN+'],
+    ['lift', 'replayViewLift', 'LIFT'],
+  ] as const) {
+    this.trackPlayOption(this.place(id).addBinding(this.guiState.replayView, key, { label }).on('change', remember));
   }
   // The ghost with the play (`services/ghost.ts`): which replay it plays and how it shows. Disabled during a play like
   // the other options, and on a course bar; "Ghost status" says whether the bar under the cursor would show it.
   // The score graph's fixed target, in beatoraja's names. It paces a play that runs no ghost; live.
   selectBinding(
-    folder,
+    this.place('scoreTarget'),
     this.guiState,
     'scoreTarget',
     'Target (beatoraja)',
     Object.fromEntries(SCORE_TARGET_IDS.map((id) => [scoreTargetLabel(id), id])),
   ).on('change', ({ value }) => this.setPlayOptions({ scoreTarget: value }));
   // The rate the SCORE RATE target paces towards (beatoraja's `RATE_<n>`); live.
-  folder
+  this.place('scoreTargetRate')
     .addBinding(this.guiState, 'scoreTargetRate', { label: 'Target score rate (%)', min: 0, max: 100, step: 0.5 })
     .on('change', ({ value }) => this.setPlayOptions({ scoreTargetRate: value }));
   const refresh = () => this.refreshGhostAvailability();
-  this.ghostController = selectBinding(folder, this.guiState, 'ghost', 'Ghost', {
+  this.ghostController = selectBinding(this.place('ghost'), this.guiState, 'ghost', 'Ghost', {
     OFF: 'OFF',
     'OWN BEST': 'OWN_BEST',
     'REPLAY SLOT 1': 'REPLAY_SLOT_1',
@@ -850,14 +942,17 @@ export function buildReplayViewFolder(this: OptionsDialog, folder: OptionContain
     'REPLAY FILE': 'REPLAY_FILE',
   });
   this.ghostController.on('change', refresh);
-  this.ghostModeController = selectBinding(folder, this.guiState, 'ghostMode', 'Ghost mode', {
+  this.ghostModeController = selectBinding(this.place('ghostMode'), this.guiState, 'ghostMode', 'Ghost mode', {
     'SECOND PLAYFIELD': 'PLAYFIELD',
     PACEMAKER: 'PACEMAKER',
     'PACEMAKER + LANES': 'LANE_OVERLAY',
   });
   this.ghostModeController.on('change', refresh);
-  this.ghostStatusController = folder.addBinding(this.ghostStatus, 'text', { label: 'Ghost status', readonly: true });
-  const fileButton = folder.addButton({ title: 'Ghost replay file…' });
+  this.ghostStatusController = this.place('ghostStatus').addBinding(this.ghostStatus, 'text', {
+    label: 'Ghost status',
+    readonly: true,
+  });
+  const fileButton = this.place('ghostReplayFile').addButton({ title: 'Ghost replay file…' });
   fileButton.on('click', () => {
     void pickReplayFile().then(async (file) => {
       if (file === undefined) return;
