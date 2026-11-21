@@ -76,7 +76,6 @@ export interface OptionSettings {
   bgaResizeMaxEdgePx: number;
   bgaUseWebCodecs: boolean;
   showInvisibleNotes: boolean;
-  guideBPM: boolean;
   guideStop: boolean;
   guideScroll: boolean;
   guideSpeed: boolean;
@@ -357,8 +356,12 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'compressorBGM', booleanOf(raw.compressorBGM));
   assign(settings, 'compressorMaster', booleanOf(raw.compressorMaster));
   assign(settings, 'showInvisibleNotes', booleanOf(raw.showInvisibleNotes));
-  assign(settings, 'guideBPM', booleanOf(raw.guideBPM));
-  assign(settings, 'guideStop', booleanOf(raw.guideStop));
+  // Guide: STOP was part of BPM GUIDE before it had its own switch: a document without one keeps STOPs with BPM.
+  assign(
+    settings,
+    'guideStop',
+    booleanOf(raw.guideStop) ?? (raw.guideBPM === undefined ? booleanOf(raw.bpmGuide) : undefined),
+  );
   assign(settings, 'guideScroll', booleanOf(raw.guideScroll));
   assign(settings, 'guideSpeed', booleanOf(raw.guideSpeed));
   assign(settings, 'autoSaveReplay', booleanOf(raw.autoSaveReplay));
@@ -703,7 +706,6 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('bgaResizeMaxEdgePx');
   assignState('bgaUseWebCodecs');
   assignState('showInvisibleNotes');
-  assignState('guideBPM');
   assignState('guideStop');
   assignState('guideScroll');
   assignState('guideSpeed');
@@ -886,7 +888,6 @@ export function captureOptionSettings(
     bgaResizeMaxEdgePx: state.bgaResizeMaxEdgePx,
     bgaUseWebCodecs: state.bgaUseWebCodecs,
     showInvisibleNotes: state.showInvisibleNotes,
-    guideBPM: state.guideBPM,
     guideStop: state.guideStop,
     guideScroll: state.guideScroll,
     guideSpeed: state.guideSpeed,

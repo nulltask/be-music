@@ -147,8 +147,8 @@ export interface PlaySessionOptions {
   onJudgeTimingChange?: (judgeTimingMs: number) => void;
   bpmGuide?: boolean;
   /**
-   * Which labels BPM GUIDE shows (a viewing preference, followed live): BPM changes and STOPs, as beatoraja's guide, by
-   * default; `#SCROLL` and `#SPEED` changes are Be-Music's.
+   * Which of the STOP, `#SCROLL` and `#SPEED` guide labels show (viewing preferences, followed live). The BPM labels
+   * follow {@link bpmGuide} alone (`resolveShownGuideKinds`); without this, STOPs follow it too, as beatoraja's guide.
    */
   bpmGuideKinds?: BPMGuideKinds;
   /**

@@ -108,7 +108,6 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Effect 2P': 'エフェクト 2P',
   'Lane cover': 'レーンカバー',
   'Cover height': 'カバーの高さ',
-  'BPM GUIDE (beatoraja)': 'BPM GUIDE (beatoraja)',
   'Guide: BPM': 'ガイド: BPM',
   'Guide: STOP': 'ガイド: STOP',
   'Guide: SCROLL': 'ガイド: SCROLL',

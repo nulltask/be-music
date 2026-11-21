@@ -92,7 +92,6 @@ function gui(changes: Partial<PlaySceneGUIState> = {}): PlaySceneGUIState {
     bgaResizeMaxEdgePx: 0,
     bgaUseWebCodecs: false,
     showInvisibleNotes: false,
-    guideBPM: true,
     guideStop: true,
     guideScroll: false,
     guideSpeed: true,
@@ -232,7 +231,7 @@ describe('resolvePlaySceneOptions: a single play', () => {
       bgaTranscodeMaxLongEdgePx: undefined,
       bgaTranscodeUseWebCodecs: false,
       showInvisibleNotes: false,
-      bpmGuideKinds: { bpm: true, stop: true, scroll: false, speed: true },
+      bpmGuideKinds: { bpm: false, stop: true, scroll: false, speed: true },
     });
   });
 
@@ -394,7 +393,7 @@ test('passes scroll REMOVE into the scene separately from visual CONSTANT', () =
 
 describe('resolveBPMGuideKinds', () => {
   test('reads the four guide label switches', () => {
-    expect(resolveBPMGuideKinds({ guideBPM: true, guideStop: false, guideScroll: true, guideSpeed: false })).toEqual({
+    expect(resolveBPMGuideKinds({ bpmGuide: true, guideStop: false, guideScroll: true, guideSpeed: false })).toEqual({
       bpm: true,
       stop: false,
       scroll: true,

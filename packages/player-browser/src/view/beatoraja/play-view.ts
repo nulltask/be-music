@@ -1,7 +1,7 @@
 import { ChartTextOverlay } from '../shared/chart-text.ts';
 import type { BGAFeed } from '../../media/bga-camera.ts';
 import type { BGAOpacityTimelines } from '@be-music/chart-model';
-import { collectBPMGuideEvents, DEFAULT_BPM_GUIDE_KINDS, type BPMGuideKinds } from '../../chart/bpm-guide.ts';
+import { collectBPMGuideEvents, type BPMGuideKinds } from '../../chart/bpm-guide.ts';
 import { DisplayAreaInfoOverlay, resolveDisplayAreaLabels } from '../shared/display-area-info.ts';
 import { BPMChangeWarningOverlay } from '../shared/bpm-change-warning.ts';
 import {
@@ -257,7 +257,7 @@ export class BeatorajaPlayView implements PlayView {
   private readonly play: BeatorajaPlayRuntime;
   private readonly options: BeatorajaPlayViewOptions;
   private showInvisibleNotes: boolean;
-  private bpmGuideKinds: BPMGuideKinds;
+  private bpmGuideKinds: BPMGuideKinds | undefined;
   private readonly chartImages: BeatorajaViewChartImages;
   private prepared: PreparedChart | undefined;
   private bridge: BeatorajaPlayBridge | undefined;
@@ -280,7 +280,7 @@ export class BeatorajaPlayView implements PlayView {
     this.play = play;
     this.options = options;
     this.showInvisibleNotes = options.showInvisibleNotes === true;
-    this.bpmGuideKinds = options.bpmGuideKinds ?? DEFAULT_BPM_GUIDE_KINDS;
+    this.bpmGuideKinds = options.bpmGuideKinds;
     this.timing = resolveBeatorajaPlayTiming(kit.kit.skin);
     this.chartImages = new BeatorajaViewChartImages(
       play.chart,
@@ -582,7 +582,7 @@ export class BeatorajaPlayView implements PlayView {
       showInvisibleNotes: this.showInvisibleNotes,
       ...((play.bgaCamera ?? play.lrxBGA) !== undefined ? { camera: (play.bgaCamera ?? play.lrxBGA)! } : {}),
       bpmGuide: frame.playOptions.bpmGuide,
-      bpmGuideKinds: this.bpmGuideKinds,
+      ...(this.bpmGuideKinds !== undefined ? { bpmGuideKinds: this.bpmGuideKinds } : {}),
       judgeTimingMs: frame.playOptions.judgeTimingMs,
       hiddenNoteChannels: resolveHiddenNoteChannels(frame.playOptions.autoScratchNotes, play.autoScratchChannels),
       ...(frame.playOptions.showJudgeArea && play.judgeWindows !== undefined ? { judgeArea: play.judgeWindows } : {}),
