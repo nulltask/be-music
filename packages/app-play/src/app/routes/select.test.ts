@@ -60,7 +60,7 @@ const AT_COURSE_BAR = { folderPath: ['courses'] } as unknown as BrowseSnapshot;
 const AT_FIXTURE = { folderPath: ['fixtures'] } as unknown as BrowseSnapshot;
 const AT_DROPPED = { folderPath: ['dropped'] } as unknown as BrowseSnapshot;
 
-const BUILT_IN_KIT = { family: 'built-in' } as unknown as SelectSceneKit;
+const BUILT_IN_KIT = { family: 'built-in', skin: { id: 'plain' } } as unknown as SelectSceneKit;
 const LR2_SKIN = { barLayout: { slots: [{}] } } as unknown as LR2Skin;
 const BEATORAJA_KIT = { family: 'beatoraja', entryPath: 'select/select.json' } as unknown as SelectSceneKit;
 
