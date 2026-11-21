@@ -13,10 +13,11 @@ import {
   PLAY_SCENE_KEY_CODES,
   resolveControlButtons,
   type ControlKeyId,
+  type ControlScheme,
 } from '@be-music/player-browser/host';
 import { LANE_KEY_CONFIG, laneKeyLabel, type LaneKeyGroup } from '@be-music/player-engine/lanes';
 import { assignLaneKey, effectiveLaneKey, resetLaneKeys } from '../../lane-keys.ts';
-import { assignControlKey } from '../../control-keys.ts';
+import { assignControlKey, overwriteActionKeysWithScheme } from '../../control-keys.ts';
 import { buildActionKeyPage } from './action-keys.ts';
 import { laneKeyConfigLabel } from './action-labels.ts';
 
@@ -53,23 +54,42 @@ const PROMPTS = {
   ja: { waiting: 'キーを押してください… (Esc で取り消し)', refused: 'そのキーは使えません。別のキーを押してください' },
 } as const;
 
+/** What the overwrite of the key config by `scheme`'s keys asks first, in the player's language. */
+function overwritePrompt(scheme: ControlScheme): string {
+  const name = scheme === 'lr2' ? 'LR2' : 'beatoraja';
+  return playerLang() === 'ja'
+    ? `画面の操作のキーを ${name} のキー設定で上書きします。自分で変えたキーは元に戻ります。よろしいですか?`
+    : `Overwrite the screens' keys with ${name}'s? Keys you changed go back to ${name}'s.`;
+}
+
 /** Builds the key config into `folder`. */
 export function buildKeyConfigFolder(this: OptionsDialog, folder: OptionContainer): void {
   let repaintActionKeys: (() => void) | undefined;
-  this.trackPlayOption(
-    folder
-      .addBinding(this.guiState, 'builtInControlScheme', {
-        label: 'Built-in skin controls',
-        options: [
-          { text: 'LR2', value: 'lr2' },
-          { text: 'beatoraja', value: 'beatoraja' },
-        ],
-      })
-      .on('change', () => {
-        this.scheduleSettingsSave();
-        repaintActionKeys?.();
-      }),
+  // Picking LR2's or beatoraja's controls overwrites the key config with that key map's keys (asking first when the
+  // player has keys of their own it would drop); it is not a mode the keys of their own survive.
+  let scheme = this.guiState.builtInControlScheme;
+  const schemeController = this.trackPlayOption(
+    folder.addBinding(this.guiState, 'builtInControlScheme', {
+      label: 'Built-in skin controls',
+      options: [
+        { text: 'LR2', value: 'lr2' },
+        { text: 'beatoraja', value: 'beatoraja' },
+      ],
+    }),
   );
+  schemeController.on('change', ({ value }) => {
+    if (value === scheme) return;
+    const next = overwriteActionKeysWithScheme(this.guiState.actionKeys, value);
+    if (next !== this.guiState.actionKeys && !window.confirm(overwritePrompt(value))) {
+      this.guiState.builtInControlScheme = scheme;
+      schemeController.refresh();
+      return;
+    }
+    scheme = value;
+    this.guiState.actionKeys = next;
+    this.scheduleSettingsSave();
+    repaintActionKeys?.();
+  });
   const groups = Object.keys(GROUP_TITLES) as LaneKeyGroup[];
   const pages = folder.addTab({
     // The screens' keys first, then each lane group's: 5 / 7 / 10 / 14 KEY, then 9 KEY.

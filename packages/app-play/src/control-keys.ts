@@ -75,3 +75,22 @@ export function assignControlKey(keys: ControlKeyOverrides, id: ControlKeyId, to
   }
   return own;
 }
+
+/**
+ * The screens' keys after picking the built-in skins' key map `scheme`: it overwrites the key config, so every operation
+ * that key map has goes back to its keys there (the player's own keys for it are dropped). Keys for operations only the
+ * other key map has are kept. Returns `keys` itself when nothing changes.
+ */
+export function overwriteActionKeysWithScheme(
+  keys: ControlActionOverrides,
+  scheme: ControlScheme,
+): ControlActionOverrides {
+  const kept: Record<string, readonly string[]> = {};
+  let changed = false;
+  for (const [id, codes] of Object.entries(keys) as [string, readonly string[]][]) {
+    const definition = CONTROL_ACTIONS.find((action) => action.id === id);
+    if (definition?.defaults[scheme] !== undefined) changed = true;
+    else kept[id] = codes;
+  }
+  return changed ? (kept as ControlActionOverrides) : keys;
+}
