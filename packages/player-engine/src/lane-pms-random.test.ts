@@ -142,13 +142,13 @@ function referencePermutation(notes: readonly SRandomNote[], draw: number): numb
   return selected;
 }
 
-test('picks the same permutation as the previous search on random charts', () => {
+function createRandomPMSCharts(): SRandomNote[][] {
   let seed = 12345;
   const next = (): number => {
     seed = (seed * 1103515245 + 12345) % 2147483648;
     return seed / 2147483648;
   };
-  for (let chart = 0; chart < 12; chart += 1) {
+  return Array.from({ length: 12 }, (_, chart) => {
     const notes: SRandomNote[] = [];
     const rows = 3 + Math.floor(next() * 12);
     for (let row = 0; row < rows; row += 1) {
@@ -160,11 +160,15 @@ test('picks the same permutation as the previous search on random charts', () =>
         notes.push({ channel: lanes[lane]!, timeMs: row * 100, ...(long ? { endTimeMs: row * 100 + 250 } : {}) });
       }
     }
-    for (const draw of [0, 0.37, 0.999]) {
-      const expected = referencePermutation(notes, draw);
-      const actual = randomizePMSPlayableLanes(notes, lanes, () => draw);
-      expect(actual).toEqual(notes.map((note) => lanes[expected[lanes.indexOf(note.channel)]!]));
-    }
+    return notes;
+  });
+}
+
+test.for(createRandomPMSCharts())('matches the previous permutation search for random chart %#', (notes) => {
+  for (const draw of [0, 0.37, 0.999]) {
+    const expected = referencePermutation(notes, draw);
+    const actual = randomizePMSPlayableLanes(notes, lanes, () => draw);
+    expect(actual).toEqual(notes.map((note) => lanes[expected[lanes.indexOf(note.channel)]!]));
   }
 });
 
