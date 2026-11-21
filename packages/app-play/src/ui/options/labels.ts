@@ -275,6 +275,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Difficulty tables': '難易度表',
   'Video format': '動画の形式',
   'Video quality': '動画の画質',
+  'Transcode quality': '変換の画質',
   Low: '低',
   Standard: '標準',
   High: '高',

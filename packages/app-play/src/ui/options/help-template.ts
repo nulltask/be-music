@@ -771,6 +771,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
             (BGA video transcode) Converts BGA videos with the browser's WebCodecs encoder where it has one. Applies
             from the next chart.
           </dd>
+          <dt>Transcode quality</dt>
+          <dd>
+            How much bitrate a transcoded BGA video spends: Low, Standard (default), High or Very high, the same steps
+            as Capture's Video quality. Applies to the next chart loaded.
+          </dd>
           <dt>Resize</dt>
           <dd>
             (BGA video transcode) The size BGA videos are shrunk to; Off keeps theirs. Applies from the next chart.

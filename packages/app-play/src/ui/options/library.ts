@@ -1,4 +1,7 @@
-import { selectBinding } from '../../pane-controls.ts';
+import { paneOptions, selectBinding } from '../../pane-controls.ts';
+import { onPlayerLangChange, playerLang } from '../../player-copy.ts';
+import { recordingQualityOptions } from '../../recording-format-choice.ts';
+import { optionLabel } from './labels.ts';
 // The Options dialog's Library & records folder. It is built with the dialog as `this` (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
 import { LocalDataPanel } from '../../local-data-panel.ts';
@@ -140,6 +143,25 @@ export function buildBGATranscodeFolder(this: OptionsDialog, transcode: OptionCo
   if (!webCodecsSupported) {
     webCodecsController.disabled = true;
   }
+  // The bitrate the transcode spends, as the Capture tab's Video quality picks a recording's: libx264's -crf, or the
+  // WebCodecs encoder's bitrate. Standard is the long-standing one.
+  const quality = selectBinding(
+    transcode,
+    this.guiState,
+    'bgaTranscodeQuality',
+    'Transcode quality',
+    recordingQualityOptions(),
+  ).on('change', ({ value }) => {
+    this.guiState.bgaTranscodeQuality = value;
+  });
+  const relabelQualities = (): void => {
+    quality.options = paneOptions(recordingQualityOptions()).map((choice) => ({
+      ...choice,
+      text: optionLabel(choice.text, playerLang()),
+    }));
+  };
+  relabelQualities();
+  onPlayerLangChange(relabelQualities);
   selectBinding(transcode, this.guiState, 'bgaResizeMaxEdgePx', 'Resize', {
     'Off (preserve resolution)': 0,
     '256 px (BMS spec)': 256,

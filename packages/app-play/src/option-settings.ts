@@ -75,6 +75,7 @@ export interface OptionSettings {
   compressorMaster: boolean;
   bgaResizeMaxEdgePx: number;
   bgaUseWebCodecs: boolean;
+  bgaTranscodeQuality: RecordingQuality;
   showInvisibleNotes: boolean;
   guideStop: boolean;
   guideScroll: boolean;
@@ -356,6 +357,11 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'compressorBGM', booleanOf(raw.compressorBGM));
   assign(settings, 'compressorMaster', booleanOf(raw.compressorMaster));
   assign(settings, 'showInvisibleNotes', booleanOf(raw.showInvisibleNotes));
+  if (
+    typeof raw.bgaTranscodeQuality === 'string' &&
+    parseRecordingQuality(raw.bgaTranscodeQuality) === raw.bgaTranscodeQuality
+  )
+    settings.bgaTranscodeQuality = raw.bgaTranscodeQuality;
   // Guide: STOP was part of BPM GUIDE before it had its own switch: a document without one keeps STOPs with BPM.
   assign(
     settings,
@@ -705,6 +711,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('compressorMaster');
   assignState('bgaResizeMaxEdgePx');
   assignState('bgaUseWebCodecs');
+  assignState('bgaTranscodeQuality');
   assignState('showInvisibleNotes');
   assignState('guideStop');
   assignState('guideScroll');
@@ -887,6 +894,7 @@ export function captureOptionSettings(
     compressorMaster: state.compressorMaster,
     bgaResizeMaxEdgePx: state.bgaResizeMaxEdgePx,
     bgaUseWebCodecs: state.bgaUseWebCodecs,
+    bgaTranscodeQuality: state.bgaTranscodeQuality,
     showInvisibleNotes: state.showInvisibleNotes,
     guideStop: state.guideStop,
     guideScroll: state.guideScroll,

@@ -86,6 +86,7 @@ flowchart LR
 - Elsewhere (a browser that cannot isolate the page, such as Safari, which does not support `Cross-Origin-Embedder-Policy: credentialless`), or with "Use WebCodecs encoder" off, or when the WebCodecs encoder fails, ffmpeg encodes with its own libx264 straight to fragmented MP4. Encoding on the decoding thread paces the decode by itself.
 - The media source declares a provisional duration until the stream ends, so a cue seeking past what has been transcoded waits there for the frames. The same bytes on several tracks share one transcode, two transcodes run at a time, and closing the last video using one cancels it.
 - Without the workers or MSE, or when the stream fails before its first frame, the whole file is transcoded before it plays (the earlier path).
+- **Transcode quality** (Options → Advanced → BGA video transcode; Low, Standard by default, High, Very high) sets what every path spends: libx264's `-crf` (34, 30, 25, 21; `resolveBGATranscodeCRF`) and the WebCodecs encoders' bitrate (0.05, 0.08, 0.15, 0.25 bits per pixel per frame, at least 500 kb/s; `estimateBGATranscodeBitrate`). It applies to the next chart loaded; a stream already transcoded at another quality is not reused.
 
 ### BGA camera
 

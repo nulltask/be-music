@@ -244,6 +244,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     // rejects the configured codec parameters or any step throws. Browsers without `VideoEncoder` (Safari < 17, older
     // Firefox) keep the toggle disabled in the GUI and the seed stays `false`.
     bgaUseWebCodecs: typeof globalThis !== 'undefined' && 'VideoEncoder' in globalThis,
+    bgaTranscodeQuality: 'standard',
     // Debug overlay for invisible / keysound notes — off by default. Power users investigating chart authoring (or
     // diagnosing missing keysound triggers) flip it on; the regular gameplay surface stays clean otherwise.
     showInvisibleNotes: false,

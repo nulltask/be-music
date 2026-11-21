@@ -8,6 +8,7 @@
  */
 import type { Output, VideoSampleSource, VideoSample as VideoSampleClass } from 'mediabunny';
 import { signalFrameTaken } from './flow.ts';
+import { estimateBGATranscodeBitrate, type BGATranscodeQuality } from './ffmpeg-args.ts';
 import type { BGAEncodeStartMessage, BGAFrameMessage, BGAStreamWorkerMessage } from './protocol.ts';
 import type { Y4MHeader } from './y4m.ts';
 
@@ -28,7 +29,7 @@ export function runBGAVideoEncodeWorker(scope: WorkerScope = globalThis as unkno
       return;
     }
     if (message.type !== 'start' || encoder) return;
-    encoder = new FrameEncoder(scope, message.flow);
+    encoder = new FrameEncoder(scope, message.flow, message.quality);
     message.framePort.onmessage = (frameEvent) => encoder!.receive(frameEvent.data as BGAFrameMessage);
   };
   let encoder: FrameEncoder | undefined;
@@ -47,10 +48,12 @@ class FrameEncoder {
   private ended = false;
   private failed = false;
   private readonly flow: Int32Array<SharedArrayBuffer>;
+  private readonly quality: BGATranscodeQuality | undefined;
 
-  public constructor(scope: WorkerScope, flow: Int32Array<SharedArrayBuffer>) {
+  public constructor(scope: WorkerScope, flow: Int32Array<SharedArrayBuffer>, quality?: BGATranscodeQuality) {
     this.scope = scope;
     this.flow = flow;
+    this.quality = quality;
   }
 
   public receive(message: BGAFrameMessage): void {
@@ -86,7 +89,9 @@ class FrameEncoder {
     const mediabunny = await import('mediabunny');
     const { width, height } = header;
     const frameRate = header.frameRateNumerator / header.frameRateDenominator;
-    const quality = new mediabunny.Quality({ bitrate: estimateBitrate(width, height, frameRate) });
+    const quality = new mediabunny.Quality({
+      bitrate: estimateBGATranscodeBitrate(width, height, frameRate, this.quality),
+    });
     const encodable = await mediabunny.canEncodeVideo('avc', {
       width,
       height,
@@ -158,12 +163,4 @@ class FrameEncoder {
   private post(message: BGAStreamWorkerMessage, transfer: Transferable[] = []): void {
     this.scope.postMessage(message, transfer);
   }
-}
-
-/**
- * Bitrate for the H.264 encoder: about what libx264 `-crf 30 -preset ultrafast` spends (0.08 bits per pixel, ~4 Mb/s
- * at 1080p30, ~1 Mb/s at 480p30), and at least 500 kb/s for the tiny 256-px BGA.
- */
-export function estimateBitrate(width: number, height: number, frameRate: number): number {
-  return Math.max(500_000, Math.round(width * height * frameRate * 0.08));
 }

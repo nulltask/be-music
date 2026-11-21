@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { buildBGAStreamArgs, buildScaleFilterArg, readAVCCodecString } from './ffmpeg-args.ts';
-import { estimateBitrate } from './encode-worker.ts';
+import {
+  BGA_TRANSCODE_QUALITIES,
+  buildBGAStreamArgs,
+  buildScaleFilterArg,
+  estimateBGATranscodeBitrate,
+  readAVCCodecString,
+  resolveBGATranscodeCRF,
+} from './ffmpeg-args.ts';
 import { pickInputExtension } from './stream.ts';
 
 describe('buildBGAStreamArgs', () => {
@@ -48,10 +54,27 @@ describe('readAVCCodecString', () => {
   });
 });
 
-describe('estimateBitrate', () => {
-  it('spends 0.08 bits per pixel per frame with a floor', () => {
-    expect(estimateBitrate(1920, 1080, 30)).toBe(4_976_640);
-    expect(estimateBitrate(256, 256, 30)).toBe(500_000);
+describe('estimateBGATranscodeBitrate', () => {
+  it('spends 0.08 bits per pixel per frame at standard, with a floor', () => {
+    expect(estimateBGATranscodeBitrate(1920, 1080, 30)).toBe(4_976_640);
+    expect(estimateBGATranscodeBitrate(256, 256, 30)).toBe(500_000);
+  });
+
+  it('spends more for each step up in quality', () => {
+    const rates = BGA_TRANSCODE_QUALITIES.map((quality) => estimateBGATranscodeBitrate(1280, 720, 30, quality));
+    expect(rates).toEqual([1_382_400, 2_211_840, 4_147_200, 6_912_000]);
+  });
+});
+
+describe('resolveBGATranscodeCRF', () => {
+  it('keeps -crf 30 at standard and lowers it for sharper qualities', () => {
+    expect(resolveBGATranscodeCRF()).toBe(30);
+    expect(BGA_TRANSCODE_QUALITIES.map(resolveBGATranscodeCRF)).toEqual([34, 30, 25, 21]);
+  });
+
+  it('puts the quality in the streaming libx264 command line', () => {
+    const args = buildBGAStreamArgs({ input: '/in.wmv', output: '/dev/out', mode: 'h264', quality: 'high' });
+    expect(args[args.indexOf('-crf') + 1]).toBe('25');
   });
 });
 
