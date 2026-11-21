@@ -8,14 +8,14 @@ test('Synesthesia displays difficulty and a banner below its controls, with matc
   const before = (await player.state()).loads;
   await player.page.evaluate(async () => {
     const canvas = document.createElement('canvas');
-    canvas.width = 600;
-    canvas.height = 100;
+    canvas.width = 300;
+    canvas.height = 80;
     const ctx = canvas.getContext('2d')!;
     ctx.fillStyle = '#203e62';
     ctx.fillRect(0, 0, 600, 100);
     ctx.fillStyle = '#e8b65e';
-    ctx.font = 'bold 36px sans-serif';
-    ctx.fillText('BE-MUSIC • BANNER', 24, 64);
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillText('BE-MUSIC • BANNER', 16, 48);
     const blob = await new Promise<Blob>((resolve) => canvas.toBlob((value) => resolve(value!)));
     const files = [
       new File(

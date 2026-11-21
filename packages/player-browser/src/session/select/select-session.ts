@@ -22,6 +22,7 @@ import {
   captureBrowse,
   chartFolderLabel,
   clampHiSpeed,
+  clampFloatingHiSpeed,
   cyclePlayOptionValue,
   DEFAULT_PLAY_OPTIONS,
   focusedChart,
@@ -103,6 +104,7 @@ export interface SelectSessionEvents {
    * surfaces for it (the replay slots' card) follow it. Reported from the frame.
    */
   focus?(entry: LibraryEntry | undefined): void;
+  practice?(chart: LibraryChart): void;
   /** The player changed the play options on the screen; the host's own `setPlayOptions` is not reported. */
   playOptions?(options: PlayOptions): void;
   /** The player asked to type a search: the host lays its text field over the skin's search box. */
@@ -588,6 +590,11 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
       case 'start':
         this.start(intent.autoPlay === true, atMs);
         return;
+      case 'practice': {
+        const entry = this.focused();
+        if (entry?.kind === 'chart') this.options.on.practice?.(entry.chart);
+        return;
+      }
       case 'replay':
         this.replay(intent.slot, atMs);
         return;
@@ -598,7 +605,11 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
         this.stepPlayOption(intent.key, intent.step);
         return;
       case 'set-play-option':
-        this.setPlayOption(intent.key, resolvePlayOptionValue(intent.key, intent.value));
+        const value =
+          intent.key === 'hiSpeed' && this.playOptions.floatingHiSpeed && typeof intent.value === 'number'
+            ? clampFloatingHiSpeed(intent.value)
+            : resolvePlayOptionValue(intent.key, intent.value);
+        this.setPlayOption(intent.key, value);
         return;
       case 'panel':
         this.togglePanel(intent.panel ?? this.panel, atMs);

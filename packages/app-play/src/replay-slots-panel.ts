@@ -62,7 +62,8 @@ export class ReplaySlotsPanel {
   }
 
   /** Shows history on every select skin, with slot controls on skins that do not draw their own. */
-  public showSelect(entry: LibraryEntry | undefined, showSlots = true): void {
+  public showSelect(entry: LibraryEntry | undefined, showSlots = true, dockBelowStage = false): void {
+    this.card.toggleAttribute('data-below-stage', dockBelowStage);
     const target = entry !== undefined && entry.kind !== 'folder' ? this.options.service.targetOf(entry) : undefined;
     this.setMode({ kind: 'select', ...(target === undefined ? {} : { target }), showSlots });
   }

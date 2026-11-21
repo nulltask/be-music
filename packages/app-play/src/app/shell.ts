@@ -147,9 +147,15 @@ export class PlayerShell {
       target === stage ||
       (target instanceof HTMLElement && target.dataset.beMusicScreen !== undefined);
     let lastPointerType = 'mouse';
+    let previousPressHandled = false;
+    let lastPressHandled = false;
     let autoFullscreenTried = false;
     stage.addEventListener('pointerdown', (event) => {
       lastPointerType = event.pointerType;
+      if (event.isPrimary && event.button === 0) {
+        previousPressHandled = lastPressHandled;
+        lastPressHandled = event.defaultPrevented;
+      }
       // A phone gives the stage the whole screen on the first tap: the browser bars eat a large share of a landscape
       // phone's height, and the stage is fitted to that height. The play surface (`#main`) goes fullscreen. It holds
       // the Options dialog, and the site header and the site footer sit outside it. Once only, so leaving fullscreen
@@ -160,7 +166,7 @@ export class PlayerShell {
       }
     });
     stage.addEventListener('dblclick', (event) => {
-      if (!isStageBackground(event.target)) return;
+      if (!isStageBackground(event.target) || previousPressHandled || lastPressHandled) return;
       event.preventDefault();
       // Double taps are lane presses during play, not a fullscreen toggle.
       if (lastPointerType !== 'mouse' && this.elements.shell.classList.contains('in-gameplay')) return;

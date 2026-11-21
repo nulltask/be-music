@@ -328,6 +328,7 @@ export class BuiltInSelectView implements SelectView {
   private readonly actions: BeMusicSelectActions = {
     play: (): void => this.emit?.({ type: 'start', autoPlay: false }),
     autoPlay: (): void => this.emit?.({ type: 'start', autoPlay: true }),
+    practice: (): void => this.emit?.({ type: 'practice' }),
     activateSearch: (): void => this.emit?.({ type: 'search' }),
     setPlayOption: (key, value): void => this.emit?.({ type: 'set-play-option', key, value }),
     cyclePlayOption: (key, step = 1): void => {

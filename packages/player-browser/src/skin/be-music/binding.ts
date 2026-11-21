@@ -571,7 +571,11 @@ export class BeMusicSelectBinding {
         area.eventMode = 'static';
         area.cursor = cursor;
         area.removeAllListeners('pointerdown');
-        area.on('pointerdown', action);
+        area.on('pointerdown', (event) => {
+          // The shell uses unhandled mouse presses on the canvas for background fullscreen gestures.
+          if (event.pointerType === 'mouse' && event.button === 0) event.preventDefault();
+          action();
+        });
         if (action === base.actions.activateSearch) {
           const fontSize =
             base.designHeight > base.designWidth

@@ -37,6 +37,7 @@ const gamereplay = logger('gameplay');
 /** What a play loading behind a decide screen is made with: the start's AUTO, and the chart as the screen drew it. */
 interface DecidePlayOverrides {
   readonly autoPlay?: boolean;
+  readonly practice?: boolean;
   readonly preResolved: ResolvedPlayChart;
 }
 
@@ -108,13 +109,18 @@ export interface DecideRouteDeps {
   /** Plays a chart with no decide screen: one with none, or a play made again after its load failed. */
   readonly playChart: (
     chartEntry: LibraryChart,
-    overrides: { autoPlay?: boolean; preResolved?: ResolvedPlayChart },
+    overrides: { autoPlay?: boolean; practice?: boolean; preResolved?: ResolvedPlayChart },
   ) => Promise<void>;
   /** Makes the play scene for a chart with the play options in force. */
   readonly buildPlayScene: (
     chartEntry: LibraryChart,
     kit: ResolvedPlayKit,
-    overrides: { autoPlay?: boolean; preResolved?: ResolvedPlayChart; chartHashes?: ChartFileHashes },
+    overrides: {
+      autoPlay?: boolean;
+      practice?: boolean;
+      preResolved?: ResolvedPlayChart;
+      chartHashes?: ChartFileHashes;
+    },
   ) => PlayScene;
   /** Puts in force what the play was made with, as it takes the stage (`PlayRoute.latchPlay`). */
   readonly latchPlay: (view: PlayScene) => void;
@@ -237,7 +243,7 @@ export class DecideRoute {
    */
   public async showDecide(
     chartEntry: LibraryChart,
-    overrides: { autoPlay?: boolean } = {},
+    overrides: { autoPlay?: boolean; practice?: boolean } = {},
     then?: DecideContinuation,
   ): Promise<void> {
     const start = then?.start ?? (() => this.playChart(chartEntry, overrides));
@@ -247,7 +253,7 @@ export class DecideRoute {
     const decideFamily = pickActiveFamilyForScene(this.familyKits.familyDispatchState(), 'decide', chartEntry);
     const playsOnBeatoraja = this.familyKits.playsOnBeatoraja(chartEntry);
     const kit = await this.familyKits.decideKitFor(decideFamily, chartEntry, playsOnBeatoraja);
-    const launch = this.takeLaunchPreload(chartEntry, overrides, then);
+    const launch = overrides.practice ? undefined : this.takeLaunchPreload(chartEntry, overrides, then);
     if (kit === undefined) {
       // No decide splash: a Be-Music Skin without one, an LR2-only setup that didn't ship a decide skin, or a beatoraja
       // theme without a decide skin (or one that failed to load). The select screen's decide jingle still plays.
@@ -298,7 +304,11 @@ export class DecideRoute {
     const decide = createDecideScene(kit, {
       controls: this.controls(),
       chart: chartEntry,
-      playOptions: { ...this.playOptions.current, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay },
+      playOptions: {
+        ...this.playOptions.current,
+        autoPlay: overrides.autoPlay ?? this.guiState.autoPlay,
+        practice: overrides.practice ?? this.playOptions.current.practice,
+      },
       source: resolveChartSource(this.library.collection, chartEntry),
       // The LR2 / built-in select screen plays the theme's decide jingle as the chart is picked, and lets it ring on
       // into the play, so those screens play none of their own. The beatoraja screen plays its theme's decide sound.
@@ -332,7 +342,7 @@ export class DecideRoute {
    */
   private async preloadGameplay(
     chartEntry: LibraryChart,
-    overrides: { autoPlay?: boolean; preResolved?: ResolvedPlayChart },
+    overrides: { autoPlay?: boolean; practice?: boolean; preResolved?: ResolvedPlayChart },
     token: SceneRouteToken,
   ): Promise<PlayScene | undefined> {
     this.setRecordingFilenameBase(sanitizeFilenameStem(chartEntry.title) || `gameplay-${Date.now()}`);

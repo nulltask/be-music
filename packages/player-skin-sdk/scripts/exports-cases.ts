@@ -228,6 +228,11 @@ export function registerSkinSDKExportsCases(define: DefineBenchmarkCase): void {
       skinSdkAPI.formatBPMRange(120, 180);
     },
   });
+  define('player-skin-sdk.formatGaugeLabel', {
+    run: () => {
+      skinSdkAPI.formatGaugeLabel('beatoraja:EX-HARD');
+    },
+  });
   define('player-skin-sdk.formatPlayVariantLabel', {
     run: () => {
       skinSdkAPI.formatPlayVariantLabel(BENCH_SONG);
