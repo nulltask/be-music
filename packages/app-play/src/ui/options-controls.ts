@@ -5,11 +5,13 @@ import { html, nothing, render, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { skeletonTemplate } from '@be-music/service-web-theme/client';
+import type { OptionRowKind } from './options/layout.ts';
 // The controls of the player's Options dialog and the beatoraja Skin Config panel, drawn with Basecoat: a switch for a
 // boolean, a select for a choice list, a slider with a number field for a number with a range, a text field, read-only
 // monitors (text, a text area, an FPS graph), buttons, collapsible folders and tabs. A control binds `object[key]`: an
 // edit writes it and runs the control's change handlers, and `refresh` shows it again after a write from elsewhere.
-// Every control has `hidden` and `disabled`, which the play lock (`play-lock.ts`) sets.
+// Every control has `hidden` and `disabled`, which the play lock (`play-lock.ts`) sets, and `omitted`, which the dialog's
+// layout (`options/layout.ts`) sets for a row it leaves off the dialog.
 import {
   choiceIndex,
   constrainNumber,
@@ -85,18 +87,45 @@ export class OptionRow {
   private readonly localize: ((language: string) => void) | undefined;
   private disabledState = false;
   private unavailableState = false;
+  private hiddenState: boolean;
+  private omittedState = false;
 
   public constructor(element: HTMLElement, parent: OptionContainer | undefined, localize?: (language: string) => void) {
     this.element = element;
     this.parent = parent;
     this.localize = localize;
+    this.hiddenState = element.hidden === true;
   }
 
+  /** What it is, as the dialog's layout names it: a row added as content is an `element`. */
+  public get kind(): OptionRowKind | 'folder' | 'tabs' {
+    return 'element';
+  }
+
+  /** Hidden by the code, as the other options make it meaningless (a 2P option in a one-player play). */
   public get hidden(): boolean {
-    return this.element.hidden === true;
+    return this.hiddenState;
   }
   public set hidden(value: boolean) {
-    this.element.hidden = value;
+    this.hiddenState = value;
+    this.applyHidden();
+  }
+
+  /**
+   * Left off the dialog by its layout (`"hidden": true` in `options-layout.json`): never shown, whatever {@link hidden}
+   * says, and never found by the search. Its value and its handlers stay.
+   */
+  public get omitted(): boolean {
+    return this.omittedState;
+  }
+  public set omitted(value: boolean) {
+    this.omittedState = value;
+    this.element.toggleAttribute('data-option-omitted', value);
+    this.applyHidden();
+  }
+
+  private applyHidden(): void {
+    this.element.hidden = this.hiddenState || this.omittedState;
   }
 
   /** Disables every input, select and button in it; a disabled row is dimmed. A play's lock sets it. */
@@ -162,7 +191,7 @@ export class OptionBinding<T = unknown> extends OptionRow {
   private readonly params: OptionBindingParams<T>;
   private labelText: string;
   private readonly id = uniqueId('option');
-  private readonly kind: 'select' | 'toggle' | 'number' | 'text' | 'monitor';
+  private readonly controlKind: 'select' | 'toggle' | 'number' | 'text' | 'monitor';
   /** The change handlers, typed loosely so a binding of any value type stores as `OptionBinding<unknown>`. */
   private readonly handlers: ((event: { value: unknown }) => void)[] = [];
   private choices: OptionChoice<T>[];
@@ -186,7 +215,7 @@ export class OptionBinding<T = unknown> extends OptionRow {
     // The original label names the row's help and remembered settings, independently of localization.
     row.dataset.optionLabel = params.label ?? String(key);
     const value = object[key];
-    this.kind =
+    this.controlKind =
       params.readonly === true
         ? 'monitor'
         : params.options !== undefined
@@ -196,19 +225,25 @@ export class OptionBinding<T = unknown> extends OptionRow {
             : typeof value === 'number'
               ? 'number'
               : 'text';
-    const slider = this.kind === 'number' && params.min !== undefined && params.max !== undefined;
-    row.classList.toggle('options-toggle-row', this.kind === 'toggle');
+    const slider = this.controlKind === 'number' && params.min !== undefined && params.max !== undefined;
+    row.classList.toggle('options-toggle-row', this.controlKind === 'toggle');
     row.classList.toggle('options-slider-row', slider);
-    row.classList.toggle('options-monitor-row', this.kind === 'monitor');
-    if (!slider && !(this.kind === 'monitor' && (params.view === 'graph' || params.multiline === true)))
+    row.classList.toggle('options-monitor-row', this.controlKind === 'monitor');
+    if (!slider && !(this.controlKind === 'monitor' && (params.view === 'graph' || params.multiline === true)))
       row.dataset.orientation = 'horizontal';
     this.refresh();
-    if (this.kind === 'monitor') {
+    if (this.controlKind === 'monitor') {
       // A hidden monitor does no sampling or rendering.
       this.timer = window.setInterval(() => {
         if (this.element.isConnected && this.element.offsetParent !== null) this.refresh();
       }, params.interval ?? 200);
     }
+  }
+
+  public override get kind(): OptionRowKind {
+    if (this.controlKind === 'number' && this.params.min !== undefined && this.params.max !== undefined)
+      return 'slider';
+    return this.controlKind;
   }
 
   public get label(): string {
@@ -277,8 +312,8 @@ export class OptionBinding<T = unknown> extends OptionRow {
   }
 
   private control(value: unknown, typing: boolean): TemplateResult {
-    if (this.kind === 'monitor') return this.monitor(value);
-    if (this.kind === 'select')
+    if (this.controlKind === 'monitor') return this.monitor(value);
+    if (this.controlKind === 'select')
       return html`${this.labelTemplate()}
         <select
           class="select options-select"
@@ -293,7 +328,7 @@ export class OptionBinding<T = unknown> extends OptionRow {
               html`<option value=${index} ?disabled=${choice.disabled === true}>${choice.text}</option>`,
           )}
         </select>`;
-    if (this.kind === 'toggle')
+    if (this.controlKind === 'toggle')
       return html`${this.labelTemplate()}
         <input
           class="input"
@@ -305,10 +340,10 @@ export class OptionBinding<T = unknown> extends OptionRow {
         />`;
     const text = typing
       ? this.field!.value
-      : this.kind === 'number' && typeof value === 'number'
+      : this.controlKind === 'number' && typeof value === 'number'
         ? formatNumber(value, this.params.step)
         : displayText(value);
-    if (this.kind === 'text')
+    if (this.controlKind === 'text')
       return html`${this.labelTemplate()}
         <input
           class="input options-text"
@@ -423,6 +458,10 @@ export class OptionButton extends OptionRow {
     this.button = row.querySelector('button')!;
   }
 
+  public override get kind(): OptionRowKind {
+    return 'button';
+  }
+
   public get title(): string {
     return this.button.textContent ?? '';
   }
@@ -469,6 +508,8 @@ export abstract class OptionContainer extends OptionRow {
   /** Where its rows go. */
   protected abstract readonly content: HTMLElement;
   private readonly changeListeners: ((event: OptionChangeEvent) => void)[] = [];
+  /** Each row's place among the others, as the dialog's layout gives it; a row without one goes last. */
+  private readonly ranks = new WeakMap<OptionRow, number>();
 
   public addBinding<O extends object, K extends keyof O>(
     object: O,
@@ -522,6 +563,17 @@ export abstract class OptionContainer extends OptionRow {
     super.dispose();
   }
 
+  /** Moves `row`, one of its rows, to the place of `rank`: after every row of a rank up to it, before the others. */
+  public placeAt(row: OptionRow, rank: number): void {
+    const at = this.children.indexOf(row);
+    if (at < 0) return;
+    this.children.splice(at, 1);
+    this.ranks.set(row, rank);
+    const index = this.children.findIndex((child) => (this.ranks.get(child) ?? Infinity) > rank);
+    this.children.splice(index < 0 ? this.children.length : index, 0, row);
+    this.paintChildren();
+  }
+
   public removeChild(child: OptionRow): void {
     const index = this.children.indexOf(child);
     if (index >= 0) {
@@ -563,7 +615,7 @@ type FolderKind = 'details' | 'section' | 'dialog' | 'panel';
 /** A folder of rows. Its `title` and `expanded` are what `folders.ts` remembers. */
 export class OptionFolder extends OptionContainer {
   protected readonly content: HTMLElement;
-  private readonly kind: FolderKind;
+  private readonly folderKind: FolderKind;
   private readonly titleText: string;
   private readonly foldListeners: ((event: { expanded: boolean }) => void)[] = [];
   /** The open state last reported, so a programmatic change is not reported as the user's. */
@@ -584,7 +636,7 @@ export class OptionFolder extends OptionContainer {
             ? element('details', 'options-folder')
             : element('section', 'options-section');
     super(root, parent);
-    this.kind = params.kind;
+    this.folderKind = params.kind;
     this.titleText = params.title;
     if (params.kind === 'dialog') {
       this.content = params.content;
@@ -632,6 +684,10 @@ export class OptionFolder extends OptionContainer {
     return folder;
   }
 
+  public override get kind(): 'folder' {
+    return 'folder';
+  }
+
   public get title(): string {
     return optionLabel(this.titleText, this.language);
   }
@@ -642,14 +698,14 @@ export class OptionFolder extends OptionContainer {
   }
 
   private paintHeading(): void {
-    if (this.kind === 'dialog') return;
+    if (this.folderKind === 'dialog') return;
     if (this.element instanceof CollapsiblePanelElement) {
       this.element.heading = this.title;
       return;
     }
     const title = html`<span class="options-folder-title">${this.title}</span><span data-option-help-host></span>`;
     render(
-      this.kind === 'details'
+      this.folderKind === 'details'
         ? html`<summary class="options-folder-summary">${title}${CHEVRON_ICON}</summary>
             ${this.content}`
         : html`<h3 class="options-section-heading">${title}</h3>
@@ -678,7 +734,7 @@ export class OptionFolder extends OptionContainer {
   }
 
   protected override onFold(listener: (event: { expanded: boolean }) => void): void {
-    if (this.kind !== 'section') this.foldListeners.push(listener);
+    if (this.folderKind !== 'section') this.foldListeners.push(listener);
   }
 
   private reportFold(open: boolean): void {
@@ -711,6 +767,8 @@ export class OptionTabs extends OptionRow {
   public readonly pages: OptionPage[];
   private readonly tabIds: string[];
   private selected = 0;
+  /** The pages the dialog's layout leaves off, by index. */
+  private readonly omittedPages = new Set<number>();
 
   public constructor(parent: OptionContainer, pages: readonly { title: string }[]) {
     super(element('section', 'tabs options-tabs'), parent);
@@ -724,6 +782,28 @@ export class OptionTabs extends OptionRow {
       return new OptionPage(this, title, panel);
     });
     this.select(0);
+  }
+
+  public override get kind(): 'tabs' {
+    return 'tabs';
+  }
+
+  /**
+   * Leaves a page off (its tab is not shown, and the search skips its rows) or brings it back. When the page selected is
+   * left off, the first page shown is selected instead.
+   */
+  public omitPage(index: number, omitted: boolean): void {
+    const page = this.pages[index];
+    if (page === undefined) return;
+    if (omitted) this.omittedPages.add(index);
+    else this.omittedPages.delete(index);
+    page.element.toggleAttribute('data-option-omitted', omitted);
+    if (omitted && this.selected === index) {
+      const shown = this.pages.findIndex((_, at) => !this.omittedPages.has(at));
+      this.select(shown < 0 ? index : shown);
+    } else {
+      this.paint();
+    }
   }
 
   public select(index: number): void {
@@ -772,6 +852,7 @@ export class OptionTabs extends OptionRow {
                 type="button"
                 role="tab"
                 id=${this.tabIds[index]}
+                ?hidden=${this.omittedPages.has(index)}
                 data-option-title=${page.title}
                 aria-controls=${page.element.id}
                 aria-selected=${String(this.selected === index)}
@@ -781,7 +862,10 @@ export class OptionTabs extends OptionRow {
                   const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
                   if (step === 0) return;
                   event.preventDefault();
-                  const next = (index + step + this.pages.length) % this.pages.length;
+                  let next = (index + step + this.pages.length) % this.pages.length;
+                  // A page left off is passed over.
+                  while (this.omittedPages.has(next) && next !== index)
+                    next = (next + step + this.pages.length) % this.pages.length;
                   this.select(next);
                   this.element.querySelector<HTMLButtonElement>(`#${this.tabIds[next]}`)?.focus();
                 }}

@@ -159,18 +159,18 @@ export class LeaderboardPanel {
       this.renderStartAccount(this.shownAccount);
     });
   }
-  /** Fills the Options dialog's Leaderboard folder. */
-  buildFolder(folder: OptionContainer): void {
+  /** Fills the Options dialog's Leaderboard folder, placing each row by its id in `options-layout.json`. */
+  buildFolder(place: (id: string) => Pick<OptionContainer, 'addElement' | 'addBinding'>): void {
     // The account first, as a sign-in form: who plays are sent as, and how to sign in, keep the account or sign out.
     this.accountForm = document.createElement('div');
     this.accountForm.className = 'leaderboard-account-form';
-    folder.addElement(this.accountForm);
+    place('leaderboardAccount').addElement(this.accountForm);
     this.renderAccountForm();
     // Submission — OFF by default. When enabled, a finished manual play is sent to the Leaderboard API (same origin,
     // `/api/*`) as the result scene mounts; the result shows the rank in the status line.
     const settings = this.host.settings();
     const startCheckbox = document.querySelector<HTMLInputElement>('#start-submit');
-    this.submitController = folder
+    this.submitController = place('submitToLeaderboard')
       .addBinding(settings, 'submitToLeaderboard', { label: 'Submit to Leaderboard' })
       .on('change', ({ value }) => {
         settings.submitToLeaderboard = value;
@@ -179,7 +179,13 @@ export class LeaderboardPanel {
     // The start card's checkbox is the same setting: it goes through the controller, so it is remembered like any
     // Options dialog change.
     // When a play is sent: only when it beats the player's best EX-SCORE on the chart (its first play always), or always.
-    const submitRule = selectBinding(folder, settings, 'leaderboardSubmitRule', 'Submit when', SUBMIT_RULE_CHOICES);
+    const submitRule = selectBinding(
+      place('leaderboardSubmitRule'),
+      settings,
+      'leaderboardSubmitRule',
+      'Submit when',
+      SUBMIT_RULE_CHOICES,
+    );
     submitRule.on('change', ({ value }) => {
       settings.leaderboardSubmitRule = value;
     });
