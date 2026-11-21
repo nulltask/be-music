@@ -20,7 +20,7 @@ interface QuickOption {
 
 const DOUBLE_MODES = new Set(['10 KEYS', '14 KEYS', '24d KEYS']);
 const ROW_HEIGHT = 29;
-export const LANDSCAPE_QUICK_OPTIONS_INSET = 61;
+export const LANDSCAPE_QUICK_OPTIONS_INSET = 39;
 
 export function drawQuickPlayOptions(
   graphics: Graphics,

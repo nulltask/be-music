@@ -9,15 +9,22 @@ test('double clicking a quick option changes it twice without toggling fullscree
   const fullscreen = () => page.evaluate(() => document.fullscreenElement !== null);
   const arrangement = () =>
     page.evaluate(() => JSON.parse(localStorage.getItem('be-music.option-settings') ?? '{}').settings?.random1P);
+  const replayDockGap = () =>
+    page.locator('.replay-slots-card[data-below-stage]').evaluate((card) => {
+      const stage = document.querySelector('#stage')!;
+      return card.getBoundingClientRect().top - stage.getBoundingClientRect().bottom;
+    });
 
-  await player.clickSkin(121, 432, 854, 480, 2);
+  await expect.poll(replayDockGap).toBeGreaterThanOrEqual(0);
+  await player.clickSkin(121, 455, 854, 480, 2);
   await expect.poll(arrangement).toBe('RANDOM');
   expect(await fullscreen()).toBe(false);
 
   await player.clickSkin(310, 60, 854, 480, 2);
   await expect.poll(fullscreen).toBe(true);
+  await expect.poll(replayDockGap).toBeGreaterThanOrEqual(0);
 
-  await player.clickSkin(25, 432, 854, 480, 2);
+  await player.clickSkin(25, 455, 854, 480, 2);
   await expect.poll(arrangement).toBe('OFF');
   expect(await fullscreen()).toBe(true);
 
@@ -82,33 +89,33 @@ test('cycles quick play options and opens the selected chart in the practice pic
         key,
       ),
     );
-  await player.clickSkin(121, 432, 854, 480);
+  await player.clickSkin(121, 455, 854, 480);
   await option('random1P').toBe('MIRROR');
-  await player.clickSkin(25, 432, 854, 480);
+  await player.clickSkin(25, 455, 854, 480);
   await option('random1P').toBe('OFF');
-  await player.clickSkin(121, 432, 854, 480);
-  await player.clickSkin(139, 432, 854, 480);
+  await player.clickSkin(121, 455, 854, 480);
+  await player.clickSkin(139, 455, 854, 480);
   await option('random1P').toBe('OFF');
 
-  await player.clickSkin(535, 432, 854, 480);
+  await player.clickSkin(535, 455, 854, 480);
   await option('hiSpeed').toBe(2.1);
-  await player.clickSkin(439, 432, 854, 480);
+  await player.clickSkin(439, 455, 854, 480);
   await option('hiSpeed').toBe(2);
-  await player.clickSkin(439, 432, 854, 480);
+  await player.clickSkin(439, 455, 854, 480);
   await option('hiSpeed').toBe(1.9);
-  await player.clickSkin(553, 432, 854, 480);
+  await player.clickSkin(553, 455, 854, 480);
   await option('hiSpeed').toBe(2);
 
-  await player.clickSkin(121, 432, 854, 480);
-  await player.clickSkin(121, 432, 854, 480);
-  await player.clickSkin(259, 432, 854, 480);
-  await player.clickSkin(397, 432, 854, 480);
-  await player.clickSkin(535, 432, 854, 480);
-  await player.clickSkin(673, 432, 854, 480);
+  await player.clickSkin(121, 455, 854, 480);
+  await player.clickSkin(121, 455, 854, 480);
+  await player.clickSkin(259, 455, 854, 480);
+  await player.clickSkin(397, 455, 854, 480);
+  await player.clickSkin(535, 455, 854, 480);
+  await player.clickSkin(673, 455, 854, 480);
   await page.waitForTimeout(750);
   await page.screenshot({ path: join(output, 'select-quick-options.png') });
 
-  await player.clickSkin(180, 303, 854, 480);
+  await player.clickSkin(180, 321, 854, 480);
   const practice = page.locator('.practice-bars-dialog');
   await expect(practice.locator('#practice-bars-title')).toBeVisible();
   await expect(practice.locator('[data-dialog-shortcut="primary"]')).toBeEnabled();
@@ -116,7 +123,7 @@ test('cycles quick play options and opens the selected chart in the practice pic
   await page.screenshot({ path: join(output, 'select-practice.png') });
   await practice.locator('[data-dialog-shortcut="cancel"]').click();
   await expect(practice.locator('#practice-bars-title')).toBeHidden();
-  await player.clickSkin(180, 303, 854, 480);
+  await player.clickSkin(180, 321, 854, 480);
   await practice.locator('[data-dialog-shortcut="primary"]').click();
   await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0, 'practice to start');
   await player.key('Escape');

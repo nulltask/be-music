@@ -906,6 +906,18 @@ textarea {
   height: 100%;
 }
 
+@media (orientation: landscape) {
+  /* Keep the replay button below Synesthesia's select options, even when the canvas fills the viewport. */
+  .shell:not(.empty) .player-main:has(.replay-slots-card[data-mode='select'][data-below-stage]:not([hidden])) {
+    .stage {
+      bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+    }
+    .auxiliary-panels {
+      bottom: env(safe-area-inset-bottom, 0px);
+    }
+  }
+}
+
 /*
  * The canvas takes keyboard focus (tabindex 0) so the scenes get their keys, but it is the whole play surface: a focus
  * ring would frame the screen, most visibly in fullscreen. The fullscreen play surface gets none either.

@@ -248,6 +248,12 @@ export class SelectRoute {
         : undefined;
     const kit: SelectSceneKit =
       beatorajaKit ?? (lr2SelectSkin !== undefined ? { family: 'lr2', skin: lr2SelectSkin } : this.builtIn.builtInKit);
+    const showReplaySlots = (entry: LibraryEntry | undefined): void =>
+      this.replaySlotsPanel.showSelect(
+        entry,
+        kit.family !== 'beatoraja',
+        kit.family === 'built-in' && kit.skin.id === 'synesthesia',
+      );
     if (this.selectView !== undefined && this.selectView.identity.family !== kit.family) {
       // The family changed (an LR2 or a beatoraja theme dropped while the built-in screen is up, or the other way
       // round): only that family's view draws it, so the screen is made again below, carrying the cursor across (the
@@ -268,7 +274,7 @@ export class SelectRoute {
       const navigation = this.lastSelectNavigation;
       this.lastSelectNavigation = undefined;
       if (navigation) kept.restore(navigation);
-      this.replaySlotsPanel.showSelect(kept.focused(), kit.family !== 'beatoraja');
+      showReplaySlots(kept.focused());
       if (kit.family === 'beatoraja') this.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions();
       return;
     }
@@ -314,7 +320,7 @@ export class SelectRoute {
         },
         // Every skin can open history. Beatoraja draws its own slot controls.
         focus: (entry) => {
-          this.replaySlotsPanel.showSelect(entry, kit.family !== 'beatoraja');
+          showReplaySlots(entry);
           // A difficulty table's course that cannot start: its song list titles the stages it is missing.
           if (entry?.kind === 'course') void this.library.titleMissingCourseStages(entry.course);
           // "Ghost status" says whether a play of the bar would show the picked ghost.
@@ -402,7 +408,7 @@ export class SelectRoute {
       },
     });
     if (!(await this.router.show(scene, { role: 'select' }))) return;
-    this.replaySlotsPanel.showSelect(scene.focused(), kit.family !== 'beatoraja');
+    showReplaySlots(scene.focused());
     this.lastSelectNavigation = undefined;
     if (kit.family === 'beatoraja') this.beatorajaSkinOptions.refreshBeatorajaSelectSkinOptions();
     this.optionsDialog.scheduleFirstRunResolutionDetect();

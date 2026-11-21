@@ -731,7 +731,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
     // Info panel.
     const cardTop = 56;
-    const bannerTop = 329;
+    const bannerTop = 351;
     const bannerWidth = 258;
     const bannerBottomPadding = 12;
     const cardBottom = designHeight - LANDSCAPE_QUICK_OPTIONS_INSET - 8;
@@ -767,7 +767,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     // README at the card's top right, on the genre line; the title starts under it.
     if (chartEntry) drawReadmeChip(chrome, addText, frame, 288 - README_CHIP_W, 66);
     if (chartArtist) {
-      addText(chartArtist, 30 + slide * 40, 110, {
+      addText(chartArtist, 30 + slide * 40, 114, {
         size: 10,
         weight: '300',
         fill: SYN_MIST,
@@ -776,14 +776,14 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         alpha: 1 - slide,
       });
     }
-    chrome.rect(30, 126, 258, 1).fill({ color: accent, alpha: 0.35 });
+    chrome.rect(30, 133, 258, 1).fill({ color: accent, alpha: 0.35 });
 
     const stats: ReadonlyArray<readonly [x: number, w: number, label: string, value: string, fill: number]> = [
       [30, 80, 'MODE', modeLabel, SYN_WHITE],
       [118, 76, 'BPM', chartBPM, SYN_WHITE],
       [202, 86, 'LEVEL', playLevel, SYN_AMBER],
     ];
-    const statsY = 134;
+    const statsY = 143;
     for (const [x, w, label, value, fill] of stats) {
       chrome.rect(x, statsY, w, 44).fill({ color: SYN_VOID, alpha: 0.5 });
       chrome.rect(x, statsY, w, 44).stroke({ color: accent, width: 1, alpha: 0.25 });
@@ -799,12 +799,12 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     }
 
     // The judge rank (#RANK / #DEFEXRANK) under the stat chips.
-    drawDifficulty(chrome, addText, chartEntry, 30, 189);
-    drawJudgeRank(addText, chartEntry, 30, 206);
+    drawDifficulty(chrome, addText, chartEntry, 30, 201);
+    drawJudgeRank(addText, chartEntry, 30, 220);
 
     // The file name and the list position share the row under the judge rank.
     if (chartEntry?.fileLabel) {
-      addText(chartEntry.fileLabel, 30, 222, {
+      addText(chartEntry.fileLabel, 30, 238, {
         size: 9,
         weight: '300',
         fill: SYN_DIM,
@@ -814,13 +814,13 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         maxWidth: 200,
       });
     }
-    addText(position, 288, 222, { size: 9, fill: SYN_MIST, fontFamily: SYN_DISPLAY_FONT, anchorX: 1, anchorY: 0.5 });
+    addText(position, 288, 238, { size: 9, fill: SYN_MIST, fontFamily: SYN_DISPLAY_FONT, anchorX: 1, anchorY: 0.5 });
 
     // The player's best on the focused chart or course: lamp, score, DJ Rank. Nothing on a folder.
     if (chartEntry !== undefined || frame.focusedCourse !== undefined) {
       drawBestRecordPanel(chrome, layer, addText, this.lampLights, focusedBestRecord(frame), {
         x: 30,
-        y: 235,
+        y: 250,
         w: 258,
         accent,
         nowMs: frame.nowMs,
@@ -829,7 +829,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     }
 
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline).
-    const buttonY = bannerTop - 46;
+    const buttonY = bannerTop - 50;
     chrome.rect(26, buttonY, 105, 40).fill({ color: accent, alpha: 0.16 });
     chrome.rect(30, buttonY + 4, 97, 32).fill({ color: accent, alpha: 0.88 });
     drawReticle(chrome, 26, buttonY, 105, 40, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
