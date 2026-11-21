@@ -104,12 +104,6 @@ jobs:
             run: vp run check
           - task: build
             run: vp run build
-          - task: test 1/3
-            run: vp test run --shard=1/3
-          - task: test 2/3
-            run: vp test run --shard=2/3
-          - task: test 3/3
-            run: vp test run --shard=3/3
 
     steps:
       - name: Checkout
@@ -128,6 +122,57 @@ jobs:
 
       - name: Run ${{ matrix.task }}
         run: ${{ matrix.run }}
+
+  coverage:
+    name: Test coverage
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.code_changed == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@cab1ab9eaff52d4857875f4f2c016e36af8f2c76 # v1.22.0
+        with:
+          node-version-file: .node-version
+          cache: true
+          run-install: false
+      - name: Install dependencies
+        run: vp install
+      - name: Run tests with coverage
+        run: vp run test:coverage
+      - name: Upload coverage report
+        id: report
+        if: ${{ !cancelled() && hashFiles('coverage/coverage-summary.json') != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-coverage
+          path: |
+            coverage/
+            !coverage/lcov-report/**
+          if-no-files-found: error
+          retention-days: 30
+      - name: Write coverage summary
+        if: ${{ !cancelled() && hashFiles('coverage/coverage-summary.json') != '' }}
+        env:
+          COVERAGE_ARTIFACT_URL: ${{ steps.report.outputs.artifact-url }}
+        run: |
+          node --input-type=module <<'JS' >> "$GITHUB_STEP_SUMMARY"
+          import { readFileSync } from 'node:fs';
+
+          const { total } = JSON.parse(readFileSync('coverage/coverage-summary.json', 'utf8'));
+          console.log('## Test coverage\n');
+          console.log('| Metric | Covered / total | Coverage |');
+          console.log('| --- | ---: | ---: |');
+          for (const metric of ['lines', 'statements', 'branches', 'functions']) {
+            const { covered, total: count, pct } = total[metric];
+            console.log(`| ${metric} | ${covered} / ${count} | ${pct}% |`);
+          }
+          if (process.env.COVERAGE_ARTIFACT_URL) {
+            console.log(`\n[Download the HTML and LCOV reports](${process.env.COVERAGE_ARTIFACT_URL}). Extract the archive and open \`index.html\` for file details.`);
+          }
+          JS
 
   # Base and head share one VM. Split jobs land on different ubuntu-24.04-arm
   # machines, and that host delta dominates the 8% regression threshold.

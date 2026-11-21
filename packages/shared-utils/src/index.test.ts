@@ -246,6 +246,12 @@ describe('utils', () => {
     expect(errors).toEqual(['broken.txt']);
   });
 
+  test('readFilesIntoEntryMap reads audio bytes when deferring is disabled', async () => {
+    const bytes = new Uint8Array([1, 2]);
+    const files = [{ name: 'sample.wav', arrayBuffer: async () => bytes.buffer }];
+    expect(await readFilesIntoEntryMap(files, { deferAudio: false })).toEqual(new Map([['sample.wav', bytes]]));
+  });
+
   test('normalizeASCIIBase36Code: normalizes ASCII 0-9/A-Z/a-z to uppercase base36 codes', () => {
     expect(normalizeASCIIBase36Code(0x30)).toBe(0x30);
     expect(normalizeASCIIBase36Code(0x39)).toBe(0x39);

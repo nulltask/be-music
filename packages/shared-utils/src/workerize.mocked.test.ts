@@ -67,4 +67,24 @@ describe('workerize SEA fallback', () => {
 
     expect(workerizeUntyped).toHaveBeenCalledTimes(1);
   });
+
+  test('reports inline worker errors to an abortable caller', async () => {
+    const { workerize, invokeWorkerizedFunction } = await loadWorkerizeModuleWithSEAMock(true);
+    const error = new Error('cannot decode sample');
+    const worker = workerize(
+      () => {
+        throw error;
+      },
+      () => [],
+    );
+    const controller = new AbortController();
+    const onAbort = vi.fn();
+    try {
+      await expect(invokeWorkerizedFunction(worker, [], { signal: controller.signal, onAbort })).rejects.toBe(error);
+      controller.abort();
+      expect(onAbort).not.toHaveBeenCalled();
+    } finally {
+      worker.close();
+    }
+  });
 });
