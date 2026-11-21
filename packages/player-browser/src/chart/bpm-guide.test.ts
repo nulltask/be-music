@@ -1,7 +1,7 @@
 import { expect, test } from 'vite-plus/test';
 import { createEmptyJSON } from '@be-music/chart-source';
 import { resolveChart } from '@be-music/chart-model';
-import { collectBPMGuideEvents } from './bpm-guide.ts';
+import { collectBPMGuideEvents, resolveShownGuideKinds, showsAnyGuide } from './bpm-guide.ts';
 
 test('shows actual BPM changes and STOP milliseconds, omitting unchanged BPM declarations', () => {
   const chart = createEmptyJSON('bms');
@@ -46,4 +46,19 @@ test('labels actual #SCROLL and #SPEED changes from a rate of 1, with up to two 
     { beat: 10, kind: 'speed', text: 'SPEED 1', seconds: 5 },
     { beat: 16, kind: 'scroll', text: 'SCROLL -1.26', seconds: 8 },
   ]);
+});
+
+test('shows the BPM labels by bpmGuide alone, and the others by their own switches', () => {
+  const kinds = { bpm: false, stop: true, scroll: false, speed: true };
+  expect(resolveShownGuideKinds(false, kinds)).toEqual({ bpm: false, stop: true, scroll: false, speed: true });
+  expect(resolveShownGuideKinds(true, { ...kinds, stop: false })).toEqual({
+    bpm: true,
+    stop: false,
+    scroll: false,
+    speed: true,
+  });
+  // Without the switches, beatoraja's guide: BPM and STOP with bpmGuide.
+  expect(resolveShownGuideKinds(true, undefined)).toEqual({ bpm: true, stop: true, scroll: false, speed: false });
+  expect(showsAnyGuide(resolveShownGuideKinds(undefined, undefined))).toBe(false);
+  expect(showsAnyGuide(resolveShownGuideKinds(false, kinds))).toBe(true);
 });

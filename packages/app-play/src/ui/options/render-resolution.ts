@@ -12,7 +12,7 @@ import {
 } from '../../render-resolution.ts';
 import type { OptionsDialog } from './index.ts';
 const resolutionLog = logger('render-resolution');
-export const AUTO_DETECT_RESOLUTION_LABEL = 'Auto-detect resolution';
+export const AUTO_DETECT_RESOLUTION_LABEL = 'Use the best resolution';
 /** How long the select screen settles (song images, fonts, first BGM) before the first-run resolution benchmark. */
 const FIRST_RUN_RESOLUTION_DELAY_MS = 2000;
 /** What the benchmark asks of the select screen it measures. */

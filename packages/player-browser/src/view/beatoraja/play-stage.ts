@@ -28,7 +28,13 @@ import type { ScrollDistanceMapperLike } from '@be-music/player-engine/display';
 import { Container, type Texture } from 'pixi.js';
 import { ChildPool } from '../../skins/pixi-kit/pools.ts';
 import { renderBPMGuide } from '../shared/bpm-guide.ts';
-import type { BPMGuideEvent, BPMGuideKind, BPMGuideKinds } from '../../chart/bpm-guide.ts';
+import {
+  resolveShownGuideKinds,
+  showsAnyGuide,
+  type BPMGuideEvent,
+  type BPMGuideKind,
+  type BPMGuideKinds,
+} from '../../chart/bpm-guide.ts';
 
 import type { BeatorajaSceneKit } from '../../skin/beatoraja/scene-kit.ts';
 import type { BGACue, NonstopBGAStage, NonstopStageBGATimeline } from '../../chart/bga-timeline.ts';
@@ -259,13 +265,14 @@ export class BeatorajaPlayStage {
     } = {},
   ): void {
     const view = this.stage.view;
+    const guideKinds = resolveShownGuideKinds(playback.bpmGuide, playback.bpmGuideKinds);
     const authored = this.noteLayer.getLaneBounds(context.activeOps, false);
     if (authored) lanes.setLaneHeight?.(authored.bottomY - authored.topY);
     this.noteLayer.setLift(lanes.laneCover ? resolveLaneCover(lanes.laneCover).lift : 0);
     view.update(context);
     this.guideLayer.visible =
       clock !== undefined &&
-      (playback.bpmGuide === true || playback.judgeArea !== undefined || (playback.laneDim ?? 0) > 0) &&
+      (showsAnyGuide(guideKinds) || playback.judgeArea !== undefined || (playback.laneDim ?? 0) > 0) &&
       playback.started !== false;
     if (clock === undefined) return;
     const activeOps = context.activeOps;
@@ -320,8 +327,8 @@ export class BeatorajaPlayStage {
       laneTopY: laneBounds.topY,
       pixelsPerBeat,
       markers: layout.markers,
-      bpmGuide: playback.bpmGuide === true,
-      ...(playback.bpmGuideKinds !== undefined ? { bpmGuideKinds: playback.bpmGuideKinds } : {}),
+      bpmGuide: guideKinds.bpm || guideKinds.stop,
+      bpmGuideKinds: guideKinds,
       window: placement.window,
       secondsAt: layout.beatToSeconds,
       ...(alphaAt !== undefined ? { alphaAt } : {}),
@@ -379,14 +386,14 @@ export class BeatorajaPlayStage {
         });
       }
       renderBPMGuide({
-        enabled: playback.bpmGuide === true,
+        enabled: showsAnyGuide(guideKinds),
         events: layout.guideEvents ?? [],
         window: placement.window,
         distance: placement.distance,
         pixelsPerBeat,
         lanes,
         pool: this.guidePool,
-        ...(playback.bpmGuideKinds !== undefined ? { kinds: playback.bpmGuideKinds } : {}),
+        kinds: guideKinds,
         // The skin's own BPM and STOP lines draw in the marker layer; `#SCROLL` and `#SPEED` have none, so they get the
         // guide's line.
         drawLines: GUIDE_LINE_KINDS,

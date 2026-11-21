@@ -77,7 +77,6 @@ export interface OptionSettings {
   bgaUseWebCodecs: boolean;
   bgaTranscodeQuality: RecordingQuality;
   showInvisibleNotes: boolean;
-  guideBPM: boolean;
   guideStop: boolean;
   guideScroll: boolean;
   guideSpeed: boolean;
@@ -363,8 +362,12 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
     parseRecordingQuality(raw.bgaTranscodeQuality) === raw.bgaTranscodeQuality
   )
     settings.bgaTranscodeQuality = raw.bgaTranscodeQuality;
-  assign(settings, 'guideBPM', booleanOf(raw.guideBPM));
-  assign(settings, 'guideStop', booleanOf(raw.guideStop));
+  // Guide: STOP was part of BPM GUIDE before it had its own switch: a document without one keeps STOPs with BPM.
+  assign(
+    settings,
+    'guideStop',
+    booleanOf(raw.guideStop) ?? (raw.guideBPM === undefined ? booleanOf(raw.bpmGuide) : undefined),
+  );
   assign(settings, 'guideScroll', booleanOf(raw.guideScroll));
   assign(settings, 'guideSpeed', booleanOf(raw.guideSpeed));
   assign(settings, 'autoSaveReplay', booleanOf(raw.autoSaveReplay));
@@ -710,7 +713,6 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('bgaUseWebCodecs');
   assignState('bgaTranscodeQuality');
   assignState('showInvisibleNotes');
-  assignState('guideBPM');
   assignState('guideStop');
   assignState('guideScroll');
   assignState('guideSpeed');
@@ -894,7 +896,6 @@ export function captureOptionSettings(
     bgaUseWebCodecs: state.bgaUseWebCodecs,
     bgaTranscodeQuality: state.bgaTranscodeQuality,
     showInvisibleNotes: state.showInvisibleNotes,
-    guideBPM: state.guideBPM,
     guideStop: state.guideStop,
     guideScroll: state.guideScroll,
     guideSpeed: state.guideSpeed,

@@ -25,21 +25,6 @@ export const OPTIONS_HELP_TEMPLATE = html`
         </li>
       </ul>
       <section class="help-menu-folder">
-        <h4 class="help-menu-folder-title">Top</h4>
-        <p class="help-menu-note">At the top of the Library tab.</p>
-        <dl class="help-menu-items">
-          <dt>Status</dt>
-          <dd>What the player is doing now (read-only).</dd>
-          <dt>Open folder</dt>
-          <dd>Picks a folder of charts and / or skins; handled like a drop.</dd>
-          <dt>Open files (ZIP / replay)</dt>
-          <dd>
-            Picks chart ZIP archives, or a replay (<code>*.bmplay.json</code>, or a course's
-            <code>*.bmcourse.json</code>) to watch.
-          </dd>
-        </dl>
-      </section>
-      <section class="help-menu-folder">
         <h4 class="help-menu-folder-title">Play options</h4>
         <p class="help-menu-note">
           Locked during a play unless noted. Options that only change the chart or the view (marked LR2, beatoraja or
@@ -420,20 +405,17 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Draws the BGA in the skin's normal frame or its larger one.</dd>
           <dt>Score graph</dt>
           <dd>Shows the skin's score graph during a play.</dd>
-          <dt>BPM GUIDE (beatoraja)</dt>
-          <dd>Shows upcoming BPM changes on the lanes.</dd>
           <dt>Guide: BPM</dt>
-          <dd>While BPM GUIDE is on, labels each BPM change. On by default; changes apply during a play.</dd>
+          <dd>
+            Labels each upcoming BPM change on the lanes: beatoraja's BPM GUIDE, a light assist on a chart whose BPM
+            changes. Off by default; read as a play starts.
+          </dd>
           <dt>Guide: STOP</dt>
-          <dd>While BPM GUIDE is on, labels each STOP with its length. On by default.</dd>
+          <dd>Labels each STOP with its length. Off by default; changes apply during a play.</dd>
           <dt>Guide: SCROLL</dt>
-          <dd>
-            While BPM GUIDE is on, labels each <code>#SCROLL</code> change with its rate (Be-Music). Off by default.
-          </dd>
+          <dd>Labels each <code>#SCROLL</code> change with its rate (Be-Music). Off by default.</dd>
           <dt>Guide: SPEED</dt>
-          <dd>
-            While BPM GUIDE is on, labels each <code>#SPEED</code> change with its rate (Be-Music). Off by default.
-          </dd>
+          <dd>Labels each <code>#SPEED</code> change with its rate (Be-Music). Off by default.</dd>
           <dt>BPM change warning (AC)</dt>
           <dd>
             Shows <code>current » next</code> BPM in a box on the lanes for 2 seconds before each BPM change: blue when
@@ -517,8 +499,9 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>Built-in skin controls</dt>
           <dd>
-            Whose keys the built-in skins' screens read: LR2's or beatoraja's. An LR2 or beatoraja skin always reads its
-            own.
+            Whose controls the built-in skins' screens take: LR2's or beatoraja's. Picking one overwrites the screens'
+            keys below with its keys (it asks first when that drops keys you changed). An LR2 or beatoraja skin always
+            reads its own.
           </dd>
           ${screenKeyHelp('en')}
           <dt>Reset screen keys to defaults</dt>
@@ -584,7 +567,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
             How sharply the canvas draws, from 0.5× up to the display's pixel ratio; lower it if the frame rate drops.
             Below 1× the picture softens, for GPUs that cannot keep up even at 1×.
           </dd>
-          <dt>Auto-detect resolution</dt>
+          <dt>Use the best resolution</dt>
           <dd>Measures the frame rate at each resolution on the screen showing and keeps the highest that holds it.</dd>
           <dt>Renderer (applies on reload)</dt>
           <dd>
@@ -657,11 +640,13 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Asks the browser for the camera once, so the list shows the cameras by name. The camera closes again.</dd>
           <dt>Mirror camera</dt>
           <dd>Flips the picture left to right, as a mirror shows it; a camera filming your hands may need it.</dd>
-          <dt>Preview camera</dt>
+          <dt>Camera resolution</dt>
           <dd>
-            Shows the picked camera here, as the BGA frame would show it, so you can frame it before a play. The camera
-            opens only for the preview, and stops when you press Stop preview, leave this tab or close Options.
+            The picture's size to ask the camera for: the camera's own (default), 480p, 720p or 1080p. A camera that
+            cannot give it opens at its nearest.
           </dd>
+          <dt>Camera aspect ratio</dt>
+          <dd>The picture's shape to ask the camera for: the camera's own (default), 4:3, 16:9 or square.</dd>
         </dl>
       </section>
       <section class="help-menu-folder">
@@ -684,7 +669,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
             On by default. Plays each song from a Bemuse music server at the volume its server sets, as Bemuse does. Off
             plays the charts at their own volume. Locked during play.
           </dd>
-          <dt>Auto-save replays</dt>
+          <dt>Auto-download replays</dt>
           <dd>Downloads each finished play's replay.</dd>
           <dt>Record device names in replays</dt>
           <dd>
@@ -692,8 +677,6 @@ export const OPTIONS_HELP_TEMPLATE = html`
             often includes its vendor and product ids. Keyboards and touch have none. The name goes wherever the replay
             goes, Leaderboard submissions included; judging never reads it.
           </dd>
-          <dt>Clear best records</dt>
-          <dd>Deletes the best records kept in this browser (asks first).</dd>
           <dt>Local data…</dt>
           <dd>
             Shows what the player keeps in this browser: its localStorage keys, its IndexedDB databases (your courses,
