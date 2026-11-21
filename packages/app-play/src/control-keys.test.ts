@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { assignControlKey, parseActionKeys, parseControlKeys } from './control-keys.ts';
+import type { ControlActionOverrides } from '@be-music/player-browser/host';
+import { assignControlKey, overwriteActionKeysWithScheme, parseActionKeys, parseControlKeys } from './control-keys.ts';
 
 describe('parseControlKeys', () => {
   test('keeps the known START / SELECT ids with keys, and drops the rest', () => {
@@ -40,5 +41,26 @@ describe('parseActionKeys', () => {
       }),
     ).toEqual({ 'select.activate': ['KeyE'] });
     expect(parseActionKeys(undefined)).toEqual({});
+  });
+});
+
+describe('overwriteActionKeysWithScheme', () => {
+  test("drops the player's keys for every operation the picked key map has, keeping the other key map's own", () => {
+    const keys = {
+      'global.fullscreen': ['F11'],
+      'select.page-down': ['KeyN'],
+      'play.hi-speed-up': ['KeyU'],
+    } as ControlActionOverrides;
+    // beatoraja has full screen and paging; hi-speed up is LR2's alone.
+    expect(overwriteActionKeysWithScheme(keys, 'beatoraja')).toEqual({ 'play.hi-speed-up': ['KeyU'] });
+    // LR2 has full screen and hi-speed up; paging is beatoraja's alone.
+    expect(overwriteActionKeysWithScheme(keys, 'lr2')).toEqual({ 'select.page-down': ['KeyN'] });
+  });
+
+  test('returns the keys themselves when nothing changes', () => {
+    const keys = { 'select.page-down': ['KeyN'] } as ControlActionOverrides;
+    expect(overwriteActionKeysWithScheme(keys, 'lr2')).toBe(keys);
+    const none = {} as ControlActionOverrides;
+    expect(overwriteActionKeysWithScheme(none, 'beatoraja')).toBe(none);
   });
 });

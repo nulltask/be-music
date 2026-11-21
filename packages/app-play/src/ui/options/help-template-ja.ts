@@ -487,7 +487,9 @@ export const OPTIONS_HELP_JA = html`
         </dd>
         <dt>Built-in skin controls</dt>
         <dd>
-          内蔵スキンの画面がどちらのキー操作に従うか: LR2 か beatoraja。LR2 スキンと beatoraja
+          内蔵スキンの画面がどちらの操作に従うか: LR2 か
+          beatoraja。選ぶと、下の画面の操作のキーをそのキー設定で上書きします
+          (自分で変えたキーが戻るときは先に確認します)。LR2 スキンと beatoraja
           スキンは常にそれぞれのキー操作に従います。
         </dd>
         ${screenKeyHelp('ja')}

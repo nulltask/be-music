@@ -517,8 +517,9 @@ export const OPTIONS_HELP_TEMPLATE = html`
           </dd>
           <dt>Built-in skin controls</dt>
           <dd>
-            Whose keys the built-in skins' screens read: LR2's or beatoraja's. An LR2 or beatoraja skin always reads its
-            own.
+            Whose controls the built-in skins' screens take: LR2's or beatoraja's. Picking one overwrites the screens'
+            keys below with its keys (it asks first when that drops keys you changed). An LR2 or beatoraja skin always
+            reads its own.
           </dd>
           ${screenKeyHelp('en')}
           <dt>Reset screen keys to defaults</dt>
