@@ -394,16 +394,17 @@ export const OPTIONS_HELP_JA = html`
         <dd>BGA をスキンの通常の枠と大きい枠のどちらに描くか。</dd>
         <dt>Score graph</dt>
         <dd>プレイ中にスキンのスコアグラフを表示します。</dd>
-        <dt>BPM GUIDE (beatoraja)</dt>
-        <dd>これから来る BPM の変化をレーン上に表示します。</dd>
         <dt>Guide: BPM</dt>
-        <dd>BPM GUIDE がオンの間、BPM の変化にラベルを付けます。既定はオンで、プレイ中も切り替えられます。</dd>
+        <dd>
+          これから来る BPM の変化にレーン上でラベルを付けます。beatoraja の BPM GUIDE で、BPM
+          が変化する譜面ではライトアシストになります。既定はオフで、プレイ開始時に確定します。
+        </dd>
         <dt>Guide: STOP</dt>
-        <dd>BPM GUIDE がオンの間、STOP に停止時間のラベルを付けます。既定はオンです。</dd>
+        <dd>STOP に停止時間のラベルを付けます。既定はオフで、プレイ中も切り替えられます。</dd>
         <dt>Guide: SCROLL</dt>
-        <dd>BPM GUIDE がオンの間、<code>#SCROLL</code> の変化に倍率のラベルを付けます（Be-Music）。既定はオフです。</dd>
+        <dd><code>#SCROLL</code> の変化に倍率のラベルを付けます（Be-Music）。既定はオフです。</dd>
         <dt>Guide: SPEED</dt>
-        <dd>BPM GUIDE がオンの間、<code>#SPEED</code> の変化に倍率のラベルを付けます（Be-Music）。既定はオフです。</dd>
+        <dd><code>#SPEED</code> の変化に倍率のラベルを付けます（Be-Music）。既定はオフです。</dd>
         <dt>BPM change warning (AC)</dt>
         <dd>
           BPM が変わる 2 秒前から、レーン上の箱に

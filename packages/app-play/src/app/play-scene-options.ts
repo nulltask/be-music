@@ -48,7 +48,6 @@ export type PlaySceneGUIState = Pick<
   | 'bgaResizeMaxEdgePx'
   | 'bgaUseWebCodecs'
   | 'showInvisibleNotes'
-  | 'guideBPM'
   | 'guideStop'
   | 'guideScroll'
   | 'guideSpeed'
@@ -90,11 +89,14 @@ export interface PlaySceneOptions {
   readonly course?: PlaySceneCourse;
 }
 
-/** Which labels BPM GUIDE shows, from the Options dialog's BPM / STOP / SCROLL / SPEED switches. */
+/**
+ * The guide labels the Options dialog's switches show: Guide: BPM is the play option `bpmGuide` (beatoraja's BPM
+ * GUIDE), Guide: STOP, SCROLL and SPEED are viewing preferences.
+ */
 export function resolveBPMGuideKinds(
-  state: Pick<PlayerGUIState, 'guideBPM' | 'guideStop' | 'guideScroll' | 'guideSpeed'>,
+  state: Pick<PlayerGUIState, 'bpmGuide' | 'guideStop' | 'guideScroll' | 'guideSpeed'>,
 ): { bpm: boolean; stop: boolean; scroll: boolean; speed: boolean } {
-  return { bpm: state.guideBPM, stop: state.guideStop, scroll: state.guideScroll, speed: state.guideSpeed };
+  return { bpm: state.bpmGuide, stop: state.guideStop, scroll: state.guideScroll, speed: state.guideSpeed };
 }
 
 /**
@@ -248,7 +250,7 @@ export function resolvePlaySceneOptions(input: PlaySceneOptionsInput): PlayScene
     bgaTranscodeMaxLongEdgePx: guiState.bgaResizeMaxEdgePx > 0 ? guiState.bgaResizeMaxEdgePx : undefined,
     bgaTranscodeUseWebCodecs: guiState.bgaUseWebCodecs,
     showInvisibleNotes: guiState.showInvisibleNotes,
-    bpmGuideKinds: resolveBPMGuideKinds(guiState),
+    bpmGuideKinds: resolveBPMGuideKinds({ ...guiState, bpmGuide: playOptions.bpmGuide }),
   };
   const { course, courseInfo, ...settings } = sharedOptions;
   return {

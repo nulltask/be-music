@@ -420,20 +420,17 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Draws the BGA in the skin's normal frame or its larger one.</dd>
           <dt>Score graph</dt>
           <dd>Shows the skin's score graph during a play.</dd>
-          <dt>BPM GUIDE (beatoraja)</dt>
-          <dd>Shows upcoming BPM changes on the lanes.</dd>
           <dt>Guide: BPM</dt>
-          <dd>While BPM GUIDE is on, labels each BPM change. On by default; changes apply during a play.</dd>
+          <dd>
+            Labels each upcoming BPM change on the lanes: beatoraja's BPM GUIDE, a light assist on a chart whose BPM
+            changes. Off by default; read as a play starts.
+          </dd>
           <dt>Guide: STOP</dt>
-          <dd>While BPM GUIDE is on, labels each STOP with its length. On by default.</dd>
+          <dd>Labels each STOP with its length. Off by default; changes apply during a play.</dd>
           <dt>Guide: SCROLL</dt>
-          <dd>
-            While BPM GUIDE is on, labels each <code>#SCROLL</code> change with its rate (Be-Music). Off by default.
-          </dd>
+          <dd>Labels each <code>#SCROLL</code> change with its rate (Be-Music). Off by default.</dd>
           <dt>Guide: SPEED</dt>
-          <dd>
-            While BPM GUIDE is on, labels each <code>#SPEED</code> change with its rate (Be-Music). Off by default.
-          </dd>
+          <dd>Labels each <code>#SPEED</code> change with its rate (Be-Music). Off by default.</dd>
           <dt>BPM change warning (AC)</dt>
           <dd>
             Shows <code>current » next</code> BPM in a box on the lanes for 2 seconds before each BPM change: blue when

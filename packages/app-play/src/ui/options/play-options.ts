@@ -584,14 +584,14 @@ export function buildPlayOptionsFolder(
       .addBinding(this.guiState, 'scoreGraph', { label: 'Score graph' })
       .on('change', ({ value }) => this.setPlayOptions({ scoreGraph: value })),
   );
+  // The guides on the lanes. Guide: BPM is beatoraja's BPM GUIDE, a play option (a light assist on a chart whose BPM
+  // changes), read as a play starts. STOP, SCROLL and SPEED are viewing preferences: live, and they change no record.
   trackPlayOption(
     effects
-      .addBinding(this.guiState, 'bpmGuide', { label: 'BPM GUIDE (beatoraja)' })
+      .addBinding(this.guiState, 'bpmGuide', { label: 'Guide: BPM' })
       .on('change', ({ value }) => this.setPlayOptions({ bpmGuide: value })),
   );
-  // Which labels BPM GUIDE shows. Viewing preferences: live during a play, and they change no record.
   for (const [key, label] of [
-    ['guideBPM', 'Guide: BPM'],
     ['guideStop', 'Guide: STOP'],
     ['guideScroll', 'Guide: SCROLL'],
     ['guideSpeed', 'Guide: SPEED'],

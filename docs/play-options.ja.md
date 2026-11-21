@@ -168,8 +168,6 @@ Options ダイアログ の **Display area info** で **OFF**（既定）、**ON
 
 Options ダイアログ の **Auto scratch 1P / 2P** は、各側のスクラッチノートを独立して自動化します。反対側はロングスクラッチを含めて手動のままです。[#708](https://github.com/nulltask/be-music/issues/708) の左右別 AUTO SCRATCH に従います。リプレイは選択した設定一式と実効的な左右のスイッチを保持します。全体のスイッチだけを持つ旧リプレイでは両側に適用します。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
-**Guide: BPM**、**Guide: STOP**、**Guide: SCROLL**、**Guide: SPEED** で、ガイドがオンの間に表示するラベルを選びます。BPM と STOP は既定でオンで、これが beatoraja のガイドです。SCROLL と SPEED は Be-Music の機能で、既定はオフです。`#SCROLL` / `#SPEED` が新しい倍率（1 から数えて）に変わる位置に、`SCROLL <x>` / `SPEED <x>` を小数第 2 位まで表示します。beatoraja スキンにはこれらのマーカー画像がないため、線も自前で描きます。この 4 つは表示の設定で、プレイ中も切り替えられ、リプレイには記録せず、BPM GUIDE のアシストの規則も変えません。ラベルはレーンの右端に寄せて線の上に置き、レーンが狭いときは縮めて収めます。線どうしがラベル 1 行分より近いラベル（同じ拍や近い位置の変化）はまとめて表示します。右寄せで短いものほど上に並べ、線から斜めに立ち上がる引き出し線から各ラベルへ短い横線を引きます。数字は等幅（どの数字も最も幅の広い数字と同じ幅の枠に置く）で描きます。内蔵スキンはスキン自身の書体と色で描き、LR2 と beatoraja のスキンは beatoraja の等幅フォントと緑・黄色、SCROLL はシアン、SPEED は紫で描きます。
-
 ## オートスクラッチのノーツ表示
 
 Options ダイアログの View タブにある **Auto scratch notes (AC)** は **Show**（既定）か **Hide** です。Hide では、AUTO SCRATCH が演奏しているスクラッチレーンのノーツ、ロングノートとその本体を描画しません。スクラッチの演奏、発音、カウントはそのままで、キービームとボムも描画します。設定は両サイド共通で、AUTO SCRATCH がオフのサイドと完全な AUTO プレイには影響しません。プレイ中にも反映し、すべてのスキン系統で働きます。判定も AUTO SCRATCH のアシスト区分も変わりません。
@@ -403,9 +401,9 @@ View タブの HS-FIX の隣にある **WINDOW HOLD (beatoraja)** をオンに�
 
 ## BPM GUIDE
 
-Options ダイアログ の **BPM GUIDE (beatoraja)** をオンにします。既定はオフです。オンにすると、beatoraja 0.8.9 の `LaneRenderer` と同様に、この先のテンポ変化をレーン上に表示します。実際に BPM が変わる位置には緑の `BPM <n>`（現在と同じ BPM の指定は省略。beatoraja は `BPM<n>` と書きますが、Be-Music は `STOP <n>ms`、`SCROLL <x>`、`SPEED <x>` と同じく数字の前にスペースを入れます）、正の STOP の位置には黄色の `STOP <n>ms` を表示し、どちらも整数に切り捨てます。ラベルは STOP や負のスクロールを含めてノートと同じようにスクロールし、判定線を過ぎると消えます。
+レーン上のガイドは、Options ダイアログの View タブにある 4 つのスイッチで、どれも既定はオフです。**Guide: BPM** は beatoraja の BPM GUIDE（プレイオプション `bpmGuide`）で、オンにすると beatoraja 0.8.9 の `LaneRenderer` と同様に、この先のテンポ変化をレーン上に表示します。実際に BPM が変わる位置には緑の `BPM <n>`（現在と同じ BPM の指定は省略。beatoraja は `BPM<n>` と書きますが、Be-Music は `STOP <n>ms`、`SCROLL <x>`、`SPEED <x>` と同じく数字の前にスペースを入れます）を整数に切り捨てて表示します。プレイ開始時に確定します。**Guide: STOP** は beatoraja のガイドと同じく、正の STOP の位置に黄色の `STOP <n>ms`（切り捨て）を表示します。**Guide: SCROLL** と **Guide: SPEED** は Be-Music の機能で、`#SCROLL` / `#SPEED` が新しい倍率（1 から数えて）に変わる位置に `SCROLL <x>` / `SPEED <x>` を小数第 2 位まで表示します。この 3 つは表示の設定で、プレイ中も切り替えられ、リプレイには記録せず、記録も変えません。Guide: STOP が独立する前に BPM GUIDE をオンにしていた場合は、STOP のラベルを引き続き表示します。ラベルは STOP や負のスクロールを含めてノートと同じようにスクロールし、判定線を過ぎると消えます。
 
-内蔵スキンと LR2 のプレイフィールドは、プレイサイドごとに線とラベルを 1 つ描きます。beatoraja スキンは自身の BPM・STOP のマーカー画像を描き、それをこのオプションがオンの間だけ表示して、上にラベルを加えます。リプレイには `play.options.bpmGuide` と、譜面のヘッダー BPM（`chart.headerBPM`）と解決後の BPM 範囲（`chart.bpmRange`）を記録します。これは beatoraja のライトアシストの規則が参照する情報で、その規則は BPM が変化する譜面にだけ適用されます。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
+内蔵スキンと LR2 のプレイフィールドは、プレイサイドごとに線とラベルを 1 つ描きます。beatoraja スキンは自身の BPM・STOP のマーカー画像を描き、それを Guide: BPM または Guide: STOP がオンの間だけ表示して、上にラベルを加えます。SCROLL と SPEED は線もガイドが描きます。ラベルはレーンの右端に寄せて線の上に置き、レーンが狭いときは縮め、同じ線上のラベルは短いものほど上に引き出し線でまとめます。数字は等幅です。内蔵スキンはスキン自身の書体と色で描き、LR2 と beatoraja のスキンは beatoraja の等幅フォントと緑・黄色、SCROLL はシアン、SPEED は紫で描きます。リプレイには `play.options.bpmGuide`（Guide: BPM）と、譜面のヘッダー BPM（`chart.headerBPM`）と解決後の BPM 範囲（`chart.bpmRange`）を記録します。これは beatoraja のライトアシストの規則が参照する情報で、その規則は BPM が変化する譜面にだけ適用されます。記録の扱いは[アシストと記録の方針](#アシストと記録の方針)のとおりです。
 
 参照元：beatoraja 0.8.9 の [`LaneRenderer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/LaneRenderer.java) と [`BMSPlayer`](https://github.com/exch-bms2/beatoraja/blob/83574048ba489082eb46df7fe9806b464bf1f526/src/bms/player/beatoraja/play/BMSPlayer.java)。対応 Issue は [#745](https://github.com/nulltask/be-music/issues/745) です。
 

@@ -22,6 +22,23 @@ export interface BPMGuideKinds {
 export const DEFAULT_BPM_GUIDE_KINDS: BPMGuideKinds = { bpm: true, stop: true, scroll: false, speed: false };
 
 /**
+ * The guide labels a play shows. The BPM labels are beatoraja's BPM GUIDE, the play option `bpmGuide` (a light assist
+ * on a chart whose BPM changes), so they follow it alone. STOP, `#SCROLL` and `#SPEED` labels are viewing preferences
+ * (`kinds`); without them, STOPs follow `bpmGuide` as beatoraja's guide draws them, and `#SCROLL` / `#SPEED` stay off.
+ */
+export function resolveShownGuideKinds(bpmGuide: boolean | undefined, kinds: BPMGuideKinds | undefined): BPMGuideKinds {
+  const bpm = bpmGuide === true;
+  return kinds === undefined
+    ? { bpm, stop: bpm, scroll: false, speed: false }
+    : { bpm, stop: kinds.stop, scroll: kinds.scroll, speed: kinds.speed };
+}
+
+/** Whether any guide label shows. */
+export function showsAnyGuide(kinds: BPMGuideKinds): boolean {
+  return kinds.bpm || kinds.stop || kinds.scroll || kinds.speed;
+}
+
+/**
  * The guide labels of a chart, in beat order. BPM changes and positive STOPs as beatoraja 0.8.9's `LaneRenderer` labels
  * them (`BPM <n>`, `STOP <n>ms`, integers; beatoraja writes `BPM<n>`, Be-Music spaces every label's number alike), and Be-Music's `#SCROLL` / `#SPEED` changes (`SCROLL <x>`, `SPEED <x>`, up to
  * two decimals), each where the value actually changes from the one before (starting from 1).
