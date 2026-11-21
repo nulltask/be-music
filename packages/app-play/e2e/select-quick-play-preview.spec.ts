@@ -108,7 +108,7 @@ test('cycles quick play options and opens the selected chart in the practice pic
   await page.waitForTimeout(750);
   await page.screenshot({ path: join(output, 'select-quick-options.png') });
 
-  await player.clickSkin(180, 330, 854, 480);
+  await player.clickSkin(180, 303, 854, 480);
   const practice = page.locator('.practice-bars-dialog');
   await expect(practice.locator('#practice-bars-title')).toBeVisible();
   await expect(practice.locator('[data-dialog-shortcut="primary"]')).toBeEnabled();
@@ -116,7 +116,7 @@ test('cycles quick play options and opens the selected chart in the practice pic
   await page.screenshot({ path: join(output, 'select-practice.png') });
   await practice.locator('[data-dialog-shortcut="cancel"]').click();
   await expect(practice.locator('#practice-bars-title')).toBeHidden();
-  await player.clickSkin(180, 330, 854, 480);
+  await player.clickSkin(180, 303, 854, 480);
   await practice.locator('[data-dialog-shortcut="primary"]').click();
   await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0, 'practice to start');
   await player.key('Escape');
