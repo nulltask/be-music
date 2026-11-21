@@ -1,3 +1,4 @@
+import { drawQuickPlayOptions, LANDSCAPE_QUICK_OPTIONS_INSET } from './select-play-options.ts';
 import { formatSelectBreadcrumb } from './layout.ts';
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { bindGlassSurface, drawGlassSurface, frostedGlassEnabled } from './glass.ts';
@@ -94,12 +95,12 @@ import {
   WARP_STAR_COUNT,
 } from './warp-field.ts';
 
-const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 92, listBottomInset: 28, rowHeight: 28 };
+const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 92, listBottomInset: 65, rowHeight: 28 };
 /**
  * The portrait list: full width under the focused-song card and the search bar, with taller rows (two lines each, and
  * a thumb's height to tap).
  */
-const PORTRAIT_LAYOUT: BeMusicSelectLayout = { listX: 16, listTop: 456, listBottomInset: 34, rowHeight: 36 };
+const PORTRAIT_LAYOUT: BeMusicSelectLayout = { listX: 16, listTop: 456, listBottomInset: 99, rowHeight: 36 };
 /** The focused-song card on the portrait stage. */
 const PORTRAIT_CARD = { x: 12, y: 52, w: 456, h: 348 } as const;
 /** The tallest a banner is drawn on the landscape card, which holds the best record above it. */
@@ -283,7 +284,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       this.banner?.texture.destroy(true);
       this.banner = image ? { image, texture: Texture.from(image) } : undefined;
     }
-    if (!this.banner) return;
+    if (!this.banner || maxHeight <= 0) return;
     const scale = Math.min(maxWidth / image!.width, maxHeight / image!.height);
     const sprite = new Sprite(this.banner.texture);
     sprite.position.set(x, y);
@@ -710,10 +711,16 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     });
 
     // Info panel.
+    const cardTop = 56;
+    const bannerTop = 364;
+    const bannerWidth = 258;
+    const bannerBottomPadding = 14;
+    const cardBottom = designHeight - LANDSCAPE_QUICK_OPTIONS_INSET - 8;
+    const bannerMaxHeight = Math.min(BANNER_MAX_H, Math.max(0, cardBottom - bannerTop - bannerBottomPadding));
     const banner = chartEntry ? frame.chartImage(chartEntry, 'banner') : undefined;
-    const bannerHeight = banner ? Math.min(BANNER_MAX_H, (258 * banner.height) / banner.width) : 0;
-    // Match the 14 px gap above the banner, including short or unusually tall source images.
-    framePanel(chrome, 14, 56, 290, banner ? 322 + bannerHeight : 316, accent);
+    const bannerHeight = banner ? Math.min(bannerMaxHeight, (bannerWidth * banner.height) / banner.width) : 0;
+    const cardHeight = bannerHeight > 0 ? bannerTop + bannerHeight + bannerBottomPadding - cardTop : 316;
+    framePanel(chrome, 14, cardTop, 290, cardHeight, accent);
     // The genre heads the card, in the accent light, where a fixed caption used to sit.
     const genre = chartEntry?.genre?.trim() || (chartEntry ? '----' : undefined);
     const slide = 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS));
@@ -802,10 +809,10 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     }
 
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline).
-    chrome.rect(26, 310, 170, 40).fill({ color: accent, alpha: 0.16 });
-    chrome.rect(30, 314, 162, 32).fill({ color: accent, alpha: 0.88 });
-    drawReticle(chrome, 26, 310, 170, 40, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
-    addText('PLAY', 111, 330, {
+    chrome.rect(26, 310, 105, 40).fill({ color: accent, alpha: 0.16 });
+    chrome.rect(30, 314, 97, 32).fill({ color: accent, alpha: 0.88 });
+    drawReticle(chrome, 26, 310, 105, 40, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
+    addText('PLAY', 78.5, 330, {
       size: 14,
       fill: SYN_VOID,
       fontFamily: SYN_DISPLAY_FONT,
@@ -814,10 +821,13 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorY: 0.5,
     });
     // AUTO's right edge sits on the content column's (288), like the LEVEL chip above it.
-    drawSecondaryButton(chrome, addText, 'AUTO', 202, 317, 86, 26, 9, true);
-    addHitArea(26, 310, 172, 40, 'pointer', frame.actions.play);
-    addHitArea(200, 314, 90, 32, 'pointer', frame.actions.autoPlay);
-    this.drawBanner(frame, 30, 364, 258, BANNER_MAX_H);
+    const practice = chartEntry !== undefined ? frame.actions.practice : undefined;
+    drawSecondaryButton(chrome, addText, 'PRACTICE', 137, 317, 87, 26, 8, practice !== undefined, 1.5);
+    drawSecondaryButton(chrome, addText, 'AUTO', 232, 317, 56, 26, 8, true, 2);
+    addHitArea(26, 310, 105, 40, 'pointer', frame.actions.play);
+    if (practice) addHitArea(137, 314, 87, 32, 'pointer', practice);
+    addHitArea(232, 314, 56, 32, 'pointer', frame.actions.autoPlay);
+    this.drawBanner(frame, 30, bannerTop, bannerWidth, bannerMaxHeight);
 
     // Search and library.
     framePanel(chrome, 322, 54, designWidth - 336, 30, accent);
@@ -836,6 +846,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     // The label and the text strip both start typing; the strip comes last, so the host lays its field over the text.
     addHitArea(322, 54, 92, 30, 'text', frame.actions.activateSearch);
     addHitArea(414, 54, designWidth - 428, 30, 'text', frame.actions.activateSearch);
+    drawQuickPlayOptions(chrome, addText, frame, accent, false);
     const footY = designHeight - 17;
     addText('LIBRARY', 30, footY, { ...labelStyle(), anchorY: 0.5 });
     // The count in the display face, like the LIBRARY label above it and the list position.
@@ -1008,7 +1019,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline), thumb-sized.
     const buttonY = card.y + 246;
-    const playW = Math.round(innerW * 0.62);
+    const playW = Math.round(innerW * 0.42);
     chrome.rect(left - 4, buttonY - 4, playW + 8, 44).fill({ color: accent, alpha: 0.16 });
     chrome.rect(left, buttonY, playW, 36).fill({ color: accent, alpha: 0.88 });
     drawReticle(chrome, left - 4, buttonY - 4, playW + 8, 44, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
@@ -1020,7 +1031,23 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorX: 0.5,
       anchorY: 0.5,
     });
-    const autoX = left + playW + 16;
+    const practice = chartEntry !== undefined ? frame.actions.practice : undefined;
+    const practiceX = left + playW + 12;
+    const practiceW = Math.round(innerW * 0.32);
+    drawSecondaryButton(
+      chrome,
+      addText,
+      'PRACTICE',
+      practiceX,
+      buttonY + 2,
+      practiceW,
+      32,
+      10,
+      practice !== undefined,
+      2,
+    );
+    if (practice) addHitArea(practiceX, buttonY - 2, practiceW, 40, 'pointer', practice);
+    const autoX = practiceX + practiceW + 8;
     const autoW = left + innerW - autoX;
     drawSecondaryButton(chrome, addText, 'AUTO', autoX, buttonY + 2, autoW, 32, 10, true);
     addHitArea(left - 4, buttonY - 4, playW + 8, 44, 'pointer', frame.actions.play);
@@ -1050,6 +1077,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     addHitArea(left + 80, searchY, card.x + card.w - (left + 80), 32, 'text', frame.actions.activateSearch);
 
     // Library line at the foot.
+    drawQuickPlayOptions(chrome, addText, frame, accent, true);
     const footY = designHeight - 17;
     const footer = new Graphics();
     footer.label = 'synesthesia-select/footer';

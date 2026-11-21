@@ -221,6 +221,7 @@ export type SelectIntent =
   | { readonly type: 'activate' }
   /** Play the chart or course under the cursor (in AUTO with `autoPlay`): a skin's PLAY and AUTO buttons. */
   | { readonly type: 'start'; readonly autoPlay?: boolean }
+  | { readonly type: 'practice' }
   /**
    * Replay the chart or course under the cursor from replay slot `slot` (a skin's replay buttons), or from the slot
    * picked when no slot is named (the REPLAY key); a slot that holds no replay starts nothing.

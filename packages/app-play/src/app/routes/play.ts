@@ -349,6 +349,7 @@ export class PlayRoute {
     { kit, beatorajaPlay }: ResolvedPlayKit,
     overrides: {
       autoPlay?: boolean;
+      practice?: boolean;
       replay?: BeMusicReplay;
       chartHashes?: ChartFileHashes;
       courseStage?: CourseStagePlay;
@@ -365,9 +366,10 @@ export class PlayRoute {
       ...(overrides.nonstop !== undefined ? { nonstop: overrides.nonstop } : {}),
     };
     // "Play without practice" on the PRACTICE bar picker plays the chart as a regular play, leaving PRACTICE on.
-    const playOptions = this.practiceSkipped?.(chartEntry)
-      ? { ...this.playOptions.current, practice: false }
-      : this.playOptions.current;
+    const playOptions = {
+      ...this.playOptions.current,
+      practice: !this.practiceSkipped?.(chartEntry) && (overrides.practice ?? this.playOptions.current.practice),
+    };
     const replay = overrides.replay;
     const courseStage = overrides.courseStage;
     const nonstop = overrides.nonstop;
@@ -545,7 +547,7 @@ export class PlayRoute {
         if (practicing) {
           // The play loops its range in place until ESC (#949), so it only finishes when its judge cannot go back to
           // the start; it is then made again, as the range would play again from beatoraja's practice setup.
-          void this.playChart(chartEntry, playAgainOverrides({ autoPlay, replay }));
+          void this.playChart(chartEntry, { ...playAgainOverrides({ autoPlay, replay }), practice: true });
           return;
         }
         if (replay === undefined && courseStage === undefined && nonstop === undefined)
@@ -614,7 +616,10 @@ export class PlayRoute {
           return;
         }
         // A single chart plays again as it was played: AUTO stays AUTO, a replay stays a replay (`playAgainOverrides`).
-        void this.playChart(chartEntry, playAgainOverrides({ autoPlay, replay }));
+        void this.playChart(chartEntry, {
+          ...playAgainOverrides({ autoPlay, replay }),
+          ...(practicing ? { practice: true } : {}),
+        });
       },
     };
     const { onExit, onChartFinished, onRestart, onHiSpeedChange, onTempoChange } = callbacks;
@@ -720,6 +725,7 @@ export class PlayRoute {
     chartEntry: LibraryChart,
     overrides: {
       autoPlay?: boolean;
+      practice?: boolean;
       replay?: BeMusicReplay;
       courseStage?: CourseStagePlay;
       nonstop?: NonstopPlay;

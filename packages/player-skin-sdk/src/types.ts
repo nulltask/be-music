@@ -840,6 +840,8 @@ export interface BeMusicSelectLayout {
 export interface BeMusicSelectActions {
   play: () => void;
   autoPlay: () => void;
+  /** Opens the practice setup for the focused chart, when supported by the host. */
+  practice?: () => void;
   activateSearch: () => void;
   /** Sets one play option. Values outside the option's choices are ignored. */
   setPlayOption<K extends keyof BeMusicPlayOptions>(key: K, value: BeMusicPlayOptions[K]): void;

@@ -61,6 +61,21 @@ describe('play adjustment keys', () => {
     expect(play.getHiSpeed()).toBe(2);
   });
 
+  test.each([
+    ['lr2', 'ArrowRight', 'ArrowLeft'],
+    ['beatoraja', 'ArrowDown', 'ArrowUp'],
+  ] as const)('%s cover arrows repeat in both directions', (scheme, more, less) => {
+    const play = coveredPlay();
+    play.options.controlScheme = scheme;
+    handleSharedEngineExitKey(play, key(more));
+    for (let i = 0; i < 3; i++) handleSharedEngineExitKey(play, key(more, { repeat: true }));
+    expect(play.playState.view.covers[0]?.sudden).toBeCloseTo(0.04);
+    handleSharedEngineExitKey(play, key(less));
+    handleSharedEngineExitKey(play, key(less, { repeat: true }));
+    expect(play.playState.view.covers[0]?.sudden).toBeCloseTo(0.02);
+    expect(play.getHiSpeed()).toBe(2);
+  });
+
   test('holding H toggles HIDDEN only once', () => {
     const play = coveredPlay();
     handleSharedEngineExitKey(play, key('h', { code: 'KeyH' }));
@@ -78,6 +93,8 @@ describe('play adjustment keys', () => {
     const right = key('ArrowRight');
     handleSharedEngineExitKey(auto, left);
     handleSharedEngineExitKey(auto, right);
+    handleSharedEngineExitKey(auto, key('ArrowRight', { repeat: true }));
+    expect(seek).toHaveBeenCalledTimes(2);
     expect(seek).toHaveBeenNthCalledWith(1, 7);
     expect(seek).toHaveBeenNthCalledWith(2, 17);
     expect(left.preventDefault).toHaveBeenCalledOnce();

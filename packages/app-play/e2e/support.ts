@@ -461,7 +461,7 @@ export class Player {
    * Clicks a point of a skin drawn at `width` × `height`, scaled to fit the canvas and centred as the scenes draw it
    * (`resolveScaledViewport`).
    */
-  async clickSkin(x: number, y: number, width: number, height: number): Promise<void> {
+  async clickSkin(x: number, y: number, width: number, height: number, clickCount = 1): Promise<void> {
     const box = await this.page.locator('#stage canvas').boundingBox();
     if (box === null) throw new Error('no canvas');
     const outputWidth = width;
@@ -469,7 +469,7 @@ export class Player {
     const scaleX = (outputWidth * scaleY) / width;
     const left = box.x + (box.width - outputWidth * scaleY) / 2;
     const top = box.y + (box.height - height * scaleY) / 2;
-    await this.page.mouse.click(left + x * scaleX, top + y * scaleY);
+    await this.page.mouse.click(left + x * scaleX, top + y * scaleY, { clickCount });
   }
 }
 

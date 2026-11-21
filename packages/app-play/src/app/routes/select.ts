@@ -103,7 +103,10 @@ export interface SelectRouteDeps {
   /** Remembers a hi-speed set on the screen for the next play, and mirrors it onto the Options dialog. */
   readonly rememberHiSpeed: (value: number, source: 'select') => void;
   /** Shows the decide screen for a chart started on the screen (`DecideRoute`). */
-  readonly showDecide: (chartEntry: LibraryChart, overrides: { autoPlay?: boolean }) => Promise<void>;
+  readonly showDecide: (
+    chartEntry: LibraryChart,
+    overrides: { autoPlay?: boolean; practice?: boolean },
+  ) => Promise<void>;
   /**
    * Starts loading the play of a chart picked on the screen as it is picked, through the skin's launch outro
    * (`DecideRoute.preloadOnLaunch`); `showDecide` follows once the outro has played.
@@ -295,6 +298,12 @@ export class SelectRoute {
           replaySlot !== undefined
             ? this.startReplayFromSlot(entry, replaySlot)
             : this.startFromSelect(entry, autoPlay),
+        practice: (chart) => {
+          if (this.courseMaker.maker.draft !== undefined || this.pickPracticeBars === undefined) return;
+          void this.pickPracticeBars(chart).then((start) => {
+            if (start) void this.showDecide(chart, { practice: true, autoPlay: false });
+          });
+        },
         // A chart that will go to its decide screen starts loading its play as it is picked, not after the outro.
         launch: (entry, { autoPlay, replaySlot }) => {
           if (replaySlot !== undefined || entry.kind !== 'chart') return;

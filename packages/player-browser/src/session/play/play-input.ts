@@ -282,7 +282,12 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     }
     return;
   }
-  if (event.repeat) return;
+  const seekBack = actions.is('play.seek-back', event);
+  const autoSeek = ctx.options.autoPlay === true && (seekBack || actions.is('play.seek-forward', event));
+  if (event.repeat) {
+    if (!autoSeek) handleCoverArrow(ctx, event, actions);
+    return;
+  }
   if (ctx.playState.view.fixedDisplayArea && actions.is('play.restore-green', event)) {
     event.preventDefault();
     const previous = ctx.lastStartTapMs;
@@ -332,8 +337,7 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     return;
   }
   // ← / → move five seconds only while AUTO play is on. A replay or a practice play does not.
-  const seekBack = actions.is('play.seek-back', event);
-  if ((seekBack || actions.is('play.seek-forward', event)) && ctx.options.autoPlay === true) {
+  if (autoSeek) {
     const target = (event.composedPath?.()[0] ?? event.target) as HTMLElement | null;
     if (
       event.defaultPrevented ||
@@ -349,7 +353,11 @@ export function handleSharedEngineExitKey(ctx: PlayInputContext, event: Keyboard
     void ctx.seek(ctx.currentSeconds() + (seekBack ? -5 : 5));
     return;
   }
-  // LR2's ← / → and beatoraja's ↑ / ↓ move the lane cover, on every play screen.
+  handleCoverArrow(ctx, event, actions);
+}
+
+/** LR2's ← / → and beatoraja's ↑ / ↓ move the lane cover on both press and keyboard auto-repeat. */
+function handleCoverArrow(ctx: PlayInputContext, event: KeyboardEvent, actions: ControlActionMap): void {
   const coverLess = actions.is('play.cover-less', event);
   if (coverLess || actions.is('play.cover-more', event)) {
     event.preventDefault();
