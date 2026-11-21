@@ -152,6 +152,14 @@ pnpm run test
 
 The toolchain is [Vite+](https://viteplus.dev/) (`vite-plus`), configured from the root `vite.config.ts`. `pnpm run build` runs each workspace's `build` script through the Vite+ task runner (`vp run -r --cache build`) in dependency order, replaying unchanged packages from the task cache; library packages build with `vp pack` (tsdown) from the `pack` block in their `vite.config.ts` and emit the bundle and type definitions (`.d.ts`) together. `pnpm run check` runs formatting, linting, and type checking (Oxfmt, Oxlint, and tsgolint) across the whole workspace in one pass; `pnpm run format` / `pnpm run lint` / `pnpm run typecheck` run the individual steps. Each package's `tsconfig.json` is its type-check project, while `tsconfig.build.json` drives declaration output. Installing dependencies also registers a Vite+ pre-commit hook that runs `vp check --fix` on staged files. `pnpm run test:e2e` plays the course browser checklist in the web player end to end with Playwright (a few minutes, so `pnpm run test` leaves it out); see [docs/player-web.md#browser-verification](docs/player-web.md#browser-verification).
 
+### Test coverage
+
+Open the [HTML coverage report](https://test-coverage.be-music.workers.dev/) to browse coverage by file. CI publishes the report from `devel` to a dedicated Cloudflare Worker. A maintainer can also publish a report by selecting **Publish this run's HTML coverage report** when starting CI manually.
+
+For a specific run, open its **Summary** in [GitHub Actions](https://github.com/nulltask/be-music/actions/workflows/ci.yml) for the coverage totals, or download its `test-coverage` artifact for HTML and LCOV. CI keeps these artifacts for 30 days, including when coverage misses a threshold.
+
+To generate the same report locally, run `pnpm run test:coverage` and open `coverage/index.html`.
+
 ## Package Releases
 
 In this repository, `Changesets` manages the version and changelog for each package.

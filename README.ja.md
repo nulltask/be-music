@@ -152,6 +152,14 @@ pnpm run test
 
 ツールチェーンは [Vite+](https://viteplus.dev/) (`vite-plus`) で、ルートの `vite.config.ts` に設定を集約しています。`pnpm run build` は Vite+ のタスクランナー (`vp run -r --cache build`) で各ワークスペースの `build` スクリプトを依存順に実行し、変更のない package はタスクキャッシュから再生します。ライブラリ package は各 `vite.config.ts` の `pack` ブロックから `vp pack` (tsdown) でビルドし、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run check` はフォーマット・lint・型チェック (Oxfmt / Oxlint / tsgolint) をワークスペース全体に対して一度に実行し、`pnpm run format` / `pnpm run lint` / `pnpm run typecheck` で個別に実行できます。各 package の `tsconfig.json` は型チェック用のプロジェクトで、型定義の出力には `tsconfig.build.json` を使います。依存関係をインストールすると、ステージされたファイルに `vp check --fix` を実行する Vite+ の pre-commit フックも登録されます。`pnpm run test:e2e` は Web プレイヤーでコースのブラウザ確認を Playwright で端から端まで実行します（数分かかるため `pnpm run test` には含めていません）。[docs/player-web.ja.md#ブラウザー検証](docs/player-web.ja.md#ブラウザー検証) を参照してください。
 
+### テストカバレッジ
+
+[HTML カバレッジレポート](https://test-coverage.be-music.workers.dev/) では、ファイル別のカバレッジをブラウザで確認できます。CI は `devel` のレポートを Cloudflare の専用 Worker に公開します。メンテナーは CI を手動で実行する際に **Publish this run's HTML coverage report** を選んで公開することもできます。
+
+特定の実行結果を見るには、[GitHub Actions の CI](https://github.com/nulltask/be-music/actions/workflows/ci.yml) の **Summary** で集計を確認するか、`test-coverage` から HTML と LCOV をダウンロードしてください。しきい値を下回った場合も、アーカイブは30日間保存されます。
+
+ローカルで同じレポートを取得するには、`pnpm run test:coverage` を実行し、`coverage/index.html` を開いてください。
+
 ## package ごとの release
 
 このリポジトリでは `Changesets` で package ごとの version と changelog を管理します。

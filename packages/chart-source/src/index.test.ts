@@ -33,6 +33,41 @@ describe('json', () => {
     expect(source.lrx.barTicks).toEqual([0, 1920]);
     expect(source.events[0]!.lrx).toEqual({ length: 480 });
   });
+  test('cloneJSON preserves LRX BGA transforms without sharing their arrays', () => {
+    const source = createEmptyJSON('lrx');
+    source.lrx = {
+      bga: [
+        { slot: 0, tick: 0, image: 1, key: '01' },
+        {
+          slot: 1,
+          tick: 480,
+          image: 2,
+          key: '02',
+          src: [0, 0, 256, 256],
+          dst: [16, 32, 128, 128],
+          color: [255, 128, 255, 255],
+        },
+      ],
+    };
+    const cloned = cloneJSON(source);
+    expect(cloned.lrx).toStrictEqual(source.lrx);
+    cloned.lrx!.bga![1]!.src![0] = 10;
+    cloned.lrx!.bga![1]!.dst![1] = 40;
+    cloned.lrx!.bga![1]!.color![2] = 128;
+    expect(source.lrx.bga?.[1]).toMatchObject({
+      src: [0, 0, 256, 256],
+      dst: [16, 32, 128, 128],
+      color: [255, 128, 255, 255],
+    });
+  });
+
+  test('cloneJSON preserves warnings about recovered chart data', () => {
+    const source = createEmptyJSON('bmson');
+    source.diagnostics = [
+      { code: 'legacy-bmson', message: 'Legacy bmson format', position: { kind: 'field', path: 'version' } },
+    ];
+    expect(cloneJSON(source).diagnostics).toEqual(source.diagnostics);
+  });
   test('cloneJSON copies optional per-slot source formats independently', () => {
     const source = createEmptyJSON('bmson');
     expect(cloneJSON(source).resources.wavSourceFormat).toBeUndefined();
@@ -182,7 +217,20 @@ describe('json', () => {
     expect(parseBmsonSubartist(':just a name')).toEqual({ name: 'just a name' });
     // A trailing colon yields role with empty name.
     expect(parseBmsonSubartist('artist:')).toEqual({ role: 'artist', name: '' });
+    expect(parseBmsonSubartist(null as unknown as string)).toEqual({ name: '' });
   });
+});
+
+test.each([
+  ['  ', '00'],
+  [' a ', '0a'],
+  [' ! ', '0!'],
+  [' aZ ', 'aZ'],
+  [' a! ', 'A!'],
+  [' !a ', '!A'],
+  ['0a', '0a'],
+])('base-62 BMS resource key %j becomes %j', (input, expected) => {
+  expect(normalizeObjectKey(input, 62)).toBe(expected);
 });
 
 test('bmson resource keys can exceed two characters without changing BMS token normalization', () => {

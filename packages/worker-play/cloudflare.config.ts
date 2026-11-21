@@ -8,6 +8,17 @@ import { cloudflareAccountId } from '../../scripts/cloudflare/env.ts';
  * The assets are the SPA `@be-music/app-play` builds; `wrangler.config.ts` points at its `dist`.
  */
 export default defineConfig(({ mode }) => {
+  if (mode === 'coverage') {
+    return {
+      accountId: cloudflareAccountId(),
+      worker: {
+        name: 'test-coverage',
+        compatibilityDate: '2026-11-21',
+        workersDev: true,
+        previewUrls: false,
+      },
+    };
+  }
   const preview = mode === 'preview';
   const suffix = preview ? '-preview' : '';
   return {

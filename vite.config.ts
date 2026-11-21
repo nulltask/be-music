@@ -224,6 +224,9 @@ const workspaceProjects = workspacePackages.map((name) => ({
   },
 }));
 
+// Shards hand their coverage maps to the blob reporter. Only the merged run can judge package totals.
+const coverageShard = process.env.BE_MUSIC_COVERAGE_SHARD === '1';
+
 export default defineConfig({
   // Workspace imports resolve to TypeScript sources through each package's `exports` `source` condition, so
   // `package.json` `exports` is the only list of entry points: a new subpath needs just a `"source"` entry there
@@ -287,7 +290,7 @@ export default defineConfig({
     ],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'text-summary', 'html', 'lcov'],
+      reporter: coverageShard ? [] : ['text', 'text-summary', 'html', 'lcov', 'json-summary'],
       reportsDirectory: './coverage',
       include: [`packages/{${workspacePackages.join(',')}}/src/**/*.ts`],
       exclude: [
@@ -302,63 +305,65 @@ export default defineConfig({
         'packages/player-terminal/src/node/*protocol.ts',
         'packages/player-browser/src/index.ts',
       ],
-      thresholds: {
-        // Use package-level thresholds so lower-coverage packages don't hide behind unrelated ones.
-        'packages/chart-audio-renderer/src/**/*.ts': {
-          statements: 65,
-          branches: 57,
-          functions: 74,
-          lines: 66,
-        },
-        'packages/chart-model/src/**/*.ts': {
-          statements: 90,
-          branches: 81,
-          functions: 93,
-          lines: 90,
-        },
-        'packages/chart-editor/src/**/*.ts': {
-          statements: 95,
-          branches: 84,
-          functions: 95,
-          lines: 96,
-        },
-        'packages/chart-source/src/**/*.ts': {
-          statements: 94,
-          branches: 91,
-          functions: 70,
-          lines: 99,
-        },
-        'packages/chart-parser/src/**/*.ts': {
-          statements: 87,
-          branches: 76,
-          functions: 93,
-          lines: 87,
-        },
-        'packages/player-engine/src/**/*.ts': {
-          statements: 59,
-          branches: 51,
-          functions: 64,
-          lines: 59,
-        },
-        'packages/player-terminal/src/**/*.ts': {
-          statements: 59,
-          branches: 51,
-          functions: 64,
-          lines: 59,
-        },
-        'packages/chart-writer/src/**/*.ts': {
-          statements: 87,
-          branches: 77,
-          functions: 96,
-          lines: 86,
-        },
-        'packages/shared-utils/src/**/*.ts': {
-          statements: 96,
-          branches: 91,
-          functions: 99,
-          lines: 96,
-        },
-      },
+      thresholds: coverageShard
+        ? undefined
+        : {
+            // Use package-level thresholds so lower-coverage packages don't hide behind unrelated ones.
+            'packages/chart-audio-renderer/src/**/*.ts': {
+              statements: 65,
+              branches: 57,
+              functions: 74,
+              lines: 66,
+            },
+            'packages/chart-model/src/**/*.ts': {
+              statements: 90,
+              branches: 81,
+              functions: 93,
+              lines: 90,
+            },
+            'packages/chart-editor/src/**/*.ts': {
+              statements: 95,
+              branches: 84,
+              functions: 95,
+              lines: 96,
+            },
+            'packages/chart-source/src/**/*.ts': {
+              statements: 94,
+              branches: 91,
+              functions: 70,
+              lines: 99,
+            },
+            'packages/chart-parser/src/**/*.ts': {
+              statements: 87,
+              branches: 76,
+              functions: 93,
+              lines: 87,
+            },
+            'packages/player-engine/src/**/*.ts': {
+              statements: 59,
+              branches: 51,
+              functions: 64,
+              lines: 59,
+            },
+            'packages/player-terminal/src/**/*.ts': {
+              statements: 59,
+              branches: 51,
+              functions: 64,
+              lines: 59,
+            },
+            'packages/chart-writer/src/**/*.ts': {
+              statements: 87,
+              branches: 77,
+              functions: 96,
+              lines: 86,
+            },
+            'packages/shared-utils/src/**/*.ts': {
+              statements: 96,
+              branches: 91,
+              functions: 99,
+              lines: 96,
+            },
+          },
     },
   },
   staged: {
