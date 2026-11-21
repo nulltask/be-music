@@ -154,7 +154,9 @@ The toolchain is [Vite+](https://viteplus.dev/) (`vite-plus`), configured from t
 
 ### Test coverage
 
-Open the **Summary** of a CI run in [GitHub Actions](https://github.com/nulltask/be-music/actions/workflows/ci.yml) to see line, statement, branch, and function coverage. Download the `test-coverage` artifact, extract it, and open `index.html` to inspect individual files. The archive also contains `lcov.info`. CI keeps reports for 30 days, including reports from runs that miss a coverage threshold.
+Open the [HTML coverage report](https://nulltask.github.io/be-music/) to browse coverage by file. CI publishes the report from `devel` to GitHub Pages. A maintainer can also publish a report by selecting **Publish this run's HTML coverage report to GitHub Pages** when starting CI manually.
+
+For a specific run, open its **Summary** in [GitHub Actions](https://github.com/nulltask/be-music/actions/workflows/ci.yml) for the coverage totals, or download its `test-coverage` artifact for HTML and LCOV. CI keeps these artifacts for 30 days, including when coverage misses a threshold.
 
 To generate the same report locally, run `pnpm run test:coverage` and open `coverage/index.html`.
 

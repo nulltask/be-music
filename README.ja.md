@@ -154,7 +154,9 @@ pnpm run test
 
 ### テストカバレッジ
 
-[GitHub Actions の CI](https://github.com/nulltask/be-music/actions/workflows/ci.yml) の実行結果を開くと、**Summary** で行・文・分岐・関数のカバレッジを確認できます。ファイル別の結果を見るには、`test-coverage` をダウンロードして展開し、`index.html` を開いてください。アーカイブには `lcov.info` も含まれます。しきい値を下回った場合も、レポートは30日間保存されます。
+[HTML カバレッジレポート](https://nulltask.github.io/be-music/) では、ファイル別のカバレッジをブラウザで確認できます。CI は `devel` のレポートを GitHub Pages に公開します。メンテナーは CI を手動で実行する際に **Publish this run's HTML coverage report to GitHub Pages** を選んで公開することもできます。
+
+特定の実行結果を見るには、[GitHub Actions の CI](https://github.com/nulltask/be-music/actions/workflows/ci.yml) の **Summary** で集計を確認するか、`test-coverage` から HTML と LCOV をダウンロードしてください。しきい値を下回った場合も、アーカイブは30日間保存されます。
 
 ローカルで同じレポートを取得するには、`pnpm run test:coverage` を実行し、`coverage/index.html` を開いてください。
 

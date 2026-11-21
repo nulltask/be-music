@@ -8,6 +8,11 @@ on:
   # Every pull request, stacked ones included, so a branch that targets another feature branch is verified too.
   pull_request:
   workflow_dispatch:
+    inputs:
+      publish_coverage:
+        description: Publish this run's HTML coverage report to GitHub Pages
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -166,6 +171,8 @@ jobs:
     if: ${{ !cancelled() && (needs.coverage-shard.result == 'success' || needs.coverage-shard.result == 'failure') }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 10
+    outputs:
+      pages_artifact: ${{ steps.pages.outputs.artifact_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -224,6 +231,67 @@ jobs:
             console.log(`\n[Download the HTML and LCOV reports](${process.env.COVERAGE_ARTIFACT_URL}). Extract the archive and open \`index.html\` for file details.`);
           }
           JS
+
+      - name: Prepare HTML coverage site
+        id: coverage-site
+        if: >-
+          !cancelled() && github.repository == 'nulltask/be-music' && hashFiles('coverage/index.html') != '' &&
+          ((github.event_name == 'push' && github.ref == 'refs/heads/devel') ||
+           (github.event_name == 'workflow_dispatch' && inputs.publish_coverage))
+        run: |
+          mkdir -p tmp/coverage-pages
+          rsync -a --exclude=/lcov-report/ --exclude=/lcov.info --exclude=/coverage-summary.json coverage/ tmp/coverage-pages/
+      - name: Upload HTML coverage site
+        id: pages
+        if: ${{ !cancelled() && steps.coverage-site.outcome == 'success' }}
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          name: coverage-pages
+          path: tmp/coverage-pages
+
+  publish-coverage:
+    name: Publish HTML coverage
+    needs: coverage
+    if: ${{ !cancelled() && needs.coverage.outputs.pages_artifact != '' }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: coverage-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check the published revision is current
+        id: revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            branch_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/devel" --jq .object.sha)
+            if [ "$branch_sha" != "$GITHUB_SHA" ]; then
+              echo 'A newer revision is on devel. This report is available in the run artifact.' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          fi
+          echo 'current=true' >> "$GITHUB_OUTPUT"
+      - name: Deploy HTML coverage
+        id: deployment
+        if: steps.revision.outputs.current == 'true'
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        with:
+          artifact_name: coverage-pages
+      - name: Link the HTML coverage report
+        if: steps.deployment.outcome == 'success'
+        env:
+          COVERAGE_PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          printf '\n[Open the HTML coverage report](%s)\n\nPublished revision: %s (%s).\n' \
+            "$COVERAGE_PAGE_URL" "$GITHUB_SHA" "$GITHUB_REF_NAME" >> "$GITHUB_STEP_SUMMARY"
 
   # Base and head share one VM. Split jobs land on different ubuntu-24.04-arm
   # machines, and that host delta dominates the 8% regression threshold.
