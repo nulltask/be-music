@@ -3,11 +3,12 @@ import {
   CLASSIC_HI_SPEED_STEPS,
   DEFAULT_PLAY_OPTIONS,
   formatGaugeLabel,
+  formatPlayVariantLabel,
   HISPEED_MAX,
   HISPEED_MIN,
   HISPEED_STEP,
-} from '@be-music/player-scene-model';
-import { formatPlayVariantLabel, type BeMusicSelectActions } from '@be-music/player-skin-sdk';
+  type BeMusicSelectActions,
+} from '@be-music/player-skin-sdk';
 import { addHitArea, type PixiSelectFrame, type SkinTextOptions } from '../pixi-kit/index.ts';
 import { SYN_DIM, SYN_DISPLAY_FONT, SYN_TEXT_FONT, SYN_VOID, SYN_WHITE } from './style.ts';
 

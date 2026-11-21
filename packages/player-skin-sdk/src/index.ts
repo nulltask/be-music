@@ -25,6 +25,7 @@ export type * from './dom.ts';
 export type * from './chart.ts';
 export type * from './result-data.ts';
 export type * from './play-options.ts';
+export * from './play-option-values.ts';
 
 export * from './audio.ts';
 export * from './playfield.ts';
