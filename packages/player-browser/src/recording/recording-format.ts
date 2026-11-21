@@ -90,3 +90,50 @@ export function recorderMIMECandidates(format: RecordingFormat = DEFAULT_RECORDI
 export function recordingFileExtension(mimeType: string): 'mp4' | 'webm' {
   return mimeType.toLowerCase().startsWith('video/mp4') ? 'mp4' : 'webm';
 }
+
+/** How much of the bitrate a recording spends: smaller files, or sharper notes and cleaner keysounds. */
+export type RecordingQuality = 'low' | 'standard' | 'high' | 'very-high';
+
+/** Every quality, smallest file first. `standard` is the default. */
+export const RECORDING_QUALITIES: readonly RecordingQuality[] = ['low', 'standard', 'high', 'very-high'];
+
+/** The quality a recording uses unless the host picks another. */
+export const DEFAULT_RECORDING_QUALITY: RecordingQuality = 'standard';
+
+/**
+ * Video bits per pixel per frame, and the audio bitrate, for each quality. `standard` is the recorder's long-standing
+ * default at 1280×720 and 60 fps: about 5.5 Mbps of video and 192 kbps of audio.
+ */
+const QUALITY_BITRATES: Readonly<Record<RecordingQuality, { videoBitsPerPixel: number; audioBitsPerSecond: number }>> =
+  {
+    low: { videoBitsPerPixel: 0.05, audioBitsPerSecond: 128_000 },
+    standard: { videoBitsPerPixel: 0.1, audioBitsPerSecond: 192_000 },
+    high: { videoBitsPerPixel: 0.2, audioBitsPerSecond: 256_000 },
+    'very-high': { videoBitsPerPixel: 0.35, audioBitsPerSecond: 320_000 },
+  };
+
+/** The video bitrate's floor and ceiling, so a tiny or huge canvas still gets a sensible file. */
+const MIN_VIDEO_BITS_PER_SECOND = 1_000_000;
+const MAX_VIDEO_BITS_PER_SECOND = 80_000_000;
+
+/** A quality as players name it: `Low`, `Standard`, `High`, `Very high`. */
+export function describeRecordingQuality(quality: RecordingQuality): string {
+  return { low: 'Low', standard: 'Standard', high: 'High', 'very-high': 'Very high' }[quality];
+}
+
+/**
+ * The bitrates to record at `quality`: the video's scaled by the frame size and rate (bits per pixel per frame), within
+ * 1 to 80 Mbps, and the audio's by the quality alone.
+ */
+export function resolveRecordingBitrates(
+  quality: RecordingQuality,
+  frame: { readonly width: number; readonly height: number; readonly fps: number },
+): { videoBitsPerSecond: number; audioBitsPerSecond: number } {
+  const preset = QUALITY_BITRATES[quality] ?? QUALITY_BITRATES[DEFAULT_RECORDING_QUALITY];
+  const pixelsPerSecond = Math.max(0, frame.width) * Math.max(0, frame.height) * Math.max(0, frame.fps);
+  const video = Math.round(pixelsPerSecond * preset.videoBitsPerPixel);
+  return {
+    videoBitsPerSecond: Math.min(MAX_VIDEO_BITS_PER_SECOND, Math.max(MIN_VIDEO_BITS_PER_SECOND, video)),
+    audioBitsPerSecond: preset.audioBitsPerSecond,
+  };
+}

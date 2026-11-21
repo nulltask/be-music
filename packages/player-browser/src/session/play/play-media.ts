@@ -165,7 +165,11 @@ export function openPlayAudio(ctx: PlayMediaContext): boolean {
 }
 
 /** Decodes the chart's samples into the graph {@link openPlayAudio} opened, then builds the play's audio session. */
-export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
+export async function decodePlayAudio(
+  ctx: PlayMediaContext,
+  onDecodeProgress?: (fraction: number) => void,
+  onStretchProgress?: (fraction: number) => void,
+): Promise<void> {
   if (!ctx.source || !ctx.chart || !ctx.audioContext) return;
   const chart = ctx.resolvedChart ?? ctx.chart.chart;
   const pitchMode = ctx.options.tempoPitchMode ?? 'pitch';
@@ -188,6 +192,8 @@ export async function decodePlayAudio(ctx: PlayMediaContext): Promise<void> {
       ...(ctx.options.nonstop !== undefined ? { nonstop: ctx.options.nonstop } : {}),
       ...practiceSampleWindow(ctx),
       isCancelled: () => ctx.disposed,
+      onDecodeProgress,
+      onStretchProgress,
       ...(ctx.options.peakGain === true ? { peakGain: true } : {}),
       // The chart played last keeps its decodes in the audio service, so a quick retry skips decoding them.
       ...(ctx.options.audio !== undefined ? { sampleCache: ctx.options.audio.chartSamples } : {}),
@@ -271,7 +277,7 @@ export function samplePlaybackRate(ctx: Pick<PlayMediaContext, 'options' | 'temp
  * the timeline cues reference. Loads run with bounded parallelism so a long preamble doesn't gate the playfield
  * without fanning browser decoders out without limit.
  */
-export async function prepareBGA(ctx: PlayMediaContext): Promise<void> {
+export async function prepareBGA(ctx: PlayMediaContext, onProgress?: (fraction: number) => void): Promise<void> {
   const chartEntry = ctx.chart;
   const source = ctx.source;
   if (!chartEntry || !source || !ctx.hasBGA) {
@@ -301,6 +307,7 @@ export async function prepareBGA(ctx: PlayMediaContext): Promise<void> {
     },
     tempo: ctx.playbackTempo ?? ctx.tempo,
     isCancelled: () => ctx.disposed,
+    onProgress,
   });
   if (ctx.disposed) return;
   // An LRX chart that moves, crops or chains its BGA, or uses layer 203 / 204, is drawn as plugout draws it.

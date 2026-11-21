@@ -1,5 +1,6 @@
 import {
   clamp,
+  LOADING_WORD,
   STAGE_WIDTH as DESIGN_WIDTH,
   type BeMusicGameplayRuntime,
   type BeMusicRect,
@@ -10,7 +11,17 @@ import { addSynesthesiaHUDText as addHUDText } from './figures.ts';
 import { drawFrame } from './draw.ts';
 import { GROOVE } from './layout.ts';
 import { emberColor, hsvToHex } from './space.ts';
-import { SYN_AMBER, SYN_CYAN, SYN_DIM, SYN_EMBER, SYN_MIST, SYN_WHITE, displayStyle, labelStyle } from './style.ts';
+import {
+  SYN_AMBER,
+  SYN_CYAN,
+  SYN_DIM,
+  SYN_DISPLAY_FONT,
+  SYN_EMBER,
+  SYN_MIST,
+  SYN_WHITE,
+  displayStyle,
+  labelStyle,
+} from './style.ts';
 
 type Runtime = BeMusicGameplayRuntime;
 /** What a gauge draws from: the 1P runtime, or the 2P player's figures of a two-player play. */
@@ -152,4 +163,40 @@ export function drawSecondPlayerFigures(layer: Container, runtime: Runtime, plat
     addHUDText(layer, label, x, plate.y + 8, { ...labelStyle(), anchorX: 1 }, pool);
     addHUDNumber(layer, value, x, plate.y + 22, { ...displayStyle(13, SYN_MIST), anchorX: 1, maxWidth: 80 }, pool);
   }
+}
+
+/** NOW LOADING above the asset preparation progress bar. */
+export function drawLoading(
+  graphics: Graphics,
+  layer: Container,
+  nowMs: number,
+  cx: number,
+  y: number,
+  width: number,
+  progress: number,
+  accent: number,
+  pool: ChildPool,
+): void {
+  const breath = 0.55 + 0.45 * Math.sin(nowMs / 420) ** 2;
+  addHUDText(
+    layer,
+    LOADING_WORD,
+    cx,
+    y,
+    {
+      size: 13,
+      fill: SYN_WHITE,
+      fontFamily: SYN_DISPLAY_FONT,
+      letterSpacing: 4,
+      anchorX: 0.5,
+      anchorY: 0.5,
+      maxWidth: width,
+      dropShadow: { color: accent, alpha: breath, blur: 10, distance: 0 },
+    },
+    pool,
+  );
+  const x = cx - width / 2;
+  const barY = y + 19;
+  graphics.rect(x, barY, width, 5).fill({ color: accent, alpha: 0.22 });
+  if (progress > 0) graphics.rect(x, barY, width * progress, 5).fill(accent);
 }

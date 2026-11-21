@@ -163,7 +163,7 @@ describe('importCourseTable', () => {
     };
     const imported = await importCourseTable('https://example.com/t/table.html', async (url) => pages[url]!);
     expect(imported.headerURL).toBe('https://example.com/t/header.json');
-    expect(imported.group.label).toBe('Example');
+    expect(imported.group).toMatchObject({ label: 'Example', kind: 'difficulty-table' });
     expect(imported.group.courses.map((course) => course.name)).toEqual(['ex0']);
   });
 
@@ -283,7 +283,7 @@ describe('saved table headers', () => {
 
   test('readTableHeaderFile reads the courses under the table name', () => {
     const group = readTableHeaderFile(header, 'insane');
-    expect(group?.label).toBe('Insane');
+    expect(group).toMatchObject({ label: 'Insane', kind: 'difficulty-table' });
     expect(group?.courses.map((course) => course.name)).toEqual(['Dan 1']);
     expect(readTableHeaderFile(JSON.stringify({ symbol: '★', course: JSON.parse(header).course }), 'x')?.label).toBe(
       '★',

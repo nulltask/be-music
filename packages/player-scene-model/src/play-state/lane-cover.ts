@@ -110,7 +110,8 @@ export type LaneCoverPart = 'sudden' | 'hidden' | 'lift';
 export type LaneCoverCommand =
   /**
    * Raise or lower a cover by `delta` of the lane (the lane cover keys, the mouse wheel, a skin's cover button). A
-   * cover switched off comes on when raised, keeping its height; one lowered to nothing goes off.
+   * SUDDEN+ or HIDDEN+ switched off comes on when raised, from the height it keeps; one lowered to nothing goes off. A
+   * LIFT switched off comes on when raised from the judgement line (none of it shows), and lowering it does nothing.
    */
   | { type: 'cover-adjust'; part: LaneCoverPart; delta: number; side?: PlaySide; bpm?: number }
   /**
@@ -134,10 +135,13 @@ function stepHeight(height: number, delta: number): number {
 }
 
 function adjust(cover: LaneCoverState, part: LaneCoverPart, delta: number): LaneCoverState {
+  // A LIFT switched off shows none, so a step moves it from the judgement line, not from the height it keeps.
+  const liftOff = part === 'lift' && cover.liftOn === false;
+  if (liftOff && delta <= 0) return cover;
   if (cover.absolute && (part === 'sudden' || part === 'lift')) {
     const next = normalizeFloatingLaneCover({
       ...cover,
-      [part]: cover[part] + delta,
+      [part]: (liftOff ? 0 : cover[part]) + delta,
       ...(part === 'lift' ? { liftOn: true } : {}),
     });
     return next.sudden === cover.sudden && next.lift === cover.lift && next.liftOn === cover.liftOn ? cover : next;
@@ -145,7 +149,7 @@ function adjust(cover: LaneCoverState, part: LaneCoverPart, delta: number): Lane
   const height =
     cover.absolute && part === 'sudden'
       ? Math.max(30 / 723, stepHeight(cover.sudden, delta))
-      : stepHeight(cover[part], delta);
+      : stepHeight(liftOff ? 0 : cover[part], delta);
   if (part === 'lift')
     return height === cover.lift && cover.liftOn !== false ? cover : { ...cover, lift: height, liftOn: true };
   const on = onKey(part);

@@ -17,6 +17,7 @@ import type { GaugePick, RulesetId } from '@be-music/player-engine/ruleset';
 import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { GuideSound, ResolvedPlayChart } from '@be-music/player-engine';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
+import type { BPMGuideKinds } from '../../chart/bpm-guide.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { ControlKeyOverrides, ControlScheme } from '../controls/control-buttons.ts';
 import type { ControlActionOverrides } from '../controls/control-actions.ts';
@@ -145,6 +146,11 @@ export interface PlaySessionOptions {
   constantFadeMs?: number;
   onJudgeTimingChange?: (judgeTimingMs: number) => void;
   bpmGuide?: boolean;
+  /**
+   * Which labels BPM GUIDE shows (a viewing preference, followed live): BPM changes and STOPs, as beatoraja's guide, by
+   * default; `#SCROLL` and `#SPEED` changes are Be-Music's.
+   */
+  bpmGuideKinds?: BPMGuideKinds;
   /**
    * The automatic judge-timing adjustment of a manual play (default `'OFF'`), which moves {@link judgeTimingMs}:
    * beatoraja's calibration or LR2's ON / SILENT. LR2's SILENT also loads no keysounds, BGM or BGA and hides the judge
@@ -439,18 +445,6 @@ export interface PlaySessionOptions {
    * regular play surface stays uncluttered.
    */
   showInvisibleNotes?: boolean;
-  /**
-   * Single-note visibility after judgement.
-   *
-   * - `'KEEP_SCROLLING'` (default) — a judged note stays on screen until its own time: one hit early keeps scrolling
-   *   down to the judgement line and goes when it reaches it. This is what LR2 (`DrawNotes` draws a hit note until the
-   *   playhead reaches it) and beatoraja (`LaneRenderer` draws a note while its time is ahead, judged or not) both do.
-   * - `'HIDE'` — a judged note goes the moment it is judged, which neither player does; kept as a preference for a
-   *   cleaner playfield in dense passages.
-   *
-   * Only tap notes are gated. Long notes stay until their end either way, so this option doesn't disturb them.
-   */
-  judgedNoteDisplay?: 'KEEP_SCROLLING' | 'HIDE';
   /**
    * The chart's `#RANDOM` / `#SWITCH` branches as the decide screen drew them (`DecideScene.resolved`), so the play
    * plays the branches the screen showed. Without it the play draws its own; a replay always plays its log's.

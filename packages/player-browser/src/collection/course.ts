@@ -35,6 +35,7 @@ import { resolveShownChartMainBPM } from '../chart/main-bpm.ts';
 /** A course file's courses, under the label its folder bar shows. */
 export interface CourseDefinitionGroup {
   label: string;
+  kind?: 'difficulty-table';
   courses: readonly CourseDefinition[];
   /** beatoraja random courses, listed after the fixed ones; their stages are drawn when one is started. */
   randomCourses?: readonly RandomCourseDefinition[];
@@ -207,6 +208,7 @@ export function resolveCourseFolders(
     .filter((group) => group.courses.length + (group.randomCourses?.length ?? 0) > 0)
     .map((group): LibraryFolder => ({
       label: group.label,
+      ...(group.kind === undefined ? {} : { kind: group.kind }),
       charts: [],
       courses: [
         ...group.courses.map((definition, index) => resolveCourseEntry(`${group.label}#${index}`, definition, lookup)),

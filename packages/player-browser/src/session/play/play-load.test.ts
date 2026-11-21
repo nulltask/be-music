@@ -4,9 +4,13 @@ import { PlaySession } from './play-session.ts';
 import type { PlayViewTiming } from '../../view/types.ts';
 
 const mocks = vi.hoisted(() => ({
-  decode: { resolve: () => {} },
+  decode: {
+    resolve: () => {},
+    progress: undefined as ((fraction: number) => void) | undefined,
+    stretchProgress: undefined as ((fraction: number) => void) | undefined,
+  },
   launchSharedEngine: vi.fn(),
-  prepareBGA: vi.fn(async () => {}),
+  prepareBGA: vi.fn(async (_context: unknown, _progress?: (fraction: number) => void) => {}),
 }));
 
 vi.mock('./play-chart.ts', () => ({ prepareChart: vi.fn() }));
@@ -14,9 +18,11 @@ vi.mock('./play-media.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./play-media.ts')>()),
   openPlayAudio: vi.fn(() => true),
   decodePlayAudio: vi.fn(
-    () =>
+    (_context, progress: (fraction: number) => void, stretchProgress: (fraction: number) => void) =>
       new Promise<void>((resolve) => {
         mocks.decode.resolve = resolve;
+        mocks.decode.progress = progress;
+        mocks.decode.stretchProgress = stretchProgress;
       }),
   ),
   prepareBGA: mocks.prepareBGA,
@@ -75,6 +81,34 @@ describe('play loading', () => {
     expect(mocks.launchSharedEngine).toHaveBeenCalledOnce();
     expect(mocks.prepareBGA).toHaveBeenCalledOnce();
     expect(moments).toContain('play-start');
+    expect(play.assetsLoading).toBe(false);
+  });
+
+  test('tracks audio and BGA progress while holding completion until the assets are ready', async () => {
+    const { play, advance } = setup();
+    let finishBGA!: () => void;
+    mocks.prepareBGA.mockImplementationOnce(
+      (_context, progress) =>
+        new Promise<void>((resolve) => {
+          progress?.(0.5);
+          finishBGA = resolve;
+        }),
+    );
+    play.entered = true;
+    await play.load(CHART);
+    expect(play.loadProgress).toBe(0.1);
+    mocks.decode.progress?.(0.5);
+    expect(play.loadProgress).toBeCloseTo(0.3);
+    mocks.decode.progress?.(1);
+    mocks.decode.stretchProgress?.(0.5);
+    expect(play.loadProgress).toBeCloseTo(0.595);
+    mocks.decode.resolve();
+    await advance(0);
+    expect(play.loadProgress).toBeCloseTo(0.825);
+    expect(play.assetsLoading).toBe(true);
+    finishBGA();
+    await advance(0);
+    expect(play.loadProgress).toBe(1);
     expect(play.assetsLoading).toBe(false);
   });
 

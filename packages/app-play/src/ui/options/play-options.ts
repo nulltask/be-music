@@ -23,6 +23,7 @@ import { parseReplay } from '@be-music/player-engine/replay';
 import { storeReplayView } from '../../replay-view-settings.ts';
 import type { OptionsDialog } from './index.ts';
 import { buildLR2ManiaRows } from './lr2-mania.ts';
+import { resolveBPMGuideKinds } from '../../app/play-scene-options.ts';
 import { PLAY_OPTION_PAGES, VIEW_OPTION_PAGES } from './folders.ts';
 import {
   bottomShiftableGaugeItems,
@@ -588,6 +589,18 @@ export function buildPlayOptionsFolder(
       .addBinding(this.guiState, 'bpmGuide', { label: 'BPM GUIDE (beatoraja)' })
       .on('change', ({ value }) => this.setPlayOptions({ bpmGuide: value })),
   );
+  // Which labels BPM GUIDE shows. Viewing preferences: live during a play, and they change no record.
+  for (const [key, label] of [
+    ['guideBPM', 'Guide: BPM'],
+    ['guideStop', 'Guide: STOP'],
+    ['guideScroll', 'Guide: SCROLL'],
+    ['guideSpeed', 'Guide: SPEED'],
+  ] as const) {
+    effects.addBinding(this.guiState, key, { label }).on('change', ({ value }) => {
+      this.guiState[key] = value;
+      this.gameplayView?.setBPMGuideKinds(resolveBPMGuideKinds(this.guiState));
+    });
+  }
   trackPlayOption(
     effects
       .addBinding(this.guiState, 'bpmChangeWarning', { label: 'BPM change warning (AC)' })
@@ -742,20 +755,10 @@ export function buildPlayOptionsFolder(
 }
 
 /**
- * The View folder's rows about which notes the lanes draw: judged notes kept or hidden, and the chart's invisible
- * notes. Both apply to a running play live.
+ * The View folder's rows about how the lanes draw: AC 34's lane brightness and judge area, mark processed notes, and
+ * the chart's invisible notes. They apply to a running play live.
  */
 function buildNoteDisplayRows(this: OptionsDialog, effects: OptionContainer): void {
-  // Picks between LR2 / beatoraja's "a judged note stays until its time" and "a judged note goes the moment it is
-  // judged". Pushed live into the running gameplay view so a mid-song toggle takes effect on the very next paint — the
-  // visibility check is a single per-frame branch with no backing state to rebuild.
-  selectBinding(effects, this.guiState, 'judgedNoteDisplay', 'Judged notes', {
-    'Keep until its time (LR2)': 'KEEP_SCROLLING',
-    'Hide on judge': 'HIDE',
-  }).on('change', ({ value }) => {
-    this.guiState.judgedNoteDisplay = value;
-    this.gameplayView?.setJudgedNoteDisplay(value);
-  });
   // AC 34's detail options. Live: the views read both at each frame.
   effects
     .addBinding(this.guiState, 'laneBrightness', { label: 'Lane brightness (AC)', min: 0, max: 100, step: 10 })

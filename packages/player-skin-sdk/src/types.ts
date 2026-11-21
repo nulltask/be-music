@@ -404,6 +404,8 @@ export interface BeMusicGameplayRuntime {
   chartMs?: number;
   /** True while the chart's audio / BGA are still loading (or a BGA video is transcoding) before the play starts. */
   loading?: boolean;
+  /** Estimated asset preparation progress from 0 to 1 while loading, when supplied by the host. */
+  loadingProgress?: number;
   /** Play-clock ms of the most recent judgement — drives the judge / combo "punch". */
   judgeAtMs?: number;
   /** Play-clock ms and lane class of the most recent key press (or autoplay hit) — drives input-reactive visuals. */
@@ -750,6 +752,40 @@ export interface BeMusicGameplayFrame {
   chartImage: BeMusicChartImageLookup;
 }
 
+/** What a BPM GUIDE label marks: a BPM change, a STOP, a `#SCROLL` change or a `#SPEED` change. */
+export type BeMusicGuideLabelKind = 'bpm' | 'stop' | 'scroll' | 'speed';
+
+/**
+ * The look of the BPM GUIDE labels the player draws over the lanes ({@link BeMusicGameplaySkin.guideLabel}). Without
+ * one they take beatoraja's monospace, a size relative to the lanes, and its green and yellow (cyan and violet for
+ * `#SCROLL` and `#SPEED`). Colours are `0xRRGGBB`; a label's line takes its colour.
+ */
+export interface BeMusicGuideLabelStyle {
+  /** A CSS font family; load the font through {@link BeMusicSkin.fontLoads}. */
+  readonly fontFamily: string;
+  /** A CSS font weight, such as `'500'`. */
+  readonly fontWeight?: '100' | '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900' | 'normal' | 'bold';
+  /** In stage pixels. */
+  readonly fontSize?: number;
+  readonly colors?: Readonly<Partial<Record<BeMusicGuideLabelKind, number>>>;
+}
+
+/**
+ * The look of the lane covers (SUDDEN+, HIDDEN+ and LIFT) the player paints for a skin ({@link BeMusicGameplaySkin.laneCover}).
+ * A cover is opaque: `color` fills it, and diagonal stripes of `stripeColor` at `stripeAlpha` run across it, moving
+ * with the cover's inner edge. Colours are `0xRRGGBB`.
+ */
+export interface BeMusicLaneCoverStyle {
+  readonly color: number;
+  readonly stripeColor: number;
+  /** 0..1. */
+  readonly stripeAlpha: number;
+  /** A line along the cover's inner edge (the one facing the notes), when set. */
+  readonly edgeColor?: number;
+  /** 0..1; default 1. */
+  readonly edgeAlpha?: number;
+}
+
 export interface BeMusicGameplaySkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
   /** Draws one gameplay frame. Called once per frame, right before the player renders. */
   draw(surface: BeMusicSurface<K>, frame: BeMusicGameplayFrame): void;
@@ -765,6 +801,13 @@ export interface BeMusicGameplaySkin<K extends BeMusicSurfaceContextKind = BeMus
    * the player draws its own covers over the skin.
    */
   readonly drawsLaneCover?: boolean;
+  /** The look of the BPM GUIDE labels and lines the player draws over the skin's lanes. */
+  readonly guideLabel?: BeMusicGuideLabelStyle;
+  /**
+   * How the player paints its lane covers over the skin when {@link drawsLaneCover} is unset: their colour and the
+   * faint stripes on them. Without it the covers are black with faint grey stripes.
+   */
+  readonly laneCover?: BeMusicLaneCoverStyle;
   /**
    * Set to `true` when the skin draws measure lines itself from `frame.measureLines`. Otherwise the player draws its
    * own lines.

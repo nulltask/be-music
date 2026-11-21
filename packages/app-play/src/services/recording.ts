@@ -1,9 +1,9 @@
 // The Options dialog's Capture folder at work: what a video recording of a play and a screenshot of the stage
 // (`recording-controller.ts`) need of the app, and the state they keep between plays.
 
-import type { RecordingFormat } from '@be-music/player-browser/recording';
+import type { RecordingFormat, RecordingQuality } from '@be-music/player-browser/recording';
 import type { GameplayRecorder, RecordingDeps } from '../recording-controller.ts';
-import { parseRecordingFormatKey } from '../recording-format-choice.ts';
+import { parseRecordingFormatKey, parseRecordingQuality } from '../recording-format-choice.ts';
 
 export interface RecordingServiceOptions {
   /** The scene host a screenshot is taken from. */
@@ -12,8 +12,10 @@ export interface RecordingServiceOptions {
   readonly recordController: () => RecordingDeps['recordController'];
   /** The recorder of the play (`PlayScene.recording`), on the stage or loading behind a decide screen. */
   readonly activeGameplay: () => GameplayRecorder | undefined;
-  /** The state the Options dialog's "Video format" is kept in. */
-  readonly settings: { readonly recordingFormat: string };
+  /** The state the Options dialog's "Video format" and "Video quality" are kept in. */
+  readonly settings: { readonly recordingFormat: string; readonly recordingQuality: string };
+  /** Locks the Video format and Video quality controls while a recording runs. */
+  readonly setRecordingSettingsLocked?: (locked: boolean) => void;
   readonly setStatus: (text: string) => void;
 }
 
@@ -41,6 +43,7 @@ export class RecordingService {
   private readonly activeGameplay: RecordingServiceOptions['activeGameplay'];
   private readonly settings: RecordingServiceOptions['settings'];
   private readonly setStatus: RecordingServiceOptions['setStatus'];
+  private readonly setRecordingSettingsLocked: RecordingServiceOptions['setRecordingSettingsLocked'];
 
   public constructor(options: RecordingServiceOptions) {
     this.sceneHost = options.sceneHost;
@@ -48,6 +51,7 @@ export class RecordingService {
     this.activeGameplay = options.activeGameplay;
     this.settings = options.settings;
     this.setStatus = options.setStatus;
+    this.setRecordingSettingsLocked = options.setRecordingSettingsLocked;
   }
 
   /** Names the next recording after the chart about to play. */
@@ -78,6 +82,10 @@ export class RecordingService {
       },
       getRecordingFilenameBase: () => this.recordingFilenameBase,
       getRecordingFormat: () => this.recordingFormat,
+      getRecordingQuality: (): RecordingQuality => parseRecordingQuality(this.settings.recordingQuality),
+      ...(this.setRecordingSettingsLocked !== undefined
+        ? { setRecordingSettingsLocked: this.setRecordingSettingsLocked }
+        : {}),
       setStatus: (text) => this.setStatus(text),
     };
   }

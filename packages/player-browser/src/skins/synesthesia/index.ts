@@ -14,6 +14,7 @@ import { BE_MUSIC_SKIN_API_VERSION, cabinetStage, tallStage, type BeMusicSkin } 
 import { definePixiSkin } from '../pixi-kit/index.ts';
 import { JUDGMENT_PARTICLES_SETTING } from './burst-budget.ts';
 import { FROSTED_GLASS_SETTING } from './glass.ts';
+import { COMBO_MILESTONE_SETTING } from './moments.ts';
 
 /**
  * Synesthesia — a skin after synaesthetic sound-and-light rhythm games: deep space,
@@ -33,7 +34,7 @@ export const synesthesiaSkin: BeMusicSkin = definePixiSkin({
   fontLoads: ['400 16px "Orbitron"', '500 16px "Orbitron"', '300 12px "M PLUS 1p"', '500 12px "M PLUS 1p"'],
   stage: cabinetStage,
   portraitStage: tallStage,
-  settings: [FROSTED_GLASS_SETTING, JUDGMENT_PARTICLES_SETTING],
+  settings: [FROSTED_GLASS_SETTING, JUDGMENT_PARTICLES_SETTING, COMBO_MILESTONE_SETTING],
   gameplay: {
     renderChrome: renderSynesthesiaChrome,
     renderLanes: renderSynesthesiaLanes,
@@ -42,6 +43,15 @@ export const synesthesiaSkin: BeMusicSkin = definePixiSkin({
     renderLongNote: renderSynesthesiaLongNote,
     renderBombs: renderSynesthesiaBombs,
     bombDurationMs: SYNESTHESIA_BOMB_DURATION_MS,
+    // The HUD's Orbitron, in its gold and ember with the electric blue and magenta accents.
+    guideLabel: {
+      fontFamily: 'Orbitron',
+      fontWeight: '500',
+      fontSize: 11,
+      colors: { bpm: 0xffd08a, stop: 0xff7a1e, scroll: 0x3fb4ff, speed: 0xff3d9e },
+    },
+    // Deep space with faint ember stripes, and an ember line along the edge the notes come from.
+    laneCover: { color: 0x07040a, stripeColor: 0xff7a1e, stripeAlpha: 0.07, edgeColor: 0xff8a2a, edgeAlpha: 0.55 },
   },
   select: synesthesiaSelectSkin,
   decide: synesthesiaDecideSkin,

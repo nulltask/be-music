@@ -22,7 +22,7 @@ function recorder(): GameplayRecorder & { formats: unknown[] } {
 
 function setup() {
   const sceneHost = {} as PixiSceneHost;
-  const settings = { recordingFormat: 'webm/vp9' };
+  const settings = { recordingFormat: 'webm/vp9', recordingQuality: 'high' };
   const statuses: string[] = [];
   let play: GameplayRecorder | undefined;
   const service = new RecordingService({
@@ -51,15 +51,18 @@ describe('RecordingService', () => {
     expect(deps.getActiveGameplay()).toBeUndefined();
     expect(deps.getRecordingFilenameBase()).toBe('gameplay');
     expect(deps.getRecordingFormat()).toEqual({ container: 'webm', videoCodec: 'vp9' });
+    expect(deps.getRecordingQuality()).toBe('high');
 
     const play = recorder();
     setPlay(play);
     service.setFilenameBase('Fixture A');
     settings.recordingFormat = 'unknown';
+    settings.recordingQuality = 'unknown';
     expect(deps.getActiveGameplay()).toBe(play);
     expect(deps.getRecordingFilenameBase()).toBe('Fixture A');
-    // A format the recorder does not offer falls back to MP4 · H.264.
+    // A format the recorder does not offer falls back to MP4 · H.264, a quality to Standard.
     expect(deps.getRecordingFormat()).toEqual({ container: 'mp4', videoCodec: 'avc' });
+    expect(deps.getRecordingQuality()).toBe('standard');
   });
 
   test('takes the record button as it is when the bundle is made', () => {
@@ -69,7 +72,7 @@ describe('RecordingService', () => {
       sceneHost: {} as PixiSceneHost,
       recordController: () => (menuBuilt ? (controller as never) : undefined),
       activeGameplay: () => undefined,
-      settings: { recordingFormat: 'mp4/avc' },
+      settings: { recordingFormat: 'mp4/avc', recordingQuality: 'standard' },
       setStatus: () => {},
     });
     expect(service.deps().recordController).toBeUndefined();

@@ -12,7 +12,12 @@ import {
 } from '@be-music/player-scene-model';
 import { describe, expect, test } from 'vite-plus/test';
 import { nextCourseStagePlay, startCourseRun } from '../course-flow.ts';
-import { resolvePlaySceneOptions, type PlaySceneGUIState, type PlaySceneOptionsInput } from './play-scene-options.ts';
+import {
+  resolvePlaySceneOptions,
+  type PlaySceneGUIState,
+  type PlaySceneOptionsInput,
+  resolveBPMGuideKinds,
+} from './play-scene-options.ts';
 import type { NonstopPlay } from './routes/nonstop.ts';
 
 function chartEntry(id: string): LibraryChart {
@@ -87,7 +92,10 @@ function gui(changes: Partial<PlaySceneGUIState> = {}): PlaySceneGUIState {
     bgaResizeMaxEdgePx: 0,
     bgaUseWebCodecs: false,
     showInvisibleNotes: false,
-    judgedNoteDisplay: 'KEEP_SCROLLING',
+    guideBPM: true,
+    guideStop: true,
+    guideScroll: false,
+    guideSpeed: true,
     ...changes,
   } as PlaySceneGUIState;
 }
@@ -224,7 +232,7 @@ describe('resolvePlaySceneOptions: a single play', () => {
       bgaTranscodeMaxLongEdgePx: undefined,
       bgaTranscodeUseWebCodecs: false,
       showInvisibleNotes: false,
-      judgedNoteDisplay: 'KEEP_SCROLLING',
+      bpmGuideKinds: { bpm: true, stop: true, scroll: false, speed: true },
     });
   });
 
@@ -382,4 +390,15 @@ test('passes scroll REMOVE into the scene separately from visual CONSTANT', () =
       input({ playOptions: { ...PLAY_OPTIONS, scrollModifier: 'REMOVE', visualConstant: false } }),
     ).settings,
   ).toMatchObject({ scrollModifier: 'REMOVE', visualConstant: false });
+});
+
+describe('resolveBPMGuideKinds', () => {
+  test('reads the four guide label switches', () => {
+    expect(resolveBPMGuideKinds({ guideBPM: true, guideStop: false, guideScroll: true, guideSpeed: false })).toEqual({
+      bpm: true,
+      stop: false,
+      scroll: true,
+      speed: false,
+    });
+  });
 });

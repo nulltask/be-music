@@ -59,6 +59,7 @@ import type {
   ChartPlayVariant,
 } from '@be-music/chart-model';
 import type { BGACue, NonstopStageBGATimeline } from '../../chart/bga-timeline.ts';
+import type { BPMGuideEvent } from '../../chart/bpm-guide.ts';
 
 import type { BeMusicJudgeWindows } from '@be-music/player-skin-sdk';
 import type { RuntimeMineNote, RuntimeNote } from '../../view/shared/playfield/context.ts';
@@ -166,6 +167,8 @@ export class PlaySessionState extends PlayPresentation {
    * (which may be transcoding video) has settled. Skins show it as NOW LOADING on the lanes.
    */
   assetsLoading = false;
+  /** Estimated preparation progress, from 0 to 1, while assets load. */
+  loadProgress = 0;
   /**
    * Between {@link enter} and {@link exit}: the input listeners are attached, and a {@link prepare} running meanwhile
    * shows the playfield (in its loading state) instead of loading off stage.
@@ -419,6 +422,8 @@ export class PlaySessionState extends PlayPresentation {
    * made notes drift through tempo transitions.
    */
   timingResolver: TimingResolver | undefined;
+  /** The chart's BPM GUIDE labels (`collectBPMGuideEvents`), prepared with the timing. */
+  bpmGuideEvents: readonly BPMGuideEvent[] = [];
   /**
    * Per-layer BGA cue lists, sorted by chart-time seconds. Each cue's `bmpKey` is the resource key our texture cache is
    * keyed by (BMS id like "01" for BMS charts, header.name like "base.png" for bmson). `bmpKey === undefined` is the

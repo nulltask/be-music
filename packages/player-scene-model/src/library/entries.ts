@@ -16,6 +16,7 @@ export interface LibraryChart {
   sourceId: string;
   sourceLabel: string;
   sourceKind: ChartSourceKind;
+  bemuseServer?: true;
   chartPath: string;
   directoryLabel: string;
   fileLabel: string;
@@ -37,6 +38,7 @@ export interface LibraryChart {
  */
 export interface LibraryFolder {
   label: string;
+  kind?: 'bemuse-server' | 'difficulty-table';
   charts: readonly LibraryChart[];
   /** A course folder lists courses instead of charts. */
   courses?: readonly LibraryCourse[];

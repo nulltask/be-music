@@ -8,6 +8,7 @@ import {
   clampPercent,
   drawGaugeCells,
   drawGauges,
+  drawLoading,
   drawSecondPlayerFigures,
 } from './player-hud.ts';
 import { cabinetWellBottom, drawSynesthesiaCabinet } from './cabinet.ts';
@@ -82,8 +83,6 @@ import {
   effectProfile,
   hash01,
   impulse,
-  LOADING_WORD,
-  loadingDots,
   resolveJudgeWordY,
   type BeMusicGameplayLayout,
   type BeMusicGameplayRuntime,
@@ -413,10 +412,13 @@ export function renderSynesthesiaChrome({
   const judgeY = resolveSkinJudgeWordY(layout);
   if (runtime.loading) {
     drawLoading(
+      front,
       overlayLayer,
       runtime.nowMs ?? 0,
       (playfieldLeft + playfieldRight) / 2,
       judgeY - 50,
+      Math.min(180, (playfieldRight - playfieldLeft) * 0.8),
+      runtime.loadingProgress ?? 0,
       accent,
       overlayLayerPool,
     );
@@ -431,6 +433,7 @@ export function renderSynesthesiaChrome({
     hue,
     overlayLayerPool,
     layout,
+    settings,
   );
 }
 
@@ -442,36 +445,6 @@ function resolveSkinJudgeWordY(layout: BeMusicGameplayLayout): number {
   const { top, judgementY } = layout.playfield;
   const skinY = layout.orientation !== 'portrait' ? 236 : Math.round(top + (judgementY - top) * 0.58);
   return resolveJudgeWordY(skinY, layout.playfield);
-}
-
-/** NOW LOADING on the lanes: wide-tracked light breathing in the accent glow, dots ticking beneath. */
-function drawLoading(layer: Container, nowMs: number, cx: number, y: number, accent: number, pool: ChildPool): void {
-  const breath = 0.55 + 0.45 * Math.sin(nowMs / 420) ** 2;
-  addHUDText(
-    layer,
-    LOADING_WORD,
-    cx,
-    y,
-    {
-      size: 13,
-      fill: SYN_WHITE,
-      fontFamily: SYN_DISPLAY_FONT,
-      letterSpacing: 4,
-      anchorX: 0.5,
-      anchorY: 0.5,
-      maxWidth: 180,
-      dropShadow: { color: accent, alpha: breath, blur: 10, distance: 0 },
-    },
-    pool,
-  );
-  addHUDText(
-    layer,
-    loadingDots(nowMs).padEnd(3, ' '),
-    cx,
-    y + 22,
-    { size: 13, fill: accent, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 6, anchorX: 0.5, anchorY: 0.5 },
-    pool,
-  );
 }
 
 function insideBGA(x: number, y: number, margin = 0): boolean {

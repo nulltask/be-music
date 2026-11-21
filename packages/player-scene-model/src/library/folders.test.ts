@@ -17,6 +17,12 @@ describe('groupChartsByFolder', () => {
     expect(folders[1]!.charts.map((chart) => chart.id)).toEqual(['a', 'c']);
   });
 
+  test('marks a folder when all its charts came from a Bemuse server', () => {
+    const remote = makeChart('remote', 'Remote/Song', { bemuseServer: true });
+    expect(groupChartsByFolder([remote])[0]?.kind).toBe('bemuse-server');
+    expect(groupChartsByFolder([remote, makeChart('local', 'Remote/Local')])[0]?.kind).toBeUndefined();
+  });
+
   test('puts a chart without a directory under its source label', () => {
     const loose = makeChart('loose', '', { sourceLabel: 'dropped files' });
     expect(chartFolderLabel(loose)).toBe('dropped files');

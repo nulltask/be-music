@@ -7,7 +7,7 @@ import {
   judgeDisplayWord,
   resolveJudgeWordY,
   resolveLanePlayLabel,
-  loadingDots,
+  LOADING_WORD,
   resolveLaneRuns,
   type BeMusicGameplayFrame,
   type BeMusicGameplayRuntime,
@@ -35,6 +35,7 @@ import {
   css,
   drawSongInfoLayers,
   stat,
+  tabularText,
   text,
 } from './theme.ts';
 import { drawCabinetHUD } from './cabinet.ts';
@@ -287,7 +288,13 @@ function drawJudgement(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFram
   const { runtime, layout, nowMs } = frame;
   const y = resolveJudgeWordY(skinY, layout.playfield);
   if (runtime.loading) {
-    text(ctx, `NOW LOADING${loadingDots(nowMs)}`, layout.playfield.left + 12, y, { size: 13, color: MUTED });
+    const x = layout.playfield.left + 12;
+    const width = Math.min(180, layout.playfield.right - x - 12);
+    text(ctx, LOADING_WORD, x, y, { size: 13, color: MUTED, maxWidth: width });
+    ctx.fillStyle = LINE;
+    ctx.fillRect(x, y + 18, width, 4);
+    ctx.fillStyle = ACCENT;
+    ctx.fillRect(x, y + 18, width * (runtime.loadingProgress ?? 0), 4);
     return;
   }
   for (const side of ['1P', '2P'] as const) {
@@ -317,7 +324,7 @@ function drawJudgement(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFram
     const detailY = sideY - (resolveLanePlayLabel(runtime, side.side) ? 44 : 22);
     details.forEach((detail, index) => {
       const spread = details.length > 1 ? (index - (details.length - 1) / 2) * JUDGE_DETAIL_SPREAD : 0;
-      text(
+      tabularText(
         ctx,
         detail.lane === undefined ? detail.text : `${JUDGE_DETAIL_LANES[detail.lane]} ${detail.text}`,
         x + spread,

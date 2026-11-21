@@ -22,7 +22,12 @@ import type { Application, Texture } from 'pixi.js';
 import type { BrowserAssetSource } from '../../collection/types.ts';
 import { logger } from '../../logger.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
-import type { RecordingFormat } from '../../recording/recording-format.ts';
+import {
+  DEFAULT_RECORDING_QUALITY,
+  resolveRecordingBitrates,
+  type RecordingFormat,
+  type RecordingQuality,
+} from '../../recording/recording-format.ts';
 import {
   sanitizeBusVolume,
   type AudioBusChannel,
@@ -177,6 +182,7 @@ export class PlaySession extends PlaySessionState {
     this.source = source;
     // Hidden until {@link start} fires, so a play shown before it begins draws nothing of it yet.
     this.shown = false;
+    this.loadProgress = 0;
     this.assetsLoading = true;
     try {
       prepareChart(this, chartEntry);
@@ -194,7 +200,18 @@ export class PlaySession extends PlaySessionState {
     await this.theme.prepareView?.();
     if (this.disposed) return;
     // The graph opens now, so the play has its AudioContext when load returns (a recording starts on it).
-    const samplesDecoded = openPlayAudio(this) ? decodePlayAudio(this) : Promise.resolve();
+    this.loadProgress = 0.1;
+    const samplesDecoded = openPlayAudio(this)
+      ? decodePlayAudio(
+          this,
+          (fraction) => {
+            this.loadProgress = 0.1 + 0.4 * fraction;
+          },
+          (fraction) => {
+            this.loadProgress = 0.5 + 0.19 * fraction;
+          },
+        )
+      : Promise.resolve();
     if (this.entered) {
       // Nothing covers this play's load: its intro runs while the samples decode, and START holds the chart until they
       // are in, so the wait is the longer of the two instead of both.
@@ -210,6 +227,7 @@ export class PlaySession extends PlaySessionState {
       this.assetsReadyPromise = this.loadAfterSamples();
     }
     void this.assetsReadyPromise.then(() => {
+      this.loadProgress = 1;
       this.assetsLoading = false;
     });
   }
@@ -220,7 +238,10 @@ export class PlaySession extends PlaySessionState {
     this.samplesDecoded = true;
     // Build the engine while BGA and the skin intro are still loading; START opens its chart gate.
     launchSharedEngine(this);
-    this.bgaReadyPromise = prepareBGA(this).catch((error) => {
+    this.loadProgress = 0.7;
+    this.bgaReadyPromise = prepareBGA(this, (fraction) => {
+      this.loadProgress = 0.7 + 0.25 * fraction;
+    }).catch((error) => {
       log.warn('BGA preload failed; continuing without it', error);
     });
     // The ghost's replay is read and simulated while the BGA loads; the chart waits for both.
@@ -503,7 +524,7 @@ export class PlaySession extends PlaySessionState {
    * Idempotent in the sense that calling while a recording is already active is a no-op (`isRecording()` is the
    * canonical gate hosts should check).
    */
-  public startRecording(options: { format?: RecordingFormat } = {}): void {
+  public startRecording(options: { format?: RecordingFormat; quality?: RecordingQuality } = {}): void {
     if (this.recorder?.isActive()) return;
     if (!this.host || !this.audioContext || !this.audioBus) {
       throw new Error('PlaySession.startRecording: gameplay audio is not ready yet');
@@ -511,8 +532,16 @@ export class PlaySession extends PlaySessionState {
     // Recreate the recorder per session — instances are one-shot by design (chunk buffer + audio tap lifecycle), so the
     // host gets a clean blob on every start.
     const host = this.host;
+    const canvas = host.app.canvas;
+    // The quality's bitrates for the frames the recorder takes: the canvas at its own size, at the recorder's 60 fps.
+    const bitrates = resolveRecordingBitrates(options.quality ?? DEFAULT_RECORDING_QUALITY, {
+      width: canvas.width,
+      height: canvas.height,
+      fps: 60,
+    });
     this.recorder = new GameplayRecorder({
-      canvas: host.app.canvas,
+      canvas,
+      ...bitrates,
       subscribeFrame: (onFrame) => host.onAfterRender(onFrame),
       audioContext: this.audioContext,
       audioOutput: this.audioBus.outputNode,
@@ -639,6 +668,7 @@ export class PlaySession extends PlaySessionState {
     this.beatAtSeconds = undefined;
     this.scrollMapper = undefined;
     this.timingResolver = undefined;
+    this.bpmGuideEvents = [];
     this.bgaTimeline = { base: [], layer: [], poor: [] };
     this.laneChannels = [];
     this.laneX.clear();
