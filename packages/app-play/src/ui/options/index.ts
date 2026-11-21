@@ -355,7 +355,6 @@ export class OptionsDialog {
     skin: [this.lr2ThemeController, ...this.skinControllers],
   }));
   /** Read-only multiline monitor, refreshed immediately when the app posts status. */
-  public statusController: PaneBinding | undefined;
   // The folders and the controls that follow what is loaded, each built in its own module with the dialog as `this`.
   private readonly buildCaptureFolder = buildCaptureFolder;
   private readonly buildBGACameraFolder = buildBGACameraFolder;
@@ -510,26 +509,30 @@ export class OptionsDialog {
       parent.addFolder({ title: folder.title });
     const tabs = gui.addTab({ pages: OPTIONS_TABS.map((title) => ({ title })) });
     this.topTabs = tabs;
-    const [play, view, keys, skin, audio, cameraTab, library, leaderboard, advanced] = tabs.pages;
-    if (!play || !view || !keys || !skin || !audio || !cameraTab || !library || !leaderboard || !advanced) return;
+    const [play, view, keys, skin, audio, cameraTab, library, captureTab, leaderboard, advanced] = tabs.pages;
+    if (
+      !play ||
+      !view ||
+      !keys ||
+      !skin ||
+      !audio ||
+      !cameraTab ||
+      !library ||
+      !captureTab ||
+      !leaderboard ||
+      !advanced
+    )
+      return;
     // Tabs in the order a session uses them: how to play and what the lanes show, the keys, how it looks and sounds,
-    // the camera in the BGA frame, the library (loading, records, the select screen's list, courses and capturing a play), the Leaderboard, then
+    // the camera in the BGA frame, the library (loading, records, the select screen's list and courses), capturing a play, the Leaderboard, then
     // the advanced settings. The sections are made first, top to bottom, since the Play options fill the View and
     // Select folders on other tabs.
     const playOptions = addSection(play, OPTION_FOLDERS.playOptions);
     const viewFolder = addSection(view, OPTION_FOLDERS.view);
-    // The status line shows long load and playback messages read-only; `setStatus` refreshes it at once.
-    this.statusController = library.addBinding(this.guiState, 'status', {
-      label: 'Status',
-      readonly: true,
-      multiline: true,
-      rows: 3,
-    });
-    this.statusController.element.classList.add('status-row');
     this.buildLibraryFolder(addSection(library, OPTION_FOLDERS.library), addFolder);
     const select = addSection(library, OPTION_FOLDERS.select);
     this.buildCourseFolder(addSection(library, OPTION_FOLDERS.course));
-    this.buildCaptureFolder(addSection(library, OPTION_FOLDERS.capture));
+    this.buildCaptureFolder(addSection(captureTab, OPTION_FOLDERS.capture));
     const { practice, replay } = this.buildPlayOptionsFolder(playOptions, viewFolder, select);
     this.buildTempoFolder(addFolder(practice, OPTION_FOLDERS.tempo));
     this.buildReplayViewFolder(addFolder(replay, OPTION_FOLDERS.replayView));
@@ -624,9 +627,7 @@ export class OptionsDialog {
     this.ghostStatusController?.refresh();
   }
   /** Repaints the status row with the status line just set. */
-  public refreshStatus(): void {
-    this.statusController?.refresh();
-  }
+  public refreshStatus(): void {}
   /** Repaints the "Hi-speed" slider with a hi-speed set elsewhere (the select screen, the play's keys). */
   public refreshJudgeTiming(): void {
     this.judgeTimingController?.refresh();

@@ -47,6 +47,7 @@ export const OPTIONS_TABS = [
   'Audio',
   'Camera',
   'Library',
+  'Capture',
   'Leaderboard',
   'Advanced',
 ] as const;
