@@ -108,7 +108,7 @@ const FINDING_NAMES: Readonly<Record<string, string>> = {
   'any-key': 'ANY KEY',
   'judge-window-override': 'JUDGE WINDOW',
   'custom-judge': 'CUSTOM JUDGE',
-  'bpm-guide': 'BPM GUIDE',
+  'bpm-guide': 'Guide: BPM',
   'hs-fix-constant': 'HS-FIX CONSTANT',
   practice: 'PRACTICE',
   'lr2-add-notes': 'ADD NOTES',

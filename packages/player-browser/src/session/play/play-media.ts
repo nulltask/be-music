@@ -53,6 +53,7 @@ export interface PlayMediaContext {
       | 'nonstop'
       | 'bgaTranscodeMaxLongEdgePx'
       | 'bgaTranscodeUseWebCodecs'
+      | 'bgaTranscodeQuality'
       | 'audio'
       | 'judgeTimingAutoAdjust'
       | 'replay'
@@ -304,6 +305,7 @@ export async function prepareBGA(ctx: PlayMediaContext, onProgress?: (fraction: 
     transcode: {
       maxLongEdgePx: ctx.options.bgaTranscodeMaxLongEdgePx,
       useWebCodecs: ctx.options.bgaTranscodeUseWebCodecs,
+      ...(ctx.options.bgaTranscodeQuality !== undefined ? { quality: ctx.options.bgaTranscodeQuality } : {}),
     },
     tempo: ctx.playbackTempo ?? ctx.tempo,
     isCancelled: () => ctx.disposed,

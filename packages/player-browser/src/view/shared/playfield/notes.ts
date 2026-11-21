@@ -1,5 +1,6 @@
 import { resolveConstantVisibility, resolveConstantAlpha } from '@be-music/player-scene-model';
 import { resolveNoteDisplaySeconds } from '@be-music/player-scene-model';
+import { resolveShownGuideKinds, showsAnyGuide } from '../../../chart/bpm-guide.ts';
 import { renderBPMGuide } from '../bpm-guide.ts';
 import { resolveSideLaneRuns } from './measure-line-runs.ts';
 import { drawLabel } from '../../../stage/draw-label.ts';
@@ -138,13 +139,14 @@ export function renderNotes(ctx: PlayfieldContext, seconds: number, height: numb
       pool: ctx.noteLayerPool,
     });
   }
-  if (ctx.options.bpmGuide && ctx.play.bpmGuideEvents.length > 0) {
+  const guideKinds = resolveShownGuideKinds(ctx.options.bpmGuide, ctx.options.bpmGuideKinds);
+  if (showsAnyGuide(guideKinds) && ctx.play.bpmGuideEvents.length > 0) {
     const first = ctx.play.laneX.values().next().value;
     if (first)
       renderBPMGuide({
         enabled: true,
         events: ctx.play.bpmGuideEvents,
-        ...(ctx.options.bpmGuideKinds !== undefined ? { kinds: ctx.options.bpmGuideKinds } : {}),
+        kinds: guideKinds,
         ...(ctx.skinBinding?.guideLabelStyle !== undefined ? { style: ctx.skinBinding.guideLabelStyle } : {}),
         window: drawWindow,
         distance: beatDistance,

@@ -23,21 +23,6 @@ export const OPTIONS_HELP_JA = html`
       </li>
     </ul>
     <section class="help-menu-folder">
-      <h4 class="help-menu-folder-title">最上部</h4>
-      <p class="help-menu-note">Library タブの最上部。</p>
-      <dl class="help-menu-items">
-        <dt>Status</dt>
-        <dd>今の状態の表示 (読み取り専用)。</dd>
-        <dt>Open folder</dt>
-        <dd>譜面やスキンのフォルダを選んで読み込みます。ドロップと同じ扱いです。</dd>
-        <dt>Open files (ZIP / replay)</dt>
-        <dd>
-          譜面の ZIP アーカイブ、または再生するリプレイ (<code>*.bmplay.json</code>、コースは
-          <code>*.bmcourse.json</code>) を選びます。
-        </dd>
-      </dl>
-    </section>
-    <section class="help-menu-folder">
       <h4 class="help-menu-folder-title">Play options</h4>
       <p class="help-menu-note">
         特に書かない限りプレイ中は変えられません。譜面や表示を変えるだけのオプション (LR2・beatoraja・AC と付いたもの)
@@ -394,16 +379,17 @@ export const OPTIONS_HELP_JA = html`
         <dd>BGA をスキンの通常の枠と大きい枠のどちらに描くか。</dd>
         <dt>Score graph</dt>
         <dd>プレイ中にスキンのスコアグラフを表示します。</dd>
-        <dt>BPM GUIDE (beatoraja)</dt>
-        <dd>これから来る BPM の変化をレーン上に表示します。</dd>
         <dt>Guide: BPM</dt>
-        <dd>BPM GUIDE がオンの間、BPM の変化にラベルを付けます。既定はオンで、プレイ中も切り替えられます。</dd>
+        <dd>
+          これから来る BPM の変化にレーン上でラベルを付けます。beatoraja の BPM GUIDE で、BPM
+          が変化する譜面ではライトアシストになります。既定はオフで、プレイ開始時に確定します。
+        </dd>
         <dt>Guide: STOP</dt>
-        <dd>BPM GUIDE がオンの間、STOP に停止時間のラベルを付けます。既定はオンです。</dd>
+        <dd>STOP に停止時間のラベルを付けます。既定はオフで、プレイ中も切り替えられます。</dd>
         <dt>Guide: SCROLL</dt>
-        <dd>BPM GUIDE がオンの間、<code>#SCROLL</code> の変化に倍率のラベルを付けます（Be-Music）。既定はオフです。</dd>
+        <dd><code>#SCROLL</code> の変化に倍率のラベルを付けます（Be-Music）。既定はオフです。</dd>
         <dt>Guide: SPEED</dt>
-        <dd>BPM GUIDE がオンの間、<code>#SPEED</code> の変化に倍率のラベルを付けます（Be-Music）。既定はオフです。</dd>
+        <dd><code>#SPEED</code> の変化に倍率のラベルを付けます（Be-Music）。既定はオフです。</dd>
         <dt>BPM change warning (AC)</dt>
         <dd>
           BPM が変わる 2 秒前から、レーン上の箱に
@@ -487,7 +473,9 @@ export const OPTIONS_HELP_JA = html`
         </dd>
         <dt>Built-in skin controls</dt>
         <dd>
-          内蔵スキンの画面がどちらのキー操作に従うか: LR2 か beatoraja。LR2 スキンと beatoraja
+          内蔵スキンの画面がどちらの操作に従うか: LR2 か
+          beatoraja。選ぶと、下の画面の操作のキーをそのキー設定で上書きします
+          (自分で変えたキーが戻るときは先に確認します)。LR2 スキンと beatoraja
           スキンは常にそれぞれのキー操作に従います。
         </dd>
         ${screenKeyHelp('ja')}
@@ -552,7 +540,7 @@ export const OPTIONS_HELP_JA = html`
           キャンバスを描く解像度 (0.5× から画面のピクセル比まで)。フレームレートが落ちるときは下げます。1×
           未満は画がぼやけますが、1× でも追いつかない GPU 向けです。
         </dd>
-        <dt>Auto-detect resolution</dt>
+        <dt>Use the best resolution</dt>
         <dd>表示中の画面で解像度ごとにフレームレートを測り、保てるいちばん高い解像度にします。</dd>
         <dt>Renderer (applies on reload)</dt>
         <dd>
@@ -624,12 +612,13 @@ export const OPTIONS_HELP_JA = html`
         <dd>一度だけブラウザにカメラの許可を求め、一覧にカメラの名前が出るようにします。カメラはすぐ止めます。</dd>
         <dt>Mirror camera</dt>
         <dd>映像を左右反転します。手元を写すときに必要になることがあります。</dd>
-        <dt>Preview camera</dt>
+        <dt>Camera resolution</dt>
         <dd>
-          選んだカメラを、BGA
-          の枠と同じ向きでここに映します。プレイの前に画角を合わせるのに使います。カメラはプレビューの間だけ動き、Stop
-          preview を押す、このタブを離れる、Options を閉じる、のいずれかで止まります。
+          カメラに求める映像の大きさ。カメラのまま (既定)、480p、720p、1080p
+          から選びます。対応しないカメラは近い大きさで開きます。
         </dd>
+        <dt>Camera aspect ratio</dt>
+        <dd>カメラに求める映像の縦横比。カメラのまま (既定)、4:3、16:9、正方形から選びます。</dd>
       </dl>
     </section>
     <section class="help-menu-folder">
@@ -652,7 +641,7 @@ export const OPTIONS_HELP_JA = html`
           既定はオンです。Bemuse 音楽サーバーの曲を、Bemuse
           と同じくサーバーが決めた音量で鳴らします。オフにすると譜面そのままの音量で鳴らします。プレイ中は変えられません。
         </dd>
-        <dt>Auto-save replays</dt>
+        <dt>Auto-download replays</dt>
         <dd>プレイが終わるたびにリプレイをダウンロードします。</dd>
         <dt>Record device names in replays</dt>
         <dd>
@@ -660,8 +649,6 @@ export const OPTIONS_HELP_JA = html`
           もリプレイに記録します。キーボードとタッチには名前がありません。名前はリプレイと一緒に、Leaderboard
           への送信にも含まれます。判定には使いません。
         </dd>
-        <dt>Clear best records</dt>
-        <dd>このブラウザのベスト記録を消します (確認があります)。</dd>
         <dt>Local data…</dt>
         <dd>
           プレイヤーがこのブラウザに保存しているもの (localStorage のキー、自作コース・リプレイスロット・解析済み譜面の
@@ -758,6 +745,11 @@ export const OPTIONS_HELP_JA = html`
         <dd>
           (BGA video transcode) ブラウザに WebCodecs のエンコーダーがあれば BGA
           の動画をそれで変換します。次の譜面から反映されます。
+        </dd>
+        <dt>Transcode quality</dt>
+        <dd>
+          BGA 動画を変換するときの画質 (ビットレート)。低・標準 (既定)・高・最高から選びます。録画の Video quality
+          と同じ段階です。次に読み込む譜面から反映します。
         </dd>
         <dt>Resize</dt>
         <dd>(BGA video transcode) BGA の動画を縮小するサイズ。Off なら縮小しません。次の譜面から反映されます。</dd>

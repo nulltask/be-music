@@ -22,6 +22,40 @@ export const BGA_STREAM_MAX_FRAME_RATE = 60;
  * `flags=fast_bilinear` picks the cheapest scaler. Commas inside `min()` are escaped (`\\,`) so the filter-graph parser
  * doesn't read them as filter-chain separators.
  */
+/** How much bitrate a BGA video transcode spends: smaller and faster, or sharper. `standard` is the long-standing one. */
+export type BGATranscodeQuality = 'low' | 'standard' | 'high' | 'very-high';
+
+/** Every quality, smallest first. */
+export const BGA_TRANSCODE_QUALITIES: readonly BGATranscodeQuality[] = ['low', 'standard', 'high', 'very-high'];
+
+const QUALITY_CRF: Readonly<Record<BGATranscodeQuality, number>> = { low: 34, standard: 30, high: 25, 'very-high': 21 };
+const QUALITY_BITS_PER_PIXEL: Readonly<Record<BGATranscodeQuality, number>> = {
+  low: 0.05,
+  standard: 0.08,
+  high: 0.15,
+  'very-high': 0.25,
+};
+
+/** libx264's `-crf` for `quality`: 30 at `standard` (`ultrafast`, BGA art tolerates it), lower for sharper. */
+export function resolveBGATranscodeCRF(quality: BGATranscodeQuality = 'standard'): number {
+  return QUALITY_CRF[quality] ?? QUALITY_CRF.standard;
+}
+
+/**
+ * The H.264 bitrate a WebCodecs encode spends at `quality`: bits per pixel per frame (0.08 at `standard`, about what
+ * libx264 `-crf 30 -preset ultrafast` spends: ~4 Mb/s at 1080p30, ~1 Mb/s at 480p30), at least 500 kb/s for the tiny
+ * 256-px BGA.
+ */
+export function estimateBGATranscodeBitrate(
+  width: number,
+  height: number,
+  frameRate: number,
+  quality: BGATranscodeQuality = 'standard',
+): number {
+  const bitsPerPixel = QUALITY_BITS_PER_PIXEL[quality] ?? QUALITY_BITS_PER_PIXEL.standard;
+  return Math.max(500_000, Math.round(width * height * frameRate * bitsPerPixel));
+}
+
 export function buildScaleFilterArg(maxLongEdge: number): string {
   return `scale='min(iw\\,${maxLongEdge})':'min(ih\\,${maxLongEdge})':force_original_aspect_ratio=decrease:force_divisible_by=2:flags=fast_bilinear`;
 }
@@ -38,6 +72,8 @@ export interface BGAStreamArgsOptions {
   mode: BGAStreamOutput;
   /** Long-edge cap in pixels, as {@link buildScaleFilterArg} takes it; `undefined` keeps the source size. */
   maxLongEdge?: number;
+  /** The libx264 encode's quality (`-crf`), `standard` by default. */
+  quality?: BGATranscodeQuality;
 }
 
 /**
@@ -45,7 +81,7 @@ export interface BGAStreamArgsOptions {
  * the frame rate at {@link BGA_STREAM_MAX_FRAME_RATE}, and emit a constant frame rate, so frame `n` is shown at `n`
  * frame periods: y4m has no timestamps, and a variable-rate source keeps its timing through repeated frames.
  */
-export function buildBGAStreamArgs({ input, output, mode, maxLongEdge }: BGAStreamArgsOptions): string[] {
+export function buildBGAStreamArgs({ input, output, mode, maxLongEdge, quality }: BGAStreamArgsOptions): string[] {
   const scale = maxLongEdge
     ? buildScaleFilterArg(maxLongEdge)
     : 'scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=fast_bilinear';
@@ -67,7 +103,7 @@ export function buildBGAStreamArgs({ input, output, mode, maxLongEdge }: BGAStre
     '-tune',
     'fastdecode,zerolatency',
     '-crf',
-    '30',
+    String(resolveBGATranscodeCRF(quality)),
     '-pix_fmt',
     'yuv420p',
     '-force_key_frames',

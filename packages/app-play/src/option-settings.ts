@@ -75,8 +75,8 @@ export interface OptionSettings {
   compressorMaster: boolean;
   bgaResizeMaxEdgePx: number;
   bgaUseWebCodecs: boolean;
+  bgaTranscodeQuality: RecordingQuality;
   showInvisibleNotes: boolean;
-  guideBPM: boolean;
   guideStop: boolean;
   guideScroll: boolean;
   guideSpeed: boolean;
@@ -357,8 +357,17 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   assign(settings, 'compressorBGM', booleanOf(raw.compressorBGM));
   assign(settings, 'compressorMaster', booleanOf(raw.compressorMaster));
   assign(settings, 'showInvisibleNotes', booleanOf(raw.showInvisibleNotes));
-  assign(settings, 'guideBPM', booleanOf(raw.guideBPM));
-  assign(settings, 'guideStop', booleanOf(raw.guideStop));
+  if (
+    typeof raw.bgaTranscodeQuality === 'string' &&
+    parseRecordingQuality(raw.bgaTranscodeQuality) === raw.bgaTranscodeQuality
+  )
+    settings.bgaTranscodeQuality = raw.bgaTranscodeQuality;
+  // Guide: STOP was part of BPM GUIDE before it had its own switch: a document without one keeps STOPs with BPM.
+  assign(
+    settings,
+    'guideStop',
+    booleanOf(raw.guideStop) ?? (raw.guideBPM === undefined ? booleanOf(raw.bpmGuide) : undefined),
+  );
   assign(settings, 'guideScroll', booleanOf(raw.guideScroll));
   assign(settings, 'guideSpeed', booleanOf(raw.guideSpeed));
   assign(settings, 'autoSaveReplay', booleanOf(raw.autoSaveReplay));
@@ -702,8 +711,8 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('compressorMaster');
   assignState('bgaResizeMaxEdgePx');
   assignState('bgaUseWebCodecs');
+  assignState('bgaTranscodeQuality');
   assignState('showInvisibleNotes');
-  assignState('guideBPM');
   assignState('guideStop');
   assignState('guideScroll');
   assignState('guideSpeed');
@@ -885,8 +894,8 @@ export function captureOptionSettings(
     compressorMaster: state.compressorMaster,
     bgaResizeMaxEdgePx: state.bgaResizeMaxEdgePx,
     bgaUseWebCodecs: state.bgaUseWebCodecs,
+    bgaTranscodeQuality: state.bgaTranscodeQuality,
     showInvisibleNotes: state.showInvisibleNotes,
-    guideBPM: state.guideBPM,
     guideStop: state.guideStop,
     guideScroll: state.guideScroll,
     guideSpeed: state.guideSpeed,

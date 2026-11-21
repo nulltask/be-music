@@ -17,6 +17,7 @@ import type { GaugePick, RulesetId } from '@be-music/player-engine/ruleset';
 import type { JudgeTimingAutoAdjust } from '@be-music/player-engine/display';
 import type { GuideSound, ResolvedPlayChart } from '@be-music/player-engine';
 import type { CompressorParams, TunableCompressor } from '../../runtime/audio-bus.ts';
+import type { BGATranscodeQuality } from '../../media/bga-stream/ffmpeg-args.ts';
 import type { BPMGuideKinds } from '../../chart/bpm-guide.ts';
 import type { AudioService } from '../../runtime/audio-service.ts';
 import type { ControlKeyOverrides, ControlScheme } from '../controls/control-buttons.ts';
@@ -147,8 +148,8 @@ export interface PlaySessionOptions {
   onJudgeTimingChange?: (judgeTimingMs: number) => void;
   bpmGuide?: boolean;
   /**
-   * Which labels BPM GUIDE shows (a viewing preference, followed live): BPM changes and STOPs, as beatoraja's guide, by
-   * default; `#SCROLL` and `#SPEED` changes are Be-Music's.
+   * Which of the STOP, `#SCROLL` and `#SPEED` guide labels show (viewing preferences, followed live). The BPM labels
+   * follow {@link bpmGuide} alone (`resolveShownGuideKinds`); without this, STOPs follow it too, as beatoraja's guide.
    */
   bpmGuideKinds?: BPMGuideKinds;
   /**
@@ -438,6 +439,8 @@ export interface PlaySessionOptions {
    * parameters, or the raw decoded frames would exceed the in-memory budget.
    */
   bgaTranscodeUseWebCodecs?: boolean;
+  /** How much bitrate a BGA video transcode spends (libx264's `-crf`, WebCodecs' bitrate), `standard` by default. */
+  bgaTranscodeQuality?: BGATranscodeQuality;
   /**
    * Debug overlay — when true, the renderer paints a thin green bar at every invisible / keysound note's chart position
    * (BMS channels `3x` / `4x`, the chart author's hidden keysound layout). The bars never affect gameplay or judgement;

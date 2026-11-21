@@ -1,7 +1,9 @@
-import { selectBinding } from '../../pane-controls.ts';
+import { paneOptions, selectBinding } from '../../pane-controls.ts';
+import { onPlayerLangChange, playerLang } from '../../player-copy.ts';
+import { recordingQualityOptions } from '../../recording-format-choice.ts';
+import { optionLabel } from './labels.ts';
 // The Options dialog's Library & records folder. It is built with the dialog as `this` (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
-import { storeChartBestRecords } from '../../chart-best-records.ts';
 import { LocalDataPanel } from '../../local-data-panel.ts';
 import { parseURLMediaParams } from '../../url-load.ts';
 import { mountBemuseServerManager } from './bemuse-servers.ts';
@@ -39,8 +41,6 @@ export function buildLibraryFolder(
   });
   const [local, bemuse, tables] = sources.pages;
   if (local === undefined || bemuse === undefined || tables === undefined) return;
-  local.addButton({ title: 'Open folder' }).on('click', () => this.guiState['openFolder']());
-  local.addButton({ title: 'Open files (ZIP / replay)' }).on('click', () => this.guiState['openFiles']());
   const folderManager = document.createElement('div');
   folderManager.dataset.rememberedFolderManager = '';
   local.addElement(folderManager);
@@ -92,7 +92,7 @@ export function buildLibraryFolder(
   // The value is LATCHED at song start (`lockReplayOptionsForPlay`) and the controller is disabled while a song
   // is playing — replay options cannot change mid-play.
   this.replaySaveController = library
-    .addBinding(this.guiState, 'autoSaveReplay', { label: 'Auto-save replays' })
+    .addBinding(this.guiState, 'autoSaveReplay', { label: 'Auto-download replays' })
     .on('change', ({ value }) => {
       this.guiState.autoSaveReplay = value;
     });
@@ -111,22 +111,6 @@ export function buildLibraryFolder(
   for (const slot of [1, 2, 3, 4] as const) {
     selectBinding(slots, this.guiState, `replaySlotAutoSave${slot}`, `Slot ${slot} auto-save`, REPLAY_AUTO_SAVE_LABELS);
   }
-  library.addButton({ title: 'Clear best records' }).on('click', () => {
-    if (this.records.chartBestRecords.size === 0) {
-      this.setStatus('No best records to clear');
-      return;
-    }
-    if (
-      !window.confirm(
-        `Clear ${this.records.chartBestRecords.size} best record(s), of every judge ruleset? This cannot be undone.`,
-      )
-    ) {
-      return;
-    }
-    this.records.chartBestRecords.clear();
-    storeChartBestRecords(this.records.chartBestRecords);
-    this.setStatus('Best records cleared');
-  });
   // What the player keeps in this browser, read-only; built on first use.
   let localData: LocalDataPanel | undefined;
   library.addButton({ title: 'Local data…' }).on('click', () => (localData ??= new LocalDataPanel()).open());
@@ -159,6 +143,25 @@ export function buildBGATranscodeFolder(this: OptionsDialog, transcode: OptionCo
   if (!webCodecsSupported) {
     webCodecsController.disabled = true;
   }
+  // The bitrate the transcode spends, as the Capture tab's Video quality picks a recording's: libx264's -crf, or the
+  // WebCodecs encoder's bitrate. Standard is the long-standing one.
+  const quality = selectBinding(
+    transcode,
+    this.guiState,
+    'bgaTranscodeQuality',
+    'Transcode quality',
+    recordingQualityOptions(),
+  ).on('change', ({ value }) => {
+    this.guiState.bgaTranscodeQuality = value;
+  });
+  const relabelQualities = (): void => {
+    quality.options = paneOptions(recordingQualityOptions()).map((choice) => ({
+      ...choice,
+      text: optionLabel(choice.text, playerLang()),
+    }));
+  };
+  relabelQualities();
+  onPlayerLangChange(relabelQualities);
   selectBinding(transcode, this.guiState, 'bgaResizeMaxEdgePx', 'Resize', {
     'Off (preserve resolution)': 0,
     '256 px (BMS spec)': 256,

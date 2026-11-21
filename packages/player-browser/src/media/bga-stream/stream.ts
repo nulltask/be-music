@@ -6,7 +6,13 @@
  * and a video that seeks back finds them again. Compressed, they are a few megabytes for a typical BGA.
  */
 import { logger } from '../../logger.ts';
-import { FFMPEG_CORE_URL, FFMPEG_WASM_URL, readAVCCodecString, type BGAStreamOutput } from './ffmpeg-args.ts';
+import {
+  FFMPEG_CORE_URL,
+  FFMPEG_WASM_URL,
+  readAVCCodecString,
+  type BGAStreamOutput,
+  type BGATranscodeQuality,
+} from './ffmpeg-args.ts';
 import { canShareFlowControl, createFlowCounter } from './flow.ts';
 import type { BGADecodeStartMessage, BGAEncodeStartMessage, BGAStreamWorkerMessage } from './protocol.ts';
 
@@ -48,6 +54,8 @@ export type BGAVideoStreamState = 'running' | 'done' | 'failed' | 'cancelled';
 
 export interface BGAVideoStreamOptions {
   maxLongEdge?: number;
+  /** How much bitrate the encode spends, `standard` by default. */
+  quality?: BGATranscodeQuality;
   /**
    * Encode with WebCodecs where it can — it needs a cross-origin isolated page for the flow control (`flow.ts`) —
    * otherwise (or when it fails) the core's libx264 encodes.
@@ -167,6 +175,7 @@ export class BGAVideoStream {
           inputName: `bga-input${pickInputExtension(this.path)}`,
           mode,
           ...(this.options.maxLongEdge !== undefined ? { maxLongEdge: this.options.maxLongEdge } : {}),
+          ...(this.options.quality !== undefined ? { quality: this.options.quality } : {}),
         };
         let producer = decoder;
         if (mode === 'raw') {
@@ -177,7 +186,12 @@ export class BGAVideoStream {
           const flow = createFlowCounter();
           start.framePort = channel.port1;
           start.flow = flow;
-          const encodeStart: BGAEncodeStartMessage = { type: 'start', framePort: channel.port2, flow };
+          const encodeStart: BGAEncodeStartMessage = {
+            type: 'start',
+            framePort: channel.port2,
+            flow,
+            ...(this.options.quality !== undefined ? { quality: this.options.quality } : {}),
+          };
           encoder.postMessage(encodeStart, [channel.port2]);
           // The decoder reports only failures here: its frames went to the encoder, which reports the output.
           decoder.onmessage = (event) => {
@@ -247,7 +261,7 @@ export function canStreamBGAVideo(): boolean {
  * holds may be cancelled by its last other subscriber leaving.
  */
 export function openBGAVideoStream(source: Blob, path: string, options: BGAVideoStreamOptions): BGAVideoStream {
-  const key = `${options.maxLongEdge ?? 0}:${options.useWebCodecs ? 'webcodecs' : 'libx264'}`;
+  const key = `${options.maxLongEdge ?? 0}:${options.useWebCodecs ? 'webcodecs' : 'libx264'}:${options.quality ?? 'standard'}`;
   let byOptions = streams.get(source);
   if (!byOptions) {
     byOptions = new Map();

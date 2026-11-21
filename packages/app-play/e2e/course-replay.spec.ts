@@ -5,7 +5,7 @@ import { COURSES, expect, openWithLibrary, test, type Player } from './support.t
 /**
  * A course replay (`*.bmcourse.json`) dropped on the built-in family: it plays the recorded run back as its course, its
  * stage results and its course result marked as a replay, and keeps nothing. Each run here is recorded first, with
- * "Auto-save replays" on, from the course's own bar.
+ * "Auto-download replays" on, from the course's own bar.
  */
 
 const RECORDS_KEY = 'be-music.chart-best-records';
@@ -19,7 +19,7 @@ async function startCourse(player: Player, title: string, auto: boolean): Promis
 }
 
 /**
- * The course replay the page downloads next ("Auto-save replays" on): it is saved as the course result shows, which
+ * The course replay the page downloads next ("Auto-download replays" on): it is saved as the course result shows, which
  * may be while the previous result is being left, so the wait starts before that.
  */
 async function nextCourseReplayDownload(player: Player): Promise<string> {
@@ -48,7 +48,7 @@ test('a dropped GRADE course replay plays the run back to where it failed, with 
   // Four stages played: the run recorded, then its replay.
   test.setTimeout(360_000);
   await openWithLibrary(player);
-  await player.setOption(['Library & records'], 'Auto-save replays', true);
+  await player.setOption(['Library & records'], 'Auto-download replays', true);
   // A manual run with no input: Fixture A clears, the dense Fixture D empties the course gauge, the run stops there.
   await startCourse(player, 'FIX GRADE FAIL', false);
   await player.waitForResult(0);
@@ -135,7 +135,7 @@ test('a dropped NONSTOP course replay plays its stitched run back as one chart, 
   player,
 }) => {
   await openWithLibrary(player);
-  await player.setOption(['Library & records'], 'Auto-save replays', true);
+  await player.setOption(['Library & records'], 'Auto-download replays', true);
   const downloaded = nextCourseReplayDownload(player);
   await startCourse(player, 'FIX NONSTOP', true);
   await player.waitForResult(0);

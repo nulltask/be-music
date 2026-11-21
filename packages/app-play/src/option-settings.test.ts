@@ -57,6 +57,15 @@ describe('parseOptionSettingsDocument', () => {
     expect((document?.settings as Record<string, unknown> | undefined)?.judgedNoteDisplay).toBeUndefined();
   });
 
+  test('keeps STOP labels for a player who had BPM GUIDE on before Guide: STOP had its own switch', () => {
+    const parse = (settings: Record<string, unknown>) =>
+      parseOptionSettingsDocument(JSON.stringify({ version: 0, updatedAt: 10, settings }))?.settings.guideStop;
+    expect(parse({ bpmGuide: true })).toBe(true);
+    expect(parse({ bpmGuide: false })).toBe(false);
+    expect(parse({ bpmGuide: true, guideStop: false })).toBe(false);
+    expect(parse({})).toBeUndefined();
+  });
+
   test('drops the removed Judged notes setting a browser saved before', () => {
     const document = parseOptionSettingsDocument(
       JSON.stringify({ version: 0, updatedAt: 10, settings: { judgedNoteDisplay: 'HIDE', autoPlay: true } }),
@@ -160,8 +169,8 @@ describe('captureOptionSettings', () => {
       compressorMaster: false,
       bgaResizeMaxEdgePx: 720,
       bgaUseWebCodecs: false,
+      bgaTranscodeQuality: 'high',
       showInvisibleNotes: true,
-      guideBPM: false,
       guideStop: true,
       guideScroll: true,
       guideSpeed: false,

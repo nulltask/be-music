@@ -130,6 +130,8 @@ export interface PlayerGUIState extends PlayTempoSettings {
    * would blow the memory budget — the transcode then silently falls back to the ffmpeg encode path.
    */
   bgaUseWebCodecs: boolean;
+  /** "Quality" of the BGA video transcode: the bitrate it spends (`low`, `standard`, `high`, `very-high`). */
+  bgaTranscodeQuality: import('@be-music/player-browser/recording').RecordingQuality;
   /**
    * Debug overlay — when true, every invisible / keysound note the chart authors on channels `3x` / `4x` paints as the
    * 9-keys POP green note (or a flat green bar fallback) in its assigned playable lane during gameplay. Useful for
@@ -141,22 +143,12 @@ export interface PlayerGUIState extends PlayTempoSettings {
    */
   showInvisibleNotes: boolean;
   /**
-   * Which labels BPM GUIDE shows while it is on: BPM changes, STOPs (both beatoraja's), and Be-Music's `#SCROLL` and
-   * `#SPEED` changes. Viewing preferences, live during a play; they change no record or replay.
+   * Guide: STOP, SCROLL and SPEED: labels on STOPs and on Be-Music's `#SCROLL` and `#SPEED` changes. Viewing
+   * preferences, live during a play; they change no record or replay. Guide: BPM is the play option `bpmGuide`.
    */
-  guideBPM: boolean;
   guideStop: boolean;
   guideScroll: boolean;
   guideSpeed: boolean;
-  /**
-   * Single-note visibility after a judgement lands.
-   *
-   * - `'KEEP_SCROLLING'` (default) — a judged note stays until its own time, so one hit early keeps scrolling down to
-   *   the judgement line, as in LR2 and beatoraja.
-   * - `'HIDE'` — a judged note disappears the moment it is judged.
-   *
-   * Long notes are unaffected — they stay until their end.
-   */
   /**
    * The replay ghost shown with the play (`services/ghost.ts`): `'OFF'` (default), or the replay it plays — `'OWN_BEST'`
    * (the player's best on the chart), a replay slot, the Leaderboard's top run, or a picked replay file. Latched at song
