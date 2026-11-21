@@ -80,8 +80,8 @@ describe('describeRecordConsequence', () => {
 
   test('a chart-dependent option is worded as conditional after what holds on any chart', () => {
     expect(describeRecordConsequence(state({ bpmGuide: true, judgeRuleset: 'beatoraja' }))).toBe(
-      'Record: score, lamp and play count are saved · Leaderboard: main board — on a chart BPM GUIDE changes: ' +
-        'LIGHT ASSIST (BPM GUIDE): LIGHT ASSIST EASY lamp and play count only, no score · Leaderboard: assisted board',
+      'Record: score, lamp and play count are saved · Leaderboard: main board — on a chart Guide: BPM changes: ' +
+        'LIGHT ASSIST (Guide: BPM): LIGHT ASSIST EASY lamp and play count only, no score · Leaderboard: assisted board',
     );
     expect(describeRecordConsequence(state({ autoScratch1P: true, longNoteModifier: 'REMOVE' }))).toContain(
       '— on a chart LN REMOVE changes: ASSIST (AUTO SCRATCH, LN REMOVE): lamp up to EASY',

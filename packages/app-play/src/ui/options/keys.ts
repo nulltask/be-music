@@ -92,9 +92,10 @@ export function buildKeyConfigFolder(this: OptionsDialog, folder: OptionContaine
   });
   const groups = Object.keys(GROUP_TITLES) as LaneKeyGroup[];
   const pages = folder.addTab({
-    pages: [...groups.map((group) => ({ title: GROUP_TITLES[group] })), { title: SCREENS_PAGE_TITLE }],
+    // The screens' keys first, then each lane group's: 5 / 7 / 10 / 14 KEY, then 9 KEY.
+    pages: [{ title: SCREENS_PAGE_TITLE }, ...groups.map((group) => ({ title: GROUP_TITLES[group] }))],
   }).pages;
-  const screensPage = pages[groups.length];
+  const screensPage = pages[0];
   if (screensPage !== undefined) repaintActionKeys = buildActionKeyPage.call(this, screensPage);
   const views: (() => void)[] = [];
   let waiting: (KeyConfigRow & { refused?: boolean }) | undefined;
@@ -200,7 +201,7 @@ export function buildKeyConfigFolder(this: OptionsDialog, folder: OptionContaine
   };
 
   groups.forEach((group, groupIndex) => {
-    const page = pages[groupIndex];
+    const page = pages[groupIndex + 1];
     if (page === undefined) return;
     if (group === 'beat') {
       // Two panes side by side, 1P and 2P, each with its side's lanes, then its START and SELECT, which go with the

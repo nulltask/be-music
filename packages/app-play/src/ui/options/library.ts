@@ -1,7 +1,6 @@
 import { selectBinding } from '../../pane-controls.ts';
 // The Options dialog's Library & records folder. It is built with the dialog as `this` (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
-import { storeChartBestRecords } from '../../chart-best-records.ts';
 import { LocalDataPanel } from '../../local-data-panel.ts';
 import { parseURLMediaParams } from '../../url-load.ts';
 import { mountBemuseServerManager } from './bemuse-servers.ts';
@@ -39,8 +38,6 @@ export function buildLibraryFolder(
   });
   const [local, bemuse, tables] = sources.pages;
   if (local === undefined || bemuse === undefined || tables === undefined) return;
-  local.addButton({ title: 'Open folder' }).on('click', () => this.guiState['openFolder']());
-  local.addButton({ title: 'Open files (ZIP / replay)' }).on('click', () => this.guiState['openFiles']());
   const folderManager = document.createElement('div');
   folderManager.dataset.rememberedFolderManager = '';
   local.addElement(folderManager);
@@ -92,7 +89,7 @@ export function buildLibraryFolder(
   // The value is LATCHED at song start (`lockReplayOptionsForPlay`) and the controller is disabled while a song
   // is playing — replay options cannot change mid-play.
   this.replaySaveController = library
-    .addBinding(this.guiState, 'autoSaveReplay', { label: 'Auto-save replays' })
+    .addBinding(this.guiState, 'autoSaveReplay', { label: 'Auto-download replays' })
     .on('change', ({ value }) => {
       this.guiState.autoSaveReplay = value;
     });
@@ -111,22 +108,6 @@ export function buildLibraryFolder(
   for (const slot of [1, 2, 3, 4] as const) {
     selectBinding(slots, this.guiState, `replaySlotAutoSave${slot}`, `Slot ${slot} auto-save`, REPLAY_AUTO_SAVE_LABELS);
   }
-  library.addButton({ title: 'Clear best records' }).on('click', () => {
-    if (this.records.chartBestRecords.size === 0) {
-      this.setStatus('No best records to clear');
-      return;
-    }
-    if (
-      !window.confirm(
-        `Clear ${this.records.chartBestRecords.size} best record(s), of every judge ruleset? This cannot be undone.`,
-      )
-    ) {
-      return;
-    }
-    this.records.chartBestRecords.clear();
-    storeChartBestRecords(this.records.chartBestRecords);
-    this.setStatus('Best records cleared');
-  });
   // What the player keeps in this browser, read-only; built on first use.
   let localData: LocalDataPanel | undefined;
   library.addButton({ title: 'Local data…' }).on('click', () => (localData ??= new LocalDataPanel()).open());

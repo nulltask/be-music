@@ -189,7 +189,7 @@ In the browser player:
 - Every play screen (`createPlayScene`) hands the recorded log to `on.finish(result, replay)`, and
   `waitForReplay()` waits for the log of a play that was left.
 - The player auto-downloads the log as `<title>-<timestamp>.bmplay.json` when the result scene mounts, controlled by
-  the **Auto-save replays** checkbox in the Options dialog's **Library & records** folder (OFF by default). Replay options are latched at chart start
+  the **Auto-download replays** checkbox in the Options dialog's **Library & records** folder (OFF by default). Replay options are latched at chart start
   and cannot change mid-play — the controls are disabled while a chart is playing, and the values in effect when
   the chart started govern that play.
 
