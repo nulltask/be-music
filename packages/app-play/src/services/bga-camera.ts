@@ -208,6 +208,20 @@ export class BGACameraService {
     }
   }
 
+  /** Sets the picture's resolution and aspect ratio, and opens the camera again with them where it is open. */
+  public setFormat(format: Partial<Pick<BGACameraSettings, 'resolution' | 'aspect'>>): void {
+    this.save({ ...this.settingsValue, ...format });
+    if (this.stream !== undefined) {
+      this.close(this.idleStatus());
+      void this.open();
+    }
+    if (this.previewWanted && this.stream === undefined) {
+      this.closePreview();
+      this.previewProblemValue = undefined;
+      void this.openPreview();
+    }
+  }
+
   public setMirror(mirror: boolean): void {
     this.save({ ...this.settingsValue, mirror });
     if (this.stream !== undefined) this.target?.setBGACamera({ stream: this.stream, mirror });

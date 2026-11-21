@@ -22,7 +22,14 @@ const text = {
 
 describe('parseStoredBGACameraSettings', () => {
   test('reads back what was stored', () => {
-    const settings = { enabled: true, deviceId: 'desk-id', label: 'USB Camera', mirror: true };
+    const settings = {
+      enabled: true,
+      deviceId: 'desk-id',
+      label: 'USB Camera',
+      mirror: true,
+      resolution: '720p' as const,
+      aspect: '1:1' as const,
+    };
     expect(parseStoredBGACameraSettings(serializeBGACameraSettings(settings))).toEqual(settings);
   });
 
@@ -133,5 +140,32 @@ describe('cameraConstraints', () => {
 
   test('asks for any camera with no pick', () => {
     expect(cameraConstraints({ deviceId: '' }, undefined)).toEqual({ audio: false, video: true });
+    expect(cameraConstraints({ deviceId: '', resolution: 'auto', aspect: 'auto' }, undefined)).toEqual({
+      audio: false,
+      video: true,
+    });
+  });
+
+  test('asks for the picked resolution and aspect ratio as ideals', () => {
+    expect(cameraConstraints({ deviceId: '', resolution: '720p', aspect: '4:3' }, undefined)).toEqual({
+      audio: false,
+      video: { height: { ideal: 720 }, width: { ideal: 960 }, aspectRatio: { ideal: 4 / 3 } },
+    });
+    // 16:9 unless an aspect ratio is picked.
+    expect(cameraConstraints({ deviceId: 'old-id', resolution: '1080p' }, desk)).toEqual({
+      audio: false,
+      video: { deviceId: { exact: 'desk-id' }, height: { ideal: 1080 }, width: { ideal: 1920 } },
+    });
+    expect(cameraConstraints({ deviceId: '', aspect: '1:1' }, undefined)).toEqual({
+      audio: false,
+      video: { aspectRatio: { ideal: 1 } },
+    });
+  });
+
+  test("reads an unknown resolution or aspect ratio as the camera's own", () => {
+    expect(parseStoredBGACameraSettings('{"resolution":"8k","aspect":"21:9"}')).toMatchObject({
+      resolution: 'auto',
+      aspect: 'auto',
+    });
   });
 });

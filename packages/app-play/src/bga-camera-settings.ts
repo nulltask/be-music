@@ -14,13 +14,38 @@ export interface BGACameraSettings {
   readonly label: string;
   /** Flip the picture left to right. */
   readonly mirror: boolean;
+  /** The picture's height to ask the camera for; `auto` takes what the camera gives. */
+  readonly resolution: BGACameraResolution;
+  /** The picture's width to height to ask the camera for; `auto` takes what the camera gives. */
+  readonly aspect: BGACameraAspect;
 }
+
+/** The camera resolutions offered: the camera's own, or about 480, 720 or 1080 lines. */
+export type BGACameraResolution = 'auto' | '480p' | '720p' | '1080p';
+export const BGA_CAMERA_RESOLUTIONS: readonly BGACameraResolution[] = ['auto', '480p', '720p', '1080p'];
+
+/** The camera aspect ratios offered: the camera's own, 4:3, 16:9 or square (the BGA frame's shape). */
+export type BGACameraAspect = 'auto' | '4:3' | '16:9' | '1:1';
+export const BGA_CAMERA_ASPECTS: readonly BGACameraAspect[] = ['auto', '4:3', '16:9', '1:1'];
 
 export const DEFAULT_BGA_CAMERA_SETTINGS: BGACameraSettings = {
   enabled: false,
   deviceId: '',
   label: '',
   mirror: false,
+  resolution: 'auto',
+  aspect: 'auto',
+};
+
+const RESOLUTION_HEIGHTS: Readonly<Record<Exclude<BGACameraResolution, 'auto'>, number>> = {
+  '480p': 480,
+  '720p': 720,
+  '1080p': 1080,
+};
+const ASPECT_RATIOS: Readonly<Record<Exclude<BGACameraAspect, 'auto'>, number>> = {
+  '4:3': 4 / 3,
+  '16:9': 16 / 9,
+  '1:1': 1,
 };
 
 /** The stored settings, with the default for anything missing or malformed. */
@@ -39,6 +64,8 @@ export function parseStoredBGACameraSettings(raw: string | null | undefined): BG
     deviceId: typeof record['deviceId'] === 'string' ? record['deviceId'] : '',
     label: typeof record['label'] === 'string' ? record['label'] : '',
     mirror: record['mirror'] === true,
+    resolution: BGA_CAMERA_RESOLUTIONS.find((value) => value === record['resolution']) ?? 'auto',
+    aspect: BGA_CAMERA_ASPECTS.find((value) => value === record['aspect']) ?? 'auto',
   };
 }
 
@@ -48,6 +75,8 @@ export function serializeBGACameraSettings(settings: BGACameraSettings): string 
     deviceId: settings.deviceId,
     label: settings.label,
     mirror: settings.mirror,
+    resolution: settings.resolution,
+    aspect: settings.aspect,
   });
 }
 
@@ -129,14 +158,27 @@ export function cameraChoices(
   return choices;
 }
 
-/** `getUserMedia`'s constraints for `settings`' camera, `camera` being what {@link pickCamera} found. */
+/**
+ * `getUserMedia`'s constraints for `settings`' camera, `camera` being what {@link pickCamera} found. A resolution and
+ * an aspect ratio are asked as `ideal`, so a camera that cannot give them still opens at its nearest.
+ */
 export function cameraConstraints(
-  settings: Pick<BGACameraSettings, 'deviceId'>,
+  settings: Pick<BGACameraSettings, 'deviceId'> & Partial<Pick<BGACameraSettings, 'resolution' | 'aspect'>>,
   camera: CameraDevice | undefined,
 ): MediaStreamConstraints {
   const deviceId = camera?.deviceId ?? settings.deviceId;
-  return {
-    audio: false,
-    video: deviceId !== '' ? { deviceId: { exact: deviceId } } : true,
-  };
+  const video: MediaTrackConstraints = {};
+  if (deviceId !== '') video.deviceId = { exact: deviceId };
+  const height =
+    settings.resolution === undefined || settings.resolution === 'auto'
+      ? undefined
+      : RESOLUTION_HEIGHTS[settings.resolution];
+  const ratio =
+    settings.aspect === undefined || settings.aspect === 'auto' ? undefined : ASPECT_RATIOS[settings.aspect];
+  if (height !== undefined) {
+    video.height = { ideal: height };
+    video.width = { ideal: Math.round(height * (ratio ?? 16 / 9)) };
+  }
+  if (ratio !== undefined) video.aspectRatio = { ideal: ratio };
+  return { audio: false, video: Object.keys(video).length > 0 ? video : true };
 }

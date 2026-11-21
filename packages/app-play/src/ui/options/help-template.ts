@@ -640,11 +640,13 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dd>Asks the browser for the camera once, so the list shows the cameras by name. The camera closes again.</dd>
           <dt>Mirror camera</dt>
           <dd>Flips the picture left to right, as a mirror shows it; a camera filming your hands may need it.</dd>
-          <dt>Preview camera</dt>
+          <dt>Camera resolution</dt>
           <dd>
-            Shows the picked camera here, as the BGA frame would show it, so you can frame it before a play. The camera
-            opens only for the preview, and stops when you press Stop preview, leave this tab or close Options.
+            The picture's size to ask the camera for: the camera's own (default), 480p, 720p or 1080p. A camera that
+            cannot give it opens at its nearest.
           </dd>
+          <dt>Camera aspect ratio</dt>
+          <dd>The picture's shape to ask the camera for: the camera's own (default), 4:3, 16:9 or square.</dd>
         </dl>
       </section>
       <section class="help-menu-folder">

@@ -612,12 +612,13 @@ export const OPTIONS_HELP_JA = html`
         <dd>一度だけブラウザにカメラの許可を求め、一覧にカメラの名前が出るようにします。カメラはすぐ止めます。</dd>
         <dt>Mirror camera</dt>
         <dd>映像を左右反転します。手元を写すときに必要になることがあります。</dd>
-        <dt>Preview camera</dt>
+        <dt>Camera resolution</dt>
         <dd>
-          選んだカメラを、BGA
-          の枠と同じ向きでここに映します。プレイの前に画角を合わせるのに使います。カメラはプレビューの間だけ動き、Stop
-          preview を押す、このタブを離れる、Options を閉じる、のいずれかで止まります。
+          カメラに求める映像の大きさ。カメラのまま (既定)、480p、720p、1080p
+          から選びます。対応しないカメラは近い大きさで開きます。
         </dd>
+        <dt>Camera aspect ratio</dt>
+        <dd>カメラに求める映像の縦横比。カメラのまま (既定)、4:3、16:9、正方形から選びます。</dd>
       </dl>
     </section>
     <section class="help-menu-folder">
