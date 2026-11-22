@@ -8,7 +8,6 @@ import {
 } from './format.ts';
 import { resolveReplayGaugeHistories } from './gauge-histories.ts';
 import { resolveReplayJudgmentTimeline } from './judgment-timeline.ts';
-import { resolveRulesetConfig } from './rulesets.ts';
 
 function makeReplay(
   notes: ReplayNote[],
@@ -109,7 +108,16 @@ describe('resolveReplayGaugeHistories', () => {
         ],
         { gauge: 'beatoraja:HARD', endOnFailure: true },
       );
-      for (const history of resolveReplayGaugeHistories(replay, { ruleset })) {
+      const histories = resolveReplayGaugeHistories(replay, { ruleset });
+      expect(histories.map((history) => history.gauge)).toEqual([
+        'ASSIST-EASY',
+        'EASY',
+        'NORMAL',
+        'HARD',
+        'EX-HARD',
+        'HAZARD',
+      ]);
+      for (const history of histories) {
         const { events } = resolveReplayJudgmentTimeline(replay, {
           ruleset,
           gauge: history.gauge,
@@ -130,10 +138,14 @@ describe('resolveReplayGaugeHistories', () => {
         course: { kind: 'grade', carryIn: { combo: 1, maxCombo: 2, gauge: 52, gauges: { GRADE: 37 } } },
       },
     );
-    for (const history of resolveReplayGaugeHistories(replay, { courseKind: 'grade' })) {
+    const histories = resolveReplayGaugeHistories(replay, { courseKind: 'grade' });
+    expect(histories.map(({ gauge, initial }) => [gauge, initial])).toEqual([
+      ['GRADE', 37],
+      ['GRADE-HARD', 52],
+      ['GRADE-DEATH', 52],
+    ]);
+    for (const history of histories) {
       const forced = { gauge: history.gauge, gaugeAutoShift: 'NONE' as const };
-      const spec = resolveRulesetConfig(replay, 'lr2', forced).gauge;
-      expect(history.initial).toBe(spec.max > 0 ? (spec.initial / spec.max) * 100 : 0);
       const { events } = resolveReplayJudgmentTimeline(replay, {
         ...forced,
         ruleset: 'lr2',

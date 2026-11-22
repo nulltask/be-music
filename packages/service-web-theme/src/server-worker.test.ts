@@ -54,7 +54,10 @@ test('browser bundles cannot accidentally import the server-only entry', async (
       platform: 'browser',
       bundle: true,
       write: false,
+      external: ['node:buffer'],
       logLevel: 'silent',
     }),
-  ).rejects.toThrow(/resolve|export|disabled/i);
+  ).rejects.toMatchObject({
+    errors: [expect.objectContaining({ text: 'Could not resolve "@be-music/service-web-theme/server"' })],
+  });
 });

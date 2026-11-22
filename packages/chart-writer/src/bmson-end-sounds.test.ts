@@ -90,6 +90,8 @@ test('up on BGM remains BGM, while nonboolean up is ignored', () => {
 
 test('lossy BMS conversion drops the end sound instead of creating an extra tap', () => {
   const converted = parseChart(stringifyBMS(chart()), 'bms');
-  expect(resolveChart(converted).notes).toHaveLength(1);
-  expect(resolveChart(converted).notes[0]?.kind).toBe('ln');
+  const resolved = resolveChart(converted);
+  expect(resolved.notes).toHaveLength(1);
+  expect(resolved.notes[0]?.kind).toBe('ln');
+  expect(resolved.sampleTriggers.map((trigger) => trigger.samplePath)).toEqual(['head.wav']);
 });

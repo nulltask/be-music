@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { isCourseStageFailed } from '../ruleset/course.ts';
-import { BE_MUSIC_COURSE_REPLAY_FORMAT, simulateCourseReplay, type BeMusicCourseReplay } from './course.ts';
+import { BE_MUSIC_COURSE_REPLAY_FORMAT, type BeMusicCourseReplay } from './course.ts';
 import {
   BE_MUSIC_REPLAY_FORMAT,
   BE_MUSIC_REPLAY_VERSION,
@@ -159,19 +159,6 @@ describe('courses', () => {
 
   test('each stage carries the source’s course gauge into the next, under every ruleset', () => {
     const course = makeCourse([stage('lr2:GROOVE', 9), stage('lr2:GROOVE', 10)]);
-    const own = makeCourse(
-      course.stages.flatMap((entry) =>
-        entry.played
-          ? [
-              {
-                ...entry.replay,
-                play: { ...entry.replay.play, gauge: 'GROOVE' as const, judgeRuleset: 'lr2' as const },
-              },
-            ]
-          : [],
-      ),
-    );
-    const reference = simulateCourseReplay(own, { ruleset: 'lr2' });
     for (const ruleset of ['lr2', 'beatoraja', '____', 'plugout'] as const) {
       const outcome = rejudgeCourseReplay(course, { ruleset });
       expect(outcome.status, ruleset).toBe('simulated');
@@ -179,11 +166,9 @@ describe('courses', () => {
       const { result } = outcome;
       expect(result.stages.map((entry) => entry.gauge.type)).toEqual(['COURSE', 'COURSE']);
       expect(result.gauge.source, ruleset).toBe(ruleset === 'lr2' ? undefined : 'lr2');
-      // Dead-on presses are PGREATs under every ruleset, so the carried gauge is the one LR2 itself computes.
-      expect(result.stages.map((entry) => entry.gauge.final)).toEqual(
-        reference.stages.map((entry) => entry.gauge.final),
-      );
-      expect(result.stages[0]!.gauge.final).toBeLessThan(100);
+      // Stage 1 loses 2 points on the final miss. Stage 2 recovers 1 point from its carried 98%.
+      expect(result.stages[0]?.gauge.final, ruleset).toBeCloseTo(98, 8);
+      expect(result.stages[1]?.gauge.final, ruleset).toBeCloseTo(99, 8);
     }
   });
 

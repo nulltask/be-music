@@ -84,11 +84,13 @@ describe('resolvePlayfieldParts', () => {
   });
 
   it('moves the judgment, its combo and its rect by the layout’s judgment offset', () => {
-    const input = frame();
+    const input = frame({ runtime: { judgeSides: [{ side: '1P', judge: 'GREAT', combo: 5 }] } });
+    const base = resolvePlayfieldParts(input);
     input.layout.playfield.judgeOffsetY = -40;
-    const base = resolvePlayfieldParts(frame());
     const moved = resolvePlayfieldParts(input);
-    expect(moved.judgmentDisplay.data.y).toBe(base.judgmentDisplay.data.y - 40);
+    expect(base.judgmentDisplay.data.y).toBe(374);
+    expect(moved.judgmentDisplay.data.y).toBe(334);
+    expect(moved.judgmentDisplay.data.words).toMatchObject([{ x: 55, text: 'GREAT', combo: 5 }]);
     expect(moved.judgmentDisplay.rect).toEqual({
       ...base.judgmentDisplay.rect,
       y: base.judgmentDisplay.rect.y - 40,

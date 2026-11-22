@@ -1,5 +1,7 @@
 import { builtinModules } from 'node:module';
 import { defaultClientConditions, defaultServerConditions, defineConfig } from 'vite-plus';
+import { playwright } from 'vite-plus/test/browser-playwright';
+import { configDefaults } from 'vite-plus/test/config';
 
 const workspacePackages = [
   'shared-utils',
@@ -216,11 +218,15 @@ const webPlayerServiceImports = {
   ],
 };
 
+const browserTests = ['packages/*/src/**/*.browser.test.ts', 'packages/app-leaderboard/client/**/*.browser.test.ts'];
+const nodeTestExcludes = [...configDefaults.exclude, ...browserTests];
+
 const workspaceProjects = workspacePackages.map((name) => ({
   extends: true as const,
   test: {
     name: `@be-music/${name}`,
     include: [`packages/${name}/src/**/*.test.ts`],
+    exclude: nodeTestExcludes,
   },
 }));
 
@@ -231,7 +237,7 @@ export default defineConfig({
   // Workspace imports resolve to TypeScript sources through each package's `exports` `source` condition, so
   // `package.json` `exports` is the only list of entry points: a new subpath needs just a `"source"` entry there
   // (listed before `"types"`, which `customConditions` in tsconfig.typecheck.json relies on). Setting conditions
-  // replaces Vite's defaults, so they are spread back in. Tests run in the `ssr` (Node) environment, where Vitest's own
+  // replaces Vite's defaults, so they are spread back in. For the `ssr` (Node) projects, Vitest's own
   // default drops `module` because a `module` build is not always native ESM that Node can load.
   resolve: {
     conditions: ['source', ...defaultClientConditions],
@@ -253,6 +259,7 @@ export default defineConfig({
         test: {
           name: '@be-music/app-play',
           include: ['packages/app-play/src/**/*.test.ts', 'packages/app-play/scripts/**/*.test.ts'],
+          exclude: nodeTestExcludes,
         },
       },
       {
@@ -262,9 +269,32 @@ export default defineConfig({
           // The pages' stylesheet, icons and client script are generated, not kept in git.
           globalSetup: ['packages/app-leaderboard/src/test-support/global-setup.ts'],
           include: ['packages/app-leaderboard/src/**/*.test.ts', 'packages/app-leaderboard/client/**/*.test.ts'],
+          exclude: nodeTestExcludes,
           // The API tests start a workerd process (Miniflare) for real D1 and R2 bindings.
           testTimeout: 30_000,
           hookTimeout: 60_000,
+        },
+      },
+      {
+        extends: true as const,
+        optimizeDeps: {
+          entries: browserTests,
+          // Prebundle the media loader's dependencies before the browser starts a test and Vite can reload its iframe.
+          include: [
+            '@be-music/player-browser > @ffmpeg/ffmpeg',
+            '@be-music/player-browser > @ffmpeg/util',
+            '@be-music/player-browser > pixi.js',
+          ],
+        },
+        test: {
+          name: 'browser',
+          include: browserTests,
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: playwright(),
+            instances: [{ browser: 'chromium' }],
+          },
         },
       },
       {
@@ -292,9 +322,15 @@ export default defineConfig({
       provider: 'v8',
       reporter: coverageShard ? [] : ['text', 'text-summary', 'html', 'lcov', 'json-summary'],
       reportsDirectory: './coverage',
-      include: [`packages/{${workspacePackages.join(',')}}/src/**/*.ts`],
+      include: [
+        `packages/{${workspacePackages.join(',')},app-play,app-leaderboard}/src/**/*.ts`,
+        'packages/app-leaderboard/client/**/*.ts',
+      ],
       exclude: [
-        'packages/*/src/**/*.test.ts',
+        'packages/**/*.test.ts',
+        'packages/app-leaderboard/src/test-support/**',
+        'packages/app-leaderboard/src/**/*.generated.ts',
+        'packages/app-leaderboard/client/**/*.d.ts',
         'packages/*/src/cli.ts',
         'packages/*/src/**/*.d.ts',
         'packages/chart-audio-renderer/src/index.ts',

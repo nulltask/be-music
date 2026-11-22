@@ -18,7 +18,7 @@ const context = {
     ),
 };
 
-test('prepares separate slot buffers with native-rate frequency, pitch, stereo balance and duration', () => {
+test('prepares separate slot buffers with pitch, stereo balance and a duration limit', () => {
   const raw = buffer([new Float32Array(48000).fill(1), new Float32Array(48000).fill(0.5)], 48000);
   const changed = prepareWAVPlaybackBuffer(
     context,
@@ -33,6 +33,15 @@ test('prepares separate slot buffers with native-rate frequency, pitch, stereo b
   expect(other.duration).toBe(2);
   expect(raw.duration).toBe(1);
   expect(raw.getChannelData(0)[0]).toBe(1);
+});
+
+test('uses the encoded sample rate for EXWAV frequency after browser resampling', () => {
+  const raw = buffer([Float32Array.of(0, 0.25, 0.5, 0.75, 1, 0.75, 0.5, 0.25)], 48000);
+  // 44,100 Hz is twice the encoded rate. At the device rate each output frame takes every other decoded frame.
+  const changed = prepareWAVPlaybackBuffer(context, raw, { frequencyHz: 44100 }, 22050);
+  expect(changed.sampleRate).toBe(48000);
+  expect(changed.length).toBe(4);
+  expect([...changed.getChannelData(0)]).toEqual([0, 0.5, 1, 0.5]);
 });
 
 test('mono is duplicated before balance attenuation and natural end is never padded', () => {

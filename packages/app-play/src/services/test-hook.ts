@@ -92,6 +92,7 @@ export function liveTestHookState(deps: LiveTestHookDeps): TestHookLiveState {
       title: play.chart.title,
       autoPlay: play.overrides.autoPlay,
       replay: play.overrides.replay !== undefined,
+      ...(progress?.practice === true ? { practice: true as const } : {}),
       tempo: gameplay?.getTempo() ?? 1,
       hiSpeed: gameplay?.getHiSpeed(),
       seconds: progress?.playSeconds,

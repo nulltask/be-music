@@ -66,7 +66,7 @@ test('cycles quick play options and opens the selected chart in the practice pic
       ([title, artist, level, bpm], index) =>
         new File(
           [
-            `#TITLE ${title}\n#ARTIST ${artist}\n#PLAYLEVEL ${level}\n#DIFFICULTY 3\n#BPM ${bpm}\n#WAV01 key.wav\n#00111:01010101\n#01213:0101\n#02418:01\n`,
+            `#TITLE ${title}\n#ARTIST ${artist}\n#PLAYLEVEL ${level}\n#DIFFICULTY 3\n#BPM ${bpm}\n#WAV01 key.wav\n#00111:01010101\n#00311:01010101\n#01213:0101\n#02418:01\n`,
           ],
           `preview-${index}.bme`,
         ),
@@ -124,8 +124,31 @@ test('cycles quick play options and opens the selected chart in the practice pic
   await practice.locator('[data-dialog-shortcut="cancel"]').click();
   await expect(practice.locator('#practice-bars-title')).toBeHidden();
   await player.clickSkin(180, 321, 854, 480);
+  const bar = practice.getByRole('button', { name: 'Bar 003, 4 notes' });
+  await bar.click();
+  await expect(bar).toHaveAttribute('aria-pressed', 'true');
+  for (const name of ['REST BEFORE (bars)', 'REST AFTER (bars)']) {
+    const field = practice.getByRole('spinbutton', { name });
+    await field.fill('0');
+    await field.press('Tab');
+  }
   await practice.locator('[data-dialog-shortcut="primary"]').click();
-  await player.waitFor((state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0, 'practice to start');
+  // At 165 BPM bar 003 runs from 4.36 s to 5.82 s. The first round leads in from bar 002 (2.91 s).
+  const running = await player.waitFor(
+    (state) => state.scene.kind === 'play' && (state.play?.seconds ?? 0) > 0,
+    'practice clock to start',
+    15_000,
+  );
+  expect(running.play?.practice).toBe(true);
+  expect(running.play?.seconds).toBeGreaterThanOrEqual(2.9);
+  expect(running.play?.seconds).toBeLessThan(4.36);
+  await player.waitFor((state) => (state.play?.seconds ?? 0) > 5.4, 'practice to approach the selected bar end', 5_000);
+  await player.waitFor(
+    (state) =>
+      state.scene.kind === 'play' && (state.play?.seconds ?? Infinity) >= 4.35 && (state.play?.seconds ?? Infinity) < 5,
+    'practice to loop back to the selected bar',
+    5_000,
+  );
   await player.key('Escape');
   const back = await player.waitFor((state) => state.scene.kind === 'select', 'return from practice');
   expect(back.results).toHaveLength(0);

@@ -622,9 +622,14 @@ it('draws HDX source dimensions against the beatoraja destination and clips over
   const context = { activeOps: new Set<number>(), getTimerStart: () => 0, nowMs: 0 };
   layer.update(0, context, false, { bgaMode: 1 });
   const sprite = layer.container.children.find((child) => child.label === 'bga/base') as Sprite;
-  expect(sprite.mask).toBe(layer.container.children.find((child) => child.label === 'bga/clip'));
+  const clip = layer.container.children.find((child) => child.label === 'bga/clip');
+  expect(clip).toBeDefined();
+  expect(sprite.mask).toBe(clip);
+  expect([clip!.x, clip!.y, clip!.width, clip!.height]).toEqual([100, 360, 320, 240]);
+  expect([sprite.x, sprite.y, sprite.width, sprite.height]).toEqual([-60, 360, 640, 120]);
   layer.update(0, context, false, { bgaMode: 0 });
   expect(sprite.mask).toBeUndefined();
+  expect([sprite.x, sprite.y, sprite.width, sprite.height]).toEqual([100, 360, 320, 240]);
   layer.dispose();
   texture.destroy(true);
 });

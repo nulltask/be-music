@@ -27,6 +27,9 @@ describe('buildKeyboardGuide', () => {
     expect(rowOf(lr2, 'play.hi-speed-up')).toBeDefined();
     const beatoraja = buildKeyboardGuide('play', 'beatoraja', {});
     expect(rowOf(beatoraja, 'play.hi-speed-up')).toBeUndefined();
+    expect(rowOf(beatoraja, 'play.cover-less')).toMatchObject({ name: 'Lane cover up', codes: ['ArrowUp'] });
+    expect(rowOf(beatoraja, 'play.cover-more')).toMatchObject({ name: 'Lane cover down', codes: ['ArrowDown'] });
+    expect(rowOf(beatoraja, 'play.pause')).toMatchObject({ name: 'Pause', codes: ['Pause', 'Tab'] });
     expect(beatoraja.actions.every((row) => row.id.startsWith('play.'))).toBe(true);
   });
 

@@ -1,3 +1,4 @@
+import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   describeDatabase,
@@ -5,6 +6,7 @@ import {
   formatBytes,
   formatKey,
   listLocalStorage,
+  readIndexedDB,
   sortDatabases,
   utf8Bytes,
   viewLocalStorageValue,
@@ -107,4 +109,40 @@ describe('local data viewer', () => {
     expect(formatKey(['a', 1])).toBe('[a, 1]');
     expect(formatKey(new Uint8Array(4).buffer)).toBe('Binary key, 4 B');
   });
+});
+
+test('the local data viewer shows the full record count with a limited, correctly paired preview', async () => {
+  const factory = new IDBFactory();
+  await new Promise<void>((resolve, reject) => {
+    const open = factory.open('be-music-charts', 2);
+    open.onupgradeneeded = () => {
+      const charts = open.result.createObjectStore('parsedCharts');
+      charts.put({ title: 'Last in key order' }, 'z:bms');
+      charts.put({ title: 'First in key order' }, 'a:bms');
+      charts.put({ title: 'Second in key order' }, 'b:bms');
+    };
+    open.onsuccess = () => {
+      open.result.close();
+      resolve();
+    };
+    open.onerror = () => reject(open.error);
+  });
+
+  const databases = await readIndexedDB(factory, 2);
+  expect(databases).toMatchObject([
+    {
+      name: 'be-music-charts',
+      version: 2,
+      stores: [
+        {
+          name: 'parsedCharts',
+          count: 3,
+          records: [
+            { key: 'a:bms', value: { title: 'First in key order' } },
+            { key: 'b:bms', value: { title: 'Second in key order' } },
+          ],
+        },
+      ],
+    },
+  ]);
 });

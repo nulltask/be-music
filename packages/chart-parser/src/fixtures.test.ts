@@ -16,6 +16,7 @@ import {
   parseBMSExWAV,
   parseBmsWAVCmd,
   resolveBMSLongNotes,
+  resolveChart,
   resolveChartPlayVariant,
   resolveLNOBJLongNotes,
   type ChartPlayVariant,
@@ -288,7 +289,8 @@ describe('test/fixtures corpus', () => {
     expect(lane5[0]?.endBeat).toBeCloseTo(17, 6);
 
     // Every token after a run's first is a continuation and must not trigger a keysound.
-    expect(resolved.suppressedTriggerEvents.size).toBeGreaterThan(0);
+    expect(resolved.suppressedTriggerEvents.size).toBe(8);
+    expect(resolveChart(json).sampleTriggers).toHaveLength(16);
     for (const note of resolved.notes) {
       expect(resolved.suppressedTriggerEvents.has(note.event)).toBe(false);
     }

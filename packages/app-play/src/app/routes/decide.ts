@@ -321,7 +321,10 @@ export class DecideRoute {
       preload = launch.preload;
     } else if (then === undefined) {
       const options = { ...overrides, preResolved: decide.resolved };
-      preload = { options, play: this.preloadGameplay(chartEntry, options, token) };
+      const play = this.preloadGameplay(chartEntry, options, token);
+      // The handoff handles the error once Decide advances. Catch it now in case the play fails during the splash.
+      play.catch(() => undefined);
+      preload = { options, play };
     }
     const shown = await this.router.show(decide, { role: 'decide', token });
     if (shown) {

@@ -1,4 +1,4 @@
-import type { BeMusicCourseReplay, BeMusicReplay } from '@be-music/player-engine/replay';
+import { type BeMusicCourseReplay, type BeMusicReplay } from '@be-music/player-engine/replay';
 import type { RecordPlay } from '@be-music/player-engine/records';
 import { describe, expect, test } from 'vite-plus/test';
 import {

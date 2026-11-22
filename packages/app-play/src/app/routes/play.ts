@@ -168,6 +168,7 @@ export interface PlayRouteDeps {
   readonly recordingDeps: () => RecordingDeps;
   /** Names the next saved recording after the chart. */
   readonly setRecordingFilenameBase: (base: string) => void;
+  readonly setStatus: (text: string) => void;
   /** Shows a status about the play, which the select screen replaces when it comes back. */
   readonly setPlayStatus: (text: string) => void;
   /** Latches the options a play takes for it, and disables their controls. */
@@ -238,6 +239,7 @@ export class PlayRoute {
   private readonly testHook: PlayRouteDeps['testHook'];
   private readonly recordingDeps: PlayRouteDeps['recordingDeps'];
   private readonly setRecordingFilenameBase: PlayRouteDeps['setRecordingFilenameBase'];
+  private readonly setStatus: PlayRouteDeps['setStatus'];
   private readonly setPlayStatus: PlayRouteDeps['setPlayStatus'];
   private readonly lockReplayOptionsForPlay: PlayRouteDeps['lockReplayOptionsForPlay'];
   private readonly unlockReplayOptions: PlayRouteDeps['unlockReplayOptions'];
@@ -274,6 +276,7 @@ export class PlayRoute {
     this.testHook = deps.testHook;
     this.recordingDeps = deps.recordingDeps;
     this.setRecordingFilenameBase = deps.setRecordingFilenameBase;
+    this.setStatus = deps.setStatus;
     this.setPlayStatus = deps.setPlayStatus;
     this.lockReplayOptionsForPlay = deps.lockReplayOptionsForPlay;
     this.unlockReplayOptions = deps.unlockReplayOptions;
@@ -790,9 +793,15 @@ export class PlayRoute {
     try {
       if (!(await this.router.prepare(view, { token }))) return;
     } catch (error) {
-      if (!(error instanceof PlayOptionMismatchError)) throw error;
-      // The chart cannot be played with the selected options: say which, and go back to select to change them.
+      if (!this.router.isCurrent(token)) return;
       if (overrides.courseStage !== undefined || overrides.nonstop !== undefined) this.courses.abandonRun();
+      if (!(error instanceof PlayOptionMismatchError)) {
+        this.selectRoute.endAutoPlaylist();
+        this.setStatus(`Could not load ${chartEntry.title}. ${error instanceof Error ? error.message : String(error)}`);
+        await this.showSelect();
+        return;
+      }
+      // The chart cannot be played with the selected options: say which, and go back to select to change them.
       this.setPlayStatus(`Cannot play ${chartEntry.title} with ${error.options.join(', ')}`);
       this.showPlayOptionMismatch(error.options, () => {
         if (this.router.isCurrent(token)) void this.showSelect();
