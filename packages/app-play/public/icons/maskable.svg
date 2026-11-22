@@ -1,31 +1,89 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -12 88 88">
-  <!-- The background also covers the expanded viewBox of the generated maskable icon. -->
-  <rect x="-12" y="-12" width="88" height="88" fill="#0a0e18"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="body" x2=".74" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#243853"/>
+      <stop offset=".56" stop-color="#101b31"/>
+      <stop offset="1" stop-color="#121025"/>
+    </linearGradient>
+    <radialGradient id="top-light" cx=".24" cy=".04" r=".8">
+      <stop stop-color="#648cb9" stop-opacity=".36"/>
+      <stop offset=".85" stop-color="#648cb9" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bottom-light" cx=".73" cy="1" r=".66">
+      <stop stop-color="#4c3261" stop-opacity=".52"/>
+      <stop offset=".79" stop-color="#4c3261" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rim" x2=".77" y2="1">
+      <stop stop-color="#c2ddff" stop-opacity=".7"/>
+      <stop offset=".4" stop-color="#6486ac" stop-opacity=".36"/>
+      <stop offset=".7" stop-color="#141a2e" stop-opacity=".4"/>
+      <stop offset="1" stop-color="#7d618e" stop-opacity=".66"/>
+    </linearGradient>
+    <linearGradient id="white-key" x2="0" y2="1">
+      <stop stop-color="#6786b2" stop-opacity="0"/>
+      <stop offset=".49" stop-color="#506c94" stop-opacity=".4"/>
+      <stop offset="1" stop-color="#39516f" stop-opacity=".82"/>
+    </linearGradient>
+    <linearGradient id="black-key" x2="0" y2="1">
+      <stop stop-color="#131e36" stop-opacity="0"/>
+      <stop offset=".53" stop-color="#0a1528" stop-opacity=".31"/>
+      <stop offset="1" stop-color="#0a1223" stop-opacity=".72"/>
+    </linearGradient>
+    <linearGradient id="scratch" x2="0" y2="1">
+      <stop stop-color="#ee984c" stop-opacity="0"/>
+      <stop offset=".58" stop-color="#df9054" stop-opacity=".36"/>
+      <stop offset="1" stop-color="#985445" stop-opacity=".65"/>
+    </linearGradient>
+    <linearGradient id="judge">
+      <stop stop-color="#ff627a" stop-opacity="0"/>
+      <stop offset=".16" stop-color="#ff627a"/>
+      <stop offset=".47" stop-color="#ff9195"/>
+      <stop offset=".84" stop-color="#ff476b"/>
+      <stop offset="1" stop-color="#ff476b" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow" x="-.2" y="-2" width="1.4" height="5">
+      <feGaussianBlur stdDeviation="1.6"/>
+    </filter>
+    <path id="edge" d="M32 2.7C44.8 2.7 51.3 2.7 56.3 7.7S61.3 19.2 61.3 32s0 19.3-5 24.3-11.5 5-24.3 5-19.3 0-24.3-5-5-11.5-5-24.3 0-19.3 5-24.3 11.5-5 24.3-5Z"/>
+  </defs>
 
-  <!-- Scratch followed by seven keys. Every lane has the same gap to its neighbour. -->
-  <rect x="8" y="8" width="7.2" height="44" fill="#302520"/>
-  <rect x="15.6" y="8" width="5.4" height="44" fill="#202c40"/>
-  <rect x="21.4" y="8" width="5.4" height="44" fill="#142238"/>
-  <rect x="27.2" y="8" width="5.4" height="44" fill="#202c40"/>
-  <rect x="33" y="8" width="5.4" height="44" fill="#142238"/>
-  <rect x="38.8" y="8" width="5.4" height="44" fill="#202c40"/>
-  <rect x="44.6" y="8" width="5.4" height="44" fill="#142238"/>
-  <rect x="50.4" y="8" width="5.4" height="44" fill="#202c40"/>
+  <!-- The opaque background extends to the crop. The rim follows the rounded silhouette inside it. -->
+  <rect width="64" height="64" fill="url(#body)"/>
+  <rect width="64" height="64" fill="url(#top-light)"/>
+  <rect width="64" height="64" fill="url(#bottom-light)"/>
+  <use href="#edge" fill="none" stroke="#070a16" stroke-opacity=".44" stroke-width="2"/>
+  <use href="#edge" fill="none" stroke="url(#rim)" stroke-width=".84"/>
 
-  <!-- Measure lines and falling notes. -->
-  <rect x="8" y="18" width="47.8" height="0.45" fill="#354156"/>
-  <rect x="8" y="30" width="47.8" height="0.45" fill="#354156"/>
-  <rect x="8" y="42" width="47.8" height="0.45" fill="#354156"/>
-  <rect x="15.6" y="13.3" width="5.4" height="1.45" fill="#f5f8ff"/>
-  <rect x="33" y="13.3" width="5.4" height="1.45" fill="#53ceff"/>
-  <rect x="44.6" y="21.3" width="5.4" height="1.45" fill="#53ceff"/>
-  <rect x="8" y="25.3" width="7.2" height="1.45" fill="#ffbb5c"/>
-  <rect x="21.4" y="29.3" width="5.4" height="1.45" fill="#53ceff"/>
-  <rect x="38.8" y="29.3" width="5.4" height="1.45" fill="#f5f8ff"/>
-  <rect x="50.4" y="29.3" width="5.4" height="1.45" fill="#f5f8ff"/>
-  <rect x="27.2" y="41.3" width="5.4" height="1.45" fill="#f5f8ff"/>
-  <rect x="44.6" y="41.3" width="5.4" height="1.45" fill="#53ceff"/>
+  <!-- The built-in 7 KEY widths are 41 for scratch, 24 for white keys and 19 for black keys. -->
+  <g transform="translate(6.875 0) scale(.25 1)">
+    <rect x="0" y="10" width="41" height="39" fill="url(#scratch)"/>
+    <g fill="url(#white-key)">
+      <rect x="42" y="10" width="24" height="39"/>
+      <rect x="87" y="10" width="24" height="39"/>
+      <rect x="132" y="10" width="24" height="39"/>
+      <rect x="177" y="10" width="24" height="39"/>
+    </g>
+    <g fill="url(#black-key)">
+      <rect x="67" y="10" width="19" height="39"/>
+      <rect x="112" y="10" width="19" height="39"/>
+      <rect x="157" y="10" width="19" height="39"/>
+    </g>
 
-  <!-- Judge line. -->
-  <rect x="8" y="52" width="47.8" height="1.3" fill="#ff4566"/>
+    <g fill="#f0f6ff">
+      <rect x="43" y="18.4" width="22" height="1.8"/>
+      <rect x="88" y="40.5" width="22" height="1.8"/>
+      <rect x="133" y="32.7" width="22" height="1.8"/>
+      <rect x="178" y="29.2" width="22" height="1.8"/>
+    </g>
+    <g fill="#66dcff">
+      <rect x="113" y="16.4" width="17" height="1.8"/>
+      <rect x="158" y="24.4" width="17" height="1.8"/>
+      <rect x="158" y="42.2" width="17" height="1.8"/>
+      <rect x="68" y="32.7" width="17" height="1.8"/>
+    </g>
+    <rect x="1" y="28.3" width="39" height="1.8" fill="#ffc77d"/>
+  </g>
+
+  <rect x="6.6" y="48" width="50.8" height="3.2" rx="1.6" fill="url(#judge)" opacity=".62" filter="url(#glow)"/>
+  <rect x="7.6" y="48.6" width="48.8" height="1.65" rx=".825" fill="url(#judge)"/>
 </svg>
