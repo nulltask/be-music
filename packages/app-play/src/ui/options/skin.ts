@@ -100,7 +100,7 @@ export function buildSkinFolder(this: OptionsDialog): void {
   this.beatorajaSkinPickerFolder = this.layout?.folder('beatorajaSkins');
   if (this.beatorajaSkinPickerFolder) this.beatorajaSkinPickerFolder.hidden = true;
   // The active Be-Music Skin's own settings, built from its `settings` schema (rebuilt when the skin changes).
-  this.skinSettingsFolder = this.layout?.folder('skinSettings');
+  this.layout?.folder('skinSettings').element.setAttribute('data-hide-empty-options-folder', '');
   this.rebuildSkinSettingsFolder();
   // LR2 theme picker — added once a drop discovers a theme (see `rebuildLR2ThemePicker`).
   this.rebuildLR2ThemePicker();
@@ -186,13 +186,10 @@ export function rebuildSkinFamilyPicker(this: OptionsDialog): void {
  * Every change is stored under the skin's id and reaches the scenes on screen at once.
  */
 export function rebuildSkinSettingsFolder(this: OptionsDialog): void {
-  const folder = this.skinSettingsFolder;
-  if (!folder) return;
-  // Snapshot native children before disposing them; disposal removes them from the folder.
-  for (const controller of folder.children.slice()) controller.dispose();
+  if (this.layout === undefined) return;
+  for (const row of this.skinSettingRows.splice(0)) row.dispose();
   const skin = this.deps.beMusicSkin();
   const controllers = describeSkinSettingControllers(skin.settings);
-  folder.hidden = controllers.length === 0;
   if (controllers.length === 0) return;
   const rows = this.place('skinSettingRows');
   const values: Record<string, unknown> = { ...resolveBeMusicSkinSettings(skin, this.skinSettings.get(skin.id)) };
@@ -207,6 +204,7 @@ export function rebuildSkinSettingsFolder(this: OptionsDialog): void {
               step: controller.step,
             })
           : rows.addBinding(values, controller.id);
+    this.skinSettingRows.push(added);
     added.label = controller.name;
     added.on('change', ({ value }) => {
       if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return;
@@ -215,13 +213,15 @@ export function rebuildSkinSettingsFolder(this: OptionsDialog): void {
       this.deps.applyBeMusicSkinSettings();
     });
   }
-  rows.addButton({ title: 'Reset to defaults' }).on('click', () => {
-    this.skinSettings.delete(skin.id);
-    storeSkinSettings(this.skinSettings);
-    this.scheduleSettingsSave();
-    this.deps.applyBeMusicSkinSettings();
-    this.rebuildSkinSettingsFolder();
-  });
+  this.skinSettingRows.push(
+    rows.addButton({ title: 'Reset to defaults' }).on('click', () => {
+      this.skinSettings.delete(skin.id);
+      storeSkinSettings(this.skinSettings);
+      this.scheduleSettingsSave();
+      this.deps.applyBeMusicSkinSettings();
+      this.rebuildSkinSettingsFolder();
+    }),
+  );
 }
 /**
  * Builds (or rebuilds in place) the Options dialog's "LR2 theme" dropdown. Visible whenever at least one theme has

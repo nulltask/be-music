@@ -1,5 +1,5 @@
 // The Options dialog's compressor controls: every compressor's tuning, remembered across visits and handed to each play,
-// and the per-stage folder, shown only where it applies. They run with the dialog as `this` (`OptionsDialog`).
+// and the per-stage controls, shown only where it applies. They run with the dialog as `this` (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
 import {
   DEFAULT_COMPRESSOR_PARAMS,
@@ -23,7 +23,7 @@ export function resolveCompressorParamOverrides(this: OptionsDialog): Record<Tun
   ) as Record<TunableCompressor, CompressorParams>;
 }
 /**
- * Hide the per-stage `Key` / `BGM` / `Master` folder when it doesn't apply to the current state:
+ * Hide the per-stage `Key` / `BGM` / `Master` controls when they don't apply to the current state:
  *
  * - Compressor checkbox unchecked → bus is in `'off'` mode, every stage is bypassed already.
  * - `?compressor=legacy` → the legacy architecture has just one compressor; per-stage toggles don't map onto it.
@@ -32,7 +32,7 @@ export function resolveCompressorParamOverrides(this: OptionsDialog): Record<Tun
  */
 export function refreshCompressorStageVisibility(this: OptionsDialog): void {
   const visible = this.guiState.compressor && this.compressorMode === 'split';
-  if (this.compressorStageFolder) this.compressorStageFolder.hidden = !visible;
+  for (const controller of this.compressorStageControllers) controller.hidden = !visible;
 }
 /**
  * One folder per compressor (key / BGM / master in split mode; the single legacy compressor only when the

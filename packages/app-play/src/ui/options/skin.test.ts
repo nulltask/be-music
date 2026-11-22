@@ -10,18 +10,18 @@ test('skin reset captures the cleared overrides in the unified settings document
   ]);
   const captured: unknown[] = [];
   const folder = {
-    children: [],
-    hidden: false,
     addBinding: () => ({ on: vi.fn() }),
     addButton: () => ({
       on: (_event: string, callback: () => void) => {
         reset = callback;
+        return { dispose: vi.fn() };
       },
     }),
   };
   const menu = {
     skinSettings,
-    skinSettingsFolder: folder,
+    layout: {},
+    skinSettingRows: [],
     place: () => folder,
     deps: {
       beMusicSkin: () => ({ id: 'test', settings: [{ kind: 'toggle', id: 'glow', label: 'Glow', default: true }] }),

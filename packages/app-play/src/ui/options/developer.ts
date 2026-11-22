@@ -30,7 +30,7 @@ export function buildDeveloperFolder(this: OptionsDialog): void {
     .on('change', ({ value }) => {
       this.guiState.autoPauseOnBlur = value;
       // Push live so a chart already in flight starts honoring the new policy on its next visibility / blur event,
-      // without forcing the user to restart the song.
+      // without forcing the user to restart the chart.
       this.gameplayView?.setAutoPauseOnBlur(value);
     });
   // Native monitor samples the scene clock and keeps a bounded FPS history.

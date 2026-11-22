@@ -21,7 +21,6 @@ import {
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 import {
   OptionFolder,
-  type OptionTabs,
   type OptionBinding,
   type OptionButton,
   type OptionContainer,
@@ -247,11 +246,11 @@ export class OptionsDialog {
   /** Whether this visit already scheduled the first-run benchmark. */
   public firstRunResolutionScheduled = false;
   /**
-   * Handles for controllers we need to address by name after construction — toggling the per-stage folder
+   * Handles for controllers we need to address by name after construction — toggling the per-stage controls
    * visibility, renaming the record button, and reflecting URL-driven compressor changes in the dialog.
    */
   public gui: OptionFolder | undefined;
-  public compressorStageFolder: OptionContainer | undefined;
+  public readonly compressorStageControllers: OptionRow[] = [];
   /** Compressor tuning in slider units, restored from the last visit; seeds every gameplay mount. */
   public readonly compressorTunings: Record<TunableCompressor, CompressorTuning> = readStoredCompressorTunings();
   public recordController: OptionButton | undefined;
@@ -340,8 +339,8 @@ export class OptionsDialog {
   private ghostBar: GhostBarFacts | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
   public tempoController: PaneBinding | undefined;
-  /** Options dialog folder holding the active Be-Music Skin's settings; hidden for a skin that declares none. */
-  public skinSettingsFolder: OptionContainer | undefined;
+  /** Rows created for the active Be-Music Skin's settings. */
+  public readonly skinSettingRows: OptionRow[] = [];
   /** Native list whose options follow loaded theme families without replacing its event handlers. */
   public confirmDroppedSkinController: OptionBinding<boolean> | undefined;
   public skinFamilyController: OptionBinding<SkinFamilyOverride> | undefined;
@@ -454,22 +453,23 @@ export class OptionsDialog {
   public toggle(): void {
     if (this.gui !== undefined) this.gui.expanded = !this.gui.expanded;
   }
-  /** The dialog's tabs, the View folder's pages and the LR2 mania options section on its Effects page. */
-  public topTabs: OptionTabs | undefined;
-  public viewTabs: OptionTabs | undefined;
-  public lr2ManiaFolder: OptionFolder | undefined;
-  /** Opens the Options dialog on the LR2 mania options: the View tab's Effects page, scrolled to the section. */
+  /** Opens and scrolls to the LR2 mania section at its current location in the layout. */
   public openLR2ManiaOptions(): void {
-    if (this.gui === undefined) return;
-    this.gui.expanded = true;
-    for (const step of this.layout?.path('lr2Mania') ?? []) this.layout?.tabs(step.tabs).select(step.page);
-    this.lr2ManiaFolder?.element.scrollIntoView({ block: 'start' });
+    const { gui, layout } = this;
+    if (gui === undefined || layout === undefined) return;
+    const path = layout.path('lr2Mania');
+    if (path.length === 0) return;
+    const folder = layout.folder('lr2Mania').element;
+    if (folder.closest('[data-option-omitted]') !== null) return;
+    gui.expanded = true;
+    for (const step of path) layout.tabs(step.tabs).select(step.page);
+    folder.scrollIntoView({ block: 'start' });
   }
   /**
    * Builds the Options dialog (`#options-modal`) and wires every controller to the gameplay / scene state. Centralizing
-   * this in one method lets us bind handles to specific controllers (`recordController`, `compressorStageFolder`)
+   * this in one method lets us bind handles to specific controllers (`recordController`, `compressorStageControllers`)
    * up-front, so runtime code can address them by name (renaming the record button when capture starts, hiding the
-   * per-stage folder on compressor mode change) without re-querying the DOM.
+   * per-stage controls on compressor mode change) without re-querying the DOM.
    *
    * Layout: `options-layout.json` (`OPTIONS_LAYOUT`) makes the tabs, folders and pages; each build function then makes
    * its options, placing each by its id. An option the layout hides is still made, so its value and behaviour stay.
@@ -519,9 +519,6 @@ export class OptionsDialog {
       console.error(`Options layout: "${id}" is a ${expected} in options-layout.json, but is built as a ${actual}`),
     );
     this.layout = layout;
-    this.topTabs = layout.tabs('options');
-    this.viewTabs = layout.tabs('viewPages');
-    this.lr2ManiaFolder = layout.folder('lr2Mania');
     // The options, area by area. Where each goes is the layout's, so the order here is only the order their side effects
     // run in: the Play options read the settings the Library made, and the skin pickers follow what is loaded.
     this.buildLibraryFolder();

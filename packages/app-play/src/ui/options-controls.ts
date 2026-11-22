@@ -766,7 +766,7 @@ export function tabRevealScroll(left: number, right: number, viewLeft: number, v
 export class OptionTabs extends OptionRow {
   public readonly pages: OptionPage[];
   private readonly tabIds: string[];
-  private selected = 0;
+  private selected = -1;
   /** The pages the dialog's layout leaves off, by index. */
   private readonly omittedPages = new Set<number>();
 
@@ -794,19 +794,23 @@ export class OptionTabs extends OptionRow {
    */
   public omitPage(index: number, omitted: boolean): void {
     const page = this.pages[index];
-    if (page === undefined) return;
+    if (page === undefined || this.omittedPages.has(index) === omitted) return;
     if (omitted) this.omittedPages.add(index);
     else this.omittedPages.delete(index);
     page.element.toggleAttribute('data-option-omitted', omitted);
-    if (omitted && this.selected === index) {
-      const shown = this.pages.findIndex((_, at) => !this.omittedPages.has(at));
-      this.select(shown < 0 ? index : shown);
+    if (this.selected === -1 || this.omittedPages.has(this.selected)) {
+      this.showPage(this.pages.findIndex((_, at) => !this.omittedPages.has(at)));
     } else {
       this.paint();
     }
   }
 
   public select(index: number): void {
+    if (this.pages[index] === undefined || this.omittedPages.has(index)) return;
+    this.showPage(index);
+  }
+
+  private showPage(index: number): void {
     this.selected = index;
     this.paint();
     this.pages.forEach((page, at) => {
@@ -815,7 +819,9 @@ export class OptionTabs extends OptionRow {
     });
     // On a screen too narrow for the tab bar, it scrolls sideways: keep the selected tab in view. Only the bar
     // scrolls, so selecting a nested tab never moves the panel around it.
-    const tab = this.element.querySelector<HTMLElement>(`#${this.tabIds[index]}`);
+    const id = this.tabIds[index];
+    if (id === undefined) return;
+    const tab = this.element.querySelector<HTMLElement>(`#${id}`);
     const bar = tab?.parentElement;
     if (tab && bar) {
       // Layout offsets, not client rects: the dialog's open animation scales it, and `scrollLeft` is unscaled. The

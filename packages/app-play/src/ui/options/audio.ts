@@ -74,21 +74,17 @@ export function buildAudioFolder(this: OptionsDialog): void {
       this.gameplayView?.setAudioCompressor(value);
       this.refreshCompressorStageVisibility();
     });
-  this.compressorStageFolder = this.layout?.folder('compressorStages');
-  this.place('compressorKey')
-    .addBinding(this.guiState, 'compressorKey', { label: 'Key' })
-    .on('change', ({ value }) => {
-      this.gameplayView?.setAudioCompressorStageEnabled('key', value);
-    });
-  this.place('compressorBGM')
-    .addBinding(this.guiState, 'compressorBGM', { label: 'BGM' })
-    .on('change', ({ value }) => {
-      this.gameplayView?.setAudioCompressorStageEnabled('bgm', value);
-    });
-  this.place('compressorMaster')
-    .addBinding(this.guiState, 'compressorMaster', { label: 'Master' })
-    .on('change', ({ value }) => {
-      this.gameplayView?.setAudioCompressorStageEnabled('master', value);
-    });
+  this.layout?.folder('compressorStages').element.setAttribute('data-hide-empty-options-folder', '');
+  for (const [key, label, stage] of [
+    ['compressorKey', 'Key', 'key'],
+    ['compressorBGM', 'BGM', 'bgm'],
+    ['compressorMaster', 'Master', 'master'],
+  ] as const) {
+    this.compressorStageControllers.push(
+      this.place(key)
+        .addBinding(this.guiState, key, { label })
+        .on('change', ({ value }) => this.gameplayView?.setAudioCompressorStageEnabled(stage, value)),
+    );
+  }
   this.buildCompressorTuningGUI(this.place('compressorTuning'));
 }
