@@ -14,6 +14,7 @@ const en = {
   shell: {
     search: 'Search title / artist / genre... (? for a filter)',
     dropTitle: 'Drop to load',
+    closeDropCard: 'Close drop card',
     openFolder: 'Open folder',
     savedFolders: 'Folders to load',
     savedFoldersHint:
@@ -465,6 +466,7 @@ const ja: typeof en = {
   shell: {
     search: 'タイトル / アーティスト / ジャンルを検索（? でフィルタ）',
     dropTitle: 'ドロップして読み込む',
+    closeDropCard: 'ドロップカードを閉じる',
     openFolder: 'フォルダを開く',
     savedFolders: '読み込み対象フォルダ',
     savedFoldersHint: '変更はプレイヤーの次回起動時に反映されます。削除しても元のフォルダは残ります。',

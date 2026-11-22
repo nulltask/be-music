@@ -132,6 +132,8 @@ export interface LibraryLoadOrigin {
   readonly startup?: boolean;
   readonly showLibraryRoot?: boolean;
   readonly entries?: readonly FileSystemEntry[];
+  /** A direct folder drop can dismiss the initial prompt once its chart or skin content is recognized. */
+  readonly droppedFolder?: { names: ReadonlySet<string>; onContent: () => void };
   readonly readFiles?: (signal?: AbortSignal) => Promise<BrowserDroppedFile[]>;
   /** The cache keys of the load's chart files, so the ones known unchanged are listed without being read. */
   readonly chartKeys?: ChartCacheKeyBook;
@@ -396,7 +398,7 @@ export class LibraryService {
    */
   public async processIncomingFiles(
     files: BrowserDroppedFile[],
-    origin: LibraryLoadOrigin = {},
+    { droppedFolder, ...origin }: LibraryLoadOrigin = {},
     signal?: AbortSignal,
   ): Promise<void> {
     signal?.throwIfAborted();
@@ -497,21 +499,7 @@ export class LibraryService {
     // (and the same for beatoraja). Adding a fourth family in the future is a one-line registry edit instead of an
     // edit here.
     signal?.throwIfAborted();
-    const themeFamilies = skinFamilyRegistry.detectThemeFamilies(
-      themeFiles.map((file) => file.webkitRelativePath || file.name),
-    );
-    // A standalone JSON theme has neither a .luaskin marker nor a skin/ ancestor. Probe its headers before
-    // offering the family switch, using the same content checks as theme discovery rather than filename guesses.
-    if (!themeFamilies.has('beatoraja')) {
-      const jsonFiles = themeFiles.filter((file) => file.name.toLowerCase().endsWith('.json'));
-      const entries = await Promise.all(
-        jsonFiles.map(
-          async (file) => [file.webkitRelativePath || file.name, new Uint8Array(await file.arrayBuffer())] as const,
-        ),
-      );
-      signal?.throwIfAborted();
-      if (discoverBeatorajaTheme(new Map(entries)).theme.entries.length > 0) themeFamilies.add('beatoraja');
-    }
+    const themeFamilies = await this.detectDroppedSkinFamilies(themeFiles, signal);
     const confirmation = this.confirmSkinDrop(themeFamilies);
     const carriesLR2Theme = themeFamilies.has('lr2');
     const carriesBeatorajaTheme = themeFamilies.has('beatoraja');
@@ -575,10 +563,48 @@ export class LibraryService {
     const confirmedFamily = await confirmation;
     signal?.throwIfAborted();
     if (confirmedFamily !== undefined) await this.applyDroppedSkin(confirmedFamily);
+    if (droppedFolder !== undefined) {
+      const isInDroppedFolder = (path: string): boolean => {
+        const separator = path.indexOf('/');
+        return separator > 0 && droppedFolder.names.has(path.slice(0, separator));
+      };
+      const hasFolderChart = this.collection.charts.some(
+        (chart) =>
+          !previousChartIds.has(chart.id) && chart.sourceKind === 'directory' && isInDroppedFolder(chart.chartPath),
+      );
+      const folderThemeFiles =
+        !hasFolderChart && themeFamilies.size > 0
+          ? themeFiles.filter((file) => isInDroppedFolder(file.webkitRelativePath || file.name))
+          : [];
+      const hasFolderSkin =
+        folderThemeFiles.length > 0 &&
+        (folderThemeFiles.length === themeFiles.length ||
+          (await this.detectDroppedSkinFamilies(folderThemeFiles, signal)).size > 0);
+      if (hasFolderChart || hasFolderSkin) droppedFolder.onContent();
+    }
     if (!(playContinues && chartFiles.length === 0 && confirmedFamily !== undefined)) await showLibrary();
     if (replayFiles.length > 0) {
       await this.startReplayReplayFromFile(replayFiles[0]!);
     }
+  }
+
+  private async detectDroppedSkinFamilies(files: File[], signal?: AbortSignal): Promise<Set<SkinFamilyId>> {
+    const themeFamilies = skinFamilyRegistry.detectThemeFamilies(
+      files.map((file) => file.webkitRelativePath || file.name),
+    );
+    // A standalone JSON theme has neither a .luaskin marker nor a skin/ ancestor. Probe its headers before
+    // offering the family switch, using the same content checks as theme discovery rather than filename guesses.
+    if (!themeFamilies.has('beatoraja')) {
+      const jsonFiles = files.filter((file) => file.name.toLowerCase().endsWith('.json'));
+      const entries = await Promise.all(
+        jsonFiles.map(
+          async (file) => [file.webkitRelativePath || file.name, new Uint8Array(await file.arrayBuffer())] as const,
+        ),
+      );
+      signal?.throwIfAborted();
+      if (discoverBeatorajaTheme(new Map(entries)).theme.entries.length > 0) themeFamilies.add('beatoraja');
+    }
+    return themeFamilies;
   }
 
   /**

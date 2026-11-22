@@ -971,10 +971,8 @@ textarea {
  *                           drag give the screen change without
  *                           shouting at the user.
  *
- * Visible whenever the shell carries `.empty` (no songs loaded
- * yet) so first-time visitors see the affordance, and during a
- * live drag (`.dragging`) where the card's heavier glow
- * tier kicks in. The card is the only drop feedback.
+ * Visible until the initial prompt is dismissed, and during a live
+ * drag (`.dragging`) where the card's heavier glow tier kicks in.
  */
 .drop {
   position: absolute;
@@ -1001,9 +999,23 @@ textarea {
 }
 
 .dragging .drop,
-.shell.empty .drop {
+.shell.drop-prompt-open .drop {
   display: grid;
   opacity: 1;
+}
+
+.drop-card-close {
+  position: absolute;
+  inset-block-start: 0.625rem;
+  inset-inline-end: 0.625rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  pointer-events: auto;
+}
+
+.shell:not(.drop-prompt-open) .drop-card-close {
+  display: none;
 }
 
 /*
@@ -1128,7 +1140,7 @@ textarea {
 /*
  * Leaderboard row of the start card: the submission checkbox, then the
  * account the plays go to with its sign-in / sign-up buttons. Only on the
- * empty shell; a drag over loaded songs shows the bare drop hint.
+ * initial card; a drag over loaded songs shows the bare drop hint.
  * `.drop` ignores the pointer (drops land on the stage), so the
  * interactive parts take it back.
  */
@@ -1143,9 +1155,9 @@ textarea {
   text-align: left;
 }
 
-.shell:not(.empty) .start-leaderboard,
-.shell:not(.empty) .start-audio,
-.shell:not(.empty) .compat-panel {
+.shell:not(.drop-prompt-open) .start-leaderboard,
+.shell:not(.drop-prompt-open) .start-audio,
+.shell:not(.drop-prompt-open) .compat-panel {
   display: none;
 }
 
@@ -1530,8 +1542,7 @@ textarea {
  * Active-drag tier — the card swells, accent colour floods the
  * typography, the icon doubles in glow, and the surrounding
  * scrim deepens nearly to black. The stage ring stays out of
- * this gesture. The empty / resting tier (`.shell.empty`
- * without `.dragging`) keeps the calmer baseline so the
+ * this gesture. The resting tier keeps the calmer baseline so the
  * contrast between the two states is the message.
  */
 .dragging .drop-card {
@@ -2990,7 +3001,7 @@ html.touch-first .search-input.search-inline:focus {
 .start-load-actions button {
   min-height: 44px;
 }
-.shell:not(.empty) .start-load-actions {
+.shell:not(.drop-prompt-open) .start-load-actions {
   display: none;
 }
 .start-leaderboard {
