@@ -107,6 +107,7 @@ export interface OptionsDialogDeps {
   readonly ghostReplayFile: GhostReplayFile;
   /** The scene host: "Render resolution" sets its resolution, and the Developer folder reads its frame rate. */
   readonly sceneHost: PixiSceneHost;
+  readonly showFPSOverlay: (shown: boolean) => void;
   /** "Play in silent mode": the Audio folder's checkbox and the start card's option drive it. */
   readonly silentMode: SilentModeSetting;
   /** The Leaderboard panel, which fills its own folder. */
@@ -263,6 +264,7 @@ export class OptionsDialog {
    * select paths enable it again.
    */
   public replaySaveController: PaneBinding | undefined;
+  public fpsOverlayController: OptionBinding<boolean> | undefined;
   /**
    * Every "Play options" folder controller (auto play / judge / gauge / random / DP flip / auto scratch). Disabled
    * together while a song is playing (`lockReplayOptionsForPlay`) and refreshed when the LR2 select panel pushes

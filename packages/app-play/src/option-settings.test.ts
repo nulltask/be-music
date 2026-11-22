@@ -162,6 +162,7 @@ describe('captureOptionSettings', () => {
     const expected = {
       autoPlay: true,
       autoPauseOnBlur: true,
+      showFPS: true,
       peakGain: true,
       compressor: false,
       compressorKey: false,

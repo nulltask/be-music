@@ -68,6 +68,7 @@ type PlayLayout = PlayerGUIState['playLayout'];
 export interface OptionSettings {
   autoPlay: boolean;
   autoPauseOnBlur: boolean;
+  showFPS: boolean;
   peakGain: boolean;
   compressor: boolean;
   compressorKey: boolean;
@@ -351,6 +352,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   const storedRuleset: RulesetId = isRulesetId(raw.judgeRuleset) ? raw.judgeRuleset : 'lr2';
   assign(settings, 'autoPlay', booleanOf(raw.autoPlay));
   assign(settings, 'autoPauseOnBlur', booleanOf(raw.autoPauseOnBlur));
+  assign(settings, 'showFPS', booleanOf(raw.showFPS));
   assign(settings, 'peakGain', booleanOf(raw.peakGain));
   assign(settings, 'compressor', booleanOf(raw.compressor));
   assign(settings, 'compressorKey', booleanOf(raw.compressorKey));
@@ -704,6 +706,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   };
   assignState('autoPlay');
   assignState('autoPauseOnBlur');
+  assignState('showFPS');
   assignState('peakGain');
   assignState('compressor');
   assignState('compressorKey');
@@ -887,6 +890,7 @@ export function captureOptionSettings(
   const settings: Partial<OptionSettings> = {
     autoPlay: state.autoPlay,
     autoPauseOnBlur: state.autoPauseOnBlur,
+    showFPS: state.showFPS,
     peakGain: state.peakGain,
     compressor: state.compressor,
     compressorKey: state.compressorKey,

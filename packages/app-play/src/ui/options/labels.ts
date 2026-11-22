@@ -295,6 +295,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'CPU workers': 'CPU ワーカー数',
   'Judgment windows': '判定ルール',
   'Auto pause on blur': 'フォーカスが外れたら一時停止',
+  'Show FPS': 'FPS を画面に表示',
   'Show invisible notes': '不可視ノーツを表示',
   FPS: 'FPS',
   'Reset settings and reload': '設定をリセットして再読み込み',

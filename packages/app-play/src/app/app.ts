@@ -486,6 +486,7 @@ export class PlayerWebApp {
       unlockReplayOptions: () => this.unlockReplayOptions(),
     });
     this.optionsDialog = new OptionsDialog(this.optionsDialogDeps());
+    this.fpsOverlay.setShown(this.guiState.showFPS);
     this.beatorajaSkinOptions = new BeatorajaSkinOptionsPanel(this.beatorajaSkinOptionsDeps());
     this.selectRoute = new SelectRoute({
       controls: () => controlSettingsOf(this.guiState),
@@ -683,6 +684,7 @@ export class PlayerWebApp {
       settings: this.guiState,
       ghostReplayFile: this.ghostReplayFile,
       sceneHost: this.sceneHost,
+      showFPSOverlay: (shown) => this.fpsOverlay.setShown(shown),
       silentMode: this.silentMode,
       bgaCamera: this.bgaCamera,
       leaderboard: this.leaderboard,
@@ -840,7 +842,10 @@ export class PlayerWebApp {
         openHelpModal();
       } else if (actions.is('global.fps', event)) {
         event.preventDefault();
-        this.fpsOverlay.toggle();
+        this.guiState.showFPS = !this.guiState.showFPS;
+        this.fpsOverlay.setShown(this.guiState.showFPS);
+        this.optionsDialog.fpsOverlayController?.refresh();
+        this.optionsDialog.scheduleSettingsSave();
       } else if (actions.is('global.fullscreen', event)) {
         event.preventDefault();
         void toggleFullscreen(playerFullscreenElement(document));

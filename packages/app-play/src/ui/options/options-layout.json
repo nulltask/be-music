@@ -472,6 +472,7 @@
           "items": [
             { "option": "workers", "kind": "slider", "default": { "use": "workers" } },
             { "option": "autoPauseOnBlur", "kind": "toggle", "default": false },
+            { "option": "showFPS", "kind": "toggle", "default": false },
             { "option": "fps", "kind": "monitor" },
             {
               "folder": "bgaTranscode",

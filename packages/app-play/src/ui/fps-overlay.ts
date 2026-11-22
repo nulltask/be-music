@@ -1,6 +1,5 @@
-// The frame rate readout (`#fps-overlay`), as beatoraja's F1 and LR2's F7 show it: switched on and off by its key, it
-// counts the frames the page draws and shows how many a second, every half second. It reads only the page's frames, so
-// it runs nothing while it is hidden.
+// The FPS readout is switched by Options or the active scheme's shortcut (beatoraja F1, LR2 F7).
+// While visible it counts page frames and updates twice a second.
 
 /** How often the readout changes, and over how long it counts. */
 export const FPS_SAMPLE_MS = 500;
@@ -10,11 +9,8 @@ export function framesPerSecond(frames: number, elapsedMs: number): number {
   return elapsedMs > 0 ? Math.round((frames * 1000) / elapsedMs) : 0;
 }
 
-/** The readout's switch. */
 export interface FpsOverlay {
-  /** Shows the readout when hidden, hides it when shown. */
-  toggle(): void;
-  readonly shown: boolean;
+  setShown(shown: boolean): void;
 }
 
 /** The readout over `element`, hidden until it is switched on. */
@@ -32,7 +28,8 @@ export function createFpsOverlay(element: HTMLElement): FpsOverlay {
     handle = requestAnimationFrame(tick);
   };
   return {
-    toggle() {
+    setShown(shown) {
+      if (shown === (handle !== undefined)) return;
       if (handle !== undefined) {
         cancelAnimationFrame(handle);
         handle = undefined;
@@ -44,9 +41,6 @@ export function createFpsOverlay(element: HTMLElement): FpsOverlay {
       frames = 0;
       since = performance.now();
       handle = requestAnimationFrame(tick);
-    },
-    get shown() {
-      return handle !== undefined;
     },
   };
 }
