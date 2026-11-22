@@ -741,39 +741,75 @@ describe('evaluateBeatorajaLuaSkin', () => {
     expect(result.value).toEqual({ on: true, off: false });
   });
 
-  it('exposes event_util.event_observe_turn_true returning a {condition, action} descriptor', () => {
-    // event_util descriptors get assigned to `customEvents` (audit 2.2 — not yet wired); for
-    // this test we just verify the require returns a usable table whose condition fires once
-    // when boolFn flips false → true and stays false on repeated true.
+  it('runs a skin action once per rising edge, even if the condition stays true for many frames', () => {
+    const active = [false, true, true, false, true];
     const result = evaluateBeatorajaLuaSkin({
-      entry: enc(
-        [
-          'local event_util = require("event_util")',
-          'local count = 0',
-          'local main_state = require("main_state")',
-          'local fired = 0',
-          'local desc = event_util.event_observe_turn_true(',
-          '  function() return main_state.option(1) end,',
-          '  function() fired = fired + 1 end',
-          ')',
-          // Drive condition() through a simulated state machine: false, true (fire), true
-          // (no-fire), false (no-fire), true (fire).
-          'local r = {}',
-          'r[1] = desc.condition()',
-          'r[2] = desc.condition()',
-          'return r',
-        ].join('\n'),
-      ),
+      entry: enc(`local events = require("event_util")
+        local state = require("main_state")
+        local fired = {}
+        local frame = 0
+        local event = events.event_observe_turn_true(
+          function() return state.option(frame) end,
+          function() fired[#fired + 1] = frame end
+        )
+        for n = 1, 5 do
+          frame = n
+          if event.condition() then event.action() end
+        end
+        return fired`),
       modules: [],
-      skinConfig: { offset: 0, option: {}, file: {} },
+      skinConfig: {},
+      runtimeContext: { option: (frame) => active[frame - 1] === true },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual([2, 5]);
+  });
+
+  it('notifies timer start and stop once each without retriggering on unchanged frames', () => {
+    const timers = [125_000, 125_000, undefined, undefined, 240_000];
+    let frame = 0;
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(`local events = require("event_util")
+        local state = require("main_state")
+        local fired = {}
+        local watches = events.event_observe_timer(42, function() fired[#fired + 1] = state.time() end)
+        for frame = 1, 5 do
+          state.option(frame)
+          for _, watch in ipairs(watches) do
+            if watch.condition() then watch.action() end
+          end
+        end
+        return fired`),
+      modules: [],
+      skinConfig: {},
       runtimeContext: {
-        // Always false during this synthetic eval — condition() should yield false twice
-        // (no flip).
-        option: () => false,
+        option: (nextFrame) => {
+          frame = nextFrame;
+          return false;
+        },
+        timer: (id) => (id === 42 ? timers[frame - 1] : undefined),
+        time: () => frame * 1000,
       },
     });
     if (!result.ok) throw new Error(result.error.message);
-    expect(result.value).toEqual([false, false]);
+    expect(result.value).toEqual([1000, 3000, 5000]);
+  });
+
+  it('rate-limits repeated skin actions in milliseconds against a microsecond scene clock', () => {
+    const timestamps = [0, 99_999, 100_000, 199_999, 200_000];
+    let frame = 0;
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(`local events = require("event_util")
+        local fired = {}
+        local act = events.event_min_interval(function(value) fired[#fired + 1] = value end, 100)
+        for n = 1, 5 do act(n) end
+        return fired`),
+      modules: [],
+      skinConfig: {},
+      runtimeContext: { time: () => timestamps[frame++]! },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual([1, 3, 5]);
   });
 
   it('audio_play with empty path short-circuits without invoking the host callback', () => {

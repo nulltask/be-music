@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vite-plus/test';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import { checkBrowserCompat, summarizeBrowserCompat } from './compat.ts';
 
 describe('checkBrowserCompat', () => {
@@ -45,13 +45,25 @@ describe('checkBrowserCompat', () => {
     expect(Array.isArray(report.items)).toBe(true);
   });
 
-  test('ok flips to false when a required feature is missing', () => {
-    const report = checkBrowserCompat();
-    // In the Vitest Node env there's no `document`, so WebGL2 detection must return `false` (the canvas-creation path
-    // can't run). That alone is enough to flip `ok`. We don't assert false unconditionally — a future browser-running
-    // env (jsdom) might satisfy more detectors — but the expected-vs-detected relationship has to hold.
-    const expectedOk = report.items.every((item) => !item.required || item.supported);
-    expect(report.ok).toBe(expectedOk);
+  test.each([true, false])('permits play only with all required features (WebGL2: %s)', (hasWebGL2) => {
+    const getContext = vi.fn((kind: string) => (kind === 'webgl2' && hasWebGL2 ? {} : null));
+    try {
+      vi.stubGlobal('document', { createElement: () => ({ getContext }) });
+      vi.stubGlobal('AudioContext', class {});
+      vi.stubGlobal('File', class {});
+      vi.stubGlobal('FileReader', class {});
+      vi.stubGlobal('DataTransfer', class {});
+      const report = checkBrowserCompat();
+      expect(getContext).toHaveBeenCalledWith('webgl2');
+      expect(report.ok).toBe(hasWebGL2);
+      expect(report.items.filter(({ required }) => required)).toEqual([
+        expect.objectContaining({ id: 'gpu', supported: hasWebGL2 }),
+        expect.objectContaining({ id: 'web-audio', supported: true }),
+        expect.objectContaining({ id: 'file-api', supported: true }),
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

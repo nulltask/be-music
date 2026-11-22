@@ -128,3 +128,102 @@ test('SP TO DP folds a 9KEY chart onto seven keys (9-TO-7)', () => {
   expect(result.chart.playVariant).toBe('7');
   expect(result.chart.notes.map((note) => note.channel)).toEqual(['11', '12', '13', '14', '19']);
 });
+
+test('DP-TO-SP keeps an overflowing 2P key as a background keysound in a full 10KEY chord', () => {
+  const source = resolveChart(
+    parseBMS(
+      [
+        '#BPM 120',
+        '#PLAYER 3',
+        '#WAV01 hand.wav',
+        '#WAV02 overflow.wav',
+        '#00111:01',
+        '#00112:01',
+        '#00113:01',
+        '#00114:01',
+        '#00115:01',
+        '#00125:02',
+      ].join('\n'),
+    ),
+    { playVariant: '10' },
+  );
+
+  const { chart } = convertLR2SPToDPChart(source);
+  expect(chart.playVariant).toBe('5');
+  expect(chart.notes.map(({ channel, seconds }) => [channel, seconds])).toEqual([
+    ['11', 2],
+    ['12', 2],
+    ['13', 2],
+    ['14', 2],
+    ['15', 2],
+  ]);
+  expect(
+    chart.sampleTriggers
+      .filter(({ channel }) => channel === '01')
+      .map(({ samplePath, seconds }) => [samplePath, seconds]),
+  ).toEqual([['overflow.wav', 2]]);
+});
+
+test('9-TO-7 compacts around two unused lanes in a sparse nine-key measure', () => {
+  // The occupied PMS keys are 1, 2, 4, 5, 6, 7 and 9, one per beat subdivision.
+  const source = resolveChart(
+    parseBMS(
+      [
+        '#BPM 120',
+        '#WAV01 key.wav',
+        '#00111:0100000000000000',
+        '#00112:0001000000000000',
+        '#00114:0000010000000000',
+        '#00115:0000000100000000',
+        '#00118:0000000001000000',
+        '#00119:0000000000010000',
+        '#00117:0000000000000100',
+      ].join('\n'),
+    ),
+    { playVariant: '9' },
+  );
+
+  const { chart } = convertLR2SPToDPChart(source);
+  expect(chart.notes.map(({ channel, seconds }) => [channel, seconds])).toEqual([
+    ['11', 2],
+    ['12', 2.25],
+    ['13', 2.5],
+    ['14', 2.75],
+    ['15', 3],
+    ['18', 3.25],
+    ['19', 3.5],
+  ]);
+  expect(chart.sampleTriggers.filter(({ channel }) => channel === '01')).toEqual([]);
+});
+
+test('9-TO-7 keeps an overflowing key audible and drops an overflowing mine', () => {
+  const source = resolveChart(
+    parseBMS(
+      [
+        '#BPM 120',
+        '#WAV00 mine.wav',
+        '#WAV01 chord.wav',
+        '#WAV02 overflow.wav',
+        '#00111:01',
+        '#00112:01',
+        '#00113:01',
+        '#00114:01',
+        '#00115:01',
+        '#00118:01',
+        '#00119:01',
+        '#00116:02',
+        '#001D7:01',
+      ].join('\n'),
+    ),
+    { playVariant: '9' },
+  );
+
+  const { chart } = convertLR2SPToDPChart(source);
+  expect(chart.notes.map(({ channel }) => channel)).toEqual(['11', '12', '13', '14', '15', '18', '19']);
+  expect(chart.mines).toEqual([]);
+  expect(
+    chart.sampleTriggers
+      .filter(({ channel }) => channel === '01')
+      .map(({ samplePath, seconds }) => [samplePath, seconds]),
+  ).toEqual([['overflow.wav', 2]]);
+});

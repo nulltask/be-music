@@ -1,6 +1,8 @@
-import type { BeMusicCourseReplay, BeMusicReplay } from '@be-music/player-engine/replay';
+import { serializeReplay, type BeMusicCourseReplay, type BeMusicReplay } from '@be-music/player-engine/replay';
 import type { RecordPlay } from '@be-music/player-engine/records';
-import { describe, expect, test } from 'vite-plus/test';
+import { IDBFactory, IDBObjectStore } from 'fake-indexeddb';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
+import { createIndexedDBReplaySlotBackend } from './replay-slot-database.ts';
 import {
   chartReplaySlotTarget,
   compressReplayText,
@@ -327,5 +329,116 @@ describe('ReplaySlotStore', () => {
     const store = new ReplaySlotStore({ backend });
     await store.load();
     expect(store.exists(CHART)).toEqual([false, false, false, false]);
+  });
+});
+
+describe('replay history across IndexedDB sessions', () => {
+  beforeEach(() => vi.stubGlobal('indexedDB', new IDBFactory()));
+  afterEach(() => vi.unstubAllGlobals());
+
+  function openStore(): ReplaySlotStore {
+    return new ReplaySlotStore({ backend: createIndexedDBReplaySlotBackend() });
+  }
+
+  test('replaces one slot without losing the old replay, then deletes that replay across page loads', async () => {
+    const initial = openStore();
+    const first = replay('First take');
+    const second = replay('Second take');
+    expect(await initial.save(CHART, [0, 1], { kind: 'chart', replay: first }, score(100), 'First take')).toMatchObject(
+      {
+        saved: true,
+      },
+    );
+    expect(await initial.save(CHART, [0], { kind: 'chart', replay: second }, score(120), 'Second take')).toMatchObject({
+      saved: true,
+    });
+
+    const reloaded = openStore();
+    await reloaded.load();
+    expect(reloaded.slots(CHART).map((slot) => slot?.title)).toEqual([
+      'Second take',
+      'First take',
+      undefined,
+      undefined,
+    ]);
+    await expect(reloaded.read(CHART, 0)).resolves.toEqual({ kind: 'chart', replay: second });
+    await expect(reloaded.read(CHART, 1)).resolves.toEqual({ kind: 'chart', replay: first });
+    const oldKey = reloaded.slots(CHART)[1]!.key;
+    await reloaded.removeHistory(oldKey);
+
+    const afterDeletion = openStore();
+    await afterDeletion.load();
+    expect(afterDeletion.history(CHART).map(({ title, slots }) => [title, slots])).toEqual([['Second take', [0]]]);
+    expect(afterDeletion.exists(CHART)).toEqual([true, false, false, false]);
+    await expect(afterDeletion.read(CHART, 0)).resolves.toEqual({ kind: 'chart', replay: second });
+    await expect(createIndexedDBReplaySlotBackend().readData(oldKey)).resolves.toBeUndefined();
+  });
+
+  test('rolls back a failed replay write and lets the old slot play after reopening the database', async () => {
+    const store = openStore();
+    const old = { kind: 'chart' as const, replay: replay('Before failure') };
+    const next = { kind: 'chart' as const, replay: replay('After retry') };
+    expect(await store.save(CHART, [0], old, score(100), 'Before failure')).toMatchObject({ saved: true });
+
+    // Abort at the compressed payload write, after the metadata updates have already been queued.
+    const put = IDBObjectStore.prototype.put;
+    const failPayload = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (
+      this: IDBObjectStore,
+      value: unknown,
+      key?: IDBValidKey,
+    ) {
+      const request = put.call(this, value, key);
+      if (this.name === 'replaySlotData') this.transaction.abort();
+      return request;
+    });
+    try {
+      expect(await store.save(CHART, [0], next, score(110), 'After retry')).toMatchObject({
+        saved: false,
+        reason: 'storage',
+      });
+    } finally {
+      failPayload.mockRestore();
+    }
+    expect(store.slots(CHART)[0]?.title).toBe('Before failure');
+
+    const reloaded = openStore();
+    await reloaded.load();
+    expect(reloaded.history(CHART).map(({ title, slots }) => [title, slots])).toEqual([['Before failure', [0]]]);
+    await expect(reloaded.read(CHART, 0)).resolves.toEqual(old);
+    expect(await reloaded.save(CHART, [0], next, score(110), 'After retry')).toMatchObject({ saved: true });
+    await expect(reloaded.read(CHART, 0)).resolves.toEqual(next);
+  });
+
+  test('opens a legacy database, retains a playable replay, and removes unrecognized and orphaned data', async () => {
+    const key = 'chart:bmfp0:aaaa#0';
+    const source = replay('Legacy take');
+    const compressed = await compressReplayText(serializeReplay(source));
+    // Version 1 held one slot per record and had no storage revision or meta store.
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('be-music-replays', 1);
+      open.onupgradeneeded = () => {
+        const records = open.result.createObjectStore('replaySlots');
+        records.put({ ...record(key, compressed.size, 0.5), title: 'Legacy take' }, key);
+        records.put({ version: 0, title: 'Broken' }, 'broken');
+        const data = open.result.createObjectStore('replaySlotData');
+        for (const storedKey of [key, 'broken', 'orphan']) data.put(compressed, storedKey);
+      };
+      open.onsuccess = () => {
+        open.result.close();
+        resolve();
+      };
+      open.onerror = () => reject(open.error);
+    });
+
+    const backend = createIndexedDBReplaySlotBackend();
+    const migrated = new ReplaySlotStore({ backend });
+    await migrated.load();
+    expect(migrated.history(CHART).map(({ title, slots }) => [title, slots])).toEqual([['Legacy take', [0]]]);
+    await expect(migrated.read(CHART, 0)).resolves.toEqual({ kind: 'chart', replay: source });
+    await expect(backend.listRecords()).resolves.toEqual([
+      expect.objectContaining({ key, slots: [0], title: 'Legacy take' }),
+    ]);
+    await expect(backend.readData('broken')).resolves.toBeUndefined();
+    await expect(backend.readData('orphan')).resolves.toBeUndefined();
   });
 });

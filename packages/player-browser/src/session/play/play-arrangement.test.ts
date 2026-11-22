@@ -760,13 +760,32 @@ test('DP FLIP follows LR2: SP TO DP never flips, DP-TO-SP flips onto 2P unless c
     ),
   };
   const merged = (battleMode: 'SP-TO-DP' | 'SP-TO-DP-CORRECTED', dpFlip: boolean) =>
-    prepare({ judgeRuleset: 'lr2', battleMode, dpFlip }, dp).notes.map((note) => note.channel[0]);
+    prepare({ judgeRuleset: 'lr2', battleMode, dpFlip }, dp).notes.map(({ channel, seconds }) => [channel, seconds]);
   // DP-TO-SP merges onto 1P; LR2's DP FLIP then moves every note to the 2P side, where an SP play cannot reach it.
-  expect(merged('SP-TO-DP', false).every((side) => side === '1')).toBe(true);
-  expect(merged('SP-TO-DP', true).every((side) => side === '2')).toBe(true);
-  expect(merged('SP-TO-DP-CORRECTED', true).every((side) => side === '1')).toBe(true);
+  expect(merged('SP-TO-DP', false)).toEqual([
+    ['11', 2],
+    ['12', 2],
+    ['13', 3],
+    ['19', 3],
+  ]);
+  expect(merged('SP-TO-DP', true)).toEqual([
+    ['21', 2],
+    ['22', 2],
+    ['23', 3],
+    ['29', 3],
+  ]);
+  expect(merged('SP-TO-DP-CORRECTED', true)).toEqual([
+    ['11', 2],
+    ['12', 2],
+    ['13', 3],
+    ['19', 3],
+  ]);
   // SP TO DP: the doubled chart is the same with or without DP FLIP.
   const doubled = (dpFlip: boolean) =>
-    prepare({ judgeRuleset: 'lr2', battleMode: 'SP-TO-DP', dpFlip }, sp7).notes.map((note) => note.channel);
-  expect(doubled(true)).toEqual(doubled(false));
+    prepare({ judgeRuleset: 'lr2', battleMode: 'SP-TO-DP', dpFlip }, sp7)
+      .notes.map((note) => note.channel)
+      .sort();
+  const channels = ['11', '12', '13', '14', '15', '16', '18', '19', '21', '22', '23', '24', '25', '26', '28', '29'];
+  expect(doubled(false)).toEqual(channels);
+  expect(doubled(true)).toEqual(channels);
 });

@@ -9,12 +9,12 @@ import {
 
 const lines = (...rows: string[]): Uint8Array => new TextEncoder().encode(rows.join('\n'));
 
-const imageCSV = (name: string, grIndex = 0): Uint8Array =>
-  lines(
-    `#IMAGE,${name}.png`,
-    `#SRC_IMAGE,0,${grIndex},0,0,100,100,1,1,0,0`,
-    '#DST_IMAGE,0,0,0,0,100,100,0,255,255,255,255',
-  );
+const imageRows = (name: string, grIndex = 0): string[] => [
+  `#IMAGE,${name}.png`,
+  `#SRC_IMAGE,0,${grIndex},0,0,100,100,1,1,0,0`,
+  '#DST_IMAGE,0,0,0,0,100,100,0,255,255,255,255',
+];
+const imageCSV = (name: string, grIndex = 0): Uint8Array => lines(...imageRows(name, grIndex));
 
 const imagePathsOf = (skin: ReturnType<typeof loadLR2SkinFromSourceFiles>): string[] =>
   skin?.images.map((image) => image.source.imagePath) ?? [];
@@ -1258,4 +1258,88 @@ describe('#SCENETIME', () => {
     );
     expect(skin?.timing.sceneTime).toBe(3000);
   });
+});
+
+it('carries bitmap font slots from the previous scene and indexes system fallback fonts independently', () => {
+  const files = new Map([
+    [
+      'scene/next.lr2skin',
+      lines('#FONT,18,0,0,System', '#LR2FONT,CONTINUE', '#FONT,26,0,0,System', '#LR2FONT,fonts/title.lr2font'),
+    ],
+    ['scene/fonts/title.lr2font', lines('#S,12')],
+  ]);
+  const next = loadLR2SkinFromSourceFiles(files, { resources: { images: [], fonts: ['select/fonts/menu.lr2font'] } });
+  expect(next?.lr2FontPaths).toEqual(['select/fonts/menu.lr2font', 'scene/fonts/title.lr2font']);
+  expect(next?.resources?.fonts).toEqual(['select/fonts/menu.lr2font', 'scene/fonts/title.lr2font']);
+  expect(next?.systemFontSizes).toEqual([18, 26]);
+});
+
+it('sets the scene timer, scratch and flip values declared by the skin', () => {
+  const skin = loadLR2SkinFromSourceFiles(
+    new Map([
+      [
+        'skin/play.lr2skin',
+        lines(
+          '#STARTINPUT,150',
+          '#SCENETIME,5500',
+          '#FADEOUT,600',
+          '#CLOSE,850',
+          '#LOADSTART,100',
+          '#LOADEND,350',
+          '#PLAYSTART,450',
+          '#SKIP,125',
+          '#SCRATCH,1,0',
+          '#FLIPSIDE',
+          '#FLIPRESULT',
+          '#RELOADBANNER',
+        ),
+      ],
+    ]),
+  );
+  expect(skin?.timing).toEqual({
+    startInput: 150,
+    sceneTime: 5500,
+    fadeOut: 600,
+    close: 850,
+    loadStart: 100,
+    loadEnd: 350,
+    playStart: 450,
+    skip: 125,
+  });
+  expect(skin?.scratchFlip).toEqual({
+    scratch1P: 1,
+    scratch2P: 0,
+    flipSide: true,
+    flipResult: true,
+    disableFlip: false,
+    reloadBanner: true,
+  });
+});
+
+it('clears a default option and applies the replacement across included files', () => {
+  const files = new Map([
+    [
+      'skin/main.lr2skin',
+      lines(
+        '#CUSTOMOPTION,Layout,900,Normal,Wide',
+        '#SETOPTION,-900',
+        '#SETOPTION,901',
+        '#INCLUDE,layout.csv',
+        '#INCLUDE,layout.csv',
+      ),
+    ],
+    [
+      'skin/layout.csv',
+      lines(
+        '#IF,900',
+        ...imageRows('normal'),
+        '#ELSEIF,901',
+        ...imageRows('wide'),
+        '#ELSE',
+        ...imageRows('fallback'),
+        '#ENDIF',
+      ),
+    ],
+  ]);
+  expect(imagePathsOf(loadLR2SkinFromSourceFiles(files))).toEqual(['wide.png']);
 });

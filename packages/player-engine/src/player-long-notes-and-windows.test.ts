@@ -9,6 +9,7 @@ vi.mock('../../player-node-audio/src/audio-sink.ts', async () =>
 import { resolveChart } from '@be-music/chart-model';
 import { createEmptyJSON } from '../../chart-source/src/index.ts';
 
+import { createVirtualClock } from './core/characterization/virtual-clock.ts';
 import { resolveBGMHeadroomGain, shouldUseAutoMixBGMHeadroomControl } from '../../player-node-audio/src/session.ts';
 import { extractPlayableNotes, resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from './display.ts';
 import { resolveJudgeWindowsMs } from './ruleset/vocabulary.ts';
@@ -141,33 +142,41 @@ describe('player', () => {
     expect(extractPlayableNotes(createLNOBJLongNoteChart(3))[0]?.longNoteMode).toBe(3);
     // HCN is a beatoraja mechanic — the chart's `#LNMODE` only reaches the engine under the rulesets that honour
     // it. LR2 plays every long note as a plain LN (asserted below).
-    const mode2Summary = await manualPlay(createLNOBJLongNoteChart(2), {
-      speed: 1,
-      leadInMs: 0,
-      audio: false,
-      tui: false,
-      judgeRuleset: 'beatoraja',
-      createInputRuntime: createScheduledInputRuntime([
-        { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
-        { delayMs: 1100, command: { kind: 'interrupt', reason: 'escape' } },
-      ]),
-    });
-    const mode3Summary = await manualPlay(createLNOBJLongNoteChart(3), {
-      speed: 1,
-      leadInMs: 0,
-      audio: false,
-      tui: false,
-      judgeRuleset: 'beatoraja',
-      createInputRuntime: createScheduledInputRuntime([
-        { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
-        { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
-      ]),
-    });
+    async function playLongNote(mode: 2 | 3) {
+      const output: string[] = [];
+      const summary = await createVirtualClock().run(() =>
+        manualPlay(createLNOBJLongNoteChart(mode), {
+          speed: 1,
+          leadInMs: 0,
+          audio: false,
+          tui: false,
+          judgeRuleset: 'beatoraja',
+          writeOutput: (line) => output.push(line),
+          createInputRuntime: createScheduledInputRuntime([
+            { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
+            { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
+          ]),
+        }),
+      );
+      const drains = output.flatMap((line) => {
+        const match = /time:(\S+).*delta:(-?[\d.]+) reason:hold-drain/.exec(line);
+        return match ? [[match[1], Number(match[2])]] : [];
+      });
+      return { summary, drains };
+    }
 
-    // A charge note is two judgments: the head on the press, the tail on the release.
-    expect(mode3Summary.total).toBe(2);
-    expect(mode3Summary.bad + mode3Summary.poor).toBe(1);
-    expect(mode3Summary.gauge?.current ?? 0).toBeLessThan(mode2Summary.gauge?.current ?? Number.POSITIVE_INFINITY);
+    const cn = await playLongNote(2);
+    const hcn = await playLongNote(3);
+    expect(cn.drains).toEqual([]);
+    // Drain ticks are 200 ms apart and cost half the beatoraja NORMAL gauge's 3-point BAD loss.
+    expect(hcn.drains).toEqual([
+      ['0:01.28', -1.5],
+      ['0:01.48', -1.5],
+    ]);
+    expect(hcn.summary.total).toBe(2);
+    expect(hcn.summary.bad + hcn.summary.poor).toBe(1);
+    expect(cn.summary.gauge?.current).toBeCloseTo(94);
+    expect(hcn.summary.gauge?.current).toBeCloseTo(91);
   });
 
   test('player: LR2 plays every long note as an LN, whatever #LNMODE says', async () => {

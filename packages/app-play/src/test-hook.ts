@@ -74,6 +74,8 @@ export interface TestHookPlay {
   title: string;
   autoPlay: boolean;
   replay: boolean;
+  /** The play is running in PRACTICE mode. */
+  practice?: true;
   /** The play tempo in force (1 = the chart's own). */
   tempo: number;
   /** The hi-speed in force (the LR2 and built-in scenes; a replay shows its recorded one). */

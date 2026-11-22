@@ -292,9 +292,15 @@ export default defineConfig({
       provider: 'v8',
       reporter: coverageShard ? [] : ['text', 'text-summary', 'html', 'lcov', 'json-summary'],
       reportsDirectory: './coverage',
-      include: [`packages/{${workspacePackages.join(',')}}/src/**/*.ts`],
+      include: [
+        `packages/{${workspacePackages.join(',')},app-play,app-leaderboard}/src/**/*.ts`,
+        'packages/app-leaderboard/client/**/*.ts',
+      ],
       exclude: [
-        'packages/*/src/**/*.test.ts',
+        'packages/**/*.test.ts',
+        'packages/app-leaderboard/src/test-support/**',
+        'packages/app-leaderboard/src/**/*.generated.ts',
+        'packages/app-leaderboard/client/**/*.d.ts',
         'packages/*/src/cli.ts',
         'packages/*/src/**/*.d.ts',
         'packages/chart-audio-renderer/src/index.ts',

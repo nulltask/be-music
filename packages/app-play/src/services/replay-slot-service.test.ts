@@ -77,7 +77,15 @@ describe('ResultReplaySlots', () => {
     expect(store.history(CHART)).toHaveLength(1);
     await Promise.all([result.save(0), result.save(1)]);
     expect(store.history(CHART)).toHaveLength(1);
-    expect(store.slots(CHART)[0]?.key).toBe(store.slots(CHART)[1]?.key);
+    const [saved] = store.history(CHART);
+    expect(saved?.key).toEqual(expect.any(String));
+    expect(
+      store
+        .slots(CHART)
+        .slice(0, 2)
+        .map((slot) => slot?.key),
+    ).toEqual([saved!.key, saved!.key]);
+    expect(result.states()).toEqual(['saved', 'saved', 'none', 'none']);
   });
 
   test('keeps a history-only run without applying slot rules', async () => {

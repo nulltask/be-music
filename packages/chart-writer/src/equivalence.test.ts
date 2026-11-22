@@ -60,3 +60,53 @@ test('bmson equivalence includes up and type changes in preserved sound channels
     expect(areBmsonChartsEquivalent(source, changed)).toBe(false);
   }
 });
+
+test('BMS preservation rejects edits to an unselected random branch', () => {
+  const source = parseBMS(
+    [
+      '#TITLE Chart',
+      '#BPM 120',
+      '#WAV01 a.wav',
+      '#WAV02 b.wav',
+      '#RANDOM 2',
+      '#IF 1',
+      '#00111:01',
+      '#ELSE',
+      '#00112:02',
+      '#ENDIF',
+      '#ENDRANDOM',
+    ].join('\n'),
+  );
+  const edited = structuredClone(source);
+  const elseIndex = edited.preservation.bms.sourceLines.findIndex(
+    (entry) => entry.kind === 'directive' && entry.command === 'ELSE',
+  );
+  expect(elseIndex).toBeGreaterThan(-1);
+  const branch = edited.preservation.bms.sourceLines[elseIndex + 1];
+  if (branch?.kind !== 'object') throw new Error('Missing preserved object in the ELSE branch');
+  edited.preservation.bms.sourceLines[elseIndex + 1] = {
+    ...branch,
+    events: branch.events.map((event) => ({ ...event, value: '01' })),
+  };
+  expect(edited.events).toEqual(source.events);
+  expect(edited.bms.controlFlow).toEqual(source.bms.controlFlow);
+  expect(areBMSChartsEquivalent(source, edited)).toBe(false);
+});
+
+test.each([
+  ['BPM', { bpmEvents: [{ y: 240, bpm: 180 }] }, { bpmEvents: [{ y: 240, bpm: 200 }] }],
+  ['STOP', { stopEvents: [{ y: 480, duration: 120 }] }, { stopEvents: [{ y: 480, duration: 240 }] }],
+  ['SCROLL', { scrollEvents: [{ y: 720, rate: 0.5 }] }, { scrollEvents: [{ y: 720, rate: 0.75 }] }],
+] as const)(
+  'bmson preservation detects a stale %s event even when the live chart still matches',
+  (_, before, after) => {
+    const source = parseBmson(bmson(120));
+    const preserved = structuredClone(source);
+    Object.assign(preserved.preservation.bmson, before);
+    const edited = structuredClone(preserved);
+    Object.assign(edited.preservation.bmson, after);
+
+    expect(areBmsonChartsEquivalent(preserved, structuredClone(preserved))).toBe(true);
+    expect(areBmsonChartsEquivalent(preserved, edited)).toBe(false);
+  },
+);

@@ -38,6 +38,7 @@
     "@lit-labs/ssr": "^4.1.0",
     "@tailwindcss/vite": "^4.3.3",
     "basecoat-css": "^1.0.2",
+    "fake-indexeddb": "^6.2.8",
     "tailwindcss": "^4.3.3",
     "vite": "catalog:",
     "vite-plus": "catalog:",
