@@ -29,7 +29,7 @@ function playHostname(): string {
  *  - `#songs` / `#search` / `#stage` / `#loading-*` / `.shell` — looked up in `main.ts` as `PlayerWebElements`
  */
 export const PLAYER_APP_TEMPLATE = html`
-  <div class="shell empty">
+  <div class="shell empty drop-prompt-open">
     <div id="player-service-header" class="player-service-header"></div>
     <main id="main" class="player-main">
       <div id="chart-diagnostics" class="chart-diagnostics"></div>
@@ -57,21 +57,22 @@ export const PLAYER_APP_TEMPLATE = html`
       />
       <p id="search-error" class="search-error" role="status" hidden></p>
       <div class="stage" id="stage">
-        <!--
-        Drop hint. Visible whenever the shell carries the
-        \`.empty\` class (no songs loaded yet) so the user has a
-        clear "drop a folder here" target up-front, plus during
-        an active drag (\`.dragging\`) so the hint reappears even
-        once charts are loaded. Falls behind the canvas otherwise.
-
-        Structured as two layers:
-        - \`.drop-card\`: centered glassmorphism panel hosting the
-          actual content; hosts the entry / hover animations.
-          It is the only drop feedback.
-        - icon + title + subtitle for the hierarchy.
-      -->
+        <!-- The initial card stays visible until dismissed. A drag shows the hint again. -->
         <div class="drop">
           <div class="card drop-card px-8">
+            <button
+              type="button"
+              class="btn drop-card-close"
+              data-variant="ghost"
+              aria-label=${localized('closeDropCard')}
+              @click=${(event: Event) => {
+                (event.currentTarget as HTMLButtonElement).closest('.shell')?.classList.remove('drop-prompt-open');
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+                <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </button>
             <svg class="drop-icon" viewBox="0 0 48 48" aria-hidden="true">
               <!--
               Stylized download arrow. The two halves animate

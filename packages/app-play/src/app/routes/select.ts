@@ -229,9 +229,6 @@ export class SelectRoute {
     if (courseReturn !== undefined) this.lastSelectNavigation = courseReturn;
     this.elements.shell.classList.remove('playing');
     this.unlockReplayOptions();
-    // The `.empty` class drives the centered "Drop BMS folder…" hint. Toggle it off the moment we have charts to show,
-    // and back on after a wipe / failed drop so the hint comes back instead of leaving the user staring at a blank
-    // canvas.
     this.elements.shell.classList.toggle('empty', this.library.collection.charts.length === 0);
     // Family dispatch. The Options dialog's "Skin family" pick overrides the auto chain (beatoraja → LR2 → default). The
     // beatoraja family draws the theme's select entry when the library has charts (an empty library shows the built-in

@@ -39,7 +39,7 @@ import type { PlayerWebElements } from '../types.ts';
 
 export interface DropTargetOptions {
   /** The loading overlay a load shows while it reads, and the Options dialog's hidden file inputs. */
-  readonly elements: LoadingOverlayElements & Pick<PlayerWebElements, 'chartInput' | 'filesInput'>;
+  readonly elements: LoadingOverlayElements & Pick<PlayerWebElements, 'chartInput' | 'filesInput' | 'shell'>;
   /** Takes the select screen off the stage while files load, when it is the one showing. */
   readonly leaveSelect: () => Promise<boolean>;
   /** Loads a drop's (or the folder picker's) files (`LibraryService`). */
@@ -526,7 +526,7 @@ export class DropTarget {
     //
     // `showSelect()` at the end of the try block shows the scene again with the freshly populated state in one shot.
     // Not awaited: the drop's items must be read before this handler yields.
-    void this.leaveSelect();
+    const leavingSelect = this.leaveSelect();
     try {
       // The drop's entries are kept with its charts, so the folder reload can walk its folders again.
       const entries = dropEntries(dataTransfer);
@@ -558,6 +558,14 @@ export class DropTarget {
       const sessions = names.size === handles.length ? handles.map((handle) => this.sessionOf(handle)) : [];
       await this.processIncomingFiles(files, {
         ...(entries.length > 0 ? { entries } : {}),
+        ...(isFolderDrop && this.elements.shell.classList.contains('drop-prompt-open')
+          ? {
+              droppedFolder: {
+                names: folderNames,
+                onContent: () => this.elements.shell.classList.remove('drop-prompt-open'),
+              },
+            }
+          : {}),
         showLibraryRoot: isFolderDrop && (this.savedFolders.length > 0 || this.droppedFolderNames.size > 0),
         ...(sessions.length > 0
           ? {
@@ -586,6 +594,13 @@ export class DropTarget {
       // produced an empty bucket. Otherwise a failed drop would leave the UI permanently masked.
       hideLoadingOverlay(this.elements);
       this.recordLoad();
+      // A drop with no importable content leaves the library alone, so its caller restores the paused select.
+      // Keep this independent of the file drop: reading the browser's files cannot be blocked on a scene transition.
+      void leavingSelect
+        .then(async (leftSelect) => {
+          if (leftSelect) await this.options.resumeSelect();
+        })
+        .catch((error: unknown) => console.warn('Could not restore select after a drop', error));
     }
   }
 }

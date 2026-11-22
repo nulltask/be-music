@@ -90,6 +90,7 @@ function harness(overrides: Partial<DropTargetOptions> = {}) {
     loadingCounter: fakeElement(),
     chartInput: fakeElement(),
     filesInput: fakeElement(),
+    shell: fakeElement(),
   };
   const loaded: string[][] = [];
   const options: DropTargetOptions = {

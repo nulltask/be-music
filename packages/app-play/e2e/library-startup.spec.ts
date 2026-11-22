@@ -19,6 +19,11 @@ test('starts the default Bemuse library when the saved server list is malformed'
   });
   await player.open({ 'be-music.bemuse-server-urls': '{' });
   await expect.poll(async () => (await player.state()).library.charts, { timeout: 5_000 }).toBe(1);
+  const dropCard = page.locator('.drop-card');
+  await expect(dropCard).toBeVisible();
+  await dropCard.getByRole('button', { name: 'Close drop card' }).press('Enter');
+  await expect(dropCard).toBeHidden();
+  expect((await player.state()).scene.kind).toBe('select');
 });
 
 for (const slowSource of ['Bemuse server', 'saved folder', 'difficulty table'] as const) {
