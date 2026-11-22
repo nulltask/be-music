@@ -10,7 +10,6 @@ function resetDatabase(): Promise<void> {
     const request = indexedDB.deleteDatabase(REPLAY_SLOT_DB_NAME);
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error('A replay database connection is still open'));
   });
 }
 

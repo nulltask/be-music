@@ -277,7 +277,15 @@ export default defineConfig({
       },
       {
         extends: true as const,
-        optimizeDeps: { entries: browserTests },
+        optimizeDeps: {
+          entries: browserTests,
+          // Prebundle the media loader's dependencies before the browser starts a test and Vite can reload its iframe.
+          include: [
+            '@be-music/player-browser > @ffmpeg/ffmpeg',
+            '@be-music/player-browser > @ffmpeg/util',
+            '@be-music/player-browser > pixi.js',
+          ],
+        },
         test: {
           name: 'browser',
           include: browserTests,
