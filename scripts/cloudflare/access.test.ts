@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { parseAllowedEmails, PREVIEW_ACCESS_HOSTS, previewAccessApplication, previewAccessPolicy } from './access.ts';
+import {
+  parseAllowedEmails,
+  PREVIEW_ACCESS_HOSTS,
+  previewAccessApplication,
+  previewAccessPolicy,
+  previewStripeWebhookApplication,
+  previewStripeWebhookPolicy,
+} from './access.ts';
 
 describe('parseAllowedEmails', () => {
   it('splits on commas and whitespace, lowercases and drops duplicates', () => {
@@ -30,5 +37,15 @@ describe('preview Access configuration', () => {
     expect(app.destinations.map((destination) => destination.uri)).toEqual([...PREVIEW_ACCESS_HOSTS]);
     expect(app.allowed_idps).toEqual(['idp']);
     expect(app.policies).toEqual([{ id: 'policy', precedence: 1 }]);
+  });
+
+  it('exempts nothing but the Stripe webhook path', () => {
+    const app = previewStripeWebhookApplication('bypass');
+    expect(app.domain).toBe('donate.preview.be-music.app/api/stripe/webhook');
+    expect(app.destinations).toEqual([{ type: 'public', uri: app.domain }]);
+    expect(app.policies).toEqual([{ id: 'bypass', precedence: 1 }]);
+    const policy = previewStripeWebhookPolicy();
+    expect(policy.decision).toBe('bypass');
+    expect(policy.include).toEqual([{ everyone: {} }]);
   });
 });

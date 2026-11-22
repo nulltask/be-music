@@ -56,3 +56,35 @@ export function previewAccessApplication(policyId: string, identityProviderId: s
     policies: [{ id: policyId, precedence: 1 }],
   };
 }
+
+/**
+ * The one preview path open to everyone: Stripe cannot sign in to Access, and the Donate Worker accepts only events
+ * signed with its webhook secret. Access applies a path to everything below it, and prefers the longer path over
+ * the application above.
+ */
+export const PREVIEW_STRIPE_WEBHOOK = 'donate.preview.be-music.app/api/stripe/webhook';
+export const PREVIEW_STRIPE_WEBHOOK_APP_NAME = 'Be-Music preview: Stripe webhook';
+export const PREVIEW_STRIPE_WEBHOOK_POLICY_NAME = 'Be-Music preview: Stripe webhook (bypass)';
+
+/** A reusable Access policy that lets every request through. Only the Stripe webhook application may use it. */
+export function previewStripeWebhookPolicy() {
+  return {
+    name: PREVIEW_STRIPE_WEBHOOK_POLICY_NAME,
+    decision: 'bypass',
+    include: [{ everyone: {} }],
+    require: [],
+    exclude: [],
+  };
+}
+
+/** The Access application that exempts exactly the Stripe webhook path. */
+export function previewStripeWebhookApplication(policyId: string) {
+  return {
+    type: 'self_hosted',
+    name: PREVIEW_STRIPE_WEBHOOK_APP_NAME,
+    domain: PREVIEW_STRIPE_WEBHOOK,
+    destinations: [{ type: 'public', uri: PREVIEW_STRIPE_WEBHOOK }],
+    app_launcher_visible: false,
+    policies: [{ id: policyId, precedence: 1 }],
+  };
+}

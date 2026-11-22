@@ -5,10 +5,15 @@ import {
   PREVIEW_ACCESS_POLICY_NAME,
   previewAccessApplication,
   previewAccessPolicy,
+  PREVIEW_STRIPE_WEBHOOK_APP_NAME,
+  PREVIEW_STRIPE_WEBHOOK_POLICY_NAME,
+  previewStripeWebhookApplication,
+  previewStripeWebhookPolicy,
 } from './access.ts';
 
 /**
- * `node scripts/cloudflare/access-apply.ts [--apply]` puts the preview hosts behind Cloudflare Access (access.ts).
+ * `node scripts/cloudflare/access-apply.ts [--apply]` puts the preview hosts behind Cloudflare Access (access.ts),
+ * except for the Stripe webhook of Donate.
  * Without `--apply` it only prints what it would send. Running it again updates the same policy and application.
  *
  * Needs `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (Access: Apps and Policies Edit, and Access: Organizations,
@@ -71,5 +76,16 @@ await upsert(
   '/apps',
   apps.find((app) => app.name === PREVIEW_ACCESS_APP_NAME),
   previewAccessApplication(policyId, github.id),
+);
+
+const webhookPolicyId = await upsert(
+  '/policies',
+  policies.find((policy) => policy.name === PREVIEW_STRIPE_WEBHOOK_POLICY_NAME),
+  previewStripeWebhookPolicy(),
+);
+await upsert(
+  '/apps',
+  apps.find((app) => app.name === PREVIEW_STRIPE_WEBHOOK_APP_NAME),
+  previewStripeWebhookApplication(webhookPolicyId),
 );
 if (!apply) console.log('Nothing was changed. Run again with --apply to send it.');
