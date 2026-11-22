@@ -1,3 +1,4 @@
+import { BEATORAJA_SKIN_TYPE } from '@be-music/skin-beatoraja';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 import { userEvent } from 'vite-plus/test/browser';
 import '../../styles.css';
@@ -7,6 +8,8 @@ import { refreshCompressorStageVisibility } from './compressor.ts';
 import { OptionsDialog } from './index.ts';
 import { OptionLayout, parseOptionsLayout } from './layout.ts';
 import { rebuildSkinSettingsFolder } from './skin.ts';
+import { rebuildBeatorajaSkinPickers } from './skin-pickers.ts';
+import { runtimeOptionDefaults } from './runtime-defaults.ts';
 
 afterEach(() => document.body.replaceChildren());
 
@@ -111,12 +114,12 @@ test('rebuilding the skin controls replaces only the relocated group and preserv
   rebuildSkinSettingsFolder.call(menu);
   const relocated = layout.folder('relocated');
   const previous = [...relocated.children];
-  expect(previous).toHaveLength(2);
+  expect(previous).toHaveLength(1);
 
   skin = { id: 'second', settings: [{ kind: 'toggle', id: 'flash', label: 'Flash', default: false }] };
   rebuildSkinSettingsFolder.call(menu);
   expect(layout.folder('skinSettings').children).toEqual([fixed]);
-  expect(relocated.children.map(({ element }) => element.textContent?.trim())).toEqual(['Flash', 'Reset to defaults']);
+  expect(relocated.children.map(({ element }) => element.textContent?.trim())).toEqual(['Flash']);
   expect(previous.every(({ element }) => !element.isConnected)).toBe(true);
 
   skin = { id: 'plain', settings: [] };
@@ -199,4 +202,100 @@ test('relocated compressor stages follow the mode while unrelated settings stay 
   const other = place('other').addBinding({ enabled: true }, 'enabled', { label: 'Other' });
   expect(getComputedStyle(stages).display).not.toBe('none');
   expect(other.element.getClientRects().length).toBeGreaterThan(0);
+});
+
+test('section reset uses the JSON defaults, applies changes in order and preserves other sections and locked settings', () => {
+  const { gui, layout, place } = mount([
+    {
+      title: 'Play',
+      items: [
+        {
+          folder: 'play',
+          title: 'Play options',
+          items: [
+            { option: 'speed', kind: 'slider', default: 0 },
+            { option: 'enabled', kind: 'toggle', default: false },
+            { option: 'locked', kind: 'toggle', default: false },
+            { option: 'workers', kind: 'slider', default: { use: 'workers' } },
+            { folder: 'nested', title: 'Nested', items: [{ group: 'custom', reset: true }] },
+          ],
+        },
+        { folder: 'view', title: 'View', items: [{ option: 'other', kind: 'toggle', default: false }] },
+      ],
+    },
+  ]);
+  const values = { enabled: true, speed: 2, locked: true, workers: 2, other: true };
+  const changes: string[] = [];
+  const register = <K extends keyof typeof values>(id: K) =>
+    place(id)
+      .addBinding(values, id, { label: id })
+      .on('change', () => changes.push(id));
+  register('enabled');
+  register('speed');
+  register('locked').disabled = true;
+  register('workers');
+  register('other');
+  const custom = vi.fn();
+  layout.setGroupReset('custom', custom);
+  layout.installSectionResets((policy) => (policy === 'workers' ? 4 : undefined));
+  gui.expanded = true;
+  layout
+    .folder('play')
+    .element.querySelector<HTMLButtonElement>(':scope > .options-folder-content > .options-section-reset button')!
+    .click();
+  expect(values).toEqual({ enabled: false, speed: 0, locked: true, workers: 4, other: true });
+  expect(changes).toEqual(['enabled', 'speed', 'workers']);
+  expect(custom).toHaveBeenCalledOnce();
+  layout.folder('nested').element.querySelector<HTMLButtonElement>('.options-section-reset button')!.click();
+  expect(custom).toHaveBeenCalledTimes(2);
+});
+
+test('runtime defaults use the supported browser and the currently available LR2 theme', () => {
+  let theme: string | undefined;
+  const resolve = runtimeOptionDefaults(() => theme);
+  expect(resolve('lr2Theme')).toBeUndefined();
+  theme = 'Fixture LR2';
+  expect(resolve('lr2Theme')).toBe('Fixture LR2');
+  expect(resolve('bgaUseWebCodecs')).toBe('VideoEncoder' in globalThis);
+  expect(resolve('workers')).toBeGreaterThan(0);
+});
+
+test('resetting the loaded beatoraja skin section removes the override and selects the discovered default', () => {
+  const mounted = mount([
+    {
+      title: 'Skin',
+      items: [
+        {
+          folder: 'beatorajaSkins',
+          title: 'Beatoraja skins',
+          items: [{ group: 'beatorajaSkinPickers', reset: true }],
+        },
+      ],
+    },
+  ]);
+  const { layout, gui } = mounted;
+  const folder = layout.folder('beatorajaSkins');
+  const type = BEATORAJA_SKIN_TYPE.MUSIC_SELECT;
+  const base = { entryPath: 'default.lua', header: { type, name: 'Default' } };
+  const other = { entryPath: 'custom.lua', header: { type, name: 'Custom' } };
+  const overrides = new Map([[type, other.entryPath]]);
+  const liveSwitch = vi.fn();
+  const menu = {
+    ...mounted,
+    beatorajaSkinPickerFolder: folder,
+    beatorajaSkinPickerControllers: new Map(),
+    beatorajaSkinOverridesByType: overrides,
+    playLock: { skinControlsLocked: false },
+    applyBeatorajaSkinSwitchIfActive: liveSwitch,
+    deps: { beatorajaTheme: () => ({ theme: { entries: [base, other], playSkins: {}, selectSkin: base } }) },
+  } as unknown as OptionsDialog;
+  rebuildBeatorajaSkinPickers.call(menu);
+  layout.installSectionResets(() => undefined);
+  gui.expanded = true;
+  const picker = folder.element.querySelector('select')!;
+  expect(picker.selectedOptions[0]?.textContent).toContain('Custom');
+  folder.element.querySelector<HTMLButtonElement>('.options-section-reset button')!.click();
+  expect(overrides.has(type)).toBe(false);
+  expect(picker.selectedOptions[0]?.textContent).toContain('Default');
+  expect(liveSwitch).toHaveBeenCalledExactlyOnceWith(type, base.entryPath, [base, other]);
 });

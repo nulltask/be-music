@@ -112,6 +112,27 @@ describe('parseOptionsLayout', () => {
     expect(optionLayoutTitles(layout)).toEqual(['Play', 'Secret', 'Play options', 'Judge']);
   });
 
+  test('keeps literal, runtime and group defaults in the layout', () => {
+    const layout = parseOptionsLayout({
+      ...SMALL_LAYOUT,
+      pages: [
+        {
+          title: 'Audio',
+          items: [
+            { option: 'mute', kind: 'toggle', default: false },
+            { option: 'workers', kind: 'slider', default: { use: 'workers' } },
+            { group: 'tuning', reset: true },
+          ],
+        },
+      ],
+    });
+    expect(layout.pages[0]!.items).toEqual([
+      { option: 'mute', kind: 'toggle', default: false, hidden: false },
+      { option: 'workers', kind: 'slider', default: { use: 'workers' }, hidden: false },
+      { group: 'tuning', reset: true, hidden: false },
+    ]);
+  });
+
   test('ignores $comment keys', () => {
     expect(() => parseOptionsLayout({ ...SMALL_LAYOUT, $comment: 'The Options dialog' })).not.toThrow();
   });
@@ -143,6 +164,24 @@ describe('parseOptionsLayout', () => {
       'an item of two kinds',
       { ...SMALL_LAYOUT, pages: [{ title: 'A', items: [{ option: 'a', group: 'b', kind: 'select' }] }] },
       'pages[0].items[0]',
+    ],
+    [
+      'a toggle default with the wrong type',
+      { ...SMALL_LAYOUT, pages: [{ title: 'A', items: [{ option: 'mute', kind: 'toggle', default: 'off' }] }] },
+      'pages[0].items[0].default',
+    ],
+    [
+      'a default on a command',
+      { ...SMALL_LAYOUT, pages: [{ title: 'A', items: [{ option: 'capture', kind: 'button', default: true }] }] },
+      'pages[0].items[0].default',
+    ],
+    [
+      'an unknown runtime default',
+      {
+        ...SMALL_LAYOUT,
+        pages: [{ title: 'A', items: [{ option: 'workers', kind: 'slider', default: { use: 'unknown' } }] }],
+      },
+      'pages[0].items[0].default.use',
     ],
     ['an empty title', { ...SMALL_LAYOUT, pages: [{ title: ' ', items: [] }] }, 'pages[0].title'],
     [
@@ -270,6 +309,14 @@ describe('options-layout.json', () => {
     for (const id of ids) {
       const named = sources.includes(`'${id}'`) || sources.includes(`${id.replace(/(?:1P|2P|\d)$/u, '')}\${`);
       expect(named, id).toBe(true);
+    }
+  });
+
+  test('declares a default for every editable option in the shipped layout', () => {
+    for (const item of optionLayoutItems(OPTIONS_LAYOUT)) {
+      if ('option' in item && !['button', 'monitor', 'element'].includes(item.kind)) {
+        expect(item.default, item.option).toBeDefined();
+      }
     }
   });
 

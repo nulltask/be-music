@@ -5,7 +5,7 @@ import { html, nothing, render, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { skeletonTemplate } from '@be-music/service-web-theme/client';
-import type { OptionRowKind } from './options/layout.ts';
+import type { OptionDefaultValue, OptionRowKind } from './options/layout.ts';
 // The controls of the player's Options dialog and the beatoraja Skin Config panel, drawn with Basecoat: a switch for a
 // boolean, a select for a choice list, a slider with a number field for a number with a range, a text field, read-only
 // monitors (text, a text area, an FPS graph), buttons, collapsible folders and tabs. A control binds `object[key]`: an
@@ -293,6 +293,27 @@ export class OptionBinding<T = unknown> extends OptionRow {
     super.dispose();
   }
 
+  /** Applies a section reset through the same change handlers as a manual edit. */
+  public resetToDefault(value: OptionDefaultValue): void {
+    if (!this.parent || this.disabled || this.unavailable || this.controlKind === 'monitor') return;
+    if (this.controlKind === 'select') {
+      const choice = this.choices[choiceIndex(this.choices, value)];
+      if (choice === undefined || choice.disabled === true) return;
+      if (!Object.is(this.object[this.key], choice.value)) this.commit(choice.value);
+      return;
+    }
+    if (this.controlKind === 'number' && typeof value === 'number') {
+      const constrained = constrainNumber(value, this.params);
+      if (constrained !== undefined && !Object.is(this.object[this.key], constrained)) this.commit(constrained as T);
+    } else if (
+      ((this.controlKind === 'text' && typeof value === 'string') ||
+        (this.controlKind === 'toggle' && typeof value === 'boolean')) &&
+      !Object.is(this.object[this.key], value)
+    ) {
+      this.commit(value as T);
+    }
+  }
+
   private commit(value: T): void {
     this.object[this.key] = value;
     for (const handler of this.handlers) handler({ value });
@@ -521,6 +542,12 @@ export abstract class OptionContainer extends OptionRow {
 
   public addButton(params: { title: string }): OptionButton {
     return this.add(new OptionButton(this, params));
+  }
+
+  public addSectionReset(reset: () => void): void {
+    const row = this.addButton({ title: 'Reset section to defaults' }).on('click', reset).element;
+    row.classList.add('options-section-reset');
+    row.removeAttribute('data-option-label');
   }
 
   /** A folder: a section with a heading, which is always open. */

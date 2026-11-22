@@ -1,4 +1,12 @@
-import { DEFAULT_REPLAY_PLAYBACK_OPTIONS, type ReplayPlaybackOptions } from '@be-music/player-engine/replay';
+import type { ReplayPlaybackOptions } from '@be-music/player-engine/replay';
+import { optionDefault } from './option-defaults.ts';
+
+const DEFAULT_REPLAY_VIEW: Readonly<ReplayPlaybackOptions> = {
+  tempo: optionDefault('replayViewTempo'),
+  hiSpeed: optionDefault('replayViewHiSpeed'),
+  covers: optionDefault('replayViewCovers'),
+  lift: optionDefault('replayViewLift'),
+};
 
 /**
  * The Options dialog's "Replay / ghost" settings: which of what a replay recorded the player seeing (tempo, hi-speed,
@@ -20,7 +28,7 @@ export function parseStoredReplayView(raw: string | null | undefined): ReplayPla
   } catch {
     // Unreadable: the defaults.
   }
-  const settings = { ...DEFAULT_REPLAY_PLAYBACK_OPTIONS };
+  const settings = { ...DEFAULT_REPLAY_VIEW };
   for (const key of KEYS) {
     if (typeof stored[key] === 'boolean') settings[key] = stored[key];
   }
@@ -34,7 +42,7 @@ export function readStoredReplayView(
   try {
     return parseStoredReplayView(storage?.getItem(REPLAY_VIEW_STORAGE_KEY));
   } catch {
-    return { ...DEFAULT_REPLAY_PLAYBACK_OPTIONS };
+    return { ...DEFAULT_REPLAY_VIEW };
   }
 }
 

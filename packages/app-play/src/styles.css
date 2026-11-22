@@ -307,7 +307,7 @@ textarea {
 .options-tab-panel[hidden],
 .options-tabs > [role='tablist'] > [role='tab'][hidden],
 [data-option-omitted][hidden],
-[data-hide-empty-options-folder]:not(:has(> .options-folder-content > :not([hidden]))) {
+[data-hide-empty-options-folder]:not(:has(> .options-folder-content > :not([hidden], .options-section-reset))) {
   display: none;
 }
 .options-section + .options-section,
@@ -734,6 +734,10 @@ textarea {
 }
 .options-button-row > .options-button {
   width: 100%;
+}
+.options-section-reset > .options-button {
+  width: auto;
+  margin-inline-start: auto;
 }
 .options-row.recording .options-button {
   background: var(--destructive);

@@ -31,7 +31,10 @@ export function rebuildBeatorajaSkinPickers(this: OptionsDialog): void {
   const theme = this.deps.beatorajaTheme()?.theme;
   // Shown only while a beatoraja theme is loaded; an empty folder header would just be noise.
   folder.hidden = theme === undefined;
-  if (theme === undefined) return;
+  if (theme === undefined) {
+    this.layout?.setGroupReset('beatorajaSkinPickers', () => {});
+    return;
+  }
   // Order matters here — the folder lays controllers out in insertion order, so we keep the
   // play-variant types together (clustered by key count), then chrome scenes (select / decide
   // / result / etc.) below them.
@@ -52,6 +55,11 @@ export function rebuildBeatorajaSkinPickers(this: OptionsDialog): void {
     { typeCode: BEATORAJA_SKIN_TYPE.RESULT, label: 'Result', best: theme.resultSkin },
     { typeCode: BEATORAJA_SKIN_TYPE.COURSE_RESULT, label: 'Course Result', best: theme.courseResultSkin },
   ];
+  const resets: (() => void)[] = [];
+  this.layout?.setGroupReset('beatorajaSkinPickers', () => {
+    if (this.playLock.skinControlsLocked) return;
+    for (const reset of resets) reset();
+  });
   for (const scene of sceneTypes) {
     const candidates = theme.entries.filter((entry) => entry.header.type === scene.typeCode);
     if (candidates.length === 0) continue;
@@ -66,11 +74,13 @@ export function rebuildBeatorajaSkinPickers(this: OptionsDialog): void {
     }
     // The proxy holds the currently-selected entryPath. Default to the discovery's best pick
     // so the dropdown reflects what would actually mount if no override is set.
-    const proxy = { entryPath: scene.best?.entryPath ?? candidates[0]!.entryPath };
+    const defaultPath = scene.best?.entryPath ?? candidates[0]!.entryPath;
+    const override = this.beatorajaSkinOverridesByType.get(scene.typeCode);
+    const proxy = { entryPath: candidates.find((entry) => entry.entryPath === override)?.entryPath ?? defaultPath };
     const controller = selectBinding(pickers, proxy, 'entryPath', `${scene.label} (${candidates.length})`, options).on(
       'change',
       ({ value: nextEntryPath }) => {
-        if (scene.best !== undefined && nextEntryPath === scene.best.entryPath) {
+        if (nextEntryPath === defaultPath) {
           // Picking the discovery default = "no override" — drop any prior override so future
           // theme rotations pick up the new "best" automatically.
           this.beatorajaSkinOverridesByType.delete(scene.typeCode);
@@ -85,6 +95,10 @@ export function rebuildBeatorajaSkinPickers(this: OptionsDialog): void {
       },
     );
     this.beatorajaSkinPickerControllers.set(scene.typeCode, controller);
+    resets.push(() => {
+      if (proxy.entryPath === defaultPath) this.beatorajaSkinOverridesByType.delete(scene.typeCode);
+      else controller.resetToDefault(defaultPath);
+    });
   }
 }
 /**

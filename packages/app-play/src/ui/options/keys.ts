@@ -68,6 +68,16 @@ export function buildKeyConfigFolder(this: OptionsDialog): void {
   // Picking LR2's or beatoraja's controls overwrites the key config with that key map's keys (asking first when the
   // player has keys of their own it would drop); it is not a mode the keys of their own survive.
   let scheme = this.guiState.builtInControlScheme;
+  this.layout?.setGroupReset('keyConfigPages', () => {
+    if (schemeController.disabled) return;
+    this.guiState.actionKeys = {};
+    this.guiState.laneKeys = {};
+    this.guiState.controlKeys = {};
+    if (waiting !== undefined) stop();
+    else paint();
+    repaintActionKeys?.();
+    this.scheduleSettingsSave();
+  });
   const schemeController = this.trackPlayOption(
     this.place('builtInControlScheme').addBinding(this.guiState, 'builtInControlScheme', {
       label: 'Built-in skin controls',

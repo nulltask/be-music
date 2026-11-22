@@ -1,3 +1,4 @@
+import { optionDefault } from './option-defaults.ts';
 // The BGA camera's settings (Options → Camera): whether the play shows a camera in the BGA frame, which
 // camera, and whether it is mirrored. They belong to this browser's cameras, so they stay in this browser's
 // `localStorage` and are not part of the synced Options document (`option-settings.ts`).
@@ -29,12 +30,12 @@ export type BGACameraAspect = 'auto' | '4:3' | '16:9' | '1:1';
 export const BGA_CAMERA_ASPECTS: readonly BGACameraAspect[] = ['auto', '4:3', '16:9', '1:1'];
 
 export const DEFAULT_BGA_CAMERA_SETTINGS: BGACameraSettings = {
-  enabled: false,
-  deviceId: '',
+  enabled: optionDefault('bgaCameraEnabled'),
+  deviceId: optionDefault('bgaCameraDevice'),
   label: '',
-  mirror: false,
-  resolution: 'auto',
-  aspect: 'auto',
+  mirror: optionDefault('bgaCameraMirror'),
+  resolution: optionDefault('bgaCameraResolution'),
+  aspect: optionDefault('bgaCameraAspect'),
 };
 
 const RESOLUTION_HEIGHTS: Readonly<Record<Exclude<BGACameraResolution, 'auto'>, number>> = {
@@ -60,12 +61,13 @@ export function parseStoredBGACameraSettings(raw: string | null | undefined): BG
   if (typeof value !== 'object' || value === null) return DEFAULT_BGA_CAMERA_SETTINGS;
   const record = value as Record<string, unknown>;
   return {
-    enabled: record['enabled'] === true,
-    deviceId: typeof record['deviceId'] === 'string' ? record['deviceId'] : '',
+    enabled: typeof record['enabled'] === 'boolean' ? record['enabled'] : DEFAULT_BGA_CAMERA_SETTINGS.enabled,
+    deviceId: typeof record['deviceId'] === 'string' ? record['deviceId'] : DEFAULT_BGA_CAMERA_SETTINGS.deviceId,
     label: typeof record['label'] === 'string' ? record['label'] : '',
-    mirror: record['mirror'] === true,
-    resolution: BGA_CAMERA_RESOLUTIONS.find((value) => value === record['resolution']) ?? 'auto',
-    aspect: BGA_CAMERA_ASPECTS.find((value) => value === record['aspect']) ?? 'auto',
+    mirror: typeof record['mirror'] === 'boolean' ? record['mirror'] : DEFAULT_BGA_CAMERA_SETTINGS.mirror,
+    resolution:
+      BGA_CAMERA_RESOLUTIONS.find((value) => value === record['resolution']) ?? DEFAULT_BGA_CAMERA_SETTINGS.resolution,
+    aspect: BGA_CAMERA_ASPECTS.find((value) => value === record['aspect']) ?? DEFAULT_BGA_CAMERA_SETTINGS.aspect,
   };
 }
 

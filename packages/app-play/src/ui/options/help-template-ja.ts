@@ -526,7 +526,7 @@ export const OPTIONS_HELP_JA = html`
         <dt>Skin effects</dt>
         <dd>(Built-in タブ) 内蔵スキンの演出の量。Full、Reduced、Off。</dd>
         <dt>Skin settings</dt>
-        <dd>(Built-in タブ) 選んだスキンの設定。Reset to defaults で既定値に戻せます。</dd>
+        <dd>(Built-in タブ) 選んだスキンの設定。「セクションを既定値に戻す」で初期値に戻せます。</dd>
         <dt>Load LR2 skin…</dt>
         <dd>(LR2 タブ) LR2 のテーマのドロップか選択を促し、読み込みます。</dd>
         <dt>LR2 theme</dt>

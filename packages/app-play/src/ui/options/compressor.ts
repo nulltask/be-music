@@ -49,6 +49,10 @@ export function buildCompressorTuningGUI(this: OptionsDialog, parent: Pick<Optio
   const compressors = TUNABLE_COMPRESSORS.filter((compressor) =>
     this.compressorMode === 'legacy' ? compressor === 'legacy' : compressor !== 'legacy',
   );
+  const resets: (() => void)[] = [];
+  this.layout?.setGroupReset('compressorTuning', () => {
+    for (const reset of resets) reset();
+  });
   for (const compressor of compressors) {
     const tuning = this.compressorTunings[compressor];
     const folder = parent.addFolder({ title: labels[compressor] });
@@ -65,11 +69,13 @@ export function buildCompressorTuningGUI(this: OptionsDialog, parent: Pick<Optio
       folder.addBinding(tuning, 'releaseMs', { label: 'Release (ms)', min: 0, max: 1000, step: 5 }),
     ];
     for (const controller of controllers) controller.on('change', apply);
-    folder.addButton({ title: 'Reset to default' }).on('click', () => {
+    const reset = () => {
       Object.assign(tuning, defaultCompressorTunings()[compressor]);
       for (const controller of controllers) controller.refresh();
       apply();
       this.scheduleSettingsSave();
-    });
+    };
+    resets.push(reset);
+    folder.addButton({ title: 'Reset to default' }).on('click', reset);
   }
 }

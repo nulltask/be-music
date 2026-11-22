@@ -1,3 +1,4 @@
+import { optionDefault } from '../../option-defaults.ts';
 import { selectBinding, type PaneBinding } from '../../pane-controls.ts';
 // The Options dialog's Play options folder, split into pages, the Replay / ghost folder on its last page, the View
 // folder and the Select folder. They are built with the dialog as `this` (`OptionsDialog`).
@@ -745,15 +746,16 @@ export function buildPlayOptionsFolder(this: OptionsDialog): void {
       this.gameplayView?.setJudgeTimingMs(value);
     });
   const state = this.guiState;
+  const defaultNormalLevel = optionDefault<number>('normalHiSpeedLevel');
   const normal = {
     get enabled() {
       return state.normalHiSpeedLevel > 0;
     },
     set enabled(value: boolean) {
-      state.normalHiSpeedLevel = value ? state.normalHiSpeedLevel || 3 : 0;
+      state.normalHiSpeedLevel = value ? state.normalHiSpeedLevel || defaultNormalLevel : 0;
     },
     get level() {
-      return state.normalHiSpeedLevel || 3;
+      return state.normalHiSpeedLevel || defaultNormalLevel;
     },
     set level(value: number) {
       if (state.normalHiSpeedLevel > 0) state.normalHiSpeedLevel = value;

@@ -158,15 +158,17 @@ flowchart LR
   build[build functions] -- "place(id)" --> dialog
 ```
 
-`parseOptionsLayout` (`ui/options/layout.ts`) checks the file as the module loads and names the first problem by its path: an unknown key or kind, an id used twice, an empty title. `assembleOptionsLayout` then makes the tabs, pages and folders in order. The build functions (`play-options.ts`, `audio.ts`, …) still make each row, but they ask `OptionsDialog.place(id)` where it goes instead of picking a container. The row lands at the item's position whatever order the code makes it in, so moving an option to another page, or reordering a page, is an edit of the JSON alone.
+`parseOptionsLayout` (`options-layout-schema.ts`) checks the file as the module loads and names the first problem by its path: an unknown key or kind, an id used twice, an empty title. `assembleOptionsLayout` then makes the tabs, pages and folders in order. The build functions (`play-options.ts`, `audio.ts`, …) still make each row, but they ask `OptionsDialog.place(id)` where it goes instead of picking a container. The row lands at the item's position whatever order the code makes it in, so moving an option to another page, or reordering a page, is an edit of the JSON alone.
 
-The JSON holds the structure only. These stay in code:
+The JSON declares the layout and defaults. These stay in code:
 
 - The label, choices, range and change handler of each option. The English label names the row for its help, its Japanese label (`labels.ts`), the search and the e2e helpers (`setOption` / `pressOption`), so it lives next to the handler that gives it meaning.
 - Whether a play locks the option (`trackPlayOption`), and the visibility that follows other options, such as the rows that only a judge ruleset or a two-player BATTLE uses.
 - Rows built from what is loaded or configured. A `group` item marks where they go: the key config pages, the compressor tuning folders, a Be-Music Skin's settings and the beatoraja skin pickers.
 
 An item with `"hidden": true` is left off the dialog: a hidden option, folder or page does not show and the search skips it. A hidden page's tab is left off the tab bar, and the arrow keys pass over it. The row is still built: its value, its handler, its play lock and the refreshes that follow the judge ruleset work as before. The layout's hiding (`OptionRow.omitted`) is apart from the code's (`OptionRow.hidden`), so neither undoes the other.
+
+Each editable option declares its default in `options-layout.json`. Use a literal when the value is fixed, or `{ "use": "..." }` when the browser, device, or available themes determine it. **Reset section to defaults** applies the settings in that section and its subsections through their regular change handlers. The reset skips controls locked by a play or capture and controls currently unavailable. Keys, skin settings, and compressor tuning restore the defaults of their respective schemas. Resetting settings leaves imported charts, courses, replay history, and registered library sources in place.
 
 Where code and JSON disagree:
 

@@ -1,3 +1,4 @@
+import { optionDefault } from '../../option-defaults.ts';
 import { paneOptions, selectBinding } from '../../pane-controls.ts';
 import { onPlayerLangChange, playerLang } from '../../player-copy.ts';
 import { recordingQualityOptions } from '../../recording-format-choice.ts';
@@ -65,8 +66,8 @@ export function buildLibraryFolder(this: OptionsDialog): void {
 
   const urlParams = parseURLMediaParams(window.location.href);
   const urls = {
-    music: urlParams.musicURL ?? '',
-    skin: urlParams.skinURL ?? '',
+    music: urlParams.musicURL ?? optionDefault<string>('musicURL'),
+    skin: urlParams.skinURL ?? optionDefault<string>('skinURL'),
     load: () => {
       const musicURL = urls.music.trim() || undefined;
       const skinURL = urls.skin.trim() || undefined;

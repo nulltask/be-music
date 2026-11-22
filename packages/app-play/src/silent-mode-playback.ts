@@ -1,3 +1,4 @@
+import { optionDefault } from './option-defaults.ts';
 import { html, nothing, render } from 'lit';
 // The player's "Play in silent mode" setting: whether the page asks the platform audio session (`navigator.audioSession`,
 // Safari / iOS) for `'playback'`, so sound plays with the Ring / Silent switch on — at the cost of pausing music
@@ -12,7 +13,7 @@ export const SILENT_MODE_HINT_SEEN_STORAGE_KEY = 'be-music.silent-mode-hint-seen
 
 /** Parses the stored setting: only `'off'` turns it off, anything else (nothing stored, junk) keeps the default on. */
 export function parseStoredPlayInSilentMode(raw: string | null | undefined): boolean {
-  return raw !== 'off';
+  return raw === 'off' ? false : raw === 'on' ? true : optionDefault('playInSilentMode');
 }
 
 export function serializePlayInSilentMode(enabled: boolean): string {
@@ -35,7 +36,7 @@ export function readPlayInSilentMode(storage: SettingStorage | undefined = defau
   try {
     return parseStoredPlayInSilentMode(storage?.getItem(PLAY_IN_SILENT_MODE_STORAGE_KEY));
   } catch {
-    return true;
+    return optionDefault('playInSilentMode');
   }
 }
 

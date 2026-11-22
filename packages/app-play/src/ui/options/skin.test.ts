@@ -11,16 +11,10 @@ test('skin reset captures the cleared overrides in the unified settings document
   const captured: unknown[] = [];
   const folder = {
     addBinding: () => ({ on: vi.fn() }),
-    addButton: () => ({
-      on: (_event: string, callback: () => void) => {
-        reset = callback;
-        return { dispose: vi.fn() };
-      },
-    }),
   };
   const menu = {
     skinSettings,
-    layout: {},
+    layout: { setGroupReset: (_id: string, callback: () => void) => (reset = callback) },
     skinSettingRows: [],
     place: () => folder,
     deps: {

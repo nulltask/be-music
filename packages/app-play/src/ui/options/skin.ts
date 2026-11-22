@@ -1,3 +1,4 @@
+import { optionDefault } from '../../option-defaults.ts';
 import { selectBinding, paneOptions } from '../../pane-controls.ts';
 // The Options dialog's Skin & display folder, and the controls in it that follow what is loaded: the Skin system picker,
 // the LR2 theme picker and the Be-Music Skin's settings. They are built with the dialog as `this` (`OptionsDialog`).
@@ -112,7 +113,7 @@ export function buildSkinFolder(this: OptionsDialog): void {
     return;
   }
   const skinSource = {
-    url: '',
+    url: optionDefault<string>('addSkinURL'),
     addFromURL: () => void this.deps.addBeMusicSkinFromURL(skinSource.url),
   };
   // Adding a skin switches to it, which makes the select screen again: the button waits for the play to end.
@@ -187,6 +188,14 @@ export function rebuildSkinFamilyPicker(this: OptionsDialog): void {
  */
 export function rebuildSkinSettingsFolder(this: OptionsDialog): void {
   if (this.layout === undefined) return;
+  this.layout.setGroupReset('skinSettingRows', () => {
+    const skin = this.deps.beMusicSkin();
+    if (!this.skinSettings.delete(skin.id)) return;
+    storeSkinSettings(this.skinSettings);
+    this.scheduleSettingsSave();
+    this.deps.applyBeMusicSkinSettings();
+    this.rebuildSkinSettingsFolder();
+  });
   for (const row of this.skinSettingRows.splice(0)) row.dispose();
   const skin = this.deps.beMusicSkin();
   const controllers = describeSkinSettingControllers(skin.settings);
@@ -213,15 +222,6 @@ export function rebuildSkinSettingsFolder(this: OptionsDialog): void {
       this.deps.applyBeMusicSkinSettings();
     });
   }
-  this.skinSettingRows.push(
-    rows.addButton({ title: 'Reset to defaults' }).on('click', () => {
-      this.skinSettings.delete(skin.id);
-      storeSkinSettings(this.skinSettings);
-      this.scheduleSettingsSave();
-      this.deps.applyBeMusicSkinSettings();
-      this.rebuildSkinSettingsFolder();
-    }),
-  );
 }
 /**
  * Builds (or rebuilds in place) the Options dialog's "LR2 theme" dropdown. Visible whenever at least one theme has

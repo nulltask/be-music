@@ -237,6 +237,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Camera aspect ratio': 'カメラの縦横比',
   "Camera's own": 'カメラのまま',
   '1:1 (square)': '1:1 (正方形)',
+  'Reset section to defaults': 'セクションを既定値に戻す',
   'Reset to defaults': '既定に戻す',
   // Audio
   Mute: 'ミュート',

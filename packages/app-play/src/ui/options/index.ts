@@ -63,6 +63,7 @@ import { buildCourseFolder } from './course.ts';
 import { buildDeveloperFolder } from './developer.ts';
 import { OPTIONS_LAYOUT } from './folders.ts';
 import { OptionLayout, type OptionPlacement } from './layout.ts';
+import { runtimeOptionDefaults } from './runtime-defaults.ts';
 import { buildLibraryFolder } from './library.ts';
 import { PlayLock } from './play-lock.ts';
 import {
@@ -533,6 +534,7 @@ export class OptionsDialog {
     this.buildBGACameraFolder(this.deps.bgaCamera);
     this.deps.leaderboard.buildFolder((id) => layout.place(id));
     this.buildDeveloperFolder();
+    layout.installSectionResets(runtimeOptionDefaults(() => this.deps.availableLR2Themes()[0]?.name));
     // An option of the layout no code made is one this browser lacks (Play in silent mode), or a mistake.
     const unclaimed = layout.unclaimed().filter((id) => !OPTIONAL_OPTIONS.has(id));
     if (unclaimed.length > 0) console.error(`Options layout: no code builds ${unclaimed.join(', ')}`);

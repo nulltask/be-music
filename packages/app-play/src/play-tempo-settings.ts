@@ -1,3 +1,4 @@
+import { optionDefault } from './option-defaults.ts';
 import { clamp } from '@be-music/shared-utils/core';
 /**
  * The Options dialog's play tempo settings: the tempo slider (-50 % .. +50 %), how a tempo change sounds (also for NONSTOP
@@ -27,10 +28,10 @@ export interface PlayTempoSettings {
 }
 
 export const DEFAULT_PLAY_TEMPO_SETTINGS: Readonly<PlayTempoSettings> = {
-  tempoEnabled: false,
-  tempoPercent: 0,
-  tempoPitchMode: 'pitch',
-  tempoStretchAlgorithm: 'wsola',
+  tempoEnabled: optionDefault('tempoEnabled'),
+  tempoPercent: optionDefault('tempoPercent'),
+  tempoPitchMode: optionDefault('tempoPitchMode'),
+  tempoStretchAlgorithm: optionDefault('tempoStretchAlgorithm'),
 };
 
 /** `value` as a whole percent within the slider's range; 0 when it is not a finite number. */
@@ -94,11 +95,20 @@ export function parseStoredPlayTempoSettings(raw: string | null | undefined): Pl
   } catch {
     // Unreadable: the defaults.
   }
+  const defaults = DEFAULT_PLAY_TEMPO_SETTINGS;
+  const { tempoEnabled, tempoPercent, tempoPitchMode, tempoStretchAlgorithm } = stored;
   return {
-    tempoEnabled: stored.tempoEnabled === true,
-    tempoPercent: clampTempoPercent(stored.tempoPercent),
-    tempoPitchMode: stored.tempoPitchMode === 'keep-pitch' ? 'keep-pitch' : 'pitch',
-    tempoStretchAlgorithm: stored.tempoStretchAlgorithm === 'signalsmith' ? 'signalsmith' : 'wsola',
+    tempoEnabled: typeof tempoEnabled === 'boolean' ? tempoEnabled : defaults.tempoEnabled,
+    tempoPercent:
+      typeof tempoPercent === 'number' && Number.isFinite(tempoPercent)
+        ? clampTempoPercent(tempoPercent)
+        : defaults.tempoPercent,
+    tempoPitchMode:
+      tempoPitchMode === 'keep-pitch' || tempoPitchMode === 'pitch' ? tempoPitchMode : defaults.tempoPitchMode,
+    tempoStretchAlgorithm:
+      tempoStretchAlgorithm === 'signalsmith' || tempoStretchAlgorithm === 'wsola'
+        ? tempoStretchAlgorithm
+        : defaults.tempoStretchAlgorithm,
   };
 }
 
