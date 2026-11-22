@@ -7,7 +7,6 @@ import { paneOptions, selectBinding } from '../../pane-controls.ts';
 import { onPlayerLangChange, playerLang, playerText } from '../../player-copy.ts';
 import { optionLabel } from './labels.ts';
 import type { BGACameraService } from '../../services/bga-camera.ts';
-import type { OptionContainer } from '../options-controls.ts';
 import type { OptionsDialog } from './index.ts';
 
 /** The Camera resolution choices, by their English text (`labels.ts` has the Japanese). */
@@ -25,7 +24,7 @@ const ASPECT_CHOICES: Record<string, BGACameraAspect> = {
   '1:1 (square)': '1:1',
 };
 
-export function buildBGACameraFolder(this: OptionsDialog, folder: OptionContainer, camera: BGACameraService): void {
+export function buildBGACameraFolder(this: OptionsDialog, camera: BGACameraService): void {
   // The controls' own copy of the settings; `paint` brings it in line with the service.
   const state = {
     enabled: camera.settings.enabled,
@@ -48,27 +47,38 @@ export function buildBGACameraFolder(this: OptionsDialog, folder: OptionContaine
     if (previewShown && camera.settings.enabled && camera.status !== 'unsupported') void camera.startPreview();
     else camera.stopPreview();
   };
-  const enabled = folder.addBinding(state, 'enabled', { label: 'Show camera in BGA' }).on('change', ({ value }) => {
-    camera.setEnabled(value);
-    syncPreview();
-  });
-  const device = selectBinding(folder, state, 'deviceId', 'Camera', choices()).on('change', ({ value }) =>
-    camera.setDevice(value),
+  const enabled = this.place('bgaCameraEnabled')
+    .addBinding(state, 'enabled', { label: 'Show camera in BGA' })
+    .on('change', ({ value }) => {
+      camera.setEnabled(value);
+      syncPreview();
+    });
+  const device = selectBinding(this.place('bgaCameraDevice'), state, 'deviceId', 'Camera', choices()).on(
+    'change',
+    ({ value }) => camera.setDevice(value),
   );
   // The browser names the cameras only once the player has allowed one.
-  const access = folder.addButton({ title: 'Allow camera access' }).on('click', () => void camera.requestAccess());
-  const mirror = folder
+  const access = this.place('bgaCameraAccess')
+    .addButton({ title: 'Allow camera access' })
+    .on('click', () => void camera.requestAccess());
+  const mirror = this.place('bgaCameraMirror')
     .addBinding(state, 'mirror', { label: 'Mirror camera' })
     .on('change', ({ value }) => camera.setMirror(value));
   // What to ask the camera for; a camera that cannot give it opens at its nearest.
-  const resolution = selectBinding(folder, state, 'resolution', 'Camera resolution', RESOLUTION_CHOICES).on(
-    'change',
-    ({ value }) => camera.setFormat({ resolution: value }),
-  );
-  const aspect = selectBinding(folder, state, 'aspect', 'Camera aspect ratio', ASPECT_CHOICES).on(
-    'change',
-    ({ value }) => camera.setFormat({ aspect: value }),
-  );
+  const resolution = selectBinding(
+    this.place('bgaCameraResolution'),
+    state,
+    'resolution',
+    'Camera resolution',
+    RESOLUTION_CHOICES,
+  ).on('change', ({ value }) => camera.setFormat({ resolution: value }));
+  const aspect = selectBinding(
+    this.place('bgaCameraAspect'),
+    state,
+    'aspect',
+    'Camera aspect ratio',
+    ASPECT_CHOICES,
+  ).on('change', ({ value }) => camera.setFormat({ aspect: value }));
   // The dialog relabels its controls, not a select's choices: these follow the player's language here.
   const relabel = (): void => {
     const localize = <T>(choice: { text: string; value: T }) => ({
@@ -83,7 +93,7 @@ export function buildBGACameraFolder(this: OptionsDialog, folder: OptionContaine
   // The preview: the picked camera as the BGA frame would show it. It runs only while it is on screen.
   const preview = document.createElement('div');
   preview.className = 'options-camera-preview';
-  folder.addElement(preview);
+  this.place('bgaCameraPreview').addElement(preview);
   new IntersectionObserver((entries) => {
     // Shown or hidden (another tab, the dialog closed), not scrolled away: the preview follows the tab.
     const entry = entries.at(-1);
@@ -93,7 +103,7 @@ export function buildBGACameraFolder(this: OptionsDialog, folder: OptionContaine
   }).observe(preview);
   const note = document.createElement('div');
   note.className = 'options-camera-note';
-  folder.addElement(note);
+  this.place('bgaCameraNote').addElement(note);
   const paint = (): void => {
     const text = playerText().camera;
     state.enabled = camera.settings.enabled;

@@ -1,6 +1,5 @@
 // The Options dialog's Audio folder: the volumes, "Play in silent mode", peak gain and the Compressor folder. It is built
 // with the dialog as `this` (`OptionsDialog`).
-import type { OptionContainer } from '../options-controls.ts';
 import { setMasterVolume, supportsSystemAudioSession } from '@be-music/player-browser/audio';
 import { storeVolumes } from '../../services/settings.ts';
 import {
@@ -8,18 +7,13 @@ import {
   mountStartSilentModeOption,
   resolveSilentModeLanguage,
 } from '../../silent-mode-playback.ts';
-import { OPTION_FOLDERS, type OptionFolderSpec } from './folders.ts';
 import type { OptionsDialog } from './index.ts';
 /**
  * Volumes (master over every sound, then the keysound / BGM balance; all three apply live and are remembered for the
  * next visit), then peak gain (the next play only; off until turned on), then the compressor: the master switch, the
  * split-mode stage toggles, and every compressor's parameters.
  */
-export function buildAudioFolder(
-  this: OptionsDialog,
-  audio: OptionContainer,
-  addFolder: (parent: OptionContainer, folder: OptionFolderSpec) => OptionContainer,
-): void {
+export function buildAudioFolder(this: OptionsDialog): void {
   const rememberVolumes = () =>
     storeVolumes({
       masterVolume: this.guiState.masterVolume,
@@ -31,30 +25,32 @@ export function buildAudioFolder(
     this.gameplayView?.setAudioVolume(channel, value / 100);
     rememberVolumes();
   };
-  audio.addBinding(this.guiState, 'muted', { label: 'Mute' }).on('change', ({ value }) => {
-    setMasterVolume(value ? 0 : this.guiState.masterVolume / 100);
-    rememberVolumes();
-  });
-  audio
+  this.place('muted')
+    .addBinding(this.guiState, 'muted', { label: 'Mute' })
+    .on('change', ({ value }) => {
+      setMasterVolume(value ? 0 : this.guiState.masterVolume / 100);
+      rememberVolumes();
+    });
+  this.place('masterVolume')
     .addBinding(this.guiState, 'masterVolume', { label: 'Master (%)', min: 0, max: 100, step: 1 })
     .on('change', ({ value }) => {
       setMasterVolume(this.guiState.muted ? 0 : value / 100);
       rememberVolumes();
     });
-  audio
+  this.place('keyVolume')
     .addBinding(this.guiState, 'keyVolume', { label: 'Key sound (%)', min: 0, max: 100, step: 1 })
     .on('change', (event) => onVolumeChange('key')(event.value));
-  audio
+  this.place('bgmVolume')
     .addBinding(this.guiState, 'bgmVolume', { label: 'BGM (%)', min: 0, max: 100, step: 1 })
     .on('change', (event) => onVolumeChange('bgm')(event.value));
   // Safari / iOS only (`navigator.audioSession`): elsewhere web audio has no silent switch to get past, so the row is
   // left out rather than shown disabled.
   if (supportsSystemAudioSession()) {
     const strings = SILENT_MODE_STRINGS[resolveSilentModeLanguage(navigator.language)];
-    this.silentMode.controller = audio
+    this.silentMode.controller = this.place('playInSilentMode')
       .addBinding(this.guiState, 'playInSilentMode', { label: strings.label })
       .on('change', ({ value }) => this.silentMode.set(value));
-    audio.addBinding({ note: strings.note }, 'note', {
+    this.place('silentModeNote').addBinding({ note: strings.note }, 'note', {
       label: 'Silent switch',
       readonly: true,
       multiline: true,
@@ -71,22 +67,24 @@ export function buildAudioFolder(
       });
     }
   }
-  audio.addBinding(this.guiState, 'peakGain', { label: 'Peak gain (next play)' });
-  const compressor = addFolder(audio, OPTION_FOLDERS.compressor);
-  compressor.addBinding(this.guiState, 'compressor', { label: 'Enabled' }).on('change', ({ value }) => {
-    this.gameplayView?.setAudioCompressor(value);
-    this.refreshCompressorStageVisibility();
-  });
-  const stages = addFolder(compressor, OPTION_FOLDERS.compressorStages);
-  this.compressorStageFolder = stages;
-  stages.addBinding(this.guiState, 'compressorKey', { label: 'Key' }).on('change', ({ value }) => {
-    this.gameplayView?.setAudioCompressorStageEnabled('key', value);
-  });
-  stages.addBinding(this.guiState, 'compressorBGM', { label: 'BGM' }).on('change', ({ value }) => {
-    this.gameplayView?.setAudioCompressorStageEnabled('bgm', value);
-  });
-  stages.addBinding(this.guiState, 'compressorMaster', { label: 'Master' }).on('change', ({ value }) => {
-    this.gameplayView?.setAudioCompressorStageEnabled('master', value);
-  });
-  this.buildCompressorTuningGUI(compressor);
+  this.place('peakGain').addBinding(this.guiState, 'peakGain', { label: 'Peak gain (next play)' });
+  this.place('compressorEnabled')
+    .addBinding(this.guiState, 'compressor', { label: 'Enabled' })
+    .on('change', ({ value }) => {
+      this.gameplayView?.setAudioCompressor(value);
+      this.refreshCompressorStageVisibility();
+    });
+  this.layout?.folder('compressorStages').element.setAttribute('data-hide-empty-options-folder', '');
+  for (const [key, label, stage] of [
+    ['compressorKey', 'Key', 'key'],
+    ['compressorBGM', 'BGM', 'bgm'],
+    ['compressorMaster', 'Master', 'master'],
+  ] as const) {
+    this.compressorStageControllers.push(
+      this.place(key)
+        .addBinding(this.guiState, key, { label })
+        .on('change', ({ value }) => this.gameplayView?.setAudioCompressorStageEnabled(stage, value)),
+    );
+  }
+  this.buildCompressorTuningGUI(this.place('compressorTuning'));
 }

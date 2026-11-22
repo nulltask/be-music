@@ -2,18 +2,15 @@
 // playfield draws. They are read at each frame, so they stay enabled during a play.
 import { PLAY_OPTION_CHOICES } from '@be-music/player-scene-model';
 import { selectBinding } from '../../pane-controls.ts';
-import type { OptionContainer } from '../options-controls.ts';
 import type { OptionsDialog } from './index.ts';
 
-/** Adds the LR2 mania options section to the View folder's Effects page. */
-export function buildLR2ManiaRows(this: OptionsDialog, effects: OptionContainer): void {
-  const mania = effects.addFolder({ title: 'LR2 mania options' });
-  this.lr2ManiaFolder = mania;
-  selectBinding(mania, this.guiState, 'lr2Acceleration', 'ACCELERATION (LR2)', [
+/** Fills the LR2 mania options section on the View folder's Effects page (`lr2Mania` in `options-layout.json`). */
+export function buildLR2ManiaRows(this: OptionsDialog): void {
+  selectBinding(this.place('lr2Acceleration'), this.guiState, 'lr2Acceleration', 'ACCELERATION (LR2)', [
     ...PLAY_OPTION_CHOICES.lr2Acceleration!,
   ]).on('change', ({ value }) => this.setPlayOptions({ lr2Acceleration: value }));
   for (const [key, label] of LEVEL_ROWS) {
-    mania
+    this.place(key)
       .addBinding(this.guiState, key, { label, min: 0, max: 100, step: 10 })
       .on('change', ({ value }) => this.setPlayOptions({ [key]: value }));
   }

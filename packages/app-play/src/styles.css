@@ -303,6 +303,13 @@ textarea {
 .options-tab-panel {
   padding-top: 12px;
 }
+/* The options' layout sets hidden on tabs and panels that are outside the current selection. */
+.options-tab-panel[hidden],
+.options-tabs > [role='tablist'] > [role='tab'][hidden],
+[data-option-omitted][hidden],
+[data-hide-empty-options-folder]:not(:has(> .options-folder-content > :not([hidden], .options-section-reset))) {
+  display: none;
+}
 .options-section + .options-section,
 .options-tab-panel > .options-section:not(:first-child) {
   margin-top: 8px;
@@ -727,6 +734,10 @@ textarea {
 }
 .options-button-row > .options-button {
   width: 100%;
+}
+.options-section-reset > .options-button {
+  width: auto;
+  margin-inline-start: auto;
 }
 .options-row.recording .options-button {
   background: var(--destructive);

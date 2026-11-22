@@ -4,7 +4,6 @@
 // seeds them: never rename one.
 
 import { parseCompressorMode, type CompressorMode } from '@be-music/player-browser/audio';
-import { DEFAULT_SCORE_TARGET_RATE } from '@be-music/player-scene-model';
 import { readStoredHiSpeed } from '../hi-speed-storage.ts';
 import { readStoredPlayTempoSettings } from '../play-tempo-settings.ts';
 import { parseRecordingFormatKey, recordingFormatKey } from '../recording-format-choice.ts';
@@ -15,11 +14,10 @@ import {
   renderResolutionSteps,
 } from '../render-resolution.ts';
 import { readStoredReplayView } from '../replay-view-settings.ts';
-import { DEFAULT_REPLAY_AUTO_SAVE_RULES } from './replay-slots.ts';
 import { overlayOptionSettings, readStoredOptionSettings } from '../option-settings.ts';
 import { readPlayInSilentMode } from '../silent-mode-playback.ts';
-import { DEFAULT_LEADERBOARD_SUBMIT_RULE } from '../leaderboard-submit-rule.ts';
 import type { PlayerGUIState } from '../types.ts';
+import { optionDefault } from '../option-defaults.ts';
 import {
   readDeviceSignals,
   resolveDefaultSkinEffects,
@@ -98,10 +96,11 @@ export type RendererChoice = 'webgl' | 'webgpu';
  */
 export function readStoredRenderer(storage: SettingStorage | undefined = defaultSettingStorage()): RendererChoice {
   try {
-    return storage?.getItem(RENDERER_STORAGE_KEY) === 'webgpu' ? 'webgpu' : 'webgl';
+    const renderer = storage?.getItem(RENDERER_STORAGE_KEY);
+    return renderer === 'webgl' || renderer === 'webgpu' ? renderer : optionDefault('renderer');
   } catch {
     // Storage blocked — the default.
-    return 'webgl';
+    return optionDefault('renderer');
   }
 }
 
@@ -127,7 +126,7 @@ export function readStoredPlayLayout(storage: SettingStorage | undefined = defau
   } catch {
     // Storage blocked — use the default.
   }
-  return 'auto';
+  return optionDefault('playLayout');
 }
 
 export function storePlayLayout(
@@ -172,7 +171,12 @@ export interface StoredVolumes {
 
 /** Master / keysound / BGM volumes in percent, as last set in the Options dialog (all 100 when nothing is stored). */
 export function readStoredVolumes(storage: SettingStorage | undefined = defaultSettingStorage()): StoredVolumes {
-  const fallback = { masterVolume: 100, muted: false, keyVolume: 100, bgmVolume: 100 };
+  const fallback: StoredVolumes = {
+    masterVolume: optionDefault('masterVolume'),
+    muted: optionDefault('muted'),
+    keyVolume: optionDefault('keyVolume'),
+    bgmVolume: optionDefault('bgmVolume'),
+  };
   try {
     const raw = storage?.getItem(VOLUME_STORAGE_KEY);
     if (!raw) return fallback;
@@ -180,10 +184,10 @@ export function readStoredVolumes(storage: SettingStorage | undefined = defaultS
     const percent = (value: unknown, otherwise: number) =>
       typeof value === 'number' && Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : otherwise;
     return {
-      masterVolume: percent(parsed.masterVolume, 100),
-      muted: parsed.muted === true,
-      keyVolume: percent(parsed.keyVolume, 100),
-      bgmVolume: percent(parsed.bgmVolume, 100),
+      masterVolume: percent(parsed.masterVolume, fallback.masterVolume),
+      muted: typeof parsed.muted === 'boolean' ? parsed.muted : fallback.muted,
+      keyVolume: percent(parsed.keyVolume, fallback.keyVolume),
+      bgmVolume: percent(parsed.bgmVolume, fallback.bgmVolume),
     };
   } catch {
     return fallback;
@@ -221,8 +225,8 @@ export interface PlayerGUIStateInputs {
 export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUIState {
   const storage = inputs.storage ?? defaultSettingStorage();
   const state: PlayerGUIState = {
-    autoPlay: false,
-    autoPauseOnBlur: false,
+    autoPlay: optionDefault('autoPlay'),
+    autoPauseOnBlur: optionDefault('autoPauseOnBlur'),
     // Compressor stack ON by default — without it, multiple simultaneous `#WAV` samples sum past full scale and
     // digital- clip at the destination. The `MIXER_HEADROOM_GAIN_LINEAR` attenuation in `audio-bus.ts` buys a little
     // headroom but the master limiter is what reliably prevents audible clipping on dense charts. Power users wanting
@@ -230,183 +234,183 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     ...readStoredVolumes(storage),
     playInSilentMode: readPlayInSilentMode(storage),
     // Peak gain is off until the Options dialog turns it on. The choice is remembered with the other Options dialog settings.
-    peakGain: false,
-    compressor: true,
-    compressorKey: true,
-    compressorBGM: true,
-    compressorMaster: true,
+    peakGain: optionDefault('peakGain'),
+    compressor: optionDefault('compressorEnabled'),
+    compressorKey: optionDefault('compressorKey'),
+    compressorBGM: optionDefault('compressorBGM'),
+    compressorMaster: optionDefault('compressorMaster'),
     // BGA resize is OFF by default — original-resolution transcode is the safe choice for visual parity. Power users
     // hitting long encode times on HD BGA can pick a pixel cap from the GUI dropdown without rebuilding. `0` means
     // "preserve resolution"; any positive integer activates the resize path with that long-edge cap.
-    bgaResizeMaxEdgePx: 0,
+    bgaResizeMaxEdgePx: optionDefault('bgaResizeMaxEdgePx'),
     // WebCodecs encode defaults ON when the browser exposes `VideoEncoder` — typically a 5-20× encode-side speedup
     // over the single-threaded wasm libx264 fallback, and the runtime silently falls back to ffmpeg if the encoder
     // rejects the configured codec parameters or any step throws. Browsers without `VideoEncoder` (Safari < 17, older
     // Firefox) keep the toggle disabled in the GUI and the seed stays `false`.
     bgaUseWebCodecs: typeof globalThis !== 'undefined' && 'VideoEncoder' in globalThis,
-    bgaTranscodeQuality: 'standard',
+    bgaTranscodeQuality: optionDefault('bgaTranscodeQuality'),
     // Debug overlay for invisible / keysound notes — off by default. Power users investigating chart authoring (or
     // diagnosing missing keysound triggers) flip it on; the regular gameplay surface stays clean otherwise.
-    showInvisibleNotes: false,
+    showInvisibleNotes: optionDefault('showInvisibleNotes'),
     // The guide labels besides BPM (the play option `bpmGuide`) are opt-in.
-    guideStop: false,
-    guideScroll: false,
-    guideSpeed: false,
+    guideStop: optionDefault('guideStop'),
+    guideScroll: optionDefault('guideScroll'),
+    guideSpeed: optionDefault('guideSpeed'),
     // No ghost unless the player asks for one; when they do, it shows as a second playfield unless they pick another mode.
-    ghost: 'OFF',
-    ghostMode: 'PLAYFIELD',
+    ghost: optionDefault('ghost'),
+    ghostMode: optionDefault('ghostMode'),
     // Play-history auto-save defaults OFF, so plays don't pile up downloaded files. Users who want every play's
     // replay (`*.bmplay.json`) preserved turn it on from the Options dialog checkbox; it then downloads when the result
     // scene mounts.
-    autoSaveReplay: false,
+    autoSaveReplay: optionDefault('autoSaveReplay'),
     // A replay records only coarse device classes unless the player opts in to the controllers' own names.
-    replayDeviceNames: false,
+    replayDeviceNames: optionDefault('replayDeviceNames'),
     // Bemuse server songs play at the volume Bemuse plays them at, unless the player turns it off.
-    bemuseReplayGain: true,
+    bemuseReplayGain: optionDefault('bemuseReplayGain'),
     // Every replay slot saves by itself until the player picks otherwise (`DEFAULT_REPLAY_AUTO_SAVE_RULES`): the best EX
     // score, the best lamp, the fewest BP and the latest play.
-    replaySlotAutoSave1: DEFAULT_REPLAY_AUTO_SAVE_RULES[0]!,
-    replaySlotAutoSave2: DEFAULT_REPLAY_AUTO_SAVE_RULES[1]!,
-    replaySlotAutoSave3: DEFAULT_REPLAY_AUTO_SAVE_RULES[2]!,
-    replaySlotAutoSave4: DEFAULT_REPLAY_AUTO_SAVE_RULES[3]!,
-    courseAutoAdvance: false,
-    nonstopPlacement: 'intended',
+    replaySlotAutoSave1: optionDefault('replaySlotAutoSave1'),
+    replaySlotAutoSave2: optionDefault('replaySlotAutoSave2'),
+    replaySlotAutoSave3: optionDefault('replaySlotAutoSave3'),
+    replaySlotAutoSave4: optionDefault('replaySlotAutoSave4'),
+    courseAutoAdvance: optionDefault('courseAutoAdvance'),
+    nonstopPlacement: optionDefault('nonstopPlacement'),
     // The play tempo, its pitch handling and the keep-pitch stretcher, remembered from the last visit.
     ...readStoredPlayTempoSettings(storage),
     // What a replay reproduces of the recorded view, remembered from the last visit.
     replayView: readStoredReplayView(storage),
     // Leaderboard submission is opt-in: a play is only sent once the player turns it on.
-    submitToLeaderboard: false,
+    submitToLeaderboard: optionDefault('submitToLeaderboard'),
     // Once on, a play is sent when it improves the player's EX-SCORE on the chart (its first play always).
-    leaderboardSubmitRule: DEFAULT_LEADERBOARD_SUBMIT_RULE,
+    leaderboardSubmitRule: optionDefault('leaderboardSubmitRule'),
     // Play options (playMode / chartOptions / assists / judge / gauge equivalents). Two-way synced with the LR2
     // select scene's PLAY OPTION panel where a counterpart exists; latched at song start and disabled during a
     // play. The judge ruleset has no in-skin counterpart — the Options dialog is its only surface.
-    judgeRuleset: 'lr2',
-    gauge: 'GROOVE',
-    random1P: 'OFF',
-    hRandomThresholdBPM: 120,
-    randomSeed1P: '-1',
-    randomSeed2P: '-1',
-    randomFixedLane1P: 0,
-    randomFixedLane2P: 0,
-    lr2RandomScratch1P: false,
-    lr2RandomScratch2P: false,
-    random2P: 'OFF',
-    dpFlip: false,
-    bpmGuide: false,
-    bpmChangeWarning: false,
-    guideSE: false,
-    windowHold: false,
-    judgeCounts: true,
-    judgeDetailSplit: false,
-    judgeDetail: 'OFF',
-    scoreTargetRate: DEFAULT_SCORE_TARGET_RATE,
-    judgePosition: 0,
-    judgeDisplay: 'SKIN',
-    laneBrightness: 100,
-    scoreTarget: 'RATE_AAA',
-    markProcessedNotes: false,
-    showJudgeArea: false,
-    lr2AddMines: 0,
-    lr2AddLongNotes: 0,
-    lr2Loudness: 0,
-    lr2AddNotes: 0,
-    lr2Gambol: 0,
-    lr2SideJump: 0,
-    lr2SpiralEffect: 0,
-    lr2Wave: 0,
-    lr2SinCurve: 0,
-    lr2Nabeatsu: 0,
-    lr2Heartbeat: 0,
-    lr2Char: 0,
-    lr2SuperLoop: 0,
-    lr2Tornado: 0,
-    lr2Earthquake: 0,
-    lr2Acceleration: 'OFF',
-    autoScratchNotes: 'SHOW',
-    judgeTimingAutoAdjust: 'OFF',
-    visualConstant: false,
-    noteDurationMs: 500,
-    lift1P: 0.1,
-    lift2P: 0.1,
-    liftOn1P: false,
-    liftOn2P: false,
-    constantFadeMs: 100,
-    judgeTimingMs: 0,
-    normalHiSpeedLevel: 0,
-    classicHiSpeed: false,
-    floatingHiSpeed: false,
-    fixedDisplayArea: false,
-    judgeAlgorithm: 'combo',
-    longNoteModifier: 'OFF',
-    longNoteRate: 1,
-    sevenToNinePattern: 0,
-    sevenToNineType: 0,
-    battleMode: 'OFF',
-    dBattleScratch: false,
-    gauge2P: 'GROOVE',
-    mRan1P: false,
-    mRan2P: false,
-    longNoteMode: 'LN',
-    customJudge: false,
-    practice: false,
-    practiceGauge: 'NORMAL',
-    practiceGaugeCategory: 'MODE',
-    practiceStartGauge: 20,
-    practiceJudgeRank: 0,
-    practiceTotal: 0,
-    practiceRestBefore: 1,
-    practiceRestAfter: 1,
-    practiceCarriedLongNotes: true,
-    customJudgeKeyPerfectGreat: 400,
-    customJudgeKeyGreat: 400,
-    customJudgeKeyGood: 100,
-    customJudgeScratchPerfectGreat: 400,
-    customJudgeScratchGreat: 400,
-    customJudgeScratchGood: 100,
-    customJudgeLongNoteMargin: 100,
-    lr2ExtraMode: false,
-    lr2ExtraLevel: 0,
-    extraNoteDepth: 0,
-    extraNoteScratch: false,
-    mineModifier: 'OFF',
-    crazyJudge: 'OFF',
-    crazyHellJudge: false,
-    crazyAddMine: false,
-    crazyNotes: 'OFF',
-    scrollModifier: 'OFF',
-    scrollSection: 4,
-    scrollRate: 0.5,
-    gaugeAutoShift: 'NONE',
-    bmsonTotalMode: 'beatoraja',
-    bottomShiftableGauge: 'ASSIST-EASY',
-    autoScratch1P: false,
-    autoScratch2P: false,
-    anyKey: false,
+    judgeRuleset: optionDefault('judgeRuleset'),
+    gauge: optionDefault('gauge'),
+    random1P: optionDefault('random1P'),
+    hRandomThresholdBPM: optionDefault('hRandomThresholdBPM'),
+    randomSeed1P: optionDefault('randomSeed1P'),
+    randomSeed2P: optionDefault('randomSeed2P'),
+    randomFixedLane1P: optionDefault('randomFixedLane1P'),
+    randomFixedLane2P: optionDefault('randomFixedLane2P'),
+    lr2RandomScratch1P: optionDefault('lr2RandomScratch1P'),
+    lr2RandomScratch2P: optionDefault('lr2RandomScratch2P'),
+    random2P: optionDefault('random2P'),
+    dpFlip: optionDefault('dpFlip'),
+    bpmGuide: optionDefault('bpmGuide'),
+    bpmChangeWarning: optionDefault('bpmChangeWarning'),
+    guideSE: optionDefault('guideSE'),
+    windowHold: optionDefault('windowHold'),
+    judgeCounts: optionDefault('judgeCounts'),
+    judgeDetailSplit: optionDefault('judgeDetailSplit'),
+    judgeDetail: optionDefault('judgeDetail'),
+    scoreTargetRate: optionDefault('scoreTargetRate'),
+    judgePosition: optionDefault('judgePosition'),
+    judgeDisplay: optionDefault('judgeDisplay'),
+    laneBrightness: optionDefault('laneBrightness'),
+    scoreTarget: optionDefault('scoreTarget'),
+    markProcessedNotes: optionDefault('markProcessedNotes'),
+    showJudgeArea: optionDefault('showJudgeArea'),
+    lr2AddMines: optionDefault('lr2AddMines'),
+    lr2AddLongNotes: optionDefault('lr2AddLongNotes'),
+    lr2Loudness: optionDefault('lr2Loudness'),
+    lr2AddNotes: optionDefault('lr2AddNotes'),
+    lr2Gambol: optionDefault('lr2Gambol'),
+    lr2SideJump: optionDefault('lr2SideJump'),
+    lr2SpiralEffect: optionDefault('lr2SpiralEffect'),
+    lr2Wave: optionDefault('lr2Wave'),
+    lr2SinCurve: optionDefault('lr2SinCurve'),
+    lr2Nabeatsu: optionDefault('lr2Nabeatsu'),
+    lr2Heartbeat: optionDefault('lr2Heartbeat'),
+    lr2Char: optionDefault('lr2Char'),
+    lr2SuperLoop: optionDefault('lr2SuperLoop'),
+    lr2Tornado: optionDefault('lr2Tornado'),
+    lr2Earthquake: optionDefault('lr2Earthquake'),
+    lr2Acceleration: optionDefault('lr2Acceleration'),
+    autoScratchNotes: optionDefault('autoScratchNotes'),
+    judgeTimingAutoAdjust: optionDefault('judgeTimingAutoAdjust'),
+    visualConstant: optionDefault('visualConstant'),
+    noteDurationMs: optionDefault('noteDurationMs'),
+    lift1P: optionDefault('lift1P'),
+    lift2P: optionDefault('lift2P'),
+    liftOn1P: optionDefault('liftOn1P'),
+    liftOn2P: optionDefault('liftOn2P'),
+    constantFadeMs: optionDefault('constantFadeMs'),
+    judgeTimingMs: optionDefault('judgeTimingMs'),
+    normalHiSpeedLevel: optionDefault<boolean>('normalHiSpeed') ? optionDefault('normalHiSpeedLevel') : 0,
+    classicHiSpeed: optionDefault('classicHiSpeed'),
+    floatingHiSpeed: optionDefault('floatingHiSpeed'),
+    fixedDisplayArea: optionDefault('fixedDisplayArea'),
+    judgeAlgorithm: optionDefault('judgeAlgorithm'),
+    longNoteModifier: optionDefault('longNoteModifier'),
+    longNoteRate: optionDefault('longNoteRate'),
+    sevenToNinePattern: optionDefault('sevenToNinePattern'),
+    sevenToNineType: optionDefault('sevenToNineType'),
+    battleMode: optionDefault('battleMode'),
+    dBattleScratch: optionDefault('dBattleScratch'),
+    gauge2P: optionDefault('gauge2P'),
+    mRan1P: optionDefault('mRan1P'),
+    mRan2P: optionDefault('mRan2P'),
+    longNoteMode: optionDefault('longNoteMode'),
+    customJudge: optionDefault('customJudge'),
+    practice: optionDefault('practice'),
+    practiceGauge: optionDefault('practiceGauge'),
+    practiceGaugeCategory: optionDefault('practiceGaugeCategory'),
+    practiceStartGauge: optionDefault('practiceStartGauge'),
+    practiceJudgeRank: optionDefault('practiceJudgeRank'),
+    practiceTotal: optionDefault('practiceTotal'),
+    practiceRestBefore: optionDefault('practiceRestBefore'),
+    practiceRestAfter: optionDefault('practiceRestAfter'),
+    practiceCarriedLongNotes: optionDefault('practiceCarriedLongNotes'),
+    customJudgeKeyPerfectGreat: optionDefault('customJudgeKeyPerfectGreat'),
+    customJudgeKeyGreat: optionDefault('customJudgeKeyGreat'),
+    customJudgeKeyGood: optionDefault('customJudgeKeyGood'),
+    customJudgeScratchPerfectGreat: optionDefault('customJudgeScratchPerfectGreat'),
+    customJudgeScratchGreat: optionDefault('customJudgeScratchGreat'),
+    customJudgeScratchGood: optionDefault('customJudgeScratchGood'),
+    customJudgeLongNoteMargin: optionDefault('customJudgeLongNoteMargin'),
+    lr2ExtraMode: optionDefault('lr2ExtraMode'),
+    lr2ExtraLevel: optionDefault('lr2ExtraLevel'),
+    extraNoteDepth: optionDefault('extraNoteDepth'),
+    extraNoteScratch: optionDefault('extraNoteScratch'),
+    mineModifier: optionDefault('mineModifier'),
+    crazyJudge: optionDefault('crazyJudge'),
+    crazyHellJudge: optionDefault('crazyHellJudge'),
+    crazyAddMine: optionDefault('crazyAddMine'),
+    crazyNotes: optionDefault('crazyNotes'),
+    scrollModifier: optionDefault('scrollModifier'),
+    scrollSection: optionDefault('scrollSection'),
+    scrollRate: optionDefault('scrollRate'),
+    gaugeAutoShift: optionDefault('gaugeAutoShift'),
+    bmsonTotalMode: optionDefault('bmsonTotalMode'),
+    bottomShiftableGauge: optionDefault('bottomShiftableGauge'),
+    autoScratch1P: optionDefault('autoScratch1P'),
+    autoScratch2P: optionDefault('autoScratch2P'),
+    anyKey: optionDefault('anyKey'),
     laneKeys: {},
     controlKeys: {},
-    builtInControlScheme: 'lr2',
+    builtInControlScheme: optionDefault('builtInControlScheme'),
     actionKeys: {},
-    sort: 'OFF',
-    keysFilter: 'ALL',
-    difficultyFilter: 'ALL',
+    sort: optionDefault('sort'),
+    keysFilter: optionDefault('keysFilter'),
+    difficultyFilter: optionDefault('difficultyFilter'),
     hiSpeed: readStoredHiSpeed(storage),
-    hsFix: 'OFF',
-    displayAreaInfo: 'OFF',
-    bga: 'ON',
-    bgaSize: 'EXTEND',
-    scoreGraph: true,
-    hiddenSudden1P: 'OFF',
-    hiddenSudden2P: 'OFF',
-    laneCover: false,
-    shutter: 0.25,
+    hsFix: optionDefault('hsFix'),
+    displayAreaInfo: optionDefault('displayAreaInfo'),
+    bga: optionDefault('bga'),
+    bgaSize: optionDefault('bgaSize'),
+    scoreGraph: optionDefault('scoreGraph'),
+    hiddenSudden1P: optionDefault('hiddenSudden1P'),
+    hiddenSudden2P: optionDefault('hiddenSudden2P'),
+    laneCover: optionDefault('laneCover'),
+    shutter: optionDefault('shutter'),
     // Skin-family routing defaults to `'auto'`: beatoraja > LR2 > default, picked per-scene from what's loaded.
     // The Options dialog's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
     // in the dropdown only when their theme is loaded (see `rebuildSkinFamilyPicker` in `ui/options/skin.ts`).
-    confirmDroppedSkin: true,
+    confirmDroppedSkin: optionDefault('confirmDroppedSkin'),
     skipDroppedSkin: false,
-    skinFamilyOverride: 'auto',
+    skinFamilyOverride: optionDefault('skinFamilyOverride'),
     builtInSkin: inputs.builtInSkinId(readStoredBuiltInSkinId(storage)),
     skinEffects: readStoredSkinEffects(storage, inputs.signals),
     renderResolution: nearestRenderResolution(
@@ -419,7 +423,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     openFolder: inputs.actions.openFolder,
     openFiles: inputs.actions.openFiles,
     recordingFormat: readStoredRecordingFormat(storage),
-    recordingQuality: 'standard',
+    recordingQuality: optionDefault('recordingQuality'),
     record: inputs.actions.record,
     screenshot: inputs.actions.screenshot,
   };
@@ -444,7 +448,7 @@ export interface CompressorStart {
 export function resolveCompressorMode(href: string): CompressorStart {
   const flag: CompressorMode | undefined = parseCompressorMode(new URL(href).searchParams.get('compressor'));
   if (flag === 'split' || flag === 'legacy') return { mode: flag, enabled: true };
-  return { mode: 'split', enabled: flag !== 'off' };
+  return { mode: 'split', enabled: flag === 'off' ? false : optionDefault('compressorEnabled') };
 }
 
 /** The `?compressor=` flag when the URL sets one. Absent, the remembered Options dialog value stays. */

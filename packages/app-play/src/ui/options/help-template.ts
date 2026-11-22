@@ -553,7 +553,7 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <dt>Skin effects</dt>
           <dd>(Built-in tab) How much animation the built-in skins draw: Full, Reduced or Off.</dd>
           <dt>Skin settings</dt>
-          <dd>(Built-in tab) The selected skin's own settings, with Reset to defaults.</dd>
+          <dd>(Built-in tab) The selected skin's own settings, with Reset section to defaults.</dd>
           <dt>Load LR2 skin…</dt>
           <dd>(LR2 tab) Asks for an LR2 theme to drop or pick, and loads it.</dd>
           <dt>LR2 theme</dt>

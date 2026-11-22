@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { OPTION_FOLDERS, OPTIONS_TABS, clearPlayerSettings, playerSettingKeys, type PlayerStorage } from './folders.ts';
+import { OPTIONS_LAYOUT, clearPlayerSettings, playerSettingKeys, type PlayerStorage } from './folders.ts';
 
 function memoryStorage(initial: Record<string, string> = {}): PlayerStorage & { values: Map<string, string> } {
   const values = new Map(Object.entries(initial));
@@ -38,13 +38,24 @@ const BLOCKED_STORAGE: PlayerStorage = {
 };
 
 describe('Options dialog folder layout', () => {
-  it('has unique folder titles', () => {
-    const titles = Object.values(OPTION_FOLDERS).map((folder) => folder.title);
-    expect(new Set(titles).size).toBe(titles.length);
+  it('has the tabs in the order a session uses them', () => {
+    expect(OPTIONS_LAYOUT.pages.map((page) => page.title)).toEqual([
+      'Play',
+      'View',
+      'Keys',
+      'Skin',
+      'Audio',
+      'Camera',
+      'Library',
+      'Capture',
+      'Leaderboard',
+      'Advanced',
+    ]);
   });
 
   it('has unique tab titles', () => {
-    expect(new Set(OPTIONS_TABS).size).toBe(OPTIONS_TABS.length);
+    const titles = OPTIONS_LAYOUT.pages.map((page) => page.title);
+    expect(new Set(titles).size).toBe(titles.length);
   });
 });
 

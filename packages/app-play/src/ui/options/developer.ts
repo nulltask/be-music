@@ -2,17 +2,15 @@ import { monitorFrameRate } from '../../pane-controls.ts';
 import { getBrowserWorkerCount, setBrowserWorkerCount } from '@be-music/player-browser/compute';
 import { storeWorkerCount } from '../../worker-settings.ts';
 // The Options dialog's Advanced folder. It is built with the dialog as `this` (`OptionsDialog`).
-import type { OptionContainer } from '../options-controls.ts';
-import { OPTION_FOLDERS } from './folders.ts';
 import type { OptionsDialog } from './index.ts';
 import { buildBGATranscodeFolder } from './library.ts';
 /**
  * Diagnostics, session behaviour and the BGA transcode, which most players never touch, plus the reset for every
  * remembered setting.
  */
-export function buildDeveloperFolder(this: OptionsDialog, developer: OptionContainer): void {
+export function buildDeveloperFolder(this: OptionsDialog): void {
   const compute = { workers: getBrowserWorkerCount() };
-  developer
+  this.place('workers')
     .addBinding(compute, 'workers', {
       label: 'CPU workers',
       min: 1,
@@ -27,12 +25,14 @@ export function buildDeveloperFolder(this: OptionsDialog, developer: OptionConta
         /* Storage can be disabled. */
       }
     });
-  developer.addBinding(this.guiState, 'autoPauseOnBlur', { label: 'Auto pause on blur' }).on('change', ({ value }) => {
-    this.guiState.autoPauseOnBlur = value;
-    // Push live so a chart already in flight starts honoring the new policy on its next visibility / blur event,
-    // without forcing the user to restart the song.
-    this.gameplayView?.setAutoPauseOnBlur(value);
-  });
+  this.place('autoPauseOnBlur')
+    .addBinding(this.guiState, 'autoPauseOnBlur', { label: 'Auto pause on blur' })
+    .on('change', ({ value }) => {
+      this.guiState.autoPauseOnBlur = value;
+      // Push live so a chart already in flight starts honoring the new policy on its next visibility / blur event,
+      // without forcing the user to restart the chart.
+      this.gameplayView?.setAutoPauseOnBlur(value);
+    });
   // Native monitor samples the scene clock and keeps a bounded FPS history.
   const sceneHost = this.sceneHost;
   const stats = {
@@ -40,7 +40,7 @@ export function buildDeveloperFolder(this: OptionsDialog, developer: OptionConta
       return monitorFrameRate(sceneHost.app.ticker);
     },
   };
-  developer.addBinding(stats, 'fps', {
+  this.place('fps').addBinding(stats, 'fps', {
     label: 'FPS',
     readonly: true,
     view: 'graph',
@@ -49,8 +49,10 @@ export function buildDeveloperFolder(this: OptionsDialog, developer: OptionConta
     interval: 500,
     bufferSize: 60,
   });
-  buildBGATranscodeFolder.call(this, developer.addFolder(OPTION_FOLDERS.bgaTranscode));
-  developer.addButton({ title: 'Reset settings and reload' }).on('click', () => {
-    void this.resetSettings();
-  });
+  buildBGATranscodeFolder.call(this);
+  this.place('resetSettings')
+    .addButton({ title: 'Reset settings and reload' })
+    .on('click', () => {
+      void this.resetSettings();
+    });
 }

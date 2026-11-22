@@ -1,7 +1,8 @@
 // The player's Options dialog: its tabs and folders, the controllers the app reaches after building them, and the locks
-// a play puts on them. Each folder is built in a module of its own (`play-options.ts`, `tempo.ts`, …) with the dialog as
-// `this`; the tabs, the folder titles and the remembered open states are `folders.ts`'. The dialog reaches the app only
-// through `OptionsDialogDeps`, which the app (`app/app.ts`) builds.
+// a play puts on them. The tabs, folders and pages, and where each option goes among them, are `options-layout.json`'s
+// (`layout.ts`); each option is built in a module of its own (`play-options.ts`, `tempo.ts`, …) with the dialog as
+// `this`, which places it by its id (`place`). The dialog reaches the app only through `OptionsDialogDeps`, which the
+// app (`app/app.ts`) builds.
 import { pickLiveDisplayPlayOptions } from '@be-music/player-scene-model';
 import type { BeatorajaSkinConfig, BeatorajaSkinHeader } from '@be-music/skin-beatoraja';
 import type { LR2DiscoveredTheme } from '@be-music/skin-lr2';
@@ -20,7 +21,6 @@ import {
 import type { BeMusicSkin } from '@be-music/player-skin-sdk';
 import {
   OptionFolder,
-  type OptionTabs,
   type OptionBinding,
   type OptionButton,
   type OptionContainer,
@@ -61,7 +61,9 @@ import {
 } from './compressor.ts';
 import { buildCourseFolder } from './course.ts';
 import { buildDeveloperFolder } from './developer.ts';
-import { OPTION_FOLDERS, OPTIONS_TABS, VIEW_OPTION_PAGES, type OptionFolderSpec } from './folders.ts';
+import { OPTIONS_LAYOUT } from './folders.ts';
+import { OptionLayout, type OptionPlacement } from './layout.ts';
+import { runtimeOptionDefaults } from './runtime-defaults.ts';
 import { buildLibraryFolder } from './library.ts';
 import { PlayLock } from './play-lock.ts';
 import {
@@ -86,6 +88,14 @@ import { buildTempoFolder } from './tempo.ts';
 import { onPlayerLangChange, playerLang, playerText } from '../../player-copy.ts';
 import { describeRecordConsequence } from '../../services/record-consequence.ts';
 import { releaseFocusOnClose } from '../dialog-focus.ts';
+/** The options of `options-layout.json` only some browsers or builds have, which the code may leave unbuilt. */
+const OPTIONAL_OPTIONS: ReadonlySet<string> = new Set([
+  'playInSilentMode',
+  'silentModeNote',
+  'addSkinURL',
+  'addSkinFromURL',
+  'lr2Theme',
+]);
 /**
  * What the Options dialog needs from the app: the settings and stores its controllers change, readers of what the app has
  * loaded and shows, and the app's actions its controllers start. The actions keep the names of the app's methods.
@@ -237,11 +247,11 @@ export class OptionsDialog {
   /** Whether this visit already scheduled the first-run benchmark. */
   public firstRunResolutionScheduled = false;
   /**
-   * Handles for controllers we need to address by name after construction — toggling the per-stage folder
+   * Handles for controllers we need to address by name after construction — toggling the per-stage controls
    * visibility, renaming the record button, and reflecting URL-driven compressor changes in the dialog.
    */
   public gui: OptionFolder | undefined;
-  public compressorStageFolder: OptionContainer | undefined;
+  public readonly compressorStageControllers: OptionRow[] = [];
   /** Compressor tuning in slider units, restored from the last visit; seeds every gameplay mount. */
   public readonly compressorTunings: Record<TunableCompressor, CompressorTuning> = readStoredCompressorTunings();
   public recordController: OptionButton | undefined;
@@ -330,12 +340,8 @@ export class OptionsDialog {
   private ghostBar: GhostBarFacts | undefined;
   /** The "Tempo (%)" slider — left enabled during a play whose tempo can change live (`allowsLiveTempo`). */
   public tempoController: PaneBinding | undefined;
-  /** Options dialog folder holding the active Be-Music Skin's settings; hidden for a skin that declares none. */
-  public skinSettingsFolder: OptionContainer | undefined;
-  /** The Options dialog's "Skin & display" folder, with the common family and display controls. */
-  public skinFolder: OptionContainer | undefined;
-  /** LR2 tab holding the discovered theme picker. */
-  public lr2SkinPage: Pick<OptionContainer, 'addBinding'> | undefined;
+  /** Rows created for the active Be-Music Skin's settings. */
+  public readonly skinSettingRows: OptionRow[] = [];
   /** Native list whose options follow loaded theme families without replacing its event handlers. */
   public confirmDroppedSkinController: OptionBinding<boolean> | undefined;
   public skinFamilyController: OptionBinding<SkinFamilyOverride> | undefined;
@@ -431,6 +437,13 @@ export class OptionsDialog {
     const live = pickLiveDisplayPlayOptions(changes);
     if (live !== undefined) this.gameplayView?.controller.dispatch({ type: 'display-options', values: live });
   }
+  /** Where each option goes: the dialog's tabs, folders and pages, made from `options-layout.json` by {@link buildGUI}. */
+  public layout: OptionLayout<OptionContainer> | undefined;
+  /** Where the option or group `id` of `options-layout.json` goes: rows made through it land there. */
+  public place(id: string): OptionPlacement {
+    if (this.layout === undefined) throw new Error('The Options dialog is not built yet');
+    return this.layout.place(id);
+  }
   /** The header gear follows the Options dialog: open, closed with its close button, Escape or a backdrop click. */
   private reportExpanded: ((open: boolean) => void) | undefined;
   /** Reports when the Options dialog opens or closes. */
@@ -441,26 +454,26 @@ export class OptionsDialog {
   public toggle(): void {
     if (this.gui !== undefined) this.gui.expanded = !this.gui.expanded;
   }
-  /** The dialog's tabs, the View folder's pages and the LR2 mania options section on its Effects page. */
-  public topTabs: OptionTabs | undefined;
-  public viewTabs: OptionTabs | undefined;
-  public lr2ManiaFolder: OptionFolder | undefined;
-  /** Opens the Options dialog on the LR2 mania options: the View tab's Effects page, scrolled to the section. */
+  /** Opens and scrolls to the LR2 mania section at its current location in the layout. */
   public openLR2ManiaOptions(): void {
-    if (this.gui === undefined) return;
-    this.gui.expanded = true;
-    this.topTabs?.select(OPTIONS_TABS.indexOf('View'));
-    this.viewTabs?.select(VIEW_OPTION_PAGES.indexOf('Effects'));
-    this.lr2ManiaFolder?.element.scrollIntoView({ block: 'start' });
+    const { gui, layout } = this;
+    if (gui === undefined || layout === undefined) return;
+    const path = layout.path('lr2Mania');
+    if (path.length === 0) return;
+    const folder = layout.folder('lr2Mania').element;
+    if (folder.closest('[data-option-omitted]') !== null) return;
+    gui.expanded = true;
+    for (const step of path) layout.tabs(step.tabs).select(step.page);
+    folder.scrollIntoView({ block: 'start' });
   }
   /**
    * Builds the Options dialog (`#options-modal`) and wires every controller to the gameplay / scene state. Centralizing
-   * this in one method lets us bind handles to specific controllers (`recordController`, `compressorStageFolder`)
+   * this in one method lets us bind handles to specific controllers (`recordController`, `compressorStageControllers`)
    * up-front, so runtime code can address them by name (renaming the record button when capture starts, hiding the
-   * per-stage folder on compressor mode change) without re-querying the DOM.
+   * per-stage controls on compressor mode change) without re-querying the DOM.
    *
-   * Layout: one tab per area (`OPTIONS_TABS`), each holding its folders as sections, with the folders inside them as
-   * sections of their own (`folders.ts`).
+   * Layout: `options-layout.json` (`OPTIONS_LAYOUT`) makes the tabs, folders and pages; each build function then makes
+   * its options, placing each by its id. An option the layout hides is still made, so its value and behaviour stay.
    */
   public buildGUI(): void {
     const dialog = document.querySelector<HTMLDialogElement>('#options-modal');
@@ -503,45 +516,28 @@ export class OptionsDialog {
     });
     // Keys stay in the dialog, so the play behind it does not take them.
     dialog.addEventListener('keydown', (event) => event.stopPropagation());
-    const addSection = (parent: OptionContainer, folder: OptionFolderSpec): OptionFolder =>
-      parent.addFolder({ title: folder.title });
-    const addFolder = (parent: Pick<OptionContainer, 'addFolder'>, folder: OptionFolderSpec): OptionFolder =>
-      parent.addFolder({ title: folder.title });
-    const tabs = gui.addTab({ pages: OPTIONS_TABS.map((title) => ({ title })) });
-    this.topTabs = tabs;
-    const [play, view, keys, skin, audio, cameraTab, library, captureTab, leaderboard, advanced] = tabs.pages;
-    if (
-      !play ||
-      !view ||
-      !keys ||
-      !skin ||
-      !audio ||
-      !cameraTab ||
-      !library ||
-      !captureTab ||
-      !leaderboard ||
-      !advanced
-    )
-      return;
-    // Tabs in the order a session uses them: how to play and what the lanes show, the keys, how it looks and sounds,
-    // the camera in the BGA frame, the library (loading, records, the select screen's list and courses), capturing a play, the Leaderboard, then
-    // the advanced settings. The sections are made first, top to bottom, since the Play options fill the View and
-    // Select folders on other tabs.
-    const playOptions = addSection(play, OPTION_FOLDERS.playOptions);
-    const viewFolder = addSection(view, OPTION_FOLDERS.view);
-    this.buildLibraryFolder(addSection(library, OPTION_FOLDERS.library), addFolder);
-    const select = addSection(library, OPTION_FOLDERS.select);
-    this.buildCourseFolder(addSection(library, OPTION_FOLDERS.course));
-    this.buildCaptureFolder(addSection(captureTab, OPTION_FOLDERS.capture));
-    const { practice, replay } = this.buildPlayOptionsFolder(playOptions, viewFolder, select);
-    this.buildTempoFolder(addFolder(practice, OPTION_FOLDERS.tempo));
-    this.buildReplayViewFolder(addFolder(replay, OPTION_FOLDERS.replayView));
-    this.buildKeyConfigFolder(addSection(keys, OPTION_FOLDERS.keys));
-    this.buildSkinFolder(addSection(skin, OPTION_FOLDERS.skin), addFolder);
-    this.buildAudioFolder(addSection(audio, OPTION_FOLDERS.audio), addFolder);
-    this.buildBGACameraFolder(addSection(cameraTab, OPTION_FOLDERS.bgaCamera), this.deps.bgaCamera);
-    this.deps.leaderboard.buildFolder(addSection(leaderboard, OPTION_FOLDERS.leaderboard));
-    this.buildDeveloperFolder(addSection(advanced, OPTION_FOLDERS.advanced));
+    const layout = new OptionLayout(OPTIONS_LAYOUT, gui, (id, expected, actual) =>
+      console.error(`Options layout: "${id}" is a ${expected} in options-layout.json, but is built as a ${actual}`),
+    );
+    this.layout = layout;
+    // The options, area by area. Where each goes is the layout's, so the order here is only the order their side effects
+    // run in: the Play options read the settings the Library made, and the skin pickers follow what is loaded.
+    this.buildLibraryFolder();
+    this.buildCourseFolder();
+    this.buildCaptureFolder();
+    this.buildPlayOptionsFolder();
+    this.buildTempoFolder();
+    this.buildReplayViewFolder();
+    this.buildKeyConfigFolder();
+    this.buildSkinFolder();
+    this.buildAudioFolder();
+    this.buildBGACameraFolder(this.deps.bgaCamera);
+    this.deps.leaderboard.buildFolder((id) => layout.place(id));
+    this.buildDeveloperFolder();
+    layout.installSectionResets(runtimeOptionDefaults(() => this.deps.availableLR2Themes()[0]?.name));
+    // An option of the layout no code made is one this browser lacks (Play in silent mode), or a mistake.
+    const unclaimed = layout.unclaimed().filter((id) => !OPTIONAL_OPTIONS.has(id));
+    if (unclaimed.length > 0) console.error(`Options layout: no code builds ${unclaimed.join(', ')}`);
     this.refreshCompressorStageVisibility();
     gui.on('change', () => {
       this.scheduleSettingsSave();

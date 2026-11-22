@@ -14,6 +14,7 @@ Be-Music Play runs BMS, BME, BML, PMS, bmson, LRX and n2s charts in the browser.
 - [Running the player](#running-the-player)
   - [Loading placeholders](#loading-placeholders)
   - [Options dialog](#options-dialog)
+    - [Options dialog layout](#options-dialog-layout)
   - [Best records](#best-records)
   - [Play tempo](#play-tempo)
   - [Built-in play screen](#built-in-play-screen)
@@ -144,6 +145,38 @@ The **Options** dialog opens from the header's Settings button (and, while the p
 **View → Show invisible notes** is off by default. Enabling it shows hidden keysound objects in every skin family, including beatoraja; it can be toggled during play. The inspection markers do not affect keysound playback, judgment, or scoring.
 
 The Status and Account rows use read-only multiline monitors. The separate **Skin Config** pane uses **Options**, **Files** (when declared), and **Timing & offsets** tabs. Categories remain grouped within each tab. Each authored custom-offset axis, including `x` and `y`, has its own slider and number field. **Reset all to 0** refreshes the native controls and applies one configuration update. Switching scenes rebuilds the schema; editing the same skin entry preserves the selected tab and folder state.
+
+#### Options dialog layout
+
+The dialog's structure comes from [`options-layout.json`](../packages/app-play/src/ui/options/options-layout.json): its tabs, the folders (sections) on them, the pages of tabs inside a folder, and the order of every option. Each option has an `id`, its `kind`, and an optional `"hidden"`.
+
+```mermaid
+flowchart LR
+  json[options-layout.json] --> parse[parseOptionsLayout]
+  parse --> assemble[assembleOptionsLayout]
+  assemble --> dialog[tabs, folders, pages]
+  build[build functions] -- "place(id)" --> dialog
+```
+
+`parseOptionsLayout` (`options-layout-schema.ts`) checks the file as the module loads and names the first problem by its path: an unknown key or kind, an id used twice, an empty title. `assembleOptionsLayout` then makes the tabs, pages and folders in order. The build functions (`play-options.ts`, `audio.ts`, …) still make each row, but they ask `OptionsDialog.place(id)` where it goes instead of picking a container. The row lands at the item's position whatever order the code makes it in, so moving an option to another page, or reordering a page, is an edit of the JSON alone.
+
+The JSON declares the layout and defaults. These stay in code:
+
+- The label, choices, range and change handler of each option. The English label names the row for its help, its Japanese label (`labels.ts`), the search and the e2e helpers (`setOption` / `pressOption`), so it lives next to the handler that gives it meaning.
+- Whether a play locks the option (`trackPlayOption`), and the visibility that follows other options, such as the rows that only a judge ruleset or a two-player BATTLE uses.
+- Rows built from what is loaded or configured. A `group` item marks where they go: the key config pages, the compressor tuning folders, a Be-Music Skin's settings and the beatoraja skin pickers.
+
+An item with `"hidden": true` is left off the dialog: a hidden option, folder or page does not show and the search skips it. A hidden page's tab is left off the tab bar, and the arrow keys pass over it. The row is still built: its value, its handler, its play lock and the refreshes that follow the judge ruleset work as before. The layout's hiding (`OptionRow.omitted`) is apart from the code's (`OptionRow.hidden`), so neither undoes the other.
+
+Each editable option declares its default in `options-layout.json`. Use a literal when the value is fixed, or `{ "use": "..." }` when the browser, device, or available themes determine it. **Reset section to defaults** applies the settings in that section and its subsections through their regular change handlers. The reset skips controls locked by a play or capture and controls currently unavailable. Keys, skin settings, and compressor tuning restore the defaults of their respective schemas. Resetting settings leaves imported charts, courses, replay history, and registered library sources in place.
+
+Where code and JSON disagree:
+
+- An id the JSON does not have, or an option built twice while its first row is still there, throws: those are programming mistakes.
+- An option built as another kind than the JSON says is logged. A binding's control follows its value's type at run time, and a stored setting of an unexpected type should not stop the dialog from opening.
+- A JSON option no code builds is logged, except those only some browsers or builds have: Play in silent mode, Add skin and the LR2 theme picker.
+
+`layout.test.ts` tests the schema and the assembly against stand-in containers, and checks that every `place('…')` id in the source exists in the JSON and that every JSON id is named in the source.
 
 ### Best records
 

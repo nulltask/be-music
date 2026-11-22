@@ -1,5 +1,5 @@
 // The Options dialog's compressor controls: every compressor's tuning, remembered across visits and handed to each play,
-// and the per-stage folder, shown only where it applies. They run with the dialog as `this` (`OptionsDialog`).
+// and the per-stage controls, shown only where it applies. They run with the dialog as `this` (`OptionsDialog`).
 import type { OptionContainer } from '../options-controls.ts';
 import {
   DEFAULT_COMPRESSOR_PARAMS,
@@ -23,7 +23,7 @@ export function resolveCompressorParamOverrides(this: OptionsDialog): Record<Tun
   ) as Record<TunableCompressor, CompressorParams>;
 }
 /**
- * Hide the per-stage `Key` / `BGM` / `Master` folder when it doesn't apply to the current state:
+ * Hide the per-stage `Key` / `BGM` / `Master` controls when they don't apply to the current state:
  *
  * - Compressor checkbox unchecked → bus is in `'off'` mode, every stage is bypassed already.
  * - `?compressor=legacy` → the legacy architecture has just one compressor; per-stage toggles don't map onto it.
@@ -32,14 +32,14 @@ export function resolveCompressorParamOverrides(this: OptionsDialog): Record<Tun
  */
 export function refreshCompressorStageVisibility(this: OptionsDialog): void {
   const visible = this.guiState.compressor && this.compressorMode === 'split';
-  if (this.compressorStageFolder) this.compressorStageFolder.hidden = !visible;
+  for (const controller of this.compressorStageControllers) controller.hidden = !visible;
 }
 /**
  * One folder per compressor (key / BGM / master in split mode; the single legacy compressor only when the
  * `?compressor=legacy` architecture is active) with threshold, knee, ratio, attack, and release sliders and a reset.
  * Changes retune a running chart live and are remembered for the next visit.
  */
-export function buildCompressorTuningGUI(this: OptionsDialog, parent: OptionContainer): void {
+export function buildCompressorTuningGUI(this: OptionsDialog, parent: Pick<OptionContainer, 'addFolder'>): void {
   const labels: Record<TunableCompressor, string> = {
     key: 'Key compressor',
     bgm: 'BGM compressor',
@@ -49,6 +49,10 @@ export function buildCompressorTuningGUI(this: OptionsDialog, parent: OptionCont
   const compressors = TUNABLE_COMPRESSORS.filter((compressor) =>
     this.compressorMode === 'legacy' ? compressor === 'legacy' : compressor !== 'legacy',
   );
+  const resets: (() => void)[] = [];
+  this.layout?.setGroupReset('compressorTuning', () => {
+    for (const reset of resets) reset();
+  });
   for (const compressor of compressors) {
     const tuning = this.compressorTunings[compressor];
     const folder = parent.addFolder({ title: labels[compressor] });
@@ -65,11 +69,13 @@ export function buildCompressorTuningGUI(this: OptionsDialog, parent: OptionCont
       folder.addBinding(tuning, 'releaseMs', { label: 'Release (ms)', min: 0, max: 1000, step: 5 }),
     ];
     for (const controller of controllers) controller.on('change', apply);
-    folder.addButton({ title: 'Reset to default' }).on('click', () => {
+    const reset = () => {
       Object.assign(tuning, defaultCompressorTunings()[compressor]);
       for (const controller of controllers) controller.refresh();
       apply();
       this.scheduleSettingsSave();
-    });
+    };
+    resets.push(reset);
+    folder.addButton({ title: 'Reset to default' }).on('click', reset);
   }
 }

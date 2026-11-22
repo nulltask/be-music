@@ -1,0 +1,491 @@
+{
+  "version": 1,
+  "tabs": "options",
+  "pages": [
+    {
+      "title": "Play",
+      "items": [
+        {
+          "folder": "playOptions",
+          "title": "Play options",
+          "items": [
+            { "option": "judgeRuleset", "kind": "select", "default": "lr2" },
+            { "option": "recordConsequence", "kind": "monitor" },
+            {
+              "tabs": "playOptionPages",
+              "pages": [
+                {
+                  "title": "Judge & gauge",
+                  "items": [
+                    { "option": "gauge", "kind": "select", "default": "GROOVE" },
+                    { "option": "judgeAlgorithm", "kind": "select", "default": "combo" },
+                    { "option": "bmsonTotalMode", "kind": "select", "default": "beatoraja" },
+                    { "option": "gaugeAutoShift", "kind": "select", "default": "NONE" },
+                    { "option": "bottomShiftableGauge", "kind": "select", "default": "ASSIST-EASY" },
+                    { "option": "longNoteMode", "kind": "select", "default": "LN" },
+                    { "option": "lr2Gambol", "kind": "select", "default": 0 },
+                    { "option": "customJudge", "kind": "toggle", "default": false },
+                    { "option": "customJudgeKeyPerfectGreat", "kind": "slider", "default": 400 },
+                    { "option": "customJudgeKeyGreat", "kind": "slider", "default": 400 },
+                    { "option": "customJudgeKeyGood", "kind": "slider", "default": 100 },
+                    { "option": "customJudgeScratchPerfectGreat", "kind": "slider", "default": 400 },
+                    { "option": "customJudgeScratchGreat", "kind": "slider", "default": 400 },
+                    { "option": "customJudgeScratchGood", "kind": "slider", "default": 100 },
+                    { "option": "customJudgeLongNoteMargin", "kind": "slider", "default": 100 },
+                    { "option": "judgeTimingAutoAdjust", "kind": "select", "default": "OFF" },
+                    { "option": "judgeTimingMs", "kind": "slider", "default": 0 }
+                  ]
+                },
+                {
+                  "title": "Arrangement",
+                  "items": [
+                    { "option": "random1P", "kind": "select", "default": "OFF" },
+                    { "option": "random2P", "kind": "select", "default": "OFF" },
+                    { "option": "hRandomThresholdBPM", "kind": "slider", "default": 120 },
+                    { "option": "lr2RandomScratch1P", "kind": "toggle", "default": false },
+                    { "option": "lr2RandomScratch2P", "kind": "toggle", "default": false },
+                    { "option": "randomFixedLane1P", "kind": "slider", "default": 0 },
+                    { "option": "randomFixedLane2P", "kind": "slider", "default": 0 },
+                    { "option": "randomSeed1P", "kind": "text", "default": "-1" },
+                    { "option": "randomSeed2P", "kind": "text", "default": "-1" },
+                    { "option": "sevenToNinePattern", "kind": "select", "default": 0 },
+                    { "option": "sevenToNineType", "kind": "select", "default": 0 },
+                    { "option": "reuseArrangement", "kind": "button" },
+                    { "option": "newArrangement", "kind": "button" },
+                    { "option": "dpFlip", "kind": "toggle", "default": false },
+                    { "option": "battleMode", "kind": "select", "default": "OFF" },
+                    { "option": "gauge2P", "kind": "select", "default": "GROOVE" },
+                    { "option": "mRan1P", "kind": "toggle", "default": false },
+                    { "option": "mRan2P", "kind": "toggle", "default": false },
+                    { "option": "dBattleScratch", "kind": "toggle", "default": false }
+                  ]
+                },
+                {
+                  "title": "Modifiers",
+                  "items": [
+                    { "option": "lr2AddNotes", "kind": "slider", "default": 0 },
+                    { "option": "lr2Loudness", "kind": "slider", "default": 0 },
+                    { "option": "lr2AddLongNotes", "kind": "slider", "default": 0 },
+                    { "option": "lr2AddMines", "kind": "slider", "default": 0 },
+                    { "option": "scrollModifier", "kind": "select", "default": "OFF" },
+                    { "option": "scrollSection", "kind": "slider", "default": 4 },
+                    { "option": "scrollRate", "kind": "slider", "default": 0.5 },
+                    { "option": "mineModifier", "kind": "select", "default": "OFF" },
+                    { "option": "longNoteModifier", "kind": "select", "default": "OFF" },
+                    { "option": "lr2ExtraMode", "kind": "toggle", "default": false },
+                    { "option": "lr2ExtraLevel", "kind": "select", "default": 0 },
+                    { "option": "extraNoteDepth", "kind": "slider", "default": 0 },
+                    { "option": "extraNoteScratch", "kind": "toggle", "default": false },
+                    { "option": "longNoteRate", "kind": "slider", "default": 1 },
+                    {
+                      "folder": "nanasigroove",
+                      "title": "nanasigroove",
+                      "items": [
+                        { "option": "crazyJudge", "kind": "select", "default": "OFF" },
+                        { "option": "crazyHellJudge", "kind": "toggle", "default": false },
+                        { "option": "crazyAddMine", "kind": "toggle", "default": false },
+                        { "option": "crazyNotes", "kind": "select", "default": "OFF" }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "title": "Assist",
+                  "items": [
+                    { "option": "autoPlay", "kind": "toggle", "default": false },
+                    { "option": "autoScratch1P", "kind": "toggle", "default": false },
+                    { "option": "autoScratch2P", "kind": "toggle", "default": false },
+                    { "option": "guideSE", "kind": "toggle", "default": false },
+                    { "option": "anyKey", "kind": "toggle", "default": false }
+                  ]
+                },
+                {
+                  "title": "Practice",
+                  "items": [
+                    { "option": "practice", "kind": "toggle", "default": false },
+                    { "option": "practiceStartGauge", "kind": "slider", "default": 20 },
+                    { "option": "practiceJudgeRank", "kind": "slider", "default": 0 },
+                    { "option": "practiceTotal", "kind": "slider", "default": 0 },
+                    { "option": "practiceRestBefore", "kind": "slider", "default": 1 },
+                    { "option": "practiceRestAfter", "kind": "slider", "default": 1 },
+                    { "option": "practiceCarriedLongNotes", "kind": "toggle", "default": true },
+                    { "option": "practiceGauge", "kind": "select", "default": "NORMAL" },
+                    { "option": "practiceGaugeCategory", "kind": "select", "default": "MODE" },
+                    {
+                      "folder": "tempo",
+                      "title": "Tempo",
+                      "items": [
+                        { "option": "tempoEnabled", "kind": "toggle", "default": false },
+                        { "option": "tempoPercent", "kind": "slider", "default": 0 },
+                        { "option": "tempoPitchMode", "kind": "select", "default": "pitch" },
+                        { "option": "tempoStretchAlgorithm", "kind": "select", "default": "wsola" }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "title": "Replay / ghost",
+                  "items": [
+                    {
+                      "folder": "replayView",
+                      "title": "Replay / ghost",
+                      "items": [
+                        { "option": "replayViewTempo", "kind": "toggle", "default": true },
+                        { "option": "replayViewHiSpeed", "kind": "toggle", "default": true },
+                        { "option": "replayViewCovers", "kind": "toggle", "default": true },
+                        { "option": "replayViewLift", "kind": "toggle", "default": true },
+                        { "option": "scoreTarget", "kind": "select", "default": "RATE_AAA" },
+                        { "option": "scoreTargetRate", "kind": "slider", "default": 90 },
+                        { "option": "ghost", "kind": "select", "default": "OFF" },
+                        { "option": "ghostMode", "kind": "select", "default": "PLAYFIELD" },
+                        { "option": "ghostStatus", "kind": "monitor" },
+                        { "option": "ghostReplayFile", "kind": "button" }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "View",
+      "items": [
+        {
+          "folder": "view",
+          "title": "View",
+          "items": [
+            {
+              "tabs": "viewPages",
+              "pages": [
+                {
+                  "title": "Hi-speed",
+                  "items": [
+                    { "option": "hsFix", "kind": "select", "default": "OFF" },
+                    { "option": "windowHold", "kind": "toggle", "default": false },
+                    { "option": "normalHiSpeed", "kind": "toggle", "default": false },
+                    { "option": "normalHiSpeedLevel", "kind": "select", "default": 3 },
+                    { "option": "fixedDisplayArea", "kind": "toggle", "default": false },
+                    { "option": "floatingHiSpeed", "kind": "toggle", "default": false },
+                    { "option": "floatingSpeed", "kind": "slider", "default": 2 },
+                    { "option": "classicHiSpeed", "kind": "toggle", "default": false },
+                    { "option": "classicSpeed", "kind": "select", "default": 2 },
+                    { "option": "hiSpeed", "kind": "slider", "default": 2 }
+                  ]
+                },
+                {
+                  "title": "Cover & LIFT",
+                  "items": [
+                    { "option": "displayAreaInfo", "kind": "select", "default": "OFF" },
+                    { "option": "hiddenSudden1P", "kind": "select", "default": "OFF" },
+                    { "option": "hiddenSudden2P", "kind": "select", "default": "OFF" },
+                    { "option": "laneCover", "kind": "toggle", "default": false },
+                    { "option": "shutter", "kind": "slider", "default": 0.25 },
+                    { "option": "liftOn1P", "kind": "toggle", "default": false },
+                    { "option": "lift1P", "kind": "slider", "default": 0.1 },
+                    { "option": "liftOn2P", "kind": "toggle", "default": false },
+                    { "option": "lift2P", "kind": "slider", "default": 0.1 }
+                  ]
+                },
+                {
+                  "title": "Effects",
+                  "items": [
+                    { "option": "bga", "kind": "select", "default": "ON" },
+                    { "option": "bgaSize", "kind": "select", "default": "EXTEND" },
+                    { "option": "scoreGraph", "kind": "toggle", "default": true },
+                    { "option": "bpmGuide", "kind": "toggle", "default": false },
+                    { "option": "guideStop", "kind": "toggle", "default": false },
+                    { "option": "guideScroll", "kind": "toggle", "default": false },
+                    { "option": "guideSpeed", "kind": "toggle", "default": false },
+                    { "option": "bpmChangeWarning", "kind": "toggle", "default": false },
+                    { "option": "visualConstant", "kind": "toggle", "default": false },
+                    { "option": "noteDurationMs", "kind": "slider", "default": 500 },
+                    { "option": "constantFadeMs", "kind": "slider", "default": 100 },
+                    { "option": "laneBrightness", "kind": "slider", "default": 100 },
+                    { "option": "judgeDetail", "kind": "select", "default": "OFF" },
+                    { "option": "judgeDetailSplit", "kind": "toggle", "default": false },
+                    { "option": "judgeCounts", "kind": "toggle", "default": true },
+                    { "option": "judgePosition", "kind": "slider", "default": 0 },
+                    { "option": "judgeDisplay", "kind": "select", "default": "SKIN" },
+                    { "option": "showJudgeArea", "kind": "toggle", "default": false },
+                    { "option": "markProcessedNotes", "kind": "toggle", "default": false },
+                    { "option": "autoScratchNotes", "kind": "select", "default": "SHOW" },
+                    { "option": "showInvisibleNotes", "kind": "toggle", "default": false },
+                    {
+                      "folder": "lr2Mania",
+                      "title": "LR2 mania options",
+                      "items": [
+                        { "option": "lr2Acceleration", "kind": "select", "default": "OFF" },
+                        { "option": "lr2Earthquake", "kind": "slider", "default": 0 },
+                        { "option": "lr2Tornado", "kind": "slider", "default": 0 },
+                        { "option": "lr2SuperLoop", "kind": "slider", "default": 0 },
+                        { "option": "lr2Char", "kind": "slider", "default": 0 },
+                        { "option": "lr2Heartbeat", "kind": "slider", "default": 0 },
+                        { "option": "lr2Nabeatsu", "kind": "slider", "default": 0 },
+                        { "option": "lr2SinCurve", "kind": "slider", "default": 0 },
+                        { "option": "lr2Wave", "kind": "slider", "default": 0 },
+                        { "option": "lr2SpiralEffect", "kind": "slider", "default": 0 },
+                        { "option": "lr2SideJump", "kind": "slider", "default": 0 }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Keys",
+      "items": [
+        {
+          "folder": "keys",
+          "title": "Key config",
+          "items": [
+            { "option": "builtInControlScheme", "kind": "select", "default": "lr2" },
+            { "group": "keyConfigPages", "reset": true }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Skin",
+      "items": [
+        {
+          "folder": "skin",
+          "title": "Skin & display",
+          "items": [
+            { "option": "skinFamilyOverride", "kind": "select", "default": "auto" },
+            { "option": "confirmDroppedSkin", "kind": "toggle", "default": true },
+            {
+              "tabs": "skinPages",
+              "pages": [
+                {
+                  "title": "Built-in",
+                  "items": [
+                    { "option": "builtInSkin", "kind": "select", "default": { "use": "builtInSkin" } },
+                    { "option": "skinEffects", "kind": "select", "default": { "use": "skinEffects" } },
+                    {
+                      "folder": "skinSettings",
+                      "title": "Skin settings",
+                      "items": [{ "group": "skinSettingRows", "reset": true }]
+                    },
+                    {
+                      "folder": "addSkin",
+                      "title": "Add skin",
+                      "items": [
+                        { "option": "addSkinURL", "kind": "text", "default": "" },
+                        { "option": "addSkinFromURL", "kind": "button" }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "title": "LR2",
+                  "items": [
+                    { "option": "loadLR2Skin", "kind": "button" },
+                    { "option": "lr2Theme", "kind": "select", "default": { "use": "lr2Theme" } }
+                  ]
+                },
+                {
+                  "title": "beatoraja",
+                  "items": [
+                    { "option": "loadBeatorajaSkin", "kind": "button" },
+                    {
+                      "folder": "beatorajaSkins",
+                      "title": "Beatoraja skins",
+                      "items": [{ "group": "beatorajaSkinPickers", "reset": true }]
+                    }
+                  ]
+                }
+              ]
+            },
+            { "option": "renderResolution", "kind": "select", "default": { "use": "renderResolution" } },
+            { "option": "autoDetectResolution", "kind": "button" },
+            { "option": "renderer", "kind": "select", "default": "webgl" },
+            { "option": "playLayout", "kind": "select", "default": "auto" },
+            { "option": "toggleFullscreen", "kind": "button" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Audio",
+      "items": [
+        {
+          "folder": "audio",
+          "title": "Audio",
+          "items": [
+            { "option": "muted", "kind": "toggle", "default": false },
+            { "option": "masterVolume", "kind": "slider", "default": 100 },
+            { "option": "keyVolume", "kind": "slider", "default": 100 },
+            { "option": "bgmVolume", "kind": "slider", "default": 100 },
+            { "option": "playInSilentMode", "kind": "toggle", "default": true },
+            { "option": "silentModeNote", "kind": "monitor" },
+            { "option": "peakGain", "kind": "toggle", "default": false },
+            {
+              "folder": "compressor",
+              "title": "Compressor",
+              "items": [
+                { "option": "compressorEnabled", "kind": "toggle", "default": true },
+                {
+                  "folder": "compressorStages",
+                  "title": "Stages",
+                  "items": [
+                    { "option": "compressorKey", "kind": "toggle", "default": true },
+                    { "option": "compressorBGM", "kind": "toggle", "default": true },
+                    { "option": "compressorMaster", "kind": "toggle", "default": true }
+                  ]
+                },
+                { "group": "compressorTuning", "reset": true }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Camera",
+      "items": [
+        {
+          "folder": "bgaCamera",
+          "title": "BGA camera",
+          "items": [
+            { "option": "bgaCameraEnabled", "kind": "toggle", "default": false },
+            { "option": "bgaCameraDevice", "kind": "select", "default": "" },
+            { "option": "bgaCameraAccess", "kind": "button" },
+            { "option": "bgaCameraMirror", "kind": "toggle", "default": false },
+            { "option": "bgaCameraResolution", "kind": "select", "default": "auto" },
+            { "option": "bgaCameraAspect", "kind": "select", "default": "auto" },
+            { "option": "bgaCameraPreview", "kind": "element" },
+            { "option": "bgaCameraNote", "kind": "element" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Library",
+      "items": [
+        {
+          "folder": "library",
+          "title": "Library & records",
+          "items": [
+            {
+              "tabs": "librarySources",
+              "pages": [
+                {
+                  "title": "Local folders",
+                  "items": [
+                    { "option": "localFolders", "kind": "element" },
+                    { "option": "reloadFolders", "kind": "button" }
+                  ]
+                },
+                {
+                  "title": "Bemuse servers",
+                  "items": [
+                    { "option": "bemuseServers", "kind": "element" },
+                    { "option": "bemuseReplayGain", "kind": "toggle", "default": true }
+                  ]
+                },
+                {
+                  "title": "Difficulty tables",
+                  "items": [{ "option": "courseTables", "kind": "element" }]
+                }
+              ]
+            },
+            { "option": "musicURL", "kind": "text", "default": "" },
+            { "option": "skinURL", "kind": "text", "default": "" },
+            { "option": "loadFromURLs", "kind": "button" },
+            { "option": "autoSaveReplay", "kind": "toggle", "default": false },
+            { "option": "replayDeviceNames", "kind": "toggle", "default": false },
+            {
+              "folder": "replaySlots",
+              "title": "Replay slots",
+              "items": [
+                { "option": "replaySlotAutoSave1", "kind": "select", "default": "score-update" },
+                { "option": "replaySlotAutoSave2", "kind": "select", "default": "clear-update" },
+                { "option": "replaySlotAutoSave3", "kind": "select", "default": "miss-count-update" },
+                { "option": "replaySlotAutoSave4", "kind": "select", "default": "always" }
+              ]
+            },
+            { "option": "localData", "kind": "button" }
+          ]
+        },
+        {
+          "folder": "select",
+          "title": "Select",
+          "items": [
+            { "option": "sort", "kind": "select", "default": "OFF" },
+            { "option": "keysFilter", "kind": "select", "default": "ALL" },
+            { "option": "difficultyFilter", "kind": "select", "default": "ALL" }
+          ]
+        },
+        {
+          "folder": "course",
+          "title": "Course",
+          "items": [
+            { "option": "courseAutoAdvance", "kind": "toggle", "default": false },
+            { "option": "myCourses", "kind": "button" },
+            { "option": "nonstopPlacement", "kind": "select", "default": "intended" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Capture",
+      "items": [
+        {
+          "folder": "capture",
+          "title": "Capture",
+          "items": [
+            { "option": "record", "kind": "button" },
+            { "option": "recordingFormat", "kind": "select", "default": "mp4/avc" },
+            { "option": "recordingQuality", "kind": "select", "default": "standard" },
+            { "option": "screenshot", "kind": "button" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Leaderboard",
+      "items": [
+        {
+          "folder": "leaderboard",
+          "title": "Leaderboard",
+          "items": [
+            { "option": "leaderboardAccount", "kind": "element" },
+            { "option": "submitToLeaderboard", "kind": "toggle", "default": false },
+            { "option": "leaderboardSubmitRule", "kind": "select", "default": "improved" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Advanced",
+      "items": [
+        {
+          "folder": "advanced",
+          "title": "Advanced",
+          "items": [
+            { "option": "workers", "kind": "slider", "default": { "use": "workers" } },
+            { "option": "autoPauseOnBlur", "kind": "toggle", "default": false },
+            { "option": "fps", "kind": "monitor" },
+            {
+              "folder": "bgaTranscode",
+              "title": "BGA video transcode",
+              "items": [
+                { "option": "bgaUseWebCodecs", "kind": "toggle", "default": { "use": "bgaUseWebCodecs" } },
+                { "option": "bgaTranscodeQuality", "kind": "select", "default": "standard" },
+                { "option": "bgaResizeMaxEdgePx", "kind": "select", "default": 0 }
+              ]
+            },
+            { "option": "resetSettings", "kind": "button" }
+          ]
+        }
+      ]
+    }
+  ]
+}
