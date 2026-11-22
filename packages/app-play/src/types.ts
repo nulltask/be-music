@@ -87,6 +87,7 @@ export interface PlayerGUIState extends PlayTempoSettings {
    * holds focus.
    */
   autoPauseOnBlur: boolean;
+  showFPS: boolean;
   /** Master volume in percent (0..100) over every sound the player makes, applied live and remembered across reloads. */
   masterVolume: number;
   /** Silence every sound while retaining the master volume setting. Persisted in localStorage. */

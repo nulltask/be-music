@@ -227,6 +227,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
   const state: PlayerGUIState = {
     autoPlay: optionDefault('autoPlay'),
     autoPauseOnBlur: optionDefault('autoPauseOnBlur'),
+    showFPS: optionDefault('showFPS'),
     // Compressor stack ON by default — without it, multiple simultaneous `#WAV` samples sum past full scale and
     // digital- clip at the destination. The `MIXER_HEADROOM_GAIN_LINEAR` attenuation in `audio-bus.ts` buys a little
     // headroom but the master limiter is what reliably prevents audible clipping on dense charts. Power users wanting

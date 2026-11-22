@@ -33,6 +33,9 @@ export function buildDeveloperFolder(this: OptionsDialog): void {
       // without forcing the user to restart the chart.
       this.gameplayView?.setAutoPauseOnBlur(value);
     });
+  this.fpsOverlayController = this.place('showFPS')
+    .addBinding(this.guiState, 'showFPS', { label: 'Show FPS' })
+    .on('change', ({ value }) => this.deps.showFPSOverlay(value));
   // Native monitor samples the scene clock and keeps a bounded FPS history.
   const sceneHost = this.sceneHost;
   const stats = {
