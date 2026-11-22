@@ -122,7 +122,7 @@ describe('the web app manifest', () => {
     display: string;
     display_override?: string[];
     orientation?: string;
-    icons: { src: string; sizes: string; purpose?: string }[];
+    icons: { src: string; sizes: string; type: string; purpose: string }[];
   };
 
   test('names the app and installs it in its own window at the root', () => {
@@ -137,11 +137,18 @@ describe('the web app manifest', () => {
     expect(manifest.display_override).toEqual(['window-controls-overlay', 'fullscreen', 'standalone']);
   });
 
-  test('lists 192 and 512 px icons, a maskable one among them, that all exist', () => {
-    const sizes = manifest.icons.map((icon) => icon.sizes);
-    expect(sizes).toContain('192x192');
-    expect(sizes).toContain('512x512');
-    expect(manifest.icons.some((icon) => icon.purpose === 'maskable' && icon.sizes === '512x512')).toBe(true);
+  test('provides maskable icons for desktop and mobile installation', () => {
+    for (const size of [192, 512]) {
+      const png = manifest.icons.find((icon) => icon.sizes === `${size}x${size}`);
+      expect(png?.type).toBe('image/png');
+      expect(png?.purpose.split(' ')).toEqual(expect.arrayContaining(['any', 'maskable']));
+    }
+    expect(manifest.icons).toContainEqual({
+      src: '/icons/maskable.svg',
+      sizes: 'any',
+      type: 'image/svg+xml',
+      purpose: 'maskable',
+    });
     for (const icon of manifest.icons) {
       expect(() => readFileSync(resolve(publicDir, icon.src.slice(1)))).not.toThrow();
     }
