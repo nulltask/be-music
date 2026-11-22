@@ -643,6 +643,7 @@ export class PlayerWebApp {
       testHook: this.testHook,
       recordingDeps: () => this.recording.deps(),
       setRecordingFilenameBase: (base) => this.recording.setFilenameBase(base),
+      setStatus: (text) => this.status.set(text),
       setPlayStatus: (text) => this.status.setPlay(text),
       lockReplayOptionsForPlay: (liveTempo, chartEntry) => this.lockReplayOptionsForPlay(liveTempo, chartEntry),
       unlockReplayOptions: () => this.unlockReplayOptions(),

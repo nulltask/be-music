@@ -354,10 +354,11 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
     await h.route.showDecide(chartEntry('a'), { autoPlay: true });
     const { decide, play } = await decided(h);
     play.load.reject(new Error('decode failed'));
+    await vi.waitFor(() => expect(play.dispose).toHaveBeenCalledOnce());
+    expect(h.deps.playChart).not.toHaveBeenCalled();
     decide.options.on.continue();
     await vi.waitFor(() => expect(h.deps.playChart).toHaveBeenCalledOnce());
     expect(h.deps.playChart).toHaveBeenCalledWith(chartEntry('a'), { autoPlay: true, preResolved: RESOLVED });
-    expect(play.dispose).toHaveBeenCalledOnce();
     expect(play.start).not.toHaveBeenCalled();
   });
 

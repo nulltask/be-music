@@ -254,6 +254,7 @@ async function harness(options: { family?: Family; beatorajaPlay?: BeatorajaPlay
     testHook: { recordReplay: vi.fn() },
     recordingDeps: () => recording,
     setRecordingFilenameBase: vi.fn<PlayRouteDeps['setRecordingFilenameBase']>(),
+    setStatus: vi.fn<PlayRouteDeps['setStatus']>(),
     setPlayStatus: vi.fn<PlayRouteDeps['setPlayStatus']>(),
     lockReplayOptionsForPlay: vi.fn<PlayRouteDeps['lockReplayOptionsForPlay']>(),
     unlockReplayOptions: vi.fn<PlayRouteDeps['unlockReplayOptions']>(),
@@ -616,13 +617,33 @@ describe('PlayRoute.playChart: a chart played at once', () => {
     expect(h.deps.showSelect).toHaveBeenCalledOnce();
   });
 
-  test('a play that fails to load for another reason keeps its error', async () => {
+  test('a failed play preparation reports its error and returns to select', async () => {
+    const h = await harness();
+    const active = h.deps.courses.beginRun(course());
+    const courseStage = nextCourseStagePlay(active)!;
+    const abandon = vi.spyOn(h.deps.courses, 'abandonRun');
+    const started = h.route.playChart(chartEntry('a'), { courseStage });
+    await vi.waitFor(() => expect(h.plays.at(-1)?.prepare).toHaveBeenCalled());
+    const play = h.plays.at(-1)!;
+    play.load.reject(new Error('decode failed'));
+    await started;
+    expect(play.start).not.toHaveBeenCalled();
+    expect(abandon).toHaveBeenCalledOnce();
+    expect(h.deps.selectRoute.endAutoPlaylist).toHaveBeenCalledOnce();
+    expect(h.deps.setStatus).toHaveBeenCalledWith('Could not load a. decode failed');
+    expect(h.deps.showSelect).toHaveBeenCalledAfter(h.deps.setStatus);
+    expect(h.deps.showPlayOptionMismatch).not.toHaveBeenCalled();
+  });
+
+  test('a failed play preparation cannot override a newer route', async () => {
     const h = await harness();
     const started = h.route.playChart(chartEntry('a'));
     await vi.waitFor(() => expect(h.plays.at(-1)?.prepare).toHaveBeenCalled());
+    h.deps.router.begin();
     h.plays.at(-1)!.load.reject(new Error('decode failed'));
-    await expect(started).rejects.toThrow('decode failed');
-    expect(h.deps.showPlayOptionMismatch).not.toHaveBeenCalled();
+    await started;
+    expect(h.deps.setStatus).not.toHaveBeenCalled();
+    expect(h.deps.showSelect).not.toHaveBeenCalled();
   });
 });
 
