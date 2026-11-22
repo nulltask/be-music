@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { afterEach, expect, test } from 'vite-plus/test';
 import type { BeMusicPlaybackData } from '../models.ts';
 import { defineBeMusicElements } from '../register.ts';

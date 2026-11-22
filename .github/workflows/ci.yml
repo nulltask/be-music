@@ -149,6 +149,8 @@ jobs:
           run-install: false
       - name: Install dependencies
         run: vp install
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
       - name: Run test shard with coverage
         env:
           SHARD: ${{ matrix.shard }}

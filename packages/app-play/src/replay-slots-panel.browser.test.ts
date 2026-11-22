@@ -1,6 +1,3 @@
-// @vitest-environment jsdom
-import { Blob as NodeBlob } from 'node:buffer';
-import { URL as NodeURL } from 'node:url';
 import type { BeMusicReplay } from '@be-music/player-engine/replay';
 import { afterEach, beforeEach, expect, test, vi } from 'vite-plus/test';
 import { makeChartWith } from '../../player-scene-model/src/test-support/library.ts';
@@ -13,7 +10,6 @@ let panel: ReplaySlotsPanel | undefined;
 
 beforeEach(() => {
   setPlayerLang('en');
-  vi.stubGlobal('Blob', NodeBlob);
   const auxiliary = document.createElement('div');
   auxiliary.id = 'auxiliary-panels';
   document.body.append(auxiliary);
@@ -23,7 +19,6 @@ afterEach(() => {
   panel?.dispose();
   panel = undefined;
   document.body.replaceChildren();
-  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -136,8 +131,7 @@ test('downloads the saved replay using a safe chart title and the visible slot n
   const { panel, card, store, target, entry, payload, score } = setup();
   expect(await store.save(target, [2], payload, score, 'A: Take 1')).toMatchObject({ saved: true });
   panel.showSelect(entry);
-  vi.stubGlobal('URL', NodeURL);
-  const objectURL = vi.spyOn(NodeURL, 'createObjectURL');
+  const objectURL = vi.spyOn(URL, 'createObjectURL');
   const downloaded: string[] = [];
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
     downloaded.push(this.download);
@@ -145,6 +139,7 @@ test('downloads the saved replay using a safe chart title and the visible slot n
   button(card, 'Download').click();
   await vi.waitFor(() => expect(downloaded).toEqual(['A_Take_1-slot3.bmplay.json']));
   const data = objectURL.mock.calls[0]![0];
+  if (!(data instanceof Blob)) throw new Error('Expected an object URL backed by a replay Blob');
   expect(data.type).toBe('application/json');
   expect(JSON.parse(await data.text())).toMatchObject({
     format: 'be-music-replay',

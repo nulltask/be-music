@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { resolveChart } from '@be-music/chart-model';
 import { parseBMS } from '@be-music/chart-parser';
 import { afterEach, expect, test } from 'vite-plus/test';

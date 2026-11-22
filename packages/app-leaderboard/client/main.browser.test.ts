@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { afterEach, beforeAll, expect, test, vi } from 'vite-plus/test';
 import type { BeMusicStatusElement } from '@be-music/service-web-theme/client';
 

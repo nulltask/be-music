@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 import { InlineSearch, type InlineSearchHost } from './inline-search.ts';
 
@@ -83,9 +82,13 @@ test('follows the skin’s search box while editing and restores the page field 
     fieldRect: () => field,
     setEditing: (active) => editing.push(active),
   });
-  canvas.getBoundingClientRect = () => new DOMRect(50, 70, 800, 450);
-  shell.getBoundingClientRect = () => new DOMRect(20, 40, 900, 500);
+  shell.style.cssText = 'position: fixed; left: 20px; top: 40px; width: 900px; height: 500px';
+  canvas.style.cssText = 'position: absolute; left: 30px; top: 30px; width: 800px; height: 450px';
+  input.style.position = 'absolute';
+  shell.append(canvas);
+
   search.open();
+  expect(input.offsetParent).toBe(shell);
   expect(editing).toEqual([true]);
   expect([input.style.left, input.style.top, input.style.width]).toEqual(['150px', '65px', '260px']);
 
