@@ -205,20 +205,22 @@ uint32_t jig_random_range(uint32_t *state, uint32_t min, uint32_t max) {
   return min + jig_random_next(state) % span;
 }
 
+// 64-bit times go through unsigned long long and %llu: the Arm toolchain's newlib does not define PRIu64.
+typedef unsigned long long jig_ull;
+
 int jig_format_result(char *buffer, size_t size, const jig_result *result) {
   int written;
   switch (result->kind) {
     case JIG_RESULT_PRESS:
-      written = snprintf(buffer, size, "P,%" PRIu32 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64
-                                       ",%" PRIu32 ",%" PRIu32,
-                         result->index, result->queued_us, result->sent_us, result->onset_us,
-                         result->onset_us - result->sent_us, result->sent_us - result->queued_us, result->peak,
-                         result->quiet_span);
+      written = snprintf(buffer, size, "P,%" PRIu32 ",%llu,%llu,%llu,%llu,%llu,%" PRIu32 ",%" PRIu32, result->index,
+                         (jig_ull)result->queued_us, (jig_ull)result->sent_us, (jig_ull)result->onset_us,
+                         (jig_ull)(result->onset_us - result->sent_us), (jig_ull)(result->sent_us - result->queued_us),
+                         result->peak, result->quiet_span);
       break;
     case JIG_RESULT_TIMEOUT:
-      written = snprintf(buffer, size, "T,%" PRIu32 ",%" PRIu64 ",%" PRIu64 ",,,%" PRIu64 ",%" PRIu32 ",%" PRIu32,
-                         result->index, result->queued_us, result->sent_us, result->sent_us - result->queued_us,
-                         result->peak, result->quiet_span);
+      written = snprintf(buffer, size, "T,%" PRIu32 ",%llu,%llu,,,%llu,%" PRIu32 ",%" PRIu32, result->index,
+                         (jig_ull)result->queued_us, (jig_ull)result->sent_us,
+                         (jig_ull)(result->sent_us - result->queued_us), result->peak, result->quiet_span);
       break;
     default:
       written = snprintf(buffer, size, "N,%" PRIu32 ",,,,,,,%" PRIu32, result->index, result->quiet_span);
