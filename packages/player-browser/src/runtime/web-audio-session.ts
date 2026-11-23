@@ -24,6 +24,7 @@ import {
   type SampleSliceEnvelope,
 } from '@be-music/shared-utils/core';
 import { type AudioBusHandle } from './audio-bus.ts';
+import { getLatencyProbe } from './latency-probe.ts';
 import { prepareWAVPlaybackBuffer } from './wav-playback.ts';
 
 interface WebAudioSourceHandle {
@@ -291,6 +292,8 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
   let paused = false;
   let disposed = false;
   let started = false;
+  /** Stops the latency probe's sampling of this play's clock (`latency-probe.ts`), while the probe is on. */
+  let detachLatencyProbe: (() => void) | undefined;
   // `#xxx97` / `#xxx98` current dynamic gains. Spec (docs/bms-spec.md「#xxx97 / #xxx98」): a volume change applies to
   // voices triggered from that point on; already-playing voices are untouched. The gain is therefore captured
   // per-voice at build time instead of being written onto the shared bus mixers.
@@ -601,6 +604,11 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       durationSeconds === undefined ? undefined : durationSeconds + envelope.fadeOut,
     );
 
+    // A player keysound started now, not queued ahead or partway: the sound of a press (`latency-probe.ts`).
+    if (isPlayerLane && audioContextStartSeconds === undefined && elapsedSeconds === 0) {
+      getLatencyProbe()?.recordKeysoundStart(audioContext, startAt);
+    }
+
     activeSources.add(built);
     built.startContextSeconds = startAt;
     if (cutAt !== undefined) stopSource(built, cutAt);
@@ -676,6 +684,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       // the active-source tracking (which would lose `stopChannel` reach to in-flight LN samples).
       if (started) return;
       started = true;
+      detachLatencyProbe = getLatencyProbe()?.attachClock(audioContext);
       // Chart second 0 is now (after the backend's own start delay): a NONSTOP chart's fades fall from here.
       const delaySeconds = (context.chartStartDelayMs ?? 0) / 1000;
       anchorChartAt(delaySeconds > 0 ? -delaySeconds * tempo : 0);
@@ -712,6 +721,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     finish: async (): Promise<void> => {
       // Engine finished playback gracefully — let any tail samples ring out naturally. Drop our tracking so a
       // post-finish `stopChannel` (defensive) doesn't try to silence an already-cleaned source.
+      detachLatencyProbe?.();
       activeBySlot.clear();
       activeBySlice.clear();
       activeByChannel.clear();
@@ -720,6 +730,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     dispose: async (): Promise<void> => {
       if (disposed) return;
       disposed = true;
+      detachLatencyProbe?.();
       // Hard-stop every still-playing source so they don't survive into the next chart's bus and bleed audio. The
       // engine's dispose path runs after `finish` (the abort variant) — the source set is empty in the graceful
       // path so this loop is a no-op there.

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import { createPlayerInputSignalBus } from '../../../player-engine/src/core/input-signal-bus.ts';
 import { CS_GAMEPAD_BUTTON_CHANNELS, createWebInputRuntime, keyboardEventToTokens } from './web-input-runtime.ts';
+import { disableLatencyProbe, enableLatencyProbe } from './latency-probe.ts';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -322,6 +323,22 @@ describe('createWebInputRuntime', () => {
         pressedAt: performance.timeOrigin + 12_345.6,
       },
     ]);
+  });
+
+  test('records a lane key press with the latency probe while it is on', () => {
+    const probe = enableLatencyProbe({ now: () => 20_000 });
+    try {
+      const inputSignals = createPlayerInputSignalBus();
+      const { target, dispatch } = makeMockTarget();
+      const runtime = createWebInputRuntime({ inputSignals, inputTokenToChannels: new Map(), target });
+      runtime.start();
+      dispatch('keydown', makeKeyEvent('KeyZ', { timeStamp: 19_995 }));
+      dispatch('keydown', makeKeyEvent('Escape', { timeStamp: 19_996 }));
+      runtime.stop();
+      expect(probe.presses()).toEqual([{ play: 0, code: 'KeyZ', eventAtMs: 19_995, handlerAtMs: 20_000 }]);
+    } finally {
+      disableLatencyProbe();
+    }
   });
 
   test('lane key release forwards `KeyboardEvent.timeStamp` as a wall-clock-ms `pressedAt` on kitty-state release', () => {
