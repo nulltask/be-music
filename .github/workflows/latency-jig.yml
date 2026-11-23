@@ -1,0 +1,74 @@
+name: Latency jig firmware
+
+# Builds the latency jig's firmware (docs/latency-jig.md) for the Pico and the Pico 2 and runs its host test, when
+# the firmware or this workflow changes. Each board's UF2 is kept as an artifact, to flash without a local toolchain.
+on:
+  push:
+    branches:
+      - devel
+      - main
+    paths:
+      - scripts/latency-jig/firmware/**
+      - .github/workflows/latency-jig.yml
+  pull_request:
+    paths:
+      - scripts/latency-jig/firmware/**
+      - .github/workflows/latency-jig.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: latency-jig-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  host-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Test the jig's core
+        run: scripts/latency-jig/firmware/test/run.sh
+
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [pico, pico2]
+    env:
+      PICO_SDK_VERSION: 2.1.1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Checkout the Pico SDK
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: raspberrypi/pico-sdk
+          ref: ${{ env.PICO_SDK_VERSION }}
+          path: pico-sdk
+          submodules: true
+
+      - name: Install the toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y cmake ninja-build gcc-arm-none-eabi \
+            libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib
+
+      - name: Build
+        env:
+          PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
+        run: |
+          cmake -S scripts/latency-jig/firmware -B build -G Ninja -DPICO_BOARD=${{ matrix.board }} -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+
+      - name: Upload the UF2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: latency-jig-${{ matrix.board }}
+          path: build/latency_jig.uf2
+          if-no-files-found: error

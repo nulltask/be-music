@@ -312,6 +312,7 @@ export default defineConfig({
             'scripts/bench/**/*.test.ts',
             'scripts/cloudflare/**/*.test.ts',
             'scripts/course-checklist/**/*.test.ts',
+            'scripts/latency-jig/**/*.test.ts',
             'scripts/lint/**/*.test.ts',
             'scripts/release/**/*.test.ts',
           ],

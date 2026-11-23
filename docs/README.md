@@ -44,3 +44,4 @@ Supplement:
 - `@be-music/skin-lr2` and `@be-music/skin-beatoraja` keep skin parsing renderer-independent. Browser PixiJS rendering is documented under `@be-music/player-browser`.
 
 - [Browser player performance and measurement](./player-performance.md)
+- [Latency jig](./latency-jig.md)

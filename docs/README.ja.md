@@ -44,3 +44,4 @@
 - `@be-music/skin-lr2` と `@be-music/skin-beatoraja` は skin parsing を renderer 非依存に保ちます。browser PixiJS rendering は `@be-music/player-browser` 側に記述します。
 
 - [ブラウザープレイヤーの性能と計測](./player-performance.ja.md)
+- [遅延計測治具](./latency-jig.ja.md)
