@@ -9,6 +9,8 @@ export interface Env {
   API_AUDIENCE?: string;
   DB: D1Database;
   ACCOUNTS?: Pick<Fetcher, 'fetch'>;
+  SUPPORTER?: Pick<Fetcher, 'fetch'>;
+  SUPPORTER_ORIGIN?: string;
   /** Replays, chart documents and share-card images. Accounts owns avatars. */
   BLOBS: R2Bucket;
   /** Submissions per user or device and minute. Absent in tests and local runs that do not configure it. */

@@ -28,7 +28,9 @@ export default defineConfig(({ mode }) => {
       env: {
         BUILD_TIMESTAMP: bindings.text(buildInfo.builtAt),
         BUILD_REVISION: bindings.text(buildInfo.revision),
-        SHOW_DONATE_LINK: bindings.text(String(preview)),
+        SHOW_DONATE_LINK: bindings.text('false'),
+        SUPPORTER_ORIGIN: bindings.text(`https://supporter.${site}`),
+        SUPPORTER_DASHBOARD_ORIGIN: bindings.text(`https://dashboard.${site}`),
         DB: bindings.d1({
           name: `dashboard${suffix}`,
           id: d1DatabaseId(preview ? 'DASHBOARD_D1_PREVIEW_ID' : 'DASHBOARD_D1_PRODUCTION_ID'),
@@ -39,9 +41,12 @@ export default defineConfig(({ mode }) => {
         PASSKEY_RP_ID: bindings.text(site),
         API_AUDIENCE: bindings.text(`https://leaderboard.${site}`),
         OIDC_CLIENTS: bindings.text(
-          JSON.stringify(
-            Object.fromEntries(['play', 'leaderboard', 'donate'].map((name) => [name, `https://${name}.${site}`])),
-          ),
+          JSON.stringify({
+            ...Object.fromEntries(
+              ['play', 'leaderboard', 'donate', 'supporter'].map((name) => [name, `https://${name}.${site}`]),
+            ),
+            'supporter-dashboard': `https://dashboard.${site}`,
+          }),
         ),
         PLAY_ORIGIN: bindings.text(`https://play.${site}/`),
         LEADERBOARD_ORIGIN: bindings.text(`https://leaderboard.${site}/`),

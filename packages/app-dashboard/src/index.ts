@@ -15,6 +15,8 @@ export interface Env extends AccountsEnv {
   PLAY_ORIGIN: string;
   LEADERBOARD_ORIGIN: string;
   DONATE_ORIGIN: string;
+  SUPPORTER_ORIGIN?: string;
+  SUPPORTER_DASHBOARD_ORIGIN?: string;
 }
 
 async function dashboard(request: Request, env: Env): Promise<Response> {
@@ -61,6 +63,8 @@ async function dashboard(request: Request, env: Env): Promise<Response> {
         acceptLanguage: request.headers.get('accept-language') ?? undefined,
       }),
       requestURL: request.url,
+      supporterOrigin: env.SUPPORTER_ORIGIN,
+      supporterDashboardOrigin: env.SUPPORTER_DASHBOARD_ORIGIN,
       links: { play: env.PLAY_ORIGIN, leaderboard: env.LEADERBOARD_ORIGIN, donate: env.DONATE_ORIGIN },
     }),
     {
