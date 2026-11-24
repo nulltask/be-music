@@ -1,0 +1,66 @@
+name: Native latency probe
+
+# Checks and builds the native latency probe (docs/latency-native.md) on macOS and Windows when it or this workflow
+# changes. Each platform's binary is kept as an artifact, to measure without a local Rust toolchain.
+on:
+  push:
+    branches:
+      - devel
+      - main
+    paths:
+      - scripts/latency-native/**
+      - .github/workflows/latency-native.yml
+  pull_request:
+    paths:
+      - scripts/latency-native/**
+      - .github/workflows/latency-native.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: latency-native-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact: latency-native-macos
+            binary: be-music-latency-native
+          - os: windows-latest
+            artifact: latency-native-windows
+            binary: be-music-latency-native.exe
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: scripts/latency-native
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy && rustup default stable
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Lint
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Upload binary
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.artifact }}
+          path: scripts/latency-native/target/release/${{ matrix.binary }}
+          if-no-files-found: error
