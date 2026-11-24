@@ -40,7 +40,15 @@ export default defineConfig(({ mode }) => {
         API_AUDIENCE: bindings.text(`https://leaderboard.${site}`),
         OIDC_CLIENTS: bindings.text(
           JSON.stringify(
-            Object.fromEntries(['play', 'leaderboard', 'donate'].map((name) => [name, `https://${name}.${site}`])),
+            {
+              ...Object.fromEntries(['play', 'leaderboard', 'donate'].map((name) => [name, `https://${name}.${site}`])),
+              ...(preview
+                ? {
+                    supporter: `https://supporter.${site}`,
+                    'supporter-dashboard': `https://dashboard.${site}`,
+                  }
+                : {}),
+            },
           ),
         ),
         PLAY_ORIGIN: bindings.text(`https://play.${site}/`),
