@@ -91,6 +91,22 @@ describe('renderDashboard', () => {
     }
   });
 
+  test('links a registered account to Supporter membership management in the same environment', () => {
+    const input = {
+      hostname: 'preview.be-music.app',
+      locale: 'ja' as const,
+      supporterOrigin: 'https://supporter.preview.be-music.app',
+      supporterDashboardOrigin: 'https://dashboard.preview.be-music.app',
+    };
+    const account = { handle: 'alice', displayName: 'Alice', anonymous: false };
+    const page = renderDashboard({ ...input, account });
+    expect(page).toContain('href="https://dashboard.preview.be-music.app/settings/supporter">サポーター契約管理</a>');
+    expect(page).toContain('href="https://supporter.preview.be-music.app">サポーターになる</a>');
+    expect(renderDashboard({ ...input, account: { ...account, anonymous: true } })).not.toContain(
+      '/settings/supporter',
+    );
+  });
+
   test('escapes the display name', () => {
     const html = renderDashboard({
       account: { handle: 'a', displayName: '<script>x</script>', anonymous: false },

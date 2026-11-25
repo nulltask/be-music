@@ -48,6 +48,8 @@ export default defineConfig(({ mode }) => {
         // Accounts runs in the Dashboard Worker (ADR 0039). Sign-in and token verification reach the issuer through it,
         // not the public network, so they work while the preview hosts are behind Cloudflare Access.
         ACCOUNTS: bindings.worker({ worker: `dashboard${suffix}` }),
+        SUPPORTER: bindings.worker({ worker: `donate${suffix}` }),
+        SUPPORTER_ORIGIN: bindings.text(`https://supporter.${site}`),
         AUTH_ISSUER: bindings.text(`https://${site}/api/auth`),
         PUBLIC_ORIGIN: bindings.text(`https://leaderboard.${site}`),
         OIDC_CLIENT_ID: bindings.text('leaderboard'),

@@ -74,6 +74,8 @@ export function renderDashboard(input: {
   hostname: string;
   locale: Locale;
   showDonateLink?: boolean;
+  supporterOrigin?: string;
+  supporterDashboardOrigin?: string;
   buildInfo?: BuildInfo;
   requestURL?: string;
   links?: { play: string; leaderboard: string; donate: string };
@@ -89,7 +91,16 @@ export function renderDashboard(input: {
     hostname: input.hostname,
     origins: { play: links.play, leaderboard: links.leaderboard },
     navLabel: input.locale === 'ja' ? 'サービス' : 'Services',
-    siteHTML: renderHTML(html`Be-Music${donate}`),
+    siteHTML: renderHTML(
+      html`Be-Music${
+        input.supporterOrigin
+          ? html` ·
+              <a class=${SERVICE_FOOTER_LINK_CLASS} href=${input.supporterOrigin}
+                >${input.locale === 'ja' ? 'サポーターになる' : 'Become a Supporter'}</a
+              >`
+          : donate
+      }`,
+    ),
     buildInfo: input.buildInfo,
     locale: input.locale,
   });
@@ -159,6 +170,17 @@ export function renderDashboard(input: {
                 </p>
                 <div class="flex flex-wrap gap-2">
                   <a class="btn no-underline" data-size="sm" href=${accountHref}>${accountLabel}</a>
+                  ${
+                    input.account && !input.account.anonymous && input.supporterDashboardOrigin
+                      ? html`<a
+                          class="btn no-underline"
+                          data-size="sm"
+                          data-variant="outline"
+                          href=${new URL('/settings/supporter', input.supporterDashboardOrigin).href}
+                          >${input.locale === 'ja' ? 'サポーター契約管理' : 'Manage Supporter Membership'}</a
+                        >`
+                      : nothing
+                  }
                   ${input.account === undefined ? nothing : html`<form method="post" action="/sign-out"><button class="btn" data-size="sm" data-variant="outline" type="submit">${input.locale === 'ja' ? 'ログアウト' : 'Sign out'}</button></form>`}
                 </div>
               </section>

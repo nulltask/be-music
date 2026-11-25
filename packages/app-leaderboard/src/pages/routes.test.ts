@@ -69,6 +69,48 @@ const page = async (path: string, cookie?: string) => {
   };
 };
 
+test('player pages apply approved Supporter display benefits and discard private billing fields', async () => {
+  const cookie = await signInAnonymously(fetchApp);
+  const userId = await userIdOf(cookie);
+  await claimAccount(openDatabase(env.DB), userId);
+  const profile = await fetchApp('/api/v0/me', { headers: { cookie } });
+  const { handle } = (await profile.json()) as { handle: string };
+  const path = `${ORIGIN}/players/${handle}`;
+  const receives: string[] = [];
+  const supportEnv = {
+    ...env,
+    SUPPORTER_ORIGIN: 'https://supporter.example',
+    SUPPORTER: {
+      async fetch(request: Request) {
+        receives.push(request.url);
+        return Response.json({
+          showBadge: true,
+          titleKey: 'supporter',
+          accentColorKey: 'teal',
+          amountMinor: 5000,
+          stripeSubscriptionId: 'sub_private',
+        });
+      },
+    },
+  };
+  const active = markup(await (await app.request(path, undefined, supportEnv)).text());
+  expect(receives).toEqual([`https://supporter.example/api/supporter/public-profile?userId=${userId}`]);
+  expect(active).toContain('text-teal-700');
+  expect(active).toContain('data-variant="outline">Supporter</span>');
+  expect(active).toContain('class="font-medium">Supporter</span>');
+  expect(active).not.toContain('sub_private');
+  const inactive = markup(
+    await (
+      await app.request(path, undefined, {
+        ...supportEnv,
+        SUPPORTER: { fetch: async () => Response.json(null) },
+      })
+    ).text(),
+  );
+  expect(inactive).not.toContain('>Supporter</span>');
+  expect(inactive).not.toContain('text-teal-700');
+});
+
 describe('session cookies', () => {
   test('a page refreshes the session cookie cache it had to read from the database', async () => {
     const cookie = await signInAnonymously(fetchApp);

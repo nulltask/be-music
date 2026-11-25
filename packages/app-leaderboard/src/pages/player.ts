@@ -1,4 +1,4 @@
-import { html, renderHTML } from '@be-music/service-web-theme/server';
+import { html, nothing, renderHTML } from '@be-music/service-web-theme/server';
 import { HelpTip } from './components/help-tip.ts';
 import { openDatabase } from '../db/client.ts';
 import { RecentScoresList } from './components/lists.ts';
@@ -23,6 +23,7 @@ import {
 import { loadPlayerStats } from './stats.ts';
 import { resolveFormerHandle } from '../profiles.ts';
 import { movedTo } from './avatar.ts';
+import { loadSupporterBenefits, SUPPORTER_ACCENT_CLASSES } from './supporter.ts';
 
 /** A player's figures and newest plays. */
 export async function playerPage(c: PageContext<'/players/:handle'>) {
@@ -37,7 +38,7 @@ export async function playerPage(c: PageContext<'/players/:handle'>) {
   }
   const ruleset = displayRuleset(c);
   const owner = c.get('viewer')?.handle === player.handle ? { ownerUserId: c.get('viewer')!.userId } : {};
-  const [stats, scores, runs] = await Promise.all([
+  const [stats, scores, runs, benefits] = await Promise.all([
     loadPlayerStats(db, player.userId, ruleset),
     loadRecentScores(db, {
       limit: RECENT_LIMIT,
@@ -50,6 +51,7 @@ export async function playerPage(c: PageContext<'/players/:handle'>) {
     }),
     // Their course runs, the hidden ones only to them.
     loadRecentCourseRuns(db, { limit: RECENT_LIMIT, ruleset, includeAnonymous: true, ...owner, handle: player.handle }),
+    player.anonymous ? null : loadSupporterBenefits(c.env, player.userId),
   ]);
   c.header('cache-control', PAGE_CACHE);
   const t = pageMessages(c);
@@ -62,10 +64,15 @@ export async function playerPage(c: PageContext<'/players/:handle'>) {
           { label: player.displayName, kind: 'player' },
         ]),
         children: html`${PageHeader({
-            title: html`<span class="inline-flex items-center gap-3"
-              >${Avatar({ src: player.avatarUrl, size: 40 })}${player.displayName}</span
+            title: html`<span
+              class=${`inline-flex items-center gap-3 ${
+                benefits?.accentColorKey ? SUPPORTER_ACCENT_CLASSES[benefits.accentColorKey] : ''
+              }`}
+              >${Avatar({ src: player.avatarUrl, size: 40 })}${player.displayName}
+              ${benefits?.showBadge ? Tag({ children: html`Supporter` }) : nothing}</span
             >`,
-            children: html`@${player.handle}${player.anonymous ? Tag({ children: html`${t.lists.anonymous}` }) : null}`,
+            children: html`@${player.handle}${player.anonymous ? Tag({ children: html`${t.lists.anonymous}` }) : nothing}
+            ${benefits?.titleKey ? html`<span class="font-medium">Supporter</span>` : nothing}`,
           })}${Stats({
             items: [
               [t.player.stats.plays, stats.plays],
