@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
+import { synesthesiaSelectSkin } from '../../skins/synesthesia/select.ts';
+import { LANDSCAPE_QUICK_OPTIONS_INSET } from '../../skins/synesthesia/select-play-options.ts';
 import { createBeMusicSkinRegistry, resolveBeMusicLaneKind, resolveSelectListWindow } from './registry.ts';
 import type { BeMusicSkin } from './types.ts';
 
@@ -94,6 +96,15 @@ describe('resolveSelectListWindow', () => {
 
   it('fits as many rows as the list height allows', () => {
     expect(resolveSelectListWindow(layout, 480, 0, 100).visibleRows).toBe(14);
+  });
+
+  it('fits twelve Synesthesia landscape rows above the quick options at the standard stage height', () => {
+    const height = 480;
+    const { layout } = synesthesiaSelectSkin;
+    const { visibleRows } = resolveSelectListWindow(layout, height, 8, 24);
+    expect(visibleRows).toBe(12);
+    const gap = height - LANDSCAPE_QUICK_OPTIONS_INSET - (layout.listTop + visibleRows * layout.rowHeight);
+    expect(gap).toBe(1);
   });
 
   it('centres the focused row and clamps at both ends', () => {
