@@ -29,6 +29,7 @@ export interface BrowserAssetSource {
 export interface BrowserChartCollection {
   sources: BrowserAssetSource[];
   charts: LibraryChart[];
+  bemuseServerFolders?: readonly string[];
   errors: Array<{ sourceId: string; path?: string; message: string }>;
   /** Course folders (see `resolveCourseFolders`), listed after the chart folders at the root of a select view. */
   courseFolders?: LibraryFolder[];

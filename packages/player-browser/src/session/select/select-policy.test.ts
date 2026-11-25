@@ -47,6 +47,10 @@ describe('openLibrary', () => {
   it('stays at the root of an empty library', () => {
     expect(openLibrary(makeCollection([]), LR2)).toEqual(createBrowseState());
   });
+
+  it('stays at the root when the only folder is an unavailable server', () => {
+    expect(openLibrary({ charts: [], bemuseServerFolders: ['Bemuse Alpha'] }, LR2).path).toEqual([]);
+  });
 });
 
 describe('restoreSelectBrowse', () => {

@@ -39,6 +39,7 @@ export interface LibraryChart {
 export interface LibraryFolder {
   label: string;
   kind?: 'bemuse-server' | 'difficulty-table';
+  disabled?: true;
   charts: readonly LibraryChart[];
   /** A course folder lists courses instead of charts. */
   courses?: readonly LibraryCourse[];
@@ -98,6 +99,7 @@ export type LibraryEntry =
  */
 export interface Library {
   readonly charts: readonly LibraryChart[];
+  readonly bemuseServerFolders?: readonly string[];
   readonly courseFolders?: readonly LibraryFolder[];
   /**
    * A chart as a chart filter search (`?…`) sees it: its song columns, best record and song information. Without it

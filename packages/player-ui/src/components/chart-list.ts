@@ -52,6 +52,9 @@ export class BeMusicChartListElement extends BeMusicElement {
         text-align: left;
         white-space: normal;
       }
+      button.btn[aria-disabled='true'] {
+        opacity: 0.45;
+      }
       .text {
         display: grid;
         min-width: 0;
@@ -93,7 +96,8 @@ export class BeMusicChartListElement extends BeMusicElement {
   }
   private select(index: number, activate = false): void {
     this.emit('selection-change', { index });
-    if (activate) this.emit('activate-request', { index });
+    const entry = this.entries?.[index];
+    if (activate && !(entry?.kind === 'folder' && entry.folder.disabled)) this.emit('activate-request', { index });
   }
   protected override render(): TemplateResult {
     const entries = this.entries ?? [];
@@ -113,6 +117,7 @@ export class BeMusicChartListElement extends BeMusicElement {
                 data-variant="ghost"
                 part="row"
                 aria-current=${String(index === this.selectedIndex)}
+                aria-disabled=${String(entry.kind === 'folder' && entry.folder.disabled === true)}
                 .tabIndex=${index === this.selectedIndex ? 0 : -1}
                 ?disabled=${this.disabled}
                 @focus=${() => this.emit('selection-change', { index })}

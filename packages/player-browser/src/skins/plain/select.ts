@@ -366,7 +366,9 @@ function drawList(
       ctx.globalAlpha /= light.alpha || 1;
     }
     // A course that cannot start (a stage missing) is drawn faint, as a disabled control is.
-    if (entry.kind === 'course' && !entry.course.playable) ctx.globalAlpha *= DISABLED_ALPHA;
+    if (entry.kind === 'folder' ? entry.folder.disabled : entry.kind === 'course' && !entry.course.playable) {
+      ctx.globalAlpha *= DISABLED_ALPHA;
+    }
     drawEntry(ctx, entry, listX, y + (rowHeight - 2) / 2, rowW, selected ? frame.nowMs : undefined);
     ctx.restore();
   }

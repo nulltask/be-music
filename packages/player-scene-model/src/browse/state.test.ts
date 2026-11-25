@@ -113,6 +113,12 @@ describe('cursor', () => {
 describe('folders', () => {
   const library = makeLibrary();
 
+  test('keeps an unavailable server folder focused when asked to open it', () => {
+    const pending = { charts: [], bemuseServerFolders: ['Bemuse Alpha'] };
+    const state = createBrowseState();
+    expect(reduceBrowse(pending, state, { type: 'open' })).toEqual({ state, event: { kind: 'none' } });
+  });
+
   test('opens the focused folder at its first bar and backs out onto the folder bar it was opened from', () => {
     const onBeta = run(library, createBrowseState(), { type: 'move', delta: 1 });
     const opened = reduceBrowse(library, onBeta, { type: 'open' });

@@ -90,6 +90,7 @@ export function renderLR2SelectBars(ctx: LR2SelectBarsContext, skin: LR2Skin, op
     if (!isDestinationVisible(dst, ops, ctx.timerActive)) {
       continue;
     }
+    const firstChild = ctx.listLayer.children.length;
     const body = pickLR2BarBody(layout.bodies, entry);
     if (body) {
       const texture = ctx.skinTextures.get(body.source.imagePath);
@@ -119,6 +120,9 @@ export function renderLR2SelectBars(ctx: LR2SelectBarsContext, skin: LR2Skin, op
     // BAR_TITLE. BAR_RANK is not drawn yet.
     if (entry !== undefined && layout.lamps.length > 0 && layout.lampDestination !== undefined) {
       drawBarLamp(ctx, entry, dst, layout.lamps, layout.lampDestination);
+    }
+    if (entry?.kind === 'folder' && entry.folder.disabled) {
+      for (let i = firstChild; i < ctx.listLayer.children.length; i++) ctx.listLayer.children[i]!.alpha *= 0.45;
     }
   }
 }

@@ -107,6 +107,10 @@ function pathSegment(name: string): string {
   return cleaned.length > 0 && cleaned !== '.' && cleaned !== '..' ? cleaned : '_';
 }
 
+export function bemuseServerFolderLabel(indexURL: string): string {
+  return `Bemuse ${pathSegment(bemuseServerLabel(indexURL))}`;
+}
+
 function songFolderName(track: BemuseServerTrack): string {
   const last = new URL(track.baseURL).pathname.split('/').filter(Boolean).at(-1);
   if (last === undefined) return pathSegment(track.id);
@@ -524,7 +528,7 @@ export async function readBemuseServerFiles(
     signal,
   );
   const index = parseBemuseServerIndex(decodeJSON(indexRead.bytes), indexURL);
-  const root = `Bemuse ${pathSegment(bemuseServerLabel(indexURL))}`;
+  const root = bemuseServerFolderLabel(indexURL);
   const displayed = options.displayedIndex?.songs;
   if (
     displayed !== undefined &&
