@@ -441,7 +441,7 @@
           "folder": "capture",
           "title": "Capture",
           "items": [
-            { "option": "record", "kind": "button" },
+            { "option": "recordGameplay", "kind": "toggle", "default": false },
             { "option": "recordingFormat", "kind": "select", "default": "mp4/avc" },
             { "option": "recordingQuality", "kind": "select", "default": "standard" },
             { "option": "screenshot", "kind": "button" }

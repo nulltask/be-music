@@ -89,4 +89,12 @@ export class BuiltInThemeService {
       effects: this.guiState.skinEffects,
     };
   }
+
+  /** Canvas video capture needs a skin that draws both the play and the result on the stage. */
+  public get recordableKit(): BuiltInKit {
+    const kit = this.builtInKit;
+    if (!kit.skin.dom?.gameplay && !kit.skin.dom?.result) return kit;
+    const skin = BE_MUSIC_SKINS.resolve('synesthesia');
+    return { ...kit, skin, settings: this.skinSettings.get(skin.id) };
+  }
 }

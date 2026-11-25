@@ -216,7 +216,7 @@ export interface PlayerGUIStateInputs {
   /** The built-in skin to start with for the remembered id (`undefined` when none is stored). */
   readonly builtInSkinId: (stored: string | undefined) => string;
   /** The Options dialog's buttons. */
-  readonly actions: Pick<PlayerGUIState, 'openFolder' | 'openFiles' | 'record' | 'screenshot'>;
+  readonly actions: Pick<PlayerGUIState, 'openFolder' | 'openFiles' | 'screenshot'>;
 }
 
 /**
@@ -425,7 +425,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     openFiles: inputs.actions.openFiles,
     recordingFormat: readStoredRecordingFormat(storage),
     recordingQuality: optionDefault('recordingQuality'),
-    record: inputs.actions.record,
+    recordGameplay: false,
     screenshot: inputs.actions.screenshot,
   };
   const saved = readStoredOptionSettings(storage);

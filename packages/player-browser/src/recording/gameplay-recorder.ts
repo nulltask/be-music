@@ -35,6 +35,8 @@ import {
 import { WebCodecsCapture, supportsWebCodecsRecording } from './webcodecs-recorder.ts';
 
 export interface GameplayRecorderOptions {
+  /** Uses a separate capture canvas so the video can fade without changing the live stage. */
+  captureFade?: boolean;
   /**
    * The canvas to capture as the video track. Typically `host.app.canvas` from the `PixiSceneHost`. The recorder
    * doesn't take ownership — disposing the recorder leaves the canvas alone.
@@ -176,6 +178,8 @@ export class GameplayRecorder {
   private readonly subscribeFrame: ((onFrame: () => void) => () => void) | undefined;
   private readonly backend: 'auto' | 'webcodecs' | 'media-recorder';
   private readonly format: RecordingFormat;
+  private readonly captureFade: boolean;
+  private fade: { startMs: number; durationMs: number } | undefined;
   /** The canvas frames are encoded from, and the copy that refreshes it (when the scene canvas is scaled down). */
   private source: { canvas: HTMLCanvasElement; copy?: () => void } | undefined;
   /** Active WebCodecs session, when that backend is in use. */
@@ -208,10 +212,15 @@ export class GameplayRecorder {
     this.subscribeFrame = options.subscribeFrame;
     this.backend = options.mimeType !== undefined ? 'media-recorder' : (options.backend ?? 'auto');
     this.format = options.format ?? DEFAULT_RECORDING_FORMAT;
+    this.captureFade = options.captureFade ?? false;
   }
 
   public isActive(): boolean {
     return this.recording;
+  }
+
+  public fadeOut(durationMs: number): void {
+    this.fade = { startMs: performance.now(), durationMs: Math.max(1, durationMs) };
   }
 
   /**
@@ -366,7 +375,8 @@ export class GameplayRecorder {
       });
     } else {
       for (const unused of videoStream.getTracks()) unused.stop();
-      this.videoStream = this.canvas.captureStream(this.fps);
+      this.videoStream = source.canvas.captureStream(this.fps);
+      if (source.copy) this.startFrameLoop(source.copy);
     }
     // Combine canvas video + bus audio into a single stream so the recorder treats them as one timeline.
     const combined = new MediaStream([
@@ -397,7 +407,7 @@ export class GameplayRecorder {
   private createCaptureSource(): { canvas: HTMLCanvasElement; copy?: () => void } {
     const { width, height } = this.canvas;
     const size = resolveCaptureSize(width, height, this.maxVideoSize);
-    if (size.width === width && size.height === height) return { canvas: this.canvas };
+    if (!this.captureFade && size.width === width && size.height === height) return { canvas: this.canvas };
     const target = document.createElement('canvas');
     target.width = size.width;
     target.height = size.height;
@@ -407,6 +417,11 @@ export class GameplayRecorder {
     const copy = () => {
       // The scene canvas can be resized mid-recording (window resize); stretch whatever it holds into the fixed frame.
       context.drawImage(this.canvas, 0, 0, target.width, target.height);
+      if (this.fade !== undefined) {
+        const opacity = Math.max(0, Math.min(1, (performance.now() - this.fade.startMs) / this.fade.durationMs));
+        context.fillStyle = `rgba(0, 0, 0, ${opacity})`;
+        context.fillRect(0, 0, target.width, target.height);
+      }
     };
     copy();
     return { canvas: target, copy };

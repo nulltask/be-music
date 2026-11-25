@@ -138,6 +138,8 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
   private completed = false;
   /** A retry asked for the same note arrangement (the retry-same key, or beatoraja's key 7 held). */
   private retrySame = false;
+  private recordingHeld = false;
+  private deferredAdvance: ResultLeavingTo | 'step' | undefined;
   /** The gauge graphs the host has for the play, once asked for. */
   private gaugeGraphs: readonly ResultGaugeGraph[] | undefined;
   /** The result as the frame shows it: the play's own, or with another gauge's graph in place of its own. */
@@ -193,6 +195,7 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
     this.entered = false;
     this.buttons.reset();
     this.leaveKeyDownAtMs = undefined;
+    this.deferredAdvance = undefined;
     this.options.audio.stopOwned(this);
   }
 
@@ -278,6 +281,10 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
     if (this.leaving !== undefined) return;
     this.advanceTo(atMs);
     if (this.nowMs < this.inputOpenAtMs) return;
+    if (this.recordingHeld) {
+      this.deferredAdvance ??= 'step';
+      return;
+    }
     if (this.options.timing.skipsResultSteps === true) {
       this.leave('continue', this.nowMs);
       return;
@@ -335,6 +342,10 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
   }
 
   private leave(to: ResultLeavingTo, atMs: number): void {
+    if (this.recordingHeld) {
+      this.deferredAdvance ??= to;
+      return;
+    }
     this.advanceTo(atMs);
     this.leaving = { to, atMs: this.nowMs };
     const close = this.closeSound;
@@ -344,6 +355,16 @@ export class ResultSession implements SceneSession<ResultFrame, ResultIntent> {
       void this.options.audio.playJingle(close, { owner: this });
     }
     this.completeLeaving(this.nowMs);
+  }
+
+  /** Keeps the result visible until capture finishes, then carries out the first request to leave. */
+  public setRecordingHeld(held: boolean): void {
+    this.recordingHeld = held;
+    if (held || this.deferredAdvance === undefined) return;
+    const advance = this.deferredAdvance;
+    this.deferredAdvance = undefined;
+    if (advance === 'step') this.step(this.nowMs);
+    else this.leave(advance, this.nowMs);
   }
 
   /** Tells the host where the screen goes once its fade-out has run. */

@@ -3,7 +3,7 @@ import type { PixiSceneHost } from '@be-music/player-browser/host';
 import {
   captureScreenshot,
   finalizeRecordingIfActive,
-  startArmedRecording,
+  startAutomaticRecording,
   type GameplayRecorder,
   type RecordingDeps,
 } from './recording-controller.ts';
@@ -31,18 +31,13 @@ function recorder(recording = false): GameplayRecorder & { started: number } {
   return view;
 }
 
-function deps(gameplay: GameplayRecorder | undefined, armed: boolean): RecordingDeps & { statuses: string[] } {
+function deps(gameplay: GameplayRecorder | undefined, enabled: boolean): RecordingDeps & { statuses: string[] } {
   const statuses: string[] = [];
-  let autoRecordArmed = armed;
   return {
     statuses,
     sceneHost: {} as PixiSceneHost,
-    recordController: undefined,
     getActiveGameplay: () => gameplay,
-    getAutoRecordArmed: () => autoRecordArmed,
-    setAutoRecordArmed: (value) => {
-      autoRecordArmed = value;
-    },
+    getRecordGameplay: () => enabled,
     getRecordingFilenameBase: () => 'play',
     getRecordingFormat: () => ({ container: 'mp4', videoCodec: 'avc' }),
     getRecordingQuality: () => 'high',
@@ -51,25 +46,25 @@ function deps(gameplay: GameplayRecorder | undefined, armed: boolean): Recording
   } as RecordingDeps & { statuses: string[] };
 }
 
-describe('startArmedRecording', () => {
-  test('starts the armed recording on the mounted view, of either family, once', () => {
+describe('startAutomaticRecording', () => {
+  test('starts recording only once on the mounted view and leaves the setting enabled', () => {
     const view = recorder();
     const recordingDeps = deps(view, true);
-    startArmedRecording(recordingDeps);
-    startArmedRecording(recordingDeps);
+    startAutomaticRecording(recordingDeps);
+    startAutomaticRecording(recordingDeps);
     expect(view.started).toBe(1);
     expect(view.startRecording).toHaveBeenCalledWith({
       format: { container: 'mp4', videoCodec: 'avc' },
       quality: 'high',
     });
-    expect(recordingDeps.getAutoRecordArmed()).toBe(false);
+    expect(recordingDeps.getRecordGameplay()).toBe(true);
     // The Video format and Video quality lock while the recording runs.
     expect(recordingDeps.statuses).toEqual(['locked', 'Recording…']);
   });
 
-  test('does nothing unless armed', () => {
+  test('does nothing while automatic recording is off', () => {
     const view = recorder();
-    startArmedRecording(deps(view, false));
+    startAutomaticRecording(deps(view, false));
     expect(view.started).toBe(0);
   });
 
@@ -79,7 +74,7 @@ describe('startArmedRecording', () => {
       throw new Error('no MediaRecorder');
     };
     const recordingDeps = deps(view, true);
-    startArmedRecording(recordingDeps);
+    startAutomaticRecording(recordingDeps);
     expect(recordingDeps.statuses).toEqual(['Recording unavailable: no MediaRecorder']);
   });
 });

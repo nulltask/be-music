@@ -723,8 +723,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
       <section class="help-menu-folder">
         <h4 class="help-menu-folder-title">Capture</h4>
         <dl class="help-menu-items">
-          <dt>● Record gameplay video</dt>
-          <dd>Records the next play as a video to download. A camera shown in the BGA frame is recorded too.</dd>
+          <dt>Record every play</dt>
+          <dd>
+            Automatically downloads a video of each play and its result. The video includes any camera shown in the BGA
+            frame.
+          </dd>
           <dt>Video format</dt>
           <dd>The video's container and codec: MP4 · H.264 by default, or MP4 / WebM with H.265, AV1, VP9 or VP8.</dd>
           <dt>Video quality</dt>
@@ -793,9 +796,8 @@ export const OPTIONS_HELP_TEMPLATE = html`
           <strong>Play options → Judgment windows</strong> picks. A replay records the options it was played with.
         </li>
         <li>
-          Click <strong>Record gameplay video</strong> to capture the next play as a downloadable video (MP4 · H.264
-          unless <strong>Video format</strong> says otherwise) (requires MediaRecorder support — see Acknowledgements /
-          browser checks).
+          Turn on <strong>Record every play</strong> to download a video after each result. The Native skin uses
+          Synesthesia for the play and result while recording.
         </li>
         <li>
           The active skin's <strong>PLAY OPTION</strong> panel in chart select sets the same options (Random / Mirror /

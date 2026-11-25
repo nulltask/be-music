@@ -1,7 +1,5 @@
-// The web player's scene router (ADR 0006): the one owner of the scene on stage. Every transition finalizes a recording
-// in progress, hands the stage over with one `setScene` (the scene showing exits as the next enters, so the stage never
-// shows an empty frame) and then disposes the scene that went, before the transition resolves. Transitions run one at a
-// time, and a scene built for a navigation that a newer one replaced is disposed instead of shown.
+// The scene router (ADR 0006) hands the stage over with one `setScene` and disposes the scene that left.
+// It saves recordings before changing screens, except when a result must be included in the same video.
 //
 // The select scene is kept alive across a decide, play and result (`docs/player-web.md`, "Scene lifecycle"); a play
 // can load off stage behind a decide screen (`prepare`); and a play's sound can outlive its screen (`playDispose`).
@@ -13,6 +11,7 @@
 /** What the router asks of a scene: it disposes the scenes it owns. */
 export interface RoutedScene {
   dispose(): void;
+  setRecordingHeld?(held: boolean): void;
 }
 
 /** What the router asks of a play scene: it also loads it, off stage or while it shows. */
@@ -30,8 +29,9 @@ export interface SceneRouterHost<S> {
 }
 
 /** The video recording of a play: `finalize` stops and saves one in progress, and does nothing otherwise. */
-export interface SceneRouterRecorder {
+export interface SceneRouterRecorder<P> {
   finalize(): Promise<void>;
+  prepareResult?(play: P): ((entranceMs: number) => Promise<void>) | undefined;
 }
 
 /** The screen a scene is shown as. */
@@ -61,6 +61,7 @@ export interface SceneNavigationOptions {
 
 export interface SceneShowOptions<P> extends SceneNavigationOptions {
   readonly role: SceneRole;
+  readonly resultRecordingEntranceMs?: number;
   /**
    * Keep the scene alive after another one takes over: the router exits it but never disposes it. The default is `true`
    * for the select scene, which the router then holds as {@link SceneRouter.select}, and `false` for every other
@@ -94,9 +95,9 @@ export interface ScenePrepareOptions {
   readonly onProgress?: (progress: number) => void;
 }
 
-export interface SceneRouterOptions<S> {
+export interface SceneRouterOptions<S, P> {
   readonly host: SceneRouterHost<S>;
-  readonly recorder: SceneRouterRecorder;
+  readonly recorder: SceneRouterRecorder<P>;
   /**
    * A navigation begins that does not carry the run on ({@link SceneNavigationOptions.continuesRun}): the host ends
    * what the run was part of (a course's stages), so that it does not reach into the next play. Called as the
@@ -118,7 +119,8 @@ export interface SceneRouterOptions<S> {
  */
 export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene, Sel extends S = S> {
   private readonly host: SceneRouterHost<S>;
-  private readonly recorder: SceneRouterRecorder;
+  private readonly recorder: SceneRouterRecorder<P>;
+  private resultRecording: Promise<void> | undefined;
   private readonly onInterrupt: (() => void) | undefined;
   private readonly onError: (error: unknown, step: SceneRouterErrorStep) => void;
   /** The last transition in line; each one starts once it has settled. */
@@ -133,7 +135,7 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene, S
   private readonly plays = new WeakSet<S>();
   private readonly disposed = new WeakSet<S>();
 
-  public constructor(options: SceneRouterOptions<S>) {
+  public constructor(options: SceneRouterOptions<S, P>) {
     this.host = options.host;
     this.recorder = options.recorder;
     this.onInterrupt = options.onInterrupt;
@@ -176,8 +178,8 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene, S
   }
 
   /**
-   * Shows `scene` as `role`, after the transitions already in line: the recording in progress is finalized, `scene`
-   * takes the stage from the scene showing (which exits as it enters), and the scene that went is disposed, unless it
+   * Shows `scene` as `role`, after the transitions already in line. Once any recording that ends here is saved,
+   * `scene` takes the stage and the scene that went is disposed, unless it
    * is kept. A play loading off stage survives only a decide screen. Resolves `false`, with `scene` disposed unless it
    * is kept, when a newer navigation has begun by its turn (it begins one itself without `options.token`, interrupting
    * the run unless `options.continuesRun`), or when `scene` was already disposed.
@@ -192,22 +194,47 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene, S
         this.discard(scene);
         return false;
       }
-      await this.finalizeRecording();
+      const previous = this.currentScene;
+      const entranceMs = options.resultRecordingEntranceMs;
+      const recordingPlay =
+        options.role === 'result' && entranceMs !== undefined && previous !== undefined && this.isPlay(previous)
+          ? previous
+          : undefined;
+      const recordResult = recordingPlay && this.recorder.prepareResult?.(recordingPlay);
+      if (recordResult === undefined) await this.finalizeRecording();
       if (!this.isCurrent(token)) {
         this.discard(scene);
         return false;
       }
-      const previous = this.currentScene;
       const keep = options.keep ?? options.role === 'select';
       if (keep) this.kept.add(scene);
       const replacedSelect =
         options.role === 'select' && keep && this.selectScene !== scene ? this.selectScene : undefined;
       if (options.role === 'play') this.plays.add(scene);
-      await this.host.setScene(scene, options.role);
+      if (recordResult !== undefined) scene.setRecordingHeld?.(true);
+      try {
+        await this.host.setScene(scene, options.role);
+      } catch (error) {
+        if (recordResult !== undefined) {
+          scene.setRecordingHeld?.(false);
+          await this.finalizeRecording();
+        }
+        throw error;
+      }
       this.currentScene = scene;
       // The overloads take only a select scene as `role: 'select'`.
       if (options.role === 'select' && keep) this.selectScene = scene as Sel;
-      if (previous !== undefined && previous !== scene && !this.kept.has(previous)) {
+      if (recordResult !== undefined && entranceMs !== undefined && recordingPlay !== undefined) {
+        if (this.playScene === recordingPlay) this.playScene = undefined;
+        this.resultRecording = Promise.resolve()
+          .then(() => recordResult(entranceMs))
+          .catch((error: unknown) => this.onError(error, 'finalize'))
+          .finally(() => {
+            this.resultRecording = undefined;
+            if (!this.kept.has(recordingPlay)) this.release(recordingPlay, options.playDispose);
+            scene.setRecordingHeld?.(false);
+          });
+      } else if (previous !== undefined && previous !== scene && !this.kept.has(previous)) {
         this.release(previous, options.playDispose);
       }
       if (replacedSelect !== undefined) this.release(replacedSelect);
@@ -305,7 +332,8 @@ export class SceneRouter<S extends RoutedScene, P extends S & RoutedPlayScene, S
 
   private async finalizeRecording(): Promise<void> {
     try {
-      await this.recorder.finalize();
+      if (this.resultRecording !== undefined) await this.resultRecording;
+      else await this.recorder.finalize();
     } catch (error) {
       this.onError(error, 'finalize');
     }

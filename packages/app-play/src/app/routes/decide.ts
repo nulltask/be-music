@@ -20,7 +20,7 @@ import { systemSoundSetFromBeatoraja, type LibraryChart } from '@be-music/player
 import { sanitizeFilenameStem } from '../../player-utils.ts';
 import { pickActiveFamilyForScene } from '../../family-dispatch.ts';
 import { allowsLiveTempo, describePlayingStatus } from '../../play-tempo-settings.ts';
-import { startArmedRecording, type RecordingDeps } from '../../recording-controller.ts';
+import { startAutomaticRecording, type RecordingDeps } from '../../recording-controller.ts';
 import type { LibraryService } from '../../services/library.ts';
 import type { PlayOptionsService } from '../../services/play-options.ts';
 import type { RecordsService } from '../../services/records.ts';
@@ -95,7 +95,7 @@ export interface DecideRouteDeps {
   readonly beatorajaSkinOptions: Pick<BeatorajaSkinOptionsPanel, 'refreshBeatorajaPlaySkinOptions'>;
   /** The play last made: whether it is a replay. */
   readonly lastPlay: () => { readonly overrides: { readonly replay?: BeMusicReplay } } | undefined;
-  /** The video recording's deps: a recording armed on the select screen starts with the play. */
+  /** The video recording's deps: automatic recording starts with the play. */
   readonly recordingDeps: () => RecordingDeps;
   /** Names the next saved recording after the chart. */
   readonly setRecordingFilenameBase: (base: string) => void;
@@ -401,8 +401,8 @@ export class DecideRoute {
       }),
       chartEntry,
     );
+    startAutomaticRecording(this.recordingDeps());
     view.start();
-    startArmedRecording(this.recordingDeps());
     this.beatorajaSkinOptions.refreshBeatorajaPlaySkinOptions();
   }
 }

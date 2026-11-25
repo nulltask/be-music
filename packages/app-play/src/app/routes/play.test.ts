@@ -20,7 +20,7 @@ import type { DeviceProfile } from '../../device-profile.ts';
 import { storeHiSpeed } from '../../hi-speed-storage.ts';
 import type { PreparedNonstopPlay } from '../../nonstop-course.ts';
 import { describePlayingStatus } from '../../play-tempo-settings.ts';
-import { startArmedRecording, type RecordingDeps } from '../../recording-controller.ts';
+import { startAutomaticRecording, type RecordingDeps } from '../../recording-controller.ts';
 import { CourseRunService } from '../../services/courses.ts';
 import { PlayOptionsService } from '../../services/play-options.ts';
 import type { BeatorajaPlayEntry } from '../../services/themes/beatoraja.ts';
@@ -42,7 +42,7 @@ vi.mock('@be-music/player-browser/host', () => ({
     }
   },
 }));
-vi.mock('../../recording-controller.ts', () => ({ startArmedRecording: vi.fn() }));
+vi.mock('../../recording-controller.ts', () => ({ startAutomaticRecording: vi.fn() }));
 vi.mock('../../hi-speed-storage.ts', () => ({ storeHiSpeed: vi.fn() }));
 
 type Family = PlaySceneKit['family'];
@@ -503,10 +503,10 @@ describe('PlayRoute.playChart: a chart played at once', () => {
     expect(play.start).not.toHaveBeenCalled();
     play.load.resolve();
     await vi.waitFor(() => expect(play.start).toHaveBeenCalledOnce());
-    // A recording armed on the select screen starts once the play has its audio.
-    expect(startArmedRecording).toHaveBeenLastCalledWith(h.recording);
-    expect(play.start.mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(startArmedRecording).mock.invocationCallOrder.at(-1)!,
+    // Automatic recording starts once the play has its audio.
+    expect(startAutomaticRecording).toHaveBeenLastCalledWith(h.recording);
+    expect(play.start.mock.invocationCallOrder[0]).toBeGreaterThan(
+      vi.mocked(startAutomaticRecording).mock.invocationCallOrder.at(-1)!,
     );
   });
 

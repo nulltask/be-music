@@ -541,6 +541,7 @@ export class PlaySession extends PlaySessionState {
     });
     this.recorder = new GameplayRecorder({
       canvas,
+      captureFade: true,
       ...bitrates,
       subscribeFrame: (onFrame) => host.onAfterRender(onFrame),
       audioContext: this.audioContext,
@@ -563,6 +564,10 @@ export class PlaySession extends PlaySessionState {
 
   public isRecording(): boolean {
     return this.recorder?.isActive() ?? false;
+  }
+
+  public fadeOutRecording(durationMs: number): void {
+    this.recorder?.fadeOut(durationMs);
   }
 
   /**

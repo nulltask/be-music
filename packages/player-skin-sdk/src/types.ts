@@ -982,6 +982,8 @@ export interface BeMusicResultFrame {
 }
 
 export interface BeMusicResultSkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
+  /** Milliseconds until the entrance animation settles, for video capture. */
+  readonly entranceMs?: number;
   /** Draws one result frame. Called every frame while the result screen is shown. */
   draw(surface: BeMusicSurface<K>, frame: BeMusicResultFrame): void;
 }

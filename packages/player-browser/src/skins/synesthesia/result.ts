@@ -50,10 +50,16 @@ const ENTRANCE_PACE = 1.3;
 const ROLL_DELAY_MS = 700;
 const ROLL_MS = 1100;
 const RANK_DELAY_MS = 1600;
+const RANK_BURST_MS = 1100;
+const GRAPH_DELAY_MS = ROLL_DELAY_MS + 150;
+const GRAPH_DRAW_MS = ROLL_MS + 300;
 
 const RANK_BURST = burstParticles(29, 260);
 
-export const synesthesiaResultSkin: PixiResultSkin = { render: (frame) => renderSynesthesiaResult(frame) };
+export const synesthesiaResultSkin: PixiResultSkin = {
+  entranceMs: Math.max(RANK_DELAY_MS + RANK_BURST_MS, GRAPH_DELAY_MS + GRAPH_DRAW_MS) / ENTRANCE_PACE,
+  render: (frame) => renderSynesthesiaResult(frame),
+};
 
 /**
  * Synesthesia result, in the light of a cosmic particle world: a black void with ember dust and a floor of light
@@ -189,7 +195,7 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   const rankColor = topRank ? SYN_AMBER : accent;
   drawFrame(rank.g, rankBox.x, rankBox.y, rankBox.w, rankBox.h, rankColor, { emphasis: true });
   label('DJ LEVEL', rankBox.x + 14, rankBox.y + 12, rank.root, rankColor);
-  const burstT = stageProgress(elapsed, RANK_DELAY_MS, 1100);
+  const burstT = stageProgress(elapsed, RANK_DELAY_MS, RANK_BURST_MS);
   if (burstT > 0 && burstT < 1) {
     for (const particle of RANK_BURST) {
       const life = burstT / particle.life;
@@ -314,7 +320,7 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
     graphs.root,
   );
   label('EX SCORE', graphX, grid.graphsTop + graphH + 12, graphs.root);
-  const draw = easeOutCubic(stageProgress(elapsed, ROLL_DELAY_MS + 150, ROLL_MS + 300));
+  const draw = easeOutCubic(stageProgress(elapsed, GRAPH_DELAY_MS, GRAPH_DRAW_MS));
   filament(
     graphs.g,
     graphX,
