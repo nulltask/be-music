@@ -10,9 +10,10 @@ export interface RecordingServiceOptions {
   readonly sceneHost: RecordingDeps['sceneHost'];
   /** The recorder of the play (`PlayScene.recording`), on the stage or loading behind a decide screen. */
   readonly activeGameplay: () => GameplayRecorder | undefined;
-  /** The state the Options dialog's "Video format" and "Video quality" are kept in. */
+  /** The Capture settings in the Options dialog. */
   readonly settings: {
     readonly recordGameplay: boolean;
+    readonly recordingResultSeconds: number;
     readonly recordingFormat: string;
     readonly recordingQuality: string;
   };
@@ -54,16 +55,17 @@ export class RecordingService {
   public prepareResult(gameplay: GameplayRecorder): ((entranceMs: number) => Promise<void>) | undefined {
     if (!gameplay.isRecording()) return undefined;
     const filenameBase = this.recordingFilenameBase;
+    const holdMs = this.settings.recordingResultSeconds * 1_000;
     const deps = this.deps();
     return async (entranceMs) => {
       const fadeMs = 350;
       const fadeWindowMs = fadeMs + 50;
-      if (gameplay.fadeOutRecording) {
-        await new Promise<void>((resolve) => setTimeout(resolve, entranceMs + 1_000 - fadeWindowMs));
+      if (holdMs >= fadeWindowMs && gameplay.fadeOutRecording) {
+        await new Promise<void>((resolve) => setTimeout(resolve, entranceMs + holdMs - fadeWindowMs));
         gameplay.fadeOutRecording(fadeMs);
         await new Promise<void>((resolve) => setTimeout(resolve, fadeWindowMs));
       } else {
-        await new Promise<void>((resolve) => setTimeout(resolve, entranceMs + 1_000));
+        await new Promise<void>((resolve) => setTimeout(resolve, entranceMs + holdMs));
       }
       await finalizeRecordingIfActive(deps, gameplay, filenameBase);
     };

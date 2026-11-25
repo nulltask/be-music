@@ -236,6 +236,7 @@ describe('createPlayerGUIState', () => {
     });
     expect(state.openFolder).toBe(actions.openFolder);
     expect(state.recordGameplay).toBe(false);
+    expect(state.recordingResultSeconds).toBe(3);
   });
 
   test('picks up every remembered setting from its be-music.* key', () => {

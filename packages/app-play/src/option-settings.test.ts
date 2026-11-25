@@ -29,6 +29,21 @@ function memory(): Storage {
 }
 
 describe('parseOptionSettingsDocument', () => {
+  test.each([
+    [0, 0],
+    [8, 8],
+    [30, 30],
+    [-1, undefined],
+    [31, undefined],
+    [1.5, undefined],
+    ['3', undefined],
+  ])('reads a recorded result duration of %j as %j', (saved, expected) => {
+    const document = parseOptionSettingsDocument(
+      JSON.stringify({ version: 0, updatedAt: 10, settings: { recordingResultSeconds: saved } }),
+    );
+    expect(document?.settings.recordingResultSeconds).toBe(expected);
+  });
+
   test('ignores an invalid Bemuse server list and preserves an explicitly empty one', () => {
     const parse = (bemuseServerURLs: unknown[]) =>
       parseOptionSettingsDocument(JSON.stringify({ version: 0, updatedAt: 10, settings: { bemuseServerURLs } }))
@@ -324,6 +339,7 @@ describe('captureOptionSettings', () => {
       renderer: 'webgpu',
       recordingFormat: 'mp4/avc',
       recordGameplay: true,
+      recordingResultSeconds: 8,
       recordingQuality: 'very-high',
       workerCount: 3,
       compressorTuning: defaultCompressorTunings(),

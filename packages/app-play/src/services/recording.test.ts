@@ -22,7 +22,12 @@ function recorder(): GameplayRecorder & { formats: unknown[] } {
 
 function setup() {
   const sceneHost = {} as PixiSceneHost;
-  const settings = { recordGameplay: false, recordingFormat: 'webm/vp9', recordingQuality: 'high' };
+  const settings = {
+    recordGameplay: false,
+    recordingResultSeconds: 3,
+    recordingFormat: 'webm/vp9',
+    recordingQuality: 'high',
+  };
   const statuses: string[] = [];
   let play: GameplayRecorder | undefined;
   const service = new RecordingService({
@@ -81,22 +86,31 @@ describe('RecordingService', () => {
     expect(nextPlay.isRecording()).toBe(false);
   });
 
-  test('includes one second after the entrance with a fade at the end of the original take', async () => {
+  test.each([3, 8, 0])('includes %i seconds after the entrance in the original take', async (seconds) => {
     vi.useFakeTimers();
     try {
-      const { service, setPlay } = setup();
+      const { service, setPlay, settings } = setup();
+      settings.recordingResultSeconds = seconds;
       const fadeOutRecording = vi.fn();
       const play = { ...recorder(), fadeOutRecording };
       play.startRecording();
       const finish = service.prepareResult(play)!(2_000);
+      settings.recordingResultSeconds = seconds + 1;
       const nextPlay = recorder();
       setPlay(nextPlay);
-      await vi.advanceTimersByTimeAsync(2_599);
+      const fadeWindowMs = seconds === 0 ? 0 : 400;
+      await vi.advanceTimersByTimeAsync(2_000 + seconds * 1_000 - fadeWindowMs - 1);
       expect(fadeOutRecording).not.toHaveBeenCalled();
       expect(play.isRecording()).toBe(true);
       await vi.advanceTimersByTimeAsync(1);
-      expect(fadeOutRecording).toHaveBeenCalledWith(350);
-      await vi.advanceTimersByTimeAsync(400);
+      if (seconds > 0) {
+        expect(fadeOutRecording).toHaveBeenCalledWith(350);
+        await vi.advanceTimersByTimeAsync(fadeWindowMs - 1);
+        expect(play.isRecording()).toBe(true);
+        await vi.advanceTimersByTimeAsync(1);
+      } else {
+        expect(fadeOutRecording).not.toHaveBeenCalled();
+      }
       await finish;
       expect(play.isRecording()).toBe(false);
       expect(nextPlay.formats).toEqual([]);

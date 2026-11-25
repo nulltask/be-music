@@ -9,6 +9,8 @@ import {
 } from '@be-music/player-browser/recording';
 import { optionDefault } from './option-defaults.ts';
 
+export const RECORDING_RESULT_MAX_SECONDS = 30;
+
 /** A recording format as one string, for the Options dialog value and `localStorage`: `mp4/avc`, `webm/vp9`. */
 export function recordingFormatKey(format: RecordingFormat): string {
   return `${format.container}/${format.videoCodec}`;

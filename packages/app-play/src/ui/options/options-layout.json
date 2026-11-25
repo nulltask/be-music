@@ -442,6 +442,7 @@
           "title": "Capture",
           "items": [
             { "option": "recordGameplay", "kind": "toggle", "default": false },
+            { "option": "recordingResultSeconds", "kind": "slider", "default": 3 },
             { "option": "recordingFormat", "kind": "select", "default": "mp4/avc" },
             { "option": "recordingQuality", "kind": "select", "default": "standard" },
             { "option": "screenshot", "kind": "button" }

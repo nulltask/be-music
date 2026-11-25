@@ -271,6 +271,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Use WebCodecs encoder': 'WebCodecs のエンコーダーを使う',
   Resize: '縮小',
   'Record every play': '毎回プレイを録画',
+  'Recorded result duration (s)': '録画のリザルト表示時間（秒）',
   'Local folders': 'ローカルフォルダ',
   'Bemuse servers': 'Bemuse サーバー',
   'Difficulty tables': '難易度表',

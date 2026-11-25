@@ -43,7 +43,7 @@ BGA events can reference still images and video.
 ### Recording and results
 
 - The result screen opens after a short delay. Samples already playing ring out across the transition.
-- With **Record every play** on, the player downloads an MP4 or WebM after each result. The video includes one second after the result entrance and fades to black at the end. The live screen stays visible until the recording finishes. Native uses Synesthesia for the play and result while recording.
+- With **Record every play** on, the player downloads an MP4 or WebM after each result. **Recorded result duration (s)** sets how long to record after the result entrance, including the fade to black. The default is 3 seconds. Set 0 to end the recording as soon as the entrance finishes. The live screen stays visible until the recording finishes. Native uses Synesthesia for the play and result while recording.
 - See the [replay specification](./replay.md) for recording, downloads, and playback.
 
 ### Leaderboard submissions
