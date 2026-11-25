@@ -11,7 +11,7 @@ It is a prototype. The macOS build is signed ad hoc and the Windows installer is
 - **Its own window and icon**, apart from the browser and its storage clearing. The window remembers its size, position, maximized state and full screen; a saved position on a display that is gone is dropped.
 - **Folder access without prompts**: the player's permission requests (File System Access, MIDI, full screen) are granted for the player's origin and refused for any other page.
 - **No background throttling**: audio scheduling and rendering keep full rate while another window covers this one.
-- **Links**: the player and its sign-in flow stay in the window; other pages, such as Leaderboard rankings, open in the default browser. The app removes Electron's tokens from the user agent, because Google refuses to sign in from an embedded browser it recognizes.
+- **Links**: the player and its sign-in flow stay in the window; other pages, such as Leaderboard rankings, open in the default browser. Discord and passkeys sign in inside the window. Google refuses to sign in from an embedded browser even with Electron's tokens removed from the user agent, so Google sign-in does not work yet; it needs the sign-in to run in the default browser.
 - **One instance**: a second launch focuses the running window. Closing the window quits the app, on macOS too.
 
 ```mermaid
