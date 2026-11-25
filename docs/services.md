@@ -17,7 +17,7 @@ Be-Music account.
 | Leaderboard | `leaderboard.be-music.app` | Rankings                                                                                                   |
 | Registry    | `registry.be-music.app`    | Users register charts, songs, courses and dan certifications, each public, private or unlisted (link only) |
 | Editor      | `edit.be-music.app`        | BMS / bmson editor; publishes to the Registry or exports BMS / bmson locally                               |
-| Donate      | `donate.be-music.app`      | Donations toward server and infrastructure costs                                                           |
+| Donate      | `donate.be-music.app`      | Support toward running and developing Be-Music                                                             |
 
 ```mermaid
 flowchart LR
@@ -99,13 +99,16 @@ flowchart LR
 
 - **Calls between Workers** never cross Access. A relying party reaches Accounts (OIDC discovery, token and JWKS)
   through its `ACCOUNTS` Service Binding to the Dashboard Worker (`@be-music/service-auth-client`), not the public
-  network. A Worker without the binding uses `fetch`, which Access would block. Donate, in its own repository, needs
-  the same binding before its preview host can go behind Access.
+  network. A Worker without the binding uses `fetch`, which Access would block. Donate, in its own repository, has the
+  same binding.
+- **The Stripe webhook** is the one exception: a second Access application lets every request through to
+  `donate.preview.be-music.app/api/stripe/webhook`, because Stripe cannot sign in. The Worker accepts only events
+  signed with its webhook secret.
 - **No other way in**: `play-preview`, `leaderboard-preview` and `dashboard-preview` turn off `workers.dev` and
   version preview URLs, so they answer only on their custom domains.
 - **The web app manifest** is requested with credentials (`crossorigin="use-credentials"`), so the Player still
   installs behind Access.
-- **Setting it up**: `scripts/cloudflare/access.ts` defines the application and policy, and
+- **Setting it up**: `scripts/cloudflare/access.ts` defines the applications and policies, and
   `node scripts/cloudflare/access-apply.ts` prints them; `--apply` creates or updates them. It reads
   `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (Access: Apps and Policies Edit; Access: Organizations, Identity
   Providers, and Groups Read) and `ACCESS_ALLOWED_EMAILS` from the environment or `.env.cloudflare`. The addresses are
@@ -231,7 +234,7 @@ configuration:
 | Accounts    | Part of `dashboard` / `dashboard-preview`: the OIDC provider and its D1                |
 | Player      | `play` / `play-preview` (`packages/worker-play`, serving `@be-music/app-play`'s build) |
 | Leaderboard | `leaderboard` / `leaderboard-preview`, pages at the root of its host                   |
-| Donate      | `donate` / `donate-preview`, OIDC login and public financial data                      |
+| Donate      | `donate` / `donate-preview`, OIDC login, support payments and public financial data    |
 
 The monorepo Workers deploy with `cf` from `cloudflare.config.ts`; Donate uses Wrangler in its private content repository. `.github/workflows/deploy.yml` deploys `main` to
 production and `devel` to the preview. All of them run in the Be-Music Cloudflare account, which bills only Be-Music.
@@ -245,13 +248,13 @@ Every response from the `play` Worker carries `Cross-Origin-Opener-Policy: same-
 
 ## Storage ownership
 
-Accounts owns public profiles and avatars; all edits take place there. Leaderboard retains only its public ranking projection, player identity mappings and score data. See [ADR 0009](./adr/0009-accounts-profiles.md) for synchronization and the migration sequence.
+Accounts owns public profiles and avatars; all edits take place there. Leaderboard retains only its public ranking projection, player identity mappings and score data. See [ADR 0009](./adr/0009-accounts-profiles.md) for synchronization and the migration sequence. Donate's database keeps only which accounts supported, whether they asked to be listed, and a copy of the public profile of listed supporters; amounts, email addresses and card details stay in Stripe.
 
 | Worker                                | D1             | R2                                                    |
 | ------------------------------------- | -------------- | ----------------------------------------------------- |
 | `leaderboard` / `leaderboard-preview` | Same as Worker | Same as Worker: replays, chart documents, share cards |
 | `play` / `play-preview`               | None           | Same as Worker: FFmpeg core                           |
 | `dashboard` / `dashboard-preview`     | Same as Worker | `accounts` / `accounts-preview`: avatars              |
-| `donate` / `donate-preview`           | None           | None; financial data stays in its repository          |
+| `donate` / `donate-preview`           | Same as Worker | None; financial data stays in its repository          |
 
 The static public asset bucket is `assets`, served at `assets.be-music.app`. The FFmpeg upload script defaults to `play`; `pnpm --filter @be-music/app-play run cf:r2:push:preview` updates `play-preview` separately.

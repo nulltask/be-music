@@ -17,7 +17,7 @@ Be-Music のアカウントでログインします。
 | Leaderboard | `leaderboard.be-music.app` | ランキング（今は `be-music.app/leaderboard`）                                                                        |
 | Registry    | `registry.be-music.app`    | ユーザーが譜面・楽曲・コース・段位認定を登録する。それぞれ公開・非公開・限定公開（リンクを知っている人だけ）を選べる |
 | Editor      | `edit.be-music.app`        | BMS / bmson のエディタ。Registry で公開したり、BMS / bmson としてローカルに書き出したりできる                        |
-| Donate      | `donate.be-music.app`      | サーバー代とインフラ費用のための寄付                                                                                 |
+| Donate      | `donate.be-music.app`      | Be-Music の運営と開発の費用への支援                                                                                  |
 
 ```mermaid
 flowchart LR
@@ -100,8 +100,11 @@ flowchart LR
 
 - **Worker 間の通信**は Access を通りません。リライングパーティーは Accounts（OIDC の discovery、token、JWKS）に、
   公開ネットワークではなく Dashboard Worker への `ACCOUNTS` Service Binding で届きます（`@be-music/service-auth-client`）。
-  binding のない Worker は `fetch` を使うので、Access に止められます。別リポジトリの Donate も、プレビューのホストを
-  Access の下に入れる前に同じ binding が要ります。
+  binding のない Worker は `fetch` を使うので、Access に止められます。別リポジトリの Donate にも同じ
+  binding があります。
+- **Stripe の Webhook** だけは例外です。Stripe は Access にログインできないので、2 つ目の Access アプリケーションが
+  `donate.preview.be-music.app/api/stripe/webhook` への通信をすべて通します。Worker は、Webhook の secret で署名された
+  イベントだけを受け付けます。
 - **ほかの入り口はありません**: `play-preview`、`leaderboard-preview`、`dashboard-preview` は `workers.dev` と
   バージョンのプレビュー URL を切っており、カスタムドメインでだけ応答します。
 - **Web アプリのマニフェスト**は資格情報つき（`crossorigin="use-credentials"`）で取得するので、Access の下でも
@@ -231,7 +234,7 @@ Accounts を Dashboard の Worker に移したとき、データベースは空�
 | Accounts    | `dashboard` / `dashboard-preview` の一部。OIDC プロバイダーとその D1                   |
 | Player      | `play` / `play-preview`（`packages/worker-play`。`@be-music/app-play` のビルドを配信） |
 | Leaderboard | `leaderboard` / `leaderboard-preview`。ページはホストのルートに置く                    |
-| Donate      | `donate` / `donate-preview`。OIDC ログインと公開の収支データ                           |
+| Donate      | `donate` / `donate-preview`。OIDC ログイン、支援の支払い、公開の収支データ             |
 
 モノレポの Worker は `cloudflare.config.ts` から `cf` でデプロイします。Donate は非公開のコンテンツリポジトリで Wrangler を使います。`.github/workflows/deploy.yml` が `main` を本番に、
 `devel` をプレビューにデプロイします。どれも Be-Music の Cloudflare アカウントで動いていて、このアカウントの請求は
@@ -245,13 +248,13 @@ Player は Service Worker を持つインストール可能な Web アプリで�
 
 ## データの管理先
 
-公開プロフィールとアバターの正本は Accounts に置き、編集もそこで行います。Leaderboard はランキング用のコピー、プレイヤー ID の対応、スコアを保持します。同期と移行順は [ADR 0009](./adr/0009-accounts-profiles.ja.md) を参照してください。
+公開プロフィールとアバターの正本は Accounts に置き、編集もそこで行います。Leaderboard はランキング用のコピー、プレイヤー ID の対応、スコアを保持します。同期と移行順は [ADR 0009](./adr/0009-accounts-profiles.ja.md) を参照してください。Donate のデータベースには、支援したアカウント、一覧への掲載希望、掲載する人の公開プロフィールの写しだけを置きます。金額・メールアドレス・カード情報は Stripe に残します。
 
 | Worker                                | D1            | R2                                                  |
 | ------------------------------------- | ------------- | --------------------------------------------------- |
 | `leaderboard` / `leaderboard-preview` | Worker と同名 | Worker と同名：リプレイ、譜面構造データ、共有カード |
 | `play` / `play-preview`               | なし          | Worker と同名：FFmpeg core                          |
 | `dashboard` / `dashboard-preview`     | Worker と同名 | `accounts` / `accounts-preview`：アバター           |
-| `donate` / `donate-preview`           | なし          | なし。収支データはリポジトリで管理                  |
+| `donate` / `donate-preview`           | Worker と同名 | なし。収支データはリポジトリで管理                  |
 
 公開の静的アセットは `assets` バケットを `assets.be-music.app` で配信します。FFmpeg のアップロード先は既定で `play` です。`pnpm --filter @be-music/app-play run cf:r2:push:preview` で `play-preview` を別に更新します。
