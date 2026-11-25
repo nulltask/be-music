@@ -30,7 +30,12 @@ import {
 import { parseCompressorTunings, type CompressorTuning } from './compressor-tuning.ts';
 import { parseStoredHiSpeed, HI_SPEED_STORAGE_KEY } from './hi-speed-storage.ts';
 import { parseStoredPlayTempoSettings, PLAY_TEMPO_STORAGE_KEY, type PlayTempoSettings } from './play-tempo-settings.ts';
-import { parseRecordingFormatKey, parseRecordingQuality, recordingFormatKey } from './recording-format-choice.ts';
+import {
+  parseRecordingFormatKey,
+  parseRecordingQuality,
+  recordingFormatKey,
+  RECORDING_RESULT_MAX_SECONDS,
+} from './recording-format-choice.ts';
 import type { RecordingQuality } from '@be-music/player-browser/recording';
 import { parseStoredRenderResolution, RENDER_RESOLUTION_STORAGE_KEY } from './render-resolution.ts';
 import { parseStoredReplayView, REPLAY_VIEW_STORAGE_KEY } from './replay-view-settings.ts';
@@ -233,6 +238,7 @@ export interface OptionSettings {
   renderer: PlayerGUIState['renderer'];
   recordingFormat: string;
   recordGameplay: boolean;
+  recordingResultSeconds: number;
   recordingQuality: RecordingQuality;
   workerCount: number;
   compressorTuning: Record<TunableCompressor, CompressorTuning>;
@@ -353,6 +359,14 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   const storedRuleset: RulesetId = isRulesetId(raw.judgeRuleset) ? raw.judgeRuleset : 'lr2';
   assign(settings, 'autoPlay', booleanOf(raw.autoPlay));
   assign(settings, 'recordGameplay', booleanOf(raw.recordGameplay));
+  if (
+    typeof raw.recordingResultSeconds === 'number' &&
+    Number.isInteger(raw.recordingResultSeconds) &&
+    raw.recordingResultSeconds >= 0 &&
+    raw.recordingResultSeconds <= RECORDING_RESULT_MAX_SECONDS
+  ) {
+    settings.recordingResultSeconds = raw.recordingResultSeconds;
+  }
   assign(settings, 'autoPauseOnBlur', booleanOf(raw.autoPauseOnBlur));
   assign(settings, 'showFPS', booleanOf(raw.showFPS));
   assign(settings, 'peakGain', booleanOf(raw.peakGain));
@@ -874,6 +888,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('renderer');
   assignState('recordingFormat');
   assignState('recordGameplay');
+  assignState('recordingResultSeconds');
   assignState('recordingQuality');
 }
 
@@ -1059,6 +1074,7 @@ export function captureOptionSettings(
     renderer: state.renderer,
     recordingFormat: state.recordingFormat,
     recordGameplay: state.recordGameplay,
+    recordingResultSeconds: state.recordingResultSeconds,
     recordingQuality: state.recordingQuality,
     workerCount: extras.workerCount,
     compressorTuning: extras.compressorTuning,

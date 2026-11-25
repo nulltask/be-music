@@ -7,8 +7,13 @@ test('downloads a fresh video for each play and fades the result in the file onl
   await player.drop('songs', { prefix: SONGS });
   await player.setOption(['Play options'], 'Auto play', true);
   await player.setOption(['Capture'], 'Record every play', true);
+  expect(await player.readOption(['Capture'], 'Recorded result duration (s)')).toBe(3);
 
   for (const [index, title] of ['Fixture A', 'Fixture B'].entries()) {
+    if (index === 1) {
+      await player.setOption(['Capture'], 'Recorded result duration (s)', 2);
+      expect(await player.readOption(['Capture'], 'Recorded result duration (s)')).toBe(2);
+    }
     await player.browseTo(SONGS, title);
     const download = page.waitForEvent('download', { timeout: 60_000 });
     await player.key('Enter');

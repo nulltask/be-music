@@ -399,6 +399,8 @@ export interface PlayerGUIState extends PlayTempoSettings {
   recordingQuality: import('@be-music/player-browser/recording').RecordingQuality;
   /** Automatically records each play and its result. */
   recordGameplay: boolean;
+  /** Seconds of recorded result after the entrance animation. */
+  recordingResultSeconds: number;
   /** Triggered by clicking the GUI's "Screenshot" button. Captures the Pixi stage at its native size. */
   screenshot: () => void;
 }

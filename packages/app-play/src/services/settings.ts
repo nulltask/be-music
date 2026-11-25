@@ -426,6 +426,7 @@ export function createPlayerGUIState(inputs: PlayerGUIStateInputs): PlayerGUISta
     recordingFormat: readStoredRecordingFormat(storage),
     recordingQuality: optionDefault('recordingQuality'),
     recordGameplay: false,
+    recordingResultSeconds: optionDefault('recordingResultSeconds'),
     screenshot: inputs.actions.screenshot,
   };
   const saved = readStoredOptionSettings(storage);

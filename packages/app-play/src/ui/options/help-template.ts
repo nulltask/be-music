@@ -728,6 +728,11 @@ export const OPTIONS_HELP_TEMPLATE = html`
             Automatically downloads a video of each play and its result. The video includes any camera shown in the BGA
             frame.
           </dd>
+          <dt>Recorded result duration (s)</dt>
+          <dd>
+            How long the video holds the result after its entrance. Set 0 to finish as soon as the entrance ends. The
+            default is 3 seconds.
+          </dd>
           <dt>Video format</dt>
           <dd>The video's container and codec: MP4 · H.264 by default, or MP4 / WebM with H.265, AV1, VP9 or VP8.</dd>
           <dt>Video quality</dt>

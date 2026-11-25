@@ -698,6 +698,11 @@ export const OPTIONS_HELP_JA = html`
       <dl class="help-menu-items">
         <dt>毎回プレイを録画</dt>
         <dd>プレイからリザルトまで録画し、動画を自動でダウンロードします。BGA に表示したカメラ映像も入ります。</dd>
+        <dt>録画のリザルト表示時間（秒）</dt>
+        <dd>
+          リザルトの演出が終わってから録画を続ける時間です。既定は 3 秒です。0
+          秒にすると、演出が終わった時点で録画を終了します。
+        </dd>
         <dt>Video format</dt>
         <dd>動画のコンテナとコーデック。既定は MP4 · H.264 で、MP4 / WebM と H.265・AV1・VP9・VP8 から選べます。</dd>
         <dt>Video quality</dt>
