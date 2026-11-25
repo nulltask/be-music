@@ -375,8 +375,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         (portrait
           ? this.renderPortraitRow(frame, entry, entryIndex, slot, listWidth)
           : this.renderRow(frame, entry, entryIndex, slot, listWidth)) || needsFrame;
-      // A course that cannot start (a stage missing) is drawn faint, as a disabled control is.
-      const disabled = entry.kind === 'course' && !entry.course.playable;
+      const disabled =
+        entry.kind === 'folder' ? entry.folder.disabled : entry.kind === 'course' && !entry.course.playable;
       fadeChildrenFrom(frame.layer, from, disabled ? alpha * DISABLED_ROW_ALPHA : alpha);
     }
     const visible = this.activeCard !== undefined;

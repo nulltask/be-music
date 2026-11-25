@@ -1,5 +1,40 @@
 import { expect, test } from './support.ts';
 
+test('keeps a Bemuse server bar in place while its charts load', async ({ player }) => {
+  const { page } = player;
+  const server = 'https://pending-bemuse.example';
+  const title = 'Bemuse pending-bemuse.example';
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/player-settings', (route) => route.fulfill({ status: 204 }));
+  await page.route(`${server}/**`, async (route) => {
+    const headers = { 'access-control-allow-origin': '*' };
+    if (route.request().url().endsWith('/index.json')) {
+      await pending;
+      await route.fulfill({
+        headers,
+        json: { songs: [{ path: 'song', bemusepack_url: null, charts: [{ file: 'chart.bms' }] }] },
+      });
+    } else {
+      await route.fulfill({ headers, body: '#TITLE Server chart\n#BPM 120\n#WAV01 key.wav\n#00111:01\n' });
+    }
+  });
+  try {
+    await player.open({ 'be-music.bemuse-server-urls': JSON.stringify([`${server}/index.json`]) });
+    await player.cursorTo((bar) => bar.kind === 'folder' && bar.title === title, title);
+    await player.key('Enter');
+    expect((await player.state()).cursor?.bar).toMatchObject({ kind: 'folder', title });
+  } finally {
+    release();
+  }
+  await expect.poll(async () => (await player.state()).library.charts).toBe(1);
+  expect((await player.state()).cursor?.bar).toMatchObject({ kind: 'folder', title });
+  const selected = await player.openFolder(title);
+  expect(selected.cursor?.bar).toMatchObject({ kind: 'chart', title: 'Server chart' });
+});
+
 test('starts the default Bemuse library when the saved server list is malformed', async ({ player }) => {
   const { page } = player;
   const official = 'https://music4.bemuse.ninja/server/';

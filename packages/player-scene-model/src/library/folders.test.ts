@@ -31,6 +31,18 @@ describe('groupChartsByFolder', () => {
 });
 
 describe('libraryRootFolders', () => {
+  test('keeps registered servers in place as their chart folders become available', () => {
+    const bemuseServerFolders = ['Bemuse Zeta', 'Bemuse Alpha', 'Bemuse Alpha'];
+    const pending = libraryRootFolders({ charts: [], bemuseServerFolders });
+    expect(pending).toEqual([
+      { label: 'Bemuse Alpha', kind: 'bemuse-server', charts: [], disabled: true },
+      { label: 'Bemuse Zeta', kind: 'bemuse-server', charts: [], disabled: true },
+    ]);
+    const chart = makeChart('a', 'Bemuse Alpha/Track', { bemuseServer: true });
+    const loaded = libraryRootFolders({ charts: [chart], bemuseServerFolders });
+    expect(loaded).toEqual([{ label: 'Bemuse Alpha', kind: 'bemuse-server', charts: [chart] }, pending[1]]);
+  });
+
   test('lists the chart folders, then the course folders', () => {
     const courses = makeCourseFolder('MY COURSES', [makeCourse('dan')]);
     const library = { charts: [makeChart('a', 'Pack/x')], courseFolders: [courses] };

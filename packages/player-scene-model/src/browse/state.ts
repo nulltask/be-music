@@ -303,7 +303,7 @@ function setCursor(state: BrowseState, to: number, count: number): BrowseTransit
 
 function openFolder(library: Library, state: BrowseState): BrowseTransition {
   const entry = focusedEntry(library, state);
-  if (entry?.kind !== 'folder') return { state, event: UNCHANGED };
+  if (entry?.kind !== 'folder' || entry.folder.disabled) return { state, event: UNCHANGED };
   return {
     state: { ...state, path: [...state.path, entry.folder], cursors: [...state.cursors, 0] },
     event: { kind: 'folder-opened', folder: entry.folder },

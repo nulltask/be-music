@@ -90,6 +90,7 @@ export function openLibrary(
   const chartFolders = roots.filter((folder) => folder.courses === undefined);
   if (chartFolders.length !== 1) return state;
   const folder = chartFolders[0]!;
+  if (folder.disabled) return state;
   return { ...state, path: [folder], cursors: [roots.indexOf(folder), 0] };
 }
 

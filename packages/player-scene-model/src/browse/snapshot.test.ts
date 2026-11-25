@@ -30,6 +30,13 @@ function run(library: Library, state: BrowseState, ...commands: BrowseCommand[])
 }
 
 describe('captureBrowse / restoreBrowse', () => {
+  test('stays at the root when the saved server folder is unavailable', () => {
+    const library = { charts: [], bemuseServerFolders: ['Bemuse Alpha'] };
+    const restored = restoreBrowse(library, { folderPath: ['Bemuse Alpha'], cursors: [0, 0] });
+    expect(restored.restoredDepth).toBe(0);
+    expect(browseFolder(restored.state)).toBeUndefined();
+  });
+
   test('keeps the live cursor at the deepest depth and every parent cursor', () => {
     // beatoraja saved the cursor kept for the folder as it was entered (always 0), so coming back from a play landed on
     // the folder's first bar: the snapshot keeps the live one.

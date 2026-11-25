@@ -68,6 +68,7 @@ import type { PlayerWebElements } from '../types.ts';
 import { expandZipToFiles, fetchZipAsFile, fetchZipAsFiles, parseURLMediaParams } from '../url-load.ts';
 import { bemuseServerLabel, readStoredBemuseServerURLs } from '../bemuse-server.ts';
 import {
+  bemuseServerFolderLabel,
   keepBemuseLibraryIndex,
   openBemuseLibraryIndex,
   readBemuseLibraryIndex,
@@ -159,6 +160,7 @@ export class LibraryService {
    * redraw of the same one (`setLibrary`).
    */
   public collection: BrowserChartCollection = { sources: [], charts: [], errors: [] };
+  private startupBemuseServerURLs: readonly string[] = [];
   /** Every load of charts, for the folder reload (`reloadCharts`): a drop's entries, or the files themselves. */
   private readonly chartLoads: LibraryChartLoad[] = [];
   private collectionStore = new BrowserChartCollectionStore();
@@ -330,6 +332,8 @@ export class LibraryService {
 
   public async restoreStartupCache(): Promise<void> {
     const urls = readStoredBemuseServerURLs();
+    this.startupBemuseServerURLs = urls;
+    this.collection = { ...this.collection, bemuseServerFolders: urls.map(bemuseServerFolderLabel) };
     const tableFetch = createCachedCourseTableFetchText({ store: pageRemoteCacheStore(), cacheOnly: true });
     const [servers, tables] = await Promise.all([
       Promise.all(urls.map(async (url) => ({ url, index: await readBemuseLibraryIndex(url) }))),
@@ -1010,7 +1014,11 @@ export class LibraryService {
 
   private async reloadChartsWhenIdle(signal: AbortSignal): Promise<void> {
     const tables = readStoredCourseTableURLs();
-    if (this.chartLoads.length === 0 && tables.length === 0) {
+    const servers = new Set([
+      ...this.startupBemuseServerURLs,
+      ...this.chartLoads.flatMap(({ bemuseURL }) => (bemuseURL === undefined ? [] : [bemuseURL])),
+    ]);
+    if (this.chartLoads.length === 0 && tables.length === 0 && servers.size === 0) {
       this.setStatus('No folders to reload');
       return;
     }
@@ -1019,9 +1027,8 @@ export class LibraryService {
     if (this.chartLoads.length > 0) {
       await this.readChartsAgain((progress) => applyLoadProgress(this.elements, progress), signal);
     }
-    const servers = this.chartLoads.flatMap(({ bemuseURL }) => (bemuseURL === undefined ? [] : [bemuseURL]));
     await Promise.all([
-      ...servers.map((url) => this.loadBemuseServer(url, this.remoteRefreshedSince, signal)),
+      ...[...servers].map((url) => this.loadBemuseServer(url, this.remoteRefreshedSince, signal)),
       ...(tables.length > 0 ? [this.importCourseTables(tables, false, { relist: false, signal })] : []),
     ]);
     await this.readTableSongIndexesAgain(signal);

@@ -69,7 +69,7 @@ export function restoreBrowse(library: Library, snapshot: BrowseSnapshot): Brows
   let folders: readonly LibraryFolder[] = libraryRootFolders(library);
   for (const label of snapshot.folderPath) {
     const folder = folders.find((candidate) => candidate.label === label);
-    if (folder === undefined) break;
+    if (folder === undefined || folder.disabled) break;
     const index = browseEntries(library, state).findIndex(
       (entry) => entry.kind === 'folder' && entry.folder.label === label,
     );

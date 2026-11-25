@@ -44,6 +44,7 @@ export function chartFolderLabel(chart: LibraryChart): string {
 
 interface RootFoldersMemo {
   courseFolders: Library['courseFolders'];
+  bemuseServerFolders: Library['bemuseServerFolders'];
   folders: readonly LibraryFolder[];
 }
 
@@ -56,8 +57,20 @@ const ROOT_FOLDERS = new WeakMap<readonly LibraryChart[], RootFoldersMemo>();
  */
 export function libraryRootFolders(library: Library): readonly LibraryFolder[] {
   const memo = ROOT_FOLDERS.get(library.charts);
-  if (memo !== undefined && memo.courseFolders === library.courseFolders) return memo.folders;
-  const folders = [...groupChartsByFolder(library.charts), ...(library.courseFolders ?? [])];
-  ROOT_FOLDERS.set(library.charts, { courseFolders: library.courseFolders, folders });
+  const { bemuseServerFolders, courseFolders } = library;
+  if (memo !== undefined && memo.courseFolders === courseFolders && memo.bemuseServerFolders === bemuseServerFolders) {
+    return memo.folders;
+  }
+  const chartFolders = groupChartsByFolder(library.charts);
+  const labels = new Set(chartFolders.map(({ label }) => label));
+  for (const label of bemuseServerFolders ?? []) {
+    if (labels.has(label)) continue;
+    labels.add(label);
+    chartFolders.push({ label, kind: 'bemuse-server', charts: [], disabled: true });
+  }
+  if (bemuseServerFolders?.length)
+    chartFolders.sort((left, right) => JAPANESE_COLLATOR.compare(left.label, right.label));
+  const folders = [...chartFolders, ...(courseFolders ?? [])];
+  ROOT_FOLDERS.set(library.charts, { courseFolders, bemuseServerFolders, folders });
   return folders;
 }

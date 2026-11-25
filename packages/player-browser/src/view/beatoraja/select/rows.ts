@@ -638,10 +638,12 @@ export class BeatorajaSelectRows {
         continue;
       }
       const isSelected = i === this.centreRowIndex;
+      const opacity = entry.kind === 'folder' && entry.folder.disabled ? 0.45 : 1;
       label.visible = true;
       hit.visible = true;
       if (bar !== undefined) {
         bar.visible = true;
+        bar.alpha = opacity;
         // Per-bar-type imageset frame swap. Mirrors upstream `BarRenderer.java:269`'s
         // `si.draw(sprite, time, ba.value, ...)` where `ba.value` is the bar TYPE index
         // resolved at `BarRenderer.java:150-166`. Our app currently surfaces only `'chart'`
@@ -742,7 +744,7 @@ export class BeatorajaSelectRows {
           }
         }
       }
-      label.alpha = isSelected ? 1 : 0.75;
+      label.alpha = opacity * (isSelected ? 1 : 0.75);
     }
     this.layoutRows();
   }

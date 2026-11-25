@@ -339,7 +339,10 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
     const place = captureBrowse(this.browseLibrary, this.browse);
     this.library = library;
     this.browseLibrary = this.createBrowseLibrary();
-    const empty = previous.charts.length === 0 && (previous.courseFolders?.length ?? 0) === 0;
+    const empty =
+      previous.charts.length === 0 &&
+      (previous.courseFolders?.length ?? 0) === 0 &&
+      (previous.bemuseServerFolders?.length ?? 0) === 0;
     this.browse = empty
       ? openLibrary(this.browseLibrary, this.policy, { searchText: this.browse.searchText, list: this.browse.list })
       : restoreSelectBrowse(this.browseLibrary, place, this.browse, this.policy).state;
@@ -367,9 +370,10 @@ export class SelectSession implements SceneSession<SelectFrame, SelectIntent> {
 
   /** {@link browseLibrary} for the library and the records in force. */
   private createBrowseLibrary(): Library {
-    const { charts, courseFolders } = this.library;
+    const { charts, courseFolders, bemuseServerFolders } = this.library;
     return {
       charts,
+      ...(bemuseServerFolders !== undefined ? { bemuseServerFolders } : {}),
       ...(courseFolders !== undefined ? { courseFolders } : {}),
       chartFilterRecord: (chart) => {
         let record = this.filterRecords.get(chart);
