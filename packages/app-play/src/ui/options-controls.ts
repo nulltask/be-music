@@ -544,10 +544,11 @@ export abstract class OptionContainer extends OptionRow {
     return this.add(new OptionButton(this, params));
   }
 
-  public addSectionReset(reset: () => void): void {
-    const row = this.addButton({ title: 'Reset section to defaults' }).on('click', reset).element;
-    row.classList.add('options-section-reset');
-    row.removeAttribute('data-option-label');
+  public addSectionReset(reset: () => void): OptionButton {
+    const button = this.addButton({ title: 'Reset section to defaults' }).on('click', reset);
+    button.element.classList.add('options-section-reset');
+    button.element.removeAttribute('data-option-label');
+    return button;
   }
 
   /** A folder: a section with a heading, which is always open. */

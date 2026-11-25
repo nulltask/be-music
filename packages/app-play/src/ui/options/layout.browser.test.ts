@@ -2,7 +2,7 @@ import { BEATORAJA_SKIN_TYPE } from '@be-music/skin-beatoraja';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 import { userEvent } from 'vite-plus/test/browser';
 import '../../styles.css';
-import { OptionFolder } from '../options-controls.ts';
+import { type OptionContainer, OptionFolder } from '../options-controls.ts';
 import { buildAudioFolder } from './audio.ts';
 import { refreshCompressorStageVisibility } from './compressor.ts';
 import { OptionsDialog } from './index.ts';
@@ -204,7 +204,7 @@ test('relocated compressor stages follow the mode while unrelated settings stay 
   expect(other.element.getClientRects().length).toBeGreaterThan(0);
 });
 
-test('section reset uses the JSON defaults, applies changes in order and preserves other sections and locked settings', () => {
+test('section reset uses the JSON defaults, applies changes in order and preserves other and nested sections and locked settings', () => {
   const { gui, layout, place } = mount([
     {
       title: 'Play',
@@ -245,9 +245,76 @@ test('section reset uses the JSON defaults, applies changes in order and preserv
     .click();
   expect(values).toEqual({ enabled: false, speed: 0, locked: true, workers: 4, other: true });
   expect(changes).toEqual(['enabled', 'speed', 'workers']);
-  expect(custom).toHaveBeenCalledOnce();
+  expect(custom).not.toHaveBeenCalled();
   layout.folder('nested').element.querySelector<HTMLButtonElement>('.options-section-reset button')!.click();
-  expect(custom).toHaveBeenCalledTimes(2);
+  expect(custom).toHaveBeenCalledOnce();
+});
+
+test('each section has one reset right after its own settings, and a section of only folders and tabs has none', () => {
+  const { gui, layout, tabs, place } = mount([
+    {
+      title: 'Play',
+      items: [
+        {
+          folder: 'play',
+          title: 'Play options',
+          items: [
+            { option: 'ruleset', kind: 'toggle', default: false },
+            {
+              tabs: 'playPages',
+              pages: [
+                {
+                  title: 'Practice',
+                  items: [
+                    { option: 'practice', kind: 'toggle', default: false },
+                    {
+                      folder: 'tempoFolder',
+                      title: 'Tempo',
+                      items: [{ option: 'tempo', kind: 'toggle', default: false }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          folder: 'view',
+          title: 'View',
+          items: [
+            {
+              tabs: 'viewPages',
+              pages: [{ title: 'Effects', items: [{ option: 'bga', kind: 'toggle', default: false }] }],
+            },
+          ],
+        },
+      ],
+    },
+  ]);
+  const values = { ruleset: true, practice: true, tempo: true, bga: true };
+  for (const id of Object.keys(values) as (keyof typeof values)[]) place(id).addBinding(values, id, { label: id });
+  layout.installSectionResets(() => undefined);
+  gui.expanded = true;
+  const rows = (container: OptionContainer) =>
+    container.children.map((row) =>
+      row.element.classList.contains('options-section-reset') ? 'reset' : (row.element.dataset.optionLabel ?? row.kind),
+    );
+  const play = layout.folder('play');
+  expect(rows(play)).toEqual(['ruleset', 'reset', 'tabs']);
+  const practice = layout.tabs('playPages').pages[0]!;
+  expect(rows(practice)).toEqual(['practice', 'reset', 'folder']);
+  expect(rows(layout.folder('tempoFolder'))).toEqual(['tempo', 'reset']);
+  expect(
+    layout.folder('view').element.querySelectorAll(':scope > .options-folder-content > .options-section-reset'),
+  ).toHaveLength(0);
+  expect(tabs.element.querySelectorAll('.options-section-reset')).toHaveLength(4);
+
+  play.element
+    .querySelector<HTMLButtonElement>(':scope > .options-folder-content > .options-section-reset button')!
+    .click();
+  expect(values).toEqual({ ruleset: false, practice: true, tempo: true, bga: true });
+  practice.element.querySelector<HTMLButtonElement>('.options-section-reset button')!.click();
+  expect(values).toEqual({ ruleset: false, practice: false, tempo: true, bga: true });
 });
 
 test('runtime defaults use the supported browser and the currently available LR2 theme', () => {

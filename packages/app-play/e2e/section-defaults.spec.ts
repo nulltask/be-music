@@ -1,7 +1,7 @@
 import { expect, smokeGroup, test } from './support.ts';
 
 test(
-  'resetting Audio applies its defaults and preserves settings outside the section',
+  'resetting Audio applies its defaults and preserves settings outside the section and in its subsections',
   smokeGroup(3),
   async ({ player }) => {
     const { page } = player;
@@ -18,14 +18,14 @@ test(
 
     const saved = () =>
       page.evaluate(() => JSON.parse(localStorage.getItem('be-music.option-settings') ?? '{}').settings);
-    await expect.poll(saved).toMatchObject({ muted: false, masterVolume: 100, compressor: true, autoPlay: true });
+    await expect.poll(saved).toMatchObject({ muted: false, masterVolume: 100, compressor: false, autoPlay: true });
     expect(await player.readOption(['Audio'], 'Mute')).toBe(false);
 
     await page.reload();
     await player.waitFor((state) => state.scene.kind === 'select', 'select after reloading the reset');
     expect(await player.readOption(['Audio'], 'Mute')).toBe(false);
     expect(await player.readOption(['Audio'], 'Master (%)')).toBe(100);
-    expect(await player.readOption(['Audio', 'Compressor'], 'Enabled')).toBe(true);
+    expect(await player.readOption(['Audio', 'Compressor'], 'Enabled')).toBe(false);
     expect(await player.readOption(['Play options'], 'Auto play')).toBe(true);
   },
 );
