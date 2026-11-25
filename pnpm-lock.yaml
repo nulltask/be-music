@@ -372,8 +372,8 @@ importers:
         specifier: ^0.4.1
         version: 0.4.1(@standard-schema/spec@1.1.0)(hono@4.13.19)
       '@scalar/hono-api-reference':
-        specifier: ^0.12.16
-        version: 0.12.16(hono@4.13.19)
+        specifier: ^0.12.23
+        version: 0.12.23(hono@4.13.19)
       '@valibot/to-json-schema':
         specifier: ^1.8.0
         version: 1.8.0(valibot@1.5.0(typescript@7.0.2))
@@ -2516,30 +2516,30 @@ packages:
   '@rolldown/pluginutils@1.0.0-rc.17':
     resolution: {integrity: sha512-n8iosDOt6Ig1UhJ2AYqoIhHWh/isz0xpicHTzpKBeotdVsTEcxsSA/i3EVM7gQAj0rU27OLAxCjzlj15IWY7bg==}
 
-  '@scalar/client-side-rendering@0.4.15':
-    resolution: {integrity: sha512-9jc8mcnwlQpadi8F7WjC2r7Oav5DJDh/wVktXqNW1HMw7ShxvBdtzBAgBEq9qCfauysYcfSPc8DtyRN0OCsmkQ==}
+  '@scalar/client-side-rendering@0.4.22':
+    resolution: {integrity: sha512-7neipw+9bwNzHtEChMlFJkTFCKFbRg8W88MsWJBYH+wHhO6za/DzNu+sPdz0d+v85EMBKi/akoXgsZdya8vF7w==}
     engines: {node: '>=22'}
 
-  '@scalar/helpers@0.16.4':
-    resolution: {integrity: sha512-9eILWzUcAkHEuYMMvijpSIy69t+Vkq+NudLB/7lgARFTWqXfQpIxW1L3VH7ogKyRie5+E4CNZ3PSvlw6IIfLGw==}
+  '@scalar/helpers@0.19.0':
+    resolution: {integrity: sha512-h2yJ2QD5Y41gKszVymILKVMCWfK2vpdsro3+rp8doqWWBN09kkWHmMXTJl9EyP/jgswxJhrnjECCAHqeAeSdvg==}
     engines: {node: '>=22'}
 
-  '@scalar/hono-api-reference@0.12.16':
-    resolution: {integrity: sha512-MyFpUuahtYeqoVOr4mZQ50l0E39u+Yg2G3I7g+0Kzz5UwLhtim2oNJknBtMajKg4wwuQnhwVsQUS0H58nSsZWQ==}
+  '@scalar/hono-api-reference@0.12.23':
+    resolution: {integrity: sha512-fKbOBb9Q1uRw5P56EBgAD/32CVB3RsIylOqizC8Nztjc+WPsDDnHJZtg1p2iT1yPbshMhd3btXeS71tfLc3Hrg==}
     engines: {node: '>=22'}
     peerDependencies:
       hono: ^4.12.5
 
-  '@scalar/schemas@0.15.0':
-    resolution: {integrity: sha512-YxvmWVymAC536CFC84SGyt8PD57UqB5GOvr73y7Oj1Bjf8HMUUowzEt3AM3w9s21sR8ZKkncbt1R3r8sYsASnA==}
+  '@scalar/schemas@0.19.0':
+    resolution: {integrity: sha512-IZFZMj4HFSDtbZtNSFB896N2GpE5rSpYalXTJowXwX1VD9gyimD7rLBkYLYu+KgK1TF3xTeyyzW6Nn8xpjiuJw==}
     engines: {node: '>=22'}
 
-  '@scalar/types@0.25.2':
-    resolution: {integrity: sha512-3QGFX9DOvk8jAEPOcwCEbkLpagFvvjoeuUCTUyYUlsu1Mf5itUaw+RL4mfD3Udbqk9xfVTSlkm2Xa357vwWlxw==}
+  '@scalar/types@0.31.0':
+    resolution: {integrity: sha512-PFNIaZymTaisk0OlTEsDzGBX/ilmR43IobsEGKbFReKWCdEpAKN4lnjZ/GuRD9B3iKMHDM52erP/kXkhrihszA==}
     engines: {node: '>=22'}
 
-  '@scalar/validation@0.6.7':
-    resolution: {integrity: sha512-xvmeYb0LOg9B598oVA/1fs9MvnMdtWjQYG3v2Wgftewizr7tQjsdDYT1TQahlDzqRG+r+ml6zlSkPrFiCE5jHQ==}
+  '@scalar/validation@0.6.9':
+    resolution: {integrity: sha512-ep4aZE96geACbUjIyx+jr7QCouCs4FUZjVnHrDPYqGQX93LeVyy0K93dtDkb0IDEqyC3iSNF2t0SUhCR2KcQdw==}
     engines: {node: '>=20'}
 
   '@simplewebauthn/browser@13.3.0':
@@ -4487,10 +4487,12 @@ packages:
   yuku-core@0.19.0:
     resolution: {integrity: sha512-kYK9e1XdfirNhkipzW0wmMcSWcVF/CWnuugodfVYRCUwvoBefweL9HzB96OiKEhsx78V5WbUxbJqlizMX869Qg==}
     engines: {node: '>=14.18.0'}
+    deprecated: 'Yuku is now one package with one core. Use "yuku" instead: https://yuku.fyi/javascript/. Existing installs keep working but get no more fixes.'
 
   yuku-parser@0.19.0:
     resolution: {integrity: sha512-XrBh9ZiQK5mJVRxZBAvD6LwRyAYrK3MFtH3+onyuxFL5hFD44EC3QOmIC1FjTj6H2MMwq46/NAI+NZxLZPZgxg==}
     engines: {node: '>=14.18.0'}
+    deprecated: 'Yuku is now one package with one core. Use "yuku" instead: https://yuku.fyi/javascript/. Existing installs keep working but get no more fixes.'
 
   zod@4.6.6:
     resolution: {integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==}
@@ -5630,33 +5632,34 @@ snapshots:
   '@rolldown/pluginutils@1.0.0-rc.17':
     optional: true
 
-  '@scalar/client-side-rendering@0.4.15':
+  '@scalar/client-side-rendering@0.4.22':
     dependencies:
-      '@scalar/helpers': 0.16.4
-      '@scalar/schemas': 0.15.0
-      '@scalar/types': 0.25.2
-      '@scalar/validation': 0.6.7
+      '@scalar/helpers': 0.19.0
+      '@scalar/schemas': 0.19.0
+      '@scalar/types': 0.31.0
+      '@scalar/validation': 0.6.9
 
-  '@scalar/helpers@0.16.4': {}
+  '@scalar/helpers@0.19.0': {}
 
-  '@scalar/hono-api-reference@0.12.16(hono@4.13.19)':
+  '@scalar/hono-api-reference@0.12.23(hono@4.13.19)':
     dependencies:
-      '@scalar/client-side-rendering': 0.4.15
+      '@scalar/client-side-rendering': 0.4.22
       hono: 4.13.19
 
-  '@scalar/schemas@0.15.0':
+  '@scalar/schemas@0.19.0':
     dependencies:
-      '@scalar/helpers': 0.16.4
-      '@scalar/validation': 0.6.7
+      '@scalar/helpers': 0.19.0
+      '@scalar/types': 0.31.0
+      '@scalar/validation': 0.6.9
 
-  '@scalar/types@0.25.2':
+  '@scalar/types@0.31.0':
     dependencies:
-      '@scalar/helpers': 0.16.4
+      '@scalar/helpers': 0.19.0
       nanoid: 5.1.16
       type-fest: 5.10.0
       zod: 4.6.7
 
-  '@scalar/validation@0.6.7': {}
+  '@scalar/validation@0.6.9': {}
 
   '@simplewebauthn/browser@13.3.0': {}
 
