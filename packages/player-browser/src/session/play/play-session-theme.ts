@@ -70,6 +70,8 @@ export interface PlaySessionTheme {
    * and timer spans); the play waits for it. It should stop early once the play is disposed.
    */
   prepareView?(): Promise<void>;
+  /** Starts a layout transition after assets are ready, resolving after the settled layout has been drawn. */
+  beginLoadingLayout?(): Promise<void> | undefined;
   /** Uploads `textures` to the GPU now, so the first frame that draws them does not stall. */
   uploadTextures?(textures: Iterable<Texture | undefined>): Promise<void>;
   /**

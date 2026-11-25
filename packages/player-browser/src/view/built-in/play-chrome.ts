@@ -1,4 +1,4 @@
-import { fitVideoBGARect } from './bga-layout.ts';
+import { fitVideoBGARect, resizeVideoBGARect } from './bga-layout.ts';
 import { pickActiveBGACue } from '../../chart/bga-timeline.ts';
 /**
  * The built-in play screen's chrome inputs (`BuiltInPlayView`): the lane geometry of the built-in playfield for the
@@ -87,6 +87,8 @@ export interface LaneGeometryContext {
   readonly play: PlayfieldRuntime;
   readonly layoutMode: GameplayLayoutMode;
   readonly beMusicStage: BeMusicStage | undefined;
+  /** Shared by the monitor chrome and the BGA target so they resize in step. */
+  readonly bgaResizeProgress?: number;
   laneGeometryCache:
     | {
         laneChannels: readonly string[];
@@ -348,7 +350,7 @@ export function resolveJudgeOffsetY(position: number, top: number, judgementY: n
 
 /** Keep the base layout/BGA fixed and publish each side's actual line for the skin's chrome. */
 function withLiftLines(ctx: BeMusicLayoutContext, layout: BeMusicGameplayLayout): BeMusicGameplayLayout {
-  const bga = resolveVideoBGA(ctx, layout.bga, resolveLaneGeometry(ctx));
+  const bga = layout.bga && resolveDisplayedBGA(ctx, layout.bga, resolveLaneGeometry(ctx));
   if (bga !== layout.bga) layout = { ...layout, bga };
   const judgeOffsetY = resolveJudgeOffsetY(
     ctx.playFrame?.playOptions.judgePosition ?? 0,
@@ -392,10 +394,10 @@ export interface BeMusicLayoutContext extends LaneGeometryContext {
 /** Resizes only opted-in built-in monitors; external skins retain their authored rectangles. */
 function resolveVideoBGA(
   ctx: LaneGeometryContext,
-  rect: BeMusicGameplayLayout['bga'],
+  rect: NonNullable<BeMusicGameplayLayout['bga']>,
   geometry: ReturnType<typeof resolveLaneGeometry>,
-): BeMusicGameplayLayout['bga'] {
-  if (!rect || !ctx.beMusicStage?.fitBGAVideoAspect || !ctx.play.bgaVideos?.size) return rect;
+): NonNullable<BeMusicGameplayLayout['bga']> {
+  if (rect.w <= 0 || !ctx.beMusicStage?.fitBGAVideoAspect || !ctx.play.bgaVideos?.size) return rect;
   const cues = ctx.play.bgaTimeline?.base ?? [];
   const cue = pickActiveBGACue(cues, ctx.play.currentSeconds()) ?? cues[0];
   const key = cue?.bmpKey;
@@ -423,6 +425,26 @@ function resolveVideoBGA(
   return fitVideoBGARect(rect, handle.video.videoWidth, handle.video.videoHeight, maxWidth);
 }
 
+function resolveDisplayedBGA(
+  ctx: LaneGeometryContext,
+  rect: NonNullable<BeMusicGameplayLayout['bga']>,
+  geometry: ReturnType<typeof resolveLaneGeometry>,
+): NonNullable<BeMusicGameplayLayout['bga']> {
+  const progress = ctx.bgaResizeProgress ?? 1;
+  if (progress === 0) return rect;
+  return resizeVideoBGARect(rect, resolveVideoBGA(ctx, rect, geometry), progress);
+}
+
+/** Whether the initial BGA video calls for a different width once its metadata is available. */
+export function needsBGALoadingResize(ctx: LaneGeometryContext): boolean {
+  const stage = ctx.beMusicStage;
+  if (!stage?.fitBGAVideoAspect || !ctx.play.bgaVideos?.size) return false;
+  const geometry = resolveLaneGeometry(ctx);
+  if (geometry.mode === 'touch' && geometry.orientation === 'landscape') return false;
+  const base = stage.resolveBGARect(geometry.right, geometry.left, geometry.twoPlayer);
+  return resolveVideoBGA(ctx, base, geometry) !== base;
+}
+
 /** The built-in BGA rect (`PlayfieldSkin.bgaTargets` of the built-in view). */
 export function collectBGATargets(ctx: BGATargetsContext, out: PlayfieldBGATarget[]): void {
   const stage = ctx.beMusicStage;
@@ -433,7 +455,11 @@ export function collectBGATargets(ctx: BGATargetsContext, out: PlayfieldBGATarge
   const geometry = resolveLaneGeometry(ctx);
   // The landscape touch layout gives the BGA's room to the lanes.
   if (geometry.mode === 'touch' && geometry.orientation === 'landscape') return;
-  const rect = resolveVideoBGA(ctx, stage.resolveBGARect(geometry.right, geometry.left, geometry.twoPlayer), geometry)!;
+  const rect = resolveDisplayedBGA(
+    ctx,
+    stage.resolveBGARect(geometry.right, geometry.left, geometry.twoPlayer),
+    geometry,
+  );
   const cached = ctx.stageBGATarget;
   if (cached && cached.x === rect.x && cached.y === rect.y && cached.w === rect.w && cached.h === rect.h) {
     out.push(cached);

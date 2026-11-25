@@ -307,10 +307,16 @@ export class PlaySession extends PlaySessionState {
     // The `start()` invocation we belong to — captured so the gate handlers below can detect a dispose-and-re-mount and
     // bail out instead of mutating a fresh play's state.
     const sceneEpoch = this.sceneStartTime;
-    // The samples (on a play that decodes through its intro) and the BGA.
-    const bgaReady = this.assetsReadyPromise ?? Promise.resolve();
-    // LOAD END gate — both the configured load-end delay AND the BGA preload need to finish.
     const isCurrent = () => !this.disposed && !this.exiting && this.sceneStartTime === sceneEpoch;
+    const bgaReady = (this.assetsReadyPromise ?? Promise.resolve()).then(async () => {
+      if (!isCurrent()) return;
+      const layoutReady = this.theme.beginLoadingLayout?.();
+      if (layoutReady === undefined) return;
+      this.assetsLoading = true;
+      await layoutReady;
+      if (isCurrent()) this.assetsLoading = false;
+    });
+    // LOAD END waits for the assets and any loading layout animation.
     if (inputStartOffsetMs !== undefined) {
       void this.delaySceneStage(inputStartOffsetMs).then(() => {
         if (isCurrent()) this.theme.moment({ kind: 'input-start', at: this.playClock() });
