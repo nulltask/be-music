@@ -96,6 +96,22 @@ struct App {
     next_index: u64,
     records: Vec<PressRecord>,
     dropped: u64,
+    out: Option<String>,
+    reported: bool,
+}
+
+/// Prints the distribution and writes the CSV.
+fn report(records: &[PressRecord], dropped: u64, out: Option<&str>) {
+    print!("{}", format_summary(records));
+    if dropped > 0 {
+        println!("# {dropped} press(es) dropped: the audio callback did not run");
+    }
+    if let Some(path) = out {
+        match std::fs::write(path, format_csv(records)) {
+            Ok(()) => println!("# wrote {path}"),
+            Err(error) => eprintln!("cannot write {path}: {error}"),
+        }
+    }
 }
 
 /// Moves the measured presses from the audio callback into `records`.
@@ -186,6 +202,13 @@ impl ApplicationHandler for App {
         self.drain();
         event_loop.set_control_flow(ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(20)));
     }
+
+    /// Reports here: on macOS, Quit (Cmd+Q) terminates the process without returning from `run_app`.
+    fn exiting(&mut self, _: &ActiveEventLoop) {
+        self.drain();
+        report(&self.records, self.dropped, self.out.as_deref());
+        self.reported = true;
+    }
 }
 
 fn main() {
@@ -254,35 +277,35 @@ fn main() {
         std::process::exit(1);
     });
 
-    let (records, dropped) = match options.auto {
+    match options.auto {
         Some(presses) => {
             let mut records = Vec::new();
             let dropped = press_automatically(&shared, presses, &mut records);
-            (records, dropped)
+            drop(stream);
+            report(&records, dropped, options.out.as_deref());
         }
         None => {
             let event_loop = EventLoop::new().unwrap_or_else(|error| {
                 eprintln!("cannot start the event loop: {error}");
                 std::process::exit(1);
             });
-            let mut app = App { shared, window: None, next_index: 0, records: Vec::new(), dropped: 0 };
+            let mut app = App {
+                shared,
+                window: None,
+                next_index: 0,
+                records: Vec::new(),
+                dropped: 0,
+                out: options.out.clone(),
+                reported: false,
+            };
             if let Err(error) = event_loop.run_app(&mut app) {
                 eprintln!("event loop error: {error}");
             }
-            app.drain();
-            (app.records, app.dropped)
-        }
-    };
-    drop(stream);
-
-    print!("{}", format_summary(&records));
-    if dropped > 0 {
-        println!("# {dropped} press(es) dropped: the audio callback did not run");
-    }
-    if let Some(path) = &options.out {
-        match std::fs::write(path, format_csv(&records)) {
-            Ok(()) => println!("# wrote {path}"),
-            Err(error) => eprintln!("cannot write {path}: {error}"),
+            drop(stream);
+            if !app.reported {
+                app.drain();
+                report(&app.records, app.dropped, app.out.as_deref());
+            }
         }
     }
 }
