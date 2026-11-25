@@ -4,6 +4,7 @@ test('keeps a Bemuse server bar in place while its charts load', async ({ player
   const { page } = player;
   const server = 'https://pending-bemuse.example';
   const title = 'Bemuse pending-bemuse.example';
+  const row = page.locator('be-music-chart-list').getByRole('button', { name: title });
   let release!: () => void;
   const pending = new Promise<void>((resolve) => {
     release = resolve;
@@ -22,14 +23,21 @@ test('keeps a Bemuse server bar in place while its charts load', async ({ player
     }
   });
   try {
-    await player.open({ 'be-music.bemuse-server-urls': JSON.stringify([`${server}/index.json`]) });
+    await player.open({
+      'be-music.built-in-skin': 'native',
+      'be-music.bemuse-server-urls': JSON.stringify([`${server}/index.json`]),
+    });
+    await page.getByRole('button', { name: 'Close drop card' }).click();
     await player.cursorTo((bar) => bar.kind === 'folder' && bar.title === title, title);
-    await player.key('Enter');
+    await expect(row).toBeDisabled();
+    await expect(row).toHaveCSS('opacity', '0.45');
+    await row.press('Enter');
     expect((await player.state()).cursor?.bar).toMatchObject({ kind: 'folder', title });
   } finally {
     release();
   }
   await expect.poll(async () => (await player.state()).library.charts).toBe(1);
+  await expect(row).toBeEnabled();
   expect((await player.state()).cursor?.bar).toMatchObject({ kind: 'folder', title });
   const selected = await player.openFolder(title);
   expect(selected.cursor?.bar).toMatchObject({ kind: 'chart', title: 'Server chart' });
