@@ -2,15 +2,12 @@ import { paneOptions, selectBinding } from '../../pane-controls.ts';
 import { onPlayerLangChange, playerLang } from '../../player-copy.ts';
 import { optionLabel } from './labels.ts';
 // The Options dialog's Capture folder. It is built with the dialog as `this` (`OptionsDialog`).
-import { RECORD_LABEL } from '../../recording-controller.ts';
 import { recordingFormatOptions, recordingQualityOptions } from '../../recording-format-choice.ts';
 import { storeRecordingFormat } from '../../services/settings.ts';
 import type { OptionsDialog } from './index.ts';
 /** Capture: recording the play screen as a video in the chosen format, and screenshots. */
 export function buildCaptureFolder(this: OptionsDialog): void {
-  this.recordController = this.place('record')
-    .addButton({ title: RECORD_LABEL })
-    .on('click', () => this.guiState['record']());
+  this.place('recordGameplay').addBinding(this.guiState, 'recordGameplay', { label: 'Record every play' });
   // The container and codec of the video: MP4 · H.264 unless the player picks another, remembered across visits.
   const format = selectBinding(
     this.place('recordingFormat'),

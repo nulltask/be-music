@@ -99,6 +99,7 @@ export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'web
       },
     },
     result: {
+      ...(definition.result.entranceMs !== undefined ? { entranceMs: definition.result.entranceMs } : {}),
       draw(surface, frame) {
         const target = surfaceFor(surface);
         if (!target) return;

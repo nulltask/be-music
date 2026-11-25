@@ -232,6 +232,7 @@ export interface OptionSettings {
   playLayout: PlayLayout;
   renderer: PlayerGUIState['renderer'];
   recordingFormat: string;
+  recordGameplay: boolean;
   recordingQuality: RecordingQuality;
   workerCount: number;
   compressorTuning: Record<TunableCompressor, CompressorTuning>;
@@ -351,6 +352,7 @@ function pickSettings(raw: Record<string, unknown>): Partial<OptionSettings> {
   // The settings this document was saved with default to LR2 rules, as a fresh visit does.
   const storedRuleset: RulesetId = isRulesetId(raw.judgeRuleset) ? raw.judgeRuleset : 'lr2';
   assign(settings, 'autoPlay', booleanOf(raw.autoPlay));
+  assign(settings, 'recordGameplay', booleanOf(raw.recordGameplay));
   assign(settings, 'autoPauseOnBlur', booleanOf(raw.autoPauseOnBlur));
   assign(settings, 'showFPS', booleanOf(raw.showFPS));
   assign(settings, 'peakGain', booleanOf(raw.peakGain));
@@ -871,6 +873,7 @@ export function overlayOptionSettings(state: PlayerGUIState, settings: Partial<O
   assignState('playLayout');
   assignState('renderer');
   assignState('recordingFormat');
+  assignState('recordGameplay');
   assignState('recordingQuality');
 }
 
@@ -1055,6 +1058,7 @@ export function captureOptionSettings(
     playLayout: state.playLayout,
     renderer: state.renderer,
     recordingFormat: state.recordingFormat,
+    recordGameplay: state.recordGameplay,
     recordingQuality: state.recordingQuality,
     workerCount: extras.workerCount,
     compressorTuning: extras.compressorTuning,

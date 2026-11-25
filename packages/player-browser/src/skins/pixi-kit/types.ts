@@ -187,6 +187,7 @@ export interface PixiResultFrame extends BeMusicResultFrame {
 }
 
 export interface PixiResultSkin {
+  readonly entranceMs?: number;
   render(frame: PixiResultFrame): void;
 }
 

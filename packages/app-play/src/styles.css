@@ -739,16 +739,6 @@ textarea {
   width: auto;
   margin-inline-start: auto;
 }
-.options-row.recording .options-button {
-  background: var(--destructive);
-  color: var(--background);
-  animation: record-pulse 1.4s ease-in-out infinite;
-}
-.options-row.arming .options-button {
-  background: var(--primary);
-  color: var(--primary-foreground);
-  animation: record-arming 2s ease-in-out infinite;
-}
 /* Nested tabs (Skin & display's skin systems) sit inside a section. */
 .options-tab-panel .options-tabs > [role='tab'] {
   font-size: 0.8125rem;
@@ -817,26 +807,6 @@ textarea {
 }
 .skin-config-pane > .options-folder-content > .options-tabs > [role='tabpanel'] {
   padding-top: 8px;
-}
-
-@keyframes record-arming {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 50%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 6px 2px color-mix(in oklch, var(--primary) 50%, transparent);
-  }
-}
-
-@keyframes record-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in oklch, var(--destructive) 60%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 8px 2px color-mix(in oklch, var(--destructive) 60%, transparent);
-  }
 }
 
 /*

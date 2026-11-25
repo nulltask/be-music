@@ -72,7 +72,7 @@ export interface ResultRouteDeps {
   /** The player's keys the screen reads its control buttons by (`ControlSettings`), as it opens. */
   readonly controls: () => ControlSettings;
   /** The scene router: the result takes the stage from the play, and leaves it before the next stage or a retry. */
-  readonly router: Pick<SceneRouter<PlayerScene, PlayScene, SelectScene>, 'show' | 'leave'>;
+  readonly router: Pick<SceneRouter<PlayerScene, PlayScene, SelectScene>, 'show' | 'leave' | 'play'>;
   /** The library: the chart's asset source. */
   readonly library: Pick<LibraryService, 'collection'>;
   /**
@@ -99,7 +99,7 @@ export interface ResultRouteDeps {
   /** The beatoraja theme's result entries, loaded as kits, and its jingles. */
   readonly beatoraja: Pick<BeatorajaThemeService, 'loadBeatorajaResultKit' | 'beatorajaThemeBGM'>;
   /** The Be-Music Skin the built-in family draws with. */
-  readonly builtIn: Pick<BuiltInThemeService, 'builtInKit'>;
+  readonly builtIn: Pick<BuiltInThemeService, 'builtInKit'> & Partial<Pick<BuiltInThemeService, 'recordableKit'>>;
   /** A single play's replay auto-save, by the setting latched at the play's start. */
   readonly replayAutoSave: Pick<ReplayAutoSave, 'savePlay'>;
   /** Ranks a single play. */
@@ -401,6 +401,7 @@ export class ResultRoute {
     // or the course asked for its result, so it carries the run on.
     const shown = await this.router.show(resultScene, {
       role: 'result',
+      resultRecordingEntranceMs: resultScene.recordingEntranceMs,
       playDispose: disposeKeepingAudioTail,
       continuesRun: true,
     });
@@ -525,8 +526,10 @@ export class ResultRoute {
         : undefined;
     // A single play's slots, or the course run's; a course stage has none (beatoraja saves the course as one run).
     const replaySlots = run === 'single' ? this.playReplaySlots(data, kept) : mode.replaySlots;
-    const kit: ResultSceneKit =
-      lr2ResultSkin !== undefined ? { family: 'lr2', skin: lr2ResultSkin } : this.builtIn.builtInKit;
+    const builtInKit = this.router.play?.recording?.isRecording()
+      ? (this.builtIn.recordableKit ?? this.builtIn.builtInKit)
+      : this.builtIn.builtInKit;
+    const kit: ResultSceneKit = lr2ResultSkin !== undefined ? { family: 'lr2', skin: lr2ResultSkin } : builtInKit;
     const resultScene = createResultScene(kit, {
       controls: this.controls(),
       // The LR2 skin shows the course of the result (`result.course`): the stage's course, or the course run.
@@ -547,6 +550,7 @@ export class ResultRoute {
     // or the course asked for its result, so it carries the run on.
     const shown = await this.router.show(resultScene, {
       role: 'result',
+      resultRecordingEntranceMs: resultScene.recordingEntranceMs,
       playDispose: disposeKeepingAudioTail,
       continuesRun: true,
     });

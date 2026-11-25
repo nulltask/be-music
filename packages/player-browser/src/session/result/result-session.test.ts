@@ -125,6 +125,31 @@ function createSession(
 }
 
 describe('ResultSession', () => {
+  it('defers leaving until recording finishes, then starts the normal result fade', () => {
+    const { session, on } = createSession({ timing: { inputDelayMs: 0, fadeOutMs: 500, skipsResultSteps: true } });
+    session.setRecordingHeld(true);
+    session.enter(0);
+    session.dispatch({ type: 'continue' });
+    expect(session.frame(3_000).leaving).toBeUndefined();
+    expect(on.continue).not.toHaveBeenCalled();
+    session.setRecordingHeld(false);
+    expect(session.frame(3_499).leaving).toEqual({ to: 'continue', atMs: 3_000 });
+    expect(on.continue).not.toHaveBeenCalled();
+    session.frame(3_500);
+    expect(on.continue).toHaveBeenCalledOnce();
+  });
+
+  it('does not skip the graph animation when continuing before capture ends', () => {
+    const { session } = createSession({ timing: { inputDelayMs: 0 } });
+    session.setRecordingHeld(true);
+    session.enter(0);
+    session.frame(300);
+    session.dispatch({ type: 'continue' });
+    expect(session.frame(500).graphShownAtMs).toBeUndefined();
+    session.setRecordingHeld(false);
+    expect(session.frame(510).graphShownAtMs).toBe(500);
+  });
+
   it('draws the result with its presentation, and the graphs once their time is up', () => {
     const result = playResult();
     const { session } = createSession({ result });

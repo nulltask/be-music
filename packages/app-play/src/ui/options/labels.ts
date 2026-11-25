@@ -270,7 +270,7 @@ export const OPTION_LABELS_JA: Readonly<Record<string, string>> = {
   'Local data…': '保存データ…',
   'Use WebCodecs encoder': 'WebCodecs のエンコーダーを使う',
   Resize: '縮小',
-  '● Record gameplay video': '● プレイ動画を録画',
+  'Record every play': '毎回プレイを録画',
   'Local folders': 'ローカルフォルダ',
   'Bemuse servers': 'Bemuse サーバー',
   'Difficulty tables': '難易度表',

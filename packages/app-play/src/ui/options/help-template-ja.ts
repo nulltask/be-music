@@ -696,8 +696,8 @@ export const OPTIONS_HELP_JA = html`
     <section class="help-menu-folder">
       <h4 class="help-menu-folder-title">Capture</h4>
       <dl class="help-menu-items">
-        <dt>● Record gameplay video</dt>
-        <dd>次のプレイを動画として録画してダウンロードします。BGA の枠に映したカメラの映像も記録されます。</dd>
+        <dt>毎回プレイを録画</dt>
+        <dd>プレイからリザルトまで録画し、動画を自動でダウンロードします。BGA に表示したカメラ映像も入ります。</dd>
         <dt>Video format</dt>
         <dd>動画のコンテナとコーデック。既定は MP4 · H.264 で、MP4 / WebM と H.265・AV1・VP9・VP8 から選べます。</dd>
         <dt>Video quality</dt>
@@ -768,9 +768,8 @@ export const OPTIONS_HELP_JA = html`
         で選んだ LR2 や beatoraja の仕様に従います。リプレイにはプレイしたときのオプションが記録されます。
       </li>
       <li>
-        <strong>Record gameplay video</strong> ボタンを押すと、次の再生を動画（<strong>Video format</strong>
-        で選んだ形式、既定は MP4 · H.264）として録画してダウンロードできます (ブラウザが MediaRecorder
-        に対応している必要があります — Acknowledgements / Browser checks を参照)。
+        <strong>毎回プレイを録画</strong> をオンにすると、リザルトのあとに動画を自動でダウンロードします。 Native
+        スキンで録画するときは、プレイ画面とリザルト画面に Synesthesia が適用されます。
       </li>
       <li>
         選曲画面で現在のスキンの <strong>PLAY OPTION</strong> パネルからも、同じオプション (Random / Mirror /

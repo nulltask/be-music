@@ -44,7 +44,7 @@ import { showPlayOptionMismatch } from '../ui/play-option-mismatch.ts';
 import { showMissingReplayCharts } from '../ui/replay-missing.ts';
 import { showMissingCourseStages } from '../ui/course-missing.ts';
 import { readDeviceSignals, type DeviceProfile } from '../device-profile.ts';
-import { captureScreenshot, finalizeRecordingIfActive, toggleRecording } from '../recording-controller.ts';
+import { captureScreenshot, finalizeRecordingIfActive } from '../recording-controller.ts';
 import type { PlayerGUIState, PlayerScene, PlayerWebElements, SkinFamilyOverride } from '../types.ts';
 import { createPlayerGUIState, readCompressorRequest, storeBuiltInSkinId } from '../services/settings.ts';
 import { BE_MUSIC_SKINS } from '../services/built-in-skins.ts';
@@ -116,8 +116,8 @@ export class PlayerWebApp {
   /** Mounting {@link sceneHost} on the page, started as the first scene shows (`mountStage`). */
   private stageMount: Promise<void> | undefined;
   /**
-   * The one owner of the scene on the stage (ADR 0006): every transition finalizes a video recording in progress, hands
-   * the stage to the next scene (the one showing exits as it enters) and then disposes the scene that left, unless it is
+   * The scene router (ADR 0006) hands the stage to the next scene (the one showing exits as it enters) and disposes
+   * the scene that left once its recording finishes, unless it is
    * the select scene, which it keeps across a decide, play and result. Transitions run one at a time, and a scene made
    * for a navigation a newer one replaced is disposed instead of shown.
    */
@@ -137,7 +137,10 @@ export class PlayerWebApp {
         this.replaySlotsPanel.hide();
       },
     },
-    recorder: { finalize: () => finalizeRecordingIfActive(this.recording.deps()) },
+    recorder: {
+      finalize: () => finalizeRecordingIfActive(this.recording.deps()),
+      prepareResult: (play) => this.recording.prepareResult(play.recording),
+    },
     // A navigation the scenes did not ask for (a drop, a skin or theme change, files or a replay loaded) ends the
     // course run, so the next single play is not taken for its next stage.
     onInterrupt: () => {
@@ -234,7 +237,7 @@ export class PlayerWebApp {
   private compressorMode: 'split' | 'legacy' = 'split';
   /**
    * GUI state object the Tweakpane controllers read / write. Held on the instance so the GUI build code and the runtime
-   * handlers (`toggleRecording` etc.) share a single source of truth — programmatic updates go through `state.foo = …`
+   * handlers share a single source of truth — programmatic updates go through `state.foo = …`
    * + `controller.updateDisplay()`.
    */
   private readonly guiState: PlayerGUIState;
@@ -316,9 +319,6 @@ export class PlayerWebApp {
       actions: {
         openFolder: () => void this.dropTarget.openFolder(),
         openFiles: () => this.elements.filesInput.click(),
-        record: () => {
-          void toggleRecording(this.recording.deps());
-        },
         screenshot: () => {
           void captureScreenshot(this.recording.deps());
         },
@@ -331,7 +331,6 @@ export class PlayerWebApp {
     });
     this.recording = new RecordingService({
       sceneHost: this.sceneHost,
-      recordController: () => this.optionsDialog.recordController,
       activeGameplay: () => this.gameplayView?.recording,
       settings: this.guiState,
       setStatus: (text) => this.status.set(text),

@@ -151,6 +151,7 @@ export interface PlaySceneRecording {
   /** Starts recording the play in `format` (MP4 · H.264 by default) at `quality` (`standard` by default). */
   startRecording(options?: { format?: RecordingFormat; quality?: RecordingQuality }): void;
   stopRecording(): Promise<GameplayRecorderResult | undefined>;
+  fadeOutRecording?(durationMs: number): void;
   isRecording(): boolean;
 }
 
@@ -417,6 +418,7 @@ class FamilyPlayScene extends SessionScene<PlayFrame, PlayIntent> implements Pla
     this.recording = {
       startRecording: (recordingOptions) => play.startRecording(recordingOptions),
       stopRecording: () => play.stopRecording(),
+      fadeOutRecording: (durationMs) => play.fadeOutRecording(durationMs),
       isRecording: () => play.isRecording(),
     };
   }

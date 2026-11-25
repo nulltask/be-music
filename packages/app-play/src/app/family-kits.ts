@@ -31,10 +31,11 @@ export interface FamilyKitsOptions {
     'beatorajaTheme' | 'loadBeatorajaPlayKit' | 'loadBeatorajaDecideKit' | 'selectSoundSet'
   >;
   /** The Be-Music Skin the built-in family draws with. */
-  readonly builtIn: Pick<BuiltInThemeService, 'beMusicSkin' | 'builtInKit'>;
+  readonly builtIn: Pick<BuiltInThemeService, 'beMusicSkin' | 'builtInKit'> &
+    Partial<Pick<BuiltInThemeService, 'recordableKit'>>;
   /** The Options dialog's "Skin system" pick (`skinFamilyOverride`) and the battle mode, which picks the LR2 play skin. */
   readonly guiState: Pick<PlayerGUIState, 'skinFamilyOverride' | 'battleMode'> &
-    Partial<Pick<PlayerGUIState, 'judgeRuleset'>>;
+    Partial<Pick<PlayerGUIState, 'judgeRuleset' | 'recordGameplay'>>;
 }
 
 /** The kit a play is drawn with, and on a beatoraja theme the play entry it was loaded from. */
@@ -152,7 +153,10 @@ export class FamilyKits {
               { kind: 'play', playVariant: pickLR2PlaySkinVariant(this.lr2.playSkins, skinChart, battle) },
             )
           : pickLR2PlaySkin(this.lr2.playSkins, skinChart, battle);
-    if (playSkin === undefined) return { kit: this.builtIn.builtInKit };
+    if (playSkin === undefined) {
+      const { builtInKit, recordableKit } = this.builtIn;
+      return { kit: this.guiState.recordGameplay ? (recordableKit ?? builtInKit) : builtInKit };
+    }
     const invisibleNoteSkin = this.lr2.playSkins['9'];
     return {
       kit: { family: 'lr2', skin: playSkin, ...(invisibleNoteSkin !== undefined ? { invisibleNoteSkin } : {}) },

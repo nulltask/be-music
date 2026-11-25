@@ -92,7 +92,11 @@ class FakeHost implements SceneRouterHost<FakeScene> {
 }
 
 function setup(
-  options: { onError?: (error: unknown, step: string) => void; onInterrupt?: (log: string[]) => void } = {},
+  options: {
+    onError?: (error: unknown, step: string) => void;
+    onInterrupt?: (log: string[]) => void;
+    prepareResult?: (play: FakePlay) => ((entranceMs: number) => Promise<void>) | undefined;
+  } = {},
 ) {
   const log: string[] = [];
   const host = new FakeHost(log);
@@ -102,7 +106,7 @@ function setup(
   const { onInterrupt } = options;
   const router = new SceneRouter<FakeScene, FakePlay>({
     host,
-    recorder: { finalize },
+    recorder: { finalize, ...('prepareResult' in options ? { prepareResult: options.prepareResult } : {}) },
     ...(options.onError !== undefined ? { onError: options.onError } : {}),
     ...(onInterrupt !== undefined ? { onInterrupt: () => onInterrupt(log) } : {}),
   });
@@ -119,6 +123,28 @@ function setup(
 const withTail = (play: FakePlay): void => play.dispose({ preserveAudioTail: true });
 
 describe('SceneRouter.show', () => {
+  test('captures the mounted result before disposing the play or changing screens again', async () => {
+    const finished = gate();
+    const capture = vi.fn(() => finished.promise);
+    const { router, log, scene, play, finalize } = setup({ prepareResult: () => capture });
+    const gameplay = play('play');
+    const result = Object.assign(scene('result'), { setRecordingHeld: vi.fn() });
+    await router.show(gameplay, { role: 'play' });
+    finalize.mockClear();
+    await router.show(result, { role: 'result', playDispose: withTail, resultRecordingEntranceMs: 2_000 });
+    expect(capture).toHaveBeenCalledWith(2_000);
+    expect(result.setRecordingHeld).toHaveBeenCalledWith(true);
+    expect(finalize).not.toHaveBeenCalled();
+    const leave = router.leave();
+    await settle();
+    expect(router.current).toBe(result);
+    expect(log).not.toContain('dispose:play:tail');
+    finished.open();
+    await expect(leave).resolves.toBe(true);
+    expect(log).toContain('dispose:play:tail');
+    expect(result.setRecordingHeld).toHaveBeenLastCalledWith(false);
+  });
+
   test('tells the stage the role each scene is shown as', async () => {
     const { router, host, scene, play } = setup();
     await router.show(scene('select'), { role: 'select' });

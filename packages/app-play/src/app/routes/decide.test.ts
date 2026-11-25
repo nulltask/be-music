@@ -14,14 +14,14 @@ import {
 import { systemSoundSetFromBeatoraja, type BrowseSnapshot, type LibraryChart } from '@be-music/player-scene-model';
 import { describe, expect, test, vi } from 'vite-plus/test';
 import type { FamilyDispatchState } from '../../family-dispatch.ts';
-import { startArmedRecording, type RecordingDeps } from '../../recording-controller.ts';
+import { startAutomaticRecording, type RecordingDeps } from '../../recording-controller.ts';
 import { PlayOptionsService } from '../../services/play-options.ts';
 import type { PlayerScene, PlayerWebElements } from '../../types.ts';
 import { SceneRouter } from '../scene-router.ts';
 import { DecideRoute, playingFamily, type DecideRouteDeps } from './decide.ts';
 
 vi.mock('@be-music/player-browser/host', () => ({ createDecideScene: vi.fn() }));
-vi.mock('../../recording-controller.ts', () => ({ startArmedRecording: vi.fn() }));
+vi.mock('../../recording-controller.ts', () => ({ startAutomaticRecording: vi.fn() }));
 
 type Family = DecideSceneKit['family'];
 
@@ -281,10 +281,10 @@ describe('DecideRoute: a chart’s built-in decide screen', () => {
     );
     // Pitch follows tempo at the slider's tempo: the tempo slider stays live during the play.
     expect(h.deps.lockReplayOptionsForPlay).toHaveBeenCalledWith(true, chartEntry('a'));
-    // A recording armed on the select screen starts with the play.
-    expect(startArmedRecording).toHaveBeenLastCalledWith(h.recording);
-    expect(play.start.mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(startArmedRecording).mock.invocationCallOrder.at(-1)!,
+    // Automatic recording starts with the play.
+    expect(startAutomaticRecording).toHaveBeenLastCalledWith(h.recording);
+    expect(play.start.mock.invocationCallOrder[0]).toBeGreaterThan(
+      vi.mocked(startAutomaticRecording).mock.invocationCallOrder.at(-1)!,
     );
     expect(h.deps.beatorajaSkinOptions.refreshBeatorajaPlaySkinOptions).toHaveBeenCalledOnce();
     expect(h.deps.playChart).not.toHaveBeenCalled();

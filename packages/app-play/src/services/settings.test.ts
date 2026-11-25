@@ -193,7 +193,6 @@ describe('createPlayerGUIState', () => {
   const actions = {
     openFolder: vi.fn(),
     openFiles: vi.fn(),
-    record: vi.fn(),
     screenshot: vi.fn(),
   };
   const create = (storage: SettingStorage, overrides: { devicePixelRatio?: number; signals?: DeviceSignals } = {}) =>
@@ -236,7 +235,7 @@ describe('createPlayerGUIState', () => {
       status: 'Ready',
     });
     expect(state.openFolder).toBe(actions.openFolder);
-    expect(state.record).toBe(actions.record);
+    expect(state.recordGameplay).toBe(false);
   });
 
   test('picks up every remembered setting from its be-music.* key', () => {

@@ -255,7 +255,6 @@ export class OptionsDialog {
   public readonly compressorStageControllers: OptionRow[] = [];
   /** Compressor tuning in slider units, restored from the last visit; seeds every gameplay mount. */
   public readonly compressorTunings: Record<TunableCompressor, CompressorTuning> = readStoredCompressorTunings();
-  public recordController: OptionButton | undefined;
   /** The Capture folder's Video format and Video quality, locked while a recording runs. */
   public recordingSettingControllers: PaneBinding[] = [];
   /**
@@ -470,7 +469,7 @@ export class OptionsDialog {
   }
   /**
    * Builds the Options dialog (`#options-modal`) and wires every controller to the gameplay / scene state. Centralizing
-   * this in one method lets us bind handles to specific controllers (`recordController`, `compressorStageControllers`)
+   * this in one method lets us bind handles to specific controllers (`compressorStageControllers`)
    * up-front, so runtime code can address them by name (renaming the record button when capture starts, hiding the
    * per-stage controls on compressor mode change) without re-querying the DOM.
    *

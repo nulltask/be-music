@@ -47,7 +47,7 @@ import { sanitizeFilenameStem } from '../../player-utils.ts';
 import { resolvePlayLayoutMode, type DeviceProfile } from '../../device-profile.ts';
 import { storeHiSpeed } from '../../hi-speed-storage.ts';
 import { allowsLiveTempo, describePlayingStatus, tempoPercentFromTempo } from '../../play-tempo-settings.ts';
-import { startArmedRecording, type RecordingDeps } from '../../recording-controller.ts';
+import { startAutomaticRecording, type RecordingDeps } from '../../recording-controller.ts';
 import type { LeaderboardPanel } from '../../leaderboard-ui.ts';
 import type { CourseRunService } from '../../services/courses.ts';
 import type { LibraryService } from '../../services/library.ts';
@@ -164,7 +164,7 @@ export interface PlayRouteDeps {
   readonly replayRecorder: Omit<ReplayRecorderInfo, 'engine'>;
   /** `window.__beMusicTest`, when installed: the replay of a stage that shows no result. */
   readonly testHook: Pick<TestHookRecorder, 'recordReplay'> | undefined;
-  /** The video recording's deps: a recording armed on the select screen starts with the play. */
+  /** The video recording's deps: automatic recording starts with the play. */
   readonly recordingDeps: () => RecordingDeps;
   /** Names the next saved recording after the chart. */
   readonly setRecordingFilenameBase: (base: string) => void;
@@ -808,12 +808,8 @@ export class PlayRoute {
       });
       return;
     }
+    startAutomaticRecording(this.recordingDeps());
     view.start();
-    // Consume the "user pressed Record on the select screen" flag now that gameplay is prepared — `startRecording`
-    // requires the gameplay AudioContext to exist, which only happens after `prepare`. Failing here is non-fatal: the
-    // select-screen click already nudged the user that capture would start; if it doesn't (codec missing / no
-    // MediaRecorder), the surfaced error replaces the armed status without breaking gameplay.
-    startArmedRecording(this.recordingDeps());
   }
 
   /**

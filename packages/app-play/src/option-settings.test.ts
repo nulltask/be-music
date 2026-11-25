@@ -157,7 +157,7 @@ describe('captureOptionSettings', () => {
         },
         devicePixelRatio: 2,
         builtInSkinId: (stored) => stored ?? 'native',
-        actions: { openFolder() {}, openFiles() {}, record() {}, screenshot() {} },
+        actions: { openFolder() {}, openFiles() {}, screenshot() {} },
       });
     const expected = {
       autoPlay: true,
@@ -323,6 +323,7 @@ describe('captureOptionSettings', () => {
       playLayout: 'touch',
       renderer: 'webgpu',
       recordingFormat: 'mp4/avc',
+      recordGameplay: true,
       recordingQuality: 'very-high',
       workerCount: 3,
       compressorTuning: defaultCompressorTunings(),

@@ -8,7 +8,12 @@ import type { BeMusicJSON } from '@be-music/chart-source';
 import type { PlayResult, PlayRunKind, ReplaySlotState, SystemSoundSet } from '@be-music/player-scene-model';
 import type { BrowserAssetSource } from '../collection/types.ts';
 import type { AudioService } from '../runtime/audio-service.ts';
-import { ResultSession, type ResultGaugeGraph, type ResultSessionEvents } from '../session/result/result-session.ts';
+import {
+  RESULT_GRAPH_DRAW_MS,
+  ResultSession,
+  type ResultGaugeGraph,
+  type ResultSessionEvents,
+} from '../session/result/result-session.ts';
 import { resolveFamilyControlActions } from '../session/controls/control-actions.ts';
 import { SessionScene, type SessionSceneOptions } from '../session/session-scene.ts';
 import { logger } from '../logger.ts';
@@ -71,6 +76,8 @@ export interface ResultSceneOptions extends SessionSceneOptions {
 
 /** The result screen as a scene. */
 export interface ResultScene extends SessionScene<ResultFrame, ResultIntent> {
+  readonly recordingEntranceMs: number;
+  setRecordingHeld(held: boolean): void;
   /**
    * Takes the player's new settings for the kit's skin; the next frame draws with them. The scene keeps its family and
    * its skin: a kit of another family or skin is ignored.
@@ -141,14 +148,27 @@ function ignoreKit(kit: ResultSceneKit, family: ResultSceneKit['family']): void 
 
 class FamilyResultScene extends SessionScene<ResultFrame, ResultIntent> implements ResultScene {
   private readonly familyView: FamilyResultView;
+  private readonly resultSession: ResultSession;
+  public readonly recordingEntranceMs: number;
 
-  public constructor(session: ResultSession, familyView: FamilyResultView, options: SessionSceneOptions) {
-    super(session, familyView.view, options);
+  public constructor(
+    resultSession: ResultSession,
+    familyView: FamilyResultView,
+    options: SessionSceneOptions,
+    recordingEntranceMs: number,
+  ) {
+    super(resultSession, familyView.view, options);
     this.familyView = familyView;
+    this.resultSession = resultSession;
+    this.recordingEntranceMs = recordingEntranceMs;
   }
 
   public updateKit(kit: ResultSceneKit): void {
     this.familyView.updateKit(kit);
+  }
+
+  public setRecordingHeld(held: boolean): void {
+    this.resultSession.setRecordingHeld(held);
   }
 }
 
@@ -157,6 +177,7 @@ class FamilyResultScene extends SessionScene<ResultFrame, ResultIntent> implemen
  * where it leads; the kit's family view draws it. Show it with `PixiSceneHost.setScene`, and dispose it once it is gone.
  */
 export function createResultScene(kit: ResultSceneKit, options: ResultSceneOptions): ResultScene {
+  const timing = resultTimingOf(kit);
   const session = new ResultSession({
     result: options.result,
     actions: resolveFamilyControlActions(kit.family, options.controls),
@@ -164,14 +185,25 @@ export function createResultScene(kit: ResultSceneKit, options: ResultSceneOptio
     ...(options.playChart !== undefined ? { playChart: options.playChart } : {}),
     sounds: options.sounds,
     audio: options.audio,
-    timing: resultTimingOf(kit),
+    timing,
     ...(options.replaySlots !== undefined ? { replaySlots: options.replaySlots } : {}),
     ...(options.gaugeGraphs !== undefined ? { gaugeGraphs: options.gaugeGraphs } : {}),
     on: options.on,
   });
-  return new FamilyResultScene(session, createResultView(kit, session, options), {
-    ...(options.keyTarget !== undefined ? { keyTarget: options.keyTarget } : {}),
-    ...(options.controls !== undefined ? { controls: options.controls } : {}),
-    ...(options.now !== undefined ? { now: options.now } : {}),
-  });
+  const entranceMs =
+    kit.family === 'built-in'
+      ? kit.effects === 'off'
+        ? 0
+        : Math.max(0, kit.skin.result.entranceMs ?? 0)
+      : timing.inputDelayMs + (kit.family === 'lr2' ? RESULT_GRAPH_DRAW_MS : 0);
+  return new FamilyResultScene(
+    session,
+    createResultView(kit, session, options),
+    {
+      ...(options.keyTarget !== undefined ? { keyTarget: options.keyTarget } : {}),
+      ...(options.controls !== undefined ? { controls: options.controls } : {}),
+      ...(options.now !== undefined ? { now: options.now } : {}),
+    },
+    entranceMs,
+  );
 }

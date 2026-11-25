@@ -7,13 +7,6 @@ import {
   type RecordingFormat,
   type RecordingQuality,
 } from '@be-music/player-browser/recording';
-import type { OptionButton } from './ui/options-controls.ts';
-import { setDisabled, setButtonTitle } from './pane-controls.ts';
-
-/** The Options dialog button that records the play screen (gameplay) as a video. */
-export const RECORD_LABEL = '● Record gameplay video';
-/** The same button while a recording runs. */
-export const STOP_RECORDING_LABEL = '■ Stop recording';
 
 const recordLog = logger('record');
 
@@ -26,6 +19,7 @@ export interface GameplayRecorder {
   startRecording(options?: { format?: RecordingFormat; quality?: RecordingQuality }): void;
   stopRecording(): Promise<{ blob: Blob; mimeType: string; durationMs: number; seekable: boolean } | undefined>;
   isRecording(): boolean;
+  fadeOutRecording?(durationMs: number): void;
 }
 
 /**
@@ -36,11 +30,9 @@ export interface GameplayRecorder {
  */
 export interface RecordingDeps {
   readonly sceneHost: PixiSceneHost;
-  readonly recordController: OptionButton | undefined;
   /** Whichever gameplay view is mounted right now, or `undefined` when neither family is active. */
   getActiveGameplay(): GameplayRecorder | undefined;
-  getAutoRecordArmed(): boolean;
-  setAutoRecordArmed(value: boolean): void;
+  getRecordGameplay(): boolean;
   /** Snapshot of the recording filename stem at call time; the player updates it per chart in `playChart`. */
   getRecordingFilenameBase(): string;
   /** The Options dialog's "Video format": the container and codec a new recording is written in. */
@@ -159,102 +151,39 @@ export async function captureScreenshot(deps: RecordingDeps): Promise<void> {
     deps.setStatus(`Screenshot failed: ${message}`);
   }
 }
-
-/**
- * Toggles the recording state of the active gameplay view, or arms / disarms the "record on next song" auto-flag
- * when no gameplay view is mounted yet (= user pressed Record from song-select). Updates the GUI controller's
- * label / class to reflect the current state.
- */
-export async function toggleRecording(deps: RecordingDeps): Promise<void> {
-  const gameplay = deps.getActiveGameplay();
-  const controller = deps.recordController;
-  if (!gameplay) {
-    // No chart is playing yet — interpret the click as "arm capture for the next song I pick" so the user can stage
-    // recording from the song-select screen without having to hit Record at the precise moment gameplay starts. A
-    // second click before picking a song disarms.
-    const next = !deps.getAutoRecordArmed();
-    deps.setAutoRecordArmed(next);
-    if (next) {
-      controller?.element.classList.add('arming');
-      setButtonTitle(controller, '◉ Records the next play');
-      deps.setStatus('Recording armed — pick a song to start capturing');
-    } else {
-      controller?.element.classList.remove('arming');
-      setButtonTitle(controller, RECORD_LABEL);
-      deps.setStatus('Recording disarmed');
-    }
-    return;
-  }
-  if (gameplay.isRecording()) {
-    setDisabled(controller, true);
-    deps.setStatus('Finalizing recording…');
-    try {
-      const result = await gameplay.stopRecording();
-      if (result) {
-        // A WebM from the `MediaRecorder` fallback has no seek index — post-process it to inject `Duration` + `Cues` so
-        // external players can seek inside it. Falls back to the raw blob if the patch fails, so a take is never
-        // silently lost. The WebCodecs backend, and MP4 from either, carry the index already.
-        const seekable = result.seekable ? result.blob : await makeWebMSeekable(result.blob);
-        // Named after what was written: the browser may have fallen back to another container.
-        const filename = `${deps.getRecordingFilenameBase()}.${recordingFileExtension(result.mimeType)}`;
-        downloadBlob(seekable, filename);
-        const seconds = (result.durationMs / 1000).toFixed(1);
-        const sizeMb = (seekable.size / (1024 * 1024)).toFixed(1);
-        deps.setStatus(`Saved ${filename} (${seconds}s, ${sizeMb} MB)`);
-      }
-    } finally {
-      controller?.element.classList.remove('recording');
-      setButtonTitle(controller, RECORD_LABEL);
-      setDisabled(controller, false);
-      deps.setRecordingSettingsLocked?.(false);
-    }
-    return;
-  }
-  try {
-    gameplay.startRecording({ format: deps.getRecordingFormat(), quality: deps.getRecordingQuality() });
-    deps.setRecordingSettingsLocked?.(true);
-    controller?.element.classList.add('recording');
-    setButtonTitle(controller, STOP_RECORDING_LABEL);
-    deps.setStatus('Recording…');
-  } catch (error) {
-    recordLog.warn('start failed', error);
-    deps.setStatus(`Recording unavailable: ${(error as Error).message}`);
-  }
-}
-
-/**
- * Stop the in-flight recording (if any) before a gameplay-view dispose. Sequencing matters: `MediaRecorder.stop()`
- * waits for a `'stop'` event from its source stream — disposing the gameplay view first kills the AudioContext that
- * feeds it, so the recorder never sees the event and the save never finalizes. Caller-side: invoke this BEFORE
- * disposing the gameplay view, whichever family it belongs to.
- */
-export async function finalizeRecordingIfActive(deps: RecordingDeps): Promise<void> {
-  if (deps.getActiveGameplay()?.isRecording() === true) {
-    await toggleRecording(deps);
-  }
-}
-
-/**
- * Starts the recording armed from song select (the Record button pressed with no play up) on the gameplay view that just
- * mounted, whichever family it belongs to. Call it once the view's AudioContext exists. A failure is not fatal: the
- * play goes on and the status says why nothing is recorded.
- */
-export function startArmedRecording(deps: RecordingDeps): void {
-  if (!deps.getAutoRecordArmed()) return;
-  const gameplay = deps.getActiveGameplay();
+/** Stops and downloads one take before its audio graph is disposed. */
+export async function finalizeRecordingIfActive(
+  deps: RecordingDeps,
+  gameplay = deps.getActiveGameplay(),
+  filenameBase = deps.getRecordingFilenameBase(),
+): Promise<void> {
   if (gameplay === undefined) return;
-  deps.setAutoRecordArmed(false);
-  const controller = deps.recordController;
-  controller?.element.classList.remove('arming');
+  try {
+    const result = gameplay.isRecording() ? await gameplay.stopRecording() : undefined;
+    if (!result) return;
+    const blob = result.seekable ? result.blob : await makeWebMSeekable(result.blob);
+    const filename = `${filenameBase}.${recordingFileExtension(result.mimeType)}`;
+    downloadBlob(blob, filename);
+    deps.setStatus(`Saved ${filename}`);
+  } catch (error) {
+    recordLog.warn('save failed', error);
+    deps.setStatus(`Recording could not be saved: ${String(error)}`);
+  } finally {
+    deps.setRecordingSettingsLocked?.(false);
+  }
+}
+
+/** Starts a fresh capture once the play's audio is ready. The setting applies to every play. */
+export function startAutomaticRecording(deps: RecordingDeps): void {
+  if (!deps.getRecordGameplay()) return;
+  const gameplay = deps.getActiveGameplay();
+  if (!gameplay || gameplay.isRecording()) return;
   try {
     gameplay.startRecording({ format: deps.getRecordingFormat(), quality: deps.getRecordingQuality() });
     deps.setRecordingSettingsLocked?.(true);
-    controller?.element.classList.add('recording');
-    setButtonTitle(controller, STOP_RECORDING_LABEL);
     deps.setStatus('Recording…');
   } catch (error) {
-    setButtonTitle(controller, RECORD_LABEL);
     recordLog.warn('auto-start failed', error);
-    deps.setStatus(`Recording unavailable: ${(error as Error).message}`);
+    deps.setStatus(`Recording unavailable: ${String(error instanceof Error ? error.message : error)}`);
   }
 }
