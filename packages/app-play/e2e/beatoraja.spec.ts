@@ -51,6 +51,9 @@ test('skin configuration uses tabs and slider controls, with a working reset', a
   player.page.setDefaultTimeout(15_000);
   await openBeatoraja(player);
   const pane = player.page.locator('[data-pane=skin-config]');
+  // Settings in the auxiliary dock start closed; the player opens them.
+  await expect(pane).not.toHaveAttribute('open', '');
+  await pane.locator('summary').click();
   await expect(pane).toHaveAttribute('open', '');
   await pane.getByRole('tab', { name: 'Timing & offsets', exact: true }).click();
   const axis = (label: string) =>

@@ -764,26 +764,46 @@ textarea {
 }
 
 /*
- * Auxiliary panels share the stage's bottom dock, including beatoraja Skin Config, replay slots and course creation.
- * Each heading remains available when its content is collapsed.
+ * The auxiliary dock (`ui/auxiliary-dock.ts`): every panel added over the stage is a tab in one row along the stage's
+ * bottom, in the dock's order, as wide as its heading. One panel is open at a time, and its content opens above the
+ * row, so opening or closing a panel moves neither another tab nor the stage. The dock decides where the row and the
+ * open content sit: from the bottom left on the select screen, clear of the skins' central controls, and centred
+ * elsewhere, clear of the play skins' BPM / TIME / SPEED readouts. A panel shows only on the screens it belongs to.
  */
 .auxiliary-panels {
+  --be-music-panel-content-start: 8px;
+  --be-music-panel-content-shift: 0;
   position: absolute;
   inset: auto 0 0;
   z-index: 40;
   display: flex;
-  flex-direction: column;
+  flex-flow: row nowrap;
   gap: 4px;
-  align-items: center;
-  max-height: min(70%, calc(100dvh - 64px));
-  overflow: auto;
+  align-items: flex-end;
+  justify-content: center;
+  padding-inline: 8px;
   pointer-events: none;
 }
+.auxiliary-panels:not([data-screen='select']) {
+  --be-music-panel-content-start: 50%;
+  --be-music-panel-content-shift: -50% 0;
+}
+.auxiliary-panels[data-screen='select'] {
+  justify-content: flex-start;
+}
 .auxiliary-panels > * {
-  flex: 0 0 auto;
-  width: min(420px, calc(100% - 16px));
+  flex: 0 1 auto;
+  min-width: 0;
   pointer-events: auto;
   font-size: 13px;
+}
+.auxiliary-panels > [hidden],
+.auxiliary-panels[data-screen='start'] > *,
+.auxiliary-panels[data-screen='select'] > :not([data-auxiliary-screens~='select']),
+.auxiliary-panels[data-screen='decide'] > :not([data-auxiliary-screens~='decide']),
+.auxiliary-panels[data-screen='play'] > :not([data-auxiliary-screens~='play']),
+.auxiliary-panels[data-screen='result'] > :not([data-auxiliary-screens~='result']) {
+  display: none;
 }
 /* The quick options panel's dock (`ui/options/quick-options.ts`): the stage's bottom right, clear of the centred dock. */
 .quick-options-dock {
@@ -888,8 +908,11 @@ textarea {
 }
 
 @media (orientation: landscape) {
-  /* Keep the replay button below Synesthesia's select options, even when the canvas fills the viewport. */
-  .shell:not(.empty) .player-main:has(.replay-slots-card[data-mode='select'][data-below-stage]:not([hidden])) {
+  /*
+   * Synesthesia's select screen keeps the dock below its stage, clear of the options along the stage's bottom, even when
+   * the canvas fills the viewport. The strip belongs to the screen: a panel opening or closing never moves the stage.
+   */
+  .shell:not(.empty) .player-main:has(.auxiliary-panels[data-screen='select'][data-below-stage]) {
     .stage {
       bottom: calc(48px + env(safe-area-inset-bottom, 0px));
     }
@@ -2865,9 +2888,6 @@ html.touch-first .search-input.search-inline:focus {
 }
 
 /* Course maker (course-maker-panel.ts): the card shown while a course is being made, and the saved-course dialog. */
-.course-maker-card[hidden] {
-  display: none;
-}
 .course-maker-card h2 {
   margin: 0 0 2px;
   font-size: 15px;
@@ -2977,16 +2997,6 @@ html.touch-first .search-input.search-inline:focus {
 .start-leaderboard {
   border-top: 1px solid var(--border);
   padding-top: 16px;
-}
-.replay-slots-card[hidden] {
-  display: none;
-}
-/* Keep the collapsed history control away from the skin's central buttons. */
-.replay-slots-card[data-mode='select']:has(be-music-collapsible-panel:not([open])) {
-  align-self: flex-start;
-  width: fit-content;
-  max-width: calc(100% - 16px);
-  margin-inline-start: 8px;
 }
 /* The card pads its own sides; Basecoat's card header would indent the heading past the slot rows. */
 .replay-slots-card > header {
@@ -3322,31 +3332,11 @@ html.touch-first .search-input.search-inline:focus {
   width: 100%;
 }
 
-/* Chart warnings stay readable over any select or decide skin. */
-.chart-diagnostics {
-  position: absolute;
-  inset: 0.75rem auto auto 0.75rem;
-  z-index: 4;
-  max-width: min(28rem, calc(100% - 1.5rem));
-}
-
-.chart-diagnostics details {
-  padding: 0.5rem 0.75rem;
-  color: white;
-  background: #171a20;
-  border-radius: 0.375rem;
-}
-
-.chart-diagnostics summary {
-  cursor: pointer;
-}
-
-.chart-diagnostics ul {
-  max-height: min(16rem, 45vh);
-  overflow: auto;
-  overflow-wrap: anywhere;
-  margin-block: 0.5rem 0;
+/* Chart warnings (`ui/chart-diagnostics.ts`), a panel in the auxiliary dock. */
+.chart-diagnostics-list {
+  margin: 0;
   padding-inline-start: 1.25rem;
+  overflow-wrap: anywhere;
 }
 
 /* The stages a decided course is missing, each with the download pages its difficulty table names. */

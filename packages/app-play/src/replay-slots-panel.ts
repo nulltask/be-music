@@ -1,4 +1,5 @@
 import './ui/collapsible-panel.ts';
+import { mountAuxiliaryPanel } from './ui/auxiliary-dock.ts';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { downloadBlob } from '@be-music/player-browser/recording';
@@ -50,7 +51,7 @@ export class ReplaySlotsPanel {
     this.card.className = 'replay-slots-card';
     this.card.hidden = true;
 
-    document.querySelector('#auxiliary-panels')!.append(this.card);
+    mountAuxiliaryPanel(this.card, 'replay-slots');
     this.unsubscribe = options.service.store.subscribe(() => this.render());
     this.unsubscribeLanguage = onPlayerLangChange(() => this.render());
   }
@@ -62,8 +63,7 @@ export class ReplaySlotsPanel {
   }
 
   /** Shows history on every select skin, with slot controls on skins that do not draw their own. */
-  public showSelect(entry: LibraryEntry | undefined, showSlots = true, dockBelowStage = false): void {
-    this.card.toggleAttribute('data-below-stage', dockBelowStage);
+  public showSelect(entry: LibraryEntry | undefined, showSlots = true): void {
     const target = entry !== undefined && entry.kind !== 'folder' ? this.options.service.targetOf(entry) : undefined;
     this.setMode({ kind: 'select', ...(target === undefined ? {} : { target }), showSlots });
   }
@@ -119,7 +119,7 @@ export class ReplaySlotsPanel {
     render(
       html`
         <be-music-collapsible-panel
-          position="inline"
+          position="dock"
           .heading=${copy.slotsTitle}
           .open=${this.expanded}
           @panel-toggle=${(event: CustomEvent<{ open: boolean }>) => {
@@ -186,7 +186,7 @@ export class ReplaySlotsPanel {
     render(
       html`
         <be-music-collapsible-panel
-          position="inline"
+          position="dock"
           .heading=${showSlots ? copy.slotsAndHistory : copy.historyTitle}
           .open=${this.expanded}
           @panel-toggle=${(event: CustomEvent<{ open: boolean }>) => {

@@ -23,6 +23,7 @@
 //     skinGUI.clear();
 //
 // A different skin entry rebuilds the schema; edits to the same entry preserve the panel's tab and folder state.
+import { mountAuxiliaryPanel } from './ui/auxiliary-dock.ts';
 import { OptionFolder } from './ui/options-controls.ts';
 import { defaultOpForBeatorajaSkinProperty } from '@be-music/skin-beatoraja';
 import type {
@@ -176,11 +177,12 @@ export class BeatorajaSkinOptionsGUI {
       // property[] / filepath[] schema simply has no controls to surface here.
       return;
     }
-    // Bottom-centre over the stage (`.skin-config-pane`), clear of the play skins' BPM / TIME / SPEED readouts.
-    const gui = OptionFolder.panel(this.container, { title: options.title, expanded: true });
+    // A panel in the auxiliary dock, closed until the player opens it: settings never open on their own.
+    const gui = OptionFolder.panel(this.container, { title: options.title, expanded: false });
     this.gui = gui;
     gui.element.classList.add('skin-config-pane');
     gui.element.dataset.pane = 'skin-config';
+    mountAuxiliaryPanel(gui.element, 'skin-config', this.container);
     let refreshing = false;
     const emit = (): void => {
       if (refreshing) return;

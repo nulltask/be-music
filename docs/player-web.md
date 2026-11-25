@@ -15,6 +15,7 @@ Be-Music Play runs BMS, BME, BML, PMS, bmson, LRX and n2s charts in the browser.
   - [Loading placeholders](#loading-placeholders)
   - [Options dialog](#options-dialog)
     - [Options dialog layout](#options-dialog-layout)
+  - [Auxiliary panels](#auxiliary-panels)
   - [Best records](#best-records)
   - [Play tempo](#play-tempo)
   - [Built-in play screen](#built-in-play-screen)
@@ -177,6 +178,26 @@ Where code and JSON disagree:
 - A JSON option no code builds is logged, except those only some browsers or builds have: Play in silent mode, Add skin and the LR2 theme picker.
 
 `layout.test.ts` tests the schema and the assembly against stand-in containers, and checks that every `place('…')` id in the source exists in the JSON and that every JSON id is named in the source.
+
+### Auxiliary panels
+
+Panels the player adds over the stage go in one dock, `#auxiliary-panels`, so that several of them read as one row. `ui/auxiliary-dock.ts` holds the rules:
+
+| Panel                                                   | Place | Screens              | Opens on its own                |
+| ------------------------------------------------------- | ----- | -------------------- | ------------------------------- |
+| Chart warnings (`ui/chart-diagnostics.ts`)              | 1     | select, decide       | No                              |
+| Replay slots and history (`replay-slots-panel.ts`)      | 2     | select, result       | On the result screen            |
+| Course being made (`course-maker-panel.ts`)             | 3     | select               | When the player starts a course |
+| beatoraja Skin Config (`beatoraja-skin-options-gui.ts`) | 4     | select, decide, play | No                              |
+
+1. **One dock.** A panel goes in the dock through `mountAuxiliaryPanel`, never at a place of its own over the stage.
+2. **One frame.** Every panel is a `<be-music-collapsible-panel position="dock">`: a tab as wide as its heading, standing on the stage's bottom edge with square bottom corners, whose content opens above the row. Keys typed in a panel stay out of the scene, except `Escape`.
+3. **Fixed order.** The dock orders the tabs by their place in the table, not by the order they were made in: warnings about the chart, then what acts on the play, then the player's work in progress, then settings.
+4. **One panel open at a time.** A panel starts closed. Only the panel that carries the screen's main action opens on its own: the replay slots on the result screen, and the course maker when the player starts a course. Opening a panel, by the player or its owner, closes the one open, so open panels never cover each other. A panel stays as the player left it while its screen stays.
+5. **The screen decides.** The scene router tells the dock which screen is showing, and the dock hides every panel that does not belong to it. Routes and services fill panels; they never take another route's panel down.
+6. **Nothing moves when a panel opens.** The open content floats above the row, so opening or closing a panel moves neither another tab nor the stage, and the closed tabs stay small enough to keep clear of the skins' controls. The dock, not a panel, decides where the row and the open content sit: from the bottom left on the select screen, clear of the skins' central controls, and centred elsewhere. A skin that needs the strip below its stage reserves it for the whole screen (`setAuxiliaryDockBelowStage`; Synesthesia's select screen).
+
+Dialogs (`<dialog>`), the quick options in their own corner, and readouts such as the frame rate are not auxiliary panels.
 
 ### Best records
 

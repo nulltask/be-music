@@ -26,14 +26,18 @@ function playHostname(): string {
  *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`), folded inside the drop card
  *  - `#start-leaderboard` / `#start-*` — `leaderboard-ui.ts` (`LeaderboardPanel.bindStartCard`)
  *  - `#start-silent-mode` — `silent-mode-playback.ts` (`mountStartSilentModeOption`), from `services/silent-mode.ts`
+ *  - `#auxiliary-panels` — `ui/auxiliary-dock.ts`: chart warnings, replay slots, the course maker and Skin Config
  *  - `#songs` / `#search` / `#stage` / `#loading-*` / `.shell` — looked up in `main.ts` as `PlayerWebElements`
  */
 export const PLAYER_APP_TEMPLATE = html`
   <div class="shell empty drop-prompt-open">
     <div id="player-service-header" class="player-service-header"></div>
     <main id="main" class="player-main">
-      <div id="chart-diagnostics" class="chart-diagnostics"></div>
-      <div id="auxiliary-panels" class="auxiliary-panels"></div>
+      <!--
+      The auxiliary dock: the one place panels added over the stage go (chart warnings, replay slots, the course being
+      made, a beatoraja skin's options). \`ui/auxiliary-dock.ts\` orders them and shows each on its own screens.
+    -->
+      <div id="auxiliary-panels" class="auxiliary-panels" data-screen="start"></div>
       <!-- The quick options panel, at the bottom right on the select and play screens. \`ui/options/quick-options.ts\`. -->
       <div id="quick-options" class="quick-options-dock" hidden></div>
       <!-- The frame rate readout (beatoraja's F1, LR2's F7), inside the full-screen area. \`ui/fps-overlay.ts\`. -->

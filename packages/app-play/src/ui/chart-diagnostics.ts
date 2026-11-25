@@ -2,6 +2,8 @@ import { resolveChart } from '@be-music/chart-model';
 import type { BeMusicJSON, ChartDiagnostic } from '@be-music/chart-source';
 import { html, nothing, render } from 'lit';
 import { onPlayerLangChange, playerLang } from '../player-copy.ts';
+import { mountAuxiliaryPanel } from './auxiliary-dock.ts';
+import './collapsible-panel.ts';
 
 const japanese: Record<ChartDiagnostic['code'], string> = {
   'legacy-bmson': '旧形式の bmson v0.21 を変換しました。',
@@ -14,19 +16,36 @@ const japanese: Record<ChartDiagnostic['code'], string> = {
   'unsupported-channel': '未対応のチャンネルです。',
 };
 
-/** The host's warning list is shared by every select and decide skin. */
-export function createChartDiagnosticsPanel(root: HTMLElement) {
+/**
+ * The host's warning list, shared by every select and decide skin: a panel in the auxiliary dock, closed until the player
+ * opens it, kept open or closed across charts while the screen stays.
+ */
+export function createChartDiagnosticsPanel(fallback?: HTMLElement) {
   const cache = new WeakMap<BeMusicJSON, readonly ChartDiagnostic[]>();
+  const card = document.createElement('aside');
+  card.id = 'chart-diagnostics';
+  card.className = 'chart-diagnostics';
+  card.hidden = true;
+  mountAuxiliaryPanel(card, 'chart-diagnostics', fallback);
   let diagnostics: readonly ChartDiagnostic[] = [];
+  let expanded = false;
   function update(): void {
     const ja = playerLang() === 'ja';
+    card.hidden = diagnostics.length === 0;
+    card.setAttribute('aria-label', ja ? '譜面の警告' : 'Chart warnings');
     render(
       diagnostics.length === 0
         ? nothing
         : html`
-            <details @keydown=${stopSceneKeys} @keyup=${stopSceneKeys}>
-              <summary>${ja ? `譜面の警告 (${diagnostics.length})` : `Chart warnings (${diagnostics.length})`}</summary>
-              <ul>
+            <be-music-collapsible-panel
+              position="dock"
+              .heading=${ja ? `譜面の警告 (${diagnostics.length})` : `Chart warnings (${diagnostics.length})`}
+              .open=${expanded}
+              @panel-toggle=${(event: CustomEvent<{ open: boolean }>) => {
+                expanded = event.detail.open;
+              }}
+            >
+              <ul class="chart-diagnostics-list">
                 ${diagnostics.map(({ code, message, subject, position }) => {
                   const location =
                     position.kind === 'field'
@@ -38,9 +57,9 @@ export function createChartDiagnosticsPanel(root: HTMLElement) {
                   </li>`;
                 })}
               </ul>
-            </details>
+            </be-music-collapsible-panel>
           `,
-      root,
+      card,
     );
   }
   onPlayerLangChange(update);
@@ -48,6 +67,7 @@ export function createChartDiagnosticsPanel(root: HTMLElement) {
     show(chart?: BeMusicJSON, chartPath?: string): void {
       if (chart === undefined) {
         diagnostics = [];
+        expanded = false;
       } else {
         diagnostics =
           cache.get(chart) ?? resolveChart(chart, { chartPath, inferBmsLNTypeWhenMissing: false }).diagnostics;
@@ -56,8 +76,4 @@ export function createChartDiagnosticsPanel(root: HTMLElement) {
       update();
     },
   };
-}
-
-function stopSceneKeys(event: KeyboardEvent): void {
-  if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
 }

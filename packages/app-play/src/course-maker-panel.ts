@@ -1,4 +1,5 @@
 import './ui/collapsible-panel.ts';
+import { mountAuxiliaryPanel } from './ui/auxiliary-dock.ts';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -223,7 +224,7 @@ export class CourseMakerPanel {
     // The modal owns the keyboard: keys must not also drive the select scene behind it (Escape still closes it).
     for (const type of ['keydown', 'keyup'] as const)
       this.dialog.addEventListener(type, (event) => event.stopPropagation());
-    document.querySelector('#auxiliary-panels')!.append(this.card);
+    mountAuxiliaryPanel(this.card, 'course-maker');
     document.body.append(this.dialog);
   }
 
@@ -287,7 +288,7 @@ export class CourseMakerPanel {
     render(
       html`
         <be-music-collapsible-panel
-          position="inline"
+          position="dock"
           .heading=${copy.newCourse(KIND_LABELS[draft.kind])}
           .open=${this.expanded}
           @panel-toggle=${(event: CustomEvent<{ open: boolean }>) => {
