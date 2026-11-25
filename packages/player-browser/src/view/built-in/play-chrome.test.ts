@@ -8,6 +8,7 @@ import {
   resolveJudgeDetails,
   resolveJudgeOffsetY,
   collectBGATargets,
+  needsBGALoadingResize,
   type LaneGeometryContext,
   type BeMusicLayoutContext,
   type BGATargetsContext,
@@ -159,18 +160,29 @@ test('a video changes the monitor and target width together while keeping their 
     },
     beMusicStage: cabinetStage,
     layoutMode: 'standard',
+    bgaResizeProgress: 0,
   } as unknown as LaneGeometryContext & BeMusicLayoutContext & BGATargetsContext;
-  const wide = resolveBeMusicLayout(ctx).bga!;
+  const square = resolveBeMusicLayout(ctx).bga!;
+  expect(square.w).toBe(square.h);
+  expect(needsBGALoadingResize(ctx)).toBe(true);
+  const wide = resolveBeMusicLayout({ ...ctx, bgaResizeProgress: 1 }).bga!;
+  const animating = { ...ctx, bgaResizeProgress: 0.5 };
+  const halfway = resolveBeMusicLayout(animating).bga!;
+  expect(halfway.w).toBeCloseTo((square.w + wide.w) / 2);
   const targets: Parameters<typeof collectBGATargets>[1] = [];
-  collectBGATargets(ctx, targets);
-  expect(targets[0]).toMatchObject(wide);
+  collectBGATargets(animating, targets);
+  expect(targets[0]).toMatchObject(halfway);
   expect(targets[0]?.preserveVideoAspect).toBe(true);
   video.videoWidth = 900;
   video.videoHeight = 1600;
-  const portrait = resolveBeMusicLayout(ctx).bga!;
+  const portrait = resolveBeMusicLayout({ ...ctx, bgaResizeProgress: 1 }).bga!;
   expect(portrait.h).toBe(wide.h);
   expect(portrait.w / portrait.h).toBeCloseTo(900 / 1600);
   expect(portrait.x + portrait.w / 2).toBeCloseTo(wide.x + wide.w / 2);
+  video.videoWidth = video.videoHeight;
+  expect(needsBGALoadingResize(ctx)).toBe(false);
+  video.videoWidth = 0;
+  expect(needsBGALoadingResize(ctx)).toBe(false);
 });
 
 test("shows a NONSTOP stage's song, crossfading from the previous stage's as its window starts", () => {

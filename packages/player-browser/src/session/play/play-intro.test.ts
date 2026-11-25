@@ -3,7 +3,7 @@ import { PlaySession } from './play-session.ts';
 import type { PlayMoment } from './play-session-theme.ts';
 import type { PlayViewTiming } from '../../view/types.ts';
 
-function setup(timing: PlayViewTiming) {
+function setup(timing: PlayViewTiming, beginLoadingLayout?: () => Promise<void>) {
   vi.useFakeTimers();
   vi.stubGlobal('window', globalThis);
   const moments: PlayMoment[] = [];
@@ -11,6 +11,7 @@ function setup(timing: PlayViewTiming) {
     {},
     {
       timing: () => timing,
+      ...(beginLoadingLayout !== undefined ? { beginLoadingLayout } : {}),
       moment: (event) => moments.push(event),
       keyOnFadeMs: () => 100,
     },
@@ -34,6 +35,33 @@ afterEach(() => {
 });
 
 describe('play intro stages', () => {
+  test('keeps loading visible until the BGA resize finishes, even when the media is late', async () => {
+    let settled!: () => void;
+    const layoutReady = new Promise<void>((resolve) => {
+      settled = resolve;
+    });
+    const beginLoadingLayout = vi.fn(() => layoutReady);
+    const { play, moments, advance } = setup(base, beginLoadingLayout);
+    let loaded!: () => void;
+    play.assetsReadyPromise = new Promise<void>((resolve) => {
+      loaded = resolve;
+    });
+    play.start();
+    await advance(5_000);
+    expect(beginLoadingLayout).not.toHaveBeenCalled();
+    loaded();
+    await advance(0);
+    expect(beginLoadingLayout).toHaveBeenCalledOnce();
+    expect(play.assetsLoading).toBe(true);
+    await advance(1_000);
+    expect(moments.map((event) => event.kind)).toEqual(['scene-start']);
+    expect(play.assetsLoading).toBe(true);
+    settled();
+    await advance(0);
+    expect(play.assetsLoading).toBe(false);
+    expect(moments.map((event) => event.kind)).toEqual(['scene-start', 'load-end', 'play-start']);
+  });
+
   test('waits the complete READY interval after slow media loading', async () => {
     const { play, moments, advance } = setup({ ...base, inputStartOffsetMs: 200, playStartAfterLoadEndMs: 1000 });
     let loaded!: () => void;

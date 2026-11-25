@@ -22,8 +22,10 @@ import type {
 } from '@be-music/player-skin-sdk';
 import { SkinDOMMount } from '../../skin/be-music/dom-mount.ts';
 import {
+  easeOutCubic,
   resolveBeMusicSkinSettings,
   resolveStageOrientation,
+  stageProgress,
   type GameplayLayoutMode,
 } from '@be-music/player-skin-sdk';
 import type { Application, Texture } from 'pixi.js';
@@ -46,6 +48,7 @@ import type { IntentSink, PlayFrame, PlayIntent, PlayView, PlayViewTiming, Playf
 import {
   collectBGATargets,
   LEGACY_STAGE_SIZE,
+  needsBGALoadingResize,
   renderBuiltInChrome,
   resolveBeMusicLayout,
   resolveSkinlessGameplayChromeRuntime,
@@ -58,6 +61,8 @@ const log = logger('gameplay');
 
 /** Design px above a lane's top through which notes keep drawing as they scroll in (standard layout). */
 const NOTE_OVERSCAN = 48;
+const BGA_LOADING_RESIZE_MS = 360;
+const MAX_BGA_RESIZE_FRAME_MS = 90;
 
 /**
  * A Be-Music Skin's timing on the play screen: no load or play-start offsets of its own (the play's fallback intro
@@ -123,6 +128,8 @@ export class BuiltInPlayView
   private chromeRuntime: SkinlessGameplayChromeRuntime | undefined;
   /** The frame being drawn: the chrome's runtime reads its best record, course and player from it. */
   public playFrame: PlayFrame | undefined;
+  public bgaResizeProgress = 0;
+  private bgaResize: { elapsedMs: number; previousFrameMs?: number; finish: () => void } | undefined;
   private dom: SkinDOMMount<BeMusicDOMGameplayFrame, BeMusicDOMGameplayActions, BeMusicDOMGameplayScreen> | undefined;
 
   public constructor(kit: BuiltInKit, play: PlayfieldRuntime, options: BuiltInPlayViewOptions = {}) {
@@ -245,6 +252,18 @@ export class BuiltInPlayView
     if (!frame.shown) this.bpmChangeWarning.hide();
     if (!frame.shown) this.chartText.hide();
     if (!frame.shown) return;
+    if (this.bgaResize !== undefined) {
+      const resize = this.bgaResize;
+      const nowMs = frame.clock.nowMs;
+      // Long frames must not skip the visible resize, even when the renderer is still warming up.
+      const deltaMs = nowMs - (resize.previousFrameMs ?? nowMs);
+      resize.elapsedMs += Math.max(0, Math.min(deltaMs, MAX_BGA_RESIZE_FRAME_MS));
+      resize.previousFrameMs = nowMs;
+      this.bgaResizeProgress = easeOutCubic(stageProgress(resize.elapsedMs, 0, BGA_LOADING_RESIZE_MS));
+    } else if (frame.stage !== 'loading') {
+      // A view swapped in after loading should use the fitted size right away.
+      this.bgaResizeProgress = 1;
+    }
     this.perf.beginTick();
     this.chromeRuntime = undefined;
     // With effects off the skins' audio drive is silent, so the frame's analysis is left unread (and unrun).
@@ -312,6 +331,7 @@ export class BuiltInPlayView
       replay: frame.replay,
       seekable: frame.seekable,
     });
+    if (this.bgaResizeProgress >= 1) this.finishLoadingLayout();
     // `?perf`: the per-second section summary, as the LR2 play view reports it.
     const report = this.perf.endFrame(() => ({
       note: this.noteLayer.children.length,
@@ -324,7 +344,26 @@ export class BuiltInPlayView
     return (this.chromeRuntime ??= resolveSkinlessGameplayChromeRuntime(this));
   }
 
+  public beginLoadingLayout(): Promise<void> | undefined {
+    if (this.kit.effects === 'off' || this.kit.effects === 'reduced' || !needsBGALoadingResize(this)) {
+      this.bgaResizeProgress = 1;
+      return;
+    }
+    return new Promise((finish) => {
+      this.bgaResize = { elapsedMs: 0, finish };
+    });
+  }
+
+  private finishLoadingLayout(): void {
+    const resize = this.bgaResize;
+    if (resize === undefined) return;
+    this.bgaResize = undefined;
+    this.bgaResizeProgress = 1;
+    resize.finish();
+  }
+
   public detach(): void {
+    this.finishLoadingLayout();
     this.displayInfo.detach();
     this.bpmChangeWarning.detach();
     this.chartText.detach();
@@ -351,6 +390,7 @@ export class BuiltInPlayView
   }
 
   public dispose(): void {
+    this.finishLoadingLayout();
     this.displayInfo.dispose();
     this.bpmChangeWarning.dispose();
     this.chartText.dispose();

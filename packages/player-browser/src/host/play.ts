@@ -244,6 +244,7 @@ interface FamilyPlayView {
   prepareOn(host: PixiSceneHost): void;
   /** Loads the view's own assets once the chart is prepared (the session theme's `prepareView`). */
   prepareView?(): Promise<void>;
+  beginLoadingLayout?(): Promise<void> | undefined;
   /** The scale the view's hi-speed reads on in the replay, when it has its own (the session theme's `replayView`). */
   replayView?(): PlayReplayViewScale | undefined;
   /** The view draws the LIFT (the session theme's `drawsLift`). */
@@ -357,6 +358,7 @@ function createPlayView(
       return view.drawsLift;
     },
     prepareOn: (host) => view.prepareOn(host),
+    beginLoadingLayout: () => view.beginLoadingLayout(),
     uploadTextures: (textures, isCancelled) => view.uploadTextures(textures, isCancelled),
     setShowInvisibleNotes: (enabled) => {
       view.options.showInvisibleNotes = enabled;
@@ -662,6 +664,7 @@ export function createPlayScene(kit: PlaySceneKit, options: PlaySceneOptions): P
     moment: (moment) => sceneSession?.queueEvent(moment),
     keyOnFadeMs: (channel) => familySlot.current!.playfieldSkin.keyOnFadeMs(channel),
     prepareView: () => familySlot.current?.prepareView?.() ?? Promise.resolve(),
+    beginLoadingLayout: () => familySlot.current?.beginLoadingLayout?.(),
     uploadTextures: (uploaded) =>
       familySlot.current?.uploadTextures(uploaded, () => play.disposed) ?? Promise.resolve(),
     replayView: () => familySlot.current?.replayView?.(),
