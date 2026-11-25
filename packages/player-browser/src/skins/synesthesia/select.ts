@@ -76,6 +76,7 @@ import {
   fadeChildrenFrom,
 } from '../pixi-kit/index.ts';
 import { addSynesthesiaText } from './figures.ts';
+import { canStartFocusedEntry, drawPlayButton, drawSecondaryButton } from './select-buttons.ts';
 import { drawSelectEntryArrow, drawSelectEntryIcon, drawSelectEntryMark } from './select-entry-mark.ts';
 import { drawBarLamp, drawBestRecordPanel, LampLights } from './select-record.ts';
 import {
@@ -216,35 +217,6 @@ function drawDifficulty(
     anchorY: 0.5,
     maxWidth: 98,
     anchorX: 0.5,
-  });
-}
-
-/**
- * A secondary button (AUTO, README): an outline with corner reticles and its label centred in the display face. A
- * disabled one (a chart with no README) is drawn faint.
- */
-function drawSecondaryButton(
-  chrome: Graphics,
-  addText: (text: string, x: number, y: number, options?: SkinTextOptions) => Container,
-  label: string,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  size: number,
-  enabled: boolean,
-  letterSpacing = 3,
-): void {
-  chrome.rect(x, y, w, h).stroke({ color: SYN_MIST, width: 1, alpha: enabled ? 0.45 : 0.15 });
-  drawReticle(chrome, x, y, w, h, SYN_MIST, enabled ? 0.8 : 0.25, { arm: 5, width: 1 });
-  addText(label, x + w / 2, y + h / 2, {
-    size,
-    fill: SYN_MIST,
-    fontFamily: SYN_DISPLAY_FONT,
-    letterSpacing,
-    anchorX: 0.5,
-    anchorY: 0.5,
-    alpha: enabled ? 1 : 0.3,
   });
 }
 
@@ -835,24 +807,16 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline).
     const buttonY = bannerTop - 50;
-    chrome.rect(26, buttonY, 105, 40).fill({ color: accent, alpha: 0.16 });
-    chrome.rect(30, buttonY + 4, 97, 32).fill({ color: accent, alpha: 0.88 });
-    drawReticle(chrome, 26, buttonY, 105, 40, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
-    addText('PLAY', 78.5, buttonY + 20, {
-      size: 14,
-      fill: SYN_VOID,
-      fontFamily: SYN_DISPLAY_FONT,
-      letterSpacing: 6,
-      anchorX: 0.5,
-      anchorY: 0.5,
-    });
+    // PLAY and AUTO start nothing from a folder; PRACTICE needs a chart.
+    const canStart = canStartFocusedEntry({ chart: chartEntry, course: frame.focusedCourse });
+    drawPlayButton(chrome, addText, 26, buttonY, 105, 40, accent, canStart);
     // AUTO's right edge sits on the content column's (288), like the LEVEL chip above it.
     const practice = chartEntry !== undefined ? frame.actions.practice : undefined;
     drawSecondaryButton(chrome, addText, 'PRACTICE', 137, buttonY + 7, 87, 26, 8, practice !== undefined, 1.5);
-    drawSecondaryButton(chrome, addText, 'AUTO', 232, buttonY + 7, 56, 26, 8, true, 2);
-    addHitArea(26, buttonY, 105, 40, 'pointer', frame.actions.play);
+    drawSecondaryButton(chrome, addText, 'AUTO', 232, buttonY + 7, 56, 26, 8, canStart, 2);
+    if (canStart) addHitArea(26, buttonY, 105, 40, 'pointer', frame.actions.play);
     if (practice) addHitArea(137, buttonY + 4, 87, 32, 'pointer', practice);
-    addHitArea(232, buttonY + 4, 56, 32, 'pointer', frame.actions.autoPlay);
+    if (canStart) addHitArea(232, buttonY + 4, 56, 32, 'pointer', frame.actions.autoPlay);
     this.drawBanner(frame, 30, bannerTop, bannerWidth, bannerMaxHeight, true);
 
     // Search and library.
@@ -1030,17 +994,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline), thumb-sized.
     const buttonY = card.y + 246;
     const playW = Math.round(innerW * 0.42);
-    chrome.rect(left - 4, buttonY - 4, playW + 8, 44).fill({ color: accent, alpha: 0.16 });
-    chrome.rect(left, buttonY, playW, 36).fill({ color: accent, alpha: 0.88 });
-    drawReticle(chrome, left - 4, buttonY - 4, playW + 8, 44, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
-    addText('PLAY', left + playW / 2, buttonY + 18, {
-      size: 14,
-      fill: SYN_VOID,
-      fontFamily: SYN_DISPLAY_FONT,
-      letterSpacing: 6,
-      anchorX: 0.5,
-      anchorY: 0.5,
-    });
+    const canStart = canStartFocusedEntry({ chart: chartEntry, course: frame.focusedCourse });
+    drawPlayButton(chrome, addText, left - 4, buttonY - 4, playW + 8, 44, accent, canStart);
     const practice = chartEntry !== undefined ? frame.actions.practice : undefined;
     const practiceX = left + playW + 12;
     const practiceW = Math.round(innerW * 0.32);
@@ -1059,9 +1014,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     if (practice) addHitArea(practiceX, buttonY - 2, practiceW, 40, 'pointer', practice);
     const autoX = practiceX + practiceW + 8;
     const autoW = left + innerW - autoX;
-    drawSecondaryButton(chrome, addText, 'AUTO', autoX, buttonY + 2, autoW, 32, 10, true);
-    addHitArea(left - 4, buttonY - 4, playW + 8, 44, 'pointer', frame.actions.play);
-    addHitArea(autoX - 2, buttonY - 2, autoW + 4, 40, 'pointer', frame.actions.autoPlay);
+    drawSecondaryButton(chrome, addText, 'AUTO', autoX, buttonY + 2, autoW, 32, 10, canStart);
+    if (canStart) addHitArea(left - 4, buttonY - 4, playW + 8, 44, 'pointer', frame.actions.play);
+    if (canStart) addHitArea(autoX - 2, buttonY - 2, autoW + 4, 40, 'pointer', frame.actions.autoPlay);
 
     const banner = chartEntry ? frame.chartImage(chartEntry, 'banner') : undefined;
     const bannerHeight = banner ? Math.min(48, (innerW * banner.height) / banner.width) : 0;
