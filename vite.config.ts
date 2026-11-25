@@ -26,6 +26,7 @@ const workspacePackages = [
   'app-dashboard',
   'worker-play',
   'service-web-theme',
+  'app-desktop',
 ] as const;
 
 /**

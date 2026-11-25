@@ -70,6 +70,7 @@ Each package's README covers its usage, options and compatibility status.
 - [`@be-music/player-ui`](./packages/player-ui/README.md), [`@be-music/player-ui-react`](./packages/player-ui-react/README.md), [`@be-music/player-ui-vue`](./packages/player-ui-vue/README.md): Reusable Lit Web Components, with typed React and Vue wrappers
 - [`@be-music/player-browser`](./packages/player-browser/README.md): Browser PixiJS runtime: every select, decide, play and result screen as a scene session drawn by a built-in, LR2 or beatoraja family view, behind one host API, plus the audio service, the chart collection, skin loading and gameplay recording
 - [`@be-music/app-play`](./packages/app-play/README.md): Private Vite player that wires folder/ZIP drops, LR2/beatoraja themes, the Options dialog and browser playback together, as services behind one scene router
+- [`@be-music/app-desktop`](./packages/app-desktop/README.md): Private Electron app that opens the web player in its own window, with offline use through the player's service worker
 - [`@be-music/app-leaderboard`](./packages/app-leaderboard/README.md): Private Leaderboard API on Cloudflare Workers: replay submission, verification by re-simulation, and rankings
 - [`@be-music/app-dashboard`](./packages/app-dashboard/README.md): Private service dashboard and the Accounts service: the OIDC provider for sign-in, passkeys, and linked providers
 - [`@be-music/worker-play`](./packages/worker-play/README.md): Player delivery Worker for static assets, OIDC sessions, settings, Leaderboard forwarding, and URL/media proxies

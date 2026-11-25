@@ -70,6 +70,7 @@ Be-Music は BMS・bmson 譜面を扱うオープンソースのツールキッ�
 - [`@be-music/player-ui`](./packages/player-ui/README.ja.md), [`@be-music/player-ui-react`](./packages/player-ui-react/README.ja.md), [`@be-music/player-ui-vue`](./packages/player-ui-vue/README.ja.md): 再利用可能な Lit 製 Web Components と、型付き React・Vue ラッパー
 - [`@be-music/player-browser`](./packages/player-browser/README.ja.md): browser の PixiJS ランタイム。選曲・決定・プレイ・リザルトの各画面を、built-in・LR2・beatoraja のファミリービューが描くシーンセッションとして 1 つのホスト向け API から作る。音声サービス、譜面のコレクション、スキンの読み込み、gameplay の録画も持つ
 - [`@be-music/app-play`](./packages/app-play/README.ja.md): folder / ZIP drop、LR2 / beatoraja theme、Options ダイアログ、browser 再生を、1 つのシーンルーターの下のサービスとして接続する private Vite プレイヤー
+- [`@be-music/app-desktop`](./packages/app-desktop/README.ja.md): Web 版のプレイヤーを専用のウィンドウで開く private な Electron アプリ。プレイヤーの Service Worker でオフラインでも使える
 - [`@be-music/app-leaderboard`](./packages/app-leaderboard/README.ja.md): Cloudflare Workers で動く private な Leaderboard API。リプレイの投稿、再シミュレーションによる検証、ランキング
 - [`@be-music/app-dashboard`](./packages/app-dashboard/README.ja.md): 非公開のサービスダッシュボードと Accounts サービス（ログイン、パスキー、連携プロバイダーを扱う OIDC プロバイダー）
 - [`@be-music/worker-play`](./packages/worker-play/README.ja.md): 静的アセット、OIDC セッション、設定、Leaderboard 転送、URL・メディアプロキシを扱うプレイヤー配信用 Worker

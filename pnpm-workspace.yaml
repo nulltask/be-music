@@ -1,6 +1,7 @@
 packages:
   - 'packages/*'
 allowBuilds:
+  electron-winstaller: false
   esbuild: true
   '@parcel/watcher': false
   workerd: false
