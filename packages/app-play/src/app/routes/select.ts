@@ -38,6 +38,7 @@ import type { LibraryService } from '../../services/library.ts';
 import { copyPlayOptionsToGUI, type GUIPlayOptions, type PlayOptionsService } from '../../services/play-options.ts';
 import type { RecordsService } from '../../services/records.ts';
 import type { ReplaySlotService } from '../../services/replay-slot-service.ts';
+import { setAuxiliaryDockBelowStage } from '../../ui/auxiliary-dock.ts';
 import type { ReplaySlotsPanel } from '../../replay-slots-panel.ts';
 import type { BeatorajaThemeService } from '../../services/themes/beatoraja.ts';
 import type { BuiltInThemeService } from '../../services/themes/built-in.ts';
@@ -245,12 +246,10 @@ export class SelectRoute {
         : undefined;
     const kit: SelectSceneKit =
       beatorajaKit ?? (lr2SelectSkin !== undefined ? { family: 'lr2', skin: lr2SelectSkin } : this.builtIn.builtInKit);
+    // Synesthesia's own controls run along the bottom of its stage, so its screen keeps the dock below the stage.
+    setAuxiliaryDockBelowStage(kit.family === 'built-in' && kit.skin.id === 'synesthesia');
     const showReplaySlots = (entry: LibraryEntry | undefined): void =>
-      this.replaySlotsPanel.showSelect(
-        entry,
-        kit.family !== 'beatoraja',
-        kit.family === 'built-in' && kit.skin.id === 'synesthesia',
-      );
+      this.replaySlotsPanel.showSelect(entry, kit.family !== 'beatoraja');
     if (this.selectView !== undefined && this.selectView.identity.family !== kit.family) {
       // The family changed (an LR2 or a beatoraja theme dropped while the built-in screen is up, or the other way
       // round): only that family's view draws it, so the screen is made again below, carrying the cursor across (the

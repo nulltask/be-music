@@ -1,4 +1,5 @@
 import { createChartDiagnosticsPanel } from '../ui/chart-diagnostics.ts';
+import { setAuxiliaryDockScreen } from '../ui/auxiliary-dock.ts';
 import { promptRandomMixConditions } from '../ui/random-mix-dialog.ts';
 import { promptRandomMixSave } from '../ui/random-mix-save-dialog.ts';
 import { playerText } from '../player-copy.ts';
@@ -110,9 +111,7 @@ export class PlayerWebApp {
   private readonly fpsOverlay = createFpsOverlay(
     document.querySelector<HTMLElement>('#fps-overlay') ?? document.createElement('div'),
   );
-  private readonly chartDiagnostics = createChartDiagnosticsPanel(
-    document.querySelector<HTMLElement>('#chart-diagnostics') ?? document.createElement('div'),
-  );
+  private readonly chartDiagnostics = createChartDiagnosticsPanel();
   /** Mounting {@link sceneHost} on the page, started as the first scene shows (`mountStage`). */
   private stageMount: Promise<void> | undefined;
   /**
@@ -127,6 +126,8 @@ export class PlayerWebApp {
         if (role === 'decide' || role === 'play') this.library.pauseBackgroundRefresh();
         await this.mountStage();
         this.chartDiagnostics.show();
+        // The dock shows only the panels that belong to the screen coming in (`ui/auxiliary-dock.ts`).
+        setAuxiliaryDockScreen(role ?? 'start');
         await this.sceneHost.setScene(scene);
         // The quick options belong to choosing a chart and playing it.
         this.optionsDialog?.setQuickOptionsShown(role === 'select' || role === 'play');

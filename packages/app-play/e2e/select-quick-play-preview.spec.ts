@@ -10,7 +10,7 @@ test('double clicking a quick option changes it twice without toggling fullscree
   const arrangement = () =>
     page.evaluate(() => JSON.parse(localStorage.getItem('be-music.option-settings') ?? '{}').settings?.random1P);
   const replayDockGap = () =>
-    page.locator('.replay-slots-card[data-below-stage]').evaluate((card) => {
+    page.locator('#auxiliary-panels[data-below-stage] .replay-slots-card').evaluate((card) => {
       const stage = document.querySelector('#stage')!;
       return card.getBoundingClientRect().top - stage.getBoundingClientRect().bottom;
     });
