@@ -1,9 +1,21 @@
 // The desktop app's main process (README.md): one window that shows the web player from its server, so the player
 // behaves as it does in Chrome, with the server's cross-origin isolation, sign-in, settings sync and URL load proxy.
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { BrowserWindow, Menu, app, dialog, screen, session, shell } from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
+import {
+  DESKTOP_SCHEME,
+  accountsLoginOrigin,
+  answersPending,
+  browserSignInURL,
+  createPendingSignIn,
+  findReturnURL,
+  parseReturnURL,
+  playerSignInURL,
+  redeemURL,
+} from './browser-sign-in.ts';
+import type { PendingSignIn } from './browser-sign-in.ts';
 import { allowsRedirect, isSameOrigin, navigationTarget } from './navigation.ts';
 import { resolvePlayURL } from './play-url.ts';
 import { chromeUserAgent } from './user-agent.ts';
@@ -15,6 +27,55 @@ const PRODUCT_NAME = 'Be-Music Play';
 const BACKGROUND_COLOR = '#101b31';
 /** Chromium's code for a navigation another one replaced; not a failure. */
 const ERROR_ABORTED = -3;
+
+/** The sign-in the app sent to the default browser, until the browser comes back. */
+let pendingSignIn: PendingSignIn | undefined;
+
+function startBrowserSignIn(issuerOrigin: string, returnTo: string): void {
+  pendingSignIn = createPendingSignIn(issuerOrigin, returnTo, Date.now());
+  openInBrowser(browserSignInURL(pendingSignIn));
+}
+
+function signInFailedMessage(): string {
+  return app.getLocale().startsWith('ja')
+    ? 'ログインを終えられませんでした。プレイヤーからもう一度ログインしてください。'
+    : 'Signing in did not finish. Sign in again from the player.';
+}
+
+/** Redeems the code the browser sent back, then runs the player's sign-in again in the window. */
+async function finishBrowserSignIn(url: string, window: BrowserWindow | undefined, playURL: URL): Promise<void> {
+  const returned = parseReturnURL(url);
+  const pending = pendingSignIn;
+  // A URL no sign-in of this app is waiting for is ignored: it may come from another app or an old tab.
+  if (returned === null || !answersPending(pending, returned.state, Date.now())) {
+    return;
+  }
+  pendingSignIn = undefined;
+  try {
+    // The session's own cookie store keeps the Accounts session the response sets, as the window's requests do.
+    const response = await session.defaultSession.fetch(redeemURL(pending), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code: returned.code, verifier: pending.verifier }),
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      throw new Error(`redeem answered ${response.status}`);
+    }
+  } catch (error) {
+    console.error('cannot finish signing in:', error);
+    dialog.showErrorBox(PRODUCT_NAME, signInFailedMessage());
+    return;
+  }
+  if (window === undefined || window.isDestroyed()) {
+    return;
+  }
+  if (window.isMinimized()) {
+    window.restore();
+  }
+  window.focus();
+  void window.loadURL(playerSignInURL(playURL.origin, pending.returnTo));
+}
 
 function windowStatePath(): string {
   return join(app.getPath('userData'), 'window-state.json');
@@ -104,7 +165,20 @@ function createWindow(playURL: URL): BrowserWindow {
     }
     return { action: 'deny' };
   });
+  // Identity providers refuse embedded browsers, so the Accounts login opens in the default browser instead.
+  const sendLoginToBrowser = (event: { preventDefault(): void }, url: string): boolean => {
+    const issuerOrigin = accountsLoginOrigin(url);
+    if (issuerOrigin === null) {
+      return false;
+    }
+    event.preventDefault();
+    startBrowserSignIn(issuerOrigin, contents.getURL());
+    return true;
+  };
   contents.on('will-navigate', (event) => {
+    if (sendLoginToBrowser(event, event.url)) {
+      return;
+    }
     const target = navigationTarget(event.url, playURL.origin);
     if (target === 'window') {
       return;
@@ -115,6 +189,9 @@ function createWindow(playURL: URL): BrowserWindow {
     }
   });
   contents.on('will-redirect', (event) => {
+    if (sendLoginToBrowser(event, event.url)) {
+      return;
+    }
     if (!allowsRedirect(event.url)) {
       event.preventDefault();
     }
@@ -144,7 +221,22 @@ function main(): void {
   }
 
   let window: BrowserWindow | undefined;
-  app.on('second-instance', () => {
+  // The browser returns a sign-in through the app's URL scheme: on macOS as an event, elsewhere as a second launch.
+  if (process.defaultApp && process.argv[1] !== undefined) {
+    app.setAsDefaultProtocolClient(DESKTOP_SCHEME, process.execPath, [resolve(process.argv[1])]);
+  } else {
+    app.setAsDefaultProtocolClient(DESKTOP_SCHEME);
+  }
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    void finishBrowserSignIn(url, window, playURL);
+  });
+  app.on('second-instance', (_event, argv) => {
+    const returnURL = findReturnURL(argv);
+    if (returnURL !== undefined) {
+      void finishBrowserSignIn(returnURL, window, playURL);
+      return;
+    }
     if (window === undefined) {
       return;
     }

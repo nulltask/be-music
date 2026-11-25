@@ -4,13 +4,15 @@
  */
 export type NavigationTarget = 'window' | 'browser' | 'refuse';
 
+/** The Accounts issuer's hosts (`AUTH_ISSUER`, production and preview), where the player's sign-in redirects. */
+export const ISSUER_HOSTS: ReadonlySet<string> = new Set(['be-music.app', 'preview.be-music.app']);
+
 /**
- * Hosts the player's sign-in passes through: the Accounts issuer (`AUTH_ISSUER`, production and preview) and the
- * identity providers it offers. Google's sign-in can bounce through `accounts.youtube.com` to set its session.
+ * Hosts the player's sign-in passes through: the issuer and the identity providers it offers. Google's sign-in can
+ * bounce through `accounts.youtube.com` to set its session.
  */
 const SIGN_IN_HOSTS: ReadonlySet<string> = new Set([
-  'be-music.app',
-  'preview.be-music.app',
+  ...ISSUER_HOSTS,
   'discord.com',
   'accounts.google.com',
   'accounts.youtube.com',

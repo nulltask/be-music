@@ -11,15 +11,21 @@ It is a prototype. The macOS build is signed ad hoc and the Windows installer is
 - **Its own window and icon**, apart from the browser and its storage clearing. The window remembers its size, position, maximized state and full screen; a saved position on a display that is gone is dropped.
 - **Folder access without prompts**: the player's permission requests (File System Access, MIDI, full screen) are granted for the player's origin and refused for any other page.
 - **No background throttling**: audio scheduling and rendering keep full rate while another window covers this one.
-- **Links**: the player and its sign-in flow stay in the window; other pages, such as Leaderboard rankings, open in the default browser. Discord and passkeys sign in inside the window. Google refuses to sign in from an embedded browser even with Electron's tokens removed from the user agent, so Google sign-in does not work yet; it needs the sign-in to run in the default browser.
+- **Links**: the player stays in the window. The Accounts login page opens in the default browser (see Signing in), and so do other pages, such as Leaderboard rankings.
 - **One instance**: a second launch focuses the running window. Closing the window quits the app, on macOS too.
 
 ```mermaid
 flowchart LR
   W[Window] -->|player origin| P[play.be-music.app]
-  W -->|sign-in| A[be-music.app<br>Discord, Google]
+  W -->|sign-in| B
   W -->|other pages| B[Default browser]
 ```
+
+## Signing in
+
+Identity providers such as Google refuse to sign in from an embedded browser, even with Electron's tokens removed from the user agent. So when the window reaches the Accounts login page, the app opens the sign-in in the default browser instead. After signing in there (at once, if the browser is already signed in), the browser hands a single-use code back through the `be-music-play://` URL scheme, and the app redeems it for an Accounts session of its own and finishes the player's sign-in in the window. The code is bound to a verifier only the app knows, so another app that registers the same scheme cannot use it. See [Services, "Desktop sign-in"](../../docs/services.md#desktop-sign-in).
+
+The packaged app registers the scheme on installation; `pnpm run dev` registers it for the development build.
 
 ## Offline
 
