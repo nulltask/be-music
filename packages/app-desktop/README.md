@@ -43,6 +43,8 @@ The first run downloads Electron. To open another player, pass `--play-url` (or 
 pnpm --filter @be-music/app-desktop exec electron . --play-url=https://play.preview.be-music.app/
 ```
 
+A player other than production keeps every web page in the window, so the preview's Cloudflare Access sign-in (GitHub) works there; the Accounts login still opens in the default browser.
+
 ## Packaging
 
 ```bash

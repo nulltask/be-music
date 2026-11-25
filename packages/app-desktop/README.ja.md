@@ -43,6 +43,8 @@ pnpm --filter @be-music/app-desktop run dev
 pnpm --filter @be-music/app-desktop exec electron . --play-url=https://play.preview.be-music.app/
 ```
 
+本番以外のプレイヤーを開いているときは、Web のページをすべてウィンドウの中で開きます。プレビューの Cloudflare Access のログイン（GitHub）をウィンドウで済ませられるようにするためです。Accounts のログイン画面は、そのときも既定のブラウザーで開きます。
+
 ## パッケージ化
 
 ```bash

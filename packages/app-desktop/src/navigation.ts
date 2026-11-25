@@ -29,8 +29,11 @@ export function isSameOrigin(url: string, origin: string): boolean {
   }
 }
 
-/** Classifies `url` for a window showing the player at `playOrigin`. */
-export function navigationTarget(url: string, playOrigin: string): NavigationTarget {
+/**
+ * Classifies `url` for a window showing the player at `playOrigin`. With `keepWebPages`, every web page stays in the
+ * window: a preview or local player sits behind Cloudflare Access, whose GitHub sign-in has to happen in the window.
+ */
+export function navigationTarget(url: string, playOrigin: string, keepWebPages = false): NavigationTarget {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -43,7 +46,10 @@ export function navigationTarget(url: string, playOrigin: string): NavigationTar
   if (parsed.protocol === 'https:' && SIGN_IN_HOSTS.has(parsed.hostname)) {
     return 'window';
   }
-  if (WEB_PROTOCOLS.has(parsed.protocol) || parsed.protocol === 'mailto:') {
+  if (WEB_PROTOCOLS.has(parsed.protocol)) {
+    return keepWebPages ? 'window' : 'browser';
+  }
+  if (parsed.protocol === 'mailto:') {
     return 'browser';
   }
   return 'refuse';

@@ -38,6 +38,13 @@ describe('navigationTarget', () => {
     expect(navigationTarget('be-music://open', PLAY)).toBe('refuse');
     expect(navigationTarget('::', PLAY)).toBe('refuse');
   });
+  it('keeps web pages in the window for a preview or local player', () => {
+    const preview = 'https://play.preview.be-music.app';
+    expect(navigationTarget('https://github.com/login', preview, true)).toBe('window');
+    expect(navigationTarget('https://team.cloudflareaccess.com/cdn-cgi/access/login', preview, true)).toBe('window');
+    expect(navigationTarget('mailto:someone@example.com', preview, true)).toBe('browser');
+    expect(navigationTarget('file:///etc/passwd', preview, true)).toBe('refuse');
+  });
 });
 
 describe('allowsRedirect', () => {

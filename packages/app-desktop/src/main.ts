@@ -17,7 +17,7 @@ import {
 } from './browser-sign-in.ts';
 import type { PendingSignIn } from './browser-sign-in.ts';
 import { allowsRedirect, isSameOrigin, navigationTarget } from './navigation.ts';
-import { resolvePlayURL } from './play-url.ts';
+import { DEFAULT_PLAY_URL, resolvePlayURL } from './play-url.ts';
 import { chromeUserAgent } from './user-agent.ts';
 import { DEFAULT_WINDOW_SIZE, MINIMUM_WINDOW_SIZE, parseWindowState, restorableBounds } from './window-state.ts';
 import type { WindowState } from './window-state.ts';
@@ -175,11 +175,13 @@ function createWindow(playURL: URL): BrowserWindow {
     startBrowserSignIn(issuerOrigin, contents.getURL());
     return true;
   };
+  // A player other than production (preview, local) keeps every web page in the window, for Cloudflare Access.
+  const keepWebPages = playURL.origin !== new URL(DEFAULT_PLAY_URL).origin;
   contents.on('will-navigate', (event) => {
     if (sendLoginToBrowser(event, event.url)) {
       return;
     }
-    const target = navigationTarget(event.url, playURL.origin);
+    const target = navigationTarget(event.url, playURL.origin, keepWebPages);
     if (target === 'window') {
       return;
     }
