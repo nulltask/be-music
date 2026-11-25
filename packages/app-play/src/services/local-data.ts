@@ -8,6 +8,7 @@ const LOCAL_STORAGE_KEYS: Readonly<Record<string, string>> = {
   'be-music.settings-reset-pending': 'A settings reset still to send to the server',
   'be-music.chart-best-records': 'Best records of each chart, per judge ruleset',
   'be-music.hi-speed': 'The hi-speed the next play starts at',
+  'be-music.select-position': 'Where the select screen was, to open there on the next visit',
   'be-music.play-tempo': 'Tempo settings',
   'be-music.replay-view': 'Replay view settings',
   'be-music.render-resolution': 'Render resolution',

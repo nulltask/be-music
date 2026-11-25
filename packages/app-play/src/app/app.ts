@@ -2,6 +2,7 @@ import { createChartDiagnosticsPanel } from '../ui/chart-diagnostics.ts';
 import { promptRandomMixConditions } from '../ui/random-mix-dialog.ts';
 import { promptRandomMixSave } from '../ui/random-mix-save-dialog.ts';
 import { playerText } from '../player-copy.ts';
+import { readStoredSelectPosition, storeSelectPosition } from '../select-position-storage.ts';
 import { BGACameraService } from '../services/bga-camera.ts';
 import { requestPlayerWindowClose } from '../ui/close-window.ts';
 import { DialogPauseController } from '../ui/dialog-pause.ts';
@@ -793,11 +794,20 @@ export class PlayerWebApp {
       await this.library
         .finishStartupCache()
         .catch((error: unknown) => console.warn('Library cache setup failed', error));
+      // The first screen opens where the last visit left, over the library the caches listed.
+      this.lastSelectNavigation ??= readStoredSelectPosition();
       await this.showSelect();
       startRefresh();
     });
     // A page put away (closed, or into the back/forward cache) keeps no decoded samples for a retry.
     window.addEventListener('pagehide', () => this.audio.chartSamples.release());
+    // The select screen's position, for the next visit: kept as the page is put away or hidden (a mobile browser may
+    // discard a hidden page without a pagehide). A place a drop or a play set for the next showing wins over the screen's.
+    const keepSelectPosition = () => storeSelectPosition(this.lastSelectNavigation ?? this.selectView?.snapshot());
+    window.addEventListener('pagehide', keepSelectPosition);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') keepSelectPosition();
+    });
 
     // The Options dialog's file pickers, and files dragged onto the page.
     this.dropTarget.wire();
