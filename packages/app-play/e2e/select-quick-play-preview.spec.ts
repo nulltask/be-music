@@ -62,6 +62,9 @@ test('cycles quick play options and opens the selected chart in the practice pic
       ['Glass Horizon', 'Mina Vale', 5, 128],
       ['Orbit Breaker', 'Arc Station', 11, 180],
     ];
+    for (let index = 1; index <= 12; index++) {
+      charts.push([`Preview ${String(index).padStart(2, '0')}`, 'Signal Garden', 8, 165]);
+    }
     const files = charts.map(
       ([title, artist, level, bpm], index) =>
         new File(
@@ -81,6 +84,7 @@ test('cycles quick play options and opens the selected chart in the practice pic
   if (state.cursor?.bar?.kind === 'folder') {
     await player.openFolder(state.cursor.bar.title);
   }
+  await page.getByRole('button', { name: 'Close drop card' }).click();
   await player.cursorTo((bar) => bar.title === 'Afterimage', 'Afterimage');
   const option = (key: string) =>
     expect.poll(() =>
