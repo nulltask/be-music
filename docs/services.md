@@ -175,6 +175,31 @@ flowchart LR
 - **Where it comes in**: the sign-in page script sends a new account to `/welcome` before it continues the app's sign-in request (`oauth_query`), so the authorization code is made only afterwards; `/account` and the Dashboard's `/` redirect there too. `next` is a path on this host only.
 - **Start with a passkey** on the sign-in page makes a guest account and registers a passkey for it at once, so a passkey can start an account without a guest step the player sees.
 
+### Desktop sign-in
+
+The desktop app ([`@be-music/app-desktop`](../packages/app-desktop/README.md)) shows the player in an Electron window, and identity providers such as Google refuse to sign in from an embedded browser. So the app signs in in the default browser and then takes an Accounts session of its own. A session of its own is needed because the player's session lasts at most 10 minutes and renews through Accounts' session in the same window.
+
+```mermaid
+sequenceDiagram
+  participant W as App window
+  participant B as Default browser
+  participant A as Accounts
+  W->>W: player sign-in reaches /login
+  W->>B: open /desktop/sign-in (state, challenge)
+  B->>A: sign in if needed
+  A->>B: single-use code
+  B->>W: be-music-play://sign-in (code, state)
+  W->>A: redeem code with verifier
+  A->>W: new Accounts session cookie
+  W->>W: player sign-in again
+```
+
+- **Start**: when the window's navigation reaches Accounts' `/login`, the app stops it and opens `/desktop/sign-in?state=…&challenge=…` in the default browser. The challenge is the S256 hash of a verifier the app keeps in memory, as in PKCE.
+- **Browser**: a signed-out browser goes to `/login?next=…` and comes back, through the welcome for a new account. `/desktop/sign-in` then issues a code (`createDesktopSignInCode`, server only) that lasts 3 minutes, and opens `be-music-play://sign-in?code=…&state=…`.
+- **Redeem**: the app accepts only the `state` it is waiting for, within 10 minutes, and posts the code and verifier to `POST /api/auth/desktop-sign-in/redeem`. The first redemption spends the code, right or wrong. Accounts checks the verifier against the challenge and creates a new session for the same user in the app's cookie store; the browser's session stays apart, so signing out of either leaves the other.
+- **Why the verifier**: another app that registers the same URL scheme could intercept the code, but cannot redeem it without the verifier, which never leaves the desktop app.
+- **Then**: the window runs the player's sign-in again. Accounts now has a session there, so it completes without a page, and later silent renewals work in the window as in a browser.
+
 ### 3.1 Identity ownership and migration
 
 Accounts has its own D1 (`dashboard` / `dashboard-preview`) for users, provider links, passkeys, sessions, signing keys and OAuth client state. It never calls the Leaderboard during login.

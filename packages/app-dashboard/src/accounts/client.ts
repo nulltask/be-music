@@ -1,5 +1,6 @@
 import { defineServiceUI, type BeMusicStatusElement } from '@be-music/service-web-theme/client';
 import { clientMessages, describeClientError } from './client-messages.ts';
+import { nextPath } from './next-path.ts';
 import { createAuthClient } from 'better-auth/client';
 import { anonymousClient } from 'better-auth/client/plugins';
 import { passkeyClient } from '@better-auth/passkey/client';
@@ -10,7 +11,16 @@ const auth = createAuthClient({
   disableDefaultFetchPlugins: true,
   plugins: [anonymousClient(), passkeyClient(), oauthProviderClient()],
 });
-const query = location.pathname === '/login' ? location.search.slice(1) : '';
+const loginParams = new URLSearchParams(location.pathname === '/login' ? location.search : '');
+/**
+ * A login with `next` and no app's signed sign-in request (`sig`) comes from a page on this host, the desktop sign-in
+ * page; it goes back there afterwards. Every other login works as before.
+ */
+const nextLogin = loginParams.has('next') && !loginParams.has('sig');
+/** Where a sign-in that no app asked for goes afterwards. */
+const afterSignIn = nextLogin ? nextPath(loginParams.get('next')) : '/account';
+/** The app's sign-in request (`oauth_query`), when an app sent the browser here. */
+const query = location.pathname === '/login' && !nextLogin ? location.search.slice(1) : '';
 defineServiceUI();
 const status = document.querySelector<BeMusicStatusElement>('#status')!;
 const messages = clientMessages(document.documentElement.lang);
@@ -66,11 +76,11 @@ async function done(result: unknown): Promise<void> {
   }
   // A new account is welcomed first, before going back to the app (docs/services.md, "Welcome after sign-up").
   if (await needsWelcome()) {
-    const params = new URLSearchParams(query ? { oauth_query: query } : { next: '/account' });
+    const params = new URLSearchParams(query ? { oauth_query: query } : { next: afterSignIn });
     location.assign(`/welcome?${params}`);
     return;
   }
-  await continueSignIn(query, '/account');
+  await continueSignIn(query, afterSignIn);
 }
 
 /** Shows one step of the welcome; the last one records the welcome as done. */
@@ -108,7 +118,7 @@ document.addEventListener('click', (event) => {
       }
       case 'discord':
       case 'google':
-        return done(await auth.signIn.social({ provider: action, callbackURL: '/account' }));
+        return done(await auth.signIn.social({ provider: action, callbackURL: afterSignIn }));
       case 'link-discord':
       case 'link-google': {
         // From the welcome, linking comes back to its last step, keeping where the welcome goes next.
@@ -122,6 +132,7 @@ document.addEventListener('click', (event) => {
         );
       }
       case 'continue':
+        if (nextLogin) return continueSignIn('', afterSignIn);
         return done(
           await auth.$fetch('/oauth2/continue', { method: 'POST', body: { selected: true, oauth_query: query } }),
         );
@@ -141,6 +152,9 @@ document.addEventListener('click', (event) => {
 });
 
 document.documentElement.dataset.authReady = 'true';
+
+// The desktop sign-in page opens the app once on load; its button opens it again.
+document.querySelector<HTMLAnchorElement>('a[data-desktop-return]')?.click();
 
 /** Starts Google or Discord when this login was opened from that button on another service. */
 function startRequestedProvider(): void {

@@ -42,6 +42,13 @@ const TEXT = {
     noticeLinked: 'That account is already linked to another Be-Music account.',
     noticeCancelled: 'Linking was cancelled.',
     noticeFailed: 'Could not link that account.',
+    desktop: {
+      title: 'Back to Be-Music Play',
+      lead: (name: string, guest: boolean) =>
+        `Signed in as ${name}${guest ? ' (guest)' : ''}. Open Be-Music Play to finish signing in there.`,
+      open: 'Open Be-Music Play',
+      hint: 'If the app does not open, check that Be-Music Play is running and choose the button again. You can close this tab afterwards.',
+    },
     welcome: {
       title: 'Welcome to Be-Music',
       lead: 'Your account is ready. A few things before you play — each can wait.',
@@ -98,6 +105,13 @@ const TEXT = {
     noticeLinked: 'そのアカウントは別の Be-Music アカウントにすでに連携されています。',
     noticeCancelled: '連携を取り消しました。',
     noticeFailed: 'アカウントを連携できませんでした。',
+    desktop: {
+      title: 'Be-Music Play に戻る',
+      lead: (name: string, guest: boolean) =>
+        `${guest ? `${name}（ゲスト）` : name} でログインしました。Be-Music Play を開いて、ログインを終えてください。`,
+      open: 'Be-Music Play を開く',
+      hint: 'アプリが開かないときは、Be-Music Play が起動しているかを確かめて、もう一度ボタンを押してください。終わったら、このタブは閉じてかまいません。',
+    },
     welcome: {
       title: 'Be-Music へようこそ',
       lead: 'アカウントができました。遊ぶ前に、いくつか決めておきましょう。どれもあとからできます。',
@@ -274,6 +288,57 @@ export function renderAccountPage(input: {
         ${services}
       </section>
       <p class="text-muted-foreground mt-6 text-xs">${t.footnote}</p>
+    </main>`,
+  });
+}
+
+/**
+ * The page that hands a browser sign-in to the desktop app (`/desktop/sign-in`, docs/services.md, "Desktop sign-in"):
+ * its button opens `returnURL`, the app's URL scheme carrying the single-use code, and the page script opens it once on
+ * load.
+ */
+export function renderDesktopSignInPage(input: {
+  anonymous: boolean;
+  name: string;
+  returnURL: string;
+  locale?: Locale;
+  requestURL?: string;
+  profile?: { handle: string; displayName: string; avatarURL: string };
+  apps?: Record<string, string>;
+  showDonateLink?: boolean;
+  buildInfo?: BuildInfo;
+}): string {
+  const locale = input.locale ?? 'en';
+  const t = TEXT[locale];
+  const name = input.profile?.displayName || input.name || t.guest;
+  return accountsDocument(input, {
+    account: {
+      handle: input.profile?.handle ?? '',
+      displayName: name,
+      anonymous: input.anonymous,
+      avatarURL: input.profile?.avatarURL,
+    },
+    accountHref: '/account',
+    requestPath: '/desktop/sign-in',
+    main: html`<main class="mx-auto w-full max-w-lg px-4 pt-12 pb-12" id="main">
+      <section class="card" data-size="sm" aria-labelledby="desktop-title">
+        <header>
+          <h1 class="text-2xl font-semibold tracking-tight" id="desktop-title">${t.desktop.title}</h1>
+          <p class="text-muted-foreground text-sm">${t.desktop.lead(name, input.anonymous)}</p>
+        </header>
+        <section class="grid gap-3">
+          <a class="btn w-full whitespace-normal" href=${input.returnURL} data-desktop-return>${t.desktop.open}</a>
+          <p class="text-muted-foreground text-sm">${t.desktop.hint}</p>
+        </section>
+        <section>
+          <be-music-status
+            class="text-destructive min-h-6 text-sm"
+            id="status"
+            role="status"
+            aria-live="polite"
+          ></be-music-status>
+        </section>
+      </section>
     </main>`,
   });
 }
