@@ -23,7 +23,8 @@ export interface LayoutContainer {
   addTab(params: { pages: readonly { title: string }[] }): LayoutTabs;
   /** Moves `row`, one of its rows, to the place of `rank` among the others: after those of a rank up to it. */
   placeAt(row: LayoutRow, rank: number): void;
-  addSectionReset?(reset: () => void): void;
+  /** Adds a button that runs `reset`, and returns its row for {@link placeAt}. */
+  addSectionReset?(reset: () => void): LayoutRow;
 }
 export interface LayoutFolder extends LayoutContainer, LayoutRow {}
 export interface LayoutTabs extends LayoutRow {
@@ -49,6 +50,14 @@ export interface LayoutStep {
   readonly page: number;
 }
 
+/** A folder or a page, as its reset sees it. */
+export interface LayoutSection {
+  /** The options and groups placed directly in it that have a default; those in its folders and tabs are theirs. */
+  readonly ids: ReadonlySet<string>;
+  /** The rank of its last option or group, after which its reset goes. */
+  readonly lastRank: number;
+}
+
 /** The containers {@link assembleOptionsLayout} made, by id, and the places the code fills. */
 export interface AssembledOptionsLayout<C extends LayoutContainer> {
   readonly folders: ReadonlyMap<string, ReturnType<C['addFolder']>>;
@@ -56,7 +65,7 @@ export interface AssembledOptionsLayout<C extends LayoutContainer> {
   readonly slots: ReadonlyMap<string, LayoutSlot<LayoutContainer>>;
   /** The pages to select, outermost first, to show each item. */
   readonly paths: ReadonlyMap<string, readonly LayoutStep[]>;
-  readonly sectionSlots: ReadonlyMap<LayoutContainer, ReadonlySet<string>>;
+  readonly sections: ReadonlyMap<LayoutContainer, LayoutSection>;
 }
 
 /**
@@ -71,19 +80,13 @@ export function assembleOptionsLayout<C extends LayoutContainer>(
   const tabs = new Map<string, LayoutTabs>();
   const slots = new Map<string, LayoutSlot<LayoutContainer>>();
   const paths = new Map<string, readonly LayoutStep[]>();
-  const sectionSlots = new Map<LayoutContainer, Set<string>>();
-  const withSection = (container: LayoutContainer, sections: readonly Set<string>[]): readonly Set<string>[] => {
-    const ids = new Set<string>();
-    sectionSlots.set(container, ids);
-    return [...sections, ids];
+  const sections = new Map<LayoutContainer, { ids: Set<string>; lastRank: number }>();
+  const sectionOf = (container: LayoutContainer) => {
+    const section = { ids: new Set<string>(), lastRank: -1 };
+    sections.set(container, section);
+    return section;
   };
-  const addTabs = (
-    parent: LayoutContainer,
-    spec: OptionLayoutTabs,
-    rank: number,
-    path: readonly LayoutStep[],
-    sections: readonly Set<string>[],
-  ) => {
+  const addTabs = (parent: LayoutContainer, spec: OptionLayoutTabs, rank: number, path: readonly LayoutStep[]) => {
     const made = parent.addTab({ pages: spec.pages.map((page) => ({ title: page.title })) });
     parent.placeAt(made, rank);
     made.omitted = spec.hidden;
@@ -93,17 +96,11 @@ export function assembleOptionsLayout<C extends LayoutContainer>(
       made.omitPage(index, page.hidden);
       const container = made.pages[index];
       if (container === undefined) return;
-      // A page made up entirely of folders already has one reset in each of its sections.
-      const pageSections = page.items.some((item) => !('folder' in item)) ? withSection(container, sections) : sections;
-      fill(container, page.items, [...path, { tabs: spec.tabs, page: index }], pageSections);
+      fill(container, page.items, [...path, { tabs: spec.tabs, page: index }]);
     });
   };
-  const fill = (
-    container: LayoutContainer,
-    items: readonly OptionLayoutItem[],
-    path: readonly LayoutStep[],
-    sections: readonly Set<string>[],
-  ) => {
+  const fill = (container: LayoutContainer, items: readonly OptionLayoutItem[], path: readonly LayoutStep[]) => {
+    const section = sectionOf(container);
     items.forEach((item, rank) => {
       if ('option' in item) {
         slots.set(item.option, {
@@ -114,30 +111,32 @@ export function assembleOptionsLayout<C extends LayoutContainer>(
           ...(item.default === undefined ? {} : { default: item.default }),
         });
         paths.set(item.option, path);
-        if (item.default !== undefined) for (const ids of sections) ids.add(item.option);
+        section.lastRank = rank;
+        if (item.default !== undefined) section.ids.add(item.option);
       } else if ('group' in item) {
         slots.set(item.group, { container, rank, kind: undefined, hidden: item.hidden });
         paths.set(item.group, path);
-        if (item.reset === true) for (const ids of sections) ids.add(item.group);
+        section.lastRank = rank;
+        if (item.reset === true) section.ids.add(item.group);
       } else if ('folder' in item) {
         const folder = container.addFolder({ title: item.title });
         container.placeAt(folder, rank);
         folder.omitted = item.hidden;
         folders.set(item.folder, folder);
         paths.set(item.folder, path);
-        fill(folder, item.items, path, withSection(folder, sections));
+        fill(folder, item.items, path);
       } else {
-        addTabs(container, item, rank, path, sections);
+        addTabs(container, item, rank, path);
       }
     });
   };
-  addTabs(root, layout, 0, [], []);
+  addTabs(root, layout, 0, []);
   return {
     folders: folders as Map<string, ReturnType<C['addFolder']>>,
     tabs: tabs as Map<string, ReturnType<C['addTab']>>,
     slots,
     paths,
-    sectionSlots,
+    sections,
   };
 }
 
@@ -193,14 +192,19 @@ export class OptionLayout<C extends LayoutContainer = LayoutContainer> {
     this.resetters.set(id, reset);
   }
 
-  /** Adds one reset to each section with settings, using the controls currently placed in it. */
+  /**
+   * Adds one reset to each folder or page with settings of its own, right after them. It resets only those settings,
+   * so a folder or tabs inside it keep theirs and their own reset; nested sections never stack resets at one end.
+   */
   public installSectionResets(resolve: RuntimeDefaultResolver): void {
-    for (const [section, ids] of this.assembled.sectionSlots) {
+    for (const [container, { ids, lastRank }] of this.assembled.sections) {
       if (ids.size === 0) continue;
-      section.addSectionReset?.(() => {
+      const row = container.addSectionReset?.(() => {
         // Construction order applies mode switches and choice lists before dependent values.
         for (const [id, reset] of this.resetters) if (ids.has(id)) reset(resolve);
       });
+      // Half a rank on: after the rows of its last item, including those a group makes later, and before what follows.
+      if (row !== undefined) container.placeAt(row, lastRank + 0.5);
     }
   }
 
