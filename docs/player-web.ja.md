@@ -182,6 +182,10 @@ player は、譜面ごと・コースごとのベスト記録を判定のルー�
 
 記録を保つ規則は `@be-music/player-engine/records`（`mergeBestRecord`、`mergeCourseStageRecord`、`recordPlayFromResult` など、`playKeepsRecord`、`courseRunKeepsRecord`）、ランプは `@be-music/player-engine/ruleset` にあります。player はキーを付けて保存するだけです（`chart-best-records.ts`）。
 
+### 選曲画面の位置
+
+選曲画面は、次に開いたときに前回の位置から始まります。開いていたフォルダー、各階層のカーソル、カーソル下のバーが対象です。player はページを閉じたときや非表示になったときにこの位置を `localStorage`（`be-music.select-position`、`select-position-storage.ts`）に保存し、最初の選曲画面で、キャッシュから一覧にしたライブラリーの上に戻します。ドロップやプレイで次に開く位置がすでに決まっている場合は、そちらを優先します。バーは一覧のどこへ動いてもキーで見つけ直し、フォルダーが一覧から消えていたときは、その手前の一覧にとどまり、カーソルを前回の位置の近くに置きます。検索、お気に入り、一覧の並びと絞り込みは保存しません。ライブラリーが空のときは前回の位置を残すので、フォルダーの読み込みに失敗しても位置は消えません。LR2 と beatoraja が再起動をまたいで位置を保つかは確かめていません。この動作は Be-Music 独自のものです。
+
 ### プレイテンポ
 
 Options ダイアログ → Tempo → **Enabled** で保存したテンポ変更率を有効にします（既定は無効）。無効にしても変更率は保持し、元のテンポで再生します。リプレイの記録テンポと NONSTOP FIT の調整は引き続き適用します。**Tempo (%)** で、曲を本来のテンポの -50 % から +50 % で遊べます（既定 0、1 % 刻み）。**Pitch** はテンポを変えたときの鳴り方を決めます。**Pitch follows tempo (LR2)**（既定）はサンプルを速く・遅く再生するので、テンポと一緒にピッチも変わります。**Keep pitch** は読み込み時にサンプルを時間方向に伸縮し、ピッチを保ちます。伸縮の方式は **Keep-pitch stretcher** で選べます（既定・選択肢の先頭は **WSOLA**、ほかに **Signalsmith Stretch**）。この 2 つの設定は NONSTOP の FIT のステージの鳴り方も決め（[NONSTOP](#コースと段位認定) を参照）、FIT のステージでは 2 つの倍率を掛け合わせます。有効・無効と3つの設定は記憶し（`localStorage`、`be-music.play-tempo`）、プレイの開始時に読み、ほかのプレイオプションと同じくプレイ中は無効になります。テンポが 0 でないときは状態表示に出ます（`Playing (tempo -20%): <曲名>`）。**Enabled** がオンで **Pitch follows tempo (LR2)** のときは **Tempo (%)** がプレイ中も有効で、プレイのテンポをその場で変え、状態表示も追従します。**Pitch** と **Keep-pitch stretcher** はロックしたままです。**Keep pitch** のとき（サンプルは読み込み時のテンポに伸縮済み）、リプレイ中（ログに従います）、コースがテンポを切ったステージでは、スライダーもロックします。
