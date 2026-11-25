@@ -95,7 +95,12 @@ import {
   WARP_STAR_COUNT,
 } from './warp-field.ts';
 
-const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 92, listBottomInset: 65, rowHeight: 28 };
+const LAYOUT: BeMusicSelectLayout = {
+  listX: 322,
+  listTop: 92,
+  listBottomInset: LANDSCAPE_QUICK_OPTIONS_INSET + 1,
+  rowHeight: 29,
+};
 /**
  * The portrait list: full width under the focused-song card and the search bar, with taller rows (two lines each, and
  * a thumb's height to tap).
