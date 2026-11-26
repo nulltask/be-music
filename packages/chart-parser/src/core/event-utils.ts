@@ -1,5 +1,5 @@
 import { cloneJSONFields } from '@be-music/chart-source';
-import { compareEvents } from '@be-music/chart-model';
+import { sortEventsInPlace } from '@be-music/chart-model';
 import {
   normalizeChannel,
   normalizeObjectKey,
@@ -108,7 +108,7 @@ export function sortAndNormalizeEvents(
     }
   }
 
-  normalized.sort(compareEvents);
+  sortEventsInPlace(normalized);
   return normalized;
 }
 

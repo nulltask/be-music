@@ -114,18 +114,20 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
         // channel named after it (no sample when the chart has none). bmson-sourced mines keep their WAV slot.
         const key = json.sourceFormat === 'bmson' ? normalizeObjectKey(event.value, idBase, true) : BMS_MINE_SAMPLE_KEY;
         const name = json.resources.wav[key] ?? (json.sourceFormat === 'bmson' ? key : '');
-        const slot = mineChannels.get(key) ?? {
-          ...collectBmsonExtraFields(json.bmson.channelExtraFields?.[key], 'channel'),
-          name,
-          notes: [],
-        };
-        slot.notes.push({
-          ...collectBmsonExtraFields(event.bmson?.extraFields, 'mineNote'),
-          x,
-          y,
-          ...(damage !== undefined ? { damage } : {}),
-        });
-        mineChannels.set(key, slot);
+        let slot = mineChannels.get(key);
+        if (slot === undefined) {
+          slot = {
+            ...collectBmsonExtraFields(json.bmson.channelExtraFields?.[key], 'channel'),
+            name,
+            notes: [],
+          };
+          mineChannels.set(key, slot);
+        }
+        const extraFields = collectBmsonExtraFields(event.bmson?.extraFields, 'mineNote');
+        const note: { x: number; y: number; damage?: number } =
+          extraFields === undefined ? { x, y } : { ...extraFields, x, y };
+        if (damage !== undefined) note.damage = damage;
+        slot.notes.push(note);
       }
       continue;
     }
@@ -134,13 +136,17 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
       const x = lane ? xMap.get(lane) : undefined;
       if (x !== undefined) {
         const key = normalizeObjectKey(event.value, idBase, json.sourceFormat === 'bmson');
-        const slot = keyChannels.get(key) ?? {
-          ...collectBmsonExtraFields(json.bmson.channelExtraFields?.[key], 'channel'),
-          name: json.resources.wav[key] ?? key,
-          notes: [],
-        };
-        slot.notes.push({ ...collectBmsonExtraFields(event.bmson?.extraFields, 'keyNote'), x, y });
-        keyChannels.set(key, slot);
+        let slot = keyChannels.get(key);
+        if (slot === undefined) {
+          slot = {
+            ...collectBmsonExtraFields(json.bmson.channelExtraFields?.[key], 'channel'),
+            name: json.resources.wav[key] ?? key,
+            notes: [],
+          };
+          keyChannels.set(key, slot);
+        }
+        const extraFields = collectBmsonExtraFields(event.bmson?.extraFields, 'keyNote');
+        slot.notes.push(extraFields === undefined ? { x, y } : { ...extraFields, x, y });
       }
       continue;
     }
@@ -172,21 +178,25 @@ export function stringifyBmson(json: BeMusicJSON, options: BmsonStringifyOptions
           ? event.bmson.t
           : undefined;
 
-      const slot = soundChannels.get(key) ?? {
-        ...collectBmsonExtraFields(json.bmson.channelExtraFields?.[key], 'channel'),
-        name: fileName,
-        notes: [],
-      };
-      slot.notes.push({
-        ...collectBmsonExtraFields(event.bmson?.extraFields, 'note'),
-        x,
-        y,
-        l: length,
-        c: continuation,
-        ...(longNoteType !== undefined ? { t: longNoteType } : {}),
-        ...(typeof event.bmson?.up === 'boolean' ? { up: event.bmson.up } : {}),
-      });
-      soundChannels.set(key, slot);
+      let slot = soundChannels.get(key);
+      if (slot === undefined) {
+        slot = {
+          ...collectBmsonExtraFields(json.bmson.channelExtraFields?.[key], 'channel'),
+          name: fileName,
+          notes: [],
+        };
+        soundChannels.set(key, slot);
+      }
+      // Nearly every note has no extra field: it is then one literal of one shape, with the rare `t` and `up` added
+      // after it in the order the document lists them, rather than a literal assembled from spreads.
+      const extraFields = collectBmsonExtraFields(event.bmson?.extraFields, 'note');
+      const note: { x: number; y: number; l: number; c: boolean; t?: number; up?: boolean } =
+        extraFields === undefined
+          ? { x, y, l: length, c: continuation }
+          : { ...extraFields, x, y, l: length, c: continuation };
+      if (longNoteType !== undefined) note.t = longNoteType;
+      if (typeof event.bmson?.up === 'boolean') note.up = event.bmson.up;
+      slot.notes.push(note);
     }
 
     if (channel === '03') {

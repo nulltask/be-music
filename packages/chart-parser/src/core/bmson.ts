@@ -426,6 +426,7 @@ export function createBmsonPositionResolver(
   lines: number[],
 ): (y: number) => MeasurePositionWithFraction {
   const ticksPerMeasure = Math.max(1, Math.floor(resolution * 4));
+  let lastLineIndex = 0;
   return (y: number) => {
     const normalizedY = Math.max(0, Math.round(y));
     if (lines.length < 2) {
@@ -437,8 +438,19 @@ export function createBmsonPositionResolver(
       };
     }
 
-    const lineIndex = findLastLineIndex(lines, normalizedY);
     const lastIndex = lines.length - 1;
+    // A channel lists its notes in time order, so most lookups land on the line of the one before or the next: the
+    // binary search runs only when the remembered line does not hold `y`.
+    let lineIndex = lastLineIndex;
+    if (!(lines[lineIndex]! <= normalizedY && (lineIndex === lastIndex || normalizedY < lines[lineIndex + 1]!))) {
+      lineIndex =
+        lineIndex < lastIndex &&
+        lines[lineIndex + 1]! <= normalizedY &&
+        (lineIndex + 1 === lastIndex || normalizedY < lines[lineIndex + 2]!)
+          ? lineIndex + 1
+          : findLastLineIndex(lines, normalizedY);
+      lastLineIndex = lineIndex;
+    }
     if (lineIndex < lastIndex) {
       const start = lines[lineIndex];
       const end = lines[lineIndex + 1];
@@ -914,8 +926,8 @@ function findLastLineIndex(lines: number[], y: number): number {
   let answer = 0;
 
   while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    if (lines[mid] <= y) {
+    const mid = (low + high) >>> 1;
+    if (lines[mid]! <= y) {
       answer = mid;
       low = mid + 1;
       continue;

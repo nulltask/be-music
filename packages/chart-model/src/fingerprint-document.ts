@@ -196,7 +196,19 @@ interface KeyOrder {
 const KEY_ORDERS = new Map<string, KeyOrder>();
 const KEY_ORDER_LIMIT = 1024;
 
+/** The order the last object used: a list's items share a shape, so most lookups end here without building a signature. */
+let lastKeyOrder: KeyOrder | undefined;
+
 function keyOrderOf(keys: string[]): KeyOrder {
+  if (lastKeyOrder !== undefined && sameKeys(lastKeyOrder.keys, keys)) {
+    return lastKeyOrder;
+  }
+  const order = lookUpKeyOrder(keys);
+  lastKeyOrder = order;
+  return order;
+}
+
+function lookUpKeyOrder(keys: string[]): KeyOrder {
   const signature = keys.join('\u0000');
   const cached = KEY_ORDERS.get(signature);
   if (cached !== undefined && sameKeys(cached.keys, keys)) {

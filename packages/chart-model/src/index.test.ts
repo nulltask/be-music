@@ -32,7 +32,9 @@ import {
   resolveChartReferenceBPM,
   resolveBMSLongNotes,
   resolveLNOBJLongNotes,
+  compareEvents,
   sortEvents,
+  sortEventsInPlace,
   usesMonophonicWAVPlayback,
   volWAVToLinearGain,
 } from './index.ts';
@@ -133,6 +135,38 @@ describe('chart', () => {
     const sorted = sortEvents(events);
     expect(sorted[0].value).toBe('01');
     expect(sorted[1].value).toBe('02');
+  });
+
+  test('sortEventsInPlace matches a comparison sort on a large shuffled chart, in place', () => {
+    let seed = 7;
+    const random = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const events: BeMusicEvent[] = [];
+    for (let index = 0; index < 600; index += 1) {
+      const denominator = 1 + Math.floor(random() * 16);
+      events.push({
+        measure: Math.floor(random() * 40),
+        // Timing channels keep their input order at one position, so the sort must be stable.
+        channel: ['08', '11', '12', 'SC'][Math.floor(random() * 4)]!,
+        position: [Math.floor(random() * denominator), denominator],
+        value: index.toString(36).toUpperCase().padStart(2, '0'),
+      });
+    }
+    const expected = [...events].sort(compareEvents);
+    expect(sortEventsInPlace(events)).toBe(events);
+    expect(events).toEqual(expected);
+    for (let index = 0; index < events.length; index += 1) expect(events[index]).toBe(expected[index]);
+  });
+
+  test('sortEventsInPlace falls back to one comparison sort for measures it cannot bucket', () => {
+    const events: BeMusicEvent[] = [];
+    for (let index = 0; index < 100; index += 1) {
+      events.push({ measure: (index * 37) % 50, channel: '11', position: [index % 4, 4], value: '01' });
+    }
+    events.push({ measure: 1_000_000, channel: '11', position: [0, 1], value: '02' });
+    events.push({ measure: 2.5, channel: '11', position: [0, 1], value: '03' });
+    events.push({ measure: -1, channel: '11', position: [0, 1], value: '04' });
+    const expected = [...events].sort(compareEvents);
+    expect(sortEventsInPlace(events)).toEqual(expected);
   });
 
   test('resolveChartReferenceBPM prefers #BASEBPM over the chart #BPM', () => {

@@ -535,7 +535,10 @@ function serializeBMSObjectLineEvents(
   base: 36 | 62 = 36,
 ): string | undefined {
   const normalizedChannel = normalizeChannel(channel);
+  // Only an event's position and its normalized value reach the line, so the events are kept as they are (no copies)
+  // beside their values.
   const lineEvents: BeMusicEvent[] = [];
+  const lineValues: string[] = [];
   for (const event of sortEvents(events)) {
     if (event.measure !== measure || normalizeChannel(event.channel) !== normalizedChannel) {
       continue;
@@ -544,12 +547,8 @@ function serializeBMSObjectLineEvents(
     if (value === '00') {
       continue;
     }
-    lineEvents.push({
-      ...event,
-      measure,
-      channel: normalizedChannel,
-      value,
-    });
+    lineEvents.push(event);
+    lineValues.push(value);
   }
 
   if (lineEvents.length === 0) {
@@ -557,12 +556,12 @@ function serializeBMSObjectLineEvents(
   }
 
   const resolution = chooseResolution(lineEvents);
-  const cells = Array.from({ length: resolution }, () => '00');
-  for (const event of lineEvents) {
-    const { numerator, denominator } = resolveEventFraction(event);
+  const cells = new Array<string>(resolution).fill('00');
+  for (let eventIndex = 0; eventIndex < lineEvents.length; eventIndex += 1) {
+    const { numerator, denominator } = resolveEventFraction(lineEvents[eventIndex]!);
     const scaled = Math.round((numerator * resolution) / denominator);
     const index = Math.min(resolution - 1, Math.max(0, scaled));
-    cells[index] = normalizeObjectKey(event.value, base);
+    cells[index] = normalizeObjectKey(lineValues[eventIndex]!, base);
   }
 
   return `#${toMeasure(measure)}${normalizedChannel}:${cells.join('')}`;

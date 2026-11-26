@@ -64,7 +64,14 @@ export function cloneJSONFields(input: unknown): JSONFields | undefined {
 export function collectBmsonExtraFields(input: unknown, scope: BmsonFieldScope): JSONFields | undefined {
   if (!isRecord(input)) return undefined;
   const known: readonly string[] = BMSON_FIELDS[scope];
-  return cloneJSONFields(Object.fromEntries(Object.entries(input).filter(([key]) => !known.includes(key))));
+  // Nearly every node holds known fields only, so nothing is allocated until an unknown one turns up.
+  let extra: Record<string, unknown> | undefined;
+  for (const key of Object.keys(input)) {
+    if (known.includes(key)) continue;
+    extra ??= {};
+    Object.defineProperty(extra, key, { value: input[key], enumerable: true, writable: true, configurable: true });
+  }
+  return extra === undefined ? undefined : cloneJSONFields(extra);
 }
 
 function isRecord(input: unknown): input is Record<string, unknown> {

@@ -113,41 +113,100 @@ export function sortEvents(events: BeMusicEvent[]): BeMusicEvent[] {
   if (sorted) {
     return [...events];
   }
-  return [...events].sort(compareEvents);
+  return sortEventsInPlace([...events]);
+}
+
+/** Below this many events one comparison sort is as fast as sorting measure by measure. */
+const MEASURE_BUCKET_MIN_EVENTS = 64;
+/** Measures past this index fall back to one comparison sort, so a stray huge index allocates no buckets. */
+const MEASURE_BUCKET_MAX_MEASURE = 4095;
+
+/**
+ * Sorts `events` in place in {@link compareEvents} order and returns the same array; equal events keep their input
+ * order, as `events.sort(compareEvents)` leaves them.
+ *
+ * A chart lists its events almost measure by measure, and the measure is the first sort key, so a large list is split
+ * by measure and each measure sorted alone: the comparator then runs on a few dozen events at a time instead of
+ * merging the whole chart's lines.
+ */
+export function sortEventsInPlace(events: BeMusicEvent[]): BeMusicEvent[] {
+  const length = events.length;
+  if (length < MEASURE_BUCKET_MIN_EVENTS) {
+    return events.sort(compareEvents);
+  }
+  let maxMeasure = 0;
+  for (let index = 0; index < length; index += 1) {
+    const measure = events[index]!.measure;
+    if (!Number.isInteger(measure) || measure < 0 || measure > MEASURE_BUCKET_MAX_MEASURE) {
+      return events.sort(compareEvents);
+    }
+    if (measure > maxMeasure) {
+      maxMeasure = measure;
+    }
+  }
+  const buckets: Array<BeMusicEvent[] | undefined> = Array.from({ length: maxMeasure + 1 });
+  for (let index = 0; index < length; index += 1) {
+    const event = events[index]!;
+    const bucket = buckets[event.measure];
+    if (bucket === undefined) {
+      buckets[event.measure] = [event];
+    } else {
+      bucket.push(event);
+    }
+  }
+  let cursor = 0;
+  for (let measure = 0; measure <= maxMeasure; measure += 1) {
+    const bucket = buckets[measure];
+    if (bucket === undefined) {
+      continue;
+    }
+    if (bucket.length > 1) {
+      bucket.sort(compareEvents);
+    }
+    for (let index = 0; index < bucket.length; index += 1) {
+      events[cursor] = bucket[index]!;
+      cursor += 1;
+    }
+  }
+  return events;
 }
 
 export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
   if (left.measure !== right.measure) {
     return left.measure - right.measure;
   }
-  const leftDenominator = normalizePositionDenominator(left.position[1]);
-  const leftNumerator = normalizePositionNumerator(left.position[0], leftDenominator);
-  const rightDenominator = normalizePositionDenominator(right.position[1]);
-  const rightNumerator = normalizePositionNumerator(right.position[0], rightDenominator);
-  if (leftDenominator === rightDenominator) {
-    const numeratorDelta = leftNumerator - rightNumerator;
-    if (numeratorDelta !== 0) {
-      return numeratorDelta;
+  const leftPosition = left.position;
+  const rightPosition = right.position;
+  const leftNumerator = leftPosition[0];
+  const leftDenominator = leftPosition[1];
+  const rightNumerator = rightPosition[0];
+  const rightDenominator = rightPosition[1];
+  // Parsed events hold a position `[n, d]` with integers `0 <= n < d`, and `d` far below 2 ** 26: the cross products
+  // are then exact small integers, compared with plain arithmetic the JIT keeps in registers. Anything else (a
+  // hand-built event out of range, a huge grid) takes the general path below.
+  if (
+    (leftNumerator | 0) === leftNumerator &&
+    (rightNumerator | 0) === rightNumerator &&
+    (leftDenominator | 0) === leftDenominator &&
+    (rightDenominator | 0) === rightDenominator &&
+    leftNumerator >= 0 &&
+    rightNumerator >= 0 &&
+    leftNumerator < leftDenominator &&
+    rightNumerator < rightDenominator &&
+    leftDenominator <= MAX_FAST_POSITION_DENOMINATOR &&
+    rightDenominator <= MAX_FAST_POSITION_DENOMINATOR
+  ) {
+    const delta =
+      leftDenominator === rightDenominator
+        ? leftNumerator - rightNumerator
+        : leftNumerator * rightDenominator - rightNumerator * leftDenominator;
+    if (delta !== 0) {
+      return delta < 0 ? -1 : 1;
     }
   } else {
-    const leftScaled = leftNumerator * rightDenominator;
-    const rightScaled = rightNumerator * leftDenominator;
-    if (Number.isSafeInteger(leftScaled) && Number.isSafeInteger(rightScaled)) {
-      if (leftScaled < rightScaled) {
-        return -1;
-      }
-      if (leftScaled > rightScaled) {
-        return 1;
-      }
-    } else {
-      const leftScaledBigInt = BigInt(leftNumerator) * BigInt(rightDenominator);
-      const rightScaledBigInt = BigInt(rightNumerator) * BigInt(leftDenominator);
-      if (leftScaledBigInt < rightScaledBigInt) {
-        return -1;
-      }
-      if (leftScaledBigInt > rightScaledBigInt) {
-        return 1;
-      }
+    const order = comparePositionsExactly(leftPosition, rightPosition);
+    if (order !== 0) {
+      return order;
     }
   }
   if (left.channel !== right.channel) {
@@ -162,6 +221,28 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
     return left.value < right.value ? -1 : 1;
   }
   return 0;
+}
+
+/** Denominators up to here keep the cross products of two positions under 2 ** 52, so they need no overflow check. */
+const MAX_FAST_POSITION_DENOMINATOR = 2 ** 26;
+
+/** The order of two positions of one measure after normalizing them, exact for any denominator. */
+function comparePositionsExactly(left: BeMusicEvent['position'], right: BeMusicEvent['position']): number {
+  const leftDenominator = normalizePositionDenominator(left[1]);
+  const leftNumerator = normalizePositionNumerator(left[0], leftDenominator);
+  const rightDenominator = normalizePositionDenominator(right[1]);
+  const rightNumerator = normalizePositionNumerator(right[0], rightDenominator);
+  if (leftDenominator === rightDenominator) {
+    return leftNumerator - rightNumerator;
+  }
+  const leftScaled = leftNumerator * rightDenominator;
+  const rightScaled = rightNumerator * leftDenominator;
+  if (Number.isSafeInteger(leftScaled) && Number.isSafeInteger(rightScaled)) {
+    return leftScaled < rightScaled ? -1 : leftScaled > rightScaled ? 1 : 0;
+  }
+  const leftScaledBigInt = BigInt(leftNumerator) * BigInt(rightDenominator);
+  const rightScaledBigInt = BigInt(rightNumerator) * BigInt(leftDenominator);
+  return leftScaledBigInt < rightScaledBigInt ? -1 : leftScaledBigInt > rightScaledBigInt ? 1 : 0;
 }
 
 /** BPM, STOP, SCROLL and SPEED channels, where the last object at a position takes effect. */

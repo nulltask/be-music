@@ -380,6 +380,11 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartAPI.sortEvents(fixtures.sampleBmsJSON.events);
     },
   });
+  define('chart-model.sortEventsInPlace', {
+    run: (fixtures) => {
+      chartAPI.sortEventsInPlace([...fixtures.sampleBmsJSON.events]);
+    },
+  });
   define('chart-model.compareEvents', {
     run: (fixtures) => {
       chartAPI.compareEvents(fixtures.eventA, fixtures.eventB);

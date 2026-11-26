@@ -40,10 +40,26 @@ export function resolveExactBmsonResolution(json: Pick<BeMusicJSON, 'events' | '
     const [lengthNumerator, lengthDenominator] = lengths.get(measure) ?? [1n, 1n];
     start = add(start, [4n * lengthNumerator, lengthDenominator]);
   }
+  // Chords and layered keysounds put many events on one position, and a position's denominator is the same every
+  // time, so each position of a measure is worked out once.
+  const seenPositions = new Set<number>();
   for (const event of json.events) {
     const [numerator, positionDenominator] = event.position;
     if (!Number.isInteger(numerator) || !Number.isInteger(positionDenominator) || positionDenominator <= 0) {
       return MAX_EXACT_BMSON_RESOLUTION;
+    }
+    const measure = event.measure;
+    if (
+      Number.isInteger(measure) &&
+      measure >= 0 &&
+      measure < POSITION_KEY_MEASURES &&
+      numerator >= 0 &&
+      numerator < POSITION_KEY_RADIX &&
+      positionDenominator < POSITION_KEY_RADIX
+    ) {
+      const key = (measure * POSITION_KEY_RADIX + positionDenominator) * POSITION_KEY_RADIX + numerator;
+      if (seenPositions.has(key)) continue;
+      seenPositions.add(key);
     }
     const [lengthNumerator, lengthDenominator] = lengths.get(event.measure) ?? [1n, 1n];
     const offset = reduce([4n * lengthNumerator * BigInt(numerator), lengthDenominator * BigInt(positionDenominator)]);
@@ -53,6 +69,10 @@ export function resolveExactBmsonResolution(json: Pick<BeMusicJSON, 'events' | '
   const resolution = lcm(BigInt(DEFAULT_BMSON_RESOLUTION), denominator);
   return resolution > BigInt(MAX_EXACT_BMSON_RESOLUTION) ? MAX_EXACT_BMSON_RESOLUTION : Number(resolution);
 }
+
+/** A position gets a number key (measure, denominator, numerator) while each part fits; the key stays a safe integer. */
+const POSITION_KEY_RADIX = 2 ** 20;
+const POSITION_KEY_MEASURES = 2 ** 12;
 
 /** A non-negative rational `[numerator, denominator]` in lowest terms. */
 type Fraction = [bigint, bigint];
