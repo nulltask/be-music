@@ -1,0 +1,22 @@
+{
+  "name": "@be-music/app-desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Desktop app that wraps the Be-Music web player in Electron",
+  "license": "MIT",
+  "author": "nulltask",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "vp pack",
+    "dev": "vp pack && electron .",
+    "dist": "vp pack && electron-builder --publish never",
+    "build:icons": "node scripts/build-icons.ts",
+    "clean": "rimraf dist release"
+  },
+  "devDependencies": {
+    "electron": "45.4.1",
+    "electron-builder": "26.18.0"
+  },
+  "productName": "Be-Music Play"
+}
