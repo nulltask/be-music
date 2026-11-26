@@ -1,11 +1,26 @@
 // The desktop app's main process (README.md): one window that shows the web player from its server, so the player
 // behaves as it does in Chrome, with the server's cross-origin isolation, sign-in, settings sync and URL load proxy.
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { BrowserWindow, Menu, app, dialog, screen, session, shell } from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
-import { allowsRedirect, isSameOrigin, navigationTarget } from './navigation.ts';
-import { resolvePlayURL } from './play-url.ts';
+import {
+  DESKTOP_SCHEME,
+  ACCOUNTS_SESSION_COOKIE,
+  accountsLoginOrigin,
+  accountsSignOutRequest,
+  answersPending,
+  browserSignInURL,
+  createPendingSignIn,
+  findReturnURL,
+  isPlayerSignOut,
+  parseReturnURL,
+  playerSignInURL,
+  redeemRequest,
+} from './browser-sign-in.ts';
+import type { PendingSignIn } from './browser-sign-in.ts';
+import { ISSUER_HOSTS, allowsRedirect, isSameOrigin, navigationTarget } from './navigation.ts';
+import { DEFAULT_PLAY_URL, resolvePlayURL } from './play-url.ts';
 import { chromeUserAgent } from './user-agent.ts';
 import { DEFAULT_WINDOW_SIZE, MINIMUM_WINDOW_SIZE, parseWindowState, restorableBounds } from './window-state.ts';
 import type { WindowState } from './window-state.ts';
@@ -15,6 +30,77 @@ const PRODUCT_NAME = 'Be-Music Play';
 const BACKGROUND_COLOR = '#101b31';
 /** Chromium's code for a navigation another one replaced; not a failure. */
 const ERROR_ABORTED = -3;
+
+/** The sign-in the app sent to the default browser, until the browser comes back. */
+let pendingSignIn: PendingSignIn | undefined;
+
+function startBrowserSignIn(loginURL: string, issuerOrigin: string, returnTo: string): void {
+  pendingSignIn = createPendingSignIn(issuerOrigin, returnTo, Date.now());
+  openInBrowser(browserSignInURL(pendingSignIn, loginURL));
+}
+
+function signInFailedMessage(): string {
+  return app.getLocale().startsWith('ja')
+    ? 'ログインを終えられませんでした。プレイヤーからもう一度ログインしてください。'
+    : 'Signing in did not finish. Sign in again from the player.';
+}
+
+/** Redeems the code the browser sent back, then runs the player's sign-in again in the window. */
+async function finishBrowserSignIn(url: string, window: BrowserWindow | undefined, playURL: URL): Promise<void> {
+  const returned = parseReturnURL(url);
+  const pending = pendingSignIn;
+  // A URL no sign-in of this app is waiting for is ignored: it may come from another app or an old tab.
+  if (returned === null || !answersPending(pending, returned.state, Date.now())) {
+    return;
+  }
+  pendingSignIn = undefined;
+  try {
+    // The session's own cookie store keeps the Accounts session the response sets, as the window's requests do.
+    const request = redeemRequest(pending, returned.code);
+    const response = await session.defaultSession.fetch(request.url, request.init);
+    if (!response.ok) {
+      throw new Error(`redeem answered ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    }
+  } catch (error) {
+    console.error('cannot finish signing in:', error);
+    dialog.showErrorBox(PRODUCT_NAME, signInFailedMessage());
+    return;
+  }
+  if (window === undefined || window.isDestroyed()) {
+    return;
+  }
+  if (window.isMinimized()) {
+    window.restore();
+  }
+  window.focus();
+  void window.loadURL(playerSignInURL(playURL.origin, pending.returnTo));
+}
+
+/**
+ * Ends the app's own Accounts session after the player signs out. The browser keeps its Accounts session for other
+ * pages, but the app's session lives only in the window, where no Accounts page shows: without this, the next sign-in
+ * would pick the same account again at once.
+ */
+async function signOutOfAccounts(): Promise<void> {
+  for (const host of ISSUER_HOSTS) {
+    const issuerOrigin = `https://${host}`;
+    const cookies = await session.defaultSession.cookies.get({ url: issuerOrigin, name: ACCOUNTS_SESSION_COOKIE });
+    if (cookies.length === 0) {
+      continue;
+    }
+    try {
+      const request = accountsSignOutRequest(issuerOrigin);
+      const response = await session.defaultSession.fetch(request.url, request.init);
+      if (!response.ok) {
+        throw new Error(`sign-out answered ${response.status}`);
+      }
+    } catch (error) {
+      console.error(`cannot sign out of ${issuerOrigin}:`, error);
+      // The session cookie goes anyway, so the next sign-in asks again; the server session expires on its own.
+      await session.defaultSession.cookies.remove(issuerOrigin, ACCOUNTS_SESSION_COOKIE);
+    }
+  }
+}
 
 function windowStatePath(): string {
   return join(app.getPath('userData'), 'window-state.json');
@@ -104,8 +190,23 @@ function createWindow(playURL: URL): BrowserWindow {
     }
     return { action: 'deny' };
   });
+  // Identity providers refuse embedded browsers, so the Accounts login opens in the default browser instead.
+  const sendLoginToBrowser = (event: { preventDefault(): void }, url: string): boolean => {
+    const issuerOrigin = accountsLoginOrigin(url);
+    if (issuerOrigin === null) {
+      return false;
+    }
+    event.preventDefault();
+    startBrowserSignIn(url, issuerOrigin, contents.getURL());
+    return true;
+  };
+  // A player other than production (preview, local) keeps every web page in the window, for Cloudflare Access.
+  const keepWebPages = playURL.origin !== new URL(DEFAULT_PLAY_URL).origin;
   contents.on('will-navigate', (event) => {
-    const target = navigationTarget(event.url, playURL.origin);
+    if (sendLoginToBrowser(event, event.url)) {
+      return;
+    }
+    const target = navigationTarget(event.url, playURL.origin, keepWebPages);
     if (target === 'window') {
       return;
     }
@@ -115,6 +216,9 @@ function createWindow(playURL: URL): BrowserWindow {
     }
   });
   contents.on('will-redirect', (event) => {
+    if (sendLoginToBrowser(event, event.url)) {
+      return;
+    }
     if (!allowsRedirect(event.url)) {
       event.preventDefault();
     }
@@ -144,7 +248,22 @@ function main(): void {
   }
 
   let window: BrowserWindow | undefined;
-  app.on('second-instance', () => {
+  // The browser returns a sign-in through the app's URL scheme: on macOS as an event, elsewhere as a second launch.
+  if (process.defaultApp && process.argv[1] !== undefined) {
+    app.setAsDefaultProtocolClient(DESKTOP_SCHEME, process.execPath, [resolve(process.argv[1])]);
+  } else {
+    app.setAsDefaultProtocolClient(DESKTOP_SCHEME);
+  }
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    void finishBrowserSignIn(url, window, playURL);
+  });
+  app.on('second-instance', (_event, argv) => {
+    const returnURL = findReturnURL(argv);
+    if (returnURL !== undefined) {
+      void finishBrowserSignIn(returnURL, window, playURL);
+      return;
+    }
     if (window === undefined) {
       return;
     }
@@ -165,6 +284,12 @@ function main(): void {
     });
     defaultSession.setPermissionCheckHandler((_contents, _permission, requestingOrigin) => {
       return isSameOrigin(requestingOrigin, playURL.origin);
+    });
+    // The player's sign-out is a request from the page; the app's Accounts session ends with it.
+    defaultSession.webRequest.onCompleted({ urls: [`${playURL.origin}/api/auth/sign-out*`] }, (details) => {
+      if (isPlayerSignOut(details, playURL.origin)) {
+        void signOutOfAccounts();
+      }
     });
     Menu.setApplicationMenu(buildMenu());
     window = createWindow(playURL);

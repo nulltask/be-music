@@ -6,6 +6,10 @@ copyright: Copyright © nulltask
 directories:
   output: release
   buildResources: build
+# The browser returns a sign-in through this scheme (README.md, "Signing in").
+protocols:
+  - name: Be-Music Play
+    schemes: [be-music-play]
 files:
   - dist/**/*
   - '!dist/**/*.map'

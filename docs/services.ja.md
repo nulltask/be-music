@@ -176,6 +176,32 @@ flowchart LR
 - **入り口**：ログインページのスクリプトは、アプリのサインイン要求（`oauth_query`）を続ける前に新しいアカウントを `/welcome` へ送ります。認可コードはウェルカムのあとで作られます。`/account` と Dashboard の `/` もウェルカムへリダイレクトします。`next` はこのホスト上のパスだけを受け付けます。
 - **パスキーで始める**（ログインページ）は、ゲストアカウントを作ってすぐにパスキーを登録します。プレイヤーにゲストの段階を見せずに、パスキーでアカウントを始められます。
 
+### デスクトップ版のログイン
+
+デスクトップ版（[`@be-music/app-desktop`](../packages/app-desktop/README.ja.md)）は、Electron のウィンドウにプレイヤーを表示します。ところが、Google などの ID プロバイダーは、埋め込みブラウザーからのログインを拒みます。そこでアプリは、既定のブラウザーでログインしてから、自分用の Accounts のセッションを受け取ります。自分用のセッションが要るのは、プレイヤーのセッションが最長 10 分で、同じウィンドウにある Accounts のセッションを使って更新されるからです。
+
+```mermaid
+sequenceDiagram
+  participant W as アプリのウィンドウ
+  participant B as 既定のブラウザー
+  participant A as Accounts
+  W->>W: プレイヤーのログインが /login に着く
+  W->>B: /desktop/sign-in を開く（state、challenge）
+  B->>A: 必要ならログイン
+  A->>B: 1 回だけ使えるコード
+  B->>W: be-music-play://sign-in（code、state）
+  W->>A: verifier を付けてコードを引き換える
+  A->>W: 新しい Accounts のセッションのクッキー
+  W->>W: もう一度プレイヤーのログイン
+```
+
+- **始まり**：ウィンドウの遷移が Accounts の `/login` に着くと、アプリはそれを止め、既定のブラウザーで `/desktop/sign-in?state=…&challenge=…` を開きます。challenge は、アプリがメモリーに持つ verifier の S256 ハッシュです（PKCE と同じ）。プレイヤーの Google や Discord のボタンから始めたときは、ログインの URL の `sign_in_method` も渡し、ブラウザーのログイン画面がそのプロバイダーを始めます。
+- **ブラウザー**：ログインしていないブラウザーは `/login?next=…` に進み、ログインすると戻ってきます。新しいアカウントはウェルカムを通ります。そのあと `/desktop/sign-in` が 3 分間有効なコードを発行し（`createDesktopSignInCode`、サーバーからのみ）、`be-music-play://sign-in?code=…&state=…` を開きます。
+- **引き換え**：アプリは、自分が待っている `state` を 10 分以内に受け取ったときだけ、コードと verifier を `POST /api/auth/desktop-sign-in/redeem` に送ります。`Origin` には Accounts の origin を付けます。ウィンドウのセッションには、プレイヤーのログインのリダイレクトで付いた Accounts のクッキーが残ることがあり、Better Auth はクッキー付きで信頼できる origin のない POST を拒むからです。コードは、正しくても誤っていても、最初の引き換えで使い切ります。Accounts は verifier を challenge と照らし合わせ、同じユーザーの新しいセッションをアプリのクッキーストアに作ります。ブラウザーのセッションとは別なので、ブラウザーでログアウトしても、アプリはログインしたままです。
+- **verifier がある理由**：同じ URL スキームを登録したほかのアプリは、コードを横取りできても、verifier がないので引き換えられません。verifier はデスクトップ版の外に出ません。
+- **そのあと**：ウィンドウはもう一度プレイヤーのログインを行います。ウィンドウにはもう Accounts のセッションがあるので、画面を出さずに終わります。あとの自動更新も、ブラウザーと同じようにウィンドウの中で動きます。
+- **ログアウト**：プレイヤーからログアウトすると、アプリの Accounts のセッションも終えます（Accounts への `POST /api/auth/sign-out`）。ウィンドウには Accounts の画面が出ないので、これがないと、次のログインで同じアカウントが確認なしに選ばれてしまいます。
+
 ### 3.1 ユーザーの所有と移行
 
 Accounts は専用の D1（`dashboard`／`dashboard-preview`）にユーザー、外部サービス連携、パスキー、セッション、署名鍵、OAuth クライアントの状態を持ちます。ログイン中に Leaderboard を呼びません。

@@ -1,5 +1,6 @@
 import { and, eq, ne } from 'drizzle-orm';
 import type { Database } from './db/client.ts';
+import { nextPath } from './next-path.ts';
 import { handleHistory, profile } from './schema.ts';
 
 const HANDLE_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -217,13 +218,5 @@ export async function onAccountKept(db: Database, userId: string): Promise<void>
     .where(eq(profile.userId, userId));
 }
 
-/**
- * Where the welcome goes when it is done: a path on this host (`/account`, `/`), never another origin or a
- * protocol-relative URL. Anything else goes to `/account`.
- */
-export function welcomeNextPath(next: string | null | undefined): string {
-  if (typeof next !== 'string' || !next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) {
-    return '/account';
-  }
-  return next;
-}
+/** Where the welcome goes when it is done (`nextPath`). */
+export const welcomeNextPath = nextPath;

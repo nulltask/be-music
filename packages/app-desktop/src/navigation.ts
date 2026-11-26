@@ -4,13 +4,15 @@
  */
 export type NavigationTarget = 'window' | 'browser' | 'refuse';
 
+/** The Accounts issuer's hosts (`AUTH_ISSUER`, production and preview), where the player's sign-in redirects. */
+export const ISSUER_HOSTS: ReadonlySet<string> = new Set(['be-music.app', 'preview.be-music.app']);
+
 /**
- * Hosts the player's sign-in passes through: the Accounts issuer (`AUTH_ISSUER`, production and preview) and the
- * identity providers it offers. Google's sign-in can bounce through `accounts.youtube.com` to set its session.
+ * Hosts the player's sign-in passes through: the issuer and the identity providers it offers. Google's sign-in can
+ * bounce through `accounts.youtube.com` to set its session.
  */
 const SIGN_IN_HOSTS: ReadonlySet<string> = new Set([
-  'be-music.app',
-  'preview.be-music.app',
+  ...ISSUER_HOSTS,
   'discord.com',
   'accounts.google.com',
   'accounts.youtube.com',
@@ -27,8 +29,11 @@ export function isSameOrigin(url: string, origin: string): boolean {
   }
 }
 
-/** Classifies `url` for a window showing the player at `playOrigin`. */
-export function navigationTarget(url: string, playOrigin: string): NavigationTarget {
+/**
+ * Classifies `url` for a window showing the player at `playOrigin`. With `keepWebPages`, every web page stays in the
+ * window: a preview or local player sits behind Cloudflare Access, whose GitHub sign-in has to happen in the window.
+ */
+export function navigationTarget(url: string, playOrigin: string, keepWebPages = false): NavigationTarget {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -41,7 +46,10 @@ export function navigationTarget(url: string, playOrigin: string): NavigationTar
   if (parsed.protocol === 'https:' && SIGN_IN_HOSTS.has(parsed.hostname)) {
     return 'window';
   }
-  if (WEB_PROTOCOLS.has(parsed.protocol) || parsed.protocol === 'mailto:') {
+  if (WEB_PROTOCOLS.has(parsed.protocol)) {
+    return keepWebPages ? 'window' : 'browser';
+  }
+  if (parsed.protocol === 'mailto:') {
     return 'browser';
   }
   return 'refuse';

@@ -3,7 +3,9 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { createAuth, provisionClients, type Env } from './auth.ts';
 import { isLocale, localeFromCookie, localeSetCookie, resolveLocale } from '@be-music/service-web-theme';
-import { accountNotice, renderAccountPage, renderWelcomePage } from './page.ts';
+import { desktopReturnURL, parseDesktopSignInRequest } from './desktop-sign-in.ts';
+import { SOCIAL_SIGN_IN_PARAM, applySocialSignInMethod } from '@be-music/service-auth-client/social-sign-in';
+import { accountNotice, renderAccountPage, renderDesktopSignInPage, renderWelcomePage } from './page.ts';
 import { CLIENT_JS } from './client.generated.ts';
 import { avatarURL } from './avatars.ts';
 import { profileHTTP } from './profile-http.ts';
@@ -43,8 +45,18 @@ export async function handleAccounts(request: Request, env: Env): Promise<Respon
   }
   if (url.pathname === '/assets/client.js' && request.method === 'GET')
     return new Response(CLIENT_JS, { headers: { 'content-type': 'text/javascript', 'cache-control': 'no-cache' } });
-  if (['/login', '/account', '/welcome'].includes(url.pathname) && request.method === 'GET') {
+  if (['/login', '/account', '/welcome', '/desktop/sign-in'].includes(url.pathname) && request.method === 'GET') {
+    const desktop = url.pathname === '/desktop/sign-in' ? parseDesktopSignInRequest(url.searchParams) : undefined;
+    if (desktop === null) return new Response('Bad Request', { status: 400 });
     const session = await auth.api.getSession({ headers: request.headers });
+    // The desktop app's sign-in happens here in the browser and comes back afterwards (docs/services.md). The login
+    // page starts the provider the player's button asked for, as it does for a sign-in from the window.
+    if (desktop !== undefined && !session) {
+      const login = new URL('/login', url);
+      login.searchParams.set('next', url.pathname + url.search);
+      applySocialSignInMethod(login, url.searchParams.get(SOCIAL_SIGN_IN_PARAM));
+      return redirect(login.pathname + login.search);
+    }
     let current;
     let linkedDiscord = false;
     let linkedGoogle = false;
@@ -91,15 +103,22 @@ export async function handleAccounts(request: Request, env: Env): Promise<Respon
       notice: accountNotice(url.searchParams.get('error'), locale),
       apps: { dashboard: '/', ...(JSON.parse(env.OIDC_CLIENTS) as Record<string, string>) },
     };
+    const desktopCode =
+      desktop === undefined
+        ? undefined
+        : (await auth.api.createDesktopSignInCode({ headers: request.headers, body: { challenge: desktop.challenge } }))
+            .code;
     const body =
-      url.pathname === '/welcome'
-        ? renderWelcomePage({
-            ...common,
-            next: welcomeNextPath(url.searchParams.get('next')),
-            continuing: url.searchParams.has('oauth_query'),
-            step: url.searchParams.get('step') === 'finish' ? 'finish' : 'profile',
-          })
-        : renderAccountPage({ ...common, signedIn: !!session, login: url.pathname === '/login' });
+      desktop !== undefined && desktopCode !== undefined
+        ? renderDesktopSignInPage({ ...common, returnURL: desktopReturnURL(desktopCode, desktop.state) })
+        : url.pathname === '/welcome'
+          ? renderWelcomePage({
+              ...common,
+              next: welcomeNextPath(url.searchParams.get('next')),
+              continuing: url.searchParams.has('oauth_query'),
+              step: url.searchParams.get('step') === 'finish' ? 'finish' : 'profile',
+            })
+          : renderAccountPage({ ...common, signedIn: !!session, login: url.pathname === '/login' });
     return new Response(body, {
       headers: {
         'content-type': 'text/html; charset=utf-8',

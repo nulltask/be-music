@@ -6,6 +6,7 @@ import { passkey } from '@better-auth/passkey';
 import { oauthProvider } from '@better-auth/oauth-provider';
 import { drizzle } from 'drizzle-orm/d1';
 import { eq, count, notInArray } from 'drizzle-orm';
+import { desktopSignIn } from './desktop-sign-in.ts';
 import { createProfile, onAccountKept } from './profiles.ts';
 import * as schema from './schema.ts';
 
@@ -121,6 +122,7 @@ function buildAuth(env: Env) {
             .where(eq(schema.identityLink.toUserId, anonymousUser.user.id));
         },
       }),
+      desktopSignIn(),
       passkey({ rpID: env.PASSKEY_RP_ID, rpName: 'Be-Music', origin: env.AUTH_ORIGIN }),
       jwt({ jwt: { issuer: `${env.AUTH_ORIGIN}/api/auth` }, jwks: { keyPairConfig: { alg: 'RS256' } } }),
       oauthProvider({
