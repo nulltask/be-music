@@ -4,6 +4,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { createAuth, provisionClients, type Env } from './auth.ts';
 import { isLocale, localeFromCookie, localeSetCookie, resolveLocale } from '@be-music/service-web-theme';
 import { desktopReturnURL, parseDesktopSignInRequest } from './desktop-sign-in.ts';
+import { SOCIAL_SIGN_IN_PARAM, applySocialSignInMethod } from '@be-music/service-auth-client/social-sign-in';
 import { accountNotice, renderAccountPage, renderDesktopSignInPage, renderWelcomePage } from './page.ts';
 import { CLIENT_JS } from './client.generated.ts';
 import { avatarURL } from './avatars.ts';
@@ -48,9 +49,14 @@ export async function handleAccounts(request: Request, env: Env): Promise<Respon
     const desktop = url.pathname === '/desktop/sign-in' ? parseDesktopSignInRequest(url.searchParams) : undefined;
     if (desktop === null) return new Response('Bad Request', { status: 400 });
     const session = await auth.api.getSession({ headers: request.headers });
-    // The desktop app's sign-in happens here in the browser and comes back afterwards (docs/services.md).
-    if (desktop !== undefined && !session)
-      return redirect(`/login?${new URLSearchParams({ next: url.pathname + url.search })}`);
+    // The desktop app's sign-in happens here in the browser and comes back afterwards (docs/services.md). The login
+    // page starts the provider the player's button asked for, as it does for a sign-in from the window.
+    if (desktop !== undefined && !session) {
+      const login = new URL('/login', url);
+      login.searchParams.set('next', url.pathname + url.search);
+      applySocialSignInMethod(login, url.searchParams.get(SOCIAL_SIGN_IN_PARAM));
+      return redirect(login.pathname + login.search);
+    }
     let current;
     let linkedDiscord = false;
     let linkedGoogle = false;

@@ -128,7 +128,21 @@ describe('desktop sign-in through the browser', () => {
     const location = new URL(response.headers.get('location')!, env.AUTH_ORIGIN);
     expect(location.pathname).toBe('/login');
     expect(location.searchParams.get('next')).toBe(`/desktop/sign-in?state=${state}&challenge=${challenge}`);
+    expect(location.searchParams.has('sign_in_method')).toBe(false);
     expect((await page(undefined, new URLSearchParams({ state }))).status).toBe(400);
+  });
+
+  test('starts the provider the player asked for on the login page', async () => {
+    const login = async (method: string) => {
+      const response = await page(undefined, new URLSearchParams({ state, challenge, sign_in_method: method }));
+      expect(response.status).toBe(302);
+      return new URL(response.headers.get('location')!, env.AUTH_ORIGIN).searchParams;
+    };
+    const google = await login('google');
+    expect(google.get('sign_in_method')).toBe('google');
+    expect(google.get('next')).toBe(`/desktop/sign-in?state=${state}&challenge=${challenge}&sign_in_method=google`);
+    expect((await login('discord')).get('sign_in_method')).toBe('discord');
+    expect((await login('passkey')).has('sign_in_method')).toBe(false);
   });
 
   test('gives the app its own Accounts session, which signs in to the player', async () => {
