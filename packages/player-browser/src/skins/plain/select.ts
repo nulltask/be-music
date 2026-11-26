@@ -106,6 +106,8 @@ function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFram
       return;
     }
     text(ctx, 'Pick a folder', x + 16, y + 28, { size: 14, color: MUTED });
+    // PLAY and AUTO start nothing from a folder: drawn faint, with no hit area.
+    drawCardButtons(ctx, frame, x, y, false);
     return;
   }
   // Genre, title, artist — the order every built-in skin uses.
@@ -148,10 +150,16 @@ function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFram
   drawCardButtons(ctx, frame, x, y);
 }
 
-/** PLAY and AUTO along the foot of the landscape card at (`x`, `y`). */
-function drawCardButtons(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFrame, x: number, y: number): void {
-  button(ctx, frame, 'PLAY', x + 16, y + PANEL_H - 64, 160, frame.actions.play, true);
-  button(ctx, frame, 'AUTO', x + 186, y + PANEL_H - 64, 88, frame.actions.autoPlay, false);
+/** PLAY and AUTO along the foot of the landscape card at (`x`, `y`); faint and inert when `enabled` is false. */
+function drawCardButtons(
+  ctx: CanvasRenderingContext2D,
+  frame: BeMusicSelectFrame,
+  x: number,
+  y: number,
+  enabled = true,
+): void {
+  button(ctx, frame, 'PLAY', x + 16, y + PANEL_H - 64, 160, enabled ? frame.actions.play : undefined, true);
+  button(ctx, frame, 'AUTO', x + 186, y + PANEL_H - 64, 88, enabled ? frame.actions.autoPlay : undefined, false);
 }
 
 /**
@@ -232,6 +240,9 @@ function drawPortraitCard(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFra
       return;
     }
     text(ctx, 'Pick a folder', left, card.y + 28, { size: 14, color: MUTED });
+    // PLAY and AUTO start nothing from a folder: drawn faint, with no hit area.
+    button(ctx, frame, 'PLAY', play.x, play.y, play.w, undefined, true, play.h);
+    button(ctx, frame, 'AUTO', auto.x, auto.y, auto.w, undefined, false, auto.h);
     return;
   }
   const { nowMs } = frame;
@@ -309,16 +320,23 @@ function button(
   x: number,
   y: number,
   w: number,
-  action: () => void,
+  action: (() => void) | undefined,
   primary: boolean,
   h = 40,
 ): void {
-  ctx.fillStyle = primary ? ACCENT : INK;
+  // Without an action the button starts nothing: an outline with faint text, and no hit area.
+  const enabled = action !== undefined;
+  ctx.fillStyle = primary && enabled ? ACCENT : INK;
   ctx.fillRect(x, y, w, h);
-  ctx.strokeStyle = primary ? ACCENT : LINE;
+  ctx.strokeStyle = primary && enabled ? ACCENT : LINE;
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-  text(ctx, label, x + w / 2, y + h / 2, { size: 14, weight: 800, align: 'center' });
-  frame.hit(x, y, w, h, action);
+  text(ctx, label, x + w / 2, y + h / 2, {
+    size: 14,
+    weight: 800,
+    align: 'center',
+    ...(enabled ? {} : { color: MUTED }),
+  });
+  if (action) frame.hit(x, y, w, h, action);
 }
 
 /** How faint a course that cannot start is drawn in the list. */
