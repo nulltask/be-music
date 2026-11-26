@@ -1,4 +1,4 @@
-import { html, css, type CSSResultGroup, type PropertyDeclarations, type TemplateResult } from 'lit';
+import { html, css, nothing, type CSSResultGroup, type PropertyDeclarations, type TemplateResult } from 'lit';
 import { browseEntryCount, browseEntryTitle, type LibraryEntry } from '@be-music/player-skin-sdk';
 import { BeMusicElement } from '../base.ts';
 import { structureStyles } from '../styles/structure.ts';
@@ -70,6 +70,7 @@ export class BeMusicChartDetailsElement extends BeMusicElement {
       <div class="actions" part="actions">
         <button
           class="btn"
+          data-variant=${playable ? nothing : 'outline'}
           ?disabled=${this.launching || !playable}
           @click=${() => this.emit('play-request', { autoPlay: false })}
         >
