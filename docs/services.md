@@ -194,11 +194,12 @@ sequenceDiagram
   W->>W: player sign-in again
 ```
 
-- **Start**: when the window's navigation reaches Accounts' `/login`, the app stops it and opens `/desktop/sign-in?state=…&challenge=…` in the default browser. The challenge is the S256 hash of a verifier the app keeps in memory, as in PKCE.
+- **Start**: when the window's navigation reaches Accounts' `/login`, the app stops it and opens `/desktop/sign-in?state=…&challenge=…` in the default browser. The challenge is the S256 hash of a verifier the app keeps in memory, as in PKCE. When the player's Google or Discord button started the sign-in, the login URL's `sign_in_method` goes along, and the browser's login page starts that provider.
 - **Browser**: a signed-out browser goes to `/login?next=…` and comes back, through the welcome for a new account. `/desktop/sign-in` then issues a code (`createDesktopSignInCode`, server only) that lasts 3 minutes, and opens `be-music-play://sign-in?code=…&state=…`.
-- **Redeem**: the app accepts only the `state` it is waiting for, within 10 minutes, and posts the code and verifier to `POST /api/auth/desktop-sign-in/redeem`. The first redemption spends the code, right or wrong. Accounts checks the verifier against the challenge and creates a new session for the same user in the app's cookie store; the browser's session stays apart, so signing out of either leaves the other.
+- **Redeem**: the app accepts only the `state` it is waiting for, within 10 minutes, and posts the code and verifier to `POST /api/auth/desktop-sign-in/redeem`, with Accounts' origin as `Origin`: the window's session can hold Accounts cookies from the player's sign-in redirects, and Better Auth refuses a POST with cookies but no trusted origin. The first redemption spends the code, right or wrong. Accounts checks the verifier against the challenge and creates a new session for the same user in the app's cookie store; the browser's session stays apart, so signing out in the browser leaves the app signed in.
 - **Why the verifier**: another app that registers the same URL scheme could intercept the code, but cannot redeem it without the verifier, which never leaves the desktop app.
 - **Then**: the window runs the player's sign-in again. Accounts now has a session there, so it completes without a page, and later silent renewals work in the window as in a browser.
+- **Sign-out**: signing out of the player also ends the app's Accounts session (`POST /api/auth/sign-out` to Accounts). No Accounts page shows in the window, so without it the next sign-in would pick the same account again without asking.
 
 ### 3.1 Identity ownership and migration
 

@@ -25,6 +25,8 @@ flowchart LR
 
 Identity providers such as Google refuse to sign in from an embedded browser, even with Electron's tokens removed from the user agent. So when the window reaches the Accounts login page, the app opens the sign-in in the default browser instead. After signing in there (at once, if the browser is already signed in), the browser hands a single-use code back through the `be-music-play://` URL scheme, and the app redeems it for an Accounts session of its own and finishes the player's sign-in in the window. The code is bound to a verifier only the app knows, so another app that registers the same scheme cannot use it. See [Services, "Desktop sign-in"](../../docs/services.md#desktop-sign-in).
 
+Signing out of the player also signs the app out of Accounts, so the next sign-in goes through the browser again and can pick another account. Signing out in the browser leaves the app signed in.
+
 The packaged app registers the scheme on installation; `pnpm run dev` registers it for the development build.
 
 ## Offline

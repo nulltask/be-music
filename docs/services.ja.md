@@ -195,11 +195,12 @@ sequenceDiagram
   W->>W: もう一度プレイヤーのログイン
 ```
 
-- **始まり**：ウィンドウの遷移が Accounts の `/login` に着くと、アプリはそれを止め、既定のブラウザーで `/desktop/sign-in?state=…&challenge=…` を開きます。challenge は、アプリがメモリーに持つ verifier の S256 ハッシュです（PKCE と同じ）。
+- **始まり**：ウィンドウの遷移が Accounts の `/login` に着くと、アプリはそれを止め、既定のブラウザーで `/desktop/sign-in?state=…&challenge=…` を開きます。challenge は、アプリがメモリーに持つ verifier の S256 ハッシュです（PKCE と同じ）。プレイヤーの Google や Discord のボタンから始めたときは、ログインの URL の `sign_in_method` も渡し、ブラウザーのログイン画面がそのプロバイダーを始めます。
 - **ブラウザー**：ログインしていないブラウザーは `/login?next=…` に進み、ログインすると戻ってきます。新しいアカウントはウェルカムを通ります。そのあと `/desktop/sign-in` が 3 分間有効なコードを発行し（`createDesktopSignInCode`、サーバーからのみ）、`be-music-play://sign-in?code=…&state=…` を開きます。
-- **引き換え**：アプリは、自分が待っている `state` を 10 分以内に受け取ったときだけ、コードと verifier を `POST /api/auth/desktop-sign-in/redeem` に送ります。コードは、正しくても誤っていても、最初の引き換えで使い切ります。Accounts は verifier を challenge と照らし合わせ、同じユーザーの新しいセッションをアプリのクッキーストアに作ります。ブラウザーのセッションとは別なので、どちらでログアウトしても、もう一方には影響しません。
+- **引き換え**：アプリは、自分が待っている `state` を 10 分以内に受け取ったときだけ、コードと verifier を `POST /api/auth/desktop-sign-in/redeem` に送ります。`Origin` には Accounts の origin を付けます。ウィンドウのセッションには、プレイヤーのログインのリダイレクトで付いた Accounts のクッキーが残ることがあり、Better Auth はクッキー付きで信頼できる origin のない POST を拒むからです。コードは、正しくても誤っていても、最初の引き換えで使い切ります。Accounts は verifier を challenge と照らし合わせ、同じユーザーの新しいセッションをアプリのクッキーストアに作ります。ブラウザーのセッションとは別なので、ブラウザーでログアウトしても、アプリはログインしたままです。
 - **verifier がある理由**：同じ URL スキームを登録したほかのアプリは、コードを横取りできても、verifier がないので引き換えられません。verifier はデスクトップ版の外に出ません。
 - **そのあと**：ウィンドウはもう一度プレイヤーのログインを行います。ウィンドウにはもう Accounts のセッションがあるので、画面を出さずに終わります。あとの自動更新も、ブラウザーと同じようにウィンドウの中で動きます。
+- **ログアウト**：プレイヤーからログアウトすると、アプリの Accounts のセッションも終えます（Accounts への `POST /api/auth/sign-out`）。ウィンドウには Accounts の画面が出ないので、これがないと、次のログインで同じアカウントが確認なしに選ばれてしまいます。
 
 ### 3.1 ユーザーの所有と移行
 
