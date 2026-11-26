@@ -493,6 +493,21 @@ Every family's play screen reads this one main BPM wherever it needs one: the re
 pnpm bench -- --packages player-browser
 ```
 
+### Latency probe
+
+`?latency-probe` turns on a developer probe of the play's audio latency ([`runtime/latency-probe.ts`](../packages/player-browser/src/runtime/latency-probe.ts), installed by [`app-play/src/latency-probe.ts`](../packages/app-play/src/latency-probe.ts)). For each lane key press it records four moments on the `performance.now()` clock, and once a second during a play it samples the play's `AudioContext`:
+
+| Moment         | Source                                                                                                |
+| -------------- | ----------------------------------------------------------------------------------------------------- |
+| `eventAtMs`    | `KeyboardEvent.timeStamp`: the time the judge uses                                                    |
+| `handlerAtMs`  | When the key handler ran; the gap from `eventAtMs` is the main thread's queueing delay                |
+| `keysoundAtMs` | When the press's keysound started (`AudioBufferSourceNode.start`) after the engine judged it          |
+| `audibleAtMs`  | When that keysound is due at the output: `getOutputTimestamp()`, else `baseLatency` + `outputLatency` |
+
+Each play's summary (median, p95, p99, max and standard deviation of each gap) goes to the console as the play ends. In the console, `beMusicLatencyProbe.summary()` summarises every play so far (or one, with its number), `download()` saves the presses and the clock samples as two CSV files, and `clear()` starts over. A keysound is matched to the oldest press that has waited at most 100 ms for one, so a press on a lane with no sound is left without one. Gamepad presses are sampled by polling and are not recorded.
+
+Every number is the browser's own account. The physical time from a key press to the sound, which includes the keyboard and the audio device, needs an external probe. While the parameter is absent, the hooks find no probe and record nothing.
+
 ## Compatibility boundary
 
 The browser player consumes `chart-parser`, `chart-model`, `player-engine`, `player-scene-model`, `player-skin-sdk`, `shared-utils`, and the LR2/beatoraja skin packages. Native Skin uses `player-ui` for presentation. Node decoding and output belong to `player-node-audio` through `audio-sample`; browser audio uses its Web Audio adapter.

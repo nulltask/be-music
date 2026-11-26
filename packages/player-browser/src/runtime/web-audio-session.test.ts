@@ -10,6 +10,7 @@ import {
   WEB_AUDIO_SCHEDULE_AHEAD_SECONDS,
 } from './web-audio-session.ts';
 import { SAMPLE_SLICE_FADE_SECONDS } from '@be-music/shared-utils/core';
+import { disableLatencyProbe, enableLatencyProbe } from './latency-probe.ts';
 
 /**
  * Stubs the Web Audio API surface that {@link createWebAudioSession} touches. The session never reaches
@@ -950,5 +951,42 @@ describe('createWebAudioSession: guide sounds', () => {
     const { context } = baseContext();
     expect(createWebAudioSession(context).playGuideSound).toBeUndefined();
     expect(createWebAudioSession({ ...context, guideSounds: new Map() }).playGuideSound).toBeUndefined();
+  });
+});
+
+describe('createWebAudioSession: latency probe', () => {
+  test('samples the clock for the play and matches a press only to a player keysound started at once', () => {
+    const ended: number[] = [];
+    const probe = enableLatencyProbe({
+      now: () => 1000,
+      repeat: () => () => undefined,
+      onPlayEnd: (play) => ended.push(play),
+    });
+    try {
+      const { audioContext, audioBus } = createMocks();
+      const session = createWebAudioSession({
+        audioContext,
+        audioBus,
+        chart: makeChartWithSamples(),
+        decodedSamples: new Map([
+          ['kick.wav', makeMockAudioBuffer()],
+          ['snare.wav', makeMockAudioBuffer()],
+        ]),
+        wavCmdVolumeMultipliers: new Map(),
+      });
+      session.start();
+      probe.recordPress('KeyZ', 995);
+      // Background sounds and sounds queued ahead are not a press's keysound.
+      session.triggerEvent?.(mkEvent('01', '01'));
+      session.scheduleEventAt(mkEvent('11', '01'), 0.5);
+      expect(probe.presses()[0]?.keysoundAtMs).toBeUndefined();
+      session.triggerEvent?.(mkEvent('11', '02'));
+      expect(probe.presses()[0]).toMatchObject({ play: 1, keysoundAtMs: 1000, keysoundContextSeconds: 0 });
+      void session.dispose();
+      expect(ended).toEqual([1]);
+      expect(probe.clockSamples()).toHaveLength(2);
+    } finally {
+      disableLatencyProbe();
+    }
   });
 });

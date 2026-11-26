@@ -26,6 +26,7 @@ import { waitForDefaultUIFonts } from './services/built-in-skins.ts';
 import { isTestHookEnabled, TestHookRecorder } from './test-hook.ts';
 import { liveTestHookState } from './services/test-hook.ts';
 import { registerServiceWorker, shouldRegisterServiceWorker } from './service-worker/register.ts';
+import { installLatencyProbe } from './latency-probe.ts';
 import './styles.css';
 
 let workerStorage: Storage | undefined;
@@ -35,6 +36,8 @@ try {
   /* Storage can be disabled. */
 }
 migratePlayerStorage(workerStorage);
+// `?latency-probe`: the developer latency probe and its console API (`latency-probe.ts`).
+installLatencyProbe(window, window.location.href);
 setBrowserWorkerCount(readWorkerCount(workerStorage, navigator.hardwareConcurrency));
 configureBrowserWorkers(() => new Worker(new URL('./compute-worker.ts', import.meta.url), { type: 'module' }));
 // A BGA video the browser can't play streams through these while ffmpeg.wasm transcodes it.

@@ -482,6 +482,21 @@ beatoraja のプレイスキンは表示の選択であって ruleset ではな�
 pnpm bench -- --packages player-browser
 ```
 
+### 遅延の計測
+
+URL に `?latency-probe` を付けると、プレイ中の音の遅延を計測する開発者向けの機能が有効になります（[`runtime/latency-probe.ts`](../packages/player-browser/src/runtime/latency-probe.ts)。[`app-play/src/latency-probe.ts`](../packages/app-play/src/latency-probe.ts) が有効にします）。レーンのキーを押すたびに次の 4 つの時刻を `performance.now()` の時計で記録し、プレイ中は 1 秒ごとにそのプレイの `AudioContext` が報告する値も記録します。
+
+| 時刻           | 取り方                                                                                                     |
+| -------------- | ---------------------------------------------------------------------------------------------------------- |
+| `eventAtMs`    | `KeyboardEvent.timeStamp`。判定に使う時刻                                                                  |
+| `handlerAtMs`  | キーのハンドラーが動いた時刻。`eventAtMs` との差がメインスレッドの待ち時間                                 |
+| `keysoundAtMs` | エンジンが判定したあと、その押下の鍵音を鳴らし始めた時刻（`AudioBufferSourceNode.start`）                  |
+| `audibleAtMs`  | その鍵音が出力に出る予定の時刻。`getOutputTimestamp()`、なければ `baseLatency` と `outputLatency` の和から |
+
+プレイが終わるたびに、それぞれの差の中央値・p95・p99・最大値・標準偏差をコンソールに出します。コンソールでは、`beMusicLatencyProbe.summary()` でこれまでの全プレイ（番号を渡せばそのプレイ）をまとめ、`download()` で押下と時計の記録を 2 つの CSV ファイルに保存し、`clear()` で記録を消します。鍵音は、待ち始めてから 100 ms 以内の押下のうち最も古いものに対応させるので、音のないレーンを押した場合は鍵音なしになります。ゲームパッドの入力はポーリングで拾うため記録しません。
+
+どの値もブラウザー自身の報告です。キーボードと音声デバイスを含む、押してから音が聞こえるまでの物理的な時間は、外部の機材で測る必要があります。パラメーターがないときは何も記録しません。
+
 ## Compatibility boundary
 
 ブラウザープレイヤーは `chart-parser`、`chart-model`、`player-engine`、`player-scene-model`、`player-skin-sdk`、`shared-utils` と LR2 / beatoraja のスキンパッケージを利用します。Native Skin の表示には `player-ui` を使います。Node の音声デコードと出力は `player-node-audio` が `audio-sample` を通じて提供し、ブラウザーの音声は Web Audio アダプターが担当します。

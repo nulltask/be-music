@@ -1,6 +1,7 @@
 import type { CreatePlayerInputRuntimeContext, PlayerInputRuntime } from '@be-music/player-engine';
 import type { InputSource, PlayerInputSignalBus } from '@be-music/player-engine/signals';
 import { isIIDXArcadeGamepad, sampleArcadeScratch, type ArcadeScratchState } from './arcade-gamepad.ts';
+import { getLatencyProbe } from './latency-probe.ts';
 import { logger } from '../logger.ts';
 
 const log = logger('web-input-runtime');
@@ -125,6 +126,8 @@ export function createWebInputRuntime(options: WebInputRuntimeOptions): PlayerIn
     // between this and its drain time so the judge resolves against the true press moment instead of "next
     // 60 Hz tick" — eliminates up to ~16 ms of late-bias on every press.
     const pressedAt = performance.timeOrigin + keyEvent.timeStamp;
+    // Before the push: the engine wakes on it and may start the press's keysound, which the probe matches to this press.
+    getLatencyProbe()?.recordPress(keyEvent.code, keyEvent.timeStamp);
     options.inputSignals.pushCommand({
       kind: 'lane-input',
       tokens,

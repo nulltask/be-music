@@ -209,6 +209,31 @@ const BENCH_BEATORAJA_DESTINATION = {
   declarationOrder: 0,
 } satisfies BeatorajaDestinationGroup;
 
+/** A play's worth of probe presses (about 1,500 notes) and a clock sample a second for two minutes. */
+const BENCH_LATENCY_PRESSES: playerWebCoreAPI.LatencyProbePress[] = Array.from({ length: 1500 }, (_, index) => ({
+  play: 1,
+  code: 'KeyZ',
+  eventAtMs: index * 80,
+  handlerAtMs: index * 80 + (index % 7),
+  keysoundAtMs: index * 80 + (index % 7) + 1,
+  keysoundContextSeconds: index * 0.08,
+  audibleAtMs: index * 80 + 30 + (index % 5),
+  audibleSource: 'output-timestamp' as const,
+}));
+const BENCH_LATENCY_CLOCK_SAMPLES: playerWebCoreAPI.LatencyProbeClockSample[] = Array.from(
+  { length: 120 },
+  (_, index) => ({
+    play: 1,
+    atMs: index * 1000,
+    contextSeconds: index,
+    outputContextSeconds: index - 0.03,
+    outputPerformanceMs: index * 1000,
+    baseLatencyMs: 5.3,
+    outputLatencyMs: 21.3,
+    sampleRate: 48_000,
+  }),
+);
+
 export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): void {
   define('player-browser.defaultBrowserWorkerCount', {
     run: () => {
@@ -899,6 +924,31 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-browser.supportsWebCodecsRecording', {
     run: () => {
       playerWebCoreAPI.supportsWebCodecsRecording({} as BaseAudioContext);
+    },
+  });
+  define('player-browser.enableLatencyProbe', {
+    run: () => {
+      playerWebCoreAPI.enableLatencyProbe();
+    },
+  });
+  define('player-browser.getLatencyProbe', {
+    run: () => {
+      playerWebCoreAPI.getLatencyProbe();
+    },
+  });
+  define('player-browser.summarizeLatencyPresses', {
+    run: () => {
+      playerWebCoreAPI.summarizeLatencyPresses(BENCH_LATENCY_PRESSES, BENCH_LATENCY_CLOCK_SAMPLES);
+    },
+  });
+  define('player-browser.latencyProbeCSV', {
+    run: () => {
+      playerWebCoreAPI.latencyProbeCSV(BENCH_LATENCY_PRESSES);
+    },
+  });
+  define('player-browser.latencyProbeClockCSV', {
+    run: () => {
+      playerWebCoreAPI.latencyProbeClockCSV(BENCH_LATENCY_CLOCK_SAMPLES);
     },
   });
   define('player-browser.sanitizeMasterVolume', {

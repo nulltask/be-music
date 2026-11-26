@@ -16,6 +16,19 @@ export type {
   ChartSampleCacheKey,
   ChartSampleLease,
 } from './chart-sample-cache.ts';
+// The developer latency probe (`?latency-probe` in the web player): the host turns it on and reads what it recorded.
+export {
+  enableLatencyProbe,
+  getLatencyProbe,
+  latencyProbeClockCSV,
+  latencyProbeCSV,
+  summarizeLatencyPresses,
+  type LatencyProbe,
+  type LatencyProbeClockSample,
+  type LatencyProbePress,
+  type LatencyProbeSummary,
+  type LatencyStatistics,
+} from './latency-probe.ts';
 export * from './master-volume.ts';
 // The platform audio session (`navigator.audioSession`) — distinct from the internal engine `WebAudioSession` noted above.
 export * from './system-audio-session.ts';
