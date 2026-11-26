@@ -6,17 +6,20 @@ import { BrowserWindow, Menu, app, dialog, screen, session, shell } from 'electr
 import type { MenuItemConstructorOptions } from 'electron';
 import {
   DESKTOP_SCHEME,
+  ACCOUNTS_SESSION_COOKIE,
   accountsLoginOrigin,
+  accountsSignOutRequest,
   answersPending,
   browserSignInURL,
   createPendingSignIn,
   findReturnURL,
+  isPlayerSignOut,
   parseReturnURL,
   playerSignInURL,
-  redeemURL,
+  redeemRequest,
 } from './browser-sign-in.ts';
 import type { PendingSignIn } from './browser-sign-in.ts';
-import { allowsRedirect, isSameOrigin, navigationTarget } from './navigation.ts';
+import { ISSUER_HOSTS, allowsRedirect, isSameOrigin, navigationTarget } from './navigation.ts';
 import { DEFAULT_PLAY_URL, resolvePlayURL } from './play-url.ts';
 import { chromeUserAgent } from './user-agent.ts';
 import { DEFAULT_WINDOW_SIZE, MINIMUM_WINDOW_SIZE, parseWindowState, restorableBounds } from './window-state.ts';
@@ -53,14 +56,10 @@ async function finishBrowserSignIn(url: string, window: BrowserWindow | undefine
   pendingSignIn = undefined;
   try {
     // The session's own cookie store keeps the Accounts session the response sets, as the window's requests do.
-    const response = await session.defaultSession.fetch(redeemURL(pending), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ code: returned.code, verifier: pending.verifier }),
-      credentials: 'include',
-    });
+    const request = redeemRequest(pending, returned.code);
+    const response = await session.defaultSession.fetch(request.url, request.init);
     if (!response.ok) {
-      throw new Error(`redeem answered ${response.status}`);
+      throw new Error(`redeem answered ${response.status}: ${(await response.text()).slice(0, 200)}`);
     }
   } catch (error) {
     console.error('cannot finish signing in:', error);
@@ -75,6 +74,32 @@ async function finishBrowserSignIn(url: string, window: BrowserWindow | undefine
   }
   window.focus();
   void window.loadURL(playerSignInURL(playURL.origin, pending.returnTo));
+}
+
+/**
+ * Ends the app's own Accounts session after the player signs out. The browser keeps its Accounts session for other
+ * pages, but the app's session lives only in the window, where no Accounts page shows: without this, the next sign-in
+ * would pick the same account again at once.
+ */
+async function signOutOfAccounts(): Promise<void> {
+  for (const host of ISSUER_HOSTS) {
+    const issuerOrigin = `https://${host}`;
+    const cookies = await session.defaultSession.cookies.get({ url: issuerOrigin, name: ACCOUNTS_SESSION_COOKIE });
+    if (cookies.length === 0) {
+      continue;
+    }
+    try {
+      const request = accountsSignOutRequest(issuerOrigin);
+      const response = await session.defaultSession.fetch(request.url, request.init);
+      if (!response.ok) {
+        throw new Error(`sign-out answered ${response.status}`);
+      }
+    } catch (error) {
+      console.error(`cannot sign out of ${issuerOrigin}:`, error);
+      // The session cookie goes anyway, so the next sign-in asks again; the server session expires on its own.
+      await session.defaultSession.cookies.remove(issuerOrigin, ACCOUNTS_SESSION_COOKIE);
+    }
+  }
 }
 
 function windowStatePath(): string {
@@ -259,6 +284,12 @@ function main(): void {
     });
     defaultSession.setPermissionCheckHandler((_contents, _permission, requestingOrigin) => {
       return isSameOrigin(requestingOrigin, playURL.origin);
+    });
+    // The player's sign-out is a request from the page; the app's Accounts session ends with it.
+    defaultSession.webRequest.onCompleted({ urls: [`${playURL.origin}/api/auth/sign-out*`] }, (details) => {
+      if (isPlayerSignOut(details, playURL.origin)) {
+        void signOutOfAccounts();
+      }
     });
     Menu.setApplicationMenu(buildMenu());
     window = createWindow(playURL);

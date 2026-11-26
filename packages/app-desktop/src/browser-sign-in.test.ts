@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vite-plus/test';
 import {
   PENDING_SIGN_IN_MS,
   accountsLoginOrigin,
+  accountsSignOutRequest,
   answersPending,
   browserSignInURL,
   challengeOf,
   createPendingSignIn,
   findReturnURL,
+  isPlayerSignOut,
   parseReturnURL,
   playerSignInURL,
+  redeemRequest,
   redeemURL,
 } from './browser-sign-in.ts';
 
@@ -77,6 +80,17 @@ describe('the browser round trip', () => {
     expect(method(`${ISSUER}/login?client_id=play`)).toBeNull();
   });
 
+  it('redeems the code with the verifier, naming Accounts as the origin', () => {
+    const request = redeemRequest(pending, 'the-code');
+    expect(request.url).toBe(`${ISSUER}/api/auth/desktop-sign-in/redeem`);
+    expect(request.init).toMatchObject({
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: ISSUER },
+      credentials: 'include',
+    });
+    expect(JSON.parse(request.init.body as string)).toEqual({ code: 'the-code', verifier: pending.verifier });
+  });
+
   it('reads the returned code and state', () => {
     expect(parseReturnURL('be-music-play://sign-in?code=c%2B1&state=s')).toEqual({ code: 'c+1', state: 's' });
     expect(parseReturnURL('be-music-play://other?code=c&state=s')).toBeNull();
@@ -104,5 +118,25 @@ describe('the browser round trip', () => {
     expect(url.origin + url.pathname).toBe(`${PLAY}/api/auth/sign-in`);
     expect(url.searchParams.get('returnTo')).toBe('/select?x=1#top');
     expect(new URL(playerSignInURL(PLAY, 'https://be-music.app/account')).searchParams.get('returnTo')).toBe('/');
+  });
+});
+
+describe('signing out', () => {
+  it('follows only a successful sign-out of the player', () => {
+    const signOut = { url: `${PLAY}/api/auth/sign-out`, method: 'POST', statusCode: 200 };
+    expect(isPlayerSignOut(signOut, PLAY)).toBe(true);
+    expect(isPlayerSignOut({ ...signOut, url: `${PLAY}/api/auth/sign-out?returnTo=%2F`, statusCode: 303 }, PLAY)).toBe(
+      true,
+    );
+    expect(isPlayerSignOut({ ...signOut, statusCode: 403 }, PLAY)).toBe(false);
+    expect(isPlayerSignOut({ ...signOut, method: 'GET' }, PLAY)).toBe(false);
+    expect(isPlayerSignOut({ ...signOut, url: `${PLAY}/api/auth/sign-in` }, PLAY)).toBe(false);
+    expect(isPlayerSignOut({ ...signOut, url: `${ISSUER}/api/auth/sign-out` }, PLAY)).toBe(false);
+  });
+
+  it('ends the Accounts session, naming Accounts as the origin', () => {
+    const request = accountsSignOutRequest(ISSUER);
+    expect(request.url).toBe(`${ISSUER}/api/auth/sign-out`);
+    expect(request.init).toMatchObject({ method: 'POST', headers: { origin: ISSUER }, credentials: 'include' });
   });
 });

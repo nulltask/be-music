@@ -88,6 +88,53 @@ export function redeemURL(pending: PendingSignIn): string {
   return new URL('/api/auth/desktop-sign-in/redeem', pending.issuerOrigin).href;
 }
 
+/**
+ * The redemption request for `code`. It names Accounts as its `Origin`: the window's session can hold Accounts
+ * cookies from the player's sign-in redirects, and Accounts refuses a POST with cookies but no trusted origin
+ * (Better Auth's CSRF check). The main process sends no `Origin` of its own.
+ */
+export function redeemRequest(pending: PendingSignIn, code: string): { url: string; init: RequestInit } {
+  return {
+    url: redeemURL(pending),
+    init: {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: pending.issuerOrigin },
+      body: JSON.stringify({ code, verifier: pending.verifier }),
+      credentials: 'include',
+    },
+  };
+}
+
+/** The Accounts session cookie (Better Auth's `session_token` under Accounts' cookie prefix, on HTTPS). */
+export const ACCOUNTS_SESSION_COOKIE = '__Secure-be-music-accounts.session_token';
+
+/** Whether a finished request is the player's successful sign-out (`POST /api/auth/sign-out`). */
+export function isPlayerSignOut(
+  request: { url: string; method: string; statusCode: number },
+  playOrigin: string,
+): boolean {
+  if (request.method !== 'POST' || !isSameOrigin(request.url, playOrigin)) {
+    return false;
+  }
+  // The player signs out with `fetch` (200); a native form returns to a page (303).
+  return (
+    new URL(request.url).pathname === '/api/auth/sign-out' && (request.statusCode === 200 || request.statusCode === 303)
+  );
+}
+
+/** The request that ends the app's Accounts session at `issuerOrigin`, naming Accounts as its origin as redeeming does. */
+export function accountsSignOutRequest(issuerOrigin: string): { url: string; init: RequestInit } {
+  return {
+    url: new URL('/api/auth/sign-out', issuerOrigin).href,
+    init: {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: issuerOrigin },
+      body: '{}',
+      credentials: 'include',
+    },
+  };
+}
+
 /** The code and state from a `be-music-play://sign-in` URL; `null` for anything else. */
 export function parseReturnURL(url: string): { code: string; state: string } | null {
   let parsed: URL;
