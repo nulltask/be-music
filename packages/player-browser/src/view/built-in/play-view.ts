@@ -22,7 +22,6 @@ import type {
 } from '@be-music/player-skin-sdk';
 import { SkinDOMMount } from '../../skin/be-music/dom-mount.ts';
 import {
-  easeOutCubic,
   resolveBeMusicSkinSettings,
   resolveStageOrientation,
   stageProgress,
@@ -47,6 +46,7 @@ import { playfieldTouchLanes, TouchLaneInput } from '../shared/touch-lane-input.
 import type { IntentSink, PlayFrame, PlayIntent, PlayView, PlayViewTiming, PlayfieldSkin } from '../types.ts';
 import {
   collectBGATargets,
+  firstBGAVideoSize,
   LEGACY_STAGE_SIZE,
   needsBGALoadingResize,
   renderBuiltInChrome,
@@ -62,6 +62,7 @@ const log = logger('gameplay');
 /** Design px above a lane's top through which notes keep drawing as they scroll in (standard layout). */
 const NOTE_OVERSCAN = 48;
 const BGA_LOADING_RESIZE_MS = 360;
+const REDUCED_BGA_LOADING_RESIZE_MS = 200;
 const MAX_BGA_RESIZE_FRAME_MS = 90;
 
 /**
@@ -129,7 +130,11 @@ export class BuiltInPlayView
   /** The frame being drawn: the chrome's runtime reads its best record, course and player from it. */
   public playFrame: PlayFrame | undefined;
   public bgaResizeProgress = 0;
-  private bgaResize: { elapsedMs: number; previousFrameMs?: number; finish: () => void } | undefined;
+  public bgaVideoSize: ReturnType<typeof firstBGAVideoSize>;
+  private hasBGALayout = false;
+  private bgaResize:
+    | { durationMs: number; elapsedMs: number; previousFrameMs?: number; finish: () => void }
+    | undefined;
   private dom: SkinDOMMount<BeMusicDOMGameplayFrame, BeMusicDOMGameplayActions, BeMusicDOMGameplayScreen> | undefined;
 
   public constructor(kit: BuiltInKit, play: PlayfieldRuntime, options: BuiltInPlayViewOptions = {}) {
@@ -259,9 +264,11 @@ export class BuiltInPlayView
       const deltaMs = nowMs - (resize.previousFrameMs ?? nowMs);
       resize.elapsedMs += Math.max(0, Math.min(deltaMs, MAX_BGA_RESIZE_FRAME_MS));
       resize.previousFrameMs = nowMs;
-      this.bgaResizeProgress = easeOutCubic(stageProgress(resize.elapsedMs, 0, BGA_LOADING_RESIZE_MS));
+      const progress = stageProgress(resize.elapsedMs, 0, resize.durationMs);
+      this.bgaResizeProgress = progress * progress * (3 - 2 * progress);
     } else if (frame.stage !== 'loading') {
       // A view swapped in after loading should use the fitted size right away.
+      if (!this.hasBGALayout) this.prepareBGALayout();
       this.bgaResizeProgress = 1;
     }
     this.perf.beginTick();
@@ -345,13 +352,21 @@ export class BuiltInPlayView
   }
 
   public beginLoadingLayout(): Promise<void> | undefined {
-    if (this.kit.effects === 'off' || this.kit.effects === 'reduced' || !needsBGALoadingResize(this)) {
+    this.prepareBGALayout();
+    if (this.kit.effects === 'off' || !needsBGALoadingResize(this)) {
       this.bgaResizeProgress = 1;
       return;
     }
+    const durationMs = this.kit.effects === 'reduced' ? REDUCED_BGA_LOADING_RESIZE_MS : BGA_LOADING_RESIZE_MS;
     return new Promise((finish) => {
-      this.bgaResize = { elapsedMs: 0, finish };
+      this.bgaResize = { durationMs, elapsedMs: 0, finish };
     });
+  }
+
+  private prepareBGALayout(): void {
+    if (this.hasBGALayout) return;
+    this.bgaVideoSize = firstBGAVideoSize(this.play);
+    this.hasBGALayout = true;
   }
 
   private finishLoadingLayout(): void {

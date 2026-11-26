@@ -251,6 +251,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
 
   for (const bga of visibleBGAs) {
     if (bga.w <= 0 || bga.h <= 0) continue;
+    const imageCanvas = bga.preserveVideoAspect && bga.w !== bga.h ? fitBGACameraRect(1, 1, bga) : bga;
     const backdrop = ctx.bgaLayerPool.acquireSprite();
     backdrop.texture = Texture.WHITE;
     backdrop.label = 'bga/background';
@@ -290,7 +291,7 @@ export function renderBGA(ctx: BGARendererContext, seconds: number, cueSeconds: 
             : resolveBGAImageRect(
                 texture.frame.width,
                 texture.frame.height,
-                bga,
+                imageCanvas,
                 ctx.play.bgaSubRegionOrigins.get(resolvedKey),
               );
       if (layerName !== 'layer' && layerName !== 'layer2' && !overlay && (placed.w < bga.w || placed.h < bga.h)) {

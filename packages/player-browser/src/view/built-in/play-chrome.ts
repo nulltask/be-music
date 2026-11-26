@@ -1,5 +1,4 @@
 import { fitVideoBGARect, resizeVideoBGARect } from './bga-layout.ts';
-import { pickActiveBGACue } from '../../chart/bga-timeline.ts';
 /**
  * The built-in play screen's chrome inputs (`BuiltInPlayView`): the lane geometry of the built-in playfield for the
  * loaded chart and the stage, and the runtime the skinless chrome (`skinlessChromeRenderer`, or a Be-Music Skin's
@@ -89,6 +88,7 @@ export interface LaneGeometryContext {
   readonly beMusicStage: BeMusicStage | undefined;
   /** Shared by the monitor chrome and the BGA target so they resize in step. */
   readonly bgaResizeProgress?: number;
+  readonly bgaVideoSize?: { width: number; height: number } | undefined;
   laneGeometryCache:
     | {
         laneChannels: readonly string[];
@@ -391,21 +391,28 @@ export interface BeMusicLayoutContext extends LaneGeometryContext {
     | undefined;
 }
 
+/** Picks a base video that was loaded, even when a still image or an empty cue comes first. */
+export function firstBGAVideoSize(
+  play: Pick<PlayfieldRuntime, 'bgaTimeline' | 'bgaVideos'>,
+): { width: number; height: number } | undefined {
+  if (!play.bgaVideos?.size) return;
+  for (const { bmpKey } of play.bgaTimeline.base) {
+    if (bmpKey === undefined) continue;
+    const video = (play.bgaVideos.get(`\0base:${bmpKey}`) ?? play.bgaVideos.get(bmpKey))?.video;
+    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+      return { width: video.videoWidth, height: video.videoHeight };
+    }
+  }
+}
+
 /** Resizes only opted-in built-in monitors; external skins retain their authored rectangles. */
 function resolveVideoBGA(
   ctx: LaneGeometryContext,
   rect: NonNullable<BeMusicGameplayLayout['bga']>,
   geometry: ReturnType<typeof resolveLaneGeometry>,
 ): NonNullable<BeMusicGameplayLayout['bga']> {
-  if (rect.w <= 0 || !ctx.beMusicStage?.fitBGAVideoAspect || !ctx.play.bgaVideos?.size) return rect;
-  const cues = ctx.play.bgaTimeline?.base ?? [];
-  const cue = pickActiveBGACue(cues, ctx.play.currentSeconds()) ?? cues[0];
-  const key = cue?.bmpKey;
-  const handle =
-    key === undefined
-      ? undefined
-      : (ctx.play.bgaVideos.get(String.fromCharCode(0) + 'base:' + key) ?? ctx.play.bgaVideos.get(key));
-  if (!handle) return rect;
+  const size = ctx.bgaVideoSize;
+  if (rect.w <= 0 || !ctx.beMusicStage?.fitBGAVideoAspect || !size) return rect;
   let maxWidth = rect.w;
   if (geometry.orientation === 'landscape' && geometry.mode === 'standard') {
     const sides: BeMusicGameplayLayout['playfield']['sides'] = {};
@@ -422,7 +429,7 @@ function resolveVideoBGA(
     });
     maxWidth = geometry.twoPlayer ? cabinet.judge.w : cabinet.players.w;
   }
-  return fitVideoBGARect(rect, handle.video.videoWidth, handle.video.videoHeight, maxWidth);
+  return fitVideoBGARect(rect, size.width, size.height, maxWidth);
 }
 
 function resolveDisplayedBGA(
@@ -438,7 +445,7 @@ function resolveDisplayedBGA(
 /** Whether the initial BGA video calls for a different width once its metadata is available. */
 export function needsBGALoadingResize(ctx: LaneGeometryContext): boolean {
   const stage = ctx.beMusicStage;
-  if (!stage?.fitBGAVideoAspect || !ctx.play.bgaVideos?.size) return false;
+  if (!stage?.fitBGAVideoAspect || !ctx.bgaVideoSize) return false;
   const geometry = resolveLaneGeometry(ctx);
   if (geometry.mode === 'touch' && geometry.orientation === 'landscape') return false;
   const base = stage.resolveBGARect(geometry.right, geometry.left, geometry.twoPlayer);
