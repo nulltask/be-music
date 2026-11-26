@@ -6,7 +6,7 @@ import {
   type BeMusicJSON,
   createEmptyJSON,
 } from '@be-music/chart-source';
-import { compareEvents, drawRandomOutcomes, type RandomDraws } from '@be-music/chart-model';
+import { drawRandomOutcomes, sortEventsInPlace, type RandomDraws } from '@be-music/chart-model';
 import { normalizeASCIIBase36Code } from '@be-music/shared-utils/core';
 import { buildBMSObjectLineEntry, upsertMeasureLength } from './event-utils.ts';
 import type { BmsonDocument } from './bmson.ts';
@@ -232,7 +232,7 @@ export function parseBMS(input: string): BeMusicJSON {
   }
   json.measures.sort((left, right) => left.index - right.index);
   // Every event above was built normalized (channel and object ids folded, positions in range), so sorting is enough.
-  json.events.sort(compareEvents);
+  sortEventsInPlace(json.events);
   return json;
 }
 

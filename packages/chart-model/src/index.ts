@@ -141,6 +141,7 @@ export { sha256Hex } from '@be-music/shared-utils/hash';
 
 export {
   compareEvents,
+  sortEventsInPlace,
   createBeatResolver,
   eventToBeat,
   getMeasureBeats,

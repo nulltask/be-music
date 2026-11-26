@@ -113,7 +113,62 @@ export function sortEvents(events: BeMusicEvent[]): BeMusicEvent[] {
   if (sorted) {
     return [...events];
   }
-  return [...events].sort(compareEvents);
+  return sortEventsInPlace([...events]);
+}
+
+/** Below this many events one comparison sort is as fast as sorting measure by measure. */
+const MEASURE_BUCKET_MIN_EVENTS = 64;
+/** Measures past this index fall back to one comparison sort, so a stray huge index allocates no buckets. */
+const MEASURE_BUCKET_MAX_MEASURE = 4095;
+
+/**
+ * Sorts `events` in place in {@link compareEvents} order and returns the same array; equal events keep their input
+ * order, as `events.sort(compareEvents)` leaves them.
+ *
+ * A chart lists its events almost measure by measure, and the measure is the first sort key, so a large list is split
+ * by measure and each measure sorted alone: the comparator then runs on a few dozen events at a time instead of
+ * merging the whole chart's lines.
+ */
+export function sortEventsInPlace(events: BeMusicEvent[]): BeMusicEvent[] {
+  const length = events.length;
+  if (length < MEASURE_BUCKET_MIN_EVENTS) {
+    return events.sort(compareEvents);
+  }
+  let maxMeasure = 0;
+  for (let index = 0; index < length; index += 1) {
+    const measure = events[index]!.measure;
+    if (!Number.isInteger(measure) || measure < 0 || measure > MEASURE_BUCKET_MAX_MEASURE) {
+      return events.sort(compareEvents);
+    }
+    if (measure > maxMeasure) {
+      maxMeasure = measure;
+    }
+  }
+  const buckets: Array<BeMusicEvent[] | undefined> = Array.from({ length: maxMeasure + 1 });
+  for (let index = 0; index < length; index += 1) {
+    const event = events[index]!;
+    const bucket = buckets[event.measure];
+    if (bucket === undefined) {
+      buckets[event.measure] = [event];
+    } else {
+      bucket.push(event);
+    }
+  }
+  let cursor = 0;
+  for (let measure = 0; measure <= maxMeasure; measure += 1) {
+    const bucket = buckets[measure];
+    if (bucket === undefined) {
+      continue;
+    }
+    if (bucket.length > 1) {
+      bucket.sort(compareEvents);
+    }
+    for (let index = 0; index < bucket.length; index += 1) {
+      events[cursor] = bucket[index]!;
+      cursor += 1;
+    }
+  }
+  return events;
 }
 
 export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
