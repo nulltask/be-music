@@ -31,9 +31,9 @@ const ERROR_ABORTED = -3;
 /** The sign-in the app sent to the default browser, until the browser comes back. */
 let pendingSignIn: PendingSignIn | undefined;
 
-function startBrowserSignIn(issuerOrigin: string, returnTo: string): void {
+function startBrowserSignIn(loginURL: string, issuerOrigin: string, returnTo: string): void {
   pendingSignIn = createPendingSignIn(issuerOrigin, returnTo, Date.now());
-  openInBrowser(browserSignInURL(pendingSignIn));
+  openInBrowser(browserSignInURL(pendingSignIn, loginURL));
 }
 
 function signInFailedMessage(): string {
@@ -172,7 +172,7 @@ function createWindow(playURL: URL): BrowserWindow {
       return false;
     }
     event.preventDefault();
-    startBrowserSignIn(issuerOrigin, contents.getURL());
+    startBrowserSignIn(url, issuerOrigin, contents.getURL());
     return true;
   };
   // A player other than production (preview, local) keeps every web page in the window, for Cloudflare Access.

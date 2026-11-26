@@ -64,7 +64,17 @@ describe('the browser round trip', () => {
     expect(url.searchParams.get('state')).toBe(pending.state);
     expect(url.searchParams.get('challenge')).toBe(pending.challenge);
     expect(url.searchParams.has('verifier')).toBe(false);
+    expect(url.searchParams.has('sign_in_method')).toBe(false);
     expect(redeemURL(pending)).toBe(`${ISSUER}/api/auth/desktop-sign-in/redeem`);
+  });
+
+  it('carries the provider the player asked for, and only Google or Discord', () => {
+    const method = (loginURL: string) =>
+      new URL(browserSignInURL(pending, loginURL)).searchParams.get('sign_in_method');
+    expect(method(`${ISSUER}/login?client_id=play&sign_in_method=google&sig=x`)).toBe('google');
+    expect(method(`${ISSUER}/login?sign_in_method=discord`)).toBe('discord');
+    expect(method(`${ISSUER}/login?sign_in_method=passkey`)).toBeNull();
+    expect(method(`${ISSUER}/login?client_id=play`)).toBeNull();
   });
 
   it('reads the returned code and state', () => {

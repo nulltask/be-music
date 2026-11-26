@@ -62,11 +62,24 @@ export function accountsLoginOrigin(url: string): string | null {
     : null;
 }
 
-/** The page the browser opens to sign in for the app. */
-export function browserSignInURL(pending: PendingSignIn): string {
+/**
+ * The login page's parameter that starts Google or Discord at once (`@be-music/service-auth-client`'s
+ * `SOCIAL_SIGN_IN_PARAM`), set when the player's Google or Discord button started the sign-in.
+ */
+const SOCIAL_SIGN_IN_PARAM = 'sign_in_method';
+
+/**
+ * The page the browser opens to sign in for the app. The provider `loginURL` asks for, Google or Discord, goes along,
+ * so the browser starts it as the window would have.
+ */
+export function browserSignInURL(pending: PendingSignIn, loginURL?: string): string {
   const url = new URL('/desktop/sign-in', pending.issuerOrigin);
   url.searchParams.set('state', pending.state);
   url.searchParams.set('challenge', pending.challenge);
+  const method = loginURL === undefined ? null : new URL(loginURL).searchParams.get(SOCIAL_SIGN_IN_PARAM);
+  if (method === 'google' || method === 'discord') {
+    url.searchParams.set(SOCIAL_SIGN_IN_PARAM, method);
+  }
   return url.href;
 }
 
