@@ -8,6 +8,7 @@ import {
   resolveJudgeDetails,
   resolveJudgeOffsetY,
   collectBGATargets,
+  firstBGAVideoSize,
   needsBGALoadingResize,
   type LaneGeometryContext,
   type BeMusicLayoutContext,
@@ -150,18 +151,26 @@ test('passes the presented ghost side independently of autoplay options', () => 
 
 test('a video changes the monitor and target width together while keeping their height', () => {
   const video = { videoWidth: 1600, videoHeight: 900 };
-  const ctx = {
+  let seconds = -1;
+  const base = {
     play: {
       laneChannels: ['16', '11', '12', '13', '14', '15', '18', '19'],
       chartPlayVariant: '7',
-      currentSeconds: () => 0,
-      bgaTimeline: { base: [{ seconds: 0, bmpKey: '01' }] },
+      currentSeconds: () => seconds,
+      bgaTimeline: {
+        base: [
+          { seconds: 0, bmpKey: 'image' },
+          { seconds: 2, bmpKey: '01' },
+          { seconds: 4, bmpKey: 'image' },
+        ],
+      },
       bgaVideos: new Map([['01', { video }]]),
     },
     beMusicStage: cabinetStage,
     layoutMode: 'standard',
     bgaResizeProgress: 0,
   } as unknown as LaneGeometryContext & BeMusicLayoutContext & BGATargetsContext;
+  const ctx = { ...base, bgaVideoSize: firstBGAVideoSize(base.play) };
   const square = resolveBeMusicLayout(ctx).bga!;
   expect(square.w).toBe(square.h);
   expect(needsBGALoadingResize(ctx)).toBe(true);
@@ -173,16 +182,24 @@ test('a video changes the monitor and target width together while keeping their 
   collectBGATargets(animating, targets);
   expect(targets[0]).toMatchObject(halfway);
   expect(targets[0]?.preserveVideoAspect).toBe(true);
+  for (seconds of [0, 2, 4]) {
+    expect(resolveBeMusicLayout({ ...ctx, bgaResizeProgress: 1 }).bga).toEqual(wide);
+  }
   video.videoWidth = 900;
   video.videoHeight = 1600;
-  const portrait = resolveBeMusicLayout({ ...ctx, bgaResizeProgress: 1 }).bga!;
+  expect(resolveBeMusicLayout({ ...ctx, bgaResizeProgress: 1 }).bga).toEqual(wide);
+  const portrait = resolveBeMusicLayout({
+    ...ctx,
+    bgaResizeProgress: 1,
+    bgaVideoSize: firstBGAVideoSize(ctx.play),
+  }).bga!;
   expect(portrait.h).toBe(wide.h);
   expect(portrait.w / portrait.h).toBeCloseTo(900 / 1600);
   expect(portrait.x + portrait.w / 2).toBeCloseTo(wide.x + wide.w / 2);
   video.videoWidth = video.videoHeight;
-  expect(needsBGALoadingResize(ctx)).toBe(false);
+  expect(needsBGALoadingResize({ ...ctx, bgaVideoSize: firstBGAVideoSize(ctx.play) })).toBe(false);
   video.videoWidth = 0;
-  expect(needsBGALoadingResize(ctx)).toBe(false);
+  expect(needsBGALoadingResize({ ...ctx, bgaVideoSize: firstBGAVideoSize(ctx.play) })).toBe(false);
 });
 
 test("shows a NONSTOP stage's song, crossfading from the previous stage's as its window starts", () => {
