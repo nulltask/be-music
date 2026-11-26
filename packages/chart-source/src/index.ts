@@ -874,7 +874,7 @@ function cloneEvent(event: BeMusicEvent): BeMusicEvent {
     value: event.value,
   };
   if (event.bmsLineOrder !== undefined) cloned.bmsLineOrder = event.bmsLineOrder;
-  cloned.bmson = event.bmson ? { ...event.bmson, ...copyExtras(event.bmson) } : undefined;
+  if (event.bmson) cloned.bmson = { ...event.bmson, ...copyExtras(event.bmson) };
   if (event.lrx !== undefined) cloned.lrx = { ...event.lrx };
   return cloned;
 }
